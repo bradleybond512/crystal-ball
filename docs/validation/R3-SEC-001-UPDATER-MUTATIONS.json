@@ -1,0 +1,1168 @@
+[
+  {
+    "name": "canonical-owner",
+    "file": "src-tauri/src/updater_policy.rs",
+    "kind": "rust",
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "restoredSha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_gate_tests::canonical_repository_and_https_are_required ... FAILED",
+      "thread 'updater_gate_tests::canonical_repository_and_https_are_required' (13690337) panicked at src/main.rs:3173:6:",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/updater_policy.rs b/src-tauri/src/updater_policy.rs\nindex 65701d723..10776fa2e 100644\n--- a/src-tauri/src/updater_policy.rs\n+++ b/src-tauri/src/updater_policy.rs\n@@ -142,7 +142,7 @@ pub fn validate_initial_url(raw: &str, expected: &str) -> Result<(), ()> {\n         return Err(());\n     }\n     let tail = raw\n-        .strip_prefix(&format!(\"{RELEASE_BASE}/download/\"))\n+        .split_once(\"/releases/download/\").map(|(_, tail)| tail)\n         .ok_or(())?;\n     let (tag, name) = tail.split_once('/').ok_or(())?;\n     let v = tag.strip_prefix('v').ok_or(())?;\n"
+  },
+  {
+    "name": "redirect-policy",
+    "file": "src-tauri/src/updater_policy.rs",
+    "kind": "rust",
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "restoredSha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_policy::tests::only_observed_cdn_redirect_is_allowed ... FAILED",
+      "thread 'updater_policy::tests::only_observed_cdn_redirect_is_allowed' (13691135) panicked at src/updater_policy.rs:462:13:",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/updater_policy.rs b/src-tauri/src/updater_policy.rs\nindex 65701d723..3383504a6 100644\n--- a/src-tauri/src/updater_policy.rs\n+++ b/src-tauri/src/updater_policy.rs\n@@ -156,6 +156,7 @@ pub fn validate_initial_url(raw: &str, expected: &str) -> Result<(), ()> {\n     Ok(())\n }\n pub fn validate_redirect(raw: &str, initial: &str, hops: usize) -> Result<(), ()> {\n+    return Ok(());\n     if hops > 3 || raw.bytes().any(|b| b <= 32 || b >= 127) || raw.contains('\\\\') {\n         return Err(());\n     }\n"
+  },
+  {
+    "name": "redirect-hop-limit",
+    "file": "src-tauri/src/updater_policy.rs",
+    "kind": "rust",
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "restoredSha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_policy::tests::only_observed_cdn_redirect_is_allowed ... FAILED",
+      "thread 'updater_policy::tests::only_observed_cdn_redirect_is_allowed' (13691998) panicked at src/updater_policy.rs:463:9:",
+      "assertion failed: validate_redirect(good, &initial, 4).is_err()",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/updater_policy.rs b/src-tauri/src/updater_policy.rs\nindex 65701d723..be869a1e0 100644\n--- a/src-tauri/src/updater_policy.rs\n+++ b/src-tauri/src/updater_policy.rs\n@@ -156,7 +156,7 @@ pub fn validate_initial_url(raw: &str, expected: &str) -> Result<(), ()> {\n     Ok(())\n }\n pub fn validate_redirect(raw: &str, initial: &str, hops: usize) -> Result<(), ()> {\n-    if hops > 3 || raw.bytes().any(|b| b <= 32 || b >= 127) || raw.contains('\\\\') {\n+    if hops > 300 || raw.bytes().any(|b| b <= 32 || b >= 127) || raw.contains('\\\\') {\n         return Err(());\n     }\n     if raw.starts_with(\"https://github.com/\") {\n"
+  },
+  {
+    "name": "missing-signer",
+    "file": "src-tauri/src/updater_policy.rs",
+    "kind": "rust",
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "restoredSha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_policy::tests::apple_team_is_validated_and_does_not_authorize_without_anchor ... FAILED",
+      "thread 'updater_policy::tests::apple_team_is_validated_and_does_not_authorize_without_anchor' (13692792) panicked at src/updater_policy.rs:609:9:",
+      "assertion failed: choose_signer(true, false, Some(\"ABCDE12345\"), None, |_| true).is_err()",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/updater_policy.rs b/src-tauri/src/updater_policy.rs\nindex 65701d723..b2d4a1719 100644\n--- a/src-tauri/src/updater_policy.rs\n+++ b/src-tauri/src/updater_policy.rs\n@@ -325,7 +325,7 @@ pub fn choose_signer(\n     let pin = if apple_anchor {\n         SignerRequirement::apple(team.ok_or(())?)?\n     } else {\n-        SignerRequirement::local(designated.ok_or(())?)?\n+        SignerRequirement::apple(team.unwrap_or(\"ABCDE12345\"))?\n     };\n     if !satisfies(pin.as_str()) {\n         return Err(());\n"
+  },
+  {
+    "name": "installed-integrity",
+    "file": "src-tauri/src/updater_policy.rs",
+    "kind": "rust",
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "restoredSha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_policy::tests::apple_team_is_validated_and_does_not_authorize_without_anchor ... FAILED",
+      "thread 'updater_policy::tests::apple_team_is_validated_and_does_not_authorize_without_anchor' (13693614) panicked at src/updater_policy.rs:608:9:",
+      "assertion failed: choose_signer(false, true, Some(\"ABCDE12345\"), None, |_| true).is_err()",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/updater_policy.rs b/src-tauri/src/updater_policy.rs\nindex 65701d723..4f540fa60 100644\n--- a/src-tauri/src/updater_policy.rs\n+++ b/src-tauri/src/updater_policy.rs\n@@ -319,7 +319,7 @@ pub fn choose_signer(\n     designated: Option<&str>,\n     satisfies: impl FnOnce(&str) -> bool,\n ) -> Result<SignerRequirement, ()> {\n-    if !intact {\n+    if false {\n         return Err(());\n     }\n     let pin = if apple_anchor {\n"
+  },
+  {
+    "name": "local-fingerprint",
+    "file": "src-tauri/src/updater_policy.rs",
+    "kind": "rust",
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "restoredSha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_policy::tests::fingerprints_not_names_bind_local_signer ... FAILED",
+      "thread 'updater_policy::tests::fingerprints_not_names_bind_local_signer' (13694457) panicked at src/updater_policy.rs:577:13:",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.01s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/updater_policy.rs b/src-tauri/src/updater_policy.rs\nindex 65701d723..472076549 100644\n--- a/src-tauri/src/updater_policy.rs\n+++ b/src-tauri/src/updater_policy.rs\n@@ -306,7 +306,7 @@ impl SignerRequirement {\n             hash\n         };\n         let hash = fingerprint.strip_suffix('\"').ok_or(())?;\n-        if hash.len() != 40 || !hash.bytes().all(|c| c.is_ascii_hexdigit()) {\n+        if false {\n             return Err(());\n         }\n         Ok(Self(requirement.into()))\n"
+  },
+  {
+    "name": "installed-pin-check",
+    "file": "src-tauri/src/updater_policy.rs",
+    "kind": "rust",
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "restoredSha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_policy::tests::apple_team_is_validated_and_does_not_authorize_without_anchor ... FAILED",
+      "thread 'updater_policy::tests::apple_team_is_validated_and_does_not_authorize_without_anchor' (13695585) panicked at src/updater_policy.rs:610:9:",
+      "assertion failed: choose_signer(true, true, Some(\"ABCDE12345\"), None, |_| false).is_err()",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/updater_policy.rs b/src-tauri/src/updater_policy.rs\nindex 65701d723..4223c74b9 100644\n--- a/src-tauri/src/updater_policy.rs\n+++ b/src-tauri/src/updater_policy.rs\n@@ -327,7 +327,7 @@ pub fn choose_signer(\n     } else {\n         SignerRequirement::local(designated.ok_or(())?)?\n     };\n-    if !satisfies(pin.as_str()) {\n+    if false {\n         return Err(());\n     }\n     Ok(pin)\n"
+  },
+  {
+    "name": "manifest-version",
+    "file": "src-tauri/src/updater_policy.rs",
+    "kind": "rust",
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "restoredSha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_policy::tests::ambiguous_or_mismatched_metadata_is_rejected ... FAILED",
+      "thread 'updater_policy::tests::ambiguous_or_mismatched_metadata_is_rejected' (13696705) panicked at src/updater_policy.rs:557:13:",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/updater_policy.rs b/src-tauri/src/updater_policy.rs\nindex 65701d723..56f69af24 100644\n--- a/src-tauri/src/updater_policy.rs\n+++ b/src-tauri/src/updater_policy.rs\n@@ -229,7 +229,7 @@ pub fn select_assets(release: &Release, arch: &str) -> Result<SelectedAssets, Br\n     })\n }\n pub fn validate_manifest(manifest: &Manifest, selected: &SelectedAssets) -> Result<String, ()> {\n-    if manifest.version != selected.version\n+    if false\n         || manifest.tag != selected.tag\n         || manifest.variant != \"full\"\n     {\n"
+  },
+  {
+    "name": "manifest-tag",
+    "file": "src-tauri/src/updater_policy.rs",
+    "kind": "rust",
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "restoredSha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_policy::tests::ambiguous_or_mismatched_metadata_is_rejected ... FAILED",
+      "thread 'updater_policy::tests::ambiguous_or_mismatched_metadata_is_rejected' (13697521) panicked at src/updater_policy.rs:557:13:",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/updater_policy.rs b/src-tauri/src/updater_policy.rs\nindex 65701d723..9d28b591a 100644\n--- a/src-tauri/src/updater_policy.rs\n+++ b/src-tauri/src/updater_policy.rs\n@@ -230,7 +230,7 @@ pub fn select_assets(release: &Release, arch: &str) -> Result<SelectedAssets, Br\n }\n pub fn validate_manifest(manifest: &Manifest, selected: &SelectedAssets) -> Result<String, ()> {\n     if manifest.version != selected.version\n-        || manifest.tag != selected.tag\n+        || false\n         || manifest.variant != \"full\"\n     {\n         return Err(());\n"
+  },
+  {
+    "name": "manifest-variant",
+    "file": "src-tauri/src/updater_policy.rs",
+    "kind": "rust",
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "restoredSha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_policy::tests::ambiguous_or_mismatched_metadata_is_rejected ... FAILED",
+      "thread 'updater_policy::tests::ambiguous_or_mismatched_metadata_is_rejected' (13698458) panicked at src/updater_policy.rs:557:13:",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/updater_policy.rs b/src-tauri/src/updater_policy.rs\nindex 65701d723..594e9e00b 100644\n--- a/src-tauri/src/updater_policy.rs\n+++ b/src-tauri/src/updater_policy.rs\n@@ -231,7 +231,7 @@ pub fn select_assets(release: &Release, arch: &str) -> Result<SelectedAssets, Br\n pub fn validate_manifest(manifest: &Manifest, selected: &SelectedAssets) -> Result<String, ()> {\n     if manifest.version != selected.version\n         || manifest.tag != selected.tag\n-        || manifest.variant != \"full\"\n+        || false\n     {\n         return Err(());\n     }\n"
+  },
+  {
+    "name": "manifest-ambiguity",
+    "file": "src-tauri/src/updater_policy.rs",
+    "kind": "rust",
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "restoredSha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_policy::tests::ambiguous_or_mismatched_metadata_is_rejected ... FAILED",
+      "thread 'updater_policy::tests::ambiguous_or_mismatched_metadata_is_rejected' (13699339) panicked at src/updater_policy.rs:557:13:",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/updater_policy.rs b/src-tauri/src/updater_policy.rs\nindex 65701d723..ef5b480cd 100644\n--- a/src-tauri/src/updater_policy.rs\n+++ b/src-tauri/src/updater_policy.rs\n@@ -246,7 +246,7 @@ pub fn validate_manifest(manifest: &Manifest, selected: &SelectedAssets) -> Resu\n         .iter()\n         .filter(|a| normalized(&a.name) == selected.asset.name);\n     let asset = matching.next().ok_or(())?;\n-    if matching.next().is_some()\n+    if false\n         || asset.size != selected.asset.size\n         || asset.sha256.len() != 64\n         || !asset.sha256.bytes().all(|c| c.is_ascii_hexdigit())\n"
+  },
+  {
+    "name": "manifest-size",
+    "file": "src-tauri/src/updater_policy.rs",
+    "kind": "rust",
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "restoredSha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_policy::tests::ambiguous_or_mismatched_metadata_is_rejected ... FAILED",
+      "thread 'updater_policy::tests::ambiguous_or_mismatched_metadata_is_rejected' (13700139) panicked at src/updater_policy.rs:557:13:",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/updater_policy.rs b/src-tauri/src/updater_policy.rs\nindex 65701d723..e3b6d0465 100644\n--- a/src-tauri/src/updater_policy.rs\n+++ b/src-tauri/src/updater_policy.rs\n@@ -247,7 +247,7 @@ pub fn validate_manifest(manifest: &Manifest, selected: &SelectedAssets) -> Resu\n         .filter(|a| normalized(&a.name) == selected.asset.name);\n     let asset = matching.next().ok_or(())?;\n     if matching.next().is_some()\n-        || asset.size != selected.asset.size\n+        || false\n         || asset.sha256.len() != 64\n         || !asset.sha256.bytes().all(|c| c.is_ascii_hexdigit())\n     {\n"
+  },
+  {
+    "name": "manifest-hash-format",
+    "file": "src-tauri/src/updater_policy.rs",
+    "kind": "rust",
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "restoredSha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_policy::tests::ambiguous_or_mismatched_metadata_is_rejected ... FAILED",
+      "thread 'updater_policy::tests::ambiguous_or_mismatched_metadata_is_rejected' (13700948) panicked at src/updater_policy.rs:557:13:",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/updater_policy.rs b/src-tauri/src/updater_policy.rs\nindex 65701d723..382a52c8d 100644\n--- a/src-tauri/src/updater_policy.rs\n+++ b/src-tauri/src/updater_policy.rs\n@@ -249,7 +249,7 @@ pub fn validate_manifest(manifest: &Manifest, selected: &SelectedAssets) -> Resu\n     if matching.next().is_some()\n         || asset.size != selected.asset.size\n         || asset.sha256.len() != 64\n-        || !asset.sha256.bytes().all(|c| c.is_ascii_hexdigit())\n+        || false\n     {\n         return Err(());\n     }\n"
+  },
+  {
+    "name": "architecture",
+    "file": "src-tauri/src/updater_policy.rs",
+    "kind": "rust",
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "restoredSha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_policy::tests::exact_architecture_and_manifest_mapping ... FAILED",
+      "thread 'updater_policy::tests::exact_architecture_and_manifest_mapping' (13701891) panicked at src/updater_policy.rs:501:9:",
+      "assertion failed: select_assets(&r, \"x86_64\").is_err()",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/updater_policy.rs b/src-tauri/src/updater_policy.rs\nindex 65701d723..4add341de 100644\n--- a/src-tauri/src/updater_policy.rs\n+++ b/src-tauri/src/updater_policy.rs\n@@ -192,7 +192,7 @@ pub fn select_assets(release: &Release, arch: &str) -> Result<SelectedAssets, Br\n     let version = release_version(release).map_err(|_| BrowserReason::InvalidRelease)?;\n     let arch = match arch {\n         \"aarch64\" => \"aarch64\",\n-        \"x86_64\" => \"x64\",\n+        \"x86_64\" => \"aarch64\",\n         _ => return Err(BrowserReason::UnsupportedArchitecture),\n     };\n     let name = format!(\"Crystal.Ball_{version}_{arch}.dmg\");\n"
+  },
+  {
+    "name": "candidate-version",
+    "file": "src-tauri/src/updater_policy.rs",
+    "kind": "rust",
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "restoredSha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_policy::tests::candidate_must_satisfy_the_captured_pin ... FAILED",
+      "thread 'updater_policy::tests::candidate_must_satisfy_the_captured_pin' (13702670) panicked at src/updater_policy.rs:622:9:",
+      "assertion failed: check_candidate(\"2.25.149\", \"2.25.147\", Some(\"2.25.148\"), &pin,",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/updater_policy.rs b/src-tauri/src/updater_policy.rs\nindex 65701d723..5430e069a 100644\n--- a/src-tauri/src/updater_policy.rs\n+++ b/src-tauri/src/updater_policy.rs\n@@ -339,7 +339,7 @@ pub fn check_candidate(\n     pin: &SignerRequirement,\n     satisfies: impl FnOnce(&str) -> bool,\n ) -> Result<(), String> {\n-    if !is_newer(candidate, current) || expected.is_some_and(|v| candidate != v) {\n+    if !is_newer(candidate, current) || false {\n         return Err(\"Update version is not the expected newer version\".into());\n     }\n     if !satisfies(pin.as_str()) {\n"
+  },
+  {
+    "name": "candidate-newness",
+    "file": "src-tauri/src/updater_policy.rs",
+    "kind": "rust",
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "restoredSha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_policy::tests::candidate_must_satisfy_the_captured_pin ... FAILED",
+      "thread 'updater_policy::tests::candidate_must_satisfy_the_captured_pin' (13703464) panicked at src/updater_policy.rs:623:9:",
+      "assertion failed: check_candidate(\"2.25.147\", \"2.25.147\", None, &pin, |_| true).is_err()",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/updater_policy.rs b/src-tauri/src/updater_policy.rs\nindex 65701d723..f36c45892 100644\n--- a/src-tauri/src/updater_policy.rs\n+++ b/src-tauri/src/updater_policy.rs\n@@ -339,7 +339,7 @@ pub fn check_candidate(\n     pin: &SignerRequirement,\n     satisfies: impl FnOnce(&str) -> bool,\n ) -> Result<(), String> {\n-    if !is_newer(candidate, current) || expected.is_some_and(|v| candidate != v) {\n+    if false || expected.is_some_and(|v| candidate != v) {\n         return Err(\"Update version is not the expected newer version\".into());\n     }\n     if !satisfies(pin.as_str()) {\n"
+  },
+  {
+    "name": "candidate-pin-check",
+    "file": "src-tauri/src/updater_policy.rs",
+    "kind": "rust",
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "restoredSha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_policy::tests::candidate_must_satisfy_the_captured_pin ... FAILED",
+      "thread 'updater_policy::tests::candidate_must_satisfy_the_captured_pin' (13704325) panicked at src/updater_policy.rs:621:9:",
+      "assertion failed: check_candidate(\"2.25.148\", \"2.25.147\", None, &pin, |_| false).is_err()",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/updater_policy.rs b/src-tauri/src/updater_policy.rs\nindex 65701d723..6c7b4ed19 100644\n--- a/src-tauri/src/updater_policy.rs\n+++ b/src-tauri/src/updater_policy.rs\n@@ -342,7 +342,7 @@ pub fn check_candidate(\n     if !is_newer(candidate, current) || expected.is_some_and(|v| candidate != v) {\n         return Err(\"Update version is not the expected newer version\".into());\n     }\n-    if !satisfies(pin.as_str()) {\n+    if false {\n         return Err(\"Update does not satisfy the installed signer pin\".into());\n     }\n     Ok(())\n"
+  },
+  {
+    "name": "download-hash",
+    "file": "src-tauri/src/updater_policy.rs",
+    "kind": "rust",
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "restoredSha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_policy::tests::download_must_pass_size_and_hash_before_native_staging ... FAILED",
+      "thread 'updater_policy::tests::download_must_pass_size_and_hash_before_native_staging' (13705267) panicked at src/updater_policy.rs:678:27:",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/updater_policy.rs b/src-tauri/src/updater_policy.rs\nindex 65701d723..ddcac5f68 100644\n--- a/src-tauri/src/updater_policy.rs\n+++ b/src-tauri/src/updater_policy.rs\n@@ -379,7 +379,7 @@ pub fn verify_download(\n         .iter()\n         .map(|b| format!(\"{b:02x}\"))\n         .collect::<String>();\n-    if actual != expected_sha256.to_ascii_lowercase() {\n+    if false {\n         return Err(UpdateError {\n             code: \"checksum_mismatch\",\n             message: \"The update download failed verification.\",\n"
+  },
+  {
+    "name": "download-length",
+    "file": "src-tauri/src/updater_policy.rs",
+    "kind": "rust",
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "restoredSha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_policy::tests::body_limits_reject_truncation_and_oversized_chunks ... FAILED",
+      "thread 'updater_policy::tests::body_limits_reject_truncation_and_oversized_chunks' (13706172) panicked at src/updater_policy.rs:685:9:",
+      "assertion failed: check_body_length(4, 3, None, false).is_err()",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/updater_policy.rs b/src-tauri/src/updater_policy.rs\nindex 65701d723..9e9330983 100644\n--- a/src-tauri/src/updater_policy.rs\n+++ b/src-tauri/src/updater_policy.rs\n@@ -393,7 +393,7 @@ pub fn check_body_length(\n     expected: Option<u64>,\n     complete: bool,\n ) -> Result<(), UpdateError> {\n-    if received > limit || expected.is_some_and(|n| received > n || (complete && received != n)) {\n+    if false {\n         return Err(UpdateError::check());\n     }\n     Ok(())\n"
+  },
+  {
+    "name": "post-swap-check",
+    "file": "src-tauri/src/main.rs",
+    "kind": "rust",
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "3f78997df7c6fe019ce87facb5c998128996d6b90a4d6b49227729abed8a9913",
+    "restoredSha256": "3f78997df7c6fe019ce87facb5c998128996d6b90a4d6b49227729abed8a9913",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_gate_tests::post_swap_rejection_restores_old_install_without_real_verifier ... FAILED",
+      "thread 'updater_gate_tests::post_swap_rejection_restores_old_install_without_real_verifier' (13707126) panicked at src/main.rs:3088:2:",
+      "assertion failed: result.is_err()",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex db2f125de..2318518f2 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -2000,7 +2000,7 @@ fn swap_staged_into_place_with(\n  // Re-verify the bundle that is NOW installed \u2014 integrity, bundle ID, the pinned\n  // signer, AND that its version is exactly the validated one (blocks a downgrade\n  // substituted into the rename window). Anything else is rolled back.\n- let post = verify_installed(dest);\n+ let post: Result<(), String> = Ok(());\n  if let Err(e) = post {\n  let _ = fs::remove_dir_all(dest);\n  if let Err(rollback) = restore_backup(backup, dest) {\n"
+  },
+  {
+    "name": "single-flight",
+    "file": "src-tauri/src/main.rs",
+    "kind": "rust",
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "3f78997df7c6fe019ce87facb5c998128996d6b90a4d6b49227729abed8a9913",
+    "restoredSha256": "3f78997df7c6fe019ce87facb5c998128996d6b90a4d6b49227729abed8a9913",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_gate_tests::staging_guard_is_exclusive_and_releases_on_failure ... FAILED",
+      "thread 'updater_gate_tests::staging_guard_is_exclusive_and_releases_on_failure' (13707970) panicked at src/main.rs:3070:2:",
+      "assertion failed: super::UpdateStageGuard::acquire().is_err()",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex db2f125de..4ccbbfb59 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -2029,8 +2029,8 @@ static UPDATE_STAGE_IN_FLIGHT: AtomicBool = AtomicBool::new(false);\n struct UpdateStageGuard;\n impl UpdateStageGuard {\n  fn acquire() -> Result<Self, UpdateError> {\n- UPDATE_STAGE_IN_FLIGHT.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)\n- .map(|_| Self).map_err(|_| UpdateError { code: \"update_busy\", message: \"An update check is already running.\" })\n+ UPDATE_STAGE_IN_FLIGHT.store(true, Ordering::Release);\n+ Ok(Self)\n  }\n }\n impl Drop for UpdateStageGuard { fn drop(&mut self) { UPDATE_STAGE_IN_FLIGHT.store(false, Ordering::Release); } }\n"
+  },
+  {
+    "name": "manual-staged-gate",
+    "file": "src-tauri/src/main.rs",
+    "kind": "source",
+    "baseline": [
+      13,
+      0
+    ],
+    "red": [
+      12,
+      1
+    ],
+    "sha256": "3f78997df7c6fe019ce87facb5c998128996d6b90a4d6b49227729abed8a9913",
+    "restoredSha256": "3f78997df7c6fe019ce87facb5c998128996d6b90a4d6b49227729abed8a9913",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 7 - apply and boot each capture a mandatory pin and validate before swapping",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex db2f125de..5e2a0dee3 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -2424,7 +2424,7 @@ fn apply_staged_update_blocking() -> Result<(), String> {\n  // re-download, so we leave it: boot-apply's own discard sweeps a genuinely\n  // invalid bundle on the next launch (self-healing), and it is never an\n  // apply-gate bypass because the swap only runs on Ok.\n- let staged_version = validate_staged_bundle(&staged, &requirement)?;\n+ let staged_version = read_bundle_short_version(&staged)?;\n  swap_staged_into_place(&staged, &dest, &backup, &requirement, &staged_version)?;\n \n  // The swap already landed on disk, so the new version runs no matter what.\n"
+  },
+  {
+    "name": "boot-staged-gate",
+    "file": "src-tauri/src/main.rs",
+    "kind": "source",
+    "baseline": [
+      13,
+      0
+    ],
+    "red": [
+      12,
+      1
+    ],
+    "sha256": "3f78997df7c6fe019ce87facb5c998128996d6b90a4d6b49227729abed8a9913",
+    "restoredSha256": "3f78997df7c6fe019ce87facb5c998128996d6b90a4d6b49227729abed8a9913",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 7 - apply and boot each capture a mandatory pin and validate before swapping",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex db2f125de..2a83cd2d8 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -2486,7 +2486,7 @@ fn maybe_apply_staged_update_on_boot() {\n  Ok(r) => r,\n  Err(e) => return discard(e),\n  };\n- let staged_version = match validate_staged_bundle(&staged, &requirement) {\n+ let staged_version = match read_bundle_short_version(&staged) {\n  Ok(v) => v,\n  Err(e) => return discard(e),\n  };\n"
+  },
+  {
+    "name": "browser-url",
+    "file": "src/app/desktop-updater.ts",
+    "kind": "ui",
+    "baseline": [
+      22,
+      0
+    ],
+    "red": [
+      20,
+      2
+    ],
+    "sha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "restoredSha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 14 - malformed native result fails closed: {\"status\":\"browser_download\",\"version\":\"9.2.0\",\"downloadUrl\":\"https://evil.example/update.dmg\",\"reason\":\"no_signer_pin\",\"checkedAt\":1790000000000}",
+      "  name: 'AssertionError'",
+      "not ok 15 - malformed native result fails closed: {\"status\":\"browser_download\",\"version\":\"9.2.0\",\"downloadUrl\":\"https://github.com/bradleybond512/crystal-ball/releases/tag/v9.2.0?redirect=evil\",\"reason\":\"no_signer_pin\",\"checkedAt\":1790000000000}",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/app/desktop-updater.ts b/src/app/desktop-updater.ts\nindex 5d6371c21..6182ab37b 100644\n--- a/src/app/desktop-updater.ts\n+++ b/src/app/desktop-updater.ts\n@@ -31,7 +31,7 @@ function isNativeUpdateResult(value: unknown): value is NativeUpdateResult {\n   if (result.status === 'ready') return true;\n   return result.status === 'browser_download'\n     && typeof result.reason === 'string' && BROWSER_DOWNLOAD_REASONS.has(result.reason)\n-    && result.downloadUrl === `https://github.com/bradleybond512/crystal-ball/releases/tag/v${result.version}`;\n+    && true;\n }\n \n export class DesktopUpdater implements AppModule {\n"
+  },
+  {
+    "name": "native-result-validation",
+    "file": "src/app/desktop-updater.ts",
+    "kind": "ui",
+    "baseline": [
+      22,
+      0
+    ],
+    "red": [
+      13,
+      9
+    ],
+    "sha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "restoredSha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 8 - malformed native result fails closed: {\"status\":\"unknown\",\"version\":\"9.2.0\",\"checkedAt\":1790000000000}",
+      "  name: 'AssertionError'",
+      "not ok 9 - malformed native result fails closed: {\"status\":\"ready\",\"version\":\"\",\"checkedAt\":1790000000000}",
+      "  name: 'AssertionError'",
+      "not ok 10 - malformed native result fails closed: {\"status\":\"ready\",\"version\":\"<img src=x>\",\"checkedAt\":1790000000000}",
+      "  name: 'AssertionError'",
+      "not ok 11 - malformed native result fails closed: {\"status\":\"ready\",\"version\":\"9.2.0\",\"checkedAt\":\"yesterday\"}",
+      "  name: 'AssertionError'",
+      "not ok 12 - malformed native result fails closed: {\"status\":\"ready\",\"version\":\"9.2.0\",\"checkedAt\":-1}",
+      "  name: 'AssertionError'",
+      "not ok 13 - malformed native result fails closed: {\"status\":\"up_to_date\",\"checkedAt\":1790000000000}",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/app/desktop-updater.ts b/src/app/desktop-updater.ts\nindex 5d6371c21..5337b7f4a 100644\n--- a/src/app/desktop-updater.ts\n+++ b/src/app/desktop-updater.ts\n@@ -143,7 +143,7 @@ export class DesktopUpdater implements AppModule {\n  try {\n  const result = await invokeTauri<unknown>('stage_latest_update');\n  if (this.ctx.isDestroyed || this.destroyed) return;\n- if (!isNativeUpdateResult(result)) throw new Error('Invalid native updater result');\n+ \n  await this.presentUpdate(result);\n  } catch (error) {\n  if (this.ctx.isDestroyed || this.destroyed) return;\n"
+  },
+  {
+    "name": "failed-check-state",
+    "file": "src/app/desktop-updater.ts",
+    "kind": "ui",
+    "baseline": [
+      22,
+      0
+    ],
+    "red": [
+      10,
+      12
+    ],
+    "sha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "restoredSha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 2 - native failure cannot promote a forged localStorage staging hint or stale ready toast",
+      "  name: 'AssertionError'",
+      "not ok 6 - malformed native result fails closed: null",
+      "  name: 'AssertionError'",
+      "not ok 7 - malformed native result fails closed: {}",
+      "  name: 'AssertionError'",
+      "not ok 8 - malformed native result fails closed: {\"status\":\"unknown\",\"version\":\"9.2.0\",\"checkedAt\":1790000000000}",
+      "  name: 'AssertionError'",
+      "not ok 9 - malformed native result fails closed: {\"status\":\"ready\",\"version\":\"\",\"checkedAt\":1790000000000}",
+      "  name: 'AssertionError'",
+      "not ok 10 - malformed native result fails closed: {\"status\":\"ready\",\"version\":\"<img src=x>\",\"checkedAt\":1790000000000}",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/app/desktop-updater.ts b/src/app/desktop-updater.ts\nindex 5d6371c21..d77b90b2b 100644\n--- a/src/app/desktop-updater.ts\n+++ b/src/app/desktop-updater.ts\n@@ -151,7 +151,7 @@ export class DesktopUpdater implements AppModule {\n  error: error instanceof Error ? error.message : 'Native update check failed',\n  });\n  document.querySelector('.update-toast:not(.update-info-toast)')?.remove();\n- this.setUpdateState(null);\n+ \n  if (this.manualCheckRequested) this.showInfoToast('Could not check for updates. Please try again.');\n  } finally {\n  this.checkInFlight = false;\n"
+  },
+  {
+    "name": "destroyed-readiness",
+    "file": "src/app/desktop-updater.ts",
+    "kind": "ui",
+    "baseline": [
+      22,
+      0
+    ],
+    "red": [
+      21,
+      1
+    ],
+    "sha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "restoredSha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 17 - pending native work stays checking and completion after destroy cannot show readiness",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/app/desktop-updater.ts b/src/app/desktop-updater.ts\nindex 5d6371c21..148869484 100644\n--- a/src/app/desktop-updater.ts\n+++ b/src/app/desktop-updater.ts\n@@ -142,7 +142,7 @@ export class DesktopUpdater implements AppModule {\n  this.setUpdateState({ phase: 'checking' });\n  try {\n  const result = await invokeTauri<unknown>('stage_latest_update');\n- if (this.ctx.isDestroyed || this.destroyed) return;\n+ \n  if (!isNativeUpdateResult(result)) throw new Error('Invalid native updater result');\n  await this.presentUpdate(result);\n  } catch (error) {\n"
+  },
+  {
+    "name": "sidebar-failed-apply",
+    "file": "src/app/panel-layout.ts",
+    "kind": "ui",
+    "baseline": [
+      22,
+      0
+    ],
+    "red": [
+      21,
+      1
+    ],
+    "sha256": "896af013e4e7340fb8ebe1e820e596d1974517b560fde6ece519258f715e2724",
+    "restoredSha256": "896af013e4e7340fb8ebe1e820e596d1974517b560fde6ece519258f715e2724",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 22 - sidebar apply rejection clears shared ready state, toast and button, then allows a fresh check",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/app/panel-layout.ts b/src/app/panel-layout.ts\nindex b3e410060..d5b253680 100644\n--- a/src/app/panel-layout.ts\n+++ b/src/app/panel-layout.ts\n@@ -1076,7 +1076,7 @@ export class PanelLayoutManager implements AppModule {\n  // On success the bundle is swapped and the app relaunches, so this\n  // promise never resolves here; only a failure returns control to JS.\n  invokeTauri<void>('apply_staged_update').catch(() => {\n- this.ctx.updateState = null;\n+ \n  document.querySelector('.update-toast[data-kind=\"ready\"]')?.remove();\n  this.renderSidebarUpdateBtn();\n  });\n"
+  },
+  {
+    "name": "native-no-renderer-arguments",
+    "file": "src-tauri/src/main.rs",
+    "kind": "source",
+    "baseline": [
+      13,
+      0
+    ],
+    "red": [
+      12,
+      1
+    ],
+    "sha256": "3f78997df7c6fe019ce87facb5c998128996d6b90a4d6b49227729abed8a9913",
+    "restoredSha256": "3f78997df7c6fe019ce87facb5c998128996d6b90a4d6b49227729abed8a9913",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 1 - native staging accepts no renderer-selected artifact inputs",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex db2f125de..0c846f4c4 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -2059,7 +2059,7 @@ fn update_asset_client(initial: &str, timeout: u64) -> Result<reqwest::Client, U\n }\n \n #[tauri::command]\n-async fn stage_latest_update(webview: Webview) -> Result<UpdateOutcome, UpdateError> {\n+async fn stage_latest_update(webview: Webview, download_url: String) -> Result<UpdateOutcome, UpdateError> {\n  require_trusted_window(webview.label()).map_err(|_| UpdateError { code: \"unauthorized\", message: \"This window cannot check updates.\" })?;\n  let guard = UpdateStageGuard::acquire()?;\n  let checked_at = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|_| UpdateError::check())?.as_millis() as u64;\n"
+  },
+  {
+    "name": "renderer-no-artifact-arguments",
+    "file": "src/app/desktop-updater.ts",
+    "kind": "source",
+    "baseline": [
+      13,
+      0
+    ],
+    "red": [
+      11,
+      2
+    ],
+    "sha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "restoredSha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 2 - the renderer requests staging without supplying an artifact or checksum",
+      "  name: 'AssertionError'",
+      "not ok 13 - only native verified outcomes establish staged readiness",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/app/desktop-updater.ts b/src/app/desktop-updater.ts\nindex 5d6371c21..43f15e737 100644\n--- a/src/app/desktop-updater.ts\n+++ b/src/app/desktop-updater.ts\n@@ -141,7 +141,7 @@ export class DesktopUpdater implements AppModule {\n  this.checkInFlight = true;\n  this.setUpdateState({ phase: 'checking' });\n  try {\n- const result = await invokeTauri<unknown>('stage_latest_update');\n+ const result = await invokeTauri<unknown>('stage_latest_update', { downloadUrl: 'https://example.org/update.dmg' });\n  if (this.ctx.isDestroyed || this.destroyed) return;\n  if (!isNativeUpdateResult(result)) throw new Error('Invalid native updater result');\n  await this.presentUpdate(result);\n"
+  },
+  {
+    "name": "storage-fallback",
+    "file": "src/app/desktop-updater.ts",
+    "kind": "source",
+    "baseline": [
+      13,
+      0
+    ],
+    "red": [
+      11,
+      2
+    ],
+    "sha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "restoredSha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 3 - native staged readiness has no renderer-storage fallback",
+      "  name: 'AssertionError'",
+      "not ok 13 - only native verified outcomes establish staged readiness",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/app/desktop-updater.ts b/src/app/desktop-updater.ts\nindex 5d6371c21..13ad6b476 100644\n--- a/src/app/desktop-updater.ts\n+++ b/src/app/desktop-updater.ts\n@@ -144,6 +144,7 @@ export class DesktopUpdater implements AppModule {\n  const result = await invokeTauri<unknown>('stage_latest_update');\n  if (this.ctx.isDestroyed || this.destroyed) return;\n  if (!isNativeUpdateResult(result)) throw new Error('Invalid native updater result');\n+ if (localStorage.getItem('wm-update-staged-9.2.0')) await this.promptReady(__APP_VERSION__, '9.2.0', false);\n  await this.presentUpdate(result);\n  } catch (error) {\n  if (this.ctx.isDestroyed || this.destroyed) return;\n"
+  },
+  {
+    "name": "source-staging-pin",
+    "file": "src-tauri/src/main.rs",
+    "kind": "source",
+    "baseline": [
+      13,
+      0
+    ],
+    "red": [
+      12,
+      1
+    ],
+    "sha256": "3f78997df7c6fe019ce87facb5c998128996d6b90a4d6b49227729abed8a9913",
+    "restoredSha256": "3f78997df7c6fe019ce87facb5c998128996d6b90a4d6b49227729abed8a9913",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 6 - updater preserves Apple anchoring and captures one mandatory staging pin",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex db2f125de..95eb4a1ab 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -2173,7 +2173,7 @@ fn stage_verified_update(download: updater_policy::VerifiedDownload, dest: Strin\n  let source = format!(\"{}/Crystal Ball.app\", mount_point);\n \n  let stage_result = (|| -> Result<String, String> {\n- validate_candidate_bundle(&source, &requirement, Some(&expected_version))?;\n+ validate_candidate_bundle(&source, &requirement, None)?;\n  reject_symlinked_path(&staged, \"request staging bundle\")?;\n  let _ = fs::remove_dir_all(&staged);\n  copy_app_bundle_preserving_signature(&source, &staged)?;\n"
+  },
+  {
+    "name": "source-installed-integrity",
+    "file": "src-tauri/src/main.rs",
+    "kind": "source",
+    "baseline": [
+      13,
+      0
+    ],
+    "red": [
+      12,
+      1
+    ],
+    "sha256": "3f78997df7c6fe019ce87facb5c998128996d6b90a4d6b49227729abed8a9913",
+    "restoredSha256": "3f78997df7c6fe019ce87facb5c998128996d6b90a4d6b49227729abed8a9913",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 10 - non-Apple installs require certificate trust instead of an optional-pin bypass",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex db2f125de..22770ea09 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1840,7 +1840,7 @@ fn installed_signer_requirement(installed: &str) -> Result<SignerRequirement, St\n  reject_symlinked_path(installed, \"install path\")?;\n  if !Path::new(installed).exists() { return Err(\"Installed bundle is missing\".into()); }\n  verify_update_bundle_identifier(installed)?;\n- verify_app_bundle_signature(installed, \"Installed app\")?;\n+ \n  let apple_anchor = codesign_satisfies(installed, \"anchor apple generic\");\n  let display = updater_codesign(&[\"-dvvv\", \"-r-\", installed])?;\n  if !display.status.success() { return Err(\"Installed signer could not be read\".into()); }\n"
+  },
+  {
+    "name": "ui-native-version",
+    "file": "src/app/desktop-updater.ts",
+    "kind": "ui",
+    "baseline": [
+      22,
+      0
+    ],
+    "red": [
+      20,
+      2
+    ],
+    "sha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "restoredSha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 1 - native staging owns the version and readiness; renderer sends no selection arguments or fetches",
+      "  name: 'AssertionError'",
+      "not ok 4 - ready dismissal and notification suppression follow the native version; manual check reopens it",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/app/desktop-updater.ts b/src/app/desktop-updater.ts\nindex 5d6371c21..8fcac618d 100644\n--- a/src/app/desktop-updater.ts\n+++ b/src/app/desktop-updater.ts\n@@ -172,7 +172,7 @@ export class DesktopUpdater implements AppModule {\n  this.setUpdateState({ phase: 'up-to-date' });\n  if (this.manualCheckRequested) this.showInfoToast(`You're up to date \u2014 v${result.currentVersion} is the latest version.`);\n  } else if (result.status === 'ready') {\n- await this.promptReady(current, result.version, this.manualCheckRequested);\n+ await this.promptReady(current, current, this.manualCheckRequested);\n  } else {\n  await this.offerBrowserDownload(current, result.version, result.downloadUrl, this.manualCheckRequested);\n  }\n"
+  },
+  {
+    "name": "ui-native-current-version",
+    "file": "src/app/desktop-updater.ts",
+    "kind": "ui",
+    "baseline": [
+      22,
+      0
+    ],
+    "red": [
+      21,
+      1
+    ],
+    "sha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "restoredSha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 3 - up-to-date result uses the native current version and check timestamp",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/app/desktop-updater.ts b/src/app/desktop-updater.ts\nindex 5d6371c21..bf76a0a95 100644\n--- a/src/app/desktop-updater.ts\n+++ b/src/app/desktop-updater.ts\n@@ -170,7 +170,7 @@ export class DesktopUpdater implements AppModule {\n  if (result.status === 'up_to_date') {\n  this.logUpdaterOutcome('no_update', { current: result.currentVersion });\n  this.setUpdateState({ phase: 'up-to-date' });\n- if (this.manualCheckRequested) this.showInfoToast(`You're up to date \u2014 v${result.currentVersion} is the latest version.`);\n+ if (this.manualCheckRequested) this.showInfoToast(`You're up to date \u2014 v${current} is the latest version.`);\n  } else if (result.status === 'ready') {\n  await this.promptReady(current, result.version, this.manualCheckRequested);\n  } else {\n"
+  },
+  {
+    "name": "ui-manual-dismissal",
+    "file": "src/app/desktop-updater.ts",
+    "kind": "ui",
+    "baseline": [
+      22,
+      0
+    ],
+    "red": [
+      20,
+      2
+    ],
+    "sha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "restoredSha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 4 - ready dismissal and notification suppression follow the native version; manual check reopens it",
+      "  name: 'AssertionError'",
+      "not ok 19 - browser fallback clears an earlier ready prompt even when that version was dismissed",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/app/desktop-updater.ts b/src/app/desktop-updater.ts\nindex 5d6371c21..7f3d51e67 100644\n--- a/src/app/desktop-updater.ts\n+++ b/src/app/desktop-updater.ts\n@@ -206,7 +206,7 @@ export class DesktopUpdater implements AppModule {\n  this.logUpdaterOutcome('update_available', { current, remote, staged: true });\n  this.setUpdateState({ phase: 'ready', version: remote });\n  trackUpdateShown(current, remote);\n- if (!localStorage.getItem(dismissKey) || manual) {\n+ if (!localStorage.getItem(dismissKey)) {\n  this.showReadyToast(current, remote);\n  }\n  if (!localStorage.getItem(notifiedKey)) {\n"
+  },
+  {
+    "name": "ui-browser-link",
+    "file": "src/app/desktop-updater.ts",
+    "kind": "ui",
+    "baseline": [
+      22,
+      0
+    ],
+    "red": [
+      21,
+      1
+    ],
+    "sha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "restoredSha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 5 - browser-only native outcome offers the canonical release page and never apply",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/app/desktop-updater.ts b/src/app/desktop-updater.ts\nindex 5d6371c21..d8cccdd18 100644\n--- a/src/app/desktop-updater.ts\n+++ b/src/app/desktop-updater.ts\n@@ -367,7 +367,7 @@ export class DesktopUpdater implements AppModule {\n  trackUpdateClicked(version);\n  // Open the canonical release page for a manual download.\n  if (this.ctx.isDesktopApp) {\n- void invokeTauri<void>('open_url', { url: downloadUrl }).catch((error: unknown) => {\n+ void invokeTauri<void>('open_url', { url: 'https://example.org/update' }).catch((error: unknown) => {\n  this.logUpdaterOutcome('open_failed', {\n  downloadUrl,\n  error: error instanceof Error ? error.message : String(error),\n"
+  },
+  {
+    "name": "ui-web-stage",
+    "file": "src/app/desktop-updater.ts",
+    "kind": "ui",
+    "baseline": [
+      22,
+      0
+    ],
+    "red": [
+      21,
+      1
+    ],
+    "sha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "restoredSha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 18 - web builds cannot initiate native staging",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/app/desktop-updater.ts b/src/app/desktop-updater.ts\nindex 5d6371c21..8167317b1 100644\n--- a/src/app/desktop-updater.ts\n+++ b/src/app/desktop-updater.ts\n@@ -135,7 +135,7 @@ export class DesktopUpdater implements AppModule {\n   }\n \n   private async checkForUpdate(manual = false): Promise<void> {\n- if (!this.ctx.isDesktopApp || this.ctx.isDestroyed || this.destroyed) return;\n+ if (this.ctx.isDestroyed || this.destroyed) return;\n  this.manualCheckRequested ||= manual;\n  if (this.checkInFlight) return;\n  this.checkInFlight = true;\n"
+  },
+  {
+    "name": "ui-stale-ready-kind",
+    "file": "src/app/desktop-updater.ts",
+    "kind": "ui",
+    "baseline": [
+      22,
+      0
+    ],
+    "red": [
+      21,
+      1
+    ],
+    "sha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "restoredSha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 19 - browser fallback clears an earlier ready prompt even when that version was dismissed",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/app/desktop-updater.ts b/src/app/desktop-updater.ts\nindex 5d6371c21..eddfec4cf 100644\n--- a/src/app/desktop-updater.ts\n+++ b/src/app/desktop-updater.ts\n@@ -163,7 +163,7 @@ export class DesktopUpdater implements AppModule {\n  this.markChecked(result.checkedAt);\n  const existing = document.querySelector<HTMLElement>('.update-toast:not(.update-info-toast)');\n  const nextKind = result.status === 'ready' ? 'ready' : 'browser';\n- if (result.status === 'up_to_date' || existing?.dataset.version !== result.version || existing.dataset.kind !== nextKind) {\n+ if (result.status === 'up_to_date' || existing?.dataset.version !== result.version) {\n  existing?.remove();\n  }\n  const current = __APP_VERSION__;\n"
+  },
+  {
+    "name": "ui-coalescing",
+    "file": "src/app/desktop-updater.ts",
+    "kind": "ui",
+    "baseline": [
+      22,
+      0
+    ],
+    "red": [
+      21,
+      1
+    ],
+    "sha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "restoredSha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 20 - concurrent focus/manual checks share the native operation and preserve manual feedback",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/app/desktop-updater.ts b/src/app/desktop-updater.ts\nindex 5d6371c21..8cb03e02f 100644\n--- a/src/app/desktop-updater.ts\n+++ b/src/app/desktop-updater.ts\n@@ -137,7 +137,7 @@ export class DesktopUpdater implements AppModule {\n   private async checkForUpdate(manual = false): Promise<void> {\n  if (!this.ctx.isDesktopApp || this.ctx.isDestroyed || this.destroyed) return;\n  this.manualCheckRequested ||= manual;\n- if (this.checkInFlight) return;\n+ \n  this.checkInFlight = true;\n  this.setUpdateState({ phase: 'checking' });\n  try {\n"
+  },
+  {
+    "name": "ui-toast-apply-failure",
+    "file": "src/app/desktop-updater.ts",
+    "kind": "ui",
+    "baseline": [
+      22,
+      0
+    ],
+    "red": [
+      21,
+      1
+    ],
+    "sha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "restoredSha256": "7e634ffa26c200196aaab49e3e490be95df0ca43bda5bb1ed9ea5386948b111b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 21 - failed apply removes ready actions and asks for a fresh native check",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/app/desktop-updater.ts b/src/app/desktop-updater.ts\nindex 5d6371c21..1992ae119 100644\n--- a/src/app/desktop-updater.ts\n+++ b/src/app/desktop-updater.ts\n@@ -301,7 +301,7 @@ export class DesktopUpdater implements AppModule {\n  this.logUpdaterOutcome('open_failed', {\n  error: error instanceof Error ? error.message : String(error),\n  });\n- this.setUpdateState(null);\n+ \n  toast.remove();\n  this.showInfoToast('Could not apply the update. Check for updates to try again.');\n  });\n"
+  },
+  {
+    "name": "initial-fragment-normalization",
+    "file": "src-tauri/src/updater_policy.rs",
+    "test": "updater_policy::tests::canonical_initial_url_rejects_untrusted_spelling",
+    "tip": "55cec43da1be9d8a3634624ac5c6ed1ac2ed4e28",
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "src-tauri/Cargo.toml",
+      "updater",
+      "--no-default-features"
+    ],
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "restoredSha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "diffConfirmed": true,
+    "cleanBefore": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_policy::tests::canonical_initial_url_rejects_untrusted_spelling ... FAILED",
+      "thread 'updater_policy::tests::canonical_initial_url_rejects_untrusted_spelling' (13717746) panicked at src/updater_policy.rs:442:13:",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/updater_policy.rs b/src-tauri/src/updater_policy.rs\nindex 65701d723..898b27e5f 100644\n--- a/src-tauri/src/updater_policy.rs\n+++ b/src-tauri/src/updater_policy.rs\n@@ -135,6 +135,7 @@ pub fn asset_url(tag: &str, name: &str) -> String {\n }\n \n pub fn validate_initial_url(raw: &str, expected: &str) -> Result<(), ()> {\n+    let raw = raw.split('#').next().unwrap_or(raw);\n     if raw != expected\n         || raw.bytes().any(|b| b <= 32 || b >= 127)\n         || raw.contains(['%', '\\\\', '?', '#'])\n"
+  },
+  {
+    "name": "strict-version-leading-zero",
+    "file": "src-tauri/src/updater_policy.rs",
+    "test": "updater_policy::tests::strict_versions_do_not_guess",
+    "tip": "55cec43da1be9d8a3634624ac5c6ed1ac2ed4e28",
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "src-tauri/Cargo.toml",
+      "updater",
+      "--no-default-features"
+    ],
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "restoredSha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "diffConfirmed": true,
+    "cleanBefore": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_policy::tests::strict_versions_do_not_guess ... FAILED",
+      "thread 'updater_policy::tests::strict_versions_do_not_guess' (13718491) panicked at src/updater_policy.rs:481:13:",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/updater_policy.rs b/src-tauri/src/updater_policy.rs\nindex 65701d723..ab46a04fa 100644\n--- a/src-tauri/src/updater_policy.rs\n+++ b/src-tauri/src/updater_policy.rs\n@@ -110,7 +110,7 @@ pub fn version(raw: &str) -> Result<[u32; 3], ()> {\n     let mut out = [0; 3];\n     for (i, part) in parts.iter().enumerate() {\n         if part.is_empty()\n-            || (part.len() > 1 && part.starts_with('0'))\n+            || false\n             || !part.bytes().all(|c| c.is_ascii_digit())\n         {\n             return Err(());\n"
+  },
+  {
+    "name": "self-signed-anchor-compatibility",
+    "file": "src-tauri/src/updater_policy.rs",
+    "test": "updater_policy::tests::self_signed_anchor_fingerprint_supports_both_conjunction_orders",
+    "tip": "55cec43da1be9d8a3634624ac5c6ed1ac2ed4e28",
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "src-tauri/Cargo.toml",
+      "updater",
+      "--no-default-features"
+    ],
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "restoredSha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "diffConfirmed": true,
+    "cleanBefore": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_policy::tests::self_signed_anchor_fingerprint_supports_both_conjunction_orders ... FAILED",
+      "thread 'updater_policy::tests::self_signed_anchor_fingerprint_supports_both_conjunction_orders' (13719225) panicked at src/updater_policy.rs:591:22:",
+      "called `Result::unwrap()` on an `Err` value: ()",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/updater_policy.rs b/src-tauri/src/updater_policy.rs\nindex 65701d723..78d24da09 100644\n--- a/src-tauri/src/updater_policy.rs\n+++ b/src-tauri/src/updater_policy.rs\n@@ -292,7 +292,7 @@ impl SignerRequirement {\n         } else {\n             return Err(());\n         };\n-        let fingerprint = if let Some(hash) = certificate.strip_prefix(\"anchor H\\\"\") {\n+        let fingerprint = if let Some(hash) = certificate.strip_prefix(\"unsupported anchor H\\\"\") {\n             hash\n         } else {\n             let (slot, hash) = certificate\n"
+  },
+  {
+    "name": "canonical-staged-downgrade",
+    "file": "src-tauri/src/updater_policy.rs",
+    "test": "updater_policy::tests::newer_existing_bundle_only_wins_after_verification",
+    "tip": "55cec43da1be9d8a3634624ac5c6ed1ac2ed4e28",
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "src-tauri/Cargo.toml",
+      "updater",
+      "--no-default-features"
+    ],
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "restoredSha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "diffConfirmed": true,
+    "cleanBefore": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_policy::tests::newer_existing_bundle_only_wins_after_verification ... FAILED",
+      "thread 'updater_policy::tests::newer_existing_bundle_only_wins_after_verification' (13719947) panicked at src/updater_policy.rs:635:9:",
+      "assertion `left == right` failed",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/updater_policy.rs b/src-tauri/src/updater_policy.rs\nindex 65701d723..758464cd1 100644\n--- a/src-tauri/src/updater_policy.rs\n+++ b/src-tauri/src/updater_policy.rs\n@@ -349,7 +349,7 @@ pub fn check_candidate(\n }\n pub fn published_version(candidate: &str, verified_existing: Result<String, String>) -> String {\n     match verified_existing {\n-        Ok(existing) if is_newer(&existing, candidate) => existing,\n+        Ok(existing) => existing,\n         _ => candidate.into(),\n     }\n }\n"
+  },
+  {
+    "name": "native-result-field-schema",
+    "file": "src-tauri/src/updater_policy.rs",
+    "test": "updater_policy::tests::result_contract_uses_native_versions_and_camel_case_fields",
+    "tip": "55cec43da1be9d8a3634624ac5c6ed1ac2ed4e28",
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "src-tauri/Cargo.toml",
+      "updater",
+      "--no-default-features"
+    ],
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "restoredSha256": "2ec1b351f526a2df30077549852498ee2e4f3265659ab495ec0ec4243291eeae",
+    "diffConfirmed": true,
+    "cleanBefore": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_policy::tests::result_contract_uses_native_versions_and_camel_case_fields ... FAILED",
+      "thread 'updater_policy::tests::result_contract_uses_native_versions_and_camel_case_fields' (13720740) panicked at src/updater_policy.rs:646:9:",
+      "assertion `left == right` failed",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/updater_policy.rs b/src-tauri/src/updater_policy.rs\nindex 65701d723..d6ad0aefe 100644\n--- a/src-tauri/src/updater_policy.rs\n+++ b/src-tauri/src/updater_policy.rs\n@@ -11,7 +11,7 @@ const RELEASE_BASE: &str = \"https://github.com/bradleybond512/crystal-ball/relea\n #[serde(\n     tag = \"status\",\n     rename_all = \"snake_case\",\n-    rename_all_fields = \"camelCase\"\n+    rename_all_fields = \"snake_case\"\n )]\n pub enum UpdateOutcome {\n     UpToDate {\n"
+  },
+  {
+    "name": "symlinked-staged-swap-gate",
+    "file": "src-tauri/src/main.rs",
+    "test": "updater_gate_tests::symlinked_staged_root_never_reaches_swap_or_verifier",
+    "tip": "55cec43da1be9d8a3634624ac5c6ed1ac2ed4e28",
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "src-tauri/Cargo.toml",
+      "updater",
+      "--no-default-features"
+    ],
+    "baseline": [
+      34,
+      0
+    ],
+    "red": [
+      33,
+      1
+    ],
+    "sha256": "3f78997df7c6fe019ce87facb5c998128996d6b90a4d6b49227729abed8a9913",
+    "restoredSha256": "3f78997df7c6fe019ce87facb5c998128996d6b90a4d6b49227729abed8a9913",
+    "diffConfirmed": true,
+    "cleanBefore": true,
+    "cleanRestored": true,
+    "assertions": [
+      "test updater_gate_tests::symlinked_staged_root_never_reaches_swap_or_verifier ... FAILED",
+      "thread 'updater_gate_tests::symlinked_staged_root_never_reaches_swap_or_verifier' (13721455) panicked at src/main.rs:3102:130:",
+      "verification must not run",
+      "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s"
+    ],
+    "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex db2f125de..2d119cde3 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1977,7 +1977,7 @@ fn swap_staged_into_place_with(\n  backup: &str,\n  verify_installed: impl FnOnce(&str) -> Result<(), String>,\n ) -> Result<(), String> {\n- reject_symlinked_path(staged, \"staged bundle\")?;\n+\n  reject_symlinked_path(dest, \"install path\")?;\n \n  let _ = fs::remove_dir_all(backup);\n"
+  }
+]

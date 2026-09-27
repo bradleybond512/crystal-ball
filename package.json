@@ -58,6 +58,7 @@
     "typecheck": "tsc --noEmit",
     "typecheck:api": "tsc --noEmit -p tsconfig.api.json",
     "typecheck:all": "tsc --noEmit && tsc --noEmit -p tsconfig.api.json",
+    "test:desktop-updater": "node --test tests/desktop-updater-signature.test.mjs tests/desktop-updater-authority.test.mjs && tsx --test src/app/__tests__/desktop-updater.test.mts",
     "research:eval": "bash scripts/research-eval.sh",
     "research:eval:rotation": "bash scripts/research-eval.sh rotation",
     "tauri": "tauri",

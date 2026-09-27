@@ -23,6 +23,8 @@ use tauri::menu::{AboutMetadata, Menu, MenuItemKind, MenuItem, PredefinedMenuIte
 use tauri::{AppHandle, Manager, RunEvent, TitleBarStyle, Webview, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 mod corelocation;
 mod current_location;
+mod updater_policy;
+use updater_policy::{BrowserReason, SignerRequirement, UpdateError, UpdateOutcome};
 
 const DEFAULT_LOCAL_API_PORT: u16 = 46123;
 const KEYRING_SERVICE: &str = "crystal-ball";
@@ -1776,32 +1778,39 @@ fn validate_expected_sha256(raw: Option<&str>) -> Result<String, String> {
  Ok(normalized)
 }
 
-/// R2-SEC-009/011: host allowlist enforced for any URL the updater
-/// will download from. Returns Ok if the URL parses and its host is
-/// one of GitHub's release-asset hosts; Err otherwise.
-fn validate_update_url(raw: &str) -> Result<(), String> {
- let parsed = reqwest::Url::parse(raw).map_err(|e| format!("Invalid update URL: {e}"))?;
- let host = parsed.host_str().unwrap_or("");
- if !matches!(host, "objects.githubusercontent.com" | "github.com" | "codeload.github.com") {
- return Err(format!(
- "Update URL host '{host}' is not trusted — must be from github.com"
- ));
+#[cfg(target_os = "macos")]
+fn updater_codesign(args: &[&str]) -> Result<std::process::Output, String> {
+ use std::io::Read;
+ const OUTPUT_LIMIT: u64 = 64 * 1024;
+ let mut child = Command::new("/usr/bin/codesign")
+ .args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped())
+ .spawn().map_err(|_| "Could not start signature verification".to_string())?;
+ let stdout = child.stdout.take().ok_or("Signature verifier stdout unavailable")?;
+ let stderr = child.stderr.take().ok_or("Signature verifier stderr unavailable")?;
+ let read = |stream: Box<dyn Read + Send>| std::thread::spawn(move || {
+ let mut bytes = Vec::new();
+ stream.take(OUTPUT_LIMIT + 1).read_to_end(&mut bytes).map(|_| bytes)
+ });
+ let out = read(Box::new(stdout));
+ let err = read(Box::new(stderr));
+ let start = Instant::now();
+ let status = loop {
+ match child.try_wait() {
+ Ok(Some(status)) => break Ok(status),
+ Ok(None) if start.elapsed() < Duration::from_secs(30) => std::thread::sleep(Duration::from_millis(20)),
+ _ => { let _ = child.kill(); let _ = child.wait(); break Err("Signature verification timed out or failed".to_string()); }
  }
- Ok(())
+ };
+ let stdout = out.join().map_err(|_| "Signature verifier output failed")?.map_err(|_| "Signature verifier output failed")?;
+ let stderr = err.join().map_err(|_| "Signature verifier output failed")?.map_err(|_| "Signature verifier output failed")?;
+ if stdout.len() as u64 > OUTPUT_LIMIT || stderr.len() as u64 > OUTPUT_LIMIT { return Err("Signature verifier output exceeded limit".into()); }
+ Ok(std::process::Output { status: status?, stdout, stderr })
 }
 
 #[cfg(target_os = "macos")]
 fn verify_app_bundle_signature(app_path: &str, label: &str) -> Result<(), String> {
- let verify = Command::new("codesign")
- .args(["--verify", "--deep", "--strict", app_path])
- .output()
- .map_err(|e| format!("codesign verify failed for {label}: {e}"))?;
- if !verify.status.success() {
- return Err(format!(
- "{label} signature verification failed: {}",
- String::from_utf8_lossy(&verify.stderr)
- ));
- }
+ let verify = updater_codesign(&["--verify", "--deep", "--strict", app_path])?;
+ if !verify.status.success() { return Err(format!("{label} signature verification failed")); }
  Ok(())
 }
 
@@ -1820,106 +1829,33 @@ fn parse_team_identifier(codesign_stderr: &str) -> Option<String> {
  None
 }
 
-/// Read a bundle's Apple Developer Team Identifier via codesign, if it has one.
-/// Returns None on any codesign failure OR an absent/`not set` team so callers
-/// must decide fail-open vs fail-closed explicitly rather than trusting this.
-#[cfg(target_os = "macos")]
-fn bundle_team_identifier(app_path: &str) -> Option<String> {
- let out = Command::new("codesign")
- .args(["-dvvv", app_path])
- .output()
- .ok()?;
- if !out.status.success() {
- return None;
- }
- // codesign writes its display output to stderr.
- parse_team_identifier(&String::from_utf8_lossy(&out.stderr))
-}
-
-/// Build the Apple-anchored designated requirement the update bundle must satisfy.
-/// Pure so it is unit-tested. `anchor apple generic` forces the cert chain to
-/// Apple's root (an attacker's self-signed cert can NEVER satisfy it, no matter
-/// what TeamIdentifier string it claims); the identifier + team leaf clauses pin
-/// the update to our exact bundle ID and Developer Team.
-fn build_signer_requirement(bundle_id: &str, team: &str) -> String {
- format!(
- "anchor apple generic and identifier \"{bundle_id}\" and certificate leaf[subject.OU] = \"{team}\""
- )
-}
-
-/// Whether `app_path` satisfies a codesign requirement, decided strictly by the
-/// process exit status (a non-zero exit means "does not satisfy", never a fail-open).
 #[cfg(target_os = "macos")]
 fn codesign_satisfies(app_path: &str, requirement: &str) -> bool {
- Command::new("codesign")
- .args(["--verify", "--deep", "--strict", &format!("-R={requirement}"), app_path])
- .output()
- .map(|o| o.status.success())
- .unwrap_or(false)
+ updater_codesign(&["--verify", "--deep", "--strict", &format!("-R={requirement}"), app_path])
+ .map(|o| o.status.success()).unwrap_or(false)
 }
 
-/// The Apple-anchored designated requirement an update must satisfy to match the
-/// currently-installed app, or `None` when the running install is itself not
-/// Apple-anchored (an unsigned local dev build, where there is no real
-/// distribution to pin against).
-///
-/// Fails CLOSED in production: if the installed app IS Apple-signed but we cannot
-/// read its team, or its signature does not verify at all (broken/stripped rather
-/// than a genuine non-Apple build), this errors so callers refuse the update
-/// rather than falling through to integrity-only verification.
 #[cfg(target_os = "macos")]
-fn installed_signer_requirement(installed: &str) -> Result<Option<String>, String> {
- // Fail closed if the install path is gone: a missing bundle must never be read
- // as "unsigned dev build" and silently disable signer enforcement. Callers
- // capture this from the live running app, so absence here means a race/tamper.
- if !Path::new(installed).exists() {
- return Err(format!("Install path {installed} is missing — refusing update"));
- }
- // Is the running install a real Apple-distributed build, or an unsigned dev build?
- if !codesign_satisfies(installed, "anchor apple generic") {
- // The Apple-anchor requirement fails for BOTH a legitimately non-Apple build
- // (valid ad-hoc/dev signature, nothing to pin) AND a production install whose
- // signature is broken or stripped. Only the former may skip signer enforcement:
- // require an intact signature here so a corrupted install fails closed instead
- // of silently downgrading to integrity-only verification (which a compromised
- // release could then satisfy with a self-signed bundle).
+fn installed_signer_requirement(installed: &str) -> Result<SignerRequirement, String> {
+ reject_symlinked_path(installed, "install path")?;
+ if !Path::new(installed).exists() { return Err("Installed bundle is missing".into()); }
+ verify_update_bundle_identifier(installed)?;
  verify_app_bundle_signature(installed, "Installed app")?;
- return Ok(None);
- }
- let team = bundle_team_identifier(installed).ok_or_else(|| {
- "Installed app is Apple-signed but its team could not be read — refusing update".to_string()
- })?;
- Ok(Some(build_signer_requirement("com.bradleybond.crystalball", &team)))
+ let apple_anchor = codesign_satisfies(installed, "anchor apple generic");
+ let display = updater_codesign(&["-dvvv", "-r-", installed])?;
+ if !display.status.success() { return Err("Installed signer could not be read".into()); }
+ // codesign display information is stderr; designated requirements are stdout.
+ let stderr = String::from_utf8_lossy(&display.stderr);
+ let designated = format!("{}\n{}", String::from_utf8_lossy(&display.stdout), stderr);
+ let team = parse_team_identifier(&stderr);
+ updater_policy::choose_signer(true, apple_anchor, team.as_deref(), Some(&designated), |pin| codesign_satisfies(installed, pin))
+ .map_err(|_| "Installed bundle has no supported certificate signer pin".into())
 }
 
-/// Verify a bundle satisfies a captured signer requirement. `None` (dev build)
-/// always passes; a `Some` requirement is enforced strictly by codesign exit
-/// status, never fail-open.
 #[cfg(target_os = "macos")]
-fn verify_bundle_satisfies_requirement(path: &str, requirement: &Option<String>) -> Result<(), String> {
- let Some(req) = requirement else { return Ok(()) };
- let verify = Command::new("codesign")
- .args(["--verify", "--deep", "--strict", &format!("-R={req}"), path])
- .output()
- .map_err(|e| format!("codesign requirement check failed: {e}"))?;
- if !verify.status.success() {
- return Err(format!(
- "Bundle does not satisfy the pinned Apple signer requirement: {}",
- String::from_utf8_lossy(&verify.stderr)
- ));
- }
+fn verify_bundle_satisfies_requirement(path: &str, requirement: &SignerRequirement) -> Result<(), String> {
+ if !codesign_satisfies(path, requirement.as_str()) { return Err("Bundle does not satisfy the installed signer pin".into()); }
  Ok(())
-}
-
-/// `codesign --verify` proves a signature is intact but NOT who produced it, so a
-/// compromised release could ship a self-signed build that still passes the
-/// bundle-ID + integrity checks (a self-signed cert can claim any TeamIdentifier
-/// string). Pin the update to an APPLE-ANCHORED requirement carrying our bundle ID
-/// and the SAME Developer Team as the currently-installed app.
-#[cfg(target_os = "macos")]
-fn verify_same_signer_as_installed(candidate: &str, installed: &str) -> Result<(), String> {
- let requirement = installed_signer_requirement(installed)?;
- verify_bundle_satisfies_requirement(candidate, &requirement)
 }
 
 #[cfg(target_os = "macos")]
@@ -1937,31 +1873,8 @@ fn copy_app_bundle_preserving_signature(source: &str, dest: &str) -> Result<(), 
  Ok(())
 }
 
-/// Pure semver comparison for the boot-time staged-update gate. Strips a leading
-/// `v`, splits on `.`, and compares numeric parts (non-numeric -> 0). Returns
-/// true iff `candidate` is strictly newer than `current`. Ungated so it is
-/// unit-tested without the macOS cfg.
 fn is_semver_newer(candidate: &str, current: &str) -> bool {
- fn parts(v: &str) -> Vec<u64> {
- v.trim()
- .trim_start_matches(|c| c == 'v' || c == 'V')
- .split('.')
- .map(|p| {
- let digits: String = p.chars().take_while(|c| c.is_ascii_digit()).collect();
- digits.parse::<u64>().unwrap_or(0)
- })
- .collect()
- }
- let a = parts(candidate);
- let b = parts(current);
- for i in 0..a.len().max(b.len()) {
- let av = a.get(i).copied().unwrap_or(0);
- let bv = b.get(i).copied().unwrap_or(0);
- if av != bv {
- return av > bv;
- }
- }
- false
+ updater_policy::is_newer(candidate, current)
 }
 
 /// R2-SEC-009/011: verify the app bundle identifier before it can replace the
@@ -2037,8 +1950,32 @@ fn swap_staged_into_place(
  staged: &str,
  dest: &str,
  backup: &str,
- requirement: &Option<String>,
+ requirement: &SignerRequirement,
  expected_version: &str,
+) -> Result<(), String> {
+ swap_staged_into_place_with(staged, dest, backup, |dest| {
+ verify_app_bundle_signature(&dest, "Installed app")
+ .and_then(|_| verify_update_bundle_identifier(dest))
+ .and_then(|_| verify_bundle_satisfies_requirement(dest, requirement))
+ .and_then(|_| {
+ let landed = read_bundle_short_version(dest)?;
+ if landed == expected_version {
+ Ok(())
+ } else {
+ Err(format!(
+ "Installed version {landed} does not match the validated staged version {expected_version} — refusing"
+ ))
+ }
+ })
+ })
+}
+
+#[cfg(target_os = "macos")]
+fn swap_staged_into_place_with(
+ staged: &str,
+ dest: &str,
+ backup: &str,
+ verify_installed: impl FnOnce(&str) -> Result<(), String>,
 ) -> Result<(), String> {
  reject_symlinked_path(staged, "staged bundle")?;
  reject_symlinked_path(dest, "install path")?;
@@ -2063,19 +2000,7 @@ fn swap_staged_into_place(
  // Re-verify the bundle that is NOW installed — integrity, bundle ID, the pinned
  // signer, AND that its version is exactly the validated one (blocks a downgrade
  // substituted into the rename window). Anything else is rolled back.
- let post = verify_app_bundle_signature(&dest, "Installed app")
- .and_then(|_| verify_update_bundle_identifier(dest))
- .and_then(|_| verify_bundle_satisfies_requirement(dest, requirement))
- .and_then(|_| {
- let landed = read_bundle_short_version(dest)?;
- if landed == expected_version {
- Ok(())
- } else {
- Err(format!(
- "Installed version {landed} does not match the validated staged version {expected_version} — refusing"
- ))
- }
- });
+ let post = verify_installed(dest);
  if let Err(e) = post {
  let _ = fs::remove_dir_all(dest);
  if let Err(rollback) = restore_backup(backup, dest) {
@@ -2100,29 +2025,111 @@ fn restore_backup(backup: &str, dest: &str) -> Result<(), String> {
  fs::rename(backup, dest).map_err(|e| format!("restore backup failed: {e}"))
 }
 
-/// Download -> SHA-256 verify -> mount -> bundle-ID + signature verify -> copy
-/// into a PERSISTENT `{dest}.update-staged` bundle next to the live install.
-/// Does NOT swap or relaunch; apply_staged_update (or the boot-apply gate)
-/// performs the swap so the running session is never interrupted mid-flight.
-#[tauri::command]
-async fn stage_update(webview: Webview, download_url: String, expected_sha256: Option<String>) -> Result<(), String> {
- require_trusted_window(webview.label())?;
- // R2-SEC-009/011: enforce GitHub-host allowlist + mandatory hash up-front
- // so a bad request is rejected before any network or filesystem activity.
- validate_update_url(&download_url)?;
- let _ = validate_expected_sha256(expected_sha256.as_deref())?;
-
- #[cfg(not(target_os = "macos"))]
- {
- let _ = (download_url, expected_sha256);
- return Err("Auto-install is only supported on macOS".into());
+static UPDATE_STAGE_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
+struct UpdateStageGuard;
+impl UpdateStageGuard {
+ fn acquire() -> Result<Self, UpdateError> {
+ UPDATE_STAGE_IN_FLIGHT.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+ .map(|_| Self).map_err(|_| UpdateError { code: "update_busy", message: "An update check is already running." })
  }
+}
+impl Drop for UpdateStageGuard { fn drop(&mut self) { UPDATE_STAGE_IN_FLIGHT.store(false, Ordering::Release); } }
 
+async fn bounded_update_body(mut response: reqwest::Response, limit: u64, expected: Option<u64>) -> Result<Vec<u8>, UpdateError> {
+ if !response.status().is_success() || response.content_length().is_some_and(|n| n > limit || expected.is_some_and(|e| n != e)) { return Err(UpdateError::check()); }
+ let mut bytes = Vec::new();
+ while let Some(chunk) = response.chunk().await.map_err(|_| UpdateError::check())? {
+ updater_policy::check_body_length((bytes.len() as u64).saturating_add(chunk.len() as u64), limit, expected, false)?;
+ bytes.extend_from_slice(&chunk);
+ }
+ updater_policy::check_body_length(bytes.len() as u64, limit, expected, true)?;
+ Ok(bytes)
+}
+
+fn update_asset_client(initial: &str, timeout: u64) -> Result<reqwest::Client, UpdateError> {
+ updater_policy::validate_initial_url(initial, initial).map_err(|_| UpdateError::check())?;
+ let initial = initial.to_string();
+ reqwest::Client::builder().use_native_tls()
+ .user_agent(concat!("CrystalBall-Desktop/", env!("CARGO_PKG_VERSION")))
+ .timeout(Duration::from_secs(timeout))
+ .redirect(reqwest::redirect::Policy::custom(move |attempt| {
+ if updater_policy::validate_redirect(attempt.url().as_str(), &initial, attempt.previous().len()).is_ok() { attempt.follow() }
+ else { attempt.error("Untrusted update redirect") }
+ })).build().map_err(|_| UpdateError::check())
+}
+
+#[tauri::command]
+async fn stage_latest_update(webview: Webview) -> Result<UpdateOutcome, UpdateError> {
+ require_trusted_window(webview.label()).map_err(|_| UpdateError { code: "unauthorized", message: "This window cannot check updates." })?;
+ let guard = UpdateStageGuard::acquire()?;
+ let checked_at = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|_| UpdateError::check())?.as_millis() as u64;
+ let client = reqwest::Client::builder().use_native_tls()
+ .user_agent(concat!("CrystalBall-Desktop/", env!("CARGO_PKG_VERSION")))
+ .timeout(Duration::from_secs(10)).redirect(reqwest::redirect::Policy::none())
+ .build().map_err(|_| UpdateError::check())?;
+ let response = client.get(updater_policy::LATEST_RELEASE_URL).send().await.map_err(|_| UpdateError::check())?;
+ let release: updater_policy::Release = serde_json::from_slice(&bounded_update_body(response, updater_policy::MAX_JSON_BYTES, None).await?).map_err(|_| UpdateError::check())?;
+ let version = updater_policy::release_version(&release).map_err(|_| UpdateError::check())?;
+ let current = env!("CARGO_PKG_VERSION");
+ updater_policy::version(current).map_err(|_| UpdateError::check())?;
+ if !is_semver_newer(&version, current) { return Ok(UpdateOutcome::UpToDate { current_version: current.into(), checked_at }); }
+ #[cfg(not(target_os = "macos"))]
+ { let _ = guard; return Ok(UpdateOutcome::browser(&version, BrowserReason::UnsupportedPlatform, checked_at)); }
  #[cfg(target_os = "macos")]
  {
- // Resolve the live install path BEFORE any download/mount so a failure here
- // can never leak a mounted DMG.
+ let selected = match updater_policy::select_assets(&release, std::env::consts::ARCH) {
+ Ok(selected) => selected, Err(reason) => return Ok(UpdateOutcome::browser(&version, reason, checked_at)),
+ };
+ let trust = tauri::async_runtime::spawn_blocking(|| {
  let dest = resolve_update_install_path()?;
+ let pin = installed_signer_requirement(&dest)?;
+ Ok::<_, String>((dest, pin))
+ }).await.map_err(|_| UpdateError::stage())?;
+ let (dest, requirement) = match trust {
+ Ok(trust) => trust,
+ Err(_) => return Ok(UpdateOutcome::browser(&version, BrowserReason::NoSignerPin, checked_at)),
+ };
+ let existing_dest = dest.clone(); let existing_pin = requirement.clone();
+ let existing = tauri::async_runtime::spawn_blocking(move || {
+ let _swap_guard = UPDATE_SWAP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+ let _xproc_guard = CrossProcessSwapLock::acquire_blocking(&existing_dest)?;
+ validate_staged_bundle(&format!("{existing_dest}.update-staged"), &existing_pin)
+ }).await.map_err(|_| UpdateError::stage())?;
+ if let Ok(existing) = existing {
+ if existing == version || is_semver_newer(&existing, &version) { return Ok(UpdateOutcome::Ready { version: existing, checked_at }); }
+ }
+ let manifest_response = update_asset_client(&selected.manifest.browser_download_url, 10)?
+ .get(&selected.manifest.browser_download_url).send().await.map_err(|_| UpdateError::check())?;
+ let manifest_bytes = bounded_update_body(manifest_response, updater_policy::MAX_JSON_BYTES, Some(selected.manifest.size)).await?;
+ let manifest: updater_policy::Manifest = match serde_json::from_slice(&manifest_bytes) {
+ Ok(m) => m, Err(_) => return Ok(UpdateOutcome::browser(&version, BrowserReason::InvalidRelease, checked_at)),
+ };
+ let expected_sha256 = match updater_policy::validate_manifest(&manifest, &selected) {
+ Ok(hash) => hash, Err(_) => return Ok(UpdateOutcome::browser(&version, BrowserReason::InvalidRelease, checked_at)),
+ };
+ let response = update_asset_client(&selected.asset.browser_download_url, 300)?
+ .get(&selected.asset.browser_download_url).send().await.map_err(|_| UpdateError::stage())?;
+ let bytes = bounded_update_body(response, selected.asset.size, Some(selected.asset.size)).await?;
+ let expected_hex = validate_expected_sha256(Some(&expected_sha256)).map_err(|_| UpdateError::stage())?;
+ let download = updater_policy::verify_download(bytes, &expected_hex, selected.asset.size)?;
+ let expected_version = selected.version;
+ let result = tauri::async_runtime::spawn_blocking(move || {
+ // Keep the single-flight guard alive even if the IPC future is cancelled.
+ let _guard = guard;
+ stage_verified_update(download, dest, requirement, expected_version)
+ }).await.map_err(|_| UpdateError::stage())?;
+ match result {
+ Ok(version) => Ok(UpdateOutcome::Ready { version, checked_at }),
+ Err(error) if error == "Bundle does not satisfy the installed signer pin" || error == "Update does not satisfy the installed signer pin" => Ok(UpdateOutcome::browser(&version, BrowserReason::SignerMismatch, checked_at)),
+ Err(error) => { eprintln!("[updater] staging failed: {error}"); Err(UpdateError::stage()) }
+ }
+ }
+}
+
+#[cfg(target_os = "macos")]
+fn stage_verified_update(download: updater_policy::VerifiedDownload, dest: String, requirement: SignerRequirement, expected_version: String) -> Result<String, String> {
+ let bytes = download.into_bytes();
+ reject_symlinked_path(&dest, "install path")?;
  // Canonical staged bundle both apply paths read. We copy + fully verify into a
  // PER-REQUEST path first, then publish onto this path atomically.
  let canonical_staged = format!("{dest}.update-staged");
@@ -2141,44 +2148,6 @@ async fn stage_update(webview: Webview, download_url: String, expected_sha256: O
  // observes a half-written bundle and a second staging run can't corrupt it.
  let staged = format!("{dest}.update-staging-{pid}-{n}");
 
- // 1. Download the DMG
- let client = reqwest::Client::builder()
- .use_native_tls()
- .user_agent(concat!("CrystalBall-Desktop/", env!("CARGO_PKG_VERSION")))
- .timeout(std::time::Duration::from_secs(300))
- .build()
- .map_err(|e| format!("HTTP client init failed: {e}"))?;
-
- let resp = client
- .get(&download_url)
- .send()
- .await
- .map_err(|e| format!("Download failed: {e}"))?;
-
- if !resp.status().is_success() {
- return Err(format!("Download HTTP {}", resp.status()));
- }
-
- let bytes = resp.bytes().await
- .map_err(|e| format!("Download read failed: {e}"))?;
-
- // 1a. Verify SHA-256 of downloaded bytes BEFORE writing to disk or mounting.
- // This detects corruption and MITM-served payloads before the OS processes the file.
- // R2-SEC-009/011: hash verification is MANDATORY. An absent or empty expected
- // hash means the release manifest was missing or tampered with — abort rather
- // than fall through to codesign-only verification.
- let expected_hex = validate_expected_sha256(expected_sha256.as_deref())?;
- let actual_sha256 = {
- let mut hasher = Sha256::new();
- hasher.update(&bytes);
- hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect::<String>()
- };
- if actual_sha256 != expected_hex {
- return Err(format!(
- "SHA-256 mismatch — aborting update: expected {expected_hex}, got {actual_sha256}"
- ));
- }
-
  // Drop any pre-existing entry (e.g. a planted symlink) so the write lands on
  // a fresh regular file we own.
  let _ = std::fs::remove_file(&tmp_dmg);
@@ -2186,7 +2155,7 @@ async fn stage_update(webview: Webview, download_url: String, expected_sha256: O
  .map_err(|e| format!("Write DMG to temp dir failed: {e}"))?;
 
  // 2. Mount the DMG
- let attach = Command::new("hdiutil")
+ let attach = Command::new("/usr/bin/hdiutil")
  .args(["attach", tmp_dmg.as_str(), "-mountpoint", mount_point.as_str(), "-nobrowse", "-quiet"])
  .output()
  .map_err(|e| format!("hdiutil attach failed: {e}"))?;
@@ -2203,31 +2172,24 @@ async fn stage_update(webview: Webview, download_url: String, expected_sha256: O
  // next to the live install. No swap or relaunch happens here.
  let source = format!("{}/Crystal Ball.app", mount_point);
 
- let stage_result = (|| -> Result<(), String> {
- verify_update_bundle_identifier(&source)?;
- verify_app_bundle_signature(&source, "Mounted app bundle")?;
- verify_same_signer_as_installed(&source, &dest)?;
+ let stage_result = (|| -> Result<String, String> {
+ validate_candidate_bundle(&source, &requirement, Some(&expected_version))?;
+ reject_symlinked_path(&staged, "request staging bundle")?;
  let _ = fs::remove_dir_all(&staged);
  copy_app_bundle_preserving_signature(&source, &staged)?;
- verify_app_bundle_signature(&staged, "Staged app")?;
- verify_same_signer_as_installed(&staged, &dest)?;
+ validate_candidate_bundle(&staged, &requirement, Some(&expected_version))?;
  // Publish under the SAME locks the swap uses so an in-progress apply/boot never
  // reads a half-written bundle and a concurrent staging run can't interleave.
  // Held only for this fast version-check + swap — never across the slow
  // copy/verify above.
  let _swap_guard = UPDATE_SWAP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
  let _xproc_guard = CrossProcessSwapLock::acquire_blocking(&dest)?;
+ reject_symlinked_path(&canonical_staged, "canonical staged bundle")?;
  if Path::new(&canonical_staged).exists() {
- // Never regress a newer already-staged bundle: if a concurrent run published
- // a strictly-newer version while we were copying, keep theirs and drop ours.
- // (An unreadable canonical version falls through and is replaced by this
- // fully-verified bundle.)
- if let Ok(existing) = read_bundle_short_version(&canonical_staged) {
- let staged_version = read_bundle_short_version(&staged)?;
- if is_semver_newer(&existing, &staged_version) {
+ let selected = updater_policy::published_version(&expected_version, validate_staged_bundle(&canonical_staged, &requirement));
+ if selected != expected_version {
  let _ = force_remove_dir_all(&staged);
- return Ok(());
- }
+ return Ok(selected);
  }
  // Atomically swap the new bundle into the canonical path in ONE syscall.
  // RENAME_SWAP has no intermediate state: on success `canonical_staged` is the
@@ -2243,25 +2205,20 @@ async fn stage_update(webview: Webview, download_url: String, expected_sha256: O
  // is a genuine I/O fault, not flag/perms/ACL accumulation, and must NOT fail an
  // update that is already published.
  let _ = force_remove_dir_all(&staged);
- Ok(())
+ Ok(expected_version.clone())
  } else {
  fs::rename(&staged, &canonical_staged)
- .map_err(|e| format!("Publish staged bundle failed: {e}"))
+ .map_err(|e| format!("Publish staged bundle failed: {e}"))?;
+ Ok(expected_version.clone())
  }
  })();
 
  // 4. Detach the DMG and clean up the download regardless of stage result.
- let _ = Command::new("hdiutil").args(["detach", mount_point.as_str(), "-quiet"]).output();
+ let _ = Command::new("/usr/bin/hdiutil").args(["detach", mount_point.as_str(), "-quiet"]).output();
  let _ = std::fs::remove_file(&tmp_dmg);
 
- if let Err(e) = stage_result {
- // Remove only THIS request's staging dir — a failed new stage must never
- // delete a previously-published good bundle at `canonical_staged`.
- let _ = force_remove_dir_all(&staged);
- return Err(e);
- }
- Ok(())
- }
+ if stage_result.is_err() { let _ = force_remove_dir_all(&staged); }
+ stage_result
 }
 
 /// Serializes the whole validate+swap sequence. Two concurrent apply invocations
@@ -2271,7 +2228,7 @@ async fn stage_update(webview: Webview, download_url: String, expected_sha256: O
 #[cfg(target_os = "macos")]
 static UPDATE_SWAP_LOCK: Mutex<()> = Mutex::new(());
 
-/// Per-request stamp so two concurrent `stage_update` calls in THIS process get
+/// Per-request stamp so two concurrent `stage_latest_update` calls in THIS process get
 /// distinct temp/mount/staging paths and cannot clobber each other's download.
 /// Combined with the pid it is unique across processes too.
 #[cfg(target_os = "macos")]
@@ -2402,38 +2359,38 @@ fn force_remove_dir_all(path: &str) -> std::io::Result<()> {
 /// other (a divergence here is exactly how a "verified" install slips through one
 /// door but not the other). Confirms the staged bundle is strictly newer than the
 /// running build, carries our bundle ID, has an intact signature, and satisfies
-/// the same Apple-anchored signer pin as the live install.
+/// the same certificate-bound signer pin as the live install.
 #[cfg(target_os = "macos")]
-fn validate_staged_bundle(staged: &str, requirement: &Option<String>) -> Result<String, String> {
+fn validate_staged_bundle(staged: &str, requirement: &SignerRequirement) -> Result<String, String> {
+ validate_candidate_bundle(staged, requirement, None)
+}
+
+#[cfg(target_os = "macos")]
+fn validate_candidate_bundle(staged: &str, requirement: &SignerRequirement, expected: Option<&str>) -> Result<String, String> {
+ reject_symlinked_path(staged, "staged bundle")?;
  let staged_version = read_bundle_short_version(staged)?;
- let current_version = env!("CARGO_PKG_VERSION");
- if !is_semver_newer(&staged_version, current_version) {
- return Err(format!(
- "staged version {staged_version} not newer than running {current_version}"
- ));
- }
  verify_update_bundle_identifier(staged)?;
  verify_app_bundle_signature(staged, "Staged app bundle")?;
- // Enforce the signer pin captured ONCE from the live install (not re-derived
- // here), so an attacker cannot swap `dest` to a different Apple team between
- // this check and the swap and have the later capture trust their team.
- verify_bundle_satisfies_requirement(staged, requirement)?;
+ updater_policy::check_candidate(&staged_version, env!("CARGO_PKG_VERSION"), expected, requirement, |pin| codesign_satisfies(staged, pin))?;
  Ok(staged_version)
 }
 
 /// Re-verify the staged bundle signature and swap it into place, then relaunch.
 /// Called when the user clicks "Restart now" after an update has been staged.
 #[tauri::command]
-async fn apply_staged_update(webview: Webview) -> Result<(), String> {
- require_trusted_window(webview.label())?;
-
+async fn apply_staged_update(webview: Webview) -> Result<(), UpdateError> {
+ require_trusted_window(webview.label()).map_err(|_| UpdateError { code: "unauthorized", message: "This window cannot apply updates." })?;
  #[cfg(not(target_os = "macos"))]
- {
- return Err("Auto-install is only supported on macOS".into());
- }
-
+ { Err(UpdateError { code: "unsupported_platform", message: "Automatic updates require macOS." }) }
  #[cfg(target_os = "macos")]
  {
+ tauri::async_runtime::spawn_blocking(apply_staged_update_blocking).await.map_err(|_| UpdateError::stage())?
+ .map_err(|error| { eprintln!("[updater] apply failed: {error}"); UpdateError { code: "apply_failed", message: "The update could not be safely applied. Please check the local desktop log before retrying." } })
+ }
+}
+
+#[cfg(target_os = "macos")]
+fn apply_staged_update_blocking() -> Result<(), String> {
  let dest = resolve_update_install_path()?;
  let staged = format!("{dest}.update-staged");
  // pid-stamped backup so two apply/boot passes cannot collide on a shared
@@ -2454,7 +2411,7 @@ async fn apply_staged_update(webview: Webview) -> Result<(), String> {
  // critical section below.
  let _xproc_guard = CrossProcessSwapLock::acquire_blocking(&dest)?;
 
- // Capture the Apple signer pin ONCE from the live install before any rename,
+ // Capture the certificate signer pin ONCE from the live install before any rename,
  // then thread that immutable requirement + the validated version through both
  // the pre-swap gate and the post-swap re-check. Re-verifying at apply time also
  // catches tampering between download and restart. Identical gate to boot-apply.
@@ -2485,40 +2442,6 @@ async fn apply_staged_update(webview: Webview) -> Result<(), String> {
  )),
  }
  }
-}
-
-/// Renderer-queryable truth for "is an update staged on disk?". The renderer
-/// keeps a `wm-update-staged-*` localStorage hint, but that flag can go stale (a
-/// boot-apply discarded the bundle as invalid, or a prior apply consumed it), so
-/// the FILESYSTEM — not localStorage — is authoritative. Returns the staged
-/// bundle's short version if one physically exists and can report a version, else
-/// None. This is a cheap existence probe, NOT the security gate: the full
-/// signer + version re-verification still runs in `validate_staged_bundle` at
-/// apply/boot time.
-#[tauri::command]
-async fn staged_update_status(webview: Webview) -> Result<Option<String>, String> {
- require_trusted_window(webview.label())?;
-
- #[cfg(not(target_os = "macos"))]
- {
- return Ok(None);
- }
-
- #[cfg(target_os = "macos")]
- {
- let dest = match resolve_update_install_path() {
- Ok(d) => d,
- Err(_) => return Ok(None),
- };
- let staged = format!("{dest}.update-staged");
- if !Path::new(&staged).exists() {
- return Ok(None);
- }
- // A staged bundle that can't even report its short version is not something
- // to advertise as ready — treat it as absent so the renderer re-stages.
- Ok(read_bundle_short_version(&staged).ok())
- }
-}
 
 /// Boot-time apply of a previously staged update. Called at the top of `main()`
 /// so an update staged in the prior session lands seamlessly before any window
@@ -3137,29 +3060,50 @@ fn sanitize_path_for_node(p: &Path) -> String {
 
 #[cfg(test)]
 mod updater_gate_tests {
- use super::{build_signer_requirement, is_semver_newer, parse_team_identifier, validate_expected_sha256, validate_update_url};
-
- // ── build_signer_requirement (Apple-anchored designated requirement) ──
+ use super::{is_semver_newer, parse_team_identifier, validate_expected_sha256};
+ use super::updater_policy::validate_initial_url;
+ fn validate_update_url(raw: &str) -> Result<(), ()> { validate_initial_url(raw, raw) }
 
  #[test]
- fn signer_requirement_is_apple_anchored_and_pins_id_and_team() {
- let req = build_signer_requirement("com.bradleybond.crystalball", "ABCDE12345");
- // Must chain to Apple's root — a self-signed cert can never satisfy this,
- // no matter what TeamIdentifier string it claims.
- assert!(req.contains("anchor apple generic"), "{req}");
- assert!(req.contains("identifier \"com.bradleybond.crystalball\""), "{req}");
- assert!(req.contains("certificate leaf[subject.OU] = \"ABCDE12345\""), "{req}");
+ fn staging_guard_is_exclusive_and_releases_on_failure() {
+ let guard = super::UpdateStageGuard::acquire().expect("first check allowed");
+ assert!(super::UpdateStageGuard::acquire().is_err());
+ drop(guard);
+ assert!(super::UpdateStageGuard::acquire().is_ok());
  }
 
- // The dev-build/ad-hoc skip path: when the installed app has no Apple signer
- // to pin against, the requirement is None and any candidate passes without
- // ever invoking codesign (so the swap is never blocked on unsigned builds).
  #[cfg(target_os = "macos")]
  #[test]
- fn none_requirement_skips_codesign_and_passes() {
- use super::verify_bundle_satisfies_requirement;
- verify_bundle_satisfies_requirement("/nonexistent/Crystal Ball.app", &None)
- .expect("a None requirement (ad-hoc/dev build) must not gate the swap");
+ fn post_swap_rejection_restores_old_install_without_real_verifier() {
+ let root = std::env::temp_dir().join(format!("cb-updater-reject-{}-{}", std::process::id(), super::STAGE_COUNTER.fetch_add(1, super::Ordering::Relaxed)));
+ std::fs::create_dir(&root).unwrap();
+ let dest = root.join("installed"); let staged = root.join("staged"); let backup = root.join("backup");
+ std::fs::create_dir(&dest).unwrap(); std::fs::create_dir(&staged).unwrap();
+ std::fs::write(dest.join("version"), "old trusted").unwrap();
+ std::fs::write(staged.join("version"), "untrusted replacement").unwrap();
+ let result = super::swap_staged_into_place_with(staged.to_str().unwrap(), dest.to_str().unwrap(), backup.to_str().unwrap(), |landed| {
+ assert_eq!(std::fs::read_to_string(std::path::Path::new(landed).join("version")).unwrap(), "untrusted replacement");
+ Err("injected signer/version rejection".into())
+ });
+ assert!(result.is_err());
+ assert_eq!(std::fs::read_to_string(dest.join("version")).unwrap(), "old trusted");
+ assert!(!backup.exists());
+ std::fs::remove_dir_all(root).unwrap();
+ }
+
+ #[cfg(target_os = "macos")]
+ #[test]
+ fn symlinked_staged_root_never_reaches_swap_or_verifier() {
+ let root = std::env::temp_dir().join(format!("cb-updater-symlink-{}-{}", std::process::id(), super::STAGE_COUNTER.fetch_add(1, super::Ordering::Relaxed)));
+ std::fs::create_dir(&root).unwrap();
+ let dest = root.join("installed"); let staged = root.join("staged"); let backup = root.join("backup");
+ std::fs::create_dir(&dest).unwrap(); std::fs::write(dest.join("version"), "old trusted").unwrap();
+ std::os::unix::fs::symlink(&dest, &staged).unwrap();
+ let result = super::swap_staged_into_place_with(staged.to_str().unwrap(), dest.to_str().unwrap(), backup.to_str().unwrap(), |_| panic!("verification must not run"));
+ assert!(result.is_err());
+ assert_eq!(std::fs::read_to_string(dest.join("version")).unwrap(), "old trusted");
+ assert!(!backup.exists());
+ std::fs::remove_dir_all(root).unwrap();
  }
 
  // ── parse_team_identifier ─────────────────────────────────────────
@@ -3220,40 +3164,32 @@ mod updater_gate_tests {
  assert_eq!(got, "0".repeat(64));
  }
 
+ #[test]
+ fn canonical_repository_and_https_are_required() {
+ for url in [
+ "https://github.com/attacker/crystal-ball/releases/download/v1.0.0/Crystal.Ball_1.0.0_aarch64.dmg",
+ "http://github.com/bradleybond512/crystal-ball/releases/download/v1.0.0/Crystal.Ball_1.0.0_aarch64.dmg",
+ "https://user@github.com/bradleybond512/crystal-ball/releases/download/v1.0.0/Crystal.Ball_1.0.0_aarch64.dmg",
+ ] { assert!(validate_update_url(url).is_err(), "accepted {url}"); }
+ }
+
  // ── validate_update_url ──────────────────────────────────────────
 
  #[test]
- fn accepts_objects_githubusercontent_com() {
- validate_update_url("https://objects.githubusercontent.com/abc/Crystal-Ball.dmg")
- .expect("github asset host should be allowed");
+ fn rejects_unobserved_initial_asset_hosts() {
+ assert!(validate_update_url("https://objects.githubusercontent.com/abc/Crystal-Ball.dmg").is_err());
+ assert!(validate_update_url("https://codeload.github.com/x/y/zip/refs/tags/v1").is_err());
  }
-
  #[test]
- fn accepts_github_com() {
- validate_update_url("https://github.com/bradleybond512/crystal-ball/releases/download/v1.0.0/Crystal-Ball.dmg")
- .expect("github.com should be allowed");
+ fn accepts_exact_canonical_asset() {
+ validate_update_url("https://github.com/bradleybond512/crystal-ball/releases/download/v1.0.0/Crystal.Ball_1.0.0_aarch64.dmg").expect("canonical asset allowed");
  }
-
  #[test]
- fn accepts_codeload_github_com() {
- validate_update_url("https://codeload.github.com/x/y/zip/refs/tags/v1").expect("codeload allowed");
- }
-
+ fn rejects_unknown_host() { assert!(validate_update_url("https://evil.example.com/Crystal-Ball.dmg").is_err()); }
  #[test]
- fn rejects_unknown_host() {
- let err = validate_update_url("https://evil.example.com/Crystal-Ball.dmg").unwrap_err();
- assert!(err.contains("is not trusted"), "{err}");
- }
-
+ fn rejects_lookalike_host() { assert!(validate_update_url("https://github.com.evil.com/x.dmg").is_err()); }
  #[test]
- fn rejects_lookalike_host() {
- assert!(validate_update_url("https://github.com.evil.com/x.dmg").is_err());
- }
-
- #[test]
- fn rejects_invalid_url() {
- assert!(validate_update_url("not a url").is_err());
- }
+ fn rejects_invalid_url() { assert!(validate_update_url("not a url").is_err()); }
 
  // ── is_semver_newer (boot-apply gate) ─────────────────────────────
 
@@ -3272,10 +3208,10 @@ mod updater_gate_tests {
  }
 
  #[test]
- fn tolerates_v_prefix_and_uneven_lengths() {
- assert!(is_semver_newer("v1.2.3", "1.2.2"));
+ fn rejects_v_prefix_and_uneven_lengths() {
+ assert!(!is_semver_newer("v1.2.3", "1.2.2"));
  assert!(!is_semver_newer("v1.2", "1.2.0"));
- assert!(is_semver_newer("1.2.0.1", "1.2.0"));
+ assert!(!is_semver_newer("1.2.0.1", "1.2.0"));
  }
 }
 
@@ -4643,9 +4579,8 @@ fn main() {
  send_notification,
  send_imessage,
  speak_aloud,
- stage_update,
+ stage_latest_update,
  apply_staged_update,
- staged_update_status,
  update_mode_label,
  set_dock_badge,
  set_menubar_status

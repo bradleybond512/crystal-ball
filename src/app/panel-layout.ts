@@ -1071,18 +1071,13 @@ export class PanelLayoutManager implements AppModule {
  const applyBtn = container.querySelector<HTMLButtonElement>('#sidebarUpdateApply');
  if (applyBtn) {
  applyBtn.addEventListener('click', () => {
- const prev = this.ctx.updateState;
  this.ctx.updateState = { phase: 'installing' };
  this.renderSidebarUpdateBtn();
  // On success the bundle is swapped and the app relaunches, so this
  // promise never resolves here; only a failure returns control to JS.
  invokeTauri<void>('apply_staged_update').catch(() => {
- // Clear the "already staged" flag so the next check re-downloads
- // instead of getting stuck on a phantom ready state.
- if (prev?.version) {
- try { localStorage.removeItem(`wm-update-staged-${prev.version}`); } catch { /* quota */ }
- }
- this.ctx.updateState = prev;
+ this.ctx.updateState = null;
+ document.querySelector('.update-toast[data-kind="ready"]')?.remove();
  this.renderSidebarUpdateBtn();
  });
  });

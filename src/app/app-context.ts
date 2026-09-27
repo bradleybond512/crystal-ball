@@ -32,7 +32,6 @@ export type UpdateState = {
   phase: 'checking' | 'up-to-date' | 'available' | 'downloading' | 'ready' | 'installing';
   version?: string;
   downloadUrl?: string;
-  expectedSha256?: string;
   lastCheckedAt?: number;
 } | null;
 

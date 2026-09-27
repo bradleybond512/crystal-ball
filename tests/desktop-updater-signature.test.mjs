@@ -5,6 +5,7 @@ import path from 'node:path';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const mainRs = readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'main.rs'), 'utf8');
+const updaterPolicy = readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'updater_policy.rs'), 'utf8');
 const desktopUpdaterTs = readFileSync(
   path.join(repoRoot, 'src', 'app', 'desktop-updater.ts'),
   'utf8',
@@ -56,8 +57,8 @@ test('macOS updater preserves bundle signatures when installing app updates', ()
 test('updater is split into background stage + prompted apply commands', () => {
   assert.match(
  mainRs,
- /async fn stage_update\(/,
- 'updater should expose stage_update to download+verify+stage in the background',
+ /async fn stage_latest_update\(/,
+ 'updater should expose stage_latest_update to select+verify+stage in the background',
   );
   assert.match(
  mainRs,
@@ -76,49 +77,30 @@ test('updater is split into background stage + prompted apply commands', () => {
   );
   assert.match(
  mainRs,
- /verify_app_bundle_signature\(&staged, "Staged app"\)/,
+ /verify_app_bundle_signature\(staged, "Staged app bundle"\)/,
  'apply/boot paths should re-verify the staged bundle signature before swapping',
   );
 });
 
-test('updater pins the update to an Apple-anchored designated requirement', () => {
-  assert.match(
- mainRs,
- /fn verify_same_signer_as_installed\(/,
- 'updater should verify the update is signed by the same signer as the installed app',
-  );
-  assert.match(
- mainRs,
- /fn build_signer_requirement\(/,
- 'signer pinning should build a designated requirement (pure + unit-testable)',
-  );
-  // The requirement MUST chain to Apple's root — a self-signed cert claiming the
-  // expected Team OU can never satisfy `anchor apple generic`.
-  assert.match(
- mainRs,
- /anchor apple generic and identifier .* certificate leaf\[subject\.OU\]/,
- 'signer requirement must be Apple-anchored and pin bundle id + team OU',
-  );
-  // The staging path pins BOTH the mounted source and the copied staged bundle.
-  const stagePins = mainRs.match(/verify_same_signer_as_installed\(&(?:source|staged), &dest\)/g) ?? [];
-  assert.ok(
- stagePins.length >= 2,
- `expected signer pinning on the mounted source and staged copy; found ${stagePins.length}`,
-  );
+test('updater preserves Apple anchoring and captures one mandatory staging pin', () => {
+  assert.match(updaterPolicy, /anchor apple generic and identifier .* certificate leaf\[subject\.OU\]/);
+  assert.match(mainRs, /fn installed_signer_requirement\(installed: &str\) -> Result<SignerRequirement, String>/);
+  assert.match(mainRs, /validate_candidate_bundle\(&source, &requirement, Some\(&expected_version\)\)\?/);
+  assert.match(mainRs, /validate_candidate_bundle\(&staged, &requirement, Some\(&expected_version\)\)\?/);
+  assert.match(mainRs, /updater_policy::choose_signer\(true, apple_anchor, team\.as_deref\(\), Some\(&designated\), \|pin\| codesign_satisfies\(installed, pin\)\)/);
 });
 
-test('apply and boot share one staged-bundle validator (no weaker door)', () => {
-  assert.match(
- mainRs,
- /fn validate_staged_bundle\(/,
- 'a shared validator should gate both swap entry points identically',
-  );
-  // Both the manual apply command and the boot-time auto-apply must run it.
-  const validatorCalls = mainRs.match(/validate_staged_bundle\(&staged, &requirement\)/g) ?? [];
-  assert.ok(
- validatorCalls.length >= 2,
- `expected validate_staged_bundle in both apply and boot; found ${validatorCalls.length}`,
-  );
+test('apply and boot each capture a mandatory pin and validate before swapping', () => {
+  const manualStart = mainRs.indexOf('fn apply_staged_update_blocking()');
+  const bootStart = mainRs.indexOf('fn maybe_apply_staged_update_on_boot()');
+  const nextCommand = mainRs.indexOf('async fn fetch_polymarket(', bootStart);
+  assert.ok(manualStart >= 0 && bootStart > manualStart && nextCommand > bootStart);
+  for (const section of [mainRs.slice(manualStart, bootStart), mainRs.slice(bootStart, nextCommand)]) {
+    const pin = section.indexOf('installed_signer_requirement(&dest)');
+    const validation = section.indexOf('validate_staged_bundle(&staged, &requirement)');
+    const swap = section.indexOf('swap_staged_into_place(&staged, &dest, &backup, &requirement, &staged_version)');
+    assert.ok(pin >= 0 && validation > pin && swap > validation, 'each installation path must capture, validate, then swap');
+  }
 });
 
 test('signer pin + version are captured once and re-checked after the swap', () => {
@@ -155,23 +137,20 @@ test('a missing install path fails signer resolution closed', () => {
   // dev build" and silently disable signer enforcement.
   assert.match(
  mainRs,
- /is missing — refusing update/,
+ /Installed bundle is missing/,
  'a missing install path must error, not return Ok(None)',
   );
 });
 
-test('a non-Apple install must prove an intact signature before skipping the pin', () => {
-  // codesign_satisfies("anchor apple generic") == false covers BOTH a valid
-  // ad-hoc/dev build and a broken/stripped signature. Only the former may skip
-  // signer enforcement, so the Ok(None) path must first require the running
-  // bundle's signature to verify — a corrupted install fails closed.
-  const gate = mainRs.match(
- /if !codesign_satisfies\(installed, "anchor apple generic"\) \{[\s\S]*?verify_app_bundle_signature\(installed, "Installed app"\)\?;[\s\S]*?return Ok\(None\);/,
-  );
-  assert.ok(
- gate,
- 'the Ok(None) dev-build skip must be guarded by an intact-signature check',
-  );
+test('non-Apple installs require certificate trust instead of an optional-pin bypass', () => {
+  const start = mainRs.indexOf('fn installed_signer_requirement(');
+  const end = mainRs.indexOf('fn copy_app_bundle_preserving_signature(', start);
+  assert.ok(start >= 0 && end > start);
+  const gate = mainRs.slice(start, end);
+  assert.match(gate, /verify_app_bundle_signature\(installed, "Installed app"\)\?/);
+  assert.match(gate, /choose_signer/);
+  assert.doesNotMatch(gate, /Ok\(None\)|Option<String>|return Ok\(\(\)\)/);
+  assert.match(gate, /codesign_satisfies\(path, requirement\.as_str\(\)\)/);
 });
 
 test('the swap is guarded by a cross-process advisory lock, not just an in-process mutex', () => {
@@ -211,7 +190,7 @@ test('the swap is guarded by a cross-process advisory lock, not just an in-proce
 });
 
 test('concurrent staging uses a unique per-request dir, then publishes atomically', () => {
-  // Residual B: two concurrent stage_update runs (or another local process) must
+  // Residual B: two concurrent stage_latest_update runs (or another local process) must
   // not clobber each other's download / in-progress copy. Each gets a pid+counter
   // path, is verified in full there, then renamed onto the canonical staged path.
   assert.match(
@@ -301,34 +280,14 @@ test('concurrent staging uses a unique per-request dir, then publishes atomicall
   // newer bundle a concurrent run already published under the lock.
   assert.match(
  mainRs,
- /is_semver_newer\(&existing, &staged_version\)/,
+ /updater_policy::published_version\(&expected_version, validate_staged_bundle\(&canonical_staged, &requirement\)\)/,
  'publish must refuse to regress a strictly-newer already-staged bundle',
   );
 });
 
-test('Rust filesystem state is authoritative over the localStorage staged hint', () => {
-  // Residual C: the renderer must not trust a `wm-update-staged-*` localStorage
-  // flag as ground truth — it queries the Rust filesystem probe and reconciles.
-  assert.match(
- mainRs,
- /async fn staged_update_status\(/,
- 'a staged_update_status command should expose the on-disk staged version',
-  );
-  assert.match(
- mainRs,
- /^\s*staged_update_status,$/m,
- 'staged_update_status must be registered in the invoke handler',
-  );
-  assert.match(
- desktopUpdaterTs,
- /invokeTauri<string \| null>\('staged_update_status'\)/,
- 'the updater must query the Rust staged-status probe before (re-)downloading',
-  );
-  // Reconcile in BOTH directions: re-stage when disk lacks it (stale '1'),
-  // skip re-download when disk has it (cleared flag).
-  assert.match(
- desktopUpdaterTs,
- /if \(!stagedOnDisk\)/,
- 'the download gate must key off disk truth, not the localStorage flag',
-  );
+test('only native verified outcomes establish staged readiness', () => {
+  assert.match(mainRs, /^\s*stage_latest_update,$/m);
+  assert.doesNotMatch(mainRs, /async fn staged_update_status\(/);
+  assert.match(desktopUpdaterTs, /invokeTauri<unknown>\('stage_latest_update'\)/);
+  assert.doesNotMatch(desktopUpdaterTs, /wm-update-staged-|reconcileStagedOnDisk/);
 });

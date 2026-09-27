@@ -164,3 +164,20 @@ The refreshed main bundle is 453.5 KB against the unchanged 460 KB policy. The f
 ## QA/QC report
 
 Risk tier: Critical (privileged update boundary). Automated checks and mutation evidence above passed. Actual native signature, mount, swap and installed-app UI acceptance were not run; those require Bradley’s separately authorized test installation. The unsigned-manifest pre-mount exposure and unknown legitimate signer syntax remain explicit limits. Merge requires the exact-tip Claude verdict and required CI. Rollback must disable the updater or forward-fix without restoring renderer artifact authority.
+
+## CI coverage mapping correction
+
+The first targeted CI run stopped before executing tests because the new
+`src-tauri/src/updater_policy.rs` module had no declared suite. The same
+`node scripts/targeted-tests.mjs --list` failure reproduced locally (exit 1).
+Both native updater files are now mapped to `test:desktop-updater` through
+the existing additive declaration file. This suite reads both native files;
+Rust behavior evidence remains separately reported above. No baseline entry,
+assertion, runner policy or required check was weakened.
+
+`node scripts/targeted-tests.mjs --ci` then exited 0 with 227 passed and zero
+failed across the selected suites. Actual final output:
+
+```text
+[targeted-tests] 6 script(s) passed.
+```

@@ -192,10 +192,10 @@ test('concurrent focus/manual checks share the native operation and preserve man
   let resolve!: (value: unknown) => void;
   const h = harness(new Promise(res => { resolve = res; }));
   const pending = h.check(false);
-  await h.check(true);
+  const manual = h.check(true);
   assert.equal(h.calls.filter(call => call.command === 'stage_latest_update').length, 1);
   resolve({ status: 'up_to_date', currentVersion: '9.1.0', checkedAt });
-  await pending;
+  await Promise.all([pending, manual]);
   assert.match(h.browser.document.body.textContent, /9\.1\.0 is the latest/);
 });
 

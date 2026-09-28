@@ -1,0 +1,1182 @@
+{
+  "reviewedCodeSha": "457198c597d7480ac6133d8a5765fc93a1497776",
+  "method": "Clean baseline, SHA256, applied diff inspected, actual assertion red/counts, identical SHA256 restored, clean status and restored green suites. Native tests are exact filtered pure contracts. Source guards inspect wiring text only; source mutants are not compiled behavior evidence.",
+  "results": [
+    {
+      "name": "get_secret-async",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        12,
+        0
+      ],
+      "red": [
+        11,
+        1
+      ],
+      "sha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "restoredSha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 1 - get_secret validates its caller and keeps all blocking work inside an awaited worker",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 5ef7069fb..2d40fc02f 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1029,7 +1029,7 @@ fn secrets_ready(webview: Webview, cache: tauri::State<'_, SecretsCache>) -> Res\n }\n \n #[tauri::command]\n-async fn get_secret(\n+fn get_secret(\n  webview: Webview,\n  key: String,\n ) -> Result<Option<String>, String> {\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/native-responsiveness-boundary.test.mjs"
+      ],
+      "log": "source-mutations/get_secret-async-red.log"
+    },
+    {
+      "name": "get_secret-blocking-worker",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        12,
+        0
+      ],
+      "red": [
+        11,
+        1
+      ],
+      "sha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "restoredSha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 1 - get_secret validates its caller and keeps all blocking work inside an awaited worker",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 5ef7069fb..76a941282 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1038,7 +1038,7 @@ async fn get_secret(\n  return Err(format!(\"Unsupported secret key: {key}\"));\n  }\n  let app = webview.app_handle().clone();\n- tauri::async_runtime::spawn_blocking(move || {\n+ tauri::async_runtime::block_on(move || {\n  let cache = app.state::<SecretsCache>();\n  let secrets = cache\n  .secrets\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/native-responsiveness-boundary.test.mjs"
+      ],
+      "log": "source-mutations/get_secret-blocking-worker-red.log"
+    },
+    {
+      "name": "set_secret-async",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        12,
+        0
+      ],
+      "red": [
+        11,
+        1
+      ],
+      "sha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "restoredSha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 2 - set_secret validates its caller and keeps all blocking work inside an awaited worker",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 5ef7069fb..7c76bff47 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1081,7 +1081,7 @@ fn wait_until_secrets_loaded(cache: &SecretsCache) -> bool {\n }\n \n #[tauri::command]\n-async fn set_secret(\n+fn set_secret(\n  webview: Webview,\n  key: String,\n  value: String,\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/native-responsiveness-boundary.test.mjs"
+      ],
+      "log": "source-mutations/set_secret-async-red.log"
+    },
+    {
+      "name": "set_secret-blocking-worker",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        12,
+        0
+      ],
+      "red": [
+        11,
+        1
+      ],
+      "sha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "restoredSha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 2 - set_secret validates its caller and keeps all blocking work inside an awaited worker",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 5ef7069fb..dd95446be 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1091,7 +1091,7 @@ async fn set_secret(\n  return Err(format!(\"Unsupported secret key: {key}\"));\n  }\n  let app = webview.app_handle().clone();\n- tauri::async_runtime::spawn_blocking(move || {\n+ tauri::async_runtime::block_on(move || {\n  let cache = app.state::<SecretsCache>();\n  if !wait_until_secrets_loaded(&cache) {\n  return Err(\"Secrets are still loading from the keychain; please try again in a moment.\".to_string());\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/native-responsiveness-boundary.test.mjs"
+      ],
+      "log": "source-mutations/set_secret-blocking-worker-red.log"
+    },
+    {
+      "name": "delete_secret-async",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        12,
+        0
+      ],
+      "red": [
+        11,
+        1
+      ],
+      "sha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "restoredSha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 3 - delete_secret validates its caller and keeps all blocking work inside an awaited worker",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 5ef7069fb..9f48f440b 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1158,7 +1158,7 @@ async fn reload_secrets_from_keychain(webview: Webview) -> Result<usize, String>\n }\n \n #[tauri::command]\n-async fn delete_secret(webview: Webview, key: String) -> Result<(), String> {\n+fn delete_secret(webview: Webview, key: String) -> Result<(), String> {\n  require_trusted_window(webview.label())?;\n  if !SUPPORTED_SECRET_KEYS.contains(&key.as_str()) {\n  return Err(format!(\"Unsupported secret key: {key}\"));\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/native-responsiveness-boundary.test.mjs"
+      ],
+      "log": "source-mutations/delete_secret-async-red.log"
+    },
+    {
+      "name": "delete_secret-blocking-worker",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        12,
+        0
+      ],
+      "red": [
+        11,
+        1
+      ],
+      "sha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "restoredSha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 3 - delete_secret validates its caller and keeps all blocking work inside an awaited worker",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 5ef7069fb..54a6d1a71 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1164,7 +1164,7 @@ async fn delete_secret(webview: Webview, key: String) -> Result<(), String> {\n  return Err(format!(\"Unsupported secret key: {key}\"));\n  }\n  let app = webview.app_handle().clone();\n- tauri::async_runtime::spawn_blocking(move || {\n+ tauri::async_runtime::block_on(move || {\n  let cache = app.state::<SecretsCache>();\n  if !wait_until_secrets_loaded(&cache) {\n  return Err(\"Secrets are still loading from the keychain; please try again in a moment.\".to_string());\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/native-responsiveness-boundary.test.mjs"
+      ],
+      "log": "source-mutations/delete_secret-blocking-worker-red.log"
+    },
+    {
+      "name": "read_cache_entry-async",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        12,
+        0
+      ],
+      "red": [
+        11,
+        1
+      ],
+      "sha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "restoredSha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 4 - read_cache_entry validates its caller and keeps all blocking work inside an awaited worker",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 5ef7069fb..533b405b7 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1237,7 +1237,7 @@ fn exclude_app_data_from_backup(dir: &std::path::Path) {\n fn exclude_app_data_from_backup(_dir: &std::path::Path) {}\n \n #[tauri::command]\n-async fn read_cache_entry(webview: Webview, key: String) -> Result<Option<Value>, String> {\n+fn read_cache_entry(webview: Webview, key: String) -> Result<Option<Value>, String> {\n  require_trusted_window(webview.label())?;\n  let app = webview.app_handle().clone();\n  tauri::async_runtime::spawn_blocking(move || {\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/native-responsiveness-boundary.test.mjs"
+      ],
+      "log": "source-mutations/read_cache_entry-async-red.log"
+    },
+    {
+      "name": "read_cache_entry-blocking-worker",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        12,
+        0
+      ],
+      "red": [
+        11,
+        1
+      ],
+      "sha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "restoredSha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 4 - read_cache_entry validates its caller and keeps all blocking work inside an awaited worker",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 5ef7069fb..9fef8fb6d 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1240,7 +1240,7 @@ fn exclude_app_data_from_backup(_dir: &std::path::Path) {}\n async fn read_cache_entry(webview: Webview, key: String) -> Result<Option<Value>, String> {\n  require_trusted_window(webview.label())?;\n  let app = webview.app_handle().clone();\n- tauri::async_runtime::spawn_blocking(move || {\n+ tauri::async_runtime::block_on(move || {\n  let cache = app.state::<PersistentCache>();\n  Ok(cache.get(&key))\n  })\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/native-responsiveness-boundary.test.mjs"
+      ],
+      "log": "source-mutations/read_cache_entry-blocking-worker-red.log"
+    },
+    {
+      "name": "write_cache_entry-async",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        12,
+        0
+      ],
+      "red": [
+        11,
+        1
+      ],
+      "sha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "restoredSha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 5 - write_cache_entry validates its caller and keeps all blocking work inside an awaited worker",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 5ef7069fb..53204acf2 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1271,7 +1271,7 @@ async fn delete_cache_entry(webview: Webview, app: AppHandle, key: String) -> Re\n }\n \n #[tauri::command]\n-async fn write_cache_entry(webview: Webview, app: AppHandle, key: String, value: String, ttl_ms: Option<u64>) -> Result<(), String> {\n+fn write_cache_entry(webview: Webview, app: AppHandle, key: String, value: String, ttl_ms: Option<u64>) -> Result<(), String> {\n  require_trusted_window(webview.label())?;\n  if key.len() > 256 {\n   return Err(\"Cache key exceeds 256 byte limit\".into());\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/native-responsiveness-boundary.test.mjs"
+      ],
+      "log": "source-mutations/write_cache_entry-async-red.log"
+    },
+    {
+      "name": "write_cache_entry-blocking-worker",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        12,
+        0
+      ],
+      "red": [
+        11,
+        1
+      ],
+      "sha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "restoredSha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 5 - write_cache_entry validates its caller and keeps all blocking work inside an awaited worker",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 5ef7069fb..54347d246 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1279,7 +1279,7 @@ async fn write_cache_entry(webview: Webview, app: AppHandle, key: String, value:\n  if value.len() > 5 * 1024 * 1024 {\n   return Err(\"Cache value exceeds 5 MB limit\".into());\n  }\n- tauri::async_runtime::spawn_blocking(move || {\n+ tauri::async_runtime::block_on(move || {\n  let cache = app.state::<PersistentCache>();\n  let parsed_value: Value = serde_json::from_str(&value)\n  .map_err(|e| format!(\"Invalid cache payload JSON: {e}\"))?;\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/native-responsiveness-boundary.test.mjs"
+      ],
+      "log": "source-mutations/write_cache_entry-blocking-worker-red.log"
+    },
+    {
+      "name": "delete_cache_entry-async",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        12,
+        0
+      ],
+      "red": [
+        11,
+        1
+      ],
+      "sha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "restoredSha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 6 - delete_cache_entry validates its caller and keeps all blocking work inside an awaited worker",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 5ef7069fb..51f12a495 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1249,7 +1249,7 @@ async fn read_cache_entry(webview: Webview, key: String) -> Result<Option<Value>\n }\n \n #[tauri::command]\n-async fn delete_cache_entry(webview: Webview, app: AppHandle, key: String) -> Result<(), String> {\n+fn delete_cache_entry(webview: Webview, app: AppHandle, key: String) -> Result<(), String> {\n  require_trusted_window(webview.label())?;\n  tauri::async_runtime::spawn_blocking(move || {\n  let cache = app.state::<PersistentCache>();\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/native-responsiveness-boundary.test.mjs"
+      ],
+      "log": "source-mutations/delete_cache_entry-async-red.log"
+    },
+    {
+      "name": "delete_cache_entry-blocking-worker",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        12,
+        0
+      ],
+      "red": [
+        11,
+        1
+      ],
+      "sha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "restoredSha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 6 - delete_cache_entry validates its caller and keeps all blocking work inside an awaited worker",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 5ef7069fb..a319752c9 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1251,7 +1251,7 @@ async fn read_cache_entry(webview: Webview, key: String) -> Result<Option<Value>\n #[tauri::command]\n async fn delete_cache_entry(webview: Webview, app: AppHandle, key: String) -> Result<(), String> {\n  require_trusted_window(webview.label())?;\n- tauri::async_runtime::spawn_blocking(move || {\n+ tauri::async_runtime::block_on(move || {\n  let cache = app.state::<PersistentCache>();\n  let _write_guard = cache.write_lock.lock().unwrap_or_else(|e| e.into_inner());\n  {\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/native-responsiveness-boundary.test.mjs"
+      ],
+      "log": "source-mutations/delete_cache_entry-blocking-worker-red.log"
+    },
+    {
+      "name": "save_brief-async",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        12,
+        0
+      ],
+      "red": [
+        11,
+        1
+      ],
+      "sha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "restoredSha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 7 - save_brief validates its caller and keeps all blocking work inside an awaited worker",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 5ef7069fb..29679a502 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1309,7 +1309,7 @@ async fn write_cache_entry(webview: Webview, app: AppHandle, key: String, value:\n /// Save a PDF brief to ~/Documents/Crystal Ball Briefs/<filename>.\n /// Creates the directory if absent. Restricted to the trusted window list.\n #[tauri::command]\n-async fn save_brief(webview: Webview, filename: String, bytes: Vec<u8>) -> Result<String, String> {\n+fn save_brief(webview: Webview, filename: String, bytes: Vec<u8>) -> Result<String, String> {\n  require_trusted_window(webview.label())?;\n  tauri::async_runtime::spawn_blocking(move || {\n  // Whitelist: alphanumeric + hyphen/underscore/dot/space.\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/native-responsiveness-boundary.test.mjs"
+      ],
+      "log": "source-mutations/save_brief-async-red.log"
+    },
+    {
+      "name": "save_brief-blocking-worker",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        12,
+        0
+      ],
+      "red": [
+        11,
+        1
+      ],
+      "sha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "restoredSha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 7 - save_brief validates its caller and keeps all blocking work inside an awaited worker",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 5ef7069fb..948f7aa91 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1311,7 +1311,7 @@ async fn write_cache_entry(webview: Webview, app: AppHandle, key: String, value:\n #[tauri::command]\n async fn save_brief(webview: Webview, filename: String, bytes: Vec<u8>) -> Result<String, String> {\n  require_trusted_window(webview.label())?;\n- tauri::async_runtime::spawn_blocking(move || {\n+ tauri::async_runtime::block_on(move || {\n  // Whitelist: alphanumeric + hyphen/underscore/dot/space.\n  // Also reject \".\" / \"..\" and null bytes to prevent path confusion.\n  let filename_valid = !filename.is_empty()\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/native-responsiveness-boundary.test.mjs"
+      ],
+      "log": "source-mutations/save_brief-blocking-worker-red.log"
+    },
+    {
+      "name": "watchdog-no-background-focus",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        12,
+        0
+      ],
+      "red": [
+        11,
+        1
+      ],
+      "sha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "restoredSha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 8 - watchdog background work never queries native window focus",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 5ef7069fb..e3d1442f4 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -4625,7 +4625,7 @@ fn main() {\n  // regardless of focus.\n  if tick % 10 == 0 {\n  let beat_age = renderer_now_ms().saturating_sub(LAST_RENDERER_HEARTBEAT_MS.load(Ordering::Relaxed));\n- let focused = MAIN_WINDOW_FOCUS.snapshot().focused;\n+ let focused = app_handle.get_webview_window(\"main\").and_then(|w| w.is_focused().ok()).unwrap_or(false);\n  append_watchdog_log(&app_handle, \"INFO\", &format!(\"heartbeat: renderer last beat {beat_age}ms ago, focused={focused}\"));\n  }\n  let focus = MAIN_WINDOW_FOCUS.snapshot();\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/native-responsiveness-boundary.test.mjs"
+      ],
+      "log": "source-mutations/watchdog-no-background-focus-red.log"
+    },
+    {
+      "name": "focus-both-states",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        12,
+        0
+      ],
+      "red": [
+        11,
+        1
+      ],
+      "sha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "restoredSha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 9 - main-window focus events handle both states on every platform",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 5ef7069fb..7c5fc9155 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -4875,7 +4875,7 @@ fn main() {\n  }\n  RunEvent::WindowEvent {\n  label,\n- event: WindowEvent::Focused(focused),\n+ event: WindowEvent::Focused(true),\n  ..\n  } if label == \"main\" => {\n  MAIN_WINDOW_FOCUS.update(label, *focused);\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/native-responsiveness-boundary.test.mjs"
+      ],
+      "log": "source-mutations/focus-both-states-red.log"
+    },
+    {
+      "name": "focus-cross-platform",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        12,
+        0
+      ],
+      "red": [
+        11,
+        1
+      ],
+      "sha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "restoredSha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 9 - main-window focus events handle both states on every platform",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 5ef7069fb..d1afc9d3a 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -4873,6 +4873,7 @@ fn main() {\n  let _ = w.set_focus();\n  }\n  }\n+ #[cfg(target_os = \"macos\")]\n  RunEvent::WindowEvent {\n  label,\n  event: WindowEvent::Focused(focused),\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/native-responsiveness-boundary.test.mjs"
+      ],
+      "log": "source-mutations/focus-cross-platform-red.log"
+    },
+    {
+      "name": "focus-event-wiring",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        12,
+        0
+      ],
+      "red": [
+        11,
+        1
+      ],
+      "sha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "restoredSha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 10 - main focus event publishes its actual state to native watchdog authority",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 5ef7069fb..8a0b24c0b 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -4878,7 +4878,7 @@ fn main() {\n  event: WindowEvent::Focused(focused),\n  ..\n  } if label == \"main\" => {\n- MAIN_WINDOW_FOCUS.update(label, *focused);\n+ // Deliberately skip focus event publication.\n  // Auxiliary-window raising is macOS-only; focus tracking is cross-platform.\n  #[cfg(target_os = \"macos\")]\n  if *focused {\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/native-responsiveness-boundary.test.mjs"
+      ],
+      "log": "source-mutations/focus-event-wiring-red.log"
+    },
+    {
+      "name": "watchdog-snapshot",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        12,
+        0
+      ],
+      "red": [
+        11,
+        1
+      ],
+      "sha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "restoredSha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 11 - watchdog consumes native focus and records reload timing through its tested policy",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 5ef7069fb..dc9d2fb99 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -4628,7 +4628,7 @@ fn main() {\n  let focused = MAIN_WINDOW_FOCUS.snapshot().focused;\n  append_watchdog_log(&app_handle, \"INFO\", &format!(\"heartbeat: renderer last beat {beat_age}ms ago, focused={focused}\"));\n  }\n- let focus = MAIN_WINDOW_FOCUS.snapshot();\n+ let focus = watchdog::FocusSnapshot { focused: false, generation: 0 };\n  let age = renderer_now_ms().saturating_sub(LAST_RENDERER_HEARTBEAT_MS.load(Ordering::Relaxed));\n  match policy.tick(started.elapsed().as_millis() as u64, focus, age) {\n  watchdog::Decision::Idle => continue,\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/native-responsiveness-boundary.test.mjs"
+      ],
+      "log": "source-mutations/watchdog-snapshot-red.log"
+    },
+    {
+      "name": "watchdog-policy-tick",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        12,
+        0
+      ],
+      "red": [
+        11,
+        1
+      ],
+      "sha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "restoredSha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 11 - watchdog consumes native focus and records reload timing through its tested policy",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 5ef7069fb..91d23a534 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -4630,7 +4630,7 @@ fn main() {\n  }\n  let focus = MAIN_WINDOW_FOCUS.snapshot();\n  let age = renderer_now_ms().saturating_sub(LAST_RENDERER_HEARTBEAT_MS.load(Ordering::Relaxed));\n- match policy.tick(started.elapsed().as_millis() as u64, focus, age) {\n+ match watchdog::Decision::Idle {\n  watchdog::Decision::Idle => continue,\n  watchdog::Decision::Rebaseline => {\n  LAST_RENDERER_HEARTBEAT_MS.store(renderer_now_ms(), Ordering::Relaxed);\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/native-responsiveness-boundary.test.mjs"
+      ],
+      "log": "source-mutations/watchdog-policy-tick-red.log"
+    },
+    {
+      "name": "watchdog-reload-record",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        12,
+        0
+      ],
+      "red": [
+        11,
+        1
+      ],
+      "sha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "restoredSha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 11 - watchdog consumes native focus and records reload timing through its tested policy",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 5ef7069fb..0a72547fd 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -4654,7 +4654,7 @@ fn main() {\n  let _ = win.reload();\n  append_watchdog_log(&app_handle, \"INFO\", \"webview reloaded after stall \u2014 recovery toast pending; app NOT exited\");\n  LAST_RENDERER_HEARTBEAT_MS.store(renderer_now_ms(), Ordering::Relaxed);\n- policy.did_reload(started.elapsed().as_millis() as u64);\n+ // Deliberately omit cooldown recording.\n  }\n  });\n  }\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/native-responsiveness-boundary.test.mjs"
+      ],
+      "log": "source-mutations/watchdog-reload-record-red.log"
+    },
+    {
+      "name": "focus-initial-seed",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        12,
+        0
+      ],
+      "red": [
+        11,
+        1
+      ],
+      "sha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "restoredSha256": "91c5fd99e03c509a76b7a1067be28998116c009a90464438a4bba7ae4b80a0c1",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 12 - initial native focus is seeded only after the main window exists",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 5ef7069fb..2684005b2 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -4684,7 +4684,7 @@ fn main() {\n    .hidden_title(true);\n  }\n  let main_window = main_builder.build().map_err(|e| format!(\"failed to create main window: {e}\"))?;\n- MAIN_WINDOW_FOCUS.update(\"main\", main_window.is_focused().unwrap_or(false));\n+ MAIN_WINDOW_FOCUS.update(\"main\", false);\n \n  // Apply native macOS vibrancy (HudWindow material, 12pt rounded corners).\n  // Pairs with `transparent: true` + `macOSPrivateApi: true` in tauri.conf.json\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/native-responsiveness-boundary.test.mjs"
+      ],
+      "log": "source-mutations/focus-initial-seed-red.log"
+    },
+    {
+      "name": "focus-gain-loss",
+      "file": "src-tauri/src/watchdog.rs",
+      "kind": "rust-main_focus_tracks_gain_and_loss",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "restoredSha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test main_focus_tracks_gain_and_loss ... FAILED",
+        "thread 'main_focus_tracks_gain_and_loss' (14384141) panicked at tests/watchdog_contract.rs:12:5:",
+        "assertion failed: gained.focused",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/watchdog.rs b/src-tauri/src/watchdog.rs\nindex a7273cb71..5c918f11b 100644\n--- a/src-tauri/src/watchdog.rs\n+++ b/src-tauri/src/watchdog.rs\n@@ -31,7 +31,7 @@ impl MainFocus {\n                     return None;\n                 }\n                 // A single snapshot retains a loss/regain between watchdog ticks.\n-                Some((state.wrapping_add(2) & !1) | u64::from(focused))\n+                Some((state.wrapping_add(2) & !1) | u64::from(!focused))\n             });\n     }\n     pub fn snapshot(&self) -> FocusSnapshot {\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "watchdog_contract",
+        "main_focus_tracks_gain_and_loss",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/focus-gain-loss-red.log"
+    },
+    {
+      "name": "main-window-authority",
+      "file": "src-tauri/src/watchdog.rs",
+      "kind": "rust-auxiliary_focus_cannot_change_main_authority",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "restoredSha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test auxiliary_focus_cannot_change_main_authority ... FAILED",
+        "thread 'auxiliary_focus_cannot_change_main_authority' (14384675) panicked at tests/watchdog_contract.rs:27:9:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/watchdog.rs b/src-tauri/src/watchdog.rs\nindex a7273cb71..22a661f51 100644\n--- a/src-tauri/src/watchdog.rs\n+++ b/src-tauri/src/watchdog.rs\n@@ -21,7 +21,7 @@ impl MainFocus {\n         }\n     }\n     pub fn update(&self, label: &str, focused: bool) {\n-        if label != \"main\" {\n+        if false && label != \"main\" {\n             return;\n         }\n         let _ = self\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "watchdog_contract",
+        "auxiliary_focus_cannot_change_main_authority",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/main-window-authority-red.log"
+    },
+    {
+      "name": "duplicate-events",
+      "file": "src-tauri/src/watchdog.rs",
+      "kind": "rust-duplicate_events_do_not_reset_focus_generation",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "restoredSha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test duplicate_events_do_not_reset_focus_generation ... FAILED",
+        "thread 'duplicate_events_do_not_reset_focus_generation' (14385133) panicked at tests/watchdog_contract.rs:37:5:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/watchdog.rs b/src-tauri/src/watchdog.rs\nindex a7273cb71..6a18fb625 100644\n--- a/src-tauri/src/watchdog.rs\n+++ b/src-tauri/src/watchdog.rs\n@@ -27,7 +27,7 @@ impl MainFocus {\n         let _ = self\n             .state\n             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |state| {\n-                if (state & 1 != 0) == focused {\n+                if false && (state & 1 != 0) == focused {\n                     return None;\n                 }\n                 // A single snapshot retains a loss/regain between watchdog ticks.\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "watchdog_contract",
+        "duplicate_events_do_not_reset_focus_generation",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/duplicate-events-red.log"
+    },
+    {
+      "name": "boot-grace",
+      "file": "src-tauri/src/watchdog.rs",
+      "kind": "rust-boot_grace_ends_once_at_sixty_seconds",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "restoredSha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test boot_grace_ends_once_at_sixty_seconds ... FAILED",
+        "thread 'boot_grace_ends_once_at_sixty_seconds' (14385607) panicked at tests/watchdog_contract.rs:52:5:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/watchdog.rs b/src-tauri/src/watchdog.rs\nindex a7273cb71..ee26dcfd9 100644\n--- a/src-tauri/src/watchdog.rs\n+++ b/src-tauri/src/watchdog.rs\n@@ -66,7 +66,7 @@ impl WatchdogPolicy {\n         }\n     }\n     pub fn tick(&mut self, now_ms: u64, focus: FocusSnapshot, heartbeat_age_ms: u64) -> Decision {\n-        if now_ms.saturating_sub(self.started_ms) < BOOT_GRACE_MS {\n+        if now_ms.saturating_sub(self.started_ms) <= BOOT_GRACE_MS {\n             return Decision::Idle;\n         }\n         if !focus.focused {\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "watchdog_contract",
+        "boot_grace_ends_once_at_sixty_seconds",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/boot-grace-red.log"
+    },
+    {
+      "name": "focus-grace",
+      "file": "src-tauri/src/watchdog.rs",
+      "kind": "rust-focus_grace_and_heartbeat_threshold_keep_exact_boundaries",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "restoredSha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test focus_grace_and_heartbeat_threshold_keep_exact_boundaries ... FAILED",
+        "thread 'focus_grace_and_heartbeat_threshold_keep_exact_boundaries' (14386061) panicked at tests/watchdog_contract.rs:78:5:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/watchdog.rs b/src-tauri/src/watchdog.rs\nindex a7273cb71..6080aff55 100644\n--- a/src-tauri/src/watchdog.rs\n+++ b/src-tauri/src/watchdog.rs\n@@ -79,7 +79,7 @@ impl WatchdogPolicy {\n             self.focused_since_ms = Some(now_ms);\n             return Decision::Rebaseline;\n         }\n-        if now_ms.saturating_sub(self.focused_since_ms.unwrap_or(now_ms)) < FOCUS_GRACE_MS {\n+        if now_ms.saturating_sub(self.focused_since_ms.unwrap_or(now_ms)) <= FOCUS_GRACE_MS {\n             return Decision::Idle;\n         }\n         if heartbeat_age_ms <= HEARTBEAT_STALE_MS {\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "watchdog_contract",
+        "focus_grace_and_heartbeat_threshold_keep_exact_boundaries",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/focus-grace-red.log"
+    },
+    {
+      "name": "heartbeat-threshold",
+      "file": "src-tauri/src/watchdog.rs",
+      "kind": "rust-focus_grace_and_heartbeat_threshold_keep_exact_boundaries",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "restoredSha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test focus_grace_and_heartbeat_threshold_keep_exact_boundaries ... FAILED",
+        "thread 'focus_grace_and_heartbeat_threshold_keep_exact_boundaries' (14386526) panicked at tests/watchdog_contract.rs:74:5:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/watchdog.rs b/src-tauri/src/watchdog.rs\nindex a7273cb71..8d336ba86 100644\n--- a/src-tauri/src/watchdog.rs\n+++ b/src-tauri/src/watchdog.rs\n@@ -82,7 +82,7 @@ impl WatchdogPolicy {\n         if now_ms.saturating_sub(self.focused_since_ms.unwrap_or(now_ms)) < FOCUS_GRACE_MS {\n             return Decision::Idle;\n         }\n-        if heartbeat_age_ms <= HEARTBEAT_STALE_MS {\n+        if heartbeat_age_ms < HEARTBEAT_STALE_MS {\n             return Decision::Idle;\n         }\n         if self\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "watchdog_contract",
+        "focus_grace_and_heartbeat_threshold_keep_exact_boundaries",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/heartbeat-threshold-red.log"
+    },
+    {
+      "name": "unfocused-exemption",
+      "file": "src-tauri/src/watchdog.rs",
+      "kind": "rust-unfocused_window_stays_exempt_and_regain_rebaselines",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "restoredSha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test unfocused_window_stays_exempt_and_regain_rebaselines ... FAILED",
+        "thread 'unfocused_window_stays_exempt_and_regain_rebaselines' (14386993) panicked at tests/watchdog_contract.rs:93:5:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/watchdog.rs b/src-tauri/src/watchdog.rs\nindex a7273cb71..9750b79dd 100644\n--- a/src-tauri/src/watchdog.rs\n+++ b/src-tauri/src/watchdog.rs\n@@ -69,7 +69,7 @@ impl WatchdogPolicy {\n         if now_ms.saturating_sub(self.started_ms) < BOOT_GRACE_MS {\n             return Decision::Idle;\n         }\n-        if !focus.focused {\n+        if false && !focus.focused {\n             self.focus_generation = Some(focus.generation);\n             self.focused_since_ms = None;\n             return Decision::Idle;\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "watchdog_contract",
+        "unfocused_window_stays_exempt_and_regain_rebaselines",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/unfocused-exemption-red.log"
+    },
+    {
+      "name": "rapid-transition-generation",
+      "file": "src-tauri/src/watchdog.rs",
+      "kind": "rust-loss_and_regain_between_ticks_reset_grace",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "restoredSha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test loss_and_regain_between_ticks_reset_grace ... FAILED",
+        "thread 'loss_and_regain_between_ticks_reset_grace' (14387520) panicked at tests/watchdog_contract.rs:125:5:",
+        "assertion `left != right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/watchdog.rs b/src-tauri/src/watchdog.rs\nindex a7273cb71..290be52a3 100644\n--- a/src-tauri/src/watchdog.rs\n+++ b/src-tauri/src/watchdog.rs\n@@ -31,7 +31,7 @@ impl MainFocus {\n                     return None;\n                 }\n                 // A single snapshot retains a loss/regain between watchdog ticks.\n-                Some((state.wrapping_add(2) & !1) | u64::from(focused))\n+                Some((state.wrapping_add(0) & !1) | u64::from(focused))\n             });\n     }\n     pub fn snapshot(&self) -> FocusSnapshot {\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "watchdog_contract",
+        "loss_and_regain_between_ticks_reset_grace",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/rapid-transition-generation-red.log"
+    },
+    {
+      "name": "reload-cooldown",
+      "file": "src-tauri/src/watchdog.rs",
+      "kind": "rust-successful_reload_enforces_exact_two_minute_cooldown",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "restoredSha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test successful_reload_enforces_exact_two_minute_cooldown ... FAILED",
+        "thread 'successful_reload_enforces_exact_two_minute_cooldown' (14388065) panicked at tests/watchdog_contract.rs:152:5:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/watchdog.rs b/src-tauri/src/watchdog.rs\nindex a7273cb71..7a20ddb18 100644\n--- a/src-tauri/src/watchdog.rs\n+++ b/src-tauri/src/watchdog.rs\n@@ -87,7 +87,7 @@ impl WatchdogPolicy {\n         }\n         if self\n             .last_reload_ms\n-            .is_some_and(|last| now_ms.saturating_sub(last) < RELOAD_COOLDOWN_MS)\n+            .is_some_and(|last| now_ms.saturating_sub(last) <= RELOAD_COOLDOWN_MS)\n         {\n             return Decision::Idle;\n         }\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "watchdog_contract",
+        "successful_reload_enforces_exact_two_minute_cooldown",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/reload-cooldown-red.log"
+    },
+    {
+      "name": "cooldown-survives-focus-change",
+      "file": "src-tauri/src/watchdog.rs",
+      "kind": "rust-focus_changes_do_not_erase_reload_cooldown",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "restoredSha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test focus_changes_do_not_erase_reload_cooldown ... FAILED",
+        "thread 'focus_changes_do_not_erase_reload_cooldown' (14388527) panicked at tests/watchdog_contract.rs:173:5:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/watchdog.rs b/src-tauri/src/watchdog.rs\nindex a7273cb71..809ba019a 100644\n--- a/src-tauri/src/watchdog.rs\n+++ b/src-tauri/src/watchdog.rs\n@@ -77,6 +77,7 @@ impl WatchdogPolicy {\n         if self.focus_generation != Some(focus.generation) || self.focused_since_ms.is_none() {\n             self.focus_generation = Some(focus.generation);\n             self.focused_since_ms = Some(now_ms);\n+            self.last_reload_ms = None;\n             return Decision::Rebaseline;\n         }\n         if now_ms.saturating_sub(self.focused_since_ms.unwrap_or(now_ms)) < FOCUS_GRACE_MS {\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "watchdog_contract",
+        "focus_changes_do_not_erase_reload_cooldown",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/cooldown-survives-focus-change-red.log"
+    },
+    {
+      "name": "rapid-transition-policy",
+      "file": "src-tauri/src/watchdog.rs",
+      "kind": "rust-loss_and_regain_between_ticks_reset_grace",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "restoredSha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test loss_and_regain_between_ticks_reset_grace ... FAILED",
+        "thread 'loss_and_regain_between_ticks_reset_grace' (14388998) panicked at tests/watchdog_contract.rs:126:5:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/watchdog.rs b/src-tauri/src/watchdog.rs\nindex a7273cb71..6cdef9767 100644\n--- a/src-tauri/src/watchdog.rs\n+++ b/src-tauri/src/watchdog.rs\n@@ -74,7 +74,7 @@ impl WatchdogPolicy {\n             self.focused_since_ms = None;\n             return Decision::Idle;\n         }\n-        if self.focus_generation != Some(focus.generation) || self.focused_since_ms.is_none() {\n+        if self.focused_since_ms.is_none() {\n             self.focus_generation = Some(focus.generation);\n             self.focused_since_ms = Some(now_ms);\n             return Decision::Rebaseline;\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "watchdog_contract",
+        "loss_and_regain_between_ticks_reset_grace",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/rapid-transition-policy-red.log"
+    },
+    {
+      "name": "record-reload-time",
+      "file": "src-tauri/src/watchdog.rs",
+      "kind": "rust-successful_reload_enforces_exact_two_minute_cooldown",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "restoredSha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test successful_reload_enforces_exact_two_minute_cooldown ... FAILED",
+        "thread 'successful_reload_enforces_exact_two_minute_cooldown' (14389468) panicked at tests/watchdog_contract.rs:148:5:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/watchdog.rs b/src-tauri/src/watchdog.rs\nindex a7273cb71..d99fe5497 100644\n--- a/src-tauri/src/watchdog.rs\n+++ b/src-tauri/src/watchdog.rs\n@@ -94,7 +94,7 @@ impl WatchdogPolicy {\n         Decision::Reload\n     }\n     pub fn did_reload(&mut self, now_ms: u64) {\n-        self.last_reload_ms = Some(now_ms);\n+        self.last_reload_ms = None;\n         self.focused_since_ms = Some(now_ms);\n     }\n }\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "watchdog_contract",
+        "successful_reload_enforces_exact_two_minute_cooldown",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/record-reload-time-red.log"
+    },
+    {
+      "name": "boot-grace-removal",
+      "file": "src-tauri/src/watchdog.rs",
+      "kind": "rust-boot_grace_ends_once_at_sixty_seconds",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "restoredSha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test boot_grace_ends_once_at_sixty_seconds ... FAILED",
+        "thread 'boot_grace_ends_once_at_sixty_seconds' (14389994) panicked at tests/watchdog_contract.rs:48:5:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/watchdog.rs b/src-tauri/src/watchdog.rs\nindex a7273cb71..160035837 100644\n--- a/src-tauri/src/watchdog.rs\n+++ b/src-tauri/src/watchdog.rs\n@@ -66,7 +66,7 @@ impl WatchdogPolicy {\n         }\n     }\n     pub fn tick(&mut self, now_ms: u64, focus: FocusSnapshot, heartbeat_age_ms: u64) -> Decision {\n-        if now_ms.saturating_sub(self.started_ms) < BOOT_GRACE_MS {\n+        if false && now_ms.saturating_sub(self.started_ms) < BOOT_GRACE_MS {\n             return Decision::Idle;\n         }\n         if !focus.focused {\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "watchdog_contract",
+        "boot_grace_ends_once_at_sixty_seconds",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/boot-grace-removal-red.log"
+    },
+    {
+      "name": "wrapper-propagates-focus-regression",
+      "file": "src-tauri/src/watchdog.rs",
+      "kind": "wrapper",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "restoredSha256": "7c43747707f0042f5c5e72b2a3781cb5d6fbf6e23e3c5fb6816be750967e8911",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 1 - native watchdog responsiveness contract executes successfully",
+        "    test main_focus_tracks_gain_and_loss ... FAILED",
+        "    test boot_grace_ends_once_at_sixty_seconds ... FAILED",
+        "    test successful_reload_enforces_exact_two_minute_cooldown ... FAILED",
+        "    test duplicate_events_do_not_reset_focus_generation ... FAILED",
+        "    test auxiliary_focus_cannot_change_main_authority ... FAILED",
+        "    test focus_changes_do_not_erase_reload_cooldown ... FAILED",
+        "    test loss_and_regain_between_ticks_reset_grace ... FAILED",
+        "    test focus_grace_and_heartbeat_threshold_keep_exact_boundaries ... FAILED",
+        "    test unfocused_window_stays_exempt_and_regain_rebaselines ... FAILED",
+        "    thread 'main_focus_tracks_gain_and_loss' (14393097) panicked at tests/watchdog_contract.rs:12:5:",
+        "    assertion failed: gained.focused",
+        "    thread 'boot_grace_ends_once_at_sixty_seconds' (14393092) panicked at tests/watchdog_contract.rs:52:5:",
+        "    assertion `left == right` failed",
+        "    thread 'successful_reload_enforces_exact_two_minute_cooldown' (14393098) panicked at tests/watchdog_contract.rs:135:5:",
+        "    assertion `left == right` failed",
+        "    thread 'duplicate_events_do_not_reset_focus_generation' (14393093) panicked at tests/watchdog_contract.rs:35:5:",
+        "    assertion failed: first.focused",
+        "    thread 'auxiliary_focus_cannot_change_main_authority' (14393091) panicked at tests/watchdog_contract.rs:24:5:",
+        "    assertion failed: main.focused",
+        "    thread 'focus_changes_do_not_erase_reload_cooldown' (14393094) panicked at tests/watchdog_contract.rs:162:5:",
+        "    assertion `left == right` failed",
+        "    thread 'loss_and_regain_between_ticks_reset_grace' (14393096) panicked at tests/watchdog_contract.rs:116:5:",
+        "    assertion `left == right` failed",
+        "    thread 'focus_grace_and_heartbeat_threshold_keep_exact_boundaries' (14393095) panicked at tests/watchdog_contract.rs:66:5:",
+        "    assertion `left == right` failed",
+        "    thread 'unfocused_window_stays_exempt_and_regain_rebaselines' (14393099) panicked at tests/watchdog_contract.rs:88:5:",
+        "    assertion `left == right` failed",
+        "    test result: FAILED. 0 passed; 9 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/watchdog.rs b/src-tauri/src/watchdog.rs\nindex a7273cb71..5c918f11b 100644\n--- a/src-tauri/src/watchdog.rs\n+++ b/src-tauri/src/watchdog.rs\n@@ -31,7 +31,7 @@ impl MainFocus {\n                     return None;\n                 }\n                 // A single snapshot retains a loss/regain between watchdog ticks.\n-                Some((state.wrapping_add(2) & !1) | u64::from(focused))\n+                Some((state.wrapping_add(2) & !1) | u64::from(!focused))\n             });\n     }\n     pub fn snapshot(&self) -> FocusSnapshot {\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/native-responsiveness-native.test.mjs"
+      ],
+      "log": "wrapper-mutations/wrapper-propagates-focus-regression-red.log"
+    }
+  ]
+}

@@ -4,7 +4,7 @@
 //
 // Stays decoupled from push-notifier — callers feed the already-decided
 // NotificationPayload in. The actual send happens via the existing
-// sendImessage(recipient, body) bridge.
+// sendImessage(body) bridge.
 /* eslint-disable sonarjs/no-nested-template-literals, sonarjs/no-nested-conditional -- short body interpolation; refactoring to intermediate vars hurts readability more than it helps */
 
 import type { NotificationPayload } from './push-notifier';
@@ -185,7 +185,7 @@ export function parseImessageThreatTypeList(
 // ── Side-effecting dispatch ──────────────────────────────────────────────────
 
 export interface FireImessageOptions {
-  send?: (recipient: string, body: string) => Promise<{ ok: boolean; reason?: string }>;
+  send?: (body: string) => Promise<{ ok: boolean; reason?: string }>;
 }
 
 export async function fireImessageForPayload(
@@ -196,6 +196,6 @@ export async function fireImessageForPayload(
   const decision = routeAlertToImessage(payload, settings);
   if (!decision.send || !decision.body) return { sent: false, reason: decision.reason };
   const send = opts.send ?? sendImessage;
-  const result = await send(settings.recipient, decision.body);
+  const result = await send(decision.body);
   return result.ok ? { sent: true } : { sent: false, reason: result.reason };
 }

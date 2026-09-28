@@ -23,6 +23,7 @@ use tauri::menu::{AboutMetadata, Menu, MenuItemKind, MenuItem, PredefinedMenuIte
 use tauri::{AppHandle, Manager, RunEvent, TitleBarStyle, Webview, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 mod corelocation;
 mod current_location;
+mod imessage;
 mod updater_policy;
 use updater_policy::{BrowserReason, SignerRequirement, UpdateError, UpdateOutcome};
 
@@ -125,9 +126,7 @@ const SUPPORTED_SECRET_KEYS: [&str; 77] = [
 static NOTIFICATION_LAST_SENT: Mutex<Option<Instant>> = Mutex::new(None);
 const NOTIFICATION_RATE_LIMIT: Duration = Duration::from_secs(30);
 
-// iMessage has its own rate-limit state so user-initiated Test sends aren't
-// blocked by background native notifications. Same 30s window between iMessages.
-static IMESSAGE_LAST_SENT: Mutex<Option<Instant>> = Mutex::new(None);
+static IMESSAGE_SERVICE: std::sync::OnceLock<Arc<imessage::Service<imessage::NativeEffects>>> = std::sync::OnceLock::new();
 // Voice alerts (`say`) are more disruptive than push, so we use a 5s
 // floor to avoid stacked utterances when several alerts fire at once.
 static VOICE_LAST_SENT: Mutex<Option<Instant>> = Mutex::new(None);
@@ -1606,73 +1605,42 @@ fn send_notification(webview: Webview, title: String, body: String, sound: Optio
  }
 }
 
-/// Send an iMessage / SMS to a contact via the user's signed-in macOS Messages
-/// app. No-op on non-macOS. Reuses the same sanitization, length-cap, and
-/// trusted-window pattern as send_notification — recipient and body are
-/// stripped of AppleScript-meaningful characters before interpolation, so a
-/// hostile body string can't escape the quoted literal and run extra
-/// statements.
-///
-/// Rate-limited to 1 message per 30 seconds (shared with the notification
-/// limiter) so a runaway alert source can't burn through the user's Messages.
-#[tauri::command]
-fn send_imessage(webview: Webview, recipient: String, body: String) -> Result<(), String> {
- require_trusted_window(webview.label())?;
+fn imessage_service(webview: &Webview) -> Result<Arc<imessage::Service<imessage::NativeEffects>>, imessage::ImessageError> {
  #[cfg(not(target_os = "macos"))]
- {
- let _ = (recipient, body);
- return Err("iMessage is only available on macOS".to_string());
- }
+ { let _ = webview; Err(imessage::ImessageError { code: "unavailable" }) }
  #[cfg(target_os = "macos")]
  {
- {
- let mut last = IMESSAGE_LAST_SENT.lock().unwrap_or_else(|p| p.into_inner());
- if let Some(t) = *last {
- if t.elapsed() < NOTIFICATION_RATE_LIMIT {
- return Err("Rate limit: too soon since the last iMessage".to_string());
+ let directory = webview.app_handle().path().app_config_dir().map_err(|_| imessage::ImessageError { code: "unavailable" })?;
+ Ok(IMESSAGE_SERVICE.get_or_init(|| Arc::new(imessage::Service::new(imessage::NativeEffects::new(directory)))).clone())
  }
- }
- *last = Some(Instant::now());
- }
+}
 
- let recipient = truncate_to_bytes(&recipient, 64);
- let body = truncate_to_bytes(&body, 512);
- if recipient.trim().is_empty() {
- return Err("Recipient is required".to_string());
- }
- if body.trim().is_empty() {
- return Err("Message body is required".to_string());
- }
+#[tauri::command]
+async fn get_imessage_settings(webview: Webview) -> Result<imessage::ImessageSettings, imessage::ImessageError> {
+ require_trusted_window(webview.label()).map_err(|_| imessage::ImessageError { code: "unavailable" })?;
+ let service = imessage_service(&webview)?;
+ tauri::async_runtime::spawn_blocking(move || service.settings()).await.map_err(|_| imessage::ImessageError { code: "unavailable" })?
+}
 
- let sanitize = |s: &str| -> String {
- s.chars()
- .filter(|c| !matches!(c, '"' | '\\' | '\n' | '\r' | '\x00'..='\x1f'))
- .collect()
- };
- let safe_recipient = sanitize(&recipient);
- let safe_body = sanitize(&body);
+#[tauri::command]
+async fn configure_imessage(webview: Webview, recipient: String, enabled: bool) -> Result<imessage::ImessageSettings, imessage::ImessageError> {
+ require_trusted_window(webview.label()).map_err(|_| imessage::ImessageError { code: "unavailable" })?;
+ let service = imessage_service(&webview)?;
+ tauri::async_runtime::spawn_blocking(move || service.configure(recipient, enabled)).await.map_err(|_| imessage::ImessageError { code: "unavailable" })?
+}
 
- // Use the iMessage service explicitly — falls back gracefully if the
- // recipient is only reachable via SMS by erroring inside Messages.
- let script = format!(
- r#"tell application "Messages"
-  set targetService to 1st service whose service type = iMessage
-  set targetBuddy to buddy "{safe_recipient}" of targetService
-  send "{safe_body}" to targetBuddy
-end tell"#
- );
+#[tauri::command]
+async fn disable_imessage(webview: Webview) -> Result<imessage::ImessageSettings, imessage::ImessageError> {
+ require_trusted_window(webview.label()).map_err(|_| imessage::ImessageError { code: "unavailable" })?;
+ let service = imessage_service(&webview)?;
+ tauri::async_runtime::spawn_blocking(move || service.disable()).await.map_err(|_| imessage::ImessageError { code: "unavailable" })?
+}
 
- let status = Command::new("osascript")
- .args(["-e", &script])
- .stdout(Stdio::null())
- .stderr(Stdio::null())
- .status()
- .map_err(|e| format!("osascript spawn failed: {e}"))?;
- if !status.success() {
- return Err("Messages app rejected the send (recipient unreachable, not signed in, or blocked)".to_string());
- }
- Ok(())
- }
+#[tauri::command]
+async fn send_imessage(webview: Webview, body: String) -> Result<(), imessage::ImessageError> {
+ require_trusted_window(webview.label()).map_err(|_| imessage::ImessageError { code: "unavailable" })?;
+ let service = imessage_service(&webview)?;
+ tauri::async_runtime::spawn_blocking(move || service.send(body)).await.map_err(|_| imessage::ImessageError { code: "unavailable" })?
 }
 
 /// Speak a short alert message aloud via macOS `say`. No-op on non-macOS.
@@ -4577,6 +4545,9 @@ fn main() {
  open_youtube_logout,
  fetch_polymarket,
  send_notification,
+ get_imessage_settings,
+ configure_imessage,
+ disable_imessage,
  send_imessage,
  speak_aloud,
  stage_latest_update,

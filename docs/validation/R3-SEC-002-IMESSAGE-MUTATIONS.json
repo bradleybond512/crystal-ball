@@ -1,0 +1,3163 @@
+{
+  "reviewedCodeSha": "8b4a9520376e2f308f1ab1e42fd321737bec530f",
+  "method": "Clean baseline, SHA256, applied diff inspected, assertion red, identical SHA256 restored, clean status; each restored suite rerun green. Native cases run exact filtered tests. Source guards inspect text only, not compiled native behavior.",
+  "results": [
+    {
+      "name": "send-has-no-destination",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        6,
+        0
+      ],
+      "red": [
+        5,
+        1
+      ],
+      "sha256": "0513ef2596a4515765eb862a1bd3c46809daabd35a57bf635c4146c9fd415005",
+      "restoredSha256": "0513ef2596a4515765eb862a1bd3c46809daabd35a57bf635c4146c9fd415005",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 1 - native iMessage send accepts a body but no renderer destination or consent",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 8d8bf3771..55dfeed56 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1637,7 +1637,7 @@ async fn disable_imessage(webview: Webview) -> Result<imessage::ImessageSettings\n }\n \n #[tauri::command]\n-async fn send_imessage(webview: Webview, body: String) -> Result<(), imessage::ImessageError> {\n+async fn send_imessage(webview: Webview, recipient: String, body: String) -> Result<(), imessage::ImessageError> {\n  require_trusted_window(webview.label()).map_err(|_| imessage::ImessageError { code: \"unavailable\" })?;\n  let service = imessage_service(&webview)?;\n  tauri::async_runtime::spawn_blocking(move || service.send(body)).await.map_err(|_| imessage::ImessageError { code: \"unavailable\" })?\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/imessage-native-boundary.test.mjs"
+      ],
+      "log": "source-mutations/send-has-no-destination-red.log"
+    },
+    {
+      "name": "configuration-has-no-approval-flag",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        6,
+        0
+      ],
+      "red": [
+        5,
+        1
+      ],
+      "sha256": "0513ef2596a4515765eb862a1bd3c46809daabd35a57bf635c4146c9fd415005",
+      "restoredSha256": "0513ef2596a4515765eb862a1bd3c46809daabd35a57bf635c4146c9fd415005",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 6 - configuration accepts a proposal without a renderer approval bypass",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 8d8bf3771..9d2c3462a 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1623,7 +1623,7 @@ async fn get_imessage_settings(webview: Webview) -> Result<imessage::ImessageSet\n }\n \n #[tauri::command]\n-async fn configure_imessage(webview: Webview, recipient: String, enabled: bool) -> Result<imessage::ImessageSettings, imessage::ImessageError> {\n+async fn configure_imessage(webview: Webview, recipient: String, enabled: bool, approved: bool) -> Result<imessage::ImessageSettings, imessage::ImessageError> {\n  require_trusted_window(webview.label()).map_err(|_| imessage::ImessageError { code: \"unavailable\" })?;\n  let service = imessage_service(&webview)?;\n  tauri::async_runtime::spawn_blocking(move || service.configure(recipient, enabled)).await.map_err(|_| imessage::ImessageError { code: \"unavailable\" })?\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/imessage-native-boundary.test.mjs"
+      ],
+      "log": "source-mutations/configuration-has-no-approval-flag-red.log"
+    },
+    {
+      "name": "get_imessage_settings-trusted-window",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        6,
+        0
+      ],
+      "red": [
+        5,
+        1
+      ],
+      "sha256": "0513ef2596a4515765eb862a1bd3c46809daabd35a57bf635c4146c9fd415005",
+      "restoredSha256": "0513ef2596a4515765eb862a1bd3c46809daabd35a57bf635c4146c9fd415005",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 2 - get_imessage_settings keeps trusted-window authorization before off-thread effects",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 8d8bf3771..65aaec45c 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1617,7 +1617,7 @@ fn imessage_service(webview: &Webview) -> Result<Arc<imessage::Service<imessage:\n \n #[tauri::command]\n async fn get_imessage_settings(webview: Webview) -> Result<imessage::ImessageSettings, imessage::ImessageError> {\n- require_trusted_window(webview.label()).map_err(|_| imessage::ImessageError { code: \"unavailable\" })?;\n+ // Trusted-window mutation.\n  let service = imessage_service(&webview)?;\n  tauri::async_runtime::spawn_blocking(move || service.settings()).await.map_err(|_| imessage::ImessageError { code: \"unavailable\" })?\n }\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/imessage-native-boundary.test.mjs"
+      ],
+      "log": "source-mutations/get_imessage_settings-trusted-window-red.log"
+    },
+    {
+      "name": "get_imessage_settings-off-thread",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        6,
+        0
+      ],
+      "red": [
+        5,
+        1
+      ],
+      "sha256": "0513ef2596a4515765eb862a1bd3c46809daabd35a57bf635c4146c9fd415005",
+      "restoredSha256": "0513ef2596a4515765eb862a1bd3c46809daabd35a57bf635c4146c9fd415005",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 2 - get_imessage_settings keeps trusted-window authorization before off-thread effects",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 8d8bf3771..327a9c84a 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1619,7 +1619,7 @@ fn imessage_service(webview: &Webview) -> Result<Arc<imessage::Service<imessage:\n async fn get_imessage_settings(webview: Webview) -> Result<imessage::ImessageSettings, imessage::ImessageError> {\n  require_trusted_window(webview.label()).map_err(|_| imessage::ImessageError { code: \"unavailable\" })?;\n  let service = imessage_service(&webview)?;\n- tauri::async_runtime::spawn_blocking(move || service.settings()).await.map_err(|_| imessage::ImessageError { code: \"unavailable\" })?\n+ tauri::async_runtime::block_on(move || service.settings()).await.map_err(|_| imessage::ImessageError { code: \"unavailable\" })?\n }\n \n #[tauri::command]\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/imessage-native-boundary.test.mjs"
+      ],
+      "log": "source-mutations/get_imessage_settings-off-thread-red.log"
+    },
+    {
+      "name": "configure_imessage-trusted-window",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        6,
+        0
+      ],
+      "red": [
+        5,
+        1
+      ],
+      "sha256": "0513ef2596a4515765eb862a1bd3c46809daabd35a57bf635c4146c9fd415005",
+      "restoredSha256": "0513ef2596a4515765eb862a1bd3c46809daabd35a57bf635c4146c9fd415005",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 3 - configure_imessage keeps trusted-window authorization before off-thread effects",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 8d8bf3771..4ca9e7f18 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1624,7 +1624,7 @@ async fn get_imessage_settings(webview: Webview) -> Result<imessage::ImessageSet\n \n #[tauri::command]\n async fn configure_imessage(webview: Webview, recipient: String, enabled: bool) -> Result<imessage::ImessageSettings, imessage::ImessageError> {\n- require_trusted_window(webview.label()).map_err(|_| imessage::ImessageError { code: \"unavailable\" })?;\n+ // Trusted-window mutation.\n  let service = imessage_service(&webview)?;\n  tauri::async_runtime::spawn_blocking(move || service.configure(recipient, enabled)).await.map_err(|_| imessage::ImessageError { code: \"unavailable\" })?\n }\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/imessage-native-boundary.test.mjs"
+      ],
+      "log": "source-mutations/configure_imessage-trusted-window-red.log"
+    },
+    {
+      "name": "configure_imessage-off-thread",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        6,
+        0
+      ],
+      "red": [
+        5,
+        1
+      ],
+      "sha256": "0513ef2596a4515765eb862a1bd3c46809daabd35a57bf635c4146c9fd415005",
+      "restoredSha256": "0513ef2596a4515765eb862a1bd3c46809daabd35a57bf635c4146c9fd415005",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 3 - configure_imessage keeps trusted-window authorization before off-thread effects",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 8d8bf3771..a0b0b13c6 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1626,7 +1626,7 @@ async fn get_imessage_settings(webview: Webview) -> Result<imessage::ImessageSet\n async fn configure_imessage(webview: Webview, recipient: String, enabled: bool) -> Result<imessage::ImessageSettings, imessage::ImessageError> {\n  require_trusted_window(webview.label()).map_err(|_| imessage::ImessageError { code: \"unavailable\" })?;\n  let service = imessage_service(&webview)?;\n- tauri::async_runtime::spawn_blocking(move || service.configure(recipient, enabled)).await.map_err(|_| imessage::ImessageError { code: \"unavailable\" })?\n+ tauri::async_runtime::block_on(move || service.configure(recipient, enabled)).await.map_err(|_| imessage::ImessageError { code: \"unavailable\" })?\n }\n \n #[tauri::command]\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/imessage-native-boundary.test.mjs"
+      ],
+      "log": "source-mutations/configure_imessage-off-thread-red.log"
+    },
+    {
+      "name": "disable_imessage-trusted-window",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        6,
+        0
+      ],
+      "red": [
+        5,
+        1
+      ],
+      "sha256": "0513ef2596a4515765eb862a1bd3c46809daabd35a57bf635c4146c9fd415005",
+      "restoredSha256": "0513ef2596a4515765eb862a1bd3c46809daabd35a57bf635c4146c9fd415005",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 4 - disable_imessage keeps trusted-window authorization before off-thread effects",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 8d8bf3771..2242201fd 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1631,7 +1631,7 @@ async fn configure_imessage(webview: Webview, recipient: String, enabled: bool)\n \n #[tauri::command]\n async fn disable_imessage(webview: Webview) -> Result<imessage::ImessageSettings, imessage::ImessageError> {\n- require_trusted_window(webview.label()).map_err(|_| imessage::ImessageError { code: \"unavailable\" })?;\n+ // Trusted-window mutation.\n  let service = imessage_service(&webview)?;\n  tauri::async_runtime::spawn_blocking(move || service.disable()).await.map_err(|_| imessage::ImessageError { code: \"unavailable\" })?\n }\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/imessage-native-boundary.test.mjs"
+      ],
+      "log": "source-mutations/disable_imessage-trusted-window-red.log"
+    },
+    {
+      "name": "disable_imessage-off-thread",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        6,
+        0
+      ],
+      "red": [
+        5,
+        1
+      ],
+      "sha256": "0513ef2596a4515765eb862a1bd3c46809daabd35a57bf635c4146c9fd415005",
+      "restoredSha256": "0513ef2596a4515765eb862a1bd3c46809daabd35a57bf635c4146c9fd415005",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 4 - disable_imessage keeps trusted-window authorization before off-thread effects",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 8d8bf3771..bc66ad42b 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1633,7 +1633,7 @@ async fn configure_imessage(webview: Webview, recipient: String, enabled: bool)\n async fn disable_imessage(webview: Webview) -> Result<imessage::ImessageSettings, imessage::ImessageError> {\n  require_trusted_window(webview.label()).map_err(|_| imessage::ImessageError { code: \"unavailable\" })?;\n  let service = imessage_service(&webview)?;\n- tauri::async_runtime::spawn_blocking(move || service.disable()).await.map_err(|_| imessage::ImessageError { code: \"unavailable\" })?\n+ tauri::async_runtime::block_on(move || service.disable()).await.map_err(|_| imessage::ImessageError { code: \"unavailable\" })?\n }\n \n #[tauri::command]\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/imessage-native-boundary.test.mjs"
+      ],
+      "log": "source-mutations/disable_imessage-off-thread-red.log"
+    },
+    {
+      "name": "send_imessage-trusted-window",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        6,
+        0
+      ],
+      "red": [
+        5,
+        1
+      ],
+      "sha256": "0513ef2596a4515765eb862a1bd3c46809daabd35a57bf635c4146c9fd415005",
+      "restoredSha256": "0513ef2596a4515765eb862a1bd3c46809daabd35a57bf635c4146c9fd415005",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 5 - send_imessage keeps trusted-window authorization before off-thread effects",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 8d8bf3771..3b2d97344 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1638,7 +1638,7 @@ async fn disable_imessage(webview: Webview) -> Result<imessage::ImessageSettings\n \n #[tauri::command]\n async fn send_imessage(webview: Webview, body: String) -> Result<(), imessage::ImessageError> {\n- require_trusted_window(webview.label()).map_err(|_| imessage::ImessageError { code: \"unavailable\" })?;\n+ // Trusted-window mutation.\n  let service = imessage_service(&webview)?;\n  tauri::async_runtime::spawn_blocking(move || service.send(body)).await.map_err(|_| imessage::ImessageError { code: \"unavailable\" })?\n }\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/imessage-native-boundary.test.mjs"
+      ],
+      "log": "source-mutations/send_imessage-trusted-window-red.log"
+    },
+    {
+      "name": "send_imessage-off-thread",
+      "file": "src-tauri/src/main.rs",
+      "kind": "source",
+      "baseline": [
+        6,
+        0
+      ],
+      "red": [
+        5,
+        1
+      ],
+      "sha256": "0513ef2596a4515765eb862a1bd3c46809daabd35a57bf635c4146c9fd415005",
+      "restoredSha256": "0513ef2596a4515765eb862a1bd3c46809daabd35a57bf635c4146c9fd415005",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 5 - send_imessage keeps trusted-window authorization before off-thread effects",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs\nindex 8d8bf3771..f36ada0ec 100644\n--- a/src-tauri/src/main.rs\n+++ b/src-tauri/src/main.rs\n@@ -1640,7 +1640,7 @@ async fn disable_imessage(webview: Webview) -> Result<imessage::ImessageSettings\n async fn send_imessage(webview: Webview, body: String) -> Result<(), imessage::ImessageError> {\n  require_trusted_window(webview.label()).map_err(|_| imessage::ImessageError { code: \"unavailable\" })?;\n  let service = imessage_service(&webview)?;\n- tauri::async_runtime::spawn_blocking(move || service.send(body)).await.map_err(|_| imessage::ImessageError { code: \"unavailable\" })?\n+ tauri::async_runtime::block_on(move || service.send(body)).await.map_err(|_| imessage::ImessageError { code: \"unavailable\" })?\n }\n \n /// Speak a short alert message aloud via macOS `say`. No-op on non-macOS.\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/imessage-native-boundary.test.mjs"
+      ],
+      "log": "source-mutations/send_imessage-off-thread-red.log"
+    },
+    {
+      "name": "renderer-legacy-authority",
+      "file": "src/services/imessage-bridge.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "restoredSha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 15 - legacy enabled state cannot authorize before native hydration",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/services/imessage-bridge.ts b/src/services/imessage-bridge.ts\nindex 19fb56926..c8aa854b1 100644\n--- a/src/services/imessage-bridge.ts\n+++ b/src/services/imessage-bridge.ts\n@@ -34,7 +34,7 @@ function localSettings(): Partial<ImessageSettings> {\n   catch { return {}; }\n }\n export function getImessageSettings(): ImessageSettings {\n-  return { ...nativeSettings, threshold: localSettings().threshold === 'high+critical' ? 'high+critical' : 'critical' };\n+  return { ...nativeSettings, ...localSettings(), threshold: localSettings().threshold === 'high+critical' ? 'high+critical' : 'critical' };\n }\n export function saveImessageThreshold(threshold: ImessageThreshold): void {\n   localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...localSettings(), threshold }));\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/renderer-legacy-authority-red.log"
+    },
+    {
+      "name": "renderer-body-only",
+      "file": "src/services/imessage-bridge.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "restoredSha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 16 - native hydration owns destination and send IPC carries body only",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/services/imessage-bridge.ts b/src/services/imessage-bridge.ts\nindex 19fb56926..2d28fbf8a 100644\n--- a/src/services/imessage-bridge.ts\n+++ b/src/services/imessage-bridge.ts\n@@ -100,7 +100,7 @@ export async function sendImessage(body: string): Promise<ImessageResult> {\n   if (!body.trim()) return failure({ code: 'invalid_body' });\n   try {\n     if (!isDesktopRuntime() || !hasTauriInvokeBridge()) throw new Error('Unavailable');\n-    await invokeTauri<void>('send_imessage', { body });\n+    await invokeTauri<void>('send_imessage', { recipient: nativeSettings.recipient, body });\n     return { ok: true };\n   } catch (error) {\n     const result = failure(error);\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/renderer-body-only-red.log"
+    },
+    {
+      "name": "renderer-hydration-fail-closed",
+      "file": "src/services/imessage-bridge.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "restoredSha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 17 - failed or malformed hydration clears cached authorization and never leaks native errors",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/services/imessage-bridge.ts b/src/services/imessage-bridge.ts\nindex 19fb56926..feb8aef27 100644\n--- a/src/services/imessage-bridge.ts\n+++ b/src/services/imessage-bridge.ts\n@@ -73,7 +73,7 @@ async function requestState(command: string, payload?: Record<string, unknown>):\n     acceptState(state);\n     return { ok: true };\n   } catch (error) {\n-    if (request === generation) nativeSettings = unavailable();\n+    if (false) nativeSettings = unavailable();\n     return failure(error);\n   }\n }\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/renderer-hydration-fail-closed-red.log"
+    },
+    {
+      "name": "renderer-state-schema",
+      "file": "src/services/imessage-bridge.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "restoredSha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 17 - failed or malformed hydration clears cached authorization and never leaks native errors",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/services/imessage-bridge.ts b/src/services/imessage-bridge.ts\nindex 19fb56926..b2d96b31c 100644\n--- a/src/services/imessage-bridge.ts\n+++ b/src/services/imessage-bridge.ts\n@@ -54,10 +54,7 @@ function failure(error: unknown): ImessageResult {\n function acceptState(value: unknown): void {\n   if (!value || typeof value !== 'object') throw new Error('Invalid settings');\n   const state = value as Record<string, unknown>;\n-  if (typeof state.enabled !== 'boolean' || typeof state.ready !== 'boolean'\n-    || typeof state.migrationAvailable !== 'boolean'\n-    || (state.recipient !== null && typeof state.recipient !== 'string')\n-    || (state.enabled && (!state.ready || !state.recipient))) throw new Error('Invalid settings');\n+\n   nativeSettings = { enabled: state.enabled, ready: state.ready, recipient: state.recipient as string ?? '', migrationAvailable: state.migrationAvailable };\n   if (!state.migrationAvailable) {\n     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ threshold: getImessageSettings().threshold })); }\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/renderer-state-schema-red.log"
+    },
+    {
+      "name": "renderer-migration-gate",
+      "file": "src/services/imessage-bridge.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "restoredSha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 18 - migration suggestions are offered only for genuine native absence and cleanup retains threshold",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/services/imessage-bridge.ts b/src/services/imessage-bridge.ts\nindex 19fb56926..77543ff22 100644\n--- a/src/services/imessage-bridge.ts\n+++ b/src/services/imessage-bridge.ts\n@@ -40,7 +40,7 @@ export function saveImessageThreshold(threshold: ImessageThreshold): void {\n   localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...localSettings(), threshold }));\n }\n export function getLegacyImessageSuggestion(): { enabled: boolean; recipient: string } | null {\n-  if (!nativeSettings.ready || !nativeSettings.migrationAvailable) return null;\n+  if (false) return null;\n   const legacy = localSettings();\n   return typeof legacy.recipient === 'string' && legacy.recipient\n     ? { enabled: legacy.enabled === true, recipient: legacy.recipient } : null;\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/renderer-migration-gate-red.log"
+    },
+    {
+      "name": "renderer-migration-cleanup",
+      "file": "src/services/imessage-bridge.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        61,
+        2
+      ],
+      "sha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "restoredSha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 18 - migration suggestions are offered only for genuine native absence and cleanup retains threshold",
+        "  name: 'AssertionError'",
+        "not ok 20 - canceled configuration refreshes consumed migration without authorizing legacy values",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/services/imessage-bridge.ts b/src/services/imessage-bridge.ts\nindex 19fb56926..0efb2dd6d 100644\n--- a/src/services/imessage-bridge.ts\n+++ b/src/services/imessage-bridge.ts\n@@ -59,7 +59,7 @@ function acceptState(value: unknown): void {\n     || (state.recipient !== null && typeof state.recipient !== 'string')\n     || (state.enabled && (!state.ready || !state.recipient))) throw new Error('Invalid settings');\n   nativeSettings = { enabled: state.enabled, ready: state.ready, recipient: state.recipient as string ?? '', migrationAvailable: state.migrationAvailable };\n-  if (!state.migrationAvailable) {\n+  if (false) {\n     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ threshold: getImessageSettings().threshold })); }\n     catch { /* Native authority remains valid when local preferences cannot be stored. */ }\n   }\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/renderer-migration-cleanup-red.log"
+    },
+    {
+      "name": "renderer-generation",
+      "file": "src/services/imessage-bridge.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        61,
+        2
+      ],
+      "sha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "restoredSha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 19 - disable invalidates late configure and hydration responses immediately",
+        "  name: 'AssertionError'",
+        "not ok 21 - late hydration cannot overwrite disable and failed disable remains fail-closed",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/services/imessage-bridge.ts b/src/services/imessage-bridge.ts\nindex 19fb56926..7d5e83784 100644\n--- a/src/services/imessage-bridge.ts\n+++ b/src/services/imessage-bridge.ts\n@@ -69,7 +69,7 @@ async function requestState(command: string, payload?: Record<string, unknown>):\n   try {\n     if (!isDesktopRuntime() || !hasTauriInvokeBridge()) throw new Error('Unavailable');\n     const state = await invokeTauri<unknown>(command, payload);\n-    if (request !== generation) return failure({ code: 'stale_consent' });\n+    \n     acceptState(state);\n     return { ok: true };\n   } catch (error) {\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/renderer-generation-red.log"
+    },
+    {
+      "name": "renderer-immediate-disable",
+      "file": "src/services/imessage-bridge.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "restoredSha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 19 - disable invalidates late configure and hydration responses immediately",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/services/imessage-bridge.ts b/src/services/imessage-bridge.ts\nindex 19fb56926..9c06da0a5 100644\n--- a/src/services/imessage-bridge.ts\n+++ b/src/services/imessage-bridge.ts\n@@ -88,7 +88,6 @@ export async function configureImessage(recipient: string, enabled: boolean): Pr\n   return result;\n }\n export async function disableImessage(): Promise<ImessageResult> {\n-  nativeSettings = unavailable();\n   const result = await requestState('disable_imessage');\n   if (!result.ok && result.code === 'persistence_failed') {\n     return { ...result, reason: 'Settings could not be saved. Sending is blocked for this session; previous settings may return after restart.' };\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/renderer-immediate-disable-red.log"
+    },
+    {
+      "name": "renderer-canceled-refresh",
+      "file": "src/services/imessage-bridge.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        61,
+        2
+      ],
+      "sha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "restoredSha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 20 - canceled configuration refreshes consumed migration without authorizing legacy values",
+        "  name: 'AssertionError'",
+        "not ok 24 - failed replacement preserves native confirmed destination and does not claim it was disabled",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/services/imessage-bridge.ts b/src/services/imessage-bridge.ts\nindex 19fb56926..988c4d239 100644\n--- a/src/services/imessage-bridge.ts\n+++ b/src/services/imessage-bridge.ts\n@@ -84,7 +84,7 @@ export async function configureImessage(recipient: string, enabled: boolean): Pr\n   const pending = requestState('configure_imessage', { recipient, enabled });\n   const request = generation;\n   const result = await pending;\n-  if (!result.ok && request === generation) await refreshImessageSettings();\n+  if (false) await refreshImessageSettings();\n   return result;\n }\n export async function disableImessage(): Promise<ImessageResult> {\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/renderer-canceled-refresh-red.log"
+    },
+    {
+      "name": "renderer-safe-errors",
+      "file": "src/services/imessage-bridge.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "restoredSha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 22 - native send errors are finite safe copy and revocation clears the cache without retry",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/services/imessage-bridge.ts b/src/services/imessage-bridge.ts\nindex 19fb56926..c23726a31 100644\n--- a/src/services/imessage-bridge.ts\n+++ b/src/services/imessage-bridge.ts\n@@ -49,7 +49,7 @@ function failure(error: unknown): ImessageResult {\n   const code = typeof error === 'object' && error !== null && 'code' in error\n     && typeof error.code === 'string' && Object.prototype.hasOwnProperty.call(ERRORS, error.code)\n     ? error.code as ImessageErrorCode : 'unavailable';\n-  return { ok: false, code, reason: ERRORS[code] };\n+  return { ok: false, code, reason: JSON.stringify(error) };\n }\n function acceptState(value: unknown): void {\n   if (!value || typeof value !== 'object') throw new Error('Invalid settings');\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/renderer-safe-errors-red.log"
+    },
+    {
+      "name": "renderer-revocation-cache",
+      "file": "src/services/imessage-bridge.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "restoredSha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 22 - native send errors are finite safe copy and revocation clears the cache without retry",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/services/imessage-bridge.ts b/src/services/imessage-bridge.ts\nindex 19fb56926..08461c022 100644\n--- a/src/services/imessage-bridge.ts\n+++ b/src/services/imessage-bridge.ts\n@@ -104,7 +104,7 @@ export async function sendImessage(body: string): Promise<ImessageResult> {\n     return { ok: true };\n   } catch (error) {\n     const result = failure(error);\n-    if (!result.ok && ['disabled', 'unavailable', 'persistence_failed'].includes(result.code)) nativeSettings = unavailable();\n+    \n     return result;\n   }\n }\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/renderer-revocation-cache-red.log"
+    },
+    {
+      "name": "renderer-body-empty",
+      "file": "src/services/imessage-bridge.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "restoredSha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 23 - blank bodies fail before native invocation and native consent sees exact untrimmed proposal",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/services/imessage-bridge.ts b/src/services/imessage-bridge.ts\nindex 19fb56926..daef52a07 100644\n--- a/src/services/imessage-bridge.ts\n+++ b/src/services/imessage-bridge.ts\n@@ -97,7 +97,7 @@ export async function disableImessage(): Promise<ImessageResult> {\n }\n export async function sendImessage(body: string): Promise<ImessageResult> {\n   if (!nativeSettings.ready || !nativeSettings.enabled) return failure({ code: 'disabled' });\n-  if (!body.trim()) return failure({ code: 'invalid_body' });\n+  \n   try {\n     if (!isDesktopRuntime() || !hasTauriInvokeBridge()) throw new Error('Unavailable');\n     await invokeTauri<void>('send_imessage', { body });\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/renderer-body-empty-red.log"
+    },
+    {
+      "name": "renderer-exact-proposal",
+      "file": "src/services/imessage-bridge.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "restoredSha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 23 - blank bodies fail before native invocation and native consent sees exact untrimmed proposal",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/services/imessage-bridge.ts b/src/services/imessage-bridge.ts\nindex 19fb56926..3aaa9bd9d 100644\n--- a/src/services/imessage-bridge.ts\n+++ b/src/services/imessage-bridge.ts\n@@ -81,7 +81,7 @@ export function refreshImessageSettings(): Promise<ImessageResult> {\n   return requestState('get_imessage_settings');\n }\n export async function configureImessage(recipient: string, enabled: boolean): Promise<ImessageResult> {\n-  const pending = requestState('configure_imessage', { recipient, enabled });\n+  const pending = requestState('configure_imessage', { recipient: recipient.trim(), enabled });\n   const request = generation;\n   const result = await pending;\n   if (!result.ok && request === generation) await refreshImessageSettings();\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/renderer-exact-proposal-red.log"
+    },
+    {
+      "name": "settings-loading-test",
+      "file": "src/components/UnifiedSettings.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "f4f87c1826aa79abd5a9e89a84504d0b238200f39b1d949964e618e23dea0ac9",
+      "restoredSha256": "f4f87c1826aa79abd5a9e89a84504d0b238200f39b1d949964e618e23dea0ac9",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 4 - loading blocks Save/Test and supplies names and polite feedback",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/components/UnifiedSettings.ts b/src/components/UnifiedSettings.ts\nindex 9342a1adc..93559e99a 100644\n--- a/src/components/UnifiedSettings.ts\n+++ b/src/components/UnifiedSettings.ts\n@@ -633,7 +633,7 @@ export class UnifiedSettings {\n   }\n \n   private canTestImessage(): boolean {\n-    return !this.imessageLoading && !this.imessagePending && !this.imessageDirty()\n+    return !this.imessagePending && !this.imessageDirty()\n       && this.imessageSaved.ready && this.imessageSaved.enabled && !!this.imessageSaved.recipient;\n   }\n \n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/settings-loading-test-red.log"
+    },
+    {
+      "name": "settings-draft-input",
+      "file": "src/components/UnifiedSettings.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        60,
+        3
+      ],
+      "sha256": "f4f87c1826aa79abd5a9e89a84504d0b238200f39b1d949964e618e23dea0ac9",
+      "restoredSha256": "f4f87c1826aa79abd5a9e89a84504d0b238200f39b1d949964e618e23dea0ac9",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 5 - recipient input/blur and enable are drafts; Save submits exact proposal; draft blocks Test",
+        "  name: 'AssertionError'",
+        "not ok 11 - enable requires Save and input updates retain keyboard focus",
+        "  name: 'AssertionError'",
+        "not ok 13 - a changed recipient can be explicitly confirmed while sending stays disabled",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/components/UnifiedSettings.ts b/src/components/UnifiedSettings.ts\nindex 9342a1adc..7be16b1ea 100644\n--- a/src/components/UnifiedSettings.ts\n+++ b/src/components/UnifiedSettings.ts\n@@ -458,7 +458,7 @@ export class UnifiedSettings {\n  this.overlay.addEventListener('input', (e) => {\n  const target = e.target as HTMLInputElement;\n  if (target.id === 'us-imessage-recipient') {\n- this.imessageDraft.recipient = target.value;\n+ this.imessageDraft.recipient = this.imessageSaved.recipient;\n  this.updateImessageControls();\n  } else if (target.closest('.panels-search')) {\n  this.panelFilter = target.value;\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/settings-draft-input-red.log"
+    },
+    {
+      "name": "settings-test-body",
+      "file": "src/components/UnifiedSettings.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "f4f87c1826aa79abd5a9e89a84504d0b238200f39b1d949964e618e23dea0ac9",
+      "restoredSha256": "f4f87c1826aa79abd5a9e89a84504d0b238200f39b1d949964e618e23dea0ac9",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 6 - Test uses saved confirmation and body only",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/components/UnifiedSettings.ts b/src/components/UnifiedSettings.ts\nindex 9342a1adc..4aa9b4adf 100644\n--- a/src/components/UnifiedSettings.ts\n+++ b/src/components/UnifiedSettings.ts\n@@ -705,7 +705,7 @@ export class UnifiedSettings {\n     this.imessagePending = true;\n     this.imessageStatus = 'Sending\u2026';\n     this.updateImessageControls();\n-    const result = await sendImessage('Crystal Ball test message \u2014 alert routing is wired up.');\n+    const result = await sendImessage(this.imessageDraft.recipient);\n     this.finishImessage(request, result, 'Sent.');\n   }\n \n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/settings-test-body-red.log"
+    },
+    {
+      "name": "settings-immediate-off",
+      "file": "src/components/UnifiedSettings.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        61,
+        2
+      ],
+      "sha256": "f4f87c1826aa79abd5a9e89a84504d0b238200f39b1d949964e618e23dea0ac9",
+      "restoredSha256": "f4f87c1826aa79abd5a9e89a84504d0b238200f39b1d949964e618e23dea0ac9",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 7 - disable stays available during confirmation and late completion cannot repaint enabled",
+        "  name: 'AssertionError'",
+        "not ok 12 - failed disable shows nondurable error and keeps Test disabled",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/components/UnifiedSettings.ts b/src/components/UnifiedSettings.ts\nindex 9342a1adc..a04213392 100644\n--- a/src/components/UnifiedSettings.ts\n+++ b/src/components/UnifiedSettings.ts\n@@ -524,7 +524,7 @@ export class UnifiedSettings {\n  } else if (target.id === 'us-imessage-enabled') {\n  this.imessageDraft.enabled = target.checked;\n  if (target.checked) this.updateImessageControls();\n- else void this.turnOffImessage();\n+ else this.updateImessageControls();\n  } else if (target.id === 'us-imessage-recipient') {\n  this.imessageDraft.recipient = target.value;\n  this.updateImessageControls();\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/settings-immediate-off-red.log"
+    },
+    {
+      "name": "settings-late-result",
+      "file": "src/components/UnifiedSettings.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        61,
+        2
+      ],
+      "sha256": "f4f87c1826aa79abd5a9e89a84504d0b238200f39b1d949964e618e23dea0ac9",
+      "restoredSha256": "f4f87c1826aa79abd5a9e89a84504d0b238200f39b1d949964e618e23dea0ac9",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 7 - disable stays available during confirmation and late completion cannot repaint enabled",
+        "  name: 'AssertionError'",
+        "not ok 9 - closing and reopening ignores old pending completion",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/components/UnifiedSettings.ts b/src/components/UnifiedSettings.ts\nindex 9342a1adc..fecb137c4 100644\n--- a/src/components/UnifiedSettings.ts\n+++ b/src/components/UnifiedSettings.ts\n@@ -671,7 +671,7 @@ export class UnifiedSettings {\n   }\n \n   private finishImessage(request: number, result: ImessageResult, success: string): void {\n-    if (request !== this.imessageGeneration) return;\n+    if (false) return;\n     this.imessagePending = false;\n     this.imessageSaved = getImessageSettings();\n     this.imessageDraft = { enabled: this.imessageSaved.enabled, recipient: this.imessageSaved.recipient };\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/settings-late-result-red.log"
+    },
+    {
+      "name": "settings-cancel-draft",
+      "file": "src/components/UnifiedSettings.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "f4f87c1826aa79abd5a9e89a84504d0b238200f39b1d949964e618e23dea0ac9",
+      "restoredSha256": "f4f87c1826aa79abd5a9e89a84504d0b238200f39b1d949964e618e23dea0ac9",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 8 - cancel restores actual saved configuration and safe status",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/components/UnifiedSettings.ts b/src/components/UnifiedSettings.ts\nindex 9342a1adc..e20a6974a 100644\n--- a/src/components/UnifiedSettings.ts\n+++ b/src/components/UnifiedSettings.ts\n@@ -674,7 +674,6 @@ export class UnifiedSettings {\n     if (request !== this.imessageGeneration) return;\n     this.imessagePending = false;\n     this.imessageSaved = getImessageSettings();\n-    this.imessageDraft = { enabled: this.imessageSaved.enabled, recipient: this.imessageSaved.recipient };\n     this.imessageStatus = result.ok ? success : result.reason;\n     this.updateImessageControls();\n   }\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/settings-cancel-draft-red.log"
+    },
+    {
+      "name": "settings-failed-hydration",
+      "file": "src/components/UnifiedSettings.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "f4f87c1826aa79abd5a9e89a84504d0b238200f39b1d949964e618e23dea0ac9",
+      "restoredSha256": "f4f87c1826aa79abd5a9e89a84504d0b238200f39b1d949964e618e23dea0ac9",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 10 - failed hydration stays disabled but explicit reconfiguration remains possible",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/components/UnifiedSettings.ts b/src/components/UnifiedSettings.ts\nindex 9342a1adc..5a3c75945 100644\n--- a/src/components/UnifiedSettings.ts\n+++ b/src/components/UnifiedSettings.ts\n@@ -666,7 +666,7 @@ export class UnifiedSettings {\n     this.imessageDraft = legacy ?? { enabled: this.imessageSaved.enabled, recipient: this.imessageSaved.recipient };\n     this.imessageLoading = false;\n     const loadedStatus = legacy ? 'Review previous iMessage settings, then Save and confirm.' : '';\n-    this.imessageStatus = result.ok ? loadedStatus : result.reason;\n+    this.imessageStatus = loadedStatus;\n     this.updateImessageControls();\n   }\n \n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/settings-failed-hydration-red.log"
+    },
+    {
+      "name": "settings-disabled-save",
+      "file": "src/components/UnifiedSettings.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "f4f87c1826aa79abd5a9e89a84504d0b238200f39b1d949964e618e23dea0ac9",
+      "restoredSha256": "f4f87c1826aa79abd5a9e89a84504d0b238200f39b1d949964e618e23dea0ac9",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 13 - a changed recipient can be explicitly confirmed while sending stays disabled",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/components/UnifiedSettings.ts b/src/components/UnifiedSettings.ts\nindex 9342a1adc..8851dac74 100644\n--- a/src/components/UnifiedSettings.ts\n+++ b/src/components/UnifiedSettings.ts\n@@ -685,7 +685,7 @@ export class UnifiedSettings {\n     this.imessagePending = true;\n     this.imessageStatus = 'Confirm the exact recipient in the macOS dialog.';\n     this.updateImessageControls();\n-    const result = await configureImessage(this.imessageDraft.recipient, this.imessageDraft.enabled);\n+    const result = await configureImessage(this.imessageDraft.recipient, true);\n     this.finishImessage(request, result, 'Settings saved.');\n   }\n \n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/settings-disabled-save-red.log"
+    },
+    {
+      "name": "settings-legacy-draft",
+      "file": "src/components/UnifiedSettings.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "f4f87c1826aa79abd5a9e89a84504d0b238200f39b1d949964e618e23dea0ac9",
+      "restoredSha256": "f4f87c1826aa79abd5a9e89a84504d0b238200f39b1d949964e618e23dea0ac9",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 14 - one-time legacy suggestion is visibly a draft and never silently prompts or sends",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/components/UnifiedSettings.ts b/src/components/UnifiedSettings.ts\nindex 9342a1adc..32b56cddc 100644\n--- a/src/components/UnifiedSettings.ts\n+++ b/src/components/UnifiedSettings.ts\n@@ -662,7 +662,7 @@ export class UnifiedSettings {\n     const result = await refreshImessageSettings();\n     if (request !== this.imessageGeneration) return;\n     this.imessageSaved = getImessageSettings();\n-    const legacy = getLegacyImessageSuggestion();\n+    const legacy = null;\n     this.imessageDraft = legacy ?? { enabled: this.imessageSaved.enabled, recipient: this.imessageSaved.recipient };\n     this.imessageLoading = false;\n     const loadedStatus = legacy ? 'Review previous iMessage settings, then Save and confirm.' : '';\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/settings-legacy-draft-red.log"
+    },
+    {
+      "name": "settings-draft-test-guard",
+      "file": "src/components/UnifiedSettings.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "f4f87c1826aa79abd5a9e89a84504d0b238200f39b1d949964e618e23dea0ac9",
+      "restoredSha256": "f4f87c1826aa79abd5a9e89a84504d0b238200f39b1d949964e618e23dea0ac9",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 5 - recipient input/blur and enable are drafts; Save submits exact proposal; draft blocks Test",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/components/UnifiedSettings.ts b/src/components/UnifiedSettings.ts\nindex 9342a1adc..e6c7e1de3 100644\n--- a/src/components/UnifiedSettings.ts\n+++ b/src/components/UnifiedSettings.ts\n@@ -633,7 +633,7 @@ export class UnifiedSettings {\n   }\n \n   private canTestImessage(): boolean {\n-    return !this.imessageLoading && !this.imessagePending && !this.imessageDirty()\n+    return !this.imessageLoading && !this.imessagePending\n       && this.imessageSaved.ready && this.imessageSaved.enabled && !!this.imessageSaved.recipient;\n   }\n \n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/settings-draft-test-guard-red.log"
+    },
+    {
+      "name": "desktop-startup",
+      "file": "src/app/desktop-notifications.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        61,
+        2
+      ],
+      "sha256": "43ce95a4bc7b9f10828806a4ba82d39d4eb295248b6d1c0b841480c232f8db39",
+      "restoredSha256": "43ce95a4bc7b9f10828806a4ba82d39d4eb295248b6d1c0b841480c232f8db39",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 1 - desktop lifecycle hydrates native iMessage settings without opening Settings",
+        "  name: 'AssertionError'",
+        "not ok 2 - breaking routing preserves Ghost Mode, threshold and desktop notification gates",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/app/desktop-notifications.ts b/src/app/desktop-notifications.ts\nindex 02b013b4c..ee393a885 100644\n--- a/src/app/desktop-notifications.ts\n+++ b/src/app/desktop-notifications.ts\n@@ -25,7 +25,7 @@ export class DesktopNotifications implements AppModule {\n   }\n \n   init(): void {\n- if (this.ctx.isDesktopApp) void refreshImessageSettings();\n+ if (false) void refreshImessageSettings();\n  if (!this.ctx.isDesktopApp && typeof Notification === 'undefined') {\n  this.webPermission = 'unsupported';\n  }\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/desktop-startup-red.log"
+    },
+    {
+      "name": "desktop-threshold",
+      "file": "src/app/desktop-notifications.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "43ce95a4bc7b9f10828806a4ba82d39d4eb295248b6d1c0b841480c232f8db39",
+      "restoredSha256": "43ce95a4bc7b9f10828806a4ba82d39d4eb295248b6d1c0b841480c232f8db39",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 2 - breaking routing preserves Ghost Mode, threshold and desktop notification gates",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/app/desktop-notifications.ts b/src/app/desktop-notifications.ts\nindex 02b013b4c..8046ce26b 100644\n--- a/src/app/desktop-notifications.ts\n+++ b/src/app/desktop-notifications.ts\n@@ -59,7 +59,7 @@ export class DesktopNotifications implements AppModule {\n  // they only opted into 'critical'.\n  const imSettings = getImessageSettings();\n  if (imSettings.ready && imSettings.enabled && imSettings.recipient) {\n- const meetsThreshold = imSettings.threshold === 'critical'\n+ const meetsThreshold = false\n  ? alert.threatLevel === 'critical'\n  : alert.threatLevel === 'critical' || alert.threatLevel === 'high';\n  if (meetsThreshold) {\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/desktop-threshold-red.log"
+    },
+    {
+      "name": "desktop-hydration",
+      "file": "src/app/desktop-notifications.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "43ce95a4bc7b9f10828806a4ba82d39d4eb295248b6d1c0b841480c232f8db39",
+      "restoredSha256": "43ce95a4bc7b9f10828806a4ba82d39d4eb295248b6d1c0b841480c232f8db39",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 3 - breaking alerts cannot route before native settings hydration",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/app/desktop-notifications.ts b/src/app/desktop-notifications.ts\nindex 02b013b4c..691116b66 100644\n--- a/src/app/desktop-notifications.ts\n+++ b/src/app/desktop-notifications.ts\n@@ -58,7 +58,7 @@ export class DesktopNotifications implements AppModule {\n  // gating happens here so we never wake the user's phone for a 'high' if\n  // they only opted into 'critical'.\n  const imSettings = getImessageSettings();\n- if (imSettings.ready && imSettings.enabled && imSettings.recipient) {\n+ if (imSettings.enabled && imSettings.recipient) {\n  const meetsThreshold = imSettings.threshold === 'critical'\n  ? alert.threatLevel === 'critical'\n  : alert.threatLevel === 'critical' || alert.threatLevel === 'high';\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/desktop-hydration-red.log"
+    },
+    {
+      "name": "eew-native-enabled",
+      "file": "src/services/seismic/eew-imessage.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "72d1ead39aad16e3af0ac745ebe49f158e3395e09149acbd69b682e402399018",
+      "restoredSha256": "72d1ead39aad16e3af0ac745ebe49f158e3395e09149acbd69b682e402399018",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 61 - native state {\"enabled\":false,\"ready\":true} suppresses EEW",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/services/seismic/eew-imessage.ts b/src/services/seismic/eew-imessage.ts\nindex 1d4c3d760..f2ba6067c 100644\n--- a/src/services/seismic/eew-imessage.ts\n+++ b/src/services/seismic/eew-imessage.ts\n@@ -63,7 +63,7 @@ export async function escalateTier5ToImessage(\n   }\n \n   const settings = (deps.getSettings ?? getImessageSettings)();\n-  if (!settings.enabled || !settings.ready) return { status: 'disabled', reason: 'feature_off' };\n+  if (!settings.ready) return { status: 'disabled', reason: 'feature_off' };\n   const recipient = settings.recipient.trim();\n   if (recipient.length === 0) {\n     return { status: 'disabled', reason: 'no_recipient' };\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/eew-native-enabled-red.log"
+    },
+    {
+      "name": "eew-native-ready",
+      "file": "src/services/seismic/eew-imessage.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "72d1ead39aad16e3af0ac745ebe49f158e3395e09149acbd69b682e402399018",
+      "restoredSha256": "72d1ead39aad16e3af0ac745ebe49f158e3395e09149acbd69b682e402399018",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 62 - native state {\"enabled\":true,\"ready\":false} suppresses EEW",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/services/seismic/eew-imessage.ts b/src/services/seismic/eew-imessage.ts\nindex 1d4c3d760..5bc8c5b2b 100644\n--- a/src/services/seismic/eew-imessage.ts\n+++ b/src/services/seismic/eew-imessage.ts\n@@ -63,7 +63,7 @@ export async function escalateTier5ToImessage(\n   }\n \n   const settings = (deps.getSettings ?? getImessageSettings)();\n-  if (!settings.enabled || !settings.ready) return { status: 'disabled', reason: 'feature_off' };\n+  if (!settings.enabled) return { status: 'disabled', reason: 'feature_off' };\n   const recipient = settings.recipient.trim();\n   if (recipient.length === 0) {\n     return { status: 'disabled', reason: 'no_recipient' };\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/eew-native-ready-red.log"
+    },
+    {
+      "name": "eew-body-only",
+      "file": "src/services/seismic/eew-imessage.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "72d1ead39aad16e3af0ac745ebe49f158e3395e09149acbd69b682e402399018",
+      "restoredSha256": "72d1ead39aad16e3af0ac745ebe49f158e3395e09149acbd69b682e402399018",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 63 - EEW passes body only and maps native revocation to disabled without retry",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/services/seismic/eew-imessage.ts b/src/services/seismic/eew-imessage.ts\nindex 1d4c3d760..aeabc597f 100644\n--- a/src/services/seismic/eew-imessage.ts\n+++ b/src/services/seismic/eew-imessage.ts\n@@ -73,7 +73,7 @@ export async function escalateTier5ToImessage(\n   const body = buildBody(alert, nowMs);\n \n   try {\n-    const result = await send(body);\n+    const result = await send(recipient, body);\n     if (result.ok) return { status: 'sent' };\n     if (result.code === 'disabled') return { status: 'disabled', reason: 'feature_off' };\n     return { status: 'failed', error: result.reason ?? 'unknown error' };\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/eew-body-only-red.log"
+    },
+    {
+      "name": "eew-revocation",
+      "file": "src/services/seismic/eew-imessage.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "72d1ead39aad16e3af0ac745ebe49f158e3395e09149acbd69b682e402399018",
+      "restoredSha256": "72d1ead39aad16e3af0ac745ebe49f158e3395e09149acbd69b682e402399018",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 63 - EEW passes body only and maps native revocation to disabled without retry",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/services/seismic/eew-imessage.ts b/src/services/seismic/eew-imessage.ts\nindex 1d4c3d760..d6172bfa1 100644\n--- a/src/services/seismic/eew-imessage.ts\n+++ b/src/services/seismic/eew-imessage.ts\n@@ -75,7 +75,7 @@ export async function escalateTier5ToImessage(\n   try {\n     const result = await send(body);\n     if (result.ok) return { status: 'sent' };\n-    if (result.code === 'disabled') return { status: 'disabled', reason: 'feature_off' };\n+    \n     return { status: 'failed', error: result.reason ?? 'unknown error' };\n   } catch (error) {\n     return {\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/eew-revocation-red.log"
+    },
+    {
+      "name": "extended-body-only",
+      "file": "src/services/notifications/imessage-bridge-extended.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "952e412ca187789a087546716facb442ae40062736f50b0bc47e9baba113e868",
+      "restoredSha256": "952e412ca187789a087546716facb442ae40062736f50b0bc47e9baba113e868",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 47 - extended dispatch passes only the body to native-authorized bridge",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/services/notifications/imessage-bridge-extended.ts b/src/services/notifications/imessage-bridge-extended.ts\nindex 8491fe315..a6824e1db 100644\n--- a/src/services/notifications/imessage-bridge-extended.ts\n+++ b/src/services/notifications/imessage-bridge-extended.ts\n@@ -196,6 +196,6 @@ export async function fireImessageForPayload(\n   const decision = routeAlertToImessage(payload, settings);\n   if (!decision.send || !decision.body) return { sent: false, reason: decision.reason };\n   const send = opts.send ?? sendImessage;\n-  const result = await send(decision.body);\n+  const result = await send(settings.recipient, decision.body);\n   return result.ok ? { sent: true } : { sent: false, reason: result.reason };\n }\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/extended-body-only-red.log"
+    },
+    {
+      "name": "renderer-configure-persistence-copy",
+      "file": "src/services/imessage-bridge.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "restoredSha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 24 - failed replacement preserves native confirmed destination and does not claim it was disabled",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/services/imessage-bridge.ts b/src/services/imessage-bridge.ts\nindex 19fb56926..f84bb9231 100644\n--- a/src/services/imessage-bridge.ts\n+++ b/src/services/imessage-bridge.ts\n@@ -18,7 +18,7 @@ const ERRORS = {\n   busy: 'An iMessage operation is already pending. Try again when it finishes.',\n   canceled: 'Confirmation canceled. No new destination was authorized.',\n   stale_consent: 'Settings changed while confirmation was open. Review and save again.',\n-  persistence_failed: 'Settings could not be saved. Review current settings before retrying.',\n+  persistence_failed: 'Sending is blocked for this session.',\n   rate_limited: 'Please wait 30 seconds between messages.',\n   send_failed: 'Messages could not send the message. Check Messages permissions and sign-in.',\n   send_uncertain: 'Message delivery is uncertain. It will not be retried automatically.',\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/renderer-configure-persistence-copy-red.log"
+    },
+    {
+      "name": "renderer-disable-persistence-copy",
+      "file": "src/services/imessage-bridge.ts",
+      "kind": "ui",
+      "baseline": [
+        63,
+        0
+      ],
+      "red": [
+        62,
+        1
+      ],
+      "sha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "restoredSha256": "3c11ec867f298805c5af99b67b3fc3719def178cfe3a0f4cca9dc87526ceb413",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 25 - failed disable explains that persisted settings may return after restart",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src/services/imessage-bridge.ts b/src/services/imessage-bridge.ts\nindex 19fb56926..1acf449e3 100644\n--- a/src/services/imessage-bridge.ts\n+++ b/src/services/imessage-bridge.ts\n@@ -90,7 +90,7 @@ export async function configureImessage(recipient: string, enabled: boolean): Pr\n export async function disableImessage(): Promise<ImessageResult> {\n   nativeSettings = unavailable();\n   const result = await requestState('disable_imessage');\n-  if (!result.ok && result.code === 'persistence_failed') {\n+  if (false) {\n     return { ...result, reason: 'Settings could not be saved. Sending is blocked for this session; previous settings may return after restart.' };\n   }\n   return result;\n",
+      "command": [
+        "node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/imessage-bridge.test.mts",
+        "src/components/__tests__/imessage-settings.test.mts",
+        "src/app/__tests__/desktop-imessage.test.mts",
+        "src/services/seismic/__tests__/eew-imessage.test.mts",
+        "src/services/notifications/__tests__/imessage-bridge-extended.test.mts"
+      ],
+      "log": "ui-mutations/renderer-disable-persistence-copy-red.log"
+    },
+    {
+      "name": "recipient-nonzero",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-recipient_boundaries",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test recipient_boundaries ... FAILED",
+        "thread 'recipient_boundaries' (14303966) panicked at tests/imessage_contract.rs:151:9:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..7c00fd2b0 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -217,7 +217,7 @@ pub fn valid_recipient(value: &str) -> bool {\n     }\n     if let Some(digits) = value.strip_prefix('+') {\n         return (2..=15).contains(&digits.len())\n-            && matches!(digits.as_bytes()[0], b'1'..=b'9')\n+            && matches!(digits.as_bytes()[0], b'0'..=b'9')\n             && digits.bytes().all(|b| b.is_ascii_digit());\n     }\n     let Some((local, domain)) = value.split_once('@') else {\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "recipient_boundaries",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/recipient-nonzero-red.log"
+    },
+    {
+      "name": "missing-migration",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-missing_is_disabled_and_migration_available",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test missing_is_disabled_and_migration_available ... FAILED",
+        "thread 'missing_is_disabled_and_migration_available' (14304613) panicked at tests/imessage_contract.rs:158:5:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..4cd1c3ff0 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -200,7 +200,7 @@ fn view(snapshot: &Snapshot, blocked: bool) -> Result<ImessageSettings> {\n             enabled: false,\n             recipient: None,\n             ready: true,\n-            migration_available: true,\n+            migration_available: false,\n         }),\n         Snapshot::Valid(c) => Ok(ImessageSettings {\n             enabled: c.enabled && !blocked,\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "missing_is_disabled_and_migration_available",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/missing-migration-red.log"
+    },
+    {
+      "name": "enabled-guard",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-disabled_never_spawns",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test disabled_never_spawns ... FAILED",
+        "thread 'disabled_never_spawns' (14305257) panicked at tests/imessage_contract.rs:174:39:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..c5fa9f991 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -167,9 +167,6 @@ impl<E: Effects> Service<E> {\n                 Snapshot::Missing => return Err(error(\"disabled\")),\n                 Snapshot::Invalid(_) => return Err(error(\"unavailable\")),\n             };\n-            if !config.enabled {\n-                return Err(error(\"disabled\"));\n-            }\n             let recipient = config\n                 .recipient\n                 .as_deref()\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "disabled_never_spawns",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/enabled-guard-red.log"
+    },
+    {
+      "name": "native-destination",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-send_uses_saved_recipient_and_reserves_quota",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test send_uses_saved_recipient_and_reserves_quota ... FAILED",
+        "thread 'send_uses_saved_recipient_and_reserves_quota' (14305819) panicked at tests/imessage_contract.rs:182:5:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..5d6e16ca3 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -182,7 +182,7 @@ impl<E: Effects> Service<E> {\n                 return Err(error(\"rate_limited\"));\n             }\n             state.last_send = Some(now);\n-            self.effects.spawn(recipient, &body)?\n+            self.effects.spawn(\"+15550000000\", &body)?\n         };\n         child.wait()\n     }\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "send_uses_saved_recipient_and_reserves_quota",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/native-destination-red.log"
+    },
+    {
+      "name": "canceled-migration-marker",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-canceled_migration_stays_disabled_and_consumed",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test canceled_migration_stays_disabled_and_consumed ... FAILED",
+        "thread 'canceled_migration_stays_disabled_and_consumed' (14306438) panicked at tests/imessage_contract.rs:199:5:",
+        "assertion failed: !v.migration_available",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..d81d3528b 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -99,7 +99,7 @@ impl<E: Effects> Service<E> {\n                     recipient: None,\n                     migration_attempted: true,\n                 };\n-                self.effects.persist(&marker)?;\n+                let _ = &marker;\n                 snapshot = Snapshot::Valid(marker);\n             }\n             (snapshot, state.generation, prompt_lock)\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "canceled_migration_stays_disabled_and_consumed",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/canceled-migration-marker-red.log"
+    },
+    {
+      "name": "final-config-persistence",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-approved_config_persists_exact_candidate",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test approved_config_persists_exact_candidate ... FAILED",
+        "thread 'approved_config_persists_exact_candidate' (14306983) panicked at tests/imessage_contract.rs:213:28:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..2cd941944 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -123,7 +123,7 @@ impl<E: Effects> Service<E> {\n             .generation\n             .checked_add(1)\n             .ok_or(error(\"unavailable\"))?;\n-        self.effects.persist(&config)?;\n+        let _ = &config;\n         state.blocked = false;\n         state.generation = next_generation;\n         view(&Snapshot::Valid(config), false)\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "approved_config_persists_exact_candidate",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/final-config-persistence-red.log"
+    },
+    {
+      "name": "marker-write-error",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-failed_migration_persistence_cannot_prompt",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test failed_migration_persistence_cannot_prompt ... FAILED",
+        "thread 'failed_migration_persistence_cannot_prompt' (14307535) panicked at tests/imessage_contract.rs:221:5:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..973114e20 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -99,7 +99,7 @@ impl<E: Effects> Service<E> {\n                     recipient: None,\n                     migration_attempted: true,\n                 };\n-                self.effects.persist(&marker)?;\n+                let _ = self.effects.persist(&marker);\n                 snapshot = Snapshot::Valid(marker);\n             }\n             (snapshot, state.generation, prompt_lock)\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "failed_migration_persistence_cannot_prompt",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/marker-write-error-red.log"
+    },
+    {
+      "name": "disable-process-block",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-failed_disable_blocks_process",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test failed_disable_blocks_process ... FAILED",
+        "thread 'failed_disable_blocks_process' (14308289) panicked at tests/imessage_contract.rs:233:39:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..8ca60749b 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -130,7 +130,7 @@ impl<E: Effects> Service<E> {\n     }\n     pub fn disable(&self) -> Result<ImessageSettings> {\n         let mut state = self.state.lock().map_err(|_| error(\"unavailable\"))?;\n-        state.blocked = true;\n+        state.blocked = false;\n         state.generation = state\n             .generation\n             .checked_add(1)\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "failed_disable_blocks_process",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/disable-process-block-red.log"
+    },
+    {
+      "name": "corrupt-confirmation",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-corrupt_requires_confirmation_to_repair",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test corrupt_requires_confirmation_to_repair ... FAILED",
+        "thread 'corrupt_requires_confirmation_to_repair' (14308835) panicked at tests/imessage_contract.rs:244:5:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..09b97e0f1 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -104,7 +104,7 @@ impl<E: Effects> Service<E> {\n             }\n             (snapshot, state.generation, prompt_lock)\n         };\n-        if !self.effects.confirm(&recipient, enabled)? {\n+        if false && !self.effects.confirm(&recipient, enabled)? {\n             return Err(error(\"canceled\"));\n         }\n         let mut state = self.state.lock().map_err(|_| error(\"unavailable\"))?;\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "corrupt_requires_confirmation_to_repair",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/corrupt-confirmation-red.log"
+    },
+    {
+      "name": "unchanged-config-no-prompt",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-unchanged_enabled_config_skips_prompt",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test unchanged_enabled_config_skips_prompt ... FAILED",
+        "thread 'unchanged_enabled_config_skips_prompt' (14309381) panicked at tests/imessage_contract.rs:252:5:",
+        "assertion failed: f.prompts.lock().unwrap().is_empty()",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..8712e9855 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -76,7 +76,7 @@ impl<E: Effects> Service<E> {\n             let _lock = self.effects.lock(false)?;\n             let mut snapshot = self.effects.load()?;\n             if let Snapshot::Valid(c) = &snapshot {\n-                if c.enabled == enabled\n+                if false && c.enabled == enabled\n                     && c.recipient.as_deref() == Some(&recipient)\n                     && !state.blocked\n                 {\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "unchanged_enabled_config_skips_prompt",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/unchanged-config-no-prompt-red.log"
+    },
+    {
+      "name": "proposal-validation",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-invalid_proposals_never_prompt_or_persist",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test invalid_proposals_never_prompt_or_persist ... FAILED",
+        "thread 'invalid_proposals_never_prompt_or_persist' (14309920) panicked at tests/imessage_contract.rs:259:45:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..43fd93f06 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -68,7 +68,7 @@ impl<E: Effects> Service<E> {\n         view(&self.effects.load()?, state.blocked)\n     }\n     pub fn configure(&self, recipient: String, enabled: bool) -> Result<ImessageSettings> {\n-        if !valid_recipient(&recipient) {\n+        if false && !valid_recipient(&recipient) {\n             return Err(error(\"invalid_recipient\"));\n         }\n         let (snapshot, generation, _prompt_lock) = {\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "invalid_proposals_never_prompt_or_persist",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/proposal-validation-red.log"
+    },
+    {
+      "name": "exact-disabled-proposal",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-disabled_destination_change_has_exact_disabled_consent",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test disabled_destination_change_has_exact_disabled_consent ... FAILED",
+        "thread 'disabled_destination_change_has_exact_disabled_consent' (14310648) panicked at tests/imessage_contract.rs:272:5:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..caf5317d9 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -104,7 +104,7 @@ impl<E: Effects> Service<E> {\n             }\n             (snapshot, state.generation, prompt_lock)\n         };\n-        if !self.effects.confirm(&recipient, enabled)? {\n+        if !self.effects.confirm(&recipient, !enabled)? {\n             return Err(error(\"canceled\"));\n         }\n         let mut state = self.state.lock().map_err(|_| error(\"unavailable\"))?;\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "disabled_destination_change_has_exact_disabled_consent",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/exact-disabled-proposal-red.log"
+    },
+    {
+      "name": "final-config-write-error",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-confirmed_write_failure_never_authorizes",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test confirmed_write_failure_never_authorizes ... FAILED",
+        "thread 'confirmed_write_failure_never_authorizes' (14311220) panicked at tests/imessage_contract.rs:284:51:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..47323168e 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -123,7 +123,7 @@ impl<E: Effects> Service<E> {\n             .generation\n             .checked_add(1)\n             .ok_or(error(\"unavailable\"))?;\n-        self.effects.persist(&config)?;\n+        let _ = self.effects.persist(&config);\n         state.blocked = false;\n         state.generation = next_generation;\n         view(&Snapshot::Valid(config), false)\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "confirmed_write_failure_never_authorizes",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/final-config-write-error-red.log"
+    },
+    {
+      "name": "dialog-error",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-rejected_dialog_errors_preserve_old_recipient",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test rejected_dialog_errors_preserve_old_recipient ... FAILED",
+        "thread 'rejected_dialog_errors_preserve_old_recipient' (14311757) panicked at tests/imessage_contract.rs:299:18:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..dbe87b5bb 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -104,7 +104,7 @@ impl<E: Effects> Service<E> {\n             }\n             (snapshot, state.generation, prompt_lock)\n         };\n-        if !self.effects.confirm(&recipient, enabled)? {\n+        if !self.effects.confirm(&recipient, enabled).unwrap_or(true) {\n             return Err(error(\"canceled\"));\n         }\n         let mut state = self.state.lock().map_err(|_| error(\"unavailable\"))?;\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "rejected_dialog_errors_preserve_old_recipient",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/dialog-error-red.log"
+    },
+    {
+      "name": "canceled-corrupt-repair",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-canceled_corrupt_repair_does_not_import_or_reset",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test canceled_corrupt_repair_does_not_import_or_reset ... FAILED",
+        "thread 'canceled_corrupt_repair_does_not_import_or_reset' (14312327) panicked at tests/imessage_contract.rs:315:51:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..09b97e0f1 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -104,7 +104,7 @@ impl<E: Effects> Service<E> {\n             }\n             (snapshot, state.generation, prompt_lock)\n         };\n-        if !self.effects.confirm(&recipient, enabled)? {\n+        if false && !self.effects.confirm(&recipient, enabled)? {\n             return Err(error(\"canceled\"));\n         }\n         let mut state = self.state.lock().map_err(|_| error(\"unavailable\"))?;\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "canceled_corrupt_repair_does_not_import_or_reset",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/canceled-corrupt-repair-red.log"
+    },
+    {
+      "name": "body-size",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-body_is_bounded_utf8_and_sanitized_before_spawn",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test body_is_bounded_utf8_and_sanitized_before_spawn ... FAILED",
+        "thread 'body_is_bounded_utf8_and_sanitized_before_spawn' (14312864) panicked at tests/imessage_contract.rs:327:5:",
+        "assertion failed: sent[0].1.len() <= 512",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..6252d18ec 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -242,7 +242,7 @@ pub fn valid_recipient(value: &str) -> bool {\n         })\n }\n fn safe_body(value: &str) -> Result<String> {\n-    let mut end = value.len().min(512);\n+    let mut end = value.len();\n     while !value.is_char_boundary(end) {\n         end -= 1;\n     }\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "body_is_bounded_utf8_and_sanitized_before_spawn",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/body-size-red.log"
+    },
+    {
+      "name": "body-empty",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-empty_body_does_not_reserve_quota",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test empty_body_does_not_reserve_quota ... FAILED",
+        "thread 'empty_body_does_not_reserve_quota' (14313495) panicked at tests/imessage_contract.rs:335:40:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..2ec81ad63 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -250,7 +250,7 @@ fn safe_body(value: &str) -> Result<String> {\n         .chars()\n         .filter(|c| !matches!(c, '\"' | '\\\\' | '\\n' | '\\r' | '\\x00'..='\\x1f'))\n         .collect();\n-    if body.trim().is_empty() {\n+    if false && body.trim().is_empty() {\n         Err(error(\"invalid_body\"))\n     } else {\n         Ok(body)\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "empty_body_does_not_reserve_quota",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/body-empty-red.log"
+    },
+    {
+      "name": "failure-send-quota",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-failed_spawn_and_uncertain_wait_reserve_quota",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test failed_spawn_and_uncertain_wait_reserve_quota ... FAILED",
+        "thread 'failed_spawn_and_uncertain_wait_reserve_quota' (14314060) panicked at tests/imessage_contract.rs:355:9:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..129f3ab54 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -181,7 +181,7 @@ impl<E: Effects> Service<E> {\n             }) {\n                 return Err(error(\"rate_limited\"));\n             }\n-            state.last_send = Some(now);\n+            let _ = now;\n             self.effects.spawn(recipient, &body)?\n         };\n         child.wait()\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "failed_spawn_and_uncertain_wait_reserve_quota",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/failure-send-quota-red.log"
+    },
+    {
+      "name": "read-error-no-migration",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-unreadable_config_is_not_migration",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test unreadable_config_is_not_migration ... FAILED",
+        "thread 'unreadable_config_is_not_migration' (14314611) panicked at tests/imessage_contract.rs:363:29:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..d931d72bd 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -65,7 +65,7 @@ impl<E: Effects> Service<E> {\n     pub fn settings(&self) -> Result<ImessageSettings> {\n         let state = self.state.lock().map_err(|_| error(\"unavailable\"))?;\n         let _lock = self.effects.lock(false)?;\n-        view(&self.effects.load()?, state.blocked)\n+        view(&self.effects.load().unwrap_or(Snapshot::Missing), state.blocked)\n     }\n     pub fn configure(&self, recipient: String, enabled: bool) -> Result<ImessageSettings> {\n         if !valid_recipient(&recipient) {\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "unreadable_config_is_not_migration",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/read-error-no-migration-red.log"
+    },
+    {
+      "name": "marker-before-dialog",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-migration_marker_is_durable_before_prompt",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test migration_marker_is_durable_before_prompt ... FAILED",
+        "thread 'migration_marker_is_durable_before_prompt' (14315202) panicked at tests/imessage_contract.rs:377:9:",
+        "assertion failed: matches!(&*store.lock().unwrap(),Snapshot::Valid(c) if c.migration_attempted",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..d81d3528b 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -99,7 +99,7 @@ impl<E: Effects> Service<E> {\n                     recipient: None,\n                     migration_attempted: true,\n                 };\n-                self.effects.persist(&marker)?;\n+                let _ = &marker;\n                 snapshot = Snapshot::Valid(marker);\n             }\n             (snapshot, state.generation, prompt_lock)\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "migration_marker_is_durable_before_prompt",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/marker-before-dialog-red.log"
+    },
+    {
+      "name": "prompt-cooldown",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-prompt_cooldown_prevents_repeated_native_dialogs",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test prompt_cooldown_prevents_repeated_native_dialogs ... FAILED",
+        "thread 'prompt_cooldown_prevents_repeated_native_dialogs' (14315769) panicked at tests/imessage_contract.rs:394:5:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..38961e6f7 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -84,7 +84,7 @@ impl<E: Effects> Service<E> {\n                 }\n             }\n             let now = self.effects.now();\n-            if state.last_prompt.is_some_and(|t| {\n+            if false && state.last_prompt.is_some_and(|t| {\n                 now.saturating_duration_since(t) < std::time::Duration::from_secs(30)\n             }) {\n                 return Err(error(\"busy\"));\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "prompt_cooldown_prevents_repeated_native_dialogs",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/prompt-cooldown-red.log"
+    },
+    {
+      "name": "disable-durable",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-disable_never_prompts_and_preserves_saved_destination",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test disable_never_prompts_and_preserves_saved_destination ... FAILED",
+        "thread 'disable_never_prompts_and_preserves_saved_destination' (14316389) panicked at tests/imessage_contract.rs:408:39:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..51973e4df 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -149,7 +149,7 @@ impl<E: Effects> Service<E> {\n             recipient,\n             migration_attempted: true,\n         };\n-        self.effects.persist(&config)?;\n+        let _ = &config;\n         state.blocked = false;\n         view(&Snapshot::Valid(config), false)\n     }\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "disable_never_prompts_and_preserves_saved_destination",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/disable-durable-red.log"
+    },
+    {
+      "name": "revision-overflow",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-persisted_revision_overflow_fails_closed",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test persisted_revision_overflow_fails_closed ... FAILED",
+        "thread 'persisted_revision_overflow_fails_closed' (14316926) panicked at tests/imessage_contract.rs:420:51:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..9f24f6aac 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -192,7 +192,7 @@ fn next_revision(snapshot: &Snapshot) -> Result<u64> {\n         Snapshot::Valid(c) => c.revision,\n         _ => 0,\n     };\n-    revision.checked_add(1).ok_or(error(\"unavailable\"))\n+    Ok(revision.wrapping_add(1))\n }\n fn view(snapshot: &Snapshot, blocked: bool) -> Result<ImessageSettings> {\n     match snapshot {\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "persisted_revision_overflow_fails_closed",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/revision-overflow-red.log"
+    },
+    {
+      "name": "stale-consent",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-pending_consent_cannot_override_same_process_disable",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test pending_consent_cannot_override_same_process_disable ... FAILED",
+        "thread 'pending_consent_cannot_override_same_process_disable' (14317558) panicked at tests/imessage_contract.rs:484:37:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..f5d043054 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -109,7 +109,7 @@ impl<E: Effects> Service<E> {\n         }\n         let mut state = self.state.lock().map_err(|_| error(\"unavailable\"))?;\n         let _lock = self.effects.lock(false)?;\n-        if state.generation != generation || self.effects.load()? != snapshot {\n+        if false && (state.generation != generation || self.effects.load()? != snapshot) {\n             return Err(error(\"stale_consent\"));\n         }\n         let config = Config {\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "pending_consent_cannot_override_same_process_disable",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/stale-consent-red.log"
+    },
+    {
+      "name": "local-consent-generation",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-failed_local_disable_invalidates_pending_consent_generation",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test failed_local_disable_invalidates_pending_consent_generation ... FAILED",
+        "thread 'failed_local_disable_invalidates_pending_consent_generation' (14318122) panicked at tests/imessage_contract.rs:505:5:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..a41a4a646 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -109,7 +109,7 @@ impl<E: Effects> Service<E> {\n         }\n         let mut state = self.state.lock().map_err(|_| error(\"unavailable\"))?;\n         let _lock = self.effects.lock(false)?;\n-        if state.generation != generation || self.effects.load()? != snapshot {\n+        if self.effects.load()? != snapshot {\n             return Err(error(\"stale_consent\"));\n         }\n         let config = Config {\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "failed_local_disable_invalidates_pending_consent_generation",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/local-consent-generation-red.log"
+    },
+    {
+      "name": "cross-instance-revision",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-second_instance_disable_invalidates_revision_and_reloads_send_authority",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test second_instance_disable_invalidates_revision_and_reloads_send_authority ... FAILED",
+        "thread 'second_instance_disable_invalidates_revision_and_reloads_send_authority' (14318676) panicked at tests/imessage_contract.rs:525:37:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..27f115ceb 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -109,7 +109,7 @@ impl<E: Effects> Service<E> {\n         }\n         let mut state = self.state.lock().map_err(|_| error(\"unavailable\"))?;\n         let _lock = self.effects.lock(false)?;\n-        if state.generation != generation || self.effects.load()? != snapshot {\n+        if state.generation != generation {\n             return Err(error(\"stale_consent\"));\n         }\n         let config = Config {\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "second_instance_disable_invalidates_revision_and_reloads_send_authority",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/cross-instance-revision-red.log"
+    },
+    {
+      "name": "prompt-singleflight",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-second_instance_prompt_is_busy_while_first_dialog_open",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test second_instance_prompt_is_busy_while_first_dialog_open ... FAILED",
+        "thread '<unnamed>' (14319293) panicked at tests/imessage_contract.rs:456:9:",
+        "thread 'second_instance_prompt_is_busy_while_first_dialog_open' (14319292) panicked at tests/imessage_contract.rs:456:9:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 5.01s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..13d36232e 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -89,7 +89,7 @@ impl<E: Effects> Service<E> {\n             }) {\n                 return Err(error(\"busy\"));\n             }\n-            let prompt_lock = self.effects.lock(true)?;\n+            let prompt_lock: Box<dyn Send> = Box::new(());\n             state.last_prompt = Some(now);\n             if snapshot == Snapshot::Missing {\n                 let marker = Config {\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "second_instance_prompt_is_busy_while_first_dialog_open",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/prompt-singleflight-red.log"
+    },
+    {
+      "name": "wait-lock-release",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-spawned_send_wait_releases_locks_and_disable_prevents_next_start",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test spawned_send_wait_releases_locks_and_disable_prevents_next_start ... FAILED",
+        "thread '<unnamed>' (14319935) panicked at tests/imessage_contract.rs:456:9:",
+        "thread 'spawned_send_wait_releases_locks_and_disable_prevents_next_start' (14319934) panicked at tests/imessage_contract.rs:566:17:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 5.01s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..cf9cc6b98 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -155,7 +155,7 @@ impl<E: Effects> Service<E> {\n     }\n     pub fn send(&self, body: String) -> Result<()> {\n         let body = safe_body(&body)?;\n-        let child = {\n+        {\n             let mut state = self.state.lock().map_err(|_| error(\"unavailable\"))?;\n             let _lock = self.effects.lock(false)?;\n             if state.blocked {\n@@ -182,9 +182,9 @@ impl<E: Effects> Service<E> {\n                 return Err(error(\"rate_limited\"));\n             }\n             state.last_send = Some(now);\n-            self.effects.spawn(recipient, &body)?\n-        };\n-        child.wait()\n+            let child = self.effects.spawn(recipient, &body)?;\n+            child.wait()\n+        }\n     }\n }\n fn next_revision(snapshot: &Snapshot) -> Result<u64> {\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "spawned_send_wait_releases_locks_and_disable_prevents_next_start",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/wait-lock-release-red.log"
+    },
+    {
+      "name": "spawn-under-lock",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-spawn_holds_cross_instance_authorization_lock_until_started",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test spawn_holds_cross_instance_authorization_lock_until_started ... FAILED",
+        "thread 'spawn_holds_cross_instance_authorization_lock_until_started' (14320585) panicked at tests/imessage_contract.rs:586:28:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..b7fd33754 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -182,7 +182,7 @@ impl<E: Effects> Service<E> {\n                 return Err(error(\"rate_limited\"));\n             }\n             state.last_send = Some(now);\n-            self.effects.spawn(recipient, &body)?\n+            { drop(_lock); self.effects.spawn(recipient, &body)? }\n         };\n         child.wait()\n     }\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "spawn_holds_cross_instance_authorization_lock_until_started",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/spawn-under-lock-red.log"
+    },
+    {
+      "name": "private-mode",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-storage_is_private_atomic_and_leaves_no_temporary_files",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test storage_is_private_atomic_and_leaves_no_temporary_files ... FAILED",
+        "thread 'storage_is_private_atomic_and_leaves_no_temporary_files' (14321261) panicked at tests/imessage_contract.rs:643:5:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.04s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..73ca9e405 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -327,7 +327,7 @@ fn private_options(options: &mut OpenOptions) -> &mut OpenOptions {\n     const NO_FOLLOW: i32 = 0x100;\n     #[cfg(not(target_os = \"macos\"))]\n     const NO_FOLLOW: i32 = 0x20000;\n-    options.mode(0o600).custom_flags(NO_FOLLOW)\n+    options.mode(0o400).custom_flags(NO_FOLLOW)\n }\n #[cfg(not(unix))]\n fn private_options(options: &mut OpenOptions) -> &mut OpenOptions {\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "storage_is_private_atomic_and_leaves_no_temporary_files",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/private-mode-red.log"
+    },
+    {
+      "name": "strict-schema",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-strict_schema_never_authorizes_malformed_configuration",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test strict_schema_never_authorizes_malformed_configuration ... FAILED",
+        "thread 'strict_schema_never_authorizes_malformed_configuration' (14321818) panicked at tests/imessage_contract.rs:666:9:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.01s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..dce8226e5 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -19,7 +19,7 @@ pub struct ImessageSettings {\n     pub migration_available: bool,\n }\n #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]\n-#[serde(deny_unknown_fields, rename_all = \"camelCase\")]\n+#[serde(rename_all = \"camelCase\")]\n pub struct Config {\n     pub version: u8,\n     pub revision: u64,\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "strict_schema_never_authorizes_malformed_configuration",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/strict-schema-red.log"
+    },
+    {
+      "name": "bounded-config",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-oversized_storage_is_unavailable_without_migration",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test oversized_storage_is_unavailable_without_migration ... FAILED",
+        "thread 'oversized_storage_is_unavailable_without_migration' (14322354) panicked at tests/imessage_contract.rs:677:35:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..2601b9adc 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -413,7 +413,7 @@ impl Effects for NativeEffects {\n         file.take(4097)\n             .read_to_end(&mut bytes)\n             .map_err(|_| error(\"unavailable\"))?;\n-        if bytes.len() > 4096 {\n+        if false && bytes.len() > 4096 {\n             return Err(error(\"unavailable\"));\n         }\n         match serde_json::from_slice::<Config>(&bytes) {\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "oversized_storage_is_unavailable_without_migration",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/bounded-config-red.log"
+    },
+    {
+      "name": "private-existing-mode",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-permissive_storage_is_not_read_or_overwritten",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test permissive_storage_is_not_read_or_overwritten ... FAILED",
+        "thread 'permissive_storage_is_not_read_or_overwritten' (14322897) panicked at tests/imessage_contract.rs:684:35:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..78c844a8e 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -344,7 +344,7 @@ fn check_file(file: &File) -> Result<()> {\n         unsafe extern \"C\" {\n             fn geteuid() -> u32;\n         }\n-        if metadata.permissions().mode() & 0o777 != 0o600\n+        if false\n             || metadata.nlink() != 1\n             || metadata.uid() != unsafe { geteuid() }\n         {\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "permissive_storage_is_not_read_or_overwritten",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/private-existing-mode-red.log"
+    },
+    {
+      "name": "symlink-persistence",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-symlink_storage_is_not_followed_or_overwritten",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test symlink_storage_is_not_followed_or_overwritten ... FAILED",
+        "thread 'symlink_storage_is_not_followed_or_overwritten' (14323443) panicked at tests/imessage_contract.rs:706:40:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.03s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..8bed2a867 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -327,7 +327,7 @@ fn private_options(options: &mut OpenOptions) -> &mut OpenOptions {\n     const NO_FOLLOW: i32 = 0x100;\n     #[cfg(not(target_os = \"macos\"))]\n     const NO_FOLLOW: i32 = 0x20000;\n-    options.mode(0o600).custom_flags(NO_FOLLOW)\n+    options.mode(0o600).custom_flags(0)\n }\n #[cfg(not(unix))]\n fn private_options(options: &mut OpenOptions) -> &mut OpenOptions {\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "symlink_storage_is_not_followed_or_overwritten",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/symlink-persistence-red.log"
+    },
+    {
+      "name": "nonregular-config",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-nonregular_storage_and_config_directory_fail_closed",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test nonregular_storage_and_config_directory_fail_closed ... FAILED",
+        "thread 'nonregular_storage_and_config_directory_fail_closed' (14324095) panicked at tests/imessage_contract.rs:716:35:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..3f9493152 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -404,7 +404,7 @@ impl Effects for NativeEffects {\n             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Snapshot::Missing),\n             Err(_) => return Err(error(\"unavailable\")),\n             Ok(metadata) if !metadata.is_file() || metadata.file_type().is_symlink() => {\n-                return Err(error(\"unavailable\"))\n+                return Ok(Snapshot::Missing)\n             }\n             _ => (),\n         }\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "nonregular_storage_and_config_directory_fail_closed",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/nonregular-config-red.log"
+    },
+    {
+      "name": "hardlink-config",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-hardlinked_storage_is_rejected",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test hardlinked_storage_is_rejected ... FAILED",
+        "thread 'hardlinked_storage_is_rejected' (14324783) panicked at tests/imessage_contract.rs:729:35:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.03s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..d290813a2 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -345,7 +345,7 @@ fn check_file(file: &File) -> Result<()> {\n             fn geteuid() -> u32;\n         }\n         if metadata.permissions().mode() & 0o777 != 0o600\n-            || metadata.nlink() != 1\n+            || false\n             || metadata.uid() != unsafe { geteuid() }\n         {\n             return Err(error(\"unavailable\"));\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "hardlinked_storage_is_rejected",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/hardlink-config-red.log"
+    },
+    {
+      "name": "cross-process-lock",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-native_locks_exclude_other_instances_and_release_on_drop",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test native_locks_exclude_other_instances_and_release_on_drop ... FAILED",
+        "thread 'native_locks_exclude_other_instances_and_release_on_drop' (14325324) panicked at tests/imessage_contract.rs:739:35:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..0920c631f 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -389,7 +389,7 @@ impl Effects for NativeEffects {\n         let file = open_private(&self.directory.join(name), true)?;\n         let started = Instant::now();\n         loop {\n-            if try_lock(&file) {\n+            if true || try_lock(&file) {\n                 return Ok(Box::new(FileLock { _file: file }));\n             }\n             if prompt || started.elapsed() >= Duration::from_millis(250) {\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "native_locks_exclude_other_instances_and_release_on_drop",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/cross-process-lock-red.log"
+    },
+    {
+      "name": "symlink-lock",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-symlink_lock_fails_closed",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test symlink_lock_fails_closed ... FAILED",
+        "thread 'symlink_lock_fails_closed' (14325863) panicked at tests/imessage_contract.rs:765:46:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..8bed2a867 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -327,7 +327,7 @@ fn private_options(options: &mut OpenOptions) -> &mut OpenOptions {\n     const NO_FOLLOW: i32 = 0x100;\n     #[cfg(not(target_os = \"macos\"))]\n     const NO_FOLLOW: i32 = 0x20000;\n-    options.mode(0o600).custom_flags(NO_FOLLOW)\n+    options.mode(0o600).custom_flags(0)\n }\n #[cfg(not(unix))]\n fn private_options(options: &mut OpenOptions) -> &mut OpenOptions {\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "symlink_lock_fails_closed",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/symlink-lock-red.log"
+    },
+    {
+      "name": "exact-consent-result",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-native_consent_accepts_only_exact_successful_allow_output",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test native_consent_accepts_only_exact_successful_allow_output ... FAILED",
+        "thread 'native_consent_accepts_only_exact_successful_allow_output' (14326410) panicked at tests/imessage_contract.rs:778:9:",
+        "assertion failed: !consent_result(true, output)",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..6ed7a7956 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -609,5 +609,5 @@ fn bounded_wait(child: Child, timeout: Duration, dialog: bool) -> Result<(bool,\n     wait_process(process, timeout, dialog, &NativeClock)\n }\n pub fn consent_result(success: bool, output: &[u8]) -> bool {\n-    success && output == b\"Allow\\n\"\n+    success\n }\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "native_consent_accepts_only_exact_successful_allow_output",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/exact-consent-result-red.log"
+    },
+    {
+      "name": "process-deadline",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-process_wait_deadlines_kill_and_report_uncertainty_without_retry",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test process_wait_deadlines_kill_and_report_uncertainty_without_retry ... FAILED",
+        "thread 'process_wait_deadlines_kill_and_report_uncertainty_without_retry' (14326969) panicked at tests/imessage_contract.rs:842:9:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..29dfba876 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -535,7 +535,7 @@ pub fn wait_process<P: Process, C: WaitClock>(\n                 return Err(error(if dialog { \"canceled\" } else { \"send_uncertain\" }));\n             }\n         }\n-        if clock.now().saturating_duration_since(started) >= timeout {\n+        if clock.now().saturating_duration_since(started) > timeout {\n             child.terminate();\n             return Err(error(if dialog { \"canceled\" } else { \"send_uncertain\" }));\n         }\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "process_wait_deadlines_kill_and_report_uncertainty_without_retry",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/process-deadline-red.log"
+    },
+    {
+      "name": "process-poll-error",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-process_wait_poll_failure_and_stalled_pipe_are_bounded",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test process_wait_poll_failure_and_stalled_pipe_are_bounded ... FAILED",
+        "thread 'process_wait_poll_failure_and_stalled_pipe_are_bounded' (14327598) panicked at tests/imessage_contract.rs:862:9:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..7bf678f32 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -532,7 +532,7 @@ pub fn wait_process<P: Process, C: WaitClock>(\n             Ok(None) => (),\n             Err(_) => {\n                 child.terminate();\n-                return Err(error(if dialog { \"canceled\" } else { \"send_uncertain\" }));\n+                return Err(error(\"send_failed\"));\n             }\n         }\n         if clock.now().saturating_duration_since(started) >= timeout {\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "process_wait_poll_failure_and_stalled_pipe_are_bounded",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/process-poll-error-red.log"
+    },
+    {
+      "name": "completed-process-result",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-completed_child_returns_actual_result_without_termination",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test completed_child_returns_actual_result_without_termination ... FAILED",
+        "thread 'completed_child_returns_actual_result_without_termination' (14328155) panicked at tests/imessage_contract.rs:885:9:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..bf5d3d255 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -522,7 +522,7 @@ pub fn wait_process<P: Process, C: WaitClock>(\n     loop {\n         match child.poll() {\n             Ok(Some(success)) => match child.output() {\n-                Ok(Some(output)) => return Ok((success, output)),\n+                Ok(Some(output)) => return Ok((!success, output)),\n                 Ok(None) => (),\n                 Err(_) => {\n                     child.terminate();\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "completed_child_returns_actual_result_without_termination",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/completed-process-result-red.log"
+    },
+    {
+      "name": "partial-write-cleanup",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-failed_partial_write_cleans_only_owned_temp_and_preserves_committed_state",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test failed_partial_write_cleans_only_owned_temp_and_preserves_committed_state ... FAILED",
+        "thread 'failed_partial_write_cleans_only_owned_temp_and_preserves_committed_state' (14328695) panicked at tests/imessage_contract.rs:919:5:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.02s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..0cee0a25e 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -313,7 +313,7 @@ impl NativeEffects {\n                 Ok(())\n             })();\n             if write_result.is_err() {\n-                let _ = fs::remove_file(&temporary);\n+                let _ = &temporary;\n             }\n             write_result\n         })();\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "failed_partial_write_cleans_only_owned_temp_and_preserves_committed_state",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/partial-write-cleanup-red.log"
+    },
+    {
+      "name": "rename-failure-cleanup",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-failed_atomic_rename_cleans_owned_temp_and_reports_failure",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test failed_atomic_rename_cleans_owned_temp_and_reports_failure ... FAILED",
+        "thread 'failed_atomic_rename_cleans_owned_temp_and_reports_failure' (14329258) panicked at tests/imessage_contract.rs:941:5:",
+        "assertion `left == right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.03s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..0cee0a25e 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -313,7 +313,7 @@ impl NativeEffects {\n                 Ok(())\n             })();\n             if write_result.is_err() {\n-                let _ = fs::remove_file(&temporary);\n+                let _ = &temporary;\n             }\n             write_result\n         })();\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "failed_atomic_rename_cleans_owned_temp_and_reports_failure",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/rename-failure-cleanup-red.log"
+    },
+    {
+      "name": "atomic-replacement",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-storage_is_private_atomic_and_leaves_no_temporary_files",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test storage_is_private_atomic_and_leaves_no_temporary_files ... FAILED",
+        "thread 'storage_is_private_atomic_and_leaves_no_temporary_files' (14329797) panicked at tests/imessage_contract.rs:649:5:",
+        "assertion `left != right` failed",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.04s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..0085c037e 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -309,7 +309,8 @@ impl NativeEffects {\n                 .map_err(|_| error(\"unavailable\"))?;\n             let write_result = (|| {\n                 write(&mut file, &bytes).map_err(|_| error(\"unavailable\"))?;\n-                fs::rename(&temporary, &destination).map_err(|_| error(\"unavailable\"))?;\n+                fs::copy(&temporary, &destination).map_err(|_| error(\"unavailable\"))?;\n+                fs::remove_file(&temporary).map_err(|_| error(\"unavailable\"))?;\n                 Ok(())\n             })();\n             if write_result.is_err() {\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "storage_is_private_atomic_and_leaves_no_temporary_files",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/atomic-replacement-red.log"
+    },
+    {
+      "name": "quota-after-success",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-send_uses_saved_recipient_and_reserves_quota",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test send_uses_saved_recipient_and_reserves_quota ... FAILED",
+        "thread 'send_uses_saved_recipient_and_reserves_quota' (14330409) panicked at tests/imessage_contract.rs:186:39:",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..df337d35f 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -176,7 +176,7 @@ impl<E: Effects> Service<E> {\n                 .filter(|r| valid_recipient(r))\n                 .ok_or(error(\"unavailable\"))?;\n             let now = self.effects.now();\n-            if state.last_send.is_some_and(|t| {\n+            if false && state.last_send.is_some_and(|t| {\n                 now.saturating_duration_since(t) < std::time::Duration::from_secs(30)\n             }) {\n                 return Err(error(\"rate_limited\"));\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "send_uses_saved_recipient_and_reserves_quota",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/quota-after-success-red.log"
+    },
+    {
+      "name": "terminate-on-timeout",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "rust-process_wait_deadlines_kill_and_report_uncertainty_without_retry",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "test process_wait_deadlines_kill_and_report_uncertainty_without_retry ... FAILED",
+        "thread 'process_wait_deadlines_kill_and_report_uncertainty_without_retry' (14330948) panicked at tests/imessage_contract.rs:841:9:",
+        "assertion failed: killed.load(std::sync::atomic::Ordering::SeqCst)",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..65f2bb4d7 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -536,7 +536,7 @@ pub fn wait_process<P: Process, C: WaitClock>(\n             }\n         }\n         if clock.now().saturating_duration_since(started) >= timeout {\n-            child.terminate();\n+            // Deliberate mutation: omit termination.\n             return Err(error(if dialog { \"canceled\" } else { \"send_uncertain\" }));\n         }\n         clock.pause();\n",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "src-tauri/Cargo.toml",
+        "--test",
+        "imessage_contract",
+        "process_wait_deadlines_kill_and_report_uncertainty_without_retry",
+        "--",
+        "--exact"
+      ],
+      "log": "rust-mutations/terminate-on-timeout-red.log"
+    },
+    {
+      "name": "wrapper-propagates-native-enabled-refusal",
+      "file": "src-tauri/src/imessage.rs",
+      "kind": "wrapper",
+      "baseline": [
+        1,
+        0
+      ],
+      "red": [
+        0,
+        1
+      ],
+      "sha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "restoredSha256": "fa8b5a220baf60d5f4b01a85df0c820252987dd2a0aa3078253b7d89fe144e07",
+      "diffConfirmed": true,
+      "cleanBefore": true,
+      "cleanRestored": true,
+      "assertions": [
+        "not ok 1 - native iMessage authorization contract executes successfully",
+        "    test disabled_destination_change_has_exact_disabled_consent ... FAILED",
+        "    test confirmed_write_failure_never_authorizes ... FAILED",
+        "    test disabled_never_spawns ... FAILED",
+        "    test disable_never_prompts_and_preserves_saved_destination ... FAILED",
+        "    test second_instance_disable_invalidates_revision_and_reloads_send_authority ... FAILED",
+        "    test spawn_holds_cross_instance_authorization_lock_until_started ... FAILED",
+        "    test spawned_send_wait_releases_locks_and_disable_prevents_next_start ... FAILED",
+        "    thread 'disabled_destination_change_has_exact_disabled_consent' (14335762) panicked at tests/imessage_contract.rs:276:39:",
+        "    thread 'confirmed_write_failure_never_authorizes' (14335759) panicked at tests/imessage_contract.rs:288:5:",
+        "    assertion `left == right` failed",
+        "    thread 'disabled_never_spawns' (14335763) panicked at tests/imessage_contract.rs:174:39:",
+        "    thread 'disable_never_prompts_and_preserves_saved_destination' (14335761) panicked at tests/imessage_contract.rs:408:39:",
+        "    thread 'second_instance_disable_invalidates_revision_and_reloads_send_authority' (14335789) panicked at tests/imessage_contract.rs:526:38:",
+        "    thread 'spawn_holds_cross_instance_authorization_lock_until_started' (14335794) panicked at tests/imessage_contract.rs:456:9:",
+        "    thread '<unnamed>' (14335798) panicked at tests/imessage_contract.rs:456:9:",
+        "    thread 'spawned_send_wait_releases_locks_and_disable_prevents_next_start' (14335796) panicked at tests/imessage_contract.rs:456:9:",
+        "    test result: FAILED. 37 passed; 7 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.03s",
+        "  name: 'AssertionError'"
+      ],
+      "appliedDiff": "diff --git a/src-tauri/src/imessage.rs b/src-tauri/src/imessage.rs\nindex bf56f4d98..c5fa9f991 100644\n--- a/src-tauri/src/imessage.rs\n+++ b/src-tauri/src/imessage.rs\n@@ -167,9 +167,6 @@ impl<E: Effects> Service<E> {\n                 Snapshot::Missing => return Err(error(\"disabled\")),\n                 Snapshot::Invalid(_) => return Err(error(\"unavailable\")),\n             };\n-            if !config.enabled {\n-                return Err(error(\"disabled\"));\n-            }\n             let recipient = config\n                 .recipient\n                 .as_deref()\n",
+      "command": [
+        "node",
+        "--test",
+        "tests/imessage-native-gate.test.mjs"
+      ],
+      "log": "wrapper-mutations/wrapper-propagates-native-enabled-refusal-red.log"
+    }
+  ]
+}

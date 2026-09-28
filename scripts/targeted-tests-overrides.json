@@ -82,7 +82,8 @@
   "src-tauri/src/main.rs": [
     "test:desktop-updater",
     "test:imessage",
-    "test:imessage-native"
+    "test:imessage-native",
+    "test:native-responsiveness"
   ],
   "src-tauri/src/updater_policy.rs": [
     "test:desktop-updater"
@@ -93,5 +94,11 @@
   ],
   "src-tauri/tests/imessage_contract.rs": [
     "test:imessage-native"
+  ],
+  "src-tauri/src/watchdog.rs": [
+    "test:native-responsiveness"
+  ],
+  "src-tauri/tests/watchdog_contract.rs": [
+    "test:native-responsiveness"
   ]
 }

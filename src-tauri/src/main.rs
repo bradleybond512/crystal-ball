@@ -25,6 +25,7 @@ mod corelocation;
 mod current_location;
 mod imessage;
 mod updater_policy;
+mod watchdog;
 use updater_policy::{BrowserReason, SignerRequirement, UpdateError, UpdateOutcome};
 
 const DEFAULT_LOCAL_API_PORT: u16 = 46123;
@@ -1028,20 +1029,25 @@ fn secrets_ready(webview: Webview, cache: tauri::State<'_, SecretsCache>) -> Res
 }
 
 #[tauri::command]
-fn get_secret(
+async fn get_secret(
  webview: Webview,
  key: String,
- cache: tauri::State<'_, SecretsCache>,
 ) -> Result<Option<String>, String> {
  require_trusted_window(webview.label())?;
  if !SUPPORTED_SECRET_KEYS.contains(&key.as_str()) {
  return Err(format!("Unsupported secret key: {key}"));
  }
+ let app = webview.app_handle().clone();
+ tauri::async_runtime::spawn_blocking(move || {
+ let cache = app.state::<SecretsCache>();
  let secrets = cache
  .secrets
  .lock()
  .map_err(|_| "Lock poisoned".to_string())?;
  Ok(secrets.get(&key).cloned())
+ })
+ .await
+ .map_err(|_| "Secret read task failed".to_string())?
 }
 
 /// Block until the async keychain load has finished before a Settings write
@@ -1075,16 +1081,18 @@ fn wait_until_secrets_loaded(cache: &SecretsCache) -> bool {
 }
 
 #[tauri::command]
-fn set_secret(
+async fn set_secret(
  webview: Webview,
  key: String,
  value: String,
- cache: tauri::State<'_, SecretsCache>,
 ) -> Result<(), String> {
  require_trusted_window(webview.label())?;
  if !SUPPORTED_SECRET_KEYS.contains(&key.as_str()) {
  return Err(format!("Unsupported secret key: {key}"));
  }
+ let app = webview.app_handle().clone();
+ tauri::async_runtime::spawn_blocking(move || {
+ let cache = app.state::<SecretsCache>();
  if !wait_until_secrets_loaded(&cache) {
  return Err("Secrets are still loading from the keychain; please try again in a moment.".to_string());
  }
@@ -1101,13 +1109,16 @@ fn set_secret(
  proposed.insert(key.clone(), trimmed);
  }
  save_vault(&proposed)?;
- write_vault_shadow(&webview.app_handle(), &proposed);
+ write_vault_shadow(&app, &proposed);
  *secrets = proposed;
  // Shield this edit from a still-in-flight async keychain read (see merge).
  if let Ok(mut touched) = cache.user_mutated.lock() {
  touched.insert(key);
  }
  Ok(())
+ })
+ .await
+ .map_err(|_| "Secret save task failed".to_string())?
 }
 
 /// User-initiated re-read of the keychain vault. The boot read runs on a
@@ -1147,11 +1158,14 @@ async fn reload_secrets_from_keychain(webview: Webview) -> Result<usize, String>
 }
 
 #[tauri::command]
-fn delete_secret(webview: Webview, key: String, cache: tauri::State<'_, SecretsCache>) -> Result<(), String> {
+async fn delete_secret(webview: Webview, key: String) -> Result<(), String> {
  require_trusted_window(webview.label())?;
  if !SUPPORTED_SECRET_KEYS.contains(&key.as_str()) {
  return Err(format!("Unsupported secret key: {key}"));
  }
+ let app = webview.app_handle().clone();
+ tauri::async_runtime::spawn_blocking(move || {
+ let cache = app.state::<SecretsCache>();
  if !wait_until_secrets_loaded(&cache) {
  return Err("Secrets are still loading from the keychain; please try again in a moment.".to_string());
  }
@@ -1162,13 +1176,16 @@ fn delete_secret(webview: Webview, key: String, cache: tauri::State<'_, SecretsC
  let mut proposed = secrets.clone();
  proposed.remove(&key);
  save_vault(&proposed)?;
- write_vault_shadow(&webview.app_handle(), &proposed);
+ write_vault_shadow(&app, &proposed);
  *secrets = proposed;
  // Shield this deletion from a still-in-flight async keychain read (see merge).
  if let Ok(mut touched) = cache.user_mutated.lock() {
  touched.insert(key);
  }
  Ok(())
+ })
+ .await
+ .map_err(|_| "Secret delete task failed".to_string())?
 }
 
 /// Sentinel that marks "migration from individual keys has been attempted".
@@ -1220,14 +1237,22 @@ fn exclude_app_data_from_backup(dir: &std::path::Path) {
 fn exclude_app_data_from_backup(_dir: &std::path::Path) {}
 
 #[tauri::command]
-fn read_cache_entry(webview: Webview, cache: tauri::State<'_, PersistentCache>, key: String) -> Result<Option<Value>, String> {
+async fn read_cache_entry(webview: Webview, key: String) -> Result<Option<Value>, String> {
  require_trusted_window(webview.label())?;
+ let app = webview.app_handle().clone();
+ tauri::async_runtime::spawn_blocking(move || {
+ let cache = app.state::<PersistentCache>();
  Ok(cache.get(&key))
+ })
+ .await
+ .map_err(|_| "Cache read task failed".to_string())?
 }
 
 #[tauri::command]
-fn delete_cache_entry(webview: Webview, app: AppHandle, cache: tauri::State<'_, PersistentCache>, key: String) -> Result<(), String> {
+async fn delete_cache_entry(webview: Webview, app: AppHandle, key: String) -> Result<(), String> {
  require_trusted_window(webview.label())?;
+ tauri::async_runtime::spawn_blocking(move || {
+ let cache = app.state::<PersistentCache>();
  let _write_guard = cache.write_lock.lock().unwrap_or_else(|e| e.into_inner());
  {
  let mut data = cache.data.lock().unwrap_or_else(|e| e.into_inner());
@@ -1240,10 +1265,13 @@ fn delete_cache_entry(webview: Webview, app: AppHandle, cache: tauri::State<'_, 
  drop(_write_guard);
  schedule_cache_flush(&app);
  Ok(())
+ })
+ .await
+ .map_err(|_| "Cache delete task failed".to_string())?
 }
 
 #[tauri::command]
-fn write_cache_entry(webview: Webview, app: AppHandle, cache: tauri::State<'_, PersistentCache>, key: String, value: String, ttl_ms: Option<u64>) -> Result<(), String> {
+async fn write_cache_entry(webview: Webview, app: AppHandle, key: String, value: String, ttl_ms: Option<u64>) -> Result<(), String> {
  require_trusted_window(webview.label())?;
  if key.len() > 256 {
   return Err("Cache key exceeds 256 byte limit".into());
@@ -1251,6 +1279,8 @@ fn write_cache_entry(webview: Webview, app: AppHandle, cache: tauri::State<'_, P
  if value.len() > 5 * 1024 * 1024 {
   return Err("Cache value exceeds 5 MB limit".into());
  }
+ tauri::async_runtime::spawn_blocking(move || {
+ let cache = app.state::<PersistentCache>();
  let parsed_value: Value = serde_json::from_str(&value)
  .map_err(|e| format!("Invalid cache payload JSON: {e}"))?;
  let stored_at = SystemTime::now()
@@ -1271,13 +1301,17 @@ fn write_cache_entry(webview: Webview, app: AppHandle, cache: tauri::State<'_, P
  drop(_write_guard);
  schedule_cache_flush(&app);
  Ok(())
+ })
+ .await
+ .map_err(|_| "Cache write task failed".to_string())?
 }
 
 /// Save a PDF brief to ~/Documents/Crystal Ball Briefs/<filename>.
 /// Creates the directory if absent. Restricted to the trusted window list.
 #[tauri::command]
-fn save_brief(webview: Webview, filename: String, bytes: Vec<u8>) -> Result<String, String> {
+async fn save_brief(webview: Webview, filename: String, bytes: Vec<u8>) -> Result<String, String> {
  require_trusted_window(webview.label())?;
+ tauri::async_runtime::spawn_blocking(move || {
  // Whitelist: alphanumeric + hyphen/underscore/dot/space.
  // Also reject "." / ".." and null bytes to prevent path confusion.
  let filename_valid = !filename.is_empty()
@@ -1307,6 +1341,9 @@ fn save_brief(webview: Webview, filename: String, bytes: Vec<u8>) -> Result<Stri
   fs::set_permissions(&path, perms).ok();
  }
  Ok(path.display().to_string())
+ })
+ .await
+ .map_err(|_| "Brief save task failed".to_string())?
 }
 
 fn logs_dir_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -3926,6 +3963,7 @@ fn renderer_now_ms() -> u64 {
 /// renderer main thread (Defect A's infinite JS loop) stops updating this; the
 /// watchdog thread below notices the silence and reloads the webview.
 static LAST_RENDERER_HEARTBEAT_MS: AtomicU64 = AtomicU64::new(0);
+static MAIN_WINDOW_FOCUS: watchdog::MainFocus = watchdog::MainFocus::new();
 
 /// Renderer heartbeat sink. The paired renderer beats every 3s via log-bridge's
 /// installRendererHeartbeat(); a wedged main thread simply stops calling this.
@@ -4573,10 +4611,10 @@ fn main() {
  {
  let app_handle = app.handle().clone();
  std::thread::spawn(move || {
- std::thread::sleep(Duration::from_secs(60)); // let the renderer finish its heavy boot
+ let started = Instant::now();
+ let mut policy = watchdog::WatchdogPolicy::new(0);
+ std::thread::sleep(Duration::from_millis(watchdog::BOOT_GRACE_MS));
  LAST_RENDERER_HEARTBEAT_MS.store(renderer_now_ms(), Ordering::Relaxed);
- let mut focused_since: Option<Instant> = None;
- let mut last_reload = Instant::now() - Duration::from_secs(600);
  let mut tick: u32 = 0;
  append_watchdog_log(&app_handle, "INFO", "renderer watchdog armed — dated log active");
  loop {
@@ -4587,22 +4625,20 @@ fn main() {
  // regardless of focus.
  if tick % 10 == 0 {
  let beat_age = renderer_now_ms().saturating_sub(LAST_RENDERER_HEARTBEAT_MS.load(Ordering::Relaxed));
- let focused = app_handle.get_webview_window("main").and_then(|w| w.is_focused().ok()).unwrap_or(false);
+ let focused = MAIN_WINDOW_FOCUS.snapshot().focused;
  append_watchdog_log(&app_handle, "INFO", &format!("heartbeat: renderer last beat {beat_age}ms ago, focused={focused}"));
  }
- let win = match app_handle.get_webview_window("main") { Some(w) => w, None => continue };
- if !win.is_focused().unwrap_or(false) { focused_since = None; continue; }
- // Just gained focus: re-baseline so a resume isn't flagged before the
- // renderer's throttled heartbeat timer wakes back up.
- if focused_since.is_none() {
- focused_since = Some(Instant::now());
+ let focus = MAIN_WINDOW_FOCUS.snapshot();
+ let age = renderer_now_ms().saturating_sub(LAST_RENDERER_HEARTBEAT_MS.load(Ordering::Relaxed));
+ match policy.tick(started.elapsed().as_millis() as u64, focus, age) {
+ watchdog::Decision::Idle => continue,
+ watchdog::Decision::Rebaseline => {
  LAST_RENDERER_HEARTBEAT_MS.store(renderer_now_ms(), Ordering::Relaxed);
  continue;
  }
- if focused_since.map(|t| t.elapsed()).unwrap_or_default() < Duration::from_secs(12) { continue; }
- let age = renderer_now_ms().saturating_sub(LAST_RENDERER_HEARTBEAT_MS.load(Ordering::Relaxed));
- if age > 60_000 {
- if last_reload.elapsed() < Duration::from_secs(120) { continue; } // no reload loop
+ watchdog::Decision::Reload => {}
+ }
+ let win = match app_handle.get_webview_window("main") { Some(w) => w, None => continue };
  // Recovery path: log the stall, kick off forensic capture on its own
  // thread (so a slow sample can't delay recovery), then reload the webview.
  // We NEVER exit the app — a wedged renderer is recoverable, and exiting
@@ -4617,10 +4653,8 @@ fn main() {
  spawn_stall_capture(app_handle.clone());
  let _ = win.reload();
  append_watchdog_log(&app_handle, "INFO", "webview reloaded after stall — recovery toast pending; app NOT exited");
- last_reload = Instant::now();
  LAST_RENDERER_HEARTBEAT_MS.store(renderer_now_ms(), Ordering::Relaxed);
- focused_since = Some(Instant::now());
- }
+ policy.did_reload(started.elapsed().as_millis() as u64);
  }
  });
  }
@@ -4649,7 +4683,8 @@ fn main() {
    .title_bar_style(TitleBarStyle::Overlay)
    .hidden_title(true);
  }
- main_builder.build().map_err(|e| format!("failed to create main window: {e}"))?;
+ let main_window = main_builder.build().map_err(|e| format!("failed to create main window: {e}"))?;
+ MAIN_WINDOW_FOCUS.update("main", main_window.is_focused().unwrap_or(false));
 
  // Apply native macOS vibrancy (HudWindow material, 12pt rounded corners).
  // Pairs with `transparent: true` + `macOSPrivateApi: true` in tauri.conf.json
@@ -4838,18 +4873,19 @@ fn main() {
  let _ = w.set_focus();
  }
  }
- // Only macOS needs explicit re-raising to keep settings above the main window.
- // On Windows, focusing the settings window here can trigger rapid focus churn
- // between windows and present as a UI hang.
- #[cfg(target_os = "macos")]
  RunEvent::WindowEvent {
  label,
- event: WindowEvent::Focused(true),
+ event: WindowEvent::Focused(focused),
  ..
  } if label == "main" => {
+ MAIN_WINDOW_FOCUS.update(label, *focused);
+ // Auxiliary-window raising is macOS-only; focus tracking is cross-platform.
+ #[cfg(target_os = "macos")]
+ if *focused {
  if let Some(sw) = app.get_webview_window("settings") {
  let _ = sw.show();
  let _ = sw.set_focus();
+ }
  }
  }
  RunEvent::ExitRequested { code, .. } => {

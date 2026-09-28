@@ -59,6 +59,8 @@
     "typecheck:api": "tsc --noEmit -p tsconfig.api.json",
     "typecheck:all": "tsc --noEmit && tsc --noEmit -p tsconfig.api.json",
     "test:desktop-updater": "node --test tests/desktop-updater-signature.test.mjs tests/desktop-updater-authority.test.mjs && tsx --test src/app/__tests__/desktop-updater.test.mts",
+    "test:imessage": "node --test tests/imessage-native-boundary.test.mjs && tsx --test src/services/__tests__/imessage-bridge.test.mts src/components/__tests__/imessage-settings.test.mts src/app/__tests__/desktop-imessage.test.mts src/services/seismic/__tests__/eew-imessage.test.mts src/services/notifications/__tests__/imessage-bridge-extended.test.mts",
+    "test:imessage-native": "node --test tests/imessage-native-gate.test.mjs",
     "research:eval": "bash scripts/research-eval.sh",
     "research:eval:rotation": "bash scripts/research-eval.sh rotation",
     "tauri": "tauri",

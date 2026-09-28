@@ -25,9 +25,9 @@ export type EewImessageOutcome =
 
 export interface EewImessageDeps {
   /** Inject for tests; defaults to the real bridge. */
-  send?: (recipient: string, body: string) => Promise<{ ok: boolean; reason?: string }>;
+  send?: (body: string) => Promise<{ ok: boolean; reason?: string; code?: string }>;
   /** Inject for tests; defaults to the real settings store. */
-  getSettings?: () => { recipient: string };
+  getSettings?: () => { enabled: boolean; ready: boolean; recipient: string };
   /** Master toggle from runtime-config. When false, never call the
    *  bridge regardless of saved settings. */
   enabled: boolean;
@@ -63,6 +63,7 @@ export async function escalateTier5ToImessage(
   }
 
   const settings = (deps.getSettings ?? getImessageSettings)();
+  if (!settings.enabled || !settings.ready) return { status: 'disabled', reason: 'feature_off' };
   const recipient = settings.recipient.trim();
   if (recipient.length === 0) {
     return { status: 'disabled', reason: 'no_recipient' };
@@ -72,8 +73,9 @@ export async function escalateTier5ToImessage(
   const body = buildBody(alert, nowMs);
 
   try {
-    const result = await send(recipient, body);
+    const result = await send(body);
     if (result.ok) return { status: 'sent' };
+    if (result.code === 'disabled') return { status: 'disabled', reason: 'feature_off' };
     return { status: 'failed', error: result.reason ?? 'unknown error' };
   } catch (error) {
     return {

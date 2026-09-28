@@ -80,9 +80,18 @@
     "test:gdacs-map"
   ],
   "src-tauri/src/main.rs": [
-    "test:desktop-updater"
+    "test:desktop-updater",
+    "test:imessage",
+    "test:imessage-native"
   ],
   "src-tauri/src/updater_policy.rs": [
     "test:desktop-updater"
+  ],
+  "src-tauri/src/imessage.rs": [
+    "test:imessage",
+    "test:imessage-native"
+  ],
+  "src-tauri/tests/imessage_contract.rs": [
+    "test:imessage-native"
   ]
 }

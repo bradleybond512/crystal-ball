@@ -45,7 +45,7 @@ test('non-TIER_5 alert returns disabled (defensive guard)', async () => {
   const wrongTier = { ...tier5(), tier: 'TIER_4_SEVERE' as const };
   const out = await escalateTier5ToImessage(wrongTier, NOW, {
     enabled: true,
-    getSettings: () => ({ recipient: '+15551234567' }),
+    getSettings: () => ({ enabled: true, ready: true, recipient: '+15551234567' }),
     send: async () => ({ ok: true }),
   });
   assert.equal(out.status, 'disabled');
@@ -56,7 +56,7 @@ test('feature-off toggle returns disabled, never calls send', async () => {
   let sendCalled = false;
   const out = await escalateTier5ToImessage(tier5(), NOW, {
     enabled: false,
-    getSettings: () => ({ recipient: '+15551234567' }),
+    getSettings: () => ({ enabled: true, ready: true, recipient: '+15551234567' }),
     send: async () => {
       sendCalled = true;
       return { ok: true };
@@ -70,7 +70,7 @@ test('empty recipient returns disabled with no_recipient', async () => {
   let sendCalled = false;
   const out = await escalateTier5ToImessage(tier5(), NOW, {
     enabled: true,
-    getSettings: () => ({ recipient: '' }),
+    getSettings: () => ({ enabled: true, ready: true, recipient: '' }),
     send: async () => {
       sendCalled = true;
       return { ok: true };
@@ -84,7 +84,7 @@ test('empty recipient returns disabled with no_recipient', async () => {
 test('whitespace-only recipient is treated as empty', async () => {
   const out = await escalateTier5ToImessage(tier5(), NOW, {
     enabled: true,
-    getSettings: () => ({ recipient: '   ' }),
+    getSettings: () => ({ enabled: true, ready: true, recipient: '   ' }),
     send: async () => ({ ok: true }),
   });
   assert.equal(out.status, 'disabled');
@@ -93,7 +93,7 @@ test('whitespace-only recipient is treated as empty', async () => {
 test('successful send returns sent', async () => {
   const out = await escalateTier5ToImessage(tier5(), NOW, {
     enabled: true,
-    getSettings: () => ({ recipient: '+15551234567' }),
+    getSettings: () => ({ enabled: true, ready: true, recipient: '+15551234567' }),
     send: async () => ({ ok: true }),
   });
   assert.equal(out.status, 'sent');
@@ -103,7 +103,7 @@ test('send failure returns failed with the error reason — no retry', async () 
   let callCount = 0;
   const out = await escalateTier5ToImessage(tier5(), NOW, {
     enabled: true,
-    getSettings: () => ({ recipient: '+15551234567' }),
+    getSettings: () => ({ enabled: true, ready: true, recipient: '+15551234567' }),
     send: async () => {
       callCount += 1;
       return { ok: false, reason: 'Messages.app rate-limited' };
@@ -117,7 +117,7 @@ test('send failure returns failed with the error reason — no retry', async () 
 test('send throw is caught and surfaced as failed', async () => {
   const out = await escalateTier5ToImessage(tier5(), NOW, {
     enabled: true,
-    getSettings: () => ({ recipient: '+15551234567' }),
+    getSettings: () => ({ enabled: true, ready: true, recipient: '+15551234567' }),
     send: async () => { throw new Error('bridge unavailable'); },
   });
   assert.equal(out.status, 'failed');
@@ -143,4 +143,17 @@ test('applyOutcome sets imessageStatus=disabled, no error', () => {
   const next = applyOutcome(tier5(), { status: 'disabled', reason: 'feature_off' });
   assert.equal(next.imessageStatus, 'disabled');
   assert.equal(next.imessageError, undefined);
+});
+
+for (const flags of [{ enabled: false, ready: true }, { enabled: true, ready: false }]) {
+  test(`native state ${JSON.stringify(flags)} suppresses EEW`, async () => {
+    let calls = 0;
+    const out = await escalateTier5ToImessage(tier5(), NOW, { enabled: true, getSettings: () => ({ ...flags, recipient: '+15551234567' }), send: async () => { calls++; return { ok: true }; } });
+    assert.equal(out.status, 'disabled'); assert.equal(calls, 0);
+  });
+}
+test('EEW passes body only and maps native revocation to disabled without retry', async () => {
+  const calls: unknown[][] = [];
+  const out = await escalateTier5ToImessage(tier5(), NOW, { enabled: true, getSettings: () => ({ enabled: true, ready: true, recipient: '+15551234567' }), send: async (...args) => { calls.push(args); return { ok: false, code: 'disabled' }; } });
+  assert.deepEqual(calls, [[buildBody(tier5(), NOW)]]); assert.equal(out.status, 'disabled');
 });

@@ -3,7 +3,7 @@ import type { BreakingAlert } from '@/services/breaking-news-alerts';
 import { tryInvokeTauri } from '@/services/tauri-bridge';
 import { getAlertSettings } from '@/services/breaking-news-alerts';
 import { isGhostMode } from '@/services/mode-manager';
-import { getImessageSettings, sendImessage } from '@/services/imessage-bridge';
+import { getImessageSettings, refreshImessageSettings, sendImessage } from '@/services/imessage-bridge';
 
 /**
  * Routes breaking alerts to native macOS notifications on desktop (osascript
@@ -25,6 +25,7 @@ export class DesktopNotifications implements AppModule {
   }
 
   init(): void {
+ if (this.ctx.isDesktopApp) void refreshImessageSettings();
  if (!this.ctx.isDesktopApp && typeof Notification === 'undefined') {
  this.webPermission = 'unsupported';
  }
@@ -57,12 +58,12 @@ export class DesktopNotifications implements AppModule {
  // gating happens here so we never wake the user's phone for a 'high' if
  // they only opted into 'critical'.
  const imSettings = getImessageSettings();
- if (imSettings.enabled && imSettings.recipient) {
+ if (imSettings.ready && imSettings.enabled && imSettings.recipient) {
  const meetsThreshold = imSettings.threshold === 'critical'
  ? alert.threatLevel === 'critical'
  : alert.threatLevel === 'critical' || alert.threatLevel === 'high';
  if (meetsThreshold) {
- const result = await sendImessage(imSettings.recipient, `Crystal Ball: ${body}`);
+ const result = await sendImessage(`Crystal Ball: ${body}`);
  if (!result.ok) {
  // eslint-disable-next-line no-console -- best-effort relay; user-actionable failure
  console.warn('[imessage] alert relay failed', result.reason);

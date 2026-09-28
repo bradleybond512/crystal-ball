@@ -239,3 +239,11 @@ test('parseImessageThreatTypeList: tolerates whitespace + casing', () => {
   const result = parseImessageThreatTypeList('  Seismic_Tier5  ,  WILDFIRE_EXTREME  ');
   assert.deepEqual(result, ['seismic_tier5', 'wildfire_extreme']);
 });
+
+test('extended dispatch passes only the body to native-authorized bridge', async () => {
+  const { fireImessageForPayload } = await import('../imessage-bridge-extended.ts');
+  const calls: unknown[][] = [];
+  const payload = seismic('tier5');
+  await fireImessageForPayload(payload, settings(), { send: async (...args) => { calls.push(args); return { ok: true }; } });
+  assert.deepEqual(calls, [[routeAlertToImessage(payload, settings()).body]]);
+});

@@ -22,7 +22,7 @@ import {
 import type { StatusPanel } from './StatusPanel';
 import { feedDisplayName } from './StatusPanel';
 import { isYouTubeConnected, signInToYouTube, signOutOfYouTube, initYouTubeAccountListeners } from '@/services/youtube-account';
-import { getImessageSettings, saveImessageSettings, sendImessage, type ImessageThreshold } from '@/services/imessage-bridge';
+import { getImessageSettings, refreshImessageSettings, configureImessage, disableImessage, getLegacyImessageSuggestion, saveImessageThreshold, sendImessage, type ImessageResult } from '@/services/imessage-bridge';
 import { getApiBaseUrl } from '@/services/runtime';
 import { tryInvokeTauri, invokeTauri } from '@/services/tauri-bridge';
 import {
@@ -116,6 +116,12 @@ export class UnifiedSettings {
   private overlay: HTMLElement;
   private config: UnifiedSettingsConfig;
   private activeTab: TabId = 'general';
+  private imessageSaved = getImessageSettings();
+  private imessageDraft = { enabled: false, recipient: '' };
+  private imessagePending = false;
+  private imessageLoading = true;
+  private imessageGeneration = 0;
+  private imessageStatus = 'Loading iMessage settings…';
   private activeSourceRegion = 'all';
   private sourceFilter = '';
   private activePanelCategory = 'all';
@@ -368,20 +374,12 @@ export class UnifiedSettings {
  return;
  }
 
- // iMessage relay test send + threshold change handled elsewhere.
- if (target.id === 'us-imessage-test') {
- const recipient = (this.overlay.querySelector<HTMLInputElement>('#us-imessage-recipient')?.value ?? '').trim();
- const statusEl = this.overlay.querySelector<HTMLElement>('#us-imessage-status');
- if (!recipient) {
- if (statusEl) statusEl.textContent = 'Enter a recipient first.';
+ if (target.id === 'us-imessage-save') {
+ void this.saveImessage();
  return;
  }
- if (statusEl) statusEl.textContent = 'Sending…';
- const btn = target as HTMLButtonElement;
- btn.disabled = true;
- void sendImessage(recipient, 'Crystal Ball test message — alert routing is wired up.').then((result) => {
- if (statusEl) statusEl.textContent = result.ok ? 'Sent.' : `Failed: ${result.reason ?? 'unknown error'}`;
- }).finally(() => { btn.disabled = false; });
+ if (target.id === 'us-imessage-test') {
+ void this.testImessage();
  return;
  }
 
@@ -459,7 +457,10 @@ export class UnifiedSettings {
  // Handle input events for search
  this.overlay.addEventListener('input', (e) => {
  const target = e.target as HTMLInputElement;
- if (target.closest('.panels-search')) {
+ if (target.id === 'us-imessage-recipient') {
+ this.imessageDraft.recipient = target.value;
+ this.updateImessageControls();
+ } else if (target.closest('.panels-search')) {
  this.panelFilter = target.value;
  this.renderPanelsTab();
  } else if (target.closest('.sources-search')) {
@@ -521,15 +522,14 @@ export class UnifiedSettings {
  } else if (target.id === 'us-auto-refresh') {
  if (target.checked) this._startDebugAutoRefresh(); else this._stopDebugAutoRefresh();
  } else if (target.id === 'us-imessage-enabled') {
- const cur = getImessageSettings();
- saveImessageSettings({ ...cur, enabled: target.checked });
+ this.imessageDraft.enabled = target.checked;
+ if (target.checked) this.updateImessageControls();
+ else void this.turnOffImessage();
  } else if (target.id === 'us-imessage-recipient') {
- const cur = getImessageSettings();
- saveImessageSettings({ ...cur, recipient: target.value });
+ this.imessageDraft.recipient = target.value;
+ this.updateImessageControls();
  } else if (target.id === 'us-imessage-threshold') {
- const cur = getImessageSettings();
- const next = target.value === 'high+critical' ? 'high+critical' : 'critical';
- saveImessageSettings({ ...cur, threshold: next as ImessageThreshold });
+ saveImessageThreshold(target.value === 'high+critical' ? 'high+critical' : 'critical');
  } else if (target.id === 'us-analytics-consent') {
  setAnalyticsConsent(target.checked);
  if (target.checked) void initAnalytics();
@@ -562,6 +562,7 @@ export class UnifiedSettings {
  localStorage.setItem('wm-settings-open', '1');
  window.addEventListener('keydown', this.escapeHandler, true);
  this.focusFirstControl();
+ if (this.config.isDesktopApp) void this.loadImessage();
  this.focusObserver.observe(this.overlay, {
  childList: true, subtree: true, attributes: true,
  attributeFilter: ['hidden', 'disabled', 'tabindex', 'class', 'style', 'inert'],
@@ -569,6 +570,7 @@ export class UnifiedSettings {
   }
 
   public close(): void {
+ this.imessageGeneration++;
  const wasOpen = this.overlay.classList.contains('active');
  this._stopDebugAutoRefresh();
  this.focusObserver.disconnect();
@@ -623,6 +625,113 @@ export class UnifiedSettings {
 
   public refreshPanelToggles(): void {
  if (this.activeTab === 'panels') this.renderPanelsTab();
+  }
+
+  private imessageDirty(): boolean {
+    return this.imessageDraft.enabled !== this.imessageSaved.enabled
+      || this.imessageDraft.recipient !== this.imessageSaved.recipient;
+  }
+
+  private canTestImessage(): boolean {
+    return !this.imessageLoading && !this.imessagePending && !this.imessageDirty()
+      && this.imessageSaved.ready && this.imessageSaved.enabled && !!this.imessageSaved.recipient;
+  }
+
+  private updateImessageControls(): void {
+    const input = this.overlay.querySelector<HTMLInputElement>('#us-imessage-recipient');
+    const enabled = this.overlay.querySelector<HTMLInputElement>('#us-imessage-enabled');
+    const save = this.overlay.querySelector<HTMLButtonElement>('#us-imessage-save');
+    const test = this.overlay.querySelector<HTMLButtonElement>('#us-imessage-test');
+    if (input) { input.value = this.imessageDraft.recipient; input.disabled = this.imessageLoading || this.imessagePending; }
+    if (enabled) { enabled.checked = this.imessageDraft.enabled; enabled.disabled = this.imessageLoading; }
+    if (save) save.disabled = this.imessageLoading || this.imessagePending || !this.imessageDraft.recipient;
+    if (test) test.disabled = !this.canTestImessage();
+    const status = this.overlay.querySelector<HTMLElement>('#us-imessage-status');
+    if (status) status.textContent = this.imessageStatus;
+    const saved = this.overlay.querySelector<HTMLElement>('#us-imessage-saved');
+    if (saved) saved.textContent = this.imessageSaved.enabled && this.imessageSaved.ready
+      ? `Test destination: ${this.imessageSaved.recipient}` : 'Sending is disabled.';
+  }
+
+  private async loadImessage(): Promise<void> {
+    const request = ++this.imessageGeneration;
+    this.imessageLoading = true;
+    this.imessagePending = false;
+    this.imessageStatus = 'Loading iMessage settings…';
+    this.updateImessageControls();
+    const result = await refreshImessageSettings();
+    if (request !== this.imessageGeneration) return;
+    this.imessageSaved = getImessageSettings();
+    const legacy = getLegacyImessageSuggestion();
+    this.imessageDraft = legacy ?? { enabled: this.imessageSaved.enabled, recipient: this.imessageSaved.recipient };
+    this.imessageLoading = false;
+    const loadedStatus = legacy ? 'Review previous iMessage settings, then Save and confirm.' : '';
+    this.imessageStatus = result.ok ? loadedStatus : result.reason;
+    this.updateImessageControls();
+  }
+
+  private finishImessage(request: number, result: ImessageResult, success: string): void {
+    if (request !== this.imessageGeneration) return;
+    this.imessagePending = false;
+    this.imessageSaved = getImessageSettings();
+    this.imessageDraft = { enabled: this.imessageSaved.enabled, recipient: this.imessageSaved.recipient };
+    this.imessageStatus = result.ok ? success : result.reason;
+    this.updateImessageControls();
+  }
+
+  private async saveImessage(): Promise<void> {
+    if (this.imessageLoading || this.imessagePending || !this.imessageDraft.recipient) return;
+    const request = ++this.imessageGeneration;
+    this.imessagePending = true;
+    this.imessageStatus = 'Confirm the exact recipient in the macOS dialog.';
+    this.updateImessageControls();
+    const result = await configureImessage(this.imessageDraft.recipient, this.imessageDraft.enabled);
+    this.finishImessage(request, result, 'Settings saved.');
+  }
+
+  private async turnOffImessage(): Promise<void> {
+    const request = ++this.imessageGeneration;
+    this.imessagePending = true;
+    this.imessageSaved = { ...this.imessageSaved, enabled: false };
+    this.imessageStatus = 'Disabling iMessage…';
+    this.updateImessageControls();
+    const result = await disableImessage();
+    this.finishImessage(request, result, 'iMessage disabled. A message already started may still finish.');
+  }
+
+  private async testImessage(): Promise<void> {
+    if (!this.canTestImessage()) return;
+    const request = ++this.imessageGeneration;
+    this.imessagePending = true;
+    this.imessageStatus = 'Sending…';
+    this.updateImessageControls();
+    const result = await sendImessage('Crystal Ball test message — alert routing is wired up.');
+    this.finishImessage(request, result, 'Sent.');
+  }
+
+  private renderImessage(): string {
+    const im = getImessageSettings();
+    const saved = this.imessageSaved.enabled && this.imessageSaved.ready
+      ? `Test destination: ${this.imessageSaved.recipient}` : 'Sending is disabled.';
+    return `<div class="ai-flow-section-label">iMessage alerts</div>
+      <div class="ai-flow-toggle-row imessage-row" style="flex-direction:column;align-items:flex-start;gap:6px">
+        <div class="ai-flow-toggle-label-wrap" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <div><div class="ai-flow-toggle-label">Route critical alerts to iMessage</div>
+          <div class="ai-flow-toggle-desc">Sends through your signed-in macOS Messages app, at most once per 30 seconds. Save and confirm before enabling a destination. Turning off takes effect immediately.</div></div>
+          <label class="ai-flow-switch"><input type="checkbox" id="us-imessage-enabled" aria-label="Enable iMessage alerts" ${this.imessageDraft.enabled ? 'checked' : ''} ${this.imessageLoading ? 'disabled' : ''}><span class="ai-flow-slider"></span></label>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;width:100%">
+          <input id="us-imessage-recipient" type="text" aria-label="iMessage recipient" aria-describedby="us-imessage-saved" placeholder="International phone number or email" maxlength="64" value="${escapeHtml(this.imessageDraft.recipient)}" ${this.imessageLoading || this.imessagePending ? 'disabled' : ''} style="flex:1 1 220px;min-width:0;width:100%;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
+          <select id="us-imessage-threshold" aria-label="iMessage alert threshold" style="max-width:100%;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
+            <option value="critical"${im.threshold === 'critical' ? ' selected' : ''}>Critical only</option>
+            <option value="high+critical"${im.threshold === 'high+critical' ? ' selected' : ''}>High + Critical</option>
+          </select>
+          <button type="button" id="us-imessage-save" class="spm-btn spm-btn--primary spm-btn--sm" ${this.imessageLoading || this.imessagePending || !this.imessageDraft.recipient ? 'disabled' : ''}>Save and confirm</button>
+          <button type="button" id="us-imessage-test" class="spm-btn spm-btn--sm" ${this.canTestImessage() ? '' : 'disabled'}>Test</button>
+        </div>
+        <span id="us-imessage-saved" style="font-size:11px;overflow-wrap:anywhere">${escapeHtml(saved)}</span>
+        <span id="us-imessage-status" role="status" aria-live="polite" style="font-size:11px;color:var(--text-muted);min-height:14px">${escapeHtml(this.imessageStatus)}</span>
+      </div>`;
   }
 
   private refreshGeneralTab(): void {
@@ -916,33 +1025,7 @@ export class UnifiedSettings {
  </div>`;
  }
 
- // iMessage relay (macOS desktop only — Apple has no API for the web)
- if (this.config.isDesktopApp) {
- const im = getImessageSettings();
- const recipientVal = escapeHtml(im.recipient);
- const checkedAttr = im.enabled ? 'checked' : '';
- const critSel = im.threshold === 'critical' ? ' selected' : '';
- const highSel = im.threshold === 'high+critical' ? ' selected' : '';
- html += `<div class="ai-flow-section-label">iMessage alerts</div>`;
- html += `<div class="ai-flow-toggle-row imessage-row" style="flex-direction:column;align-items:flex-start;gap:6px">
- <div class="ai-flow-toggle-label-wrap" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;">
- <div>
- <div class="ai-flow-toggle-label">Route critical alerts to iMessage</div>
- <div class="ai-flow-toggle-desc">Sends through your signed-in macOS Messages app. Rate-limited to 1 per 30s. Requires the Messages app to be open and signed in.</div>
- </div>
- <label class="ai-flow-switch"><input type="checkbox" id="us-imessage-enabled" ${checkedAttr}><span class="ai-flow-slider"></span></label>
- </div>
- <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;width:100%;">
- <input id="us-imessage-recipient" type="text" placeholder="Phone, email, or contact name" value="${recipientVal}" style="flex:1 1 220px;min-width:160px;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
- <select id="us-imessage-threshold" style="padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
- <option value="critical"${critSel}>Critical only</option>
- <option value="high+critical"${highSel}>High + Critical</option>
- </select>
- <button type="button" id="us-imessage-test" class="spm-btn spm-btn--primary spm-btn--sm" style="min-width:60px">Test</button>
- <span id="us-imessage-status" style="font-size:11px;color:var(--text-muted);min-height:14px;"></span>
- </div>
- </div>`;
- }
+ if (this.config.isDesktopApp) html += this.renderImessage();
 
  // Language section
  html += `<div class="ai-flow-section-label">${t('header.languageLabel')}</div>`;

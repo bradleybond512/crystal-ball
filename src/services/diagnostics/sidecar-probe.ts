@@ -19,6 +19,11 @@ import {
   sidecarHealthFromPayload,
 } from './live-diagnostics-snapshot';
 import type { SidecarHealth } from './system-health-types';
+import {
+  buildLocalEngineView,
+  fetchLocalEngineStatus,
+  type LocalEngineStatus,
+} from './local-engine-status';
 
 export interface ProbeSidecarOptions {
   /** Override the timeout for tests. Default 4 s. */
@@ -27,6 +32,41 @@ export interface ProbeSidecarOptions {
   fetchImpl?: typeof fetch;
   /** Override the clock for tests. */
   now?: () => number;
+  /** Override the native supervisor status read (tests). */
+  readEngineStatus?: () => Promise<LocalEngineStatus | null>;
+  /** Override the follow-up probe scheduler (tests). */
+  scheduleReprobe?: (delayMs: number, run: () => void) => void;
+}
+
+/** Re-probe shortly after a scheduled restart instead of waiting for the
+ *  30 s tick, so the ribbon clears within seconds of recovery. */
+const REPROBE_SLACK_MS = 3000;
+let reprobePending = false;
+
+/** For a failed probe, ask the native supervisor why: a restart in progress
+ *  or a stopped engine is a better reason than a raw fetch error (R4-BUG-004). */
+async function explainFailure(base: SidecarHealth, options: ProbeSidecarOptions): Promise<SidecarHealth> {
+  let status: LocalEngineStatus | null = null;
+  try {
+    status = await (options.readEngineStatus ?? fetchLocalEngineStatus)();
+  } catch {
+    return base;
+  }
+  if (!status || (status.phase !== 'restarting' && status.phase !== 'stopped')) return base;
+  if (status.phase === 'restarting' && status.nextRetryInMs !== null && !reprobePending) {
+    reprobePending = true;
+    const schedule = options.scheduleReprobe ?? ((delayMs: number, run: () => void) => { setTimeout(run, delayMs); });
+    schedule(status.nextRetryInMs + REPROBE_SLACK_MS, () => {
+      reprobePending = false;
+      void probeSidecarHealth(options).catch(() => { /* next tick retries */ });
+    });
+  }
+  return { ...base, status: 'failing', reason: buildLocalEngineView(status).text };
+}
+
+/** Tests only. */
+export function resetSidecarProbeForTests(): void {
+  reprobePending = false;
 }
 
 const DEFAULT_TIMEOUT_MS = 4000;
@@ -54,7 +94,7 @@ export async function probeSidecarHealth(options: ProbeSidecarOptions = {}): Pro
       signal: controller.signal,
     });
     if (!res.ok) {
-      const verdict = sidecarHealthFromError(new Error(`HTTP ${res.status}`), attemptedAt);
+      const verdict = await explainFailure(sidecarHealthFromError(new Error(`HTTP ${res.status}`), attemptedAt), options);
       setSidecarHealth(verdict);
       return verdict;
     }
@@ -63,7 +103,7 @@ export async function probeSidecarHealth(options: ProbeSidecarOptions = {}): Pro
     setSidecarHealth(verdict);
     return verdict;
   } catch (error) {
-    const verdict = sidecarHealthFromError(error, attemptedAt);
+    const verdict = await explainFailure(sidecarHealthFromError(error, attemptedAt), options);
     setSidecarHealth(verdict);
     return verdict;
   } finally {

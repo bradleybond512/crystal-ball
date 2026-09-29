@@ -84,7 +84,8 @@
     "test:desktop-updater",
     "test:imessage",
     "test:imessage-native",
-    "test:native-responsiveness"
+    "test:native-responsiveness",
+    "test:native-notify"
   ],
   "src-tauri/src/updater_policy.rs": [
     "test:desktop-updater"
@@ -161,5 +162,35 @@
   ],
   "scripts/vault-json.mjs": [
     "test:keys-backup"
+  ],
+  "src/services/native-notify.ts": [
+    "test:native-notify"
+  ],
+  "src/services/notification-router.ts": [
+    "test:native-notify"
+  ],
+  "src/services/proximity-alerts.ts": [
+    "test:native-notify"
+  ],
+  "src/services/notifications/push-notifier.ts": [
+    "test:native-notify"
+  ],
+  "src/app/desktop-notifications.ts": [
+    "test:native-notify"
+  ],
+  "src/app/desktop-updater.ts": [
+    "test:native-notify"
+  ],
+  "src/components/CommsHealthPanel.ts": [
+    "test:native-notify"
+  ],
+  "src/components/EconomicStressPanel.ts": [
+    "test:native-notify"
+  ],
+  "src/components/ResourceInventoryPanel.ts": [
+    "test:native-notify"
+  ],
+  "src-tauri/src/notify_policy.rs": [
+    "test:native-notify"
   ]
 }

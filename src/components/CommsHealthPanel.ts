@@ -1,8 +1,29 @@
+import { notifyNative } from '@/services/native-notify';
 import { Panel } from './Panel';
 import { renderStatusCard } from './StatusCard';
 import type { CommsHealthData } from '@/services/comms-health';
-import { tryInvokeTauri } from '@/services/tauri-bridge';
 import { isGhostMode } from '@/services/mode-manager';
+
+type CardSeverity = 'normal' | 'warning' | 'critical' | 'unknown';
+
+function overallLabel(overall: string): string {
+  if (overall === 'normal') return 'NORMAL';
+  if (overall === 'warning') return 'DEGRADED';
+  return 'CRITICAL';
+}
+
+function ddosSeverity(ddos: CommsHealthData['ddos']): CardSeverity {
+  if (ddos.cloudflareKeyMissing) return 'unknown';
+  if (ddos.l7 === 'critical') return 'critical';
+  if (ddos.l7 === 'elevated') return 'warning';
+  return 'normal';
+}
+
+function cableSeverity(degradedCount: number): CardSeverity {
+  if (degradedCount > 1) return 'critical';
+  if (degradedCount === 1) return 'warning';
+  return 'normal';
+}
 
 export class CommsHealthPanel extends Panel {
   private _previousOverall = 'normal';
@@ -25,16 +46,18 @@ export class CommsHealthPanel extends Panel {
  if (isGhostMode()) return;
  const prev = this._previousOverall;
  if ((prev === 'normal') && (overall === 'warning' || overall === 'critical')) {
- await tryInvokeTauri<void>('send_notification', {
+ await notifyNative({
  title: 'Communications Health',
  body: `Status changed to ${overall.toUpperCase()}`,
  sound: 'Ping',
+ priority: 'normal',
  });
  } else if (prev === 'warning' && overall === 'critical') {
- await tryInvokeTauri<void>('send_notification', {
+ await notifyNative({
  title: 'Communications Health',
  body: 'Status escalated to CRITICAL',
  sound: 'Basso',
+ priority: 'normal',
  });
  }
  this._previousOverall = overall;
@@ -52,7 +75,7 @@ export class CommsHealthPanel extends Panel {
  };
  const bc = BANNER_BG[overall] ?? BANNER_BG.warning;
  const tc = TEXT_C[overall] ?? TEXT_C.warning;
- const label = overall === 'normal' ? 'NORMAL' : (overall === 'warning' ? 'DEGRADED' : 'CRITICAL');
+ const label = overallLabel(overall);
 
  const summaryParts: string[] = [];
  if (bgp.hijacks > 0) summaryParts.push(`${bgp.hijacks} BGP hijacks`);
@@ -75,9 +98,7 @@ export class CommsHealthPanel extends Panel {
  severity: ixp.status,
  sublabel: ixp.degraded.length > 0 ? ixp.degraded[0] : 'All regions',
  });
- const ddosSev: 'normal' | 'warning' | 'critical' | 'unknown' = ddos.cloudflareKeyMissing ? 'unknown'
- : ddos.l7 === 'critical' ? 'critical'
- : ddos.l7 === 'elevated' ? 'warning' : 'normal';
+ const ddosSev = ddosSeverity(ddos);
  const ddosCard = renderStatusCard({
  label: 'DDoS L7',
  value: ddos.cloudflareKeyMissing ? 'UNKNOWN' : ddos.l7.toUpperCase(),
@@ -96,7 +117,7 @@ export class CommsHealthPanel extends Panel {
  const cableCard = renderStatusCard({
  label: 'Submarine Cables',
  value: cables.degraded.length > 0 ? `${cables.degraded.length} degraded` : 'All normal',
- severity: cables.degraded.length > 1 ? 'critical' : (cables.degraded.length === 1 ? 'warning' : 'normal'),
+ severity: cableSeverity(cables.degraded.length),
  wide: true,
  });
 

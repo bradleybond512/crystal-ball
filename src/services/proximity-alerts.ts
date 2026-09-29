@@ -3,7 +3,7 @@ import type { HazmatIncident } from './hazmat-incidents';
 import type { OilSpillIncident } from './oil-spill-tracker';
 import type { AirQualityReading } from './air-quality';
 import { haversineKm, loadProximityConfig } from './proximity-filter';
-import { tryInvokeTauri } from './tauri-bridge';
+import { notifyNative, type NativeNotifyOutcome, type NativePriority } from './native-notify';
 import { isGhostMode } from './mode-manager';
 
 export interface NearbyHazard {
@@ -93,6 +93,95 @@ function shouldAlert(id: string, alerted: Record<string, number>): boolean {
   return !ts || Date.now() - ts > ALERT_COOLDOWN_MS;
 }
 
+/** A notification waiting for native delivery; `alerted` is only set once
+ *  macOS actually showed it (R4-BUG-002). */
+export interface PendingProximityNotice {
+  id: string;
+  title: string;
+  body: string;
+  sound: string;
+  priority: NativePriority;
+}
+
+/** More than this many new notices in one scan are coalesced into one summary. */
+export const PROXIMITY_SUMMARY_THRESHOLD = 3;
+
+const PRIORITY_RANK: Record<NativePriority, number> = { critical: 0, high: 1, normal: 2 };
+
+export type ProximityNotify = (n: { title: string; body: string; sound: string; priority: NativePriority }) => Promise<NativeNotifyOutcome>;
+
+/**
+ * Deliver pending notices and return the ids that were actually delivered.
+ * Only delivered ids may be marked as alerted; anything rate-limited, failed
+ * or unavailable stays eligible for the next scan.
+ */
+export async function dispatchProximityNotices(
+  pending: readonly PendingProximityNotice[],
+  notify: ProximityNotify = notifyNative,
+): Promise<string[]> {
+  if (pending.length === 0) return [];
+  if (pending.length > PROXIMITY_SUMMARY_THRESHOLD) {
+    const ordered = [...pending].sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]);
+    const top = ordered[0]!;
+    const names = ordered.map((n) => n.title).join('; ');
+    const outcome = await notify({
+      title: `${pending.length} new hazards near you`,
+      body: names.length > 240 ? `${names.slice(0, 237)}...` : names,
+      sound: top.priority === 'critical' ? 'Basso' : 'Ping',
+      priority: top.priority,
+    });
+    return outcome === 'delivered' ? pending.map((n) => n.id) : [];
+  }
+  const delivered: string[] = [];
+  for (const notice of pending) {
+    const outcome = await notify({ title: notice.title, body: notice.body, sound: notice.sound, priority: notice.priority });
+    if (outcome === 'delivered') delivered.push(notice.id);
+  }
+  return delivered;
+}
+
+async function deliverAndMark(pending: readonly PendingProximityNotice[], alerted: Record<string, number>): Promise<void> {
+  const now = Date.now();
+  for (const id of await dispatchProximityNotices(pending)) alerted[id] = now;
+}
+
+const KM_PER_MILE = 1.609_34;
+
+function milesRounded(distKm: number): number {
+  return Math.round((distKm / KM_PER_MILE) * 10) / 10;
+}
+
+function aqiSeverity(aqi: number): NearbyHazard['severity'] {
+  if (aqi >= 301) return 'critical';
+  if (aqi >= 201) return 'high';
+  return 'medium';
+}
+
+function wildfireNotice(inc: IncidentReport, distMiles: number): PendingProximityNotice {
+  const miles = Math.round(distMiles);
+  const body = inc.evacuationOrders
+    ? `Evacuation order — ${inc.name}, ${inc.state} (${miles} mi away)`
+    : `${inc.acresBurned?.toLocaleString() ?? '?'} acres, ${inc.percentContained ?? '?'}% contained — ${miles} mi away`;
+  return {
+    id: inc.id,
+    title: `Wildfire: ${inc.name}`,
+    body,
+    sound: inc.evacuationOrders ? 'Basso' : 'Ping',
+    priority: inc.evacuationOrders ? 'critical' : 'high',
+  };
+}
+
+function hazmatNotice(inc: HazmatIncident, distMiles: number): PendingProximityNotice {
+  const critical = inc.severity === 'critical';
+  return {
+    id: inc.id,
+    title: `Hazmat: ${inc.chemical}`,
+    body: `${inc.title} — ${Math.round(distMiles)} mi away`,
+    sound: critical ? 'Basso' : 'Ping',
+    priority: critical ? 'critical' : 'high',
+  };
+}
+
 const SEVERITY_ORDER: Record<NearbyHazard['severity'], number> = {
   critical: 0, high: 1, medium: 2, low: 3,
 };
@@ -110,6 +199,7 @@ class ProximityAlertService {
  const { lat: homeLat, lon: homeLon } = config.location;
  const alerted = loadAlertedIds();
  const found: NearbyHazard[] = [];
+ const pending: PendingProximityNotice[] = [];
 
  for (const inc of incidents) {
  if (inc.lat === null || inc.lon === null) continue;
@@ -117,7 +207,7 @@ class ProximityAlertService {
  const distKm = haversineKm(homeLat, homeLon, inc.lat, inc.lon);
  if (distKm > (RADII_KM[radiusKey] ?? 80.5)) continue;
 
- const distMiles = Math.round((distKm / 1.60934) * 10) / 10;
+ const distMiles = milesRounded(distKm);
  found.push({
  id: inc.id,
  type: 'wildfire',
@@ -131,19 +221,10 @@ class ProximityAlertService {
  reportedAt: inc.updatedAt,
  });
 
- if (shouldAlert(inc.id, alerted) && !isGhostMode()) {
- alerted[inc.id] = Date.now();
- const body = inc.evacuationOrders
- ? `Evacuation order — ${inc.name}, ${inc.state} (${Math.round(distMiles)} mi away)`
- : `${inc.acresBurned?.toLocaleString() ?? '?'} acres, ${inc.percentContained ?? '?'}% contained — ${Math.round(distMiles)} mi away`;
- await tryInvokeTauri<void>('send_notification', {
- title: `Wildfire: ${inc.name}`,
- body,
- sound: inc.evacuationOrders ? 'Basso' : 'Ping',
- });
- }
+ if (shouldAlert(inc.id, alerted) && !isGhostMode()) pending.push(wildfireNotice(inc, distMiles));
  }
 
+ await deliverAndMark(pending, alerted);
  saveAlertedIds(alerted);
  this._mergeHazards('wildfire', found);
   }
@@ -154,6 +235,7 @@ class ProximityAlertService {
  const { lat: homeLat, lon: homeLon } = config.location;
  const alerted = loadAlertedIds();
  const found: NearbyHazard[] = [];
+ const pending: PendingProximityNotice[] = [];
 
  for (const inc of incidents) {
  if (inc.lat === null || inc.lon === null) continue;
@@ -161,7 +243,7 @@ class ProximityAlertService {
  const distKm = haversineKm(homeLat, homeLon, inc.lat, inc.lon);
  if (distKm > (RADII_KM[radiusKey] ?? 40.2)) continue;
 
- const distMiles = Math.round((distKm / 1.60934) * 10) / 10;
+ const distMiles = milesRounded(distKm);
  found.push({
  id: inc.id,
  type: 'hazmat',
@@ -175,16 +257,10 @@ class ProximityAlertService {
  reportedAt: inc.reportedAt,
  });
 
- if (shouldAlert(inc.id, alerted) && !isGhostMode()) {
- alerted[inc.id] = Date.now();
- await tryInvokeTauri<void>('send_notification', {
- title: `Hazmat: ${inc.chemical}`,
- body: `${inc.title} — ${Math.round(distMiles)} mi away`,
- sound: inc.severity === 'critical' ? 'Basso' : 'Ping',
- });
- }
+ if (shouldAlert(inc.id, alerted) && !isGhostMode()) pending.push(hazmatNotice(inc, distMiles));
  }
 
+ await deliverAndMark(pending, alerted);
  saveAlertedIds(alerted);
  this._mergeHazards('hazmat', found);
   }
@@ -195,6 +271,7 @@ class ProximityAlertService {
  const { lat: homeLat, lon: homeLon } = config.location;
  const alerted = loadAlertedIds();
  const found: NearbyHazard[] = [];
+ const pending: PendingProximityNotice[] = [];
 
  for (const inc of incidents) {
  if (!inc.isOpen) continue;
@@ -202,7 +279,7 @@ class ProximityAlertService {
  const distKm = haversineKm(homeLat, homeLon, inc.lat, inc.lon);
  if (distKm > (RADII_KM['oil-spill'] ?? 80.5)) continue;
 
- const distMiles = Math.round((distKm / 1.60934) * 10) / 10;
+ const distMiles = milesRounded(distKm);
  found.push({
  id: inc.id,
  type: 'oil-spill',
@@ -217,15 +294,17 @@ class ProximityAlertService {
  });
 
  if (shouldAlert(inc.id, alerted) && !isGhostMode()) {
- alerted[inc.id] = Date.now();
- await tryInvokeTauri<void>('send_notification', {
+ pending.push({
+ id: inc.id,
  title: `Spill: ${inc.name}`,
  body: `${inc.pollutant || 'Unknown pollutant'} — ${Math.round(distMiles)} mi away`,
  sound: 'Ping',
+ priority: 'normal',
  });
  }
  }
 
+ await deliverAndMark(pending, alerted);
  saveAlertedIds(alerted);
  this._mergeHazards('oil-spill', found);
   }
@@ -236,16 +315,16 @@ class ProximityAlertService {
  const { lat: homeLat, lon: homeLon } = config.location;
  const alerted = loadAlertedIds();
  const found: NearbyHazard[] = [];
+ const pending: PendingProximityNotice[] = [];
 
  for (const r of readings) {
  if (r.aqi < 151) continue;
  const distKm = haversineKm(homeLat, homeLon, r.lat, r.lon);
  if (distKm > (RADII_KM['air-quality'] ?? 160.9)) continue;
 
- const distMiles = Math.round((distKm / 1.60934) * 10) / 10;
+ const distMiles = milesRounded(distKm);
  const id = `aqi-${r.city}-${r.country}`;
- const severity: NearbyHazard['severity'] =
- r.aqi >= 301 ? 'critical' : r.aqi >= 201 ? 'high' : 'medium';
+ const severity = aqiSeverity(r.aqi);
 
  found.push({
  id,
@@ -261,15 +340,17 @@ class ProximityAlertService {
  });
 
  if (shouldAlert(id, alerted) && !isGhostMode()) {
- alerted[id] = Date.now();
- await tryInvokeTauri<void>('send_notification', {
+ pending.push({
+ id,
  title: `Air Quality Alert: ${r.city}`,
  body: `AQI ${r.aqi} — ${Math.round(distMiles)} mi away. Wear N95 outdoors.`,
  sound: 'Ping',
+ priority: 'normal',
  });
  }
  }
 
+ await deliverAndMark(pending, alerted);
  saveAlertedIds(alerted);
  this._mergeHazards('air-quality', found);
   }

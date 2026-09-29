@@ -1,8 +1,8 @@
+import { notifyNative } from '@/services/native-notify';
 import { Panel } from './Panel';
 import { renderStatusCard } from './StatusCard';
 import type { EconomicStressData } from '@/services/economic-stress';
 import type { WsbSnapshot } from '@/services/wsb-sentiment';
-import { tryInvokeTauri } from '@/services/tauri-bridge';
 import { isGhostMode } from '@/services/mode-manager';
 import { showApiKeyGate } from '@/components/api-key-gate';
 
@@ -25,13 +25,15 @@ export class EconomicStressPanel extends Panel {
  if (isGhostMode()) return;
  const prev = this._previousStressIndex;
  if (prev < 70 && index >= 70) {
- await tryInvokeTauri<void>('send_notification', {
+ await notifyNative({
  title: 'Economic Stress', body: `Stress index elevated: ${index}/100`, sound: 'Ping',
+ priority: 'normal',
  });
  }
  if (prev < 85 && index >= 85) {
- await tryInvokeTauri<void>('send_notification', {
+ await notifyNative({
  title: 'Economic Stress', body: `Stress index critical: ${index}/100`, sound: 'Basso',
+ priority: 'normal',
  });
  }
  this._previousStressIndex = index;

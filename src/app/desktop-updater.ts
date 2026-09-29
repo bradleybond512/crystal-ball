@@ -1,6 +1,7 @@
 /* eslint-disable no-console, @typescript-eslint/require-await */
+import { notifyNative } from '@/services/native-notify';
 import type { AppContext, AppModule, UpdateState } from '@/app/app-context';
-import { invokeTauri, tryInvokeTauri } from '@/services/tauri-bridge';
+import { invokeTauri } from '@/services/tauri-bridge';
 import { trackUpdateShown, trackUpdateClicked, trackUpdateDismissed } from '@/services/analytics';
 import { escapeHtml } from '@/utils/sanitize';
 
@@ -211,10 +212,11 @@ export class DesktopUpdater implements AppModule {
  }
  if (!localStorage.getItem(notifiedKey)) {
  try { localStorage.setItem(notifiedKey, '1'); } catch { /* quota */ }
- await tryInvokeTauri<void>('send_notification', {
+ await notifyNative({
  title: 'Crystal Ball update ready',
  body: `v${current} → v${remote} downloaded. Restart to update — it also applies next time you quit and reopen.`,
  sound: 'Glass',
+ priority: 'normal',
  });
  }
   }
@@ -238,10 +240,11 @@ export class DesktopUpdater implements AppModule {
  await this.showUpdateToast(remote, downloadUrl);
  if (!localStorage.getItem(notifiedKey)) {
  try { localStorage.setItem(notifiedKey, '1'); } catch { /* quota */ }
- await tryInvokeTauri<void>('send_notification', {
+ await notifyNative({
  title: 'Crystal Ball update available',
  body: `v${current} → v${remote}. Click the version chip in the sidebar to download.`,
  sound: 'Glass',
+ priority: 'normal',
  });
  }
   }

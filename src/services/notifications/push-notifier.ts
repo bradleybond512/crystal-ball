@@ -7,7 +7,7 @@
 /* eslint-disable sonarjs/no-nested-template-literals -- short notification body interpolation; refactoring to intermediate vars hurts readability more than it helps */
 /* eslint-disable sonarjs/todo-tag -- intentional placeholders; NHC + NIFC feeds land in parallel sessions per spec */
 
-import { tryInvokeTauri } from '@/services/tauri-bridge';
+import { notifyNative, type NativeNotifyOutcome, type NativePriority } from '@/services/native-notify';
 import { isDesktopRuntime } from '@/services/runtime';
 import { tierForMagnitude } from './eew-tiers';
 import { loadThresholds, type ThresholdConfig } from '@/services/config/alert-thresholds';
@@ -444,7 +444,8 @@ export function decideNotification(
 export interface FirePushOptions {
   ledger?: NotificationLedger;
   /** Override for tests; defaults to the Tauri invoke path. */
-  send?: (payload: NotificationPayload) => Promise<void>;
+  /** Must report the real native outcome; only `delivered` is recorded as fired. */
+  send?: (payload: NotificationPayload) => Promise<NativeNotifyOutcome>;
   /** When `true` (the default), every decision — fired or suppressed —
    *  is appended to the notification history ring (see
    *  notification-history-service.ts). Tests pass `false` so the ring
@@ -454,12 +455,20 @@ export interface FirePushOptions {
   source?: string;
 }
 
-async function defaultSend(payload: NotificationPayload): Promise<void> {
-  if (!isDesktopRuntime()) return;
-  await tryInvokeTauri<void>('send_notification', {
+/** Life-safety push payloads (critical) use the native critical lane. */
+export function pushNativePriority(level: NotificationThreatLevel): NativePriority {
+  if (level === 'critical') return 'critical';
+  if (level === 'high') return 'high';
+  return 'normal';
+}
+
+async function defaultSend(payload: NotificationPayload): Promise<NativeNotifyOutcome> {
+  if (!isDesktopRuntime()) return 'unavailable';
+  return notifyNative({
     title: payload.title,
     body: payload.body,
     sound: payload.sound,
+    priority: pushNativePriority(payload.threatLevel),
   });
 }
 
@@ -487,7 +496,25 @@ export async function firePushForEvent(
     return { fired: false, reason: decision.reason };
   }
   const send = opts.send ?? defaultSend;
-  await send(decision.payload);
+  const outcome = await send(decision.payload);
+  if (outcome !== 'delivered') {
+    // R4-BUG-002: a notification macOS never showed is not "fired" and must
+    // not enter the dedupe ledger, or the retry would be suppressed as a repeat.
+    if (shouldRecord) {
+      recordHistory({
+        domain: domainForThreatType(decision.payload.threatType),
+        source,
+        action: 'suppressed',
+        title: decision.payload.title,
+        body: decision.payload.body,
+        severity: decision.payload.threatLevel,
+        suppressedReason: `native-${outcome}`,
+        ruleId: `default-${event.kind}`,
+        payload: { ...decision.payload.meta, event },
+      });
+    }
+    return { fired: false, reason: `native-${outcome}` };
+  }
   try {
     await fireVoiceForEvent(event, getVoiceSettings());
   } catch { /* voice is best-effort; never break the notification path */ }

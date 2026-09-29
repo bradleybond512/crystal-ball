@@ -8,7 +8,7 @@ import { getNotificationTraceRegistry, resetDiagnosticsState } from '../diagnost
 interface Recorder {
   putCalls: UnifiedAlert[];
   toastCalls: { title: string; body: string; severity: string }[];
-  nativeCalls: { title: string; body: string }[];
+  nativeCalls: { title: string; body: string; priority?: string }[];
   markerCalls: { lat: number; lon: number; alertId: string }[];
   fanoutOrder: string[];
   ghost: boolean;
@@ -42,9 +42,10 @@ function makeDeps(rec: Recorder) {
  rec.toastCalls.push({ title, body, severity });
  rec.fanoutOrder.push('toast');
  },
- sendNativeNotification: async (title: string, body: string) => {
- rec.nativeCalls.push({ title, body });
+ sendNativeNotification: async (title: string, body: string, priority: string) => {
+ rec.nativeCalls.push({ title, body, priority });
  rec.fanoutOrder.push('native');
+ return 'delivered' as const;
  },
  addMapMarker: (lat: number, lon: number, alertId: string) => {
  rec.markerCalls.push({ lat, lon, alertId });
@@ -257,4 +258,39 @@ test('native delivery failure is recorded in the production notification trace',
     surface: 'failed',
     error: 'native-delivery-failed',
   });
+});
+
+test('a natively rate-limited alert is traced as not delivered and stays retryable (R4-BUG-002)', async () => {
+  const rec = makeRecorder();
+  const deps = makeDeps(rec);
+  const outcomes = ['rate_limited', 'delivered'] as const;
+  let call = 0;
+  deps.sendNativeNotification = async (title: string, body: string, priority: string) => {
+    rec.nativeCalls.push({ title, body, priority });
+    return outcomes[call++] ?? 'delivered';
+  };
+  const mod = await loadFresh();
+  const stop = mod.startNotificationRouter(deps);
+
+  await mod.__deliverForTesting(makeAlert({ severity: 'high' }, 'rl-1'));
+  rec.now += 1_000;
+  await mod.__deliverForTesting(makeAlert({ severity: 'high' }, 'rl-2'));
+  stop();
+
+  const traces = getNotificationTraceRegistry().all();
+  const first = traces.find((t) => t.nativeResult?.error === 'native-rate-limited');
+  assert.ok(first, 'rate-limited delivery must be traced as not delivered');
+  assert.equal(first?.nativeResult?.delivered, false);
+  // The router's own 60 s high window must not start on a non-delivery, so the
+  // second high alert one second later still reaches the native layer.
+  assert.equal(rec.nativeCalls.length, 2);
+  assert.ok(traces.some((t) => t.nativeResult?.delivered === true));
+});
+
+test('router maps severity to native priority lanes', async () => {
+  const mod = await loadFresh();
+  assert.equal(mod.routerNativePriority('critical'), 'critical');
+  assert.equal(mod.routerNativePriority('high'), 'high');
+  assert.equal(mod.routerNativePriority('medium'), 'normal');
+  assert.equal(mod.routerNativePriority('low'), 'normal');
 });

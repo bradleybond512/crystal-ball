@@ -44,11 +44,13 @@ const PERMISSIVE: ThresholdConfig = {
   hurricane: { pushMinCategory: 3 },
 };
 
-function captureSend(): { fn: (payload: NotificationPayload) => Promise<void>; calls: NotificationPayload[] } {
+// R4-BUG-002: injected senders report the native outcome; a capture that
+// stands in for a successful native delivery returns 'delivered'.
+function captureSend(): { fn: (payload: NotificationPayload) => Promise<'delivered'>; calls: NotificationPayload[] } {
   const calls: NotificationPayload[] = [];
   return {
     calls,
-    fn: async (payload) => { calls.push(payload); },
+    fn: async (payload) => { calls.push(payload); return 'delivered'; },
   };
 }
 

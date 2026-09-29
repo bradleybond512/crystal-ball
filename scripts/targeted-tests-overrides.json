@@ -222,5 +222,29 @@
   ],
   "src/components/AnalyticsConsentBanner.ts": [
     "test:analytics-consent"
+  ],
+  "src/services/runtime.ts": [
+    "test:sidecar-routing"
+  ],
+  "src/services/runtime-config.ts": [
+    "test:sidecar-routing"
+  ],
+  "src/services/cloud-fallback-policy.ts": [
+    "test:sidecar-routing"
+  ],
+  "src/services/diagnostics/local-engine-status.ts": [
+    "test:sidecar-routing"
+  ],
+  "src/services/diagnostics/sidecar-probe.ts": [
+    "test:sidecar-routing"
+  ],
+  "src/services/diagnostics/system-health.ts": [
+    "test:sidecar-routing"
+  ],
+  "src/settings-main.ts": [
+    "test:sidecar-routing"
+  ],
+  "src/components/SystemDiagnosticPanel.ts": [
+    "test:sidecar-routing"
   ]
 }

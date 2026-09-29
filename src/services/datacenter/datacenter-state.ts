@@ -44,6 +44,8 @@ export interface RecomputeInput {
   seismicNearby?: NearbySeismicEvent[];
   connectivity?: ConnectivitySignal | null;
   gridInfrastructure?: PowerContext | null;
+  /** The site's NWS zone lookup failed this tick: polygon-only matching. */
+  weatherZonesUnverified?: boolean;
 }
 
 export function recomputeDatacenterPosture(input: RecomputeInput): DataCenterPosture | null {
@@ -51,6 +53,17 @@ export function recomputeDatacenterPosture(input: RecomputeInput): DataCenterPos
   posture = computeDatacenterPosture({ site, ...input });
   emit();
   return posture;
+}
+
+/**
+ * Mark the current posture stale without recomputing it (R3-BUG-002): a
+ * skipped recompute must never leave an old "All clear" looking current. The
+ * next successful recompute replaces the posture and clears the label.
+ */
+export function markDatacenterPostureStale(label: string): void {
+  if (!posture || posture.staleInputs.includes(label)) return;
+  posture = { ...posture, staleInputs: [...posture.staleInputs, label] };
+  emit();
 }
 
 export function subscribeDatacenterPosture(listener: Listener): () => void {

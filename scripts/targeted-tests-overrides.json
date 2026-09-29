@@ -71,7 +71,8 @@
     "test:ux026"
   ],
   "src/app/data-loader.ts": [
-    "test:ux059"
+    "test:ux059",
+    "test:datacenter"
   ],
   "src/services/gdacs-coverage.ts": [
     "test:gdacs-map"

@@ -3919,6 +3919,12 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  match child.try_wait() {
  Ok(Some(status)) => {
  *slot = None;
+ // The port is no longer ours. Until a restart confirms a new one,
+ // nothing may be sent there: another process can bind it.
+ state.port_confirmed.store(false, Ordering::SeqCst);
+ if let Ok(mut port) = state.port.lock() {
+ *port = None;
+ }
  status
  }
  Ok(None) => {

@@ -28,6 +28,8 @@ Validated September 29, 2026 on branch `claude/r4-bug-004-sidecar-supervisor`
     OS-assigned port.
   - `get_local_api_port` returns only a **confirmed** port. The wording is
     kept for tauri-bridge's boot-noise filter.
+  - An unexpected exit revokes the confirmed port immediately, so nothing
+    is sent to it during the backoff.
   - A port confirmed late (after the 15 s boot wait) is picked up on the
     monitor tick.
   - New trusted-window commands:
@@ -87,8 +89,12 @@ Baselines before and after: Rust 13/0, gates 5/0.
 | `start_local_api` ignores the shutdown flag | `main.rs` | 4/1 | shutdown wins every race |
 | Unconfirmed port handed to the renderer | `main.rs` | 4/1 | only a confirmed port |
 | `restart_local_api` without trusted window | `main.rs` | 4/1 | trusted-window only |
+| Exit keeps the dead child's port confirmed | `main.rs` (`57a4f0303524`) | 4/1 | only a confirmed port |
 
-All 11 mutations went red, and every file was restored to its original hash.
+All 12 mutations went red, and every file was restored to its original hash.
+The last row was added with the follow-up commit that revokes the port on
+exit. Without it, `get_local_api_port` would keep handing out the dead
+child's port during the backoff, which any process could bind.
 
 ## Not performed
 

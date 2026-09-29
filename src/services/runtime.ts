@@ -1,4 +1,5 @@
-import { tryInvokeTauri } from './tauri-bridge';
+import { hasTauriInvokeBridge, tryInvokeTauri } from './tauri-bridge';
+import { mayFallBack, prepareCloudTarget } from './cloud-fallback-policy';
 
 // `import.meta.env` is undefined in bare Node (tsx tests); Vite always provides it.
 const VITE_ENV: Record<string, string | undefined> = (import.meta as { env?: Record<string, string | undefined> }).env ?? {};
@@ -16,26 +17,57 @@ const DEFAULT_LOCAL_API_PORT = 46_123;
 const FORCE_DESKTOP_RUNTIME = VITE_ENV.VITE_DESKTOP_RUNTIME === '1';
 
 let _resolvedPort: number | null = null;
-let _portPromise: Promise<number> | null = null;
+let _portPromise: Promise<number | null> | null = null;
 
-export async function resolveLocalApiPort(): Promise<number> {
+const PORT_POLL_INTERVAL_MS = 250;
+const PORT_WAIT_MS = 5_000;
+
+function isValidPort(port: unknown): port is number {
+  return typeof port === 'number' && Number.isInteger(port) && port > 0 && port <= 65_535;
+}
+
+/**
+ * The sidecar port the native side has CONFIRMED through the sidecar's own
+ * port file, or `null` (R4-BUG-004). Never the default 46123 on spec: another
+ * local process can own that port, and the renderer sends its bearer token
+ * and, from Settings, plaintext keys to whatever answers. While the sidecar is
+ * booting or restarting this polls for up to `waitMs`; concurrent callers share
+ * one poll. Only a confirmed port is cached.
+ */
+export async function resolveConfirmedLocalApiPort(waitMs = PORT_WAIT_MS): Promise<number | null> {
   if (_resolvedPort !== null) return _resolvedPort;
   if (_portPromise) return _portPromise;
+  if (!hasTauriInvokeBridge()) return null;
   _portPromise = (async () => {
  try {
+ const deadline = Date.now() + waitMs;
+ for (;;) {
  const port = await tryInvokeTauri<number>('get_local_api_port');
- if (port && port > 0) {
+ if (isValidPort(port)) {
  _resolvedPort = port;
  return port;
  }
- } catch {
- // IPC failed — allow retry on next call
+ if (Date.now() >= deadline) return null;
+ await sleep(PORT_POLL_INTERVAL_MS);
+ }
  } finally {
  _portPromise = null;
  }
- return DEFAULT_LOCAL_API_PORT;
   })();
   return _portPromise;
+}
+
+/** Display/iframe callers: the confirmed port, else the default. Never use
+ *  this for requests that carry the bearer token or a secret. */
+export async function resolveLocalApiPort(): Promise<number> {
+  return (await resolveConfirmedLocalApiPort()) ?? DEFAULT_LOCAL_API_PORT;
+}
+
+/** Forget the cached port so the next request re-resolves it: after a local
+ *  connection failure or a 401 the sidecar may have restarted elsewhere, or a
+ *  foreign process may hold the old port. */
+export function invalidateLocalApiPort(): void {
+  _resolvedPort = null;
 }
 
 export function getLocalApiPort(): number {
@@ -102,12 +134,16 @@ export function getApiBaseUrl(): string {
  return '';
   }
 
+  return localApiBaseForPort(getLocalApiPort());
+}
+
+/** Base URL for a specific sidecar port (or the dev override). */
+export function localApiBaseForPort(port: number): string {
   const configuredBaseUrl = VITE_ENV.VITE_TAURI_API_BASE_URL;
   if (configuredBaseUrl) {
  return normalizeBaseUrl(configuredBaseUrl);
   }
-
-  return `http://127.0.0.1:${getLocalApiPort()}`;
+  return `http://127.0.0.1:${port}`;
 }
 
 export function getRemoteApiBaseUrl(): string {
@@ -118,6 +154,19 @@ export function getRemoteApiBaseUrl(): string {
 
   const variant = VITE_ENV.VITE_VARIANT || 'full';
   return DEFAULT_REMOTE_HOSTS[variant] ?? DEFAULT_REMOTE_HOSTS.full ?? '';
+}
+
+/**
+ * Base URL for secret-bearing sidecar calls (key sync and validation), or
+ * `null` when no confirmed sidecar port exists. Always re-resolved from the
+ * native side, so a port that died since it was cached is never used.
+ */
+export async function resolveConfirmedLocalApiBase(waitMs = PORT_WAIT_MS): Promise<string | null> {
+  if (!isDesktopRuntime()) return null;
+  if (VITE_ENV.VITE_TAURI_API_BASE_URL) return localApiBaseForPort(DEFAULT_LOCAL_API_PORT);
+  invalidateLocalApiPort();
+  const port = await resolveConfirmedLocalApiPort(waitMs);
+  return port === null ? null : localApiBaseForPort(port);
 }
 
 export function toRuntimeUrl(path: string): string {
@@ -194,6 +243,10 @@ function sleep(ms: number): Promise<void> {
 const LOCAL_ONLY_API_TARGETS = new Set([
   '/api/conflict/v1/list-ucdp-events',
   '/api/ucdp-classifications',
+  // Health of the LOCAL sidecar: the cloud must never answer for it, or a
+  // dead sidecar would read as healthy (R4-BUG-004).
+  '/api/health',
+  '/api/diag',
 ]);
 
 export function isLocalOnlyApiTarget(target: string): boolean {
@@ -260,12 +313,36 @@ async function fetchLocalWithStartupRetry(
 // if IPC access is revoked mid-session.
 const TOKEN_TTL_MS = 5 * 60 * 1000;
 
-export function installRuntimeFetchPatch(): void {
-  if (!isDesktopRuntime() || typeof window === 'undefined' || (window as unknown as Record<string, unknown>).__wmFetchPatched) {
- return;
-  }
+/** Everything the desktop fetch router touches outside itself (injectable for tests). */
+export interface RuntimeFetchDeps {
+  /** Confirmed sidecar port, or null (see resolveConfirmedLocalApiPort). */
+  resolvePort: () => Promise<number | null>;
+  invalidatePort: () => void;
+  /** Base URL for the port this request resolved (never a re-read global). */
+  localBaseUrl: (port: number) => string;
+  fetchToken: () => Promise<string | null>;
+  remoteBaseUrl: () => string;
+  cloudApiKey: () => Promise<string | null>;
+  debug: () => boolean;
+}
 
-  const nativeFetch = window.fetch.bind(window);
+function requestMethod(input: RequestInfo | URL, init?: RequestInit): string {
+  if (init?.method) return init.method;
+  return typeof Request !== 'undefined' && input instanceof Request ? input.method : 'GET';
+}
+
+function requestHasBody(input: RequestInfo | URL, init?: RequestInit): boolean {
+  if (init && init.body !== undefined && init.body !== null) return true;
+  return typeof Request !== 'undefined' && input instanceof Request && input.body !== null;
+}
+
+/**
+ * The desktop fetch router: app-origin `/api/*` goes to the confirmed local
+ * sidecar with the bearer token; everything else passes through. Cloud
+ * fallback follows `cloud-fallback-policy.ts` (connection failure or 5xx only,
+ * coordinates coarsened, personal parameters and request bodies never sent).
+ */
+export function createRuntimeFetch(nativeFetch: typeof window.fetch, deps: RuntimeFetchDeps): typeof window.fetch {
   let localApiToken: string | null = null;
   let tokenFetchedAt = 0;
   // Serialise concurrent token refreshes so parallel 401s don't each trigger a fresh IPC call.
@@ -280,7 +357,7 @@ export function installRuntimeFetchPatch(): void {
  if (tokenFailCount > 0 && Date.now() < tokenNextRetryAt) return;
  tokenRefreshPromise = (async () => {
  try {
- const result = await tryInvokeTauri<string>('get_local_api_token');
+ const result = await deps.fetchToken();
  if (result) {
  localApiToken = result;
  tokenFetchedAt = Date.now();
@@ -302,13 +379,7 @@ export function installRuntimeFetchPatch(): void {
  return tokenRefreshPromise;
   }
 
-  async function getCrystalBallCloudApiKey(): Promise<string | null> {
- const { getRuntimeConfigSnapshot } = await import('@/services/runtime-config');
- const key = getRuntimeConfigSnapshot().secrets.CRYSTALBALL_API_KEY?.value?.trim();
- return key && key.length > 0 ? key : null;
-  }
-
-  window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
  // Default timeout: ~100 data feeds route through this patched fetch with no
  // timeout of their own, so a hung connection would otherwise stall forever.
  // Honor a caller-supplied signal; otherwise give EACH fetch attempt its own
@@ -319,7 +390,7 @@ export function installRuntimeFetchPatch(): void {
  const withTimeout = (base?: RequestInit): RequestInit =>
  callerSignal ? { ...base } : { ...base, signal: AbortSignal.timeout(15_000) };
  const target = getApiTargetFromRequestInput(input);
- const debug = localStorage.getItem('wm-debug-log') === '1';
+ const debug = deps.debug();
 
  if (!target?.startsWith('/api/')) {
  if (debug) {
@@ -329,10 +400,9 @@ export function installRuntimeFetchPatch(): void {
  return nativeFetch(input, withTimeout(init));
  }
 
- // Resolve dynamic sidecar port on first API call
- if (_resolvedPort === null) {
- try { await resolveLocalApiPort(); } catch { /* use default */ }
- }
+ // Only a port the native side confirmed; null means the sidecar is
+ // booting, restarting or gone (treated as a connection failure below).
+ const port = await deps.resolvePort();
 
  const tokenExpired = localApiToken && (Date.now() - tokenFetchedAt > TOKEN_TTL_MS);
  if (!localApiToken || tokenExpired) {
@@ -345,7 +415,6 @@ export function installRuntimeFetchPatch(): void {
  }
  const localInit = withTimeout({ ...init, headers });
 
- const localUrl = `${getApiBaseUrl()}${target}`;
  if (debug) console.log(`[fetch] intercept → ${target}`);
  const allowCloudFallback = !isLocalOnlyApiTarget(target);
 
@@ -353,33 +422,45 @@ export function installRuntimeFetchPatch(): void {
  if (!allowCloudFallback) {
  throw new Error(`Cloud fallback blocked for ${target}`);
  }
- const cloudUrl = `${getRemoteApiBaseUrl()}${target}`;
- if (debug) console.log(`[fetch] cloud fallback → ${cloudUrl}`);
- const cloudHeaders = new Headers(init?.headers);
- const cloudApiKey = await getCrystalBallCloudApiKey();
+ const remoteBase = deps.remoteBaseUrl();
+ const cloudTarget = prepareCloudTarget(target, requestMethod(input, init), requestHasBody(input, init));
+ if (!remoteBase || !cloudTarget.ok) {
+ if (debug) console.log(`[fetch] cloud fallback skipped for ${target}: ${cloudTarget.ok ? 'no remote base' : cloudTarget.reason}`);
+ return onUnavailable();
+ }
+ const cloudApiKey = await deps.cloudApiKey();
  if (!cloudApiKey) {
  return onUnavailable();
  }
+ const cloudUrl = `${remoteBase}${cloudTarget.target}`;
+ if (debug) console.log(`[fetch] cloud fallback → ${cloudUrl}`);
+ const cloudHeaders = new Headers(init?.headers);
+ cloudHeaders.delete('Authorization');
  cloudHeaders.set('X-CrystalBall-Key', cloudApiKey);
  return nativeFetch(cloudUrl, withTimeout({ ...init, headers: cloudHeaders }));
  };
 
  try {
+ if (port === null) {
+ throw new Error(`Local API port not confirmed for ${target}`);
+ }
  const t0 = performance.now();
- let response = await fetchLocalWithStartupRetry(nativeFetch, localUrl, localInit);
+ let response = await fetchLocalWithStartupRetry(nativeFetch, `${deps.localBaseUrl(port)}${target}`, localInit);
  if (debug) console.log(`[fetch] ${target} → ${response.status} (${Math.round(performance.now() - t0)}ms)`);
 
- // Token may be stale after a sidecar restart, OR may have been null on
- // the very first fetch (IPC race at startup). Refresh and retry once
- // either way — without this, a cold-start 401 cascades into cloud
- // fallback for the rest of the session.
+ // Token may be stale, OR may have been null on the very first fetch (IPC
+ // race at startup), OR the port may now belong to someone else. Re-resolve
+ // the port, refresh the token and retry once — without this, a cold-start
+ // 401 cascades into a failed feed for the rest of the session.
  if (response.status === 401) {
- if (debug) console.log(`[fetch] 401 from sidecar, refreshing token and retrying`);
+ if (debug) console.log(`[fetch] 401 from sidecar, re-resolving port and token, retrying`);
+ deps.invalidatePort();
+ const retryPort = await deps.resolvePort();
  await refreshToken();
- if (localApiToken) {
+ if (retryPort !== null && localApiToken) {
  const retryHeaders = new Headers(init?.headers);
  retryHeaders.set('Authorization', `Bearer ${localApiToken}`);
- response = await fetchLocalWithStartupRetry(nativeFetch, localUrl, withTimeout({ ...init, headers: retryHeaders }));
+ response = await fetchLocalWithStartupRetry(nativeFetch, `${deps.localBaseUrl(retryPort)}${target}`, withTimeout({ ...init, headers: retryHeaders }));
  if (debug) console.log(`[fetch] retry ${target} → ${response.status}`);
  }
  }
@@ -389,8 +470,12 @@ export function installRuntimeFetchPatch(): void {
  if (debug) console.log(`[fetch] local-only endpoint ${target} returned ${response.status}; skipping cloud fallback`);
  return response;
  }
+ if (!mayFallBack({ kind: 'http', status: response.status })) {
+ return response;
+ }
  if (debug) console.log(`[fetch] local ${response.status}, falling back to cloud`);
- return cloudFallback(() => response);
+ const localResponse = response;
+ return cloudFallback(() => localResponse);
  }
  return response;
  } catch (error) {
@@ -398,9 +483,41 @@ export function installRuntimeFetchPatch(): void {
  if (!allowCloudFallback) {
  throw error;
  }
+ if (!mayFallBack(callerSignal?.aborted ? { kind: 'caller-abort' } : { kind: 'connection' })) {
+ throw error;
+ }
+ deps.invalidatePort();
  return cloudFallback(() => { throw error; });
  }
   };
+}
+
+async function getCrystalBallCloudApiKey(): Promise<string | null> {
+  const { getRuntimeConfigSnapshot } = await import('@/services/runtime-config');
+  const key = getRuntimeConfigSnapshot().secrets.CRYSTALBALL_API_KEY?.value?.trim();
+  return key && key.length > 0 ? key : null;
+}
+
+export function installRuntimeFetchPatch(): void {
+  if (!isDesktopRuntime() || typeof window === 'undefined' || (window as unknown as Record<string, unknown>).__wmFetchPatched) {
+ return;
+  }
+
+  window.fetch = createRuntimeFetch(window.fetch.bind(window), {
+ resolvePort: () => resolveConfirmedLocalApiPort(),
+ invalidatePort: invalidateLocalApiPort,
+ localBaseUrl: localApiBaseForPort,
+ fetchToken: () => tryInvokeTauri<string>('get_local_api_token'),
+ remoteBaseUrl: getRemoteApiBaseUrl,
+ cloudApiKey: getCrystalBallCloudApiKey,
+ debug: () => {
+ try {
+ return localStorage.getItem('wm-debug-log') === '1';
+ } catch {
+ return false;
+ }
+ },
+  });
 
   (window as unknown as Record<string, unknown>).__wmFetchPatched = true;
 }

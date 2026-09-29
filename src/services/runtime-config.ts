@@ -1,4 +1,4 @@
-import { getApiBaseUrl, isDesktopRuntime } from './runtime';
+import { isDesktopRuntime, resolveConfirmedLocalApiBase } from './runtime';
 import { invokeTauri } from './tauri-bridge';
 import { keychainService } from './keychain';
 import { safeSetItem } from '../utils/safe-storage';
@@ -187,12 +187,8 @@ export interface RuntimeConfig {
 }
 
 const TOGGLES_STORAGE_KEY = 'crystalball-runtime-feature-toggles';
-function getSidecarEnvUpdateUrl(): string {
-  return `${getApiBaseUrl()}/api/local-env-update`;
-}
-function getSidecarSecretValidateUrl(): string {
-  return `${getApiBaseUrl()}/api/local-validate-secret`;
-}
+const SIDECAR_ENV_UPDATE_PATH = '/api/local-env-update';
+const SIDECAR_SECRET_VALIDATE_PATH = '/api/local-validate-secret';
 
 const defaultToggles: Record<RuntimeFeatureId, boolean> = {
   cloudApiFallbackAuth: true,
@@ -1179,13 +1175,19 @@ async function getLocalApiToken(): Promise<string | null> {
 }
 
 async function pushSecretToSidecar(key: string, value: string): Promise<void> {
+  // Secrets only ever go to a sidecar port the native side has confirmed. With
+  // none (booting, restarting, or the port held by another process) skip the
+  // push: the keychain and the native SecretsCache stay authoritative, and a
+  // restarted sidecar receives this key through its environment (R4-BUG-004).
+  const base = await resolveConfirmedLocalApiBase();
+  if (!base) return;
   const headers = new Headers({ 'Content-Type': 'application/json' });
   const token = await getLocalApiToken();
   if (token) {
  headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(getSidecarEnvUpdateUrl(), {
+  const response = await fetch(`${base}${SIDECAR_ENV_UPDATE_PATH}`, {
  method: 'POST',
  headers,
  body: JSON.stringify({ key, value: value || null }),
@@ -1201,13 +1203,17 @@ async function pushSecretToSidecar(key: string, value: string): Promise<void> {
   }
 }
 
-async function callSidecarWithAuth(url: string, init: RequestInit): Promise<Response> {
+async function callSidecarWithAuth(path: string, init: RequestInit): Promise<Response> {
+  const base = await resolveConfirmedLocalApiBase();
+  if (!base) {
+ throw new Error('local engine not confirmed');
+  }
   const headers = new Headers(init.headers ?? {});
   const token = await getLocalApiToken();
   if (token) {
  headers.set('Authorization', `Bearer ${token}`);
   }
-  return fetch(url, { ...init, headers });
+  return fetch(`${base}${path}`, { ...init, headers });
 }
 
 interface WebProbeSpec {
@@ -1294,7 +1300,7 @@ export async function verifySecretWithApi(
   }
 
   try {
- const response = await callSidecarWithAuth(getSidecarSecretValidateUrl(), {
+ const response = await callSidecarWithAuth(SIDECAR_SECRET_VALIDATE_PATH, {
  method: 'POST',
  headers: { 'Content-Type': 'application/json' },
  body: JSON.stringify({ key, value: value.trim(), context }),
@@ -1389,9 +1395,7 @@ export async function loadDesktopSecretsWhenReady(): Promise<void> {
   }
   // Skip the JS→sidecar push at boot: the native Rust injector has already
   // delivered every loaded secret to the *confirmed* sidecar port. The JS path
-  // builds its URL from getApiBaseUrl(), which falls back to the default 46123
-  // until resolveLocalApiPort() runs — so if a foreign process is squatting
-  // 46123 while our sidecar listens on an OS-assigned fallback port, this push
-  // would leak every secret and the bearer token to that process.
+  // is gated to a confirmed port too (resolveConfirmedLocalApiBase, R4-BUG-004),
+  // so this is only about not pushing every secret twice.
   await loadDesktopSecrets({ syncToSidecar: false });
 }

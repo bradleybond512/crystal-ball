@@ -243,7 +243,7 @@ function collectRecommendations(input: SystemHealthAggregatorInput): readonly st
     addRec(
       seen,
       recs,
-      `Sidecar: ${input.sidecar.reason || 'restart Crystal Ball to relaunch the embedded sidecar'}.`,
+      `Sidecar: ${input.sidecar.reason || 'use Restart local engine in System Diagnostic, or restart Crystal Ball'}.`,
     );
   }
   if (input.notifications.unsafeSuppressions.length > 0) {

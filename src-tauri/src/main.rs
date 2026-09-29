@@ -24,6 +24,7 @@ use tauri::{AppHandle, Manager, RunEvent, TitleBarStyle, Webview, WebviewUrl, We
 mod corelocation;
 mod current_location;
 mod imessage;
+mod sidecar_supervisor;
 mod updater_policy;
 mod watchdog;
 use updater_policy::{BrowserReason, SignerRequirement, UpdateError, UpdateOutcome};
@@ -145,8 +146,15 @@ struct LocalApiState {
  // false — secret injection must not post plaintext to a port we never
  // confirmed is actually our child (a squatter on 46123 would receive it).
  port_confirmed: AtomicBool,
- restart_count: Mutex<u32>,
- last_restart_at: Mutex<Option<Instant>>,
+ // Restart policy (R4-BUG-004). Lock order: `child` before `supervisor`;
+ // never take `child` while holding `supervisor`.
+ supervisor: Mutex<sidecar_supervisor::SupervisorState>,
+ // Set by stop_local_api before it takes the child; start_local_api checks
+ // it under the child lock, so a pending restart can never spawn a sidecar
+ // that outlives the app.
+ shutting_down: AtomicBool,
+ // Bumped on every successful spawn so status readers can tell restarts apart.
+ generation: AtomicU64,
 }
 
 const BUILD_SHA: &str = match option_env!("WM_BUILD_SHA") {
@@ -161,8 +169,9 @@ impl Default for LocalApiState {
  token: Mutex::new(None),
  port: Mutex::new(None),
  port_confirmed: AtomicBool::new(false),
- restart_count: Mutex::new(0),
- last_restart_at: Mutex::new(None),
+ supervisor: Mutex::new(sidecar_supervisor::SupervisorState::new()),
+ shutting_down: AtomicBool::new(false),
+ generation: AtomicU64::new(0),
  }
  }
 }
@@ -1005,6 +1014,13 @@ fn set_always_on(webview: Webview, state: tauri::State<AlwaysOnGuard>, enabled: 
 #[tauri::command]
 fn get_local_api_port(webview: Webview, state: tauri::State<'_, LocalApiState>) -> Result<u16, String> {
  require_trusted_window(webview.label())?;
+ // Only a port the sidecar confirmed through its port file. The timeout
+ // fallback records the default port, which another local process may own;
+ // the renderer must never send its bearer token or secrets there
+ // (R4-BUG-004). The wording keeps tauri-bridge's boot-noise filter.
+ if !state.port_confirmed.load(Ordering::SeqCst) {
+ return Err("Port not yet assigned (awaiting sidecar confirmation)".to_string());
+ }
  state.port.lock()
  .map_err(|_| "Failed to lock port state".to_string())?
  .ok_or_else(|| "Port not yet assigned".to_string())
@@ -3629,56 +3645,15 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  if slot.is_some() {
  return Ok(());
  }
+ if state.shutting_down.load(Ordering::SeqCst) {
+ return Err("Local API is shutting down".to_string());
+ }
 
  // Clear port state for fresh start
  if let Ok(mut port_slot) = state.port.lock() {
  *port_slot = None;
  }
  state.port_confirmed.store(false, Ordering::SeqCst);
-
- // ── Restart counter / flap detector ──────────────────────────────
- if let (Ok(mut count), Ok(mut last)) = (state.restart_count.lock(), state.last_restart_at.lock()) {
- *count += 1;
- let total = *count;
- let now = Instant::now();
- let recent = last.map(|t| now.duration_since(t) < Duration::from_secs(300)).unwrap_or(false);
- *last = Some(now);
- if total > 1 {
- append_desktop_log(
- app,
- if recent && total >= 4 { "WARN" } else { "INFO" },
- &format!("sidecar restart_count={total} recent_window=5min flapping={}", recent && total >= 4),
- );
- }
- }
-
- // ── Stale-sidecar reaper ─────────────────────────────────────────
- // Scan port 46123 for an existing listener. If it's an orphaned node
- // process (not us), log it and kill it so the new sidecar can claim
- // the canonical port instead of falling back to a random one.
- #[cfg(unix)]
- {
- if let Ok(out) = Command::new("lsof")
- .args(["-nP", "-tiTCP:46123", "-sTCP:LISTEN"])
- .output()
- {
- let stdout = String::from_utf8_lossy(&out.stdout);
- for line in stdout.lines() {
- if let Ok(pid) = line.trim().parse::<u32>() {
- if pid != std::process::id() {
- append_desktop_log(
- app,
- "WARN",
- &format!("pre-existing listener on port 46123 pid={pid} — killing"),
- );
- let _ = Command::new("kill").args(["-TERM", &pid.to_string()]).status();
- std::thread::sleep(Duration::from_millis(300));
- let _ = Command::new("kill").args(["-KILL", &pid.to_string()]).status();
- }
- }
- }
- }
- }
 
  let (script, resource_root) = local_api_paths(app);
  if !script.exists() {
@@ -3690,6 +3665,14 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  let node_binary = resolve_node_binary(app).ok_or_else(|| {
  "Node.js executable not found. Install Node 18+ or set LOCAL_API_NODE_BIN".to_string()
  })?;
+
+ // ── Stale-sidecar reaper ─────────────────────────────────────────
+ // Stop a listener on the canonical port only when it is provably this
+ // install's own orphaned sidecar. Anything else (another app such as the
+ // legacy World Monitor, a dev build, an unrelated tool) is left alone and
+ // our sidecar binds an OS-assigned port instead (R4-BUG-004).
+ #[cfg(unix)]
+ reap_own_orphan_sidecar(app, &node_binary.to_string_lossy(), &sanitize_path_for_node(&script));
 
  let port_file = logs_dir_path(app)?.join("sidecar.port");
  let _ = fs::remove_file(&port_file);
@@ -3852,7 +3835,23 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  &format!("local API sidecar started pid={child_pid}"),
  );
  *slot = Some(child);
+ let generation = state.generation.fetch_add(1, Ordering::SeqCst) + 1;
+ let restarts = match state.supervisor.lock() {
+ Ok(mut supervisor) => {
+ let now = supervisor_clock_ms();
+ supervisor.on_started(now);
+ supervisor.snapshot(now).restarts
+ }
+ Err(_) => 0,
+ };
  drop(slot);
+ if restarts > 0 {
+ append_desktop_log(
+ app,
+ "INFO",
+ &format!("sidecar restart #{restarts} generation={generation} pid={child_pid}"),
+ );
+ }
 
  // Watcher thread: poll for sidecar exit so we can log status code / signal
  // when it dies unexpectedly. Without this we only see "sidecar stopped" from
@@ -3860,6 +3859,7 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  // Also tails the heartbeat file and warns if it goes stale (event-loop hang).
  {
  let app_handle = app.clone();
+ let late_port_file = port_file.clone();
  let heartbeat_path = logs_dir_path(app)
  .ok()
  .map(|p| p.join("sidecar.health.json"));
@@ -3888,30 +3888,27 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  }
  }
  }
+ let status = {
  let Some(state) = app_handle.try_state::<LocalApiState>() else { return; };
  let Ok(mut slot) = state.child.lock() else { return; };
  let Some(child) = slot.as_mut() else { return; }; // already cleared by stop_local_api
  if child.id() != child_pid { return; } // a newer sidecar replaced us
  match child.try_wait() {
  Ok(Some(status)) => {
- append_desktop_log(
- &app_handle,
- "WARN",
- &format!(
- "sidecar pid={child_pid} exited unexpectedly status={status:?} code={:?} signal={:?}",
- status.code(),
- {
- #[cfg(unix)]
- { use std::os::unix::process::ExitStatusExt; status.signal() }
- #[cfg(not(unix))]
- { None::<i32> }
- }
- ),
- );
  *slot = None;
- return;
+ // The port is no longer ours. Until a restart confirms a new one,
+ // nothing may be sent there: another process can bind it.
+ state.port_confirmed.store(false, Ordering::SeqCst);
+ if let Ok(mut port) = state.port.lock() {
+ *port = None;
  }
- Ok(None) => continue, // still running
+ status
+ }
+ Ok(None) => {
+ drop(slot);
+ confirm_port_late(&app_handle, &late_port_file);
+ continue; // still running
+ }
  Err(e) => {
  append_desktop_log(
  &app_handle,
@@ -3921,6 +3918,19 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  return;
  }
  }
+ };
+ let code = status.code();
+ #[cfg(unix)]
+ let signal = { use std::os::unix::process::ExitStatusExt; status.signal() };
+ #[cfg(not(unix))]
+ let signal = None::<i32>;
+ append_desktop_log(
+ &app_handle,
+ "WARN",
+ &format!("sidecar pid={child_pid} exited unexpectedly status={status:?} code={code:?} signal={signal:?}"),
+ );
+ supervise_after_exit(&app_handle, code, signal);
+ return;
  }
  });
  }
@@ -4292,8 +4302,233 @@ async fn inject_secrets_into_running_sidecar(app: &AppHandle, secrets: Vec<(Stri
  );
 }
 
+// ── Sidecar supervision (R4-BUG-004) ─────────────────────────────────
+// The policy lives in `sidecar_supervisor.rs` (pure, contract-tested); this
+// is the thin process glue around it.
+
+static SUPERVISOR_CLOCK_ORIGIN: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+
+/// Monotonic milliseconds for the supervisor. `Instant` does not advance
+/// while the Mac sleeps, so a long sleep never counts as sidecar uptime or
+/// ages crashes out of the flap window.
+fn supervisor_clock_ms() -> u64 {
+    let origin = SUPERVISOR_CLOCK_ORIGIN.get_or_init(Instant::now);
+    u64::try_from(origin.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
+fn parse_port_file(path: &Path) -> Option<u16> {
+    let port = fs::read_to_string(path).ok()?.trim().parse::<u16>().ok()?;
+    (port > 0).then_some(port)
+}
+
+/// The boot wait gives up after 15 s and leaves the port unconfirmed. Keep
+/// watching the port file on the monitor tick so a slow Node start becomes
+/// usable without ever trusting the default port blindly.
+fn confirm_port_late(app: &AppHandle, port_file: &Path) {
+    let Some(state) = app.try_state::<LocalApiState>() else { return; };
+    if state.port_confirmed.load(Ordering::SeqCst) {
+        return;
+    }
+    let Some(port) = parse_port_file(port_file) else { return; };
+    if let Ok(mut slot) = state.port.lock() {
+        *slot = Some(port);
+    }
+    state.port_confirmed.store(true, Ordering::SeqCst);
+    append_desktop_log(app, "INFO", &format!("sidecar confirmed port={port} (late)"));
+}
+
+/// Signal a listener on the canonical port only if its full command line is
+/// exactly this install's `<node> <script>` (an orphan from our own earlier
+/// session). The command is re-checked before SIGKILL so a pid reused in the
+/// grace period is never killed.
+#[cfg(unix)]
+fn reap_own_orphan_sidecar(app: &AppHandle, node_bin: &str, script: &str) {
+    let command_of = |pid: u32| -> String {
+        Command::new("ps")
+            .args(["-ww", "-o", "args=", "-p", &pid.to_string()])
+            .output()
+            .map(|out| String::from_utf8_lossy(&out.stdout).into_owned())
+            .unwrap_or_default()
+    };
+    let Ok(out) = Command::new("lsof")
+        .args(["-nP", &format!("-tiTCP:{DEFAULT_LOCAL_API_PORT}"), "-sTCP:LISTEN"])
+        .output()
+    else {
+        return;
+    };
+    let own_pid = std::process::id();
+    for pid in String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|line| line.trim().parse::<u32>().ok())
+        .filter(|pid| *pid != own_pid)
+    {
+        if !sidecar_supervisor::is_own_sidecar_command(&command_of(pid), node_bin, script) {
+            append_desktop_log(
+                app,
+                "WARN",
+                &format!(
+                    "port {DEFAULT_LOCAL_API_PORT} is held by pid={pid}, which is not this app's sidecar; leaving it alone (sidecar will use an OS-assigned port)"
+                ),
+            );
+            continue;
+        }
+        append_desktop_log(
+            app,
+            "WARN",
+            &format!("orphaned sidecar from an earlier session on port {DEFAULT_LOCAL_API_PORT} pid={pid}; stopping it"),
+        );
+        let _ = Command::new("kill").args(["-TERM", &pid.to_string()]).status();
+        std::thread::sleep(Duration::from_millis(300));
+        if sidecar_supervisor::is_own_sidecar_command(&command_of(pid), node_bin, script) {
+            let _ = Command::new("kill").args(["-KILL", &pid.to_string()]).status();
+        }
+    }
+}
+
+/// Called from the monitor thread after an unexpected exit, with the child
+/// lock already released. Blocks this (dedicated) thread for the backoff.
+fn supervise_after_exit(app: &AppHandle, code: Option<i32>, signal: Option<i32>) {
+    let Some(state) = app.try_state::<LocalApiState>() else { return; };
+    let decision = match state.supervisor.lock() {
+        Ok(mut supervisor) => supervisor.on_exit(supervisor_clock_ms(), code, signal),
+        Err(_) => return,
+    };
+    run_restart_loop(app, decision);
+}
+
+fn run_restart_loop(app: &AppHandle, first: sidecar_supervisor::Decision) {
+    use sidecar_supervisor::Decision;
+    let Some(state) = app.try_state::<LocalApiState>() else { return; };
+    let mut decision = first;
+    loop {
+        match decision {
+            Decision::Ignore => return,
+            Decision::GiveUp => {
+                append_desktop_log(
+                    app,
+                    "ERROR",
+                    &format!(
+                        "sidecar failed {} times within {} min; automatic restarts stopped (use Restart local engine in System Diagnostic)",
+                        sidecar_supervisor::FLAP_LIMIT,
+                        sidecar_supervisor::FLAP_WINDOW_MS / 60_000
+                    ),
+                );
+                return;
+            }
+            Decision::RestartAfter(delay_ms) => {
+                append_desktop_log(app, "INFO", &format!("sidecar restart scheduled in {delay_ms} ms"));
+                std::thread::sleep(Duration::from_millis(delay_ms));
+                if state.shutting_down.load(Ordering::SeqCst) {
+                    return;
+                }
+                match start_local_api(app) {
+                    // The new child has its own monitor thread from here on.
+                    Ok(()) => return,
+                    Err(err) => {
+                        append_desktop_log(app, "ERROR", &format!("sidecar restart failed: {err}"));
+                        decision = match state.supervisor.lock() {
+                            Ok(mut supervisor) => supervisor.on_start_failed(supervisor_clock_ms()),
+                            Err(_) => return,
+                        };
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LocalApiExitInfo {
+    code: Option<i32>,
+    signal: Option<i32>,
+    seconds_ago: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LocalApiStatus {
+    phase: &'static str,
+    generation: u64,
+    port: Option<u16>,
+    port_confirmed: bool,
+    restarts: u32,
+    last_exit: Option<LocalApiExitInfo>,
+    next_retry_in_ms: Option<u64>,
+    failure_limit: usize,
+    failure_window_ms: u64,
+}
+
+fn local_api_status(state: &LocalApiState) -> LocalApiStatus {
+    let now = supervisor_clock_ms();
+    let snapshot = state
+        .supervisor
+        .lock()
+        .map(|supervisor| supervisor.snapshot(now))
+        .unwrap_or(sidecar_supervisor::Snapshot {
+            phase: sidecar_supervisor::PhaseLabel::Idle,
+            restarts: 0,
+            last_exit: None,
+            next_retry_in_ms: None,
+        });
+    let port_confirmed = state.port_confirmed.load(Ordering::SeqCst);
+    let port = if port_confirmed {
+        state.port.lock().ok().and_then(|slot| *slot)
+    } else {
+        None
+    };
+    LocalApiStatus {
+        phase: snapshot.phase.as_str(),
+        generation: state.generation.load(Ordering::SeqCst),
+        port,
+        port_confirmed,
+        restarts: snapshot.restarts,
+        last_exit: snapshot.last_exit.map(|exit| LocalApiExitInfo {
+            code: exit.code,
+            signal: exit.signal,
+            seconds_ago: now.saturating_sub(exit.at_ms) / 1_000,
+        }),
+        next_retry_in_ms: snapshot.next_retry_in_ms,
+        failure_limit: sidecar_supervisor::FLAP_LIMIT,
+        failure_window_ms: sidecar_supervisor::FLAP_WINDOW_MS,
+    }
+}
+
+/// Supervisor state for System Diagnostic and the status ribbon. Exit
+/// code/signal only; never log or stderr content.
+#[tauri::command]
+fn get_local_api_status(webview: Webview, state: tauri::State<'_, LocalApiState>) -> Result<LocalApiStatus, String> {
+    require_trusted_window(webview.label())?;
+    Ok(local_api_status(&state))
+}
+
+/// Manual retry after the supervisor gave up. Only acts in the `stopped`
+/// phase, so it can never kill or churn a running sidecar.
+#[tauri::command]
+fn restart_local_api(webview: Webview, app: AppHandle) -> Result<LocalApiStatus, String> {
+    require_trusted_window(webview.label())?;
+    let state = app.state::<LocalApiState>();
+    let accepted = state
+        .supervisor
+        .lock()
+        .map_err(|_| "Failed to lock sidecar supervisor".to_string())?
+        .on_manual_retry(supervisor_clock_ms());
+    if accepted {
+        append_desktop_log(&app, "INFO", "sidecar manual restart requested");
+        let handle = app.clone();
+        std::thread::spawn(move || run_restart_loop(&handle, sidecar_supervisor::Decision::RestartAfter(0)));
+    }
+    Ok(local_api_status(&state))
+}
+
 fn stop_local_api(app: &AppHandle) {
  if let Ok(state) = app.try_state::<LocalApiState>().ok_or(()) {
+ // Before taking the child: a pending restart either sees this flag under
+ // the child lock and aborts, or has already stored its child for us to kill.
+ state.shutting_down.store(true, Ordering::SeqCst);
+ if let Ok(mut supervisor) = state.supervisor.lock() {
+ supervisor.on_shutdown();
+ }
  if let Ok(mut slot) = state.child.lock() {
  if let Some(mut child) = slot.take() {
  let _ = child.kill();
@@ -4564,6 +4799,8 @@ fn main() {
  reload_secrets_from_keychain,
  get_local_api_token,
  get_local_api_port,
+ get_local_api_status,
+ restart_local_api,
  read_cache_entry,
  write_cache_entry,
  delete_cache_entry,

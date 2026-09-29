@@ -24,6 +24,7 @@ use tauri::{AppHandle, Manager, RunEvent, TitleBarStyle, Webview, WebviewUrl, We
 mod corelocation;
 mod current_location;
 mod imessage;
+mod notify_policy;
 mod updater_policy;
 mod watchdog;
 use updater_policy::{BrowserReason, SignerRequirement, UpdateError, UpdateOutcome};
@@ -123,9 +124,26 @@ const SUPPORTED_SECRET_KEYS: [&str; 77] = [
  "TWILIO_AUTH_TOKEN",
 ];
 
-// Rate-limit native notifications: no more than 1 per 30 seconds across all threads.
-static NOTIFICATION_LAST_SENT: Mutex<Option<Instant>> = Mutex::new(None);
-const NOTIFICATION_RATE_LIMIT: Duration = Duration::from_secs(30);
+// Priority-aware admission for native notifications (R4-BUG-002). Each
+// priority has its own lane (see notify_policy.rs), so a routine notification
+// can never consume the budget of a life-safety one.
+static NOTIFICATION_LANES: Mutex<notify_policy::LaneState> = Mutex::new(notify_policy::LaneState::new());
+static NATIVE_CLOCK_ORIGIN: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+
+/// What actually happened to a native notification or utterance. Callers must
+/// record this truthfully: `RateLimited` means nothing was shown or spoken.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum NativeOutcome {
+ Delivered,
+ RateLimited,
+ Unsupported,
+}
+
+fn native_clock_ms() -> u64 {
+ let origin = NATIVE_CLOCK_ORIGIN.get_or_init(Instant::now);
+ u64::try_from(origin.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
 
 static IMESSAGE_SERVICE: std::sync::OnceLock<Arc<imessage::Service<imessage::NativeEffects>>> = std::sync::OnceLock::new();
 // Voice alerts (`say`) are more disruptive than push, so we use a 5s
@@ -1587,28 +1605,33 @@ fn truncate_to_bytes(s: &str, max_bytes: usize) -> &str {
  &s[..boundary]
 }
 
-/// Send a native macOS notification via osascript. No-op on non-macOS platforms.
-/// Rate-limited to 1 notification per 30 seconds to prevent notification spam.
-/// Input fields are length-capped and sanitized before interpolation into AppleScript.
+/// Send a native macOS notification via osascript. Returns the real outcome:
+/// `delivered` (handed to macOS), `rate_limited` (not shown), or `unsupported`
+/// (non-macOS). Admission is priority-aware (`critical` | `high` | `normal`,
+/// default `normal`; unknown values never escalate). Input fields are
+/// length-capped and sanitized before interpolation into AppleScript.
 #[tauri::command]
-fn send_notification(webview: Webview, title: String, body: String, sound: Option<String>) -> Result<(), String> {
+fn send_notification(
+ webview: Webview,
+ title: String,
+ body: String,
+ sound: Option<String>,
+ priority: Option<String>,
+) -> Result<NativeOutcome, String> {
  require_trusted_window(webview.label())?;
  #[cfg(not(target_os = "macos"))]
  {
- let _ = (title, body, sound);
- return Ok(());
+ let _ = (title, body, sound, priority);
+ return Ok(NativeOutcome::Unsupported);
  }
  #[cfg(target_os = "macos")]
  {
- // Rate limit: silently drop if fired too recently
+ let lane = notify_policy::Priority::parse(priority.as_deref());
  {
- let mut last = NOTIFICATION_LAST_SENT.lock().unwrap_or_else(|p| p.into_inner());
- if let Some(t) = *last {
- if t.elapsed() < NOTIFICATION_RATE_LIMIT {
- return Ok(()); // suppressed — too soon
+ let mut lanes = NOTIFICATION_LANES.lock().unwrap_or_else(|p| p.into_inner());
+ if lanes.admit(native_clock_ms(), lane) == notify_policy::Admission::RateLimited {
+ return Ok(NativeOutcome::RateLimited);
  }
- }
- *last = Some(Instant::now());
  }
 
  // Enforce length limits to bound log size and script length
@@ -1638,7 +1661,7 @@ fn send_notification(webview: Webview, title: String, body: String, sound: Optio
  .stderr(Stdio::null())
  .spawn()
  .map_err(|e| format!("osascript spawn failed: {e}"))?;
- Ok(())
+ Ok(NativeOutcome::Delivered)
  }
 }
 
@@ -1690,12 +1713,12 @@ fn speak_aloud(
  text: String,
  voice: Option<String>,
  rate: Option<u32>,
-) -> Result<(), String> {
+) -> Result<NativeOutcome, String> {
  require_trusted_window(webview.label())?;
  #[cfg(not(target_os = "macos"))]
  {
  let _ = (text, voice, rate);
- return Ok(());
+ return Ok(NativeOutcome::Unsupported);
  }
  #[cfg(target_os = "macos")]
  {
@@ -1703,7 +1726,7 @@ fn speak_aloud(
  let mut last = VOICE_LAST_SENT.lock().unwrap_or_else(|p| p.into_inner());
  if let Some(t) = *last {
  if t.elapsed() < VOICE_RATE_LIMIT {
- return Ok(()); // suppressed — too soon
+ return Ok(NativeOutcome::RateLimited);
  }
  }
  *last = Some(Instant::now());
@@ -1735,7 +1758,7 @@ fn speak_aloud(
  .stderr(Stdio::null())
  .spawn()
  .map_err(|e| format!("say spawn failed: {e}"))?;
- Ok(())
+ Ok(NativeOutcome::Delivered)
  }
 }
 

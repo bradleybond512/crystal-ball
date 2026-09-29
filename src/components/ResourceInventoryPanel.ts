@@ -21,8 +21,8 @@
  * Supports JSON import/export for offline backup.
  */
 
+import { notifyNative } from '@/services/native-notify';
 import { Panel } from '@/components/Panel';
-import { tryInvokeTauri } from '@/services/tauri-bridge';
 import { isDesktopRuntime } from '@/services/runtime';
 
 const DB_NAME = 'crystalball-resources';
@@ -554,11 +554,12 @@ export class ResourceInventoryPanel extends Panel {
  });
  if (low.length === 0) return;
  const names = low.slice(0, 3).map(i => i.name).join(', ');
- await tryInvokeTauri<void>('send_notification', {
+ await notifyNative({
  title: '\u26A0 Crystal Ball \u2014 Low Stock Alert',
  body: `${low.length} item(s) have <3 days remaining: ${names}`,
  sound: 'Ping',
- }).catch(() => {});
+ priority: 'normal',
+ });
   }
 
   private _esc(s: string): string {

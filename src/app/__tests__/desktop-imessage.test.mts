@@ -10,7 +10,7 @@ function harness() {
   const document = new EventTarget();
   Object.assign(globalThis, { document });
   const deps: Record<string, unknown> = {
-    '@/services/tauri-bridge': { tryInvokeTauri: async (...args: unknown[]) => { calls.push(args); } },
+    '@/services/native-notify': { notifyNative: async (payload: unknown) => { calls.push(['send_notification', payload]); return 'delivered'; } },
     '@/services/breaking-news-alerts': { getAlertSettings: () => ({ enabled: controls.alertEnabled, desktopNotificationsEnabled: controls.desktopEnabled }) },
     '@/services/mode-manager': { isGhostMode: () => controls.ghost },
     '@/services/imessage-bridge': {

@@ -10,6 +10,7 @@ import type { ReactorAlert } from './threat-reactor';
 import type { UnifiedAlert, AlertSeverity } from './unified-alerts';
 import { getNotificationTraceRegistry } from './diagnostics/diagnostics-state';
 import type { NotificationTraceRegistry, NotificationUrgency } from './diagnostics/notification-trace';
+import type { NativeNotifyOutcome, NativePriority } from './native-notify';
 
 type Severity = 'low' | 'medium' | 'high' | 'critical';
 
@@ -25,7 +26,8 @@ export interface RouterDeps {
  put: (a: UnifiedAlert) => Promise<void>;
  getAll: (opts?: { since?: number }) => Promise<UnifiedAlert[]>;
   };
-  sendNativeNotification: (title: string, body: string) => Promise<void> | void;
+  /** Must report the real native outcome — only `delivered` counts as seen. */
+  sendNativeNotification: (title: string, body: string, priority: NativePriority) => Promise<NativeNotifyOutcome>;
   showToast: (title: string, body: string, severity: AlertSeverity) => void;
   addMapMarker: (lat: number, lon: number, alertId: string) => void;
   isGhostMode: () => boolean | Promise<boolean>;
@@ -128,23 +130,21 @@ async function defaultAlertDBGetAll(opts?: {
 async function defaultSendNativeNotification(
   title: string,
   body: string,
-): Promise<void> {
+  priority: NativePriority,
+): Promise<NativeNotifyOutcome> {
   try {
- const mod = (await import('./tauri-bridge')) as {
- tryInvokeTauri?: (
- cmd: string,
- args: Record<string, unknown>,
- ) => Promise<unknown>;
- };
- if (typeof mod.tryInvokeTauri === 'function') {
- await mod.tryInvokeTauri('send_notification', {
- title,
- body,
- });
- }
+    const mod = await import('./native-notify');
+    return await mod.notifyNative({ title, body, priority });
   } catch {
- // swallow — notifications are best-effort
+    return 'failed';
   }
+}
+
+/** Life-safety `critical` maps to the native critical lane; `high` to high. */
+export function routerNativePriority(severity: Severity): NativePriority {
+  if (severity === 'critical') return 'critical';
+  if (severity === 'high') return 'high';
+  return 'normal';
 }
 
 function defaultShowToast(title: string): void {
@@ -289,14 +289,26 @@ async function safeNative(
  recordRouterNativeResult(trace, { delivered: false, surface: 'in_app', error: 'severity-rate-limit' });
  return;
   }
-  lastNotifiedBySeverity.set(sev, nowMs);
+  let outcome: NativeNotifyOutcome;
   try {
- await deps.sendNativeNotification(alert.threat.title, alert.threat.body);
+ outcome = await deps.sendNativeNotification(alert.threat.title, alert.threat.body, routerNativePriority(sev));
+  } catch {
+ outcome = 'failed';
+  }
+  // Only a delivered notification counts: it starts the per-severity window
+  // and is recorded as seen. Anything else stays retryable and is traced as
+  // not delivered (R4-BUG-002).
+  if (outcome === 'delivered') {
+ lastNotifiedBySeverity.set(sev, nowMs);
  recordRouterNativeResult(trace, {
  delivered: true,
  surface: sev === 'critical' ? 'critical' : 'banner',
  });
-  } catch {
+  } else if (outcome === 'rate_limited') {
+ recordRouterNativeResult(trace, { delivered: false, surface: 'in_app', error: 'native-rate-limited' });
+  } else if (outcome === 'unavailable') {
+ recordRouterNativeResult(trace, { delivered: false, surface: 'in_app', error: 'native-unavailable' });
+  } else {
  recordRouterNativeResult(trace, { delivered: false, surface: 'failed', error: 'native-delivery-failed' });
   }
 }

@@ -28,9 +28,11 @@ import {
 
 const FIFTEEN_MIN_MS = 15 * 60_000;
 
-function captureSend(): { fn: (p: NotificationPayload) => Promise<void>; calls: NotificationPayload[] } {
+// R4-BUG-002: injected senders report the native outcome; a capture that
+// stands in for a successful native delivery returns 'delivered'.
+function captureSend(): { fn: (p: NotificationPayload) => Promise<'delivered'>; calls: NotificationPayload[] } {
   const calls: NotificationPayload[] = [];
-  return { calls, fn: async (p) => { calls.push(p); } };
+  return { calls, fn: async (p) => { calls.push(p); return 'delivered'; } };
 }
 
 /** Minimal multi-channel dispatcher: fans an entry out to push / sms /

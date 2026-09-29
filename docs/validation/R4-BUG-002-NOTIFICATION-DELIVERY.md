@@ -78,6 +78,19 @@ All six restored their checksum and left a clean tree.
 | High lane shares the normal lane | `notify_policy.rs` | 7/0 | 5/2 | `normal_keeps_the_thirty_second_spacing_among_normals_only` FAILED |
 | Native rate limit reported as delivered | `main.rs` | 5/0 | 4/1 | native send_notification reports outcomes through the priority lane policy |
 
+## CI follow-up
+
+The first CI run failed six `test:notifications` cases in
+`tests/notifications/notification-ladder.test.mts` and
+`tests/notifications/all-producers.integration.test.mts`. Their `captureSend`
+fakes returned `undefined`, which the push notifier now correctly treats as an
+undelivered native send. The fakes now return `'delivered'`, matching the new
+`NativeNotifyOutcome` contract; no assertion was weakened. A full local
+`node scripts/targeted-tests.mjs --ci` run then passed every selected script
+(`test:notifications` 227/0) except `test:little-snitch`, whose three
+`install-little-snitch-exporter` failures are a pre-existing macOS-host
+uid/gid expectation in files this change does not touch.
+
 ## Not performed
 
 No installed app, native notification, Keychain or real osascript

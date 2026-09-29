@@ -67,6 +67,8 @@ test('shutdown wins every race with a pending restart', () => {
 test('the renderer is only ever handed a confirmed port', () => {
   order(fnBody('get_local_api_port'), 'port_confirmed.load(Ordering::SeqCst)', 'state.port.lock()', 'port gate');
   assert.match(fnBody('get_local_api_port'), /not yet assigned/, 'keeps the tauri-bridge boot-noise wording');
+  const monitor = fnBody('start_local_api');
+  order(monitor, 'Ok(Some(status)) => {\n *slot = None;', 'state.port_confirmed.store(false, Ordering::SeqCst);\n if let Ok(mut port) = state.port.lock()', 'exit revokes the port');
   const status = fnBody('local_api_status');
   order(status, 'let port = if port_confirmed', 'state.port.lock()', 'status port gate');
 });

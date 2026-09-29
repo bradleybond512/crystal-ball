@@ -293,8 +293,10 @@ async function fetchLocalWithStartupRetry(
 
 // ── Security threat model for the fetch patch ──────────────────────────
 // The LOCAL_API_TOKEN exists to prevent OTHER local processes from
-// accessing the sidecar on port 46123. The renderer IS the intended
-// client — injecting the token automatically is correct by design.
+// accessing the sidecar. The renderer IS the intended client — injecting
+// the token automatically is correct by design, but only toward a port the
+// native side CONFIRMED is our sidecar (R4-BUG-004 / R4-SEC-006): any local
+// process can bind 46123 when our sidecar is down or restarting.
 //
 // If the renderer is compromised (XSS, supply chain), the attacker
 // already has access to Tauri IPC commands (get_secret, set_secret,
@@ -304,7 +306,9 @@ async function fetchLocalWithStartupRetry(
 // already provides.
 //
 // Defense layers that protect the renderer trust boundary:
-// 1. CSP: script-src 'self' (no unsafe-inline/eval)
+// 1. CSP: script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' — no inline
+//    script, but eval IS currently allowed (R3-SEC-004 is open); do not rely
+//    on the CSP to stop an injected string from executing.
 // 2. IPC origin validation: sensitive commands gated to trusted windows
 // 3. Sidecar allowlists: env-update restricted to ALLOWED_ENV_KEYS
 // 4. DevTools disabled in production builds

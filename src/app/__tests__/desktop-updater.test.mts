@@ -33,6 +33,14 @@ function harness(result: unknown = { status: 'ready', version: '9.2.0', checkedA
   };
   const dependencies: Record<string, unknown> = {
     '@/services/tauri-bridge': { invokeTauri: invoke, tryInvokeTauri: invoke },
+    // R4-BUG-002: native notifications go through the single notifyNative entry
+    // point; record them under the native command name the assertions expect.
+    '@/services/native-notify': {
+      notifyNative: async (payload: Record<string, unknown>) => {
+        calls.push({ command: 'send_notification', payload });
+        return 'delivered';
+      },
+    },
     '@/services/analytics': { trackUpdateShown() {}, trackUpdateClicked() {}, trackUpdateDismissed() {} },
     '@/utils/sanitize': { escapeHtml },
   };

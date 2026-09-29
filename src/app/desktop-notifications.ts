@@ -1,6 +1,6 @@
+import { notifyNative } from '@/services/native-notify';
 import type { AppContext, AppModule } from '@/app/app-context';
 import type { BreakingAlert } from '@/services/breaking-news-alerts';
-import { tryInvokeTauri } from '@/services/tauri-bridge';
 import { getAlertSettings } from '@/services/breaking-news-alerts';
 import { isGhostMode } from '@/services/mode-manager';
 import { getImessageSettings, refreshImessageSettings, sendImessage } from '@/services/imessage-bridge';
@@ -49,10 +49,11 @@ export class DesktopNotifications implements AppModule {
 
  if (this.ctx.isDesktopApp) {
  const sound = alert.threatLevel === 'critical' ? 'Basso' : 'Ping';
- await tryInvokeTauri<void>('send_notification', {
+ await notifyNative({
  title: 'Crystal Ball Alert',
  body,
  sound,
+ priority: 'high',
  });
  // Best-effort iMessage routing if the user has it configured. Threshold
  // gating happens here so we never wake the user's phone for a 'high' if

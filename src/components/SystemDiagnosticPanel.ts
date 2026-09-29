@@ -30,7 +30,14 @@ import {
 } from '@/services/diagnostics/system-health';
 import { getLiveDiagnosticsSnapshot } from '@/services/diagnostics/live-diagnostics-snapshot';
 import { diagnosticsHeartbeatAgeMs } from '@/services/diagnostics/diagnostics-heartbeat';
-import { getApiBaseUrl } from '@/services/runtime';
+import { getApiBaseUrl, isDesktopRuntime } from '@/services/runtime';
+import {
+  buildLocalEngineView,
+  fetchLocalEngineStatus,
+  requestLocalEngineRestart,
+  type LocalEngineStatus,
+  type LocalEngineTone,
+} from '@/services/diagnostics/local-engine-status';
 import { getSavedPlaces } from '@/services/saved-places';
 import { runNwsPolygonSelfTestFixture } from '@/services/weather/self-test-fixture';
 import { runChampionRollbackSelfTestFixture } from '@/services/cognition/champion-rollback-fixture';
@@ -70,6 +77,11 @@ import {
   type MissionState,
 } from '@/services/diagnostics/mission-state-service';
 
+const LOCAL_ENGINE_TONE_COLOR: Record<LocalEngineTone, string> = {
+  ok: 'var(--text-secondary,#aaa)',
+  warn: 'var(--severity-high)',
+  bad: 'var(--severity-critical)',
+};
 const REFRESH_MS = 5000;
 
 type Tab = 'overview' | 'features' | 'panels' | 'notifications' | 'feeds' | 'quality_debt' | 'self_test';
@@ -108,6 +120,8 @@ export class SystemDiagnosticPanel extends Panel {
     summary: SidecarSelfTestSummary | null;
     error: string | null;
   } = { running: false, asOf: null, results: [], summary: null, error: null };
+  /** Native sidecar supervisor state (R4-BUG-004); desktop only. */
+  private localEngine: { status: LocalEngineStatus | null; busy: boolean } = { status: null, busy: false };
 
   constructor() {
     super({
@@ -123,7 +137,11 @@ export class SystemDiagnosticPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
+    void this.refreshLocalEngine();
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => {
+      this.render();
+      void this.refreshLocalEngine();
+    }), REFRESH_MS);
     this.detachDisclosure = attachDisclosureClickDelegation(this.content, 'system-diagnostic');
     this.unsubscribeDisclosure = disclosureService.subscribe('system-diagnostic', () => this.render());
   }
@@ -532,9 +550,37 @@ export class SystemDiagnosticPanel extends Panel {
       </div>
       ${reportHtml}
       <div style="border-top:1px solid var(--border-subtle,#222);padding-top:10px;">
+        ${this.renderLocalEngine()}
         ${this.renderSidecarSelfTest()}
       </div>
     </div>`;
+  }
+
+  /** Re-render only when the supervisor view actually changed. */
+  private async refreshLocalEngine(): Promise<void> {
+    if (!isDesktopRuntime() || this.localEngine.busy) return;
+    const before = buildLocalEngineView(this.localEngine.status).text;
+    this.localEngine = { ...this.localEngine, status: await fetchLocalEngineStatus() };
+    if (buildLocalEngineView(this.localEngine.status).text !== before) this.render();
+  }
+
+  private renderLocalEngine(): string {
+    if (!isDesktopRuntime()) return '';
+    const view = buildLocalEngineView(this.localEngine.status);
+    const color = LOCAL_ENGINE_TONE_COLOR[view.tone];
+    const button = view.canRestart ? this.renderLocalEngineRestartButton() : '';
+    return `<div class="syd-local-engine" style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;font-size:11px;">
+      <span style="color:${color};">${escapeHtml(view.text)}</span>${button}
+    </div>`;
+  }
+
+  private renderLocalEngineRestartButton(): string {
+    const busy = this.localEngine.busy;
+    const disabled = busy ? 'disabled' : '';
+    const cursor = busy ? 'wait' : 'pointer';
+    const label = busy ? 'Restarting…' : 'Restart local engine';
+    return `<button class="syd-local-engine-restart" ${disabled}
+        style="padding:6px 10px;background:transparent;color:var(--text);border:1px solid var(--border-strong,#444);border-radius:3px;cursor:${cursor};font-size:11px;">${label}</button>`;
   }
 
   private renderSidecarSelfTest(): string {
@@ -642,6 +688,15 @@ export class SystemDiagnosticPanel extends Panel {
     }
     const refresh = root.querySelector<HTMLButtonElement>('.syd-refresh');
     refresh?.addEventListener('click', () => this.render());
+    const engineBtn = root.querySelector<HTMLButtonElement>('.syd-local-engine-restart');
+    engineBtn?.addEventListener('click', async () => {
+      if (this.localEngine.busy) return;
+      this.localEngine = { ...this.localEngine, busy: true };
+      this.render();
+      const status = await requestLocalEngineRestart();
+      this.localEngine = { status: status ?? this.localEngine.status, busy: false };
+      this.render();
+    });
     const sidecarBtn = root.querySelector<HTMLButtonElement>('.syd-sidecar-self-test');
     sidecarBtn?.addEventListener('click', async () => {
       if (this.sidecarSelfTest.running) return;

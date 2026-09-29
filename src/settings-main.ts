@@ -25,7 +25,7 @@ import {
   type RuntimeFeatureId,
   type RuntimeSecretKey,
 } from '@/services/runtime-config';
-import { getApiBaseUrl, isDesktopRuntime, resolveLocalApiPort } from '@/services/runtime';
+import { isDesktopRuntime, resolveConfirmedLocalApiBase, resolveLocalApiPort } from '@/services/runtime';
 import { tryInvokeTauri } from '@/services/tauri-bridge';
 import { escapeHtml } from '@/utils/sanitize';
 import { openExternalSafe } from '@/utils/safe-open';
@@ -59,13 +59,13 @@ function closeSettingsWindow(): void {
   void tryInvokeTauri<void>('close_settings_window').then(() => {}, () => window.close());
 }
 
-function getSidecarBase(): string {
-  return getApiBaseUrl() || '';
-}
-
 let _diagToken: string | null = null;
 
 async function diagFetch(path: string, init?: RequestInit): Promise<Response> {
+  // Bearer-token calls go only to a sidecar port the native side confirmed,
+  // never to the default port another process may hold (R4-BUG-004).
+  const base = await resolveConfirmedLocalApiBase();
+  if (!base) throw new Error('Local engine not available');
   if (!_diagToken) {
  try {
  _diagToken = await tryInvokeTauri<string>('get_local_api_token');
@@ -73,7 +73,7 @@ async function diagFetch(path: string, init?: RequestInit): Promise<Response> {
   }
   const headers = new Headers(init?.headers);
   if (_diagToken) headers.set('Authorization', `Bearer ${_diagToken}`);
-  return fetch(`${getSidecarBase()}${path}`, { ...init, headers });
+  return fetch(`${base}${path}`, { ...init, headers });
 }
 
 // ── Sidebar icons ──

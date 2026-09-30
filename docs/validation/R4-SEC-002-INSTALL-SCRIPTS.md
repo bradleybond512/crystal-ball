@@ -61,7 +61,7 @@ before mutating. Every file was restored and its hash re-verified.
 
 | Mutation | File (sha before) | Pass/fail | Red test(s) |
 |---|---|---|---|
-| Root `.npmrc` allows scripts | `.npmrc` (`24c13a4dbc40`) | 48/1 | scripts disabled for every project |
+| Root `.npmrc` allows scripts | `.npmrc` (`0c2a6b1ea8e0`) | 48/1 | scripts disabled for every project |
 | MCP `.npmrc` allows scripts | `tools/mcp-server/.npmrc` (`e16b6c8904ee`) | 48/1 | scripts disabled for every project |
 | main-sync runs install scripts | `sync-main-to-mac.mjs` (`3a1c3e2f8a72`) | 46/3 | explicit flag + main-sync contract |
 | MCP deps install runs scripts | `install-mcp-deps.mjs` (`dcbf998e894a`) | 46/3 | explicit flag + installer argv |
@@ -74,6 +74,15 @@ before mutating. Every file was restored and its hash re-verified.
 | Build relies on skipped pre/post hooks | `package.json` (`9c347adb811c`) | 48/1 | no silent lifecycle hooks |
 
 All 11 mutations went red, and every file was restored to its original hash.
+
+## Correction during CI
+
+The first push overwrote the existing root `.npmrc`, which carries
+`legacy-peer-deps=true` for the vite-plugin-pwa peer range, instead of
+appending to it. CI's `npm ci` then failed lockfile validation. The follow-up
+commit restores the original content above the new block and adds a test
+that keeps `legacy-peer-deps=true`. The mutation table above was re-run
+afterwards (new `.npmrc` hash), and all 11 mutations went red again.
 
 ## Not in this change (queue item Q14)
 

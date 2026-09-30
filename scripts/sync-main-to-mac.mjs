@@ -20,7 +20,9 @@ const SYSTEM_EXECUTABLE_PATH = '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/
 
 export const NPM_VERIFICATION_COMMANDS = [
   ['run', 'lockfile:check'],
-  ['ci'],
+  // Never run dependency lifecycle scripts on the automatic install, even if
+  // .npmrc is ever removed (R4-SEC-002).
+  ['ci', '--ignore-scripts'],
   ['run', 'version:check'],
   ['run', 'typecheck:all'],
   ['run', 'build'],

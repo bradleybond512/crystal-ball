@@ -329,7 +329,8 @@ import type { ObservationEvent } from '@/types/intelligence';
 import { fetchDamSafetyAlerts } from '@/services/dam-safety';
 import { fetchPowerGridAlerts } from '@/services/power-grid-alerts';
 import { fetchGridStatus } from '@/services/power-grid';
-import { getDatacenterSite, setDatacenterSite, recomputeDatacenterPosture } from '@/services/datacenter/datacenter-state';
+import { getDatacenterSite, setDatacenterSite, recomputeDatacenterPosture, markDatacenterPostureStale } from '@/services/datacenter/datacenter-state';
+import { resolveSiteZonesBestEffort } from '@/services/datacenter/site-zones';
 import { toIsoString } from '@/services/weather/weather-exposure';
 import type { PowerContext } from '@/services/infrastructure/osm-power';
 import {
@@ -1857,23 +1858,18 @@ export class DataLoaderManager implements AppModule {
  // Resolve the site's own UGC zones once (forecast zone + county) so
  // zone-only NWS products (ice/heat/flood are often issued by UGC zone,
  // not polygon) can match the site instead of reading as clear. Cached
- // by lat,lon; best-effort — degrades to polygon-only matching on failure.
- if (!site.ugcZones) {
- const zoneKey = `${site.lat},${site.lon}`;
- let zones = _siteUgcZoneCache.get(zoneKey);
- if (!zones) {
- zones = await fetchUgcZonesForPoint(site.lat, site.lon);
- _siteUgcZoneCache.set(zoneKey, zones);
- }
- if (zones.length > 0) {
+ // by lat,lon. Best-effort: a failed /points lookup (5xx/429/timeout/
+ // malformed) degrades to polygon-only matching and flags the posture's
+ // weather zones as unverified instead of skipping the tick (R3-BUG-002).
+ const zoneResolution = await resolveSiteZonesBestEffort(site, _siteUgcZoneCache, fetchUgcZonesForPoint);
+ if (!site.ugcZones && zoneResolution.zones.length > 0) {
  // Re-read current site after async gap — only write back if it's still
  // the same site (prevents stale-site race if saved places changed).
  const current = getDatacenterSite();
  if (current && current.lat === site.lat && current.lon === site.lon) {
- setDatacenterSite({ ...current, ugcZones: zones });
+ setDatacenterSite({ ...current, ugcZones: [...zoneResolution.zones] });
  }
  site = getDatacenterSite() ?? site;
- }
  }
  const grid = await fetchGridStatus().catch(() => null);
  const gridStatus = grid?.find((g) => g.region === site.eiaRegion) ?? null;
@@ -1940,9 +1936,12 @@ export class DataLoaderManager implements AppModule {
    seismicNearby: nearbySeismic,
    connectivity: connResult.status === 'fulfilled' ? connResult.value : null,
    gridInfrastructure,
+ weatherZonesUnverified: zoneResolution.degraded,
  });
  } catch (error) {
  console.warn('[Datacenter] posture recompute failed; skipping this tick:', error);
+ // Never leave the previous posture (possibly "All clear") looking current.
+ markDatacenterPostureStale('posture recompute failed');
  }
  }
 

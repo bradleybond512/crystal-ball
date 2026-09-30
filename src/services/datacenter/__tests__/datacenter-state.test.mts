@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   setDatacenterSite, getDatacenterPosture, recomputeDatacenterPosture,
-  subscribeDatacenterPosture, __resetDatacenterStateForTests,
+  subscribeDatacenterPosture, __resetDatacenterStateForTests, markDatacenterPostureStale,
 } from '../datacenter-state.ts';
 import type { SiteConfig } from '../datacenter-types.ts';
 import type { GridStatus } from '../../power-grid.ts';
@@ -34,4 +34,22 @@ test('recompute is a no-op (returns null) when no site is configured', () => {
   const result = recomputeDatacenterPosture({ gridStatus: gridStatus(94), weatherAlerts: [], nearbyOutageCount: 0, now: NOW });
   assert.equal(result, null);
   assert.equal(getDatacenterPosture(), null);
+});
+
+test('a skipped recompute marks the previous posture stale once, and a recompute clears it (R3-BUG-002)', () => {
+  __resetDatacenterStateForTests();
+  markDatacenterPostureStale('posture recompute failed');
+  assert.equal(getDatacenterPosture(), null, 'no posture: nothing to mark');
+  setDatacenterSite(SITE);
+  recomputeDatacenterPosture({ gridStatus: gridStatus(55), weatherAlerts: [], nearbyOutageCount: 0, now: NOW });
+  assert.equal(getDatacenterPosture()?.overall, 'normal');
+  let notified = 0;
+  const unsub = subscribeDatacenterPosture(() => { notified += 1; });
+  markDatacenterPostureStale('posture recompute failed');
+  markDatacenterPostureStale('posture recompute failed');
+  assert.deepEqual(getDatacenterPosture()?.staleInputs, ['posture recompute failed']);
+  assert.equal(notified, 1, 'emits once; the second mark is a no-op');
+  recomputeDatacenterPosture({ gridStatus: gridStatus(55), weatherAlerts: [], nearbyOutageCount: 0, now: NOW + 1 });
+  assert.deepEqual(getDatacenterPosture()?.staleInputs, []);
+  unsub();
 });

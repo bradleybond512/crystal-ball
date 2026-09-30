@@ -100,7 +100,7 @@ jobs:
       # with its own deps (zod), so install + run it on its own — previously it
       # ran in NO CI workflow and had silently rotted (a stale time-bomb trend
       # test). Subsumes the earlier root-deps test:mcp-storage step.
-      - run: cd tools/mcp-server && npm ci && npm test
+      - run: cd tools/mcp-server && npm ci --ignore-scripts && npm test
       # Sidecar security-hardening suite (SSRF IP classification + pinning, CSP
       # allowlist, webhook dispatch, IPv4 redirect) — the Node sidecar tests live
       # under src-tauri/ so test:renderer can't reach them; this gates them.

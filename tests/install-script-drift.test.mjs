@@ -121,6 +121,8 @@ test('install scripts are disabled for every project we install', () => {
   for (const file of ['.npmrc', 'tools/mcp-server/.npmrc']) {
     assert.match(read(file), /^ignore-scripts=true$/m, `${file} disables install scripts`);
   }
+  // The root .npmrc also carries install-resolution settings npm ci depends on.
+  assert.match(read('.npmrc'), /^legacy-peer-deps=true$/m, 'keep legacy-peer-deps (vite-plugin-pwa peer range)');
 });
 
 test('main-sync and the MCP installers pass --ignore-scripts explicitly (in case .npmrc is removed)', () => {

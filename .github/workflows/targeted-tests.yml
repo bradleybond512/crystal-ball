@@ -60,7 +60,7 @@ jobs:
       # src/services/diagnostics. smoke.yml already installs it the same way.
       # (--prefix would read the root package name off the directory name and
       # fail the lockfile-sync check, so run it from inside the package.)
-      - run: npm ci
+      - run: npm ci --ignore-scripts
         working-directory: tools/mcp-server
       - name: Select and run targeted suites
         run: |

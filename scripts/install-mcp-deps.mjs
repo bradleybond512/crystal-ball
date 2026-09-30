@@ -91,7 +91,7 @@ export function installMcpDeps({ serverDir = DEFAULT_SERVER_DIR, env = process.e
   // "npm" from PATH — no PATH lookup, no hijack surface.
   console.log(`[mcp-deps] Installing tools/mcp-server dependencies (npm ${action})…`);
   try {
-    execFileSync(process.execPath, [env.npm_execpath, action, '--no-audit', '--no-fund'], {
+    execFileSync(process.execPath, [env.npm_execpath, action, '--ignore-scripts', '--no-audit', '--no-fund'], {
       cwd: serverDir,
       stdio: 'inherit',
     });

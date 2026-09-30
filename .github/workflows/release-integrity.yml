@@ -2,6 +2,8 @@ name: Release Integrity
 
 on:
   pull_request:
+    # labeled/unlabeled: re-run when Bradley applies install-scripts-reviewed.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   push:
     branches:
       - main
@@ -29,6 +31,15 @@ jobs:
 
       - name: Check sidecar bundle completeness
         run: node scripts/check-sidecar-bundle.mjs
+
+      - name: Check install-script drift (R4-SEC-002)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE_REF"
+          node scripts/check-install-script-drift.mjs --base FETCH_HEAD
 
   scenario-coverage:
     # Plan: docs/CLAUDE_POST_PR197_INTEGRATION_HANDOFF_2026-04-28.md item 6.

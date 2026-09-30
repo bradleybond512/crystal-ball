@@ -379,7 +379,9 @@ All sounds are synthesized with Web Audio API -- no audio files in the repo:
 ## Quick Start
 
 ```bash
-npm ci && npm run dev          # web, full variant (default)
+npm ci && npm run prepare     # once per fresh clone: git hooks + MCP deps
+                              # (.npmrc disables install scripts, R4-SEC-002)
+npm run dev                    # web, full variant (default)
 npm run dev:tech               # tech variant
 npm run dev:finance            # finance variant
 npm run desktop:dev            # Tauri desktop with devtools

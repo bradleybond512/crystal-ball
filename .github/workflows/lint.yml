@@ -1,21 +1,9 @@
 name: Lint
 
 on:
+  # No path filter: main-sync requires static-lint on every merged PR
+  # (R4-SEC-003), so it must report on every PR.
   pull_request:
-    paths:
-      - '**/*.md'
-      - '**/*.json'
-      - '**/*.yml'
-      - '**/*.yaml'
-      - '**/*.sh'
-      - '**/*.ts'
-      - '**/*.tsx'
-      - '**/*.css'
-      - '.husky/**'
-      - 'scripts/lint-*.mjs'
-      - 'scripts/lint-colors-baseline.json'
-      - 'package.json'
-      - 'package-lock.json'
   merge_group:
 
 jobs:

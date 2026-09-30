@@ -100,5 +100,16 @@
   ],
   "src-tauri/tests/watchdog_contract.rs": [
     "test:native-responsiveness"
+  ],
+  "scripts/sync-main-to-mac.mjs": [
+    "test:main-sync-gate",
+    "test:data"
+  ],
+  "tests/main-sync-check-gate.test.mjs": [
+    "test:main-sync-gate"
+  ],
+  ".github/workflows/lint.yml": [
+    "test:main-sync-gate",
+    "test:eslint-runner"
   ]
 }

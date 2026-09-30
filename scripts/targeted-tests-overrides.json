@@ -1,6 +1,7 @@
 {
   "scripts/install-mcp-deps.mjs": [
-    "test:mcp-deps"
+    "test:mcp-deps",
+    "test:install-scripts"
   ],
   "scripts/claude-auth-core.mjs": [
     "test:diagnostics"
@@ -121,5 +122,26 @@
   ],
   ".github/workflows/cross-agent-review.yml": [
     "test:agentic-pipeline"
+  ],
+  ".npmrc": [
+    "test:install-scripts"
+  ],
+  "tools/mcp-server/.npmrc": [
+    "test:install-scripts"
+  ],
+  "scripts/check-install-script-drift.mjs": [
+    "test:install-scripts"
+  ],
+  "scripts/sync-main-to-mac.mjs": [
+    "test:install-scripts"
+  ],
+  "scripts/install-crystalball-mcp.mjs": [
+    "test:install-scripts"
+  ],
+  ".github/workflows/release-integrity.yml": [
+    "test:install-scripts"
+  ],
+  "package.json": [
+    "test:install-scripts"
   ]
 }

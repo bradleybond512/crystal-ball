@@ -271,7 +271,7 @@ test('main sync setup validates Node before replacing the LaunchAgent plist', ()
 test('all main sync npm verification and build commands use the pinned toolchain', () => {
   assert.deepEqual(syncMainToMac.NPM_VERIFICATION_COMMANDS, [
     ['run', 'lockfile:check'],
-    ['ci'],
+    ['ci', '--ignore-scripts'],
     ['run', 'version:check'],
     ['run', 'typecheck:all'],
     ['run', 'build'],
@@ -335,7 +335,7 @@ test('main-to-mac sync uses a local clean clone instead of a GitHub self-hosted 
   );
   assert.match(
  syncScript,
- /\['run', 'lockfile:check'\][\s\S]*\['ci'\][\s\S]*\['run', 'version:check'\][\s\S]*\['run', 'typecheck:all'\][\s\S]*\['run', 'build'\][\s\S]*\['run', 'desktop:build:app:full'\]/,
+ /\['run', 'lockfile:check'\][\s\S]*\['ci', '--ignore-scripts'\][\s\S]*\['run', 'version:check'\][\s\S]*\['run', 'typecheck:all'\][\s\S]*\['run', 'build'\][\s\S]*\['run', 'desktop:build:app:full'\]/,
  'sync-main-to-mac should rerun the hard verification stack and build a local app bundle before install',
   );
   assert.match(

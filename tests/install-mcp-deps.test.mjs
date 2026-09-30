@@ -110,7 +110,7 @@ test('the repo really does wire this into prepare', async () => {
     await import('node:fs/promises').then((fs) => fs.readFile(path.join(repoRoot, 'package.json'), 'utf8')),
   );
   assert.match(pkg.scripts.prepare, /install-mcp-deps\.mjs/);
-  assert.equal(pkg.scripts['mcp:install'], 'npm ci --prefix tools/mcp-server');
+  assert.equal(pkg.scripts['mcp:install'], 'npm ci --ignore-scripts --prefix tools/mcp-server');
 });
 
 function writeDependencies(serverDir) {
@@ -206,7 +206,7 @@ test('a failed installer leaves a directory but the next prepare retries nonfata
   const attempts = readFileSync(path.join(serverDir, 'attempts.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
   assert.equal(attempts.length, 2);
   for (const attempt of attempts) {
-    assert.deepEqual(attempt.argv, ['ci', '--no-audit', '--no-fund']);
+    assert.deepEqual(attempt.argv, ['ci', '--ignore-scripts', '--no-audit', '--no-fund']);
     assert.equal(attempt.node, process.execPath);
     assert.equal(attempt.cwd, realpathSync(serverDir));
   }
@@ -218,7 +218,7 @@ test('successful fake npm uses install without a lockfile and repaired dependenc
   const npm = writeFakeNpm(serverDir);
   assert.match(runInstaller(serverDir, { npm_execpath: npm }), /Action: install/);
   const attempt = JSON.parse(readFileSync(path.join(serverDir, 'attempts.jsonl'), 'utf8'));
-  assert.deepEqual(attempt.argv, ['install', '--no-audit', '--no-fund']);
+  assert.deepEqual(attempt.argv, ['install', '--ignore-scripts', '--no-audit', '--no-fund']);
   writeDependencies(serverDir);
   assert.match(runInstaller(serverDir, { npm_execpath: npm }), /Action: skip:installed/);
   assert.equal(readFileSync(path.join(serverDir, 'attempts.jsonl'), 'utf8').trim().split('\n').length, 1);

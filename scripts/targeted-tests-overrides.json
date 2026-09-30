@@ -100,5 +100,14 @@
   ],
   "src-tauri/tests/watchdog_contract.rs": [
     "test:native-responsiveness"
+  ],
+  "scripts/backup-keys.sh": [
+    "test:keys-backup"
+  ],
+  "scripts/restore-keys.sh": [
+    "test:keys-backup"
+  ],
+  "scripts/vault-json.mjs": [
+    "test:keys-backup"
   ]
 }

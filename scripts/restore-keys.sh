@@ -1,34 +1,50 @@
 #!/usr/bin/env bash
-# Restore Crystal Ball API keys from an encrypted backup into macOS
-# Keychain. Pairs with scripts/backup-keys.sh.
+# Restore Crystal Ball's API keys from an encrypted backup into the app's
+# Keychain vault. Pairs with scripts/backup-keys.sh. Run by Bradley only
+# (CLAUDE.md Keychain rule); agents test it against a stub `security`.
 #
 # Usage:
-#   scripts/restore-keys.sh [--verify] <path/to/keys-backup-YYYYMMDD-{age,gpg,openssl}.enc>
+#   scripts/restore-keys.sh [--verify] [--replace] <backup file>
 #
-# The encryption engine is auto-detected from the filename suffix
-# (-age.enc / -gpg.enc / -openssl.enc).
+# Accepted files: keys-backup-YYYYMMDD-{age,gpg,openssl}.enc from
+# backup-keys.sh, or a plain `.age` file (the manual vault backup). Both the
+# vault JSON format and the older KEY=value format are understood.
 #
-# Integrity is checked BEFORE any keychain writes:
-#   - age + gpg use AEAD / MDC. Wrong passphrase or tampered ciphertext
-#     fails decryption with a non-zero exit and the script aborts.
-#   - openssl uses a sidecar HMAC-SHA256 file (.hmac); we recompute and
-#     compare before decrypting.
+# --verify   decrypt and list the key NAMES and count; no Keychain access.
+# --replace  make the vault exactly match the backup. Default: merge — backup
+#            values overwrite the same names, keys added since the backup are
+#            kept.
 #
-# --verify  decrypts and prints the KEY names contained in the backup
-#           without writing anything to keychain. Use this first to
-#           confirm a backup is valid before committing to a restore.
+# Safety:
+#   - integrity is checked before anything is written (age/gpg AEAD/MDC,
+#     openssl sidecar HMAC);
+#   - the decrypted keys stay in memory (no temp files);
+#   - refuses while Crystal Ball is running (the app would overwrite the vault);
+#   - the vault is written through `security -i` on stdin as hex, so no key
+#     ever appears in a process's arguments; a read-back confirms the write.
 #
 # Exit codes:
-#   0  success
-#   1  argument / file / decryption / integrity / write error
+#   0  success (or aborted at the confirmation prompt)
+#   1  argument / file / decryption / integrity / Keychain error
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+VAULT_TOOL="$SCRIPT_DIR/vault-json.mjs"
+MAIN_RS="$REPO_ROOT/src-tauri/src/main.rs"
+SERVICE="crystal-ball"
+VAULT_ACCOUNT="secrets-vault"
+ERR_ITEM_NOT_FOUND=44
+APP_PROCESS="crystalball"
+
 VERIFY_ONLY=0
+REPLACE=0
 ENC_PATH=""
 for arg in "$@"; do
   case "$arg" in
     --verify) VERIFY_ONLY=1 ;;
+    --replace) REPLACE=1 ;;
     -h|--help)
       sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
@@ -48,23 +64,26 @@ for arg in "$@"; do
 done
 
 if [[ -z "$ENC_PATH" ]]; then
-  echo "usage: $0 [--verify] <path/to/keys-backup-YYYYMMDD-{age,gpg,openssl}.enc>" >&2
+  echo "usage: $0 [--verify] [--replace] <backup file>" >&2
   exit 1
 fi
 if [[ ! -f "$ENC_PATH" ]]; then
   echo "file not found: $ENC_PATH" >&2
   exit 1
 fi
+if ! command -v node >/dev/null 2>&1; then
+  echo "node is required (it validates the backup in memory)." >&2
+  exit 1
+fi
 
 # ── Detect engine from filename suffix ──────────────────────────────
-ENGINE=""
 case "$ENC_PATH" in
-  *-age.enc)     ENGINE="age" ;;
-  *-gpg.enc)     ENGINE="gpg" ;;
-  *-openssl.enc) ENGINE="openssl" ;;
+  *-age.enc|*.age) ENGINE="age" ;;
+  *-gpg.enc)       ENGINE="gpg" ;;
+  *-openssl.enc)   ENGINE="openssl" ;;
   *)
     echo "Cannot detect engine from filename: $ENC_PATH" >&2
-    echo "Expected suffix -age.enc, -gpg.enc, or -openssl.enc." >&2
+    echo "Expected -age.enc, -gpg.enc, -openssl.enc or .age." >&2
     exit 1
     ;;
 esac
@@ -74,23 +93,16 @@ if ! command -v "$ENGINE" >/dev/null 2>&1; then
 fi
 echo "Encryption engine: $ENGINE"
 
-TMP_DIR="$(mktemp -d -t crystalball-restore)"
-chmod 700 "$TMP_DIR"
-TMP_PLAIN="$TMP_DIR/keys.env"
-trap 'rm -rf "$TMP_DIR"' EXIT INT TERM
-
-# ── Decrypt + integrity check ───────────────────────────────────────
+# ── Decrypt into memory (integrity checked by the engine) ───────────
 case "$ENGINE" in
   age)
-    # AEAD: wrong passphrase or tampered file fails decryption.
-    if ! age -d -o "$TMP_PLAIN" "$ENC_PATH"; then
+    if ! PLAIN="$(age -d "$ENC_PATH")"; then
       echo "Integrity check failed (wrong passphrase or corrupt file)." >&2
       exit 1
     fi
     ;;
   gpg)
-    # OpenPGP MDC: tampered file fails. Wrong passphrase exits non-zero.
-    if ! gpg --decrypt --output "$TMP_PLAIN" "$ENC_PATH" 2>/dev/null; then
+    if ! PLAIN="$(gpg --decrypt "$ENC_PATH" 2>/dev/null)"; then
       echo "Integrity check failed (wrong passphrase or corrupt file)." >&2
       exit 1
     fi
@@ -106,20 +118,14 @@ case "$ENGINE" in
       echo "Empty password." >&2
       exit 1
     fi
-    # Recompute HMAC over the ciphertext and compare to the sidecar.
-    # If this fails, abort BEFORE attempting decryption.
-    EXPECTED="$TMP_DIR/expected.hmac"
-    openssl dgst -sha256 -hmac "$PW" -binary "$ENC_PATH" > "$EXPECTED"
-    if ! cmp -s "$EXPECTED" "$HMAC_PATH"; then
-      echo "Integrity check failed: HMAC mismatch." >&2
-      echo "Either the passphrase is wrong or the file has been tampered with." >&2
+    # Compare the HMAC before decrypting anything.
+    expected="$(openssl dgst -sha256 -hmac "$PW" -binary "$ENC_PATH" | od -An -tx1 | tr -d ' \n')"
+    actual="$(od -An -tx1 < "$HMAC_PATH" | tr -d ' \n')"
+    if [[ -z "$expected" || "$expected" != "$actual" ]]; then
+      echo "Integrity check failed: HMAC mismatch (wrong passphrase or tampered file)." >&2
       exit 1
     fi
-    rm -f "$EXPECTED"
-    # HMAC matched → passphrase is correct AND ciphertext is intact.
-    if ! printf '%s' "$PW" | openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
-            -in "$ENC_PATH" -out "$TMP_PLAIN" -pass stdin 2>/dev/null; then
-      # Should not happen after HMAC pass — would mean format mismatch.
+    if ! PLAIN="$(openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -in "$ENC_PATH" -pass fd:3 3< <(printf '%s' "$PW") 2>/dev/null)"; then
       echo "Decryption failed despite HMAC match — file format may be incompatible." >&2
       exit 1
     fi
@@ -127,55 +133,98 @@ case "$ENGINE" in
     ;;
 esac
 
-chmod 600 "$TMP_PLAIN"
-
-# ── Verify mode: list key names + exit ──────────────────────────────
-if (( VERIFY_ONLY == 1 )); then
-  echo
-  echo "Backup contents (KEY names only, values not shown):"
-  count=0
-  while IFS= read -r line; do
-    [[ -z "$line" || "$line" == \#* ]] && continue
-    key="${line%%=*}"
-    if [[ -n "$key" && "$key" != "$line" ]]; then
-      echo "  $key"
-      count=$((count + 1))
-    fi
-  done < "$TMP_PLAIN"
-  echo
-  echo "Total: $count keys. Backup integrity OK."
-  exit 0
-fi
-
-# ── Confirm + write to keychain ─────────────────────────────────────
-echo
-echo "About to write keys to the macOS Keychain (service=crystal-ball)."
-read -r -p "Proceed? [y/N] " ans
-if [[ "${ans,,}" != "y" && "${ans,,}" != "yes" ]]; then
-  echo "Aborted."
-  exit 0
-fi
-
-restored=0
-failed=0
-while IFS= read -r line; do
-  [[ -z "$line" || "$line" == \#* ]] && continue
-  key="${line%%=*}"
-  value="${line#*=}"
-  if [[ -z "$key" || "$key" == "$line" ]]; then
-    continue
-  fi
-  if security add-generic-password -U -s "crystal-ball" -a "$key" -w "$value" 2>/dev/null; then
-    restored=$((restored + 1))
-  else
-    failed=$((failed + 1))
-    echo "  ! failed to write $key" >&2
-  fi
-done < "$TMP_PLAIN"
-
-echo
-echo "Restored $restored keys to keychain."
-if (( failed > 0 )); then
-  echo "$failed keys failed — see above." >&2
+if ! BACKUP_JSON="$(printf '%s' "$PLAIN" | node "$VAULT_TOOL" normalize --supported "$MAIN_RS")"; then
+  unset PLAIN
+  echo "The decrypted backup is not a valid key vault. Nothing was written." >&2
   exit 1
 fi
+unset PLAIN
+BACKUP_COUNT="$(printf '%s' "$BACKUP_JSON" | node "$VAULT_TOOL" count)"
+
+# ── Verify mode: names + count, no Keychain access ──────────────────
+if (( VERIFY_ONLY == 1 )); then
+  echo
+  echo "Backup contents (names only, values never shown):"
+  printf '%s' "$BACKUP_JSON" | node "$VAULT_TOOL" names | sed 's/^/  /'
+  echo
+  echo "Total: $BACKUP_COUNT keys. Backup integrity OK."
+  exit 0
+fi
+
+if (( BACKUP_COUNT == 0 )); then
+  echo "The backup contains no keys. Nothing was written." >&2
+  exit 1
+fi
+
+# ── The app must be quit: it holds the keys in memory and rewrites the vault
+if pgrep -x "$APP_PROCESS" >/dev/null 2>&1; then
+  echo "Crystal Ball is running. Quit it first (Crystal Ball > Quit), then run the restore again." >&2
+  exit 1
+fi
+
+# ── Build the vault to write ────────────────────────────────────────
+if (( REPLACE == 1 )); then
+  NEW_JSON="$BACKUP_JSON"
+  echo "Mode: replace — the vault will contain exactly the $BACKUP_COUNT backed-up keys."
+else
+  set +e
+  CURRENT_RAW="$(security find-generic-password -s "$SERVICE" -a "$VAULT_ACCOUNT" -w 2>/dev/null)"
+  status=$?
+  set -e
+  if (( status == ERR_ITEM_NOT_FOUND )); then
+    CURRENT_JSON="{}"
+  elif (( status != 0 )); then
+    echo "Could not read the current secrets-vault item (security exit $status)." >&2
+    echo "Choose Allow if macOS asks, or use --replace to restore the backup exactly." >&2
+    exit 1
+  elif ! CURRENT_JSON="$(printf '%s' "$CURRENT_RAW" | node "$VAULT_TOOL" normalize)"; then
+    unset CURRENT_RAW
+    echo "The current vault is not valid JSON. Use --replace to restore the backup exactly." >&2
+    exit 1
+  fi
+  unset CURRENT_RAW
+  NEW_JSON="$(node "$VAULT_TOOL" merge 3< <(printf '%s' "$CURRENT_JSON") 4< <(printf '%s' "$BACKUP_JSON"))"
+  unset CURRENT_JSON
+fi
+unset BACKUP_JSON
+NEW_COUNT="$(printf '%s' "$NEW_JSON" | node "$VAULT_TOOL" count)"
+
+# ── Confirm (bash 3.2-safe) ─────────────────────────────────────────
+echo
+echo "About to write $NEW_COUNT keys to the Crystal Ball vault (Keychain: $SERVICE / $VAULT_ACCOUNT)."
+read -r -p "Proceed? [y/N] " ans || ans=""
+case "$ans" in
+  y|Y|yes|Yes|YES) ;;
+  *)
+    echo "Aborted. Nothing was written."
+    exit 0
+    ;;
+esac
+
+# ── Write via stdin as hex: no key in any process's arguments ───────
+HEX="$(printf '%s' "$NEW_JSON" | node "$VAULT_TOOL" hex)"
+if ! printf 'add-generic-password -U -s %s -a %s -X %s\n' "$SERVICE" "$VAULT_ACCOUNT" "$HEX" | security -i >/dev/null 2>&1; then
+  unset HEX NEW_JSON
+  echo "Writing the vault to the Keychain failed." >&2
+  exit 1
+fi
+unset HEX
+
+# ── Read back and confirm ───────────────────────────────────────────
+if ! CHECK_RAW="$(security find-generic-password -s "$SERVICE" -a "$VAULT_ACCOUNT" -w 2>/dev/null)"; then
+  unset NEW_JSON
+  echo "The vault was written but could not be read back to confirm it." >&2
+  exit 1
+fi
+CHECK_JSON="$(printf '%s' "$CHECK_RAW" | node "$VAULT_TOOL" normalize 2>/dev/null || true)"
+unset CHECK_RAW
+if [[ "$CHECK_JSON" != "$NEW_JSON" ]]; then
+  unset CHECK_JSON NEW_JSON
+  echo "The vault read back does not match what was written. Do not start the app; run the restore again." >&2
+  exit 1
+fi
+unset CHECK_JSON NEW_JSON
+
+echo
+echo "Restored: the vault now holds $NEW_COUNT keys (confirmed by reading it back)."
+echo "Start Crystal Ball. If macOS asks for access to the \"$SERVICE\" item, choose Always Allow for Crystal Ball."

@@ -15,28 +15,37 @@ explicit, in-turn instruction.
 
 ### Backup workflow
 
-`npm run backup-keys` reads each known `crystal-ball/*` key from the keychain and
-writes a single encrypted archive to
-`~/Library/Mobile Documents/com~apple~CloudDocs/CrystalBall/keys-backup-YYYYMMDD-{engine}.enc`.
-Plaintext is never written to iCloud. The encryption engine is auto-selected:
+The app stores every key in one Keychain item (service `crystal-ball`, account
+`secrets-vault`, a JSON object of NAME to value). `npm run backup-keys` reads
+that item into memory, validates it with `scripts/vault-json.mjs` (names and a
+count are printed, never values) and pipes it straight into the encryptor, so
+plaintext never touches disk. Only when no vault item exists does it fall back
+to the pre-vault per-key items (the names in `SUPPORTED_SECRET_KEYS`). Denied
+Keychain access is an error, never a silent fallback. The encrypted archive is
+written to
+`~/Library/Mobile Documents/com~apple~CloudDocs/CrystalBall/keys-backup-YYYYMMDD-{engine}.enc`
+(mode 600; a failed run never clobbers the day's existing backup).
+`--dry-run` lists the names only. The encryption engine is auto-selected:
 
-1. **age** (preferred) — ChaCha20-Poly1305 AEAD with Argon2id KDF. `brew install age`.
+1. **age** (preferred) — ChaCha20-Poly1305 AEAD with a scrypt passphrase KDF. `brew install age`.
 2. **gpg** — AES-256 + SHA-512 S2K (65M iterations) + OpenPGP MDC.
 3. **openssl** (fallback) — AES-256-CBC + PBKDF2-HMAC-SHA256 (600,000 iters,
    NIST SP 800-132 2023) + sidecar HMAC-SHA256 (`*.enc.hmac`) for integrity.
 
-Output filename embeds the engine so restore knows what to do
-(`-age.enc`, `-gpg.enc`, or `-openssl.enc`). Files are written with mode 600.
-
 ### Restore workflow
 
 `npm run restore-keys -- /path/to/keys-backup-YYYYMMDD-engine.enc` decrypts the
-archive and writes each `KEY=value` back to the keychain (idempotent under `-U`).
-Engine is auto-detected from the filename suffix.
+archive into memory and writes the `secrets-vault` item. It also accepts a
+manual `vault-YYYYMMDD.age` backup and the older `KEY=value` format.
 
-Use `npm run restore-keys -- --verify <path>` first to decrypt the archive and
-list the contained KEY names (values are never printed) — confirms the backup
-is valid before committing to a keychain write.
+- Default is **merge**: backup values overwrite the same names, keys added
+  since the backup are kept. `--replace` makes the vault match the backup.
+- It refuses while Crystal Ball is running, asks for confirmation, writes
+  through `security -i` on stdin as hex (no key ever appears in a process's
+  arguments) and reads the vault back to confirm the key count.
+
+Use `npm run restore-keys -- --verify <path>` first: it decrypts and lists the
+key names and count without any Keychain access.
 
 Integrity is verified BEFORE any keychain writes:
 

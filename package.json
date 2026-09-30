@@ -42,6 +42,7 @@
     "version:check": "node scripts/sync-desktop-version.mjs --check",
     "backup-keys": "bash scripts/backup-keys.sh",
     "restore-keys": "bash scripts/restore-keys.sh",
+    "test:keys-backup": "node --test tests/keys-backup-restore.test.mjs",
     "release:prepare": "node scripts/release-prepare.mjs",
     "dev": "vite",
     "dev:tech": "cross-env VITE_VARIANT=tech vite",

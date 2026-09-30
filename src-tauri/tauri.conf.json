@@ -66,6 +66,8 @@
       "sidecar/env-local-loader.mjs",
       "sidecar/acled-token-helpers.mjs",
       "sidecar/watchboard-engine.mjs",
+    "sidecar/quota-cache.mjs",
+    "sidecar/quota-policy.mjs",
       "sidecar/sms-command-parser.mjs",
       "sidecar/sms-security.mjs",
       "sidecar/sms-response-formatter.mjs",

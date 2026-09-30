@@ -3558,7 +3558,7 @@ test('/api/airquality/purpleair — upstream error is a 502 and never cached', a
   }
 });
 
-test('/api/airquality/purpleair — v1 success caches for 5 minutes, refetches after the TTL', async () => {
+test('/api/airquality/purpleair — v1 worldwide snapshot caches for 24 hours, refetches after the TTL (R4-BUG-005)', async () => {
   const upstream = {
     fields: ['sensor_index', 'pm2.5', 'latitude', 'longitude', 'location_type', 'confidence', 'name', 'last_seen'],
     data: [
@@ -3577,13 +3577,18 @@ test('/api/airquality/purpleair — v1 success caches for 5 minutes, refetches a
     assert.equal(first.sensors[0].name, 'Backyard');
     assert.equal(app.calls[0].headers['X-API-Key'], 'test-purpleair-key', 'key must travel in the X-API-Key header, not the URL');
     assert.match(app.calls[0].path, /location_type=0/);
+    assert.match(app.calls[0].path, /max_age=3600/, 'only sensors reporting in the last hour (fewer points)');
 
     await app.get('/api/airquality/purpleair');
     assert.equal(app.calls.length, 1, 'second hit inside the TTL must be served from cache');
 
-    restoreClock = shiftClock(5 * 60 * 1000 + 1000);
+    restoreClock = shiftClock(60 * 60 * 1000 + 1000);
     await app.get('/api/airquality/purpleair');
-    assert.equal(app.calls.length, 2, 'a hit after the 5-min TTL must refetch upstream');
+    assert.equal(app.calls.length, 1, 'the worldwide snapshot is not refetched hourly');
+    restoreClock();
+    restoreClock = shiftClock(24 * 60 * 60 * 1000 + 1000);
+    await app.get('/api/airquality/purpleair');
+    assert.equal(app.calls.length, 2, 'a hit after the 24 h TTL must refetch upstream');
   } finally {
     if (restoreClock) restoreClock();
     _resetSidecarCacheForTests(); // the shifted-clock write is future-stamped; don't let it outlive this test

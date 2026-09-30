@@ -48,6 +48,8 @@ import { validateTwilioSignature } from './sms-security.mjs';
 import { buildRecentChanges } from './recent-changes.mjs';
 import { explain as explainEvent } from './explainer.mjs';
 import { EventStore } from './event-store.mjs';
+import { QUOTA_CACHE_FILE, createQuotaCache } from './quota-cache.mjs';
+import { PURPLEAIR_MAX_AGE_S, QUOTA_TTL_MS } from './quota-policy.mjs';
 
 // ── Temporal World Store append helpers ──
 // These translate the renderer's observation/situation shapes into EventRecords
@@ -5606,6 +5608,14 @@ function _ensureSidecarCacheSweep() {
   }
 }
 
+// Persisted cache for quota-limited providers (R4-BUG-005). In memory only
+// until startup points it at the data dir, so tests never touch disk unless
+// they ask to.
+let _quotaCache = createQuotaCache({ filePath: null });
+export function initQuotaCache(filePath) {
+  _quotaCache = createQuotaCache({ filePath });
+}
+
 function getCached(key, ttlMs) {
   const entry = _sidecarCache.get(key);
   const effective = ttlMs ?? entry?.ttlMs;
@@ -5650,6 +5660,7 @@ export function odinRequestCanStart(inFlight, cacheKey, maximum = ODIN_IN_FLIGHT
 // boundaries without sleeping (same convention as _resetSecurityCaches).
 export function _resetSidecarCacheForTests() {
   _sidecarCache.clear();
+  _quotaCache = createQuotaCache({ filePath: null });
   _odinInFlight.clear();
   resetInfrastructureBgpCredentialState();
 }
@@ -10545,7 +10556,9 @@ async function dispatch(requestUrl, req, routes, context) {
  const q = requestUrl.searchParams.get('q') ?? 'geopolitics';
  const pageSize = Math.min(20, parseInt(requestUrl.searchParams.get('pageSize') ?? '10', 10));
  const _newsCacheKey = `newsapi:${q}:${pageSize}`;
- const _newsCached = getCached(_newsCacheKey, 10 * 60 * 1000);
+ // 100 requests/day free: 20 min TTL persisted across restarts = 72/day for
+ // the one production query (R4-BUG-005).
+ const _newsCached = _quotaCache.get(_newsCacheKey, QUOTA_TTL_MS.newsapi);
  if (_newsCached) return json(_newsCached);
  try {
  const params = new URLSearchParams({ q, pageSize: String(pageSize), language: 'en', sortBy: 'publishedAt', apiKey });
@@ -10566,7 +10579,7 @@ async function dispatch(requestUrl, req, routes, context) {
  description: a.description ?? '',
  imageUrl: a.urlToImage ?? undefined,
  }));
- setCached(_newsCacheKey, items, 10 * 60 * 1000);
+ _quotaCache.set(_newsCacheKey, items);
  return json(items);
  } catch {
  return json([], 200);
@@ -15430,11 +15443,17 @@ async function dispatch(requestUrl, req, routes, context) {
  }
  const bboxQuery = bboxPresent ? `&nwlng=${bbox[0]}&nwlat=${bbox[1]}&selng=${bbox[2]}&selat=${bbox[3]}` : '';
  const cacheKey = bboxPresent ? `purpleair-sensors:${bbox.join(',')}` : 'purpleair-sensors';
- const cached = getCached(cacheKey, 5 * 60 * 1000);
+ // PurpleAir bills points per row x field from a one-time grant. Persisted
+ // across restarts: a saved-place box refreshes hourly, the worldwide
+ // snapshot once a day (Bradley's decision). `location_type` is not
+ // requested (the query already filters outdoor; the parser defaults it to
+ // 0) and `max_age` drops sensors silent for over an hour. `confidence` stays:
+ // without it every sensor would pass the confidence gate (R4-BUG-005).
+ const cached = _quotaCache.get(cacheKey, bboxPresent ? QUOTA_TTL_MS.purpleairBbox : QUOTA_TTL_MS.purpleairGlobal);
  if (cached) return json(cached);
- const fields = 'sensor_index,pm2.5,latitude,longitude,location_type,confidence,name,last_seen';
+ const fields = 'sensor_index,pm2.5,latitude,longitude,confidence,name,last_seen';
  try {
- const url = `https://api.purpleair.com/v1/sensors?fields=${encodeURIComponent(fields)}&location_type=0${bboxQuery}`;
+ const url = `https://api.purpleair.com/v1/sensors?fields=${encodeURIComponent(fields)}&location_type=0&max_age=${PURPLEAIR_MAX_AGE_S}${bboxQuery}`;
  const resp = await fetchWithTimeout(url, {
  headers: {
  'X-API-Key': apiKey,
@@ -15446,7 +15465,7 @@ async function dispatch(requestUrl, req, routes, context) {
  const payload = await resp.json();
  const sensors = sidecarParseV1Sensors(payload);
  const result = { sensors, source: 'v1', fetchedAt: Date.now() };
- setCached(cacheKey, result, 5 * 60 * 1000);
+ _quotaCache.set(cacheKey, result);
  return json(result);
  } catch (error) {
  return json({ sensors: [], error: String(error.message ?? error) }, 500);
@@ -16298,9 +16317,10 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── ADS-B live aircraft tracking (OpenSky Network, no key required) ──────
   // opensky:states:all is a shared raw snapshot used by /api/adsb,
-  // /api/adsb-military, and /api/aviation/flights — one fetch per 55 s.
+  // /api/adsb-military, and /api/aviation/flights — one fetch per 120 s:
+ // 720/day x 4 credits = 72% of OpenSky's 4,000 daily credits (R4-BUG-005).
   if (requestUrl.pathname === '/api/adsb') {
- const OPENSKY_TTL = 55 * 1000;
+ const OPENSKY_TTL = QUOTA_TTL_MS.openskyStates;
  const cached = getCached('opensky:states:all', OPENSKY_TTL);
  if (cached) return json(cached);
 
@@ -17341,8 +17361,15 @@ async function dispatch(requestUrl, req, routes, context) {
   if (requestUrl.pathname === '/api/greynoise-scanners') {
  const apiKey = process.env.GREYNOISE_API_KEY ?? '';
  if (!apiKey) return json({ error: 'GREYNOISE_API_KEY not configured' });
- const cached = getCached('greynoise-scanners', 15 * 60 * 1000);
+ // 20 lookups per refresh against a 50/week Community quota: refresh
+ // weekly and persist across restarts (R4-BUG-005). After a refresh where
+ // every lookup failed, back off for an hour instead of retrying 20 calls on
+ // every request, and keep serving the last good list.
+ const cached = _quotaCache.get('greynoise-scanners', QUOTA_TTL_MS.greynoiseSeeds);
  if (cached) return json(cached);
+ if (getCached('greynoise-scanners:backoff', 60 * 60 * 1000)) {
+ return json(_quotaCache.getStale('greynoise-scanners') ?? []);
+ }
  const SEED_IPS = [
  '45.83.64.1', '80.82.77.33', '185.220.101.1', '193.32.127.1', '198.20.69.74',
  '198.20.69.98', '198.20.70.114', '198.20.70.242', '205.210.31.1', '209.126.110.1',
@@ -17369,7 +17396,11 @@ async function dispatch(requestUrl, req, routes, context) {
  await new Promise(r => setTimeout(r, 200));
  }
  }
- setCached('greynoise-scanners', results);
+ if (results.length === 0) {
+ setCached('greynoise-scanners:backoff', true);
+ return json(_quotaCache.getStale('greynoise-scanners') ?? results);
+ }
+ _quotaCache.set('greynoise-scanners', results);
  return json(results);
  } catch (error) {
  return json({ error: `greynoise-scanners error: ${error.message ?? error}` }, 502);
@@ -17411,7 +17442,9 @@ async function dispatch(requestUrl, req, routes, context) {
   if (requestUrl.pathname === '/api/abuseipdb-reports') {
  const apiKey = process.env.ABUSEIPDB_API_KEY ?? '';
  if (!apiKey) return json({ error: 'ABUSEIPDB_API_KEY not configured' });
- const cached = getCached('abuseipdb-reports', 30 * 60 * 1000);
+ // Blacklist endpoint: 5/day free. 8 h TTL persisted across restarts = 3/day
+ // (R4-BUG-005).
+ const cached = _quotaCache.get('abuseipdb-reports', QUOTA_TTL_MS.abuseipdbBlacklist);
  if (cached) return json(cached);
  try {
  const r = await fetchWithTimeout(
@@ -17430,7 +17463,7 @@ async function dispatch(requestUrl, req, routes, context) {
  totalReports: entry.totalReports,
  lastReportedAt: entry.lastReportedAt,
  }));
- setCached('abuseipdb-reports', entries);
+ _quotaCache.set('abuseipdb-reports', entries);
  return json(entries);
  } catch (error) {
  return json({ error: `abuseipdb-reports error: ${error.message ?? error}` }, 502);
@@ -17449,7 +17482,7 @@ async function dispatch(requestUrl, req, routes, context) {
  headers['Authorization'] = `Basic ${creds}`;
  }
  try {
- const OPENSKY_TTL = 55 * 1000;
+ const OPENSKY_TTL = QUOTA_TTL_MS.openskyStates;
  let data = getCached('opensky:states:all', OPENSKY_TTL);
  if (!data) {
  const r = await fetchWithTimeout('https://opensky-network.org/api/states/all', { headers }, 12000);
@@ -17628,7 +17661,7 @@ async function dispatch(requestUrl, req, routes, context) {
  };
  };
  try {
- const OPENSKY_TTL = 55 * 1000;
+ const OPENSKY_TTL = QUOTA_TTL_MS.openskyStates;
  let data = getCached('opensky:states:all', OPENSKY_TTL);
  if (!data) {
  const r = await fetchWithTimeout('https://opensky-network.org/api/states/all', { headers }, 12000);
@@ -21374,6 +21407,11 @@ export async function createLocalApiServer(options = {}) {
   const context = resolveConfig(options);
   loadVerboseState(context.dataDir);
   initWatchboardEngine(path.join(context.dataDir, 'watchboards.json'));
+  // Persist only to an explicitly configured data dir (the app always sets
+  // LOCAL_API_DATA_DIR). The resource-dir/cwd fallback used by dev runs and
+  // tests stays memory-only, so no quota cache is written into the repo.
+  const explicitDataDir = options.dataDir ?? process.env.LOCAL_API_DATA_DIR;
+  initQuotaCache(explicitDataDir ? path.join(context.dataDir, QUOTA_CACHE_FILE) : null);
   const routes = await buildRouteTable(context.apiDir);
   const ofacCache = new OfacCache({ dataDir: context.dataDir });
   context.ofacCache = ofacCache;

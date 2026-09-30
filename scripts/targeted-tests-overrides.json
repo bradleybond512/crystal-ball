@@ -100,5 +100,17 @@
   ],
   "src-tauri/tests/watchdog_contract.rs": [
     "test:native-responsiveness"
+  ],
+  "src-tauri/sidecar/local-api-server.mjs": [
+    "test:quota"
+  ],
+  "src-tauri/sidecar/quota-cache.mjs": [
+    "test:quota"
+  ],
+  "src-tauri/sidecar/quota-policy.mjs": [
+    "test:quota"
+  ],
+  "src-tauri/tauri.conf.json": [
+    "test:quota"
   ]
 }

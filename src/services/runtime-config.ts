@@ -181,13 +181,39 @@ export interface RuntimeSecretState {
   source: 'env' | 'vault';
 }
 
+/**
+ * Desktop secrets whose VALUE a webview may hold (R4-SEC-001): plaintext
+ * settings (PLAINTEXT_KEYS) plus keys that end up in client-side request URLs
+ * anyway. Every other secret is write-only from here; the renderer sees only
+ * that it is set. Must equal native RENDERER_READABLE_KEYS
+ * (tests/secret-boundary.test.mjs).
+ */
+export const RENDERER_READABLE_KEYS: ReadonlySet<RuntimeSecretKey> = new Set<RuntimeSecretKey>([
+  'OLLAMA_API_URL',
+  'OLLAMA_MODEL',
+  'WS_RELAY_URL',
+  'VITE_WS_RELAY_URL',
+  'VITE_OPENSKY_RELAY_URL',
+  'ACLED_EMAIL',
+  'S2U_XMPP_JID',
+  'S2U_TAK_URL',
+  'S2U_TAK_USERNAME',
+  'S2U_TLS_INSECURE_OPT_IN',
+  'PATREON_AUDIO_RSS_URL',
+  'CESIUM_ION_TOKEN',
+  'GOOGLE_MAPS_API_KEY',
+  'MAPBOX_API_KEY',
+  'MAPTILER_API_KEY',
+  'OWM_API_KEY',
+  'CRYSTALBALL_API_KEY',
+]);
+
 export interface RuntimeConfig {
   featureToggles: Record<RuntimeFeatureId, boolean>;
   secrets: Partial<Record<RuntimeSecretKey, RuntimeSecretState>>;
 }
 
 const TOGGLES_STORAGE_KEY = 'crystalball-runtime-feature-toggles';
-const SIDECAR_ENV_UPDATE_PATH = '/api/local-env-update';
 const SIDECAR_SECRET_VALIDATE_PATH = '/api/local-validate-secret';
 
 const defaultToggles: Record<RuntimeFeatureId, boolean> = {
@@ -986,6 +1012,9 @@ const runtimeConfig: RuntimeConfig = {
   secrets: {},
 };
 
+/** Desktop keys that are set but whose value stays native-side (R4-SEC-001). */
+const desktopSecretPresence = new Set<RuntimeSecretKey>();
+
 let localApiTokenPromise: Promise<string | null> | null = null;
 
 function notifyConfigChanged(): void {
@@ -1072,8 +1101,16 @@ export function isFeatureEnabled(featureId: RuntimeFeatureId): boolean {
 
 export function getSecretState(key: RuntimeSecretKey): { present: boolean; valid: boolean; source: 'env' | 'vault' | 'missing' } {
   const state = runtimeConfig.secrets[key];
-  if (!state) return { present: false, valid: false, source: 'missing' };
-  return { present: true, valid: validateSecret(key, state.value).valid, source: state.source };
+  if (state) return { present: true, valid: validateSecret(key, state.value).valid, source: state.source };
+  // A sidecar-only desktop secret: set, value never in this window. Its format
+  // was checked when it was saved (R4-SEC-001).
+  if (desktopSecretPresence.has(key)) return { present: true, valid: true, source: 'vault' };
+  return { present: false, valid: false, source: 'missing' };
+}
+
+/** Whether a secret is configured, without needing (or exposing) its value. */
+export function isSecretSet(key: RuntimeSecretKey): boolean {
+  return getSecretState(key).present;
 }
 
 export function isFeatureAvailable(featureId: RuntimeFeatureId): boolean {
@@ -1138,21 +1175,17 @@ export async function setSecretValue(key: RuntimeSecretKey, value: string): Prom
   const sanitized = value.trim();
   if (sanitized) {
  await keychainService.set(key, sanitized);
- runtimeConfig.secrets[key] = { value: sanitized, source: 'vault' };
+ desktopSecretPresence.add(key);
+ // Only allowlisted values stay in this window (R4-SEC-001).
+ if (RENDERER_READABLE_KEYS.has(key)) runtimeConfig.secrets[key] = { value: sanitized, source: 'vault' };
+ else delete runtimeConfig.secrets[key];
   } else {
  await keychainService.remove(key);
+ desktopSecretPresence.delete(key);
  delete runtimeConfig.secrets[key];
   }
-
-  // Push to sidecar so handlers pick it up immediately.
-  // This is best-effort: keyring persistence is the source of truth.
-  // Empty values must also be pushed or the deleted key remains live in the
-  // already-running sidecar environment until restart.
-  try {
-    await pushSecretToSidecar(key, sanitized);
-  } catch {
-    // Sidecar may not be ready yet — keychain is the source of truth.
-  }
+  // Native pushes the change (including a deletion, as an unset) to the
+  // running sidecar itself; this window never relays secret values.
 
   // Signal other windows (main ↔ settings) to reload secrets from keychain.
   // The `storage` event fires in all same-origin windows except the one that wrote.
@@ -1172,35 +1205,6 @@ async function getLocalApiToken(): Promise<string | null> {
  throw error;
  });
   return localApiTokenPromise;
-}
-
-async function pushSecretToSidecar(key: string, value: string): Promise<void> {
-  // Secrets only ever go to a sidecar port the native side has confirmed. With
-  // none (booting, restarting, or the port held by another process) skip the
-  // push: the keychain and the native SecretsCache stay authoritative, and a
-  // restarted sidecar receives this key through its environment (R4-BUG-004).
-  const base = await resolveConfirmedLocalApiBase();
-  if (!base) return;
-  const headers = new Headers({ 'Content-Type': 'application/json' });
-  const token = await getLocalApiToken();
-  if (token) {
- headers.set('Authorization', `Bearer ${token}`);
-  }
-
-  const response = await fetch(`${base}${SIDECAR_ENV_UPDATE_PATH}`, {
- method: 'POST',
- headers,
- body: JSON.stringify({ key, value: value || null }),
-  });
-
-  if (!response.ok) {
- let detail = '';
- try {
- detail = await response.text();
- } catch { /* ignore non-readable body */ }
- const suffix = detail ? `: ${detail.slice(0, 200)}` : '';
- throw new Error(`Sidecar secret sync failed (${response.status})${suffix}`);
-  }
 }
 
 async function callSidecarWithAuth(path: string, init: RequestInit): Promise<Response> {
@@ -1299,14 +1303,33 @@ export async function verifySecretWithApi(
  return verifyWebSecret(key, value);
   }
 
-  try {
- const response = await callSidecarWithAuth(SIDECAR_SECRET_VALIDATE_PATH, {
- method: 'POST',
- headers: { 'Content-Type': 'application/json' },
- body: JSON.stringify({ key, value: value.trim(), context }),
- });
+  return requestSidecarVerification({ key, value: value.trim(), context });
+}
 
- let payload: unknown = null;
+/**
+ * "Test" for a saved key (R4-SEC-001). A sidecar-only secret is checked by the
+ * sidecar against its own copy, so the value never comes back into this window.
+ * Readable keys (and web builds) still verify the value this window holds.
+ */
+export async function verifyStoredSecretWithApi(
+  key: RuntimeSecretKey,
+  context: Partial<Record<RuntimeSecretKey, string>> = {},
+): Promise<SecretVerificationResult> {
+  const held = runtimeConfig.secrets[key]?.value;
+  if (held) return verifySecretWithApi(key, held, context);
+  if (!isDesktopRuntime() || !isSecretSet(key)) return { valid: false, message: 'No value to test' };
+  return requestSidecarVerification({ key, useStored: true, context });
+}
+
+async function requestSidecarVerification(body: Record<string, unknown>): Promise<SecretVerificationResult> {
+  try {
+    const response = await callSidecarWithAuth(SIDECAR_SECRET_VALIDATE_PATH, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    let payload: unknown = null;
  try {
  payload = await response.json();
  } catch { /* non-JSON response */ }
@@ -1335,48 +1358,36 @@ export async function verifySecretWithApi(
   }
 }
 
-export async function loadDesktopSecrets(options?: { syncToSidecar?: boolean }): Promise<void> {
+/**
+ * Load desktop secret state (R4-SEC-001): presence for every key, values only
+ * for RENDERER_READABLE_KEYS. Sidecar-only values never enter this window; the
+ * sidecar receives them from native (at launch, on keychain load, and on every
+ * Settings change).
+ */
+export async function loadDesktopSecrets(): Promise<void> {
   if (!isDesktopRuntime()) return;
 
-  const syncToSidecar = options?.syncToSidecar ?? true;
-
   try {
- const keys = await keychainService.listSupportedKeys();
-
- const keyResults = await Promise.allSettled(
- keys.map(async (key) => {
- const value = await keychainService.get(key);
- return { key, value };
- })
- );
-
- const syncResults = await Promise.allSettled(
- keyResults
- .filter((r): r is PromiseFulfilledResult<{ key: string; value: string | null }> => r.status === 'fulfilled' && r.value.value != null && r.value.value.trim().length > 0)
- .map(async ({ value: { key, value } }) => {
- runtimeConfig.secrets[key as RuntimeSecretKey] = { value: value!, source: 'vault' };
- if (!syncToSidecar) return;
- try {
- await pushSecretToSidecar(key as RuntimeSecretKey, value!);
- } catch {
- // Sidecar may not be ready during early bootstrap — secrets are
- // already injected into the sidecar env at launch via keychain.
- }
- })
- );
-
- const failures = syncResults.filter((r) => r.status === 'rejected');
- if (failures.length > 0) {
- // eslint-disable-next-line no-console
- console.warn(`[runtime-config] ${failures.length} key(s) failed to sync to sidecar`);
- }
-
- notifyConfigChanged();
+    const [status, values] = await Promise.all([keychainService.status(), keychainService.rendererConfig()]);
+    desktopSecretPresence.clear();
+    for (const [key, present] of status) {
+      if (present) desktopSecretPresence.add(key as RuntimeSecretKey);
+    }
+    for (const key of Object.keys(runtimeConfig.secrets) as RuntimeSecretKey[]) {
+      if (runtimeConfig.secrets[key]?.source === 'vault') delete runtimeConfig.secrets[key];
+    }
+    for (const [key, value] of Object.entries(values)) {
+      // Defense in depth: hold a value only if it is allowlisted here too.
+      if (RENDERER_READABLE_KEYS.has(key as RuntimeSecretKey) && value.trim()) {
+        runtimeConfig.secrets[key as RuntimeSecretKey] = { value, source: 'vault' };
+      }
+    }
+    notifyConfigChanged();
   } catch (error) {
- // eslint-disable-next-line no-console
- console.warn('[runtime-config] Failed to load desktop secrets from vault', error);
+    // eslint-disable-next-line no-console
+    console.warn('[runtime-config] Failed to load desktop secret status', error);
   } finally {
- secretsReadyResolve();
+    secretsReadyResolve();
   }
 }
 
@@ -1393,9 +1404,5 @@ export async function loadDesktopSecretsWhenReady(): Promise<void> {
  await keychainService.waitUntilLoaded();
  keychainService.invalidateAll();
   }
-  // Skip the JS→sidecar push at boot: the native Rust injector has already
-  // delivered every loaded secret to the *confirmed* sidecar port. The JS path
-  // is gated to a confirmed port too (resolveConfirmedLocalApiBase, R4-BUG-004),
-  // so this is only about not pushing every secret twice.
-  await loadDesktopSecrets({ syncToSidecar: false });
+  await loadDesktopSecrets();
 }

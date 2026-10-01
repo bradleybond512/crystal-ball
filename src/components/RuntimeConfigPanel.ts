@@ -7,6 +7,7 @@ import {
   getRuntimeConfigSnapshot,
   getSecretState,
   isFeatureAvailable,
+  isSecretSet,
   isFeatureEnabled,
   loadDesktopSecretsWhenReady,
   setFeatureToggle,
@@ -304,7 +305,10 @@ export class RuntimeConfigPanel extends Panel {
 
   private mountDashboard(container: HTMLElement): void {
  const dashboard = new KeyDashboard(container, {
- getValue: (key) => this.pendingSecrets.get(key) ?? getRuntimeConfigSnapshot().secrets[key]?.value,
+ isSet: (key) => this.pendingSecrets.has(key) || isSecretSet(key),
+ plaintextValue: (key) => (PLAINTEXT_KEYS.has(key)
+ ? this.pendingSecrets.get(key) ?? getRuntimeConfigSnapshot().secrets[key]?.value
+ : undefined),
  onRunWizard: () => this.openWizard(),
  });
  dashboard.render();
@@ -312,7 +316,7 @@ export class RuntimeConfigPanel extends Panel {
 
   private openWizard(): void {
  const wizard = new SetupWizard(document.body, {
- getValue: (key) => this.pendingSecrets.get(key) ?? getRuntimeConfigSnapshot().secrets[key]?.value,
+ isSet: (key) => this.pendingSecrets.has(key) || isSecretSet(key),
  onClose: () => this.render(),
  });
  wizard.open();

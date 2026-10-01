@@ -15912,12 +15912,15 @@ async function dispatch(requestUrl, req, routes, context) {
  const body = await readBody(req);
  if (!body) return json({ error: 'expected { key, value }' }, 400);
  try {
- const { key, value, context } = JSON.parse(body.toString());
+ const { key, value, context, useStored } = JSON.parse(body.toString());
  if (typeof key !== 'string' || !VALIDATABLE_SECRET_KEYS.has(key)) {
  return json({ error: 'key not in allowlist' }, 403);
  }
  const safeContext = (context && typeof context === 'object') ? context : {};
- const result = await validateSecretAgainstProvider(key, value, safeContext);
+ // R4-SEC-001: "Test" on a saved key sends no value — the webview never
+ // holds it. Check this process's own copy, delivered by native.
+ const candidate = useStored === true ? process.env[key] : value;
+ const result = await validateSecretAgainstProvider(key, candidate, safeContext);
  return json(result, result.valid ? 200 : 422);
  } catch {
  return json({ error: 'expected { key, value }' }, 400);

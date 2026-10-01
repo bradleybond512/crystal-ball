@@ -1044,26 +1044,87 @@ fn secrets_ready(webview: Webview, cache: tauri::State<'_, SecretsCache>) -> Res
  Ok(cache.loaded.load(Ordering::SeqCst))
 }
 
+/// Values a webview may read (R4-SEC-001): the plaintext settings plus the
+/// keys that end up in client-side request URLs anyway (map/tile providers,
+/// crystalball.app). Every other secret is write-only from a webview; the
+/// sidecar receives it from native. Must equal TS
+/// `PLAINTEXT_KEYS ∪ RENDERER_VALUE_KEYS` (tests/secret-boundary.test.mjs).
+const RENDERER_READABLE_KEYS: [&str; 17] = [
+    "OLLAMA_API_URL",
+    "OLLAMA_MODEL",
+    "WS_RELAY_URL",
+    "VITE_WS_RELAY_URL",
+    "VITE_OPENSKY_RELAY_URL",
+    "ACLED_EMAIL",
+    "S2U_XMPP_JID",
+    "S2U_TAK_URL",
+    "S2U_TAK_USERNAME",
+    "S2U_TLS_INSECURE_OPT_IN",
+    "PATREON_AUDIO_RSS_URL",
+    "CESIUM_ION_TOKEN",
+    "GOOGLE_MAPS_API_KEY",
+    "MAPBOX_API_KEY",
+    "MAPTILER_API_KEY",
+    "OWM_API_KEY",
+    "CRYSTALBALL_API_KEY",
+];
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+struct SecretStatus {
+    key: String,
+    present: bool,
+}
+
+/// Presence of every supported key — never a value.
+fn secret_status_from(secrets: &HashMap<String, String>) -> Vec<SecretStatus> {
+    SUPPORTED_SECRET_KEYS
+        .iter()
+        .map(|key| SecretStatus {
+            key: (*key).to_string(),
+            present: secrets.get(*key).is_some_and(|v| !v.trim().is_empty()),
+        })
+        .collect()
+}
+
+/// Values for the renderer-readable allowlist only.
+fn renderer_config_from(secrets: &HashMap<String, String>) -> std::collections::BTreeMap<String, String> {
+    RENDERER_READABLE_KEYS
+        .iter()
+        .filter_map(|key| {
+            secrets
+                .get(*key)
+                .filter(|v| !v.trim().is_empty())
+                .map(|v| ((*key).to_string(), v.clone()))
+        })
+        .collect()
+}
+
+/// Replaces `get_secret` (R4-SEC-001): which keys are set, without values.
 #[tauri::command]
-async fn get_secret(
- webview: Webview,
- key: String,
-) -> Result<Option<String>, String> {
- require_trusted_window(webview.label())?;
- if !SUPPORTED_SECRET_KEYS.contains(&key.as_str()) {
- return Err(format!("Unsupported secret key: {key}"));
- }
- let app = webview.app_handle().clone();
- tauri::async_runtime::spawn_blocking(move || {
- let cache = app.state::<SecretsCache>();
- let secrets = cache
- .secrets
- .lock()
- .map_err(|_| "Lock poisoned".to_string())?;
- Ok(secrets.get(&key).cloned())
- })
- .await
- .map_err(|_| "Secret read task failed".to_string())?
+async fn get_secret_status(webview: Webview) -> Result<Vec<SecretStatus>, String> {
+    require_trusted_window(webview.label())?;
+    let app = webview.app_handle().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let cache = app.state::<SecretsCache>();
+        let secrets = cache.secrets.lock().map_err(|_| "Lock poisoned".to_string())?;
+        Ok(secret_status_from(&secrets))
+    })
+    .await
+    .map_err(|_| "Secret status task failed".to_string())?
+}
+
+/// Values the renderer genuinely needs (R4-SEC-001); see RENDERER_READABLE_KEYS.
+#[tauri::command]
+async fn get_renderer_config(webview: Webview) -> Result<std::collections::BTreeMap<String, String>, String> {
+    require_trusted_window(webview.label())?;
+    let app = webview.app_handle().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let cache = app.state::<SecretsCache>();
+        let secrets = cache.secrets.lock().map_err(|_| "Lock poisoned".to_string())?;
+        Ok(renderer_config_from(&secrets))
+    })
+    .await
+    .map_err(|_| "Renderer config task failed".to_string())?
 }
 
 /// Block until the async keychain load has finished before a Settings write
@@ -1107,6 +1168,8 @@ async fn set_secret(
  return Err(format!("Unsupported secret key: {key}"));
  }
  let app = webview.app_handle().clone();
+ let sync_app = app.clone();
+ let sync_key = key.clone();
  tauri::async_runtime::spawn_blocking(move || {
  let cache = app.state::<SecretsCache>();
  if !wait_until_secrets_loaded(&cache) {
@@ -1134,7 +1197,11 @@ async fn set_secret(
  Ok(())
  })
  .await
- .map_err(|_| "Secret save task failed".to_string())?
+ .map_err(|_| "Secret save task failed".to_string())??;
+ // Native pushes the change to the sidecar; webviews no longer relay
+ // secret values (R4-SEC-001). Best-effort; the vault is authoritative.
+ sync_secret_to_sidecar(&sync_app, &sync_key).await;
+ Ok(())
 }
 
 /// User-initiated re-read of the keychain vault. The boot read runs on a
@@ -1180,6 +1247,8 @@ async fn delete_secret(webview: Webview, key: String) -> Result<(), String> {
  return Err(format!("Unsupported secret key: {key}"));
  }
  let app = webview.app_handle().clone();
+ let sync_app = app.clone();
+ let sync_key = key.clone();
  tauri::async_runtime::spawn_blocking(move || {
  let cache = app.state::<SecretsCache>();
  if !wait_until_secrets_loaded(&cache) {
@@ -1201,7 +1270,11 @@ async fn delete_secret(webview: Webview, key: String) -> Result<(), String> {
  Ok(())
  })
  .await
- .map_err(|_| "Secret delete task failed".to_string())?
+ .map_err(|_| "Secret delete task failed".to_string())??;
+ // Native pushes the change to the sidecar; webviews no longer relay
+ // secret values (R4-SEC-001). Best-effort; the vault is authoritative.
+ sync_secret_to_sidecar(&sync_app, &sync_key).await;
+ Ok(())
 }
 
 /// Sentinel that marks "migration from individual keys has been attempted".
@@ -4179,127 +4252,157 @@ async fn copy_diagnostics(webview: Webview, app: AppHandle) -> Result<String, St
  Ok(out)
 }
 
+/// Bearer token and port of the sidecar we launched, but only while that child
+/// is alive and its port is confirmed. Secret bytes never go anywhere else: if
+/// our sidecar exited, or bound elsewhere after EADDRINUSE, the recorded port
+/// may belong to a foreign local process (R4-BUG-004).
+fn confirmed_sidecar_target(app: &AppHandle) -> Result<(String, u16), &'static str> {
+    let state = app.state::<LocalApiState>();
+    let alive = match state.child.lock() {
+        Ok(mut slot) => match slot.as_mut() {
+            Some(child) => matches!(child.try_wait(), Ok(None)),
+            None => false,
+        },
+        Err(_) => false,
+    };
+    if !alive {
+        return Err("sidecar not alive");
+    }
+    if !state.port_confirmed.load(Ordering::SeqCst) {
+        return Err("sidecar port unconfirmed");
+    }
+    let token = state.token.lock().ok().and_then(|t| t.clone()).unwrap_or_default();
+    let port = state.port.lock().ok().and_then(|p| *p).unwrap_or(DEFAULT_LOCAL_API_PORT);
+    Ok((token, port))
+}
+
+/// Body for the sidecar's `/api/local-env-update`; `None` unsets the key.
+fn sidecar_env_update_body(key: &str, value: Option<&str>) -> Value {
+    serde_json::json!({ "key": key, "value": value })
+}
+
+fn sidecar_http_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(3))
+        .build()
+        .map_err(|e| e.to_string())
+}
+
+/// POST one key to the sidecar, with a few quick retries to absorb momentary
+/// unreadiness. Returns whether the sidecar accepted it.
+async fn post_secret_update(client: &reqwest::Client, port: u16, token: &str, key: &str, value: Option<&str>) -> bool {
+    let url = format!("http://127.0.0.1:{port}/api/local-env-update");
+    for attempt in 0..3 {
+        let result = client
+            .post(&url)
+            .header("Authorization", format!("Bearer {token}"))
+            .json(&sidecar_env_update_body(key, value))
+            .send()
+            .await;
+        if matches!(result, Ok(ref resp) if resp.status().is_success()) {
+            return true;
+        }
+        if attempt < 2 {
+            // Sleep off the async executor (no tokio timer in scope).
+            let _ = tauri::async_runtime::spawn_blocking(|| std::thread::sleep(Duration::from_millis(400))).await;
+        }
+    }
+    false
+}
+
 /// Push freshly-loaded keychain secrets into the already-running sidecar via
-/// its `/api/local-env-update` IPC endpoint — the same per-key channel the
-/// renderer uses when the user edits a key in Settings (`pushSecretToSidecar`).
-/// Secrets take effect without restarting the sidecar (or the app).
+/// its `/api/local-env-update` IPC endpoint. Secrets take effect without
+/// restarting the sidecar (or the app).
 ///
 /// Used at boot so a slow Touch ID / Keychain read never gates sidecar startup:
 /// the sidecar boots with zero secrets, then these get injected the moment the
 /// keychain resolves. Best-effort — the keychain remains the source of truth,
 /// so a failed push just means those routes return 503 until the next launch.
 async fn inject_secrets_into_running_sidecar(app: &AppHandle, secrets: Vec<(String, String)>) {
- let total = secrets.len();
- if total == 0 {
- return;
- }
- let (token, port) = {
- let state = app.state::<LocalApiState>();
- // Confirm the sidecar we launched is still the live listener before
- // sending any secret bytes. If it exited during the keychain read, the
- // recorded port may now belong to a foreign local process, and posting
- // plaintext secrets there would leak them.
- let alive = match state.child.lock() {
- Ok(mut slot) => match slot.as_mut() {
- Some(child) => matches!(child.try_wait(), Ok(None)),
- None => false,
- },
- Err(_) => false,
- };
- if !alive {
- append_desktop_log(
- app,
- "WARN",
- "sidecar not alive at secret-injection time — secrets not pushed (will load on next launch)",
- );
- return;
- }
- // Only post to a port the sidecar actually confirmed via its port file. On
- // the timeout fallback the recorded port is just the default (46123), which
- // a foreign process could be squatting if our sidecar bound elsewhere after
- // EADDRINUSE — posting plaintext secrets there would leak them.
- if !state.port_confirmed.load(Ordering::SeqCst) {
- append_desktop_log(
- app,
- "WARN",
- "sidecar port unconfirmed at secret-injection time — secrets not pushed (will load on next launch)",
- );
- return;
- }
- let token = state.token.lock().ok().and_then(|t| t.clone()).unwrap_or_default();
- let port = state.port.lock().ok().and_then(|p| *p).unwrap_or(DEFAULT_LOCAL_API_PORT);
- (token, port)
- };
- let client = match reqwest::Client::builder()
- .timeout(Duration::from_secs(3))
- .build()
- {
- Ok(c) => c,
- Err(e) => {
- append_desktop_log(
- app,
- "WARN",
- &format!("secret injection skipped: http client build failed: {e}"),
- );
- return;
- }
- };
- let url = format!("http://127.0.0.1:{port}/api/local-env-update");
- let secrets_cache = app.state::<SecretsCache>();
- let mut pushed = 0usize;
- let mut skipped = 0usize;
- for (key, _snapshot) in secrets {
- // Re-read the live cache value per key rather than trusting this snapshot.
- // If the user edited the secret in Settings after the snapshot was taken,
- // the cache holds the newer value and we post that (never the stale one).
- // If the key was deleted since the snapshot it's gone from the cache, so
- // skip it rather than resurrect a just-removed credential. Posting the
- // current value is idempotent with the renderer's own push and recovers
- // any key whose early renderer push silently failed.
- let value = match secrets_cache.secrets.lock() {
- Ok(map) => match map.get(&key) {
- Some(v) => v.clone(),
- None => {
- skipped += 1;
- continue;
- }
- },
- Err(_) => {
- skipped += 1;
- continue;
- }
- };
- // start_local_api already confirmed the sidecar's port before this runs,
- // so a few quick attempts absorb any momentary unreadiness.
- for attempt in 0..3 {
- let result = client
- .post(&url)
- .header("Authorization", format!("Bearer {token}"))
- .json(&serde_json::json!({ "key": key, "value": value }))
- .send()
- .await;
- match result {
- Ok(resp) if resp.status().is_success() => {
- pushed += 1;
- break;
- }
- _ => {
- if attempt < 2 {
- // Sleep off the async executor (no tokio timer in scope).
- let _ = tauri::async_runtime::spawn_blocking(|| {
- std::thread::sleep(Duration::from_millis(400))
- })
- .await;
- }
- }
- }
- }
- }
- append_desktop_log(
- app,
- "INFO",
- &format!("injected {pushed}/{total} keychain secrets into running sidecar via IPC ({skipped} skipped: deleted or unreadable since load)"),
- );
+    let total = secrets.len();
+    if total == 0 {
+        return;
+    }
+    let (token, port) = match confirmed_sidecar_target(app) {
+        Ok(target) => target,
+        Err(reason) => {
+            append_desktop_log(
+                app,
+                "WARN",
+                &format!("{reason} at secret-injection time — secrets not pushed (will load on next launch)"),
+            );
+            return;
+        }
+    };
+    let client = match sidecar_http_client() {
+        Ok(c) => c,
+        Err(e) => {
+            append_desktop_log(app, "WARN", &format!("secret injection skipped: http client build failed: {e}"));
+            return;
+        }
+    };
+    let secrets_cache = app.state::<SecretsCache>();
+    let mut pushed = 0usize;
+    let mut skipped = 0usize;
+    for (key, _snapshot) in secrets {
+        // Re-read the live cache value per key rather than trusting this snapshot.
+        // If the user edited the secret in Settings after the snapshot was taken,
+        // the cache holds the newer value and we post that (never the stale one).
+        // If the key was deleted since the snapshot it's gone from the cache, so
+        // skip it rather than resurrect a just-removed credential.
+        let value = match secrets_cache.secrets.lock() {
+            Ok(map) => match map.get(&key) {
+                Some(v) => v.clone(),
+                None => {
+                    skipped += 1;
+                    continue;
+                }
+            },
+            Err(_) => {
+                skipped += 1;
+                continue;
+            }
+        };
+        if post_secret_update(&client, port, &token, &key, Some(&value)).await {
+            pushed += 1;
+        }
+    }
+    append_desktop_log(
+        app,
+        "INFO",
+        &format!("injected {pushed}/{total} keychain secrets into running sidecar via IPC ({skipped} skipped: deleted or unreadable since load)"),
+    );
+}
+
+/// Push one Settings edit or deletion to the running sidecar (R4-SEC-001).
+/// Webviews no longer relay secret values, so native does it after the vault
+/// write. Reads the live cache: a deleted key is sent as an unset, so it stops
+/// working immediately instead of staying live until the sidecar restarts. If
+/// the sidecar is down, its next start takes its env from the same cache.
+async fn sync_secret_to_sidecar(app: &AppHandle, key: &str) {
+    let (token, port) = match confirmed_sidecar_target(app) {
+        Ok(target) => target,
+        Err(reason) => {
+            append_desktop_log(app, "WARN", &format!("{reason} — Settings change to {key} not pushed (applies on next sidecar start)"));
+            return;
+        }
+    };
+    let client = match sidecar_http_client() {
+        Ok(c) => c,
+        Err(e) => {
+            append_desktop_log(app, "WARN", &format!("Settings change to {key} not pushed: http client build failed: {e}"));
+            return;
+        }
+    };
+    let value = app
+        .state::<SecretsCache>()
+        .secrets
+        .lock()
+        .ok()
+        .and_then(|map| map.get(key).cloned());
+    let action = if value.is_some() { "set" } else { "unset" };
+    let level = if post_secret_update(&client, port, &token, key, value.as_deref()).await { "INFO" } else { "WARN" };
+    append_desktop_log(app, level, &format!("Settings change pushed to sidecar: {action} {key} (ok={})", level == "INFO"));
 }
 
 // ── Sidecar supervision (R4-BUG-004) ─────────────────────────────────
@@ -4791,7 +4894,8 @@ fn main() {
  .plugin(corelocation::init())
  .invoke_handler(tauri::generate_handler![
  list_supported_secret_keys,
- get_secret,
+ get_secret_status,
+ get_renderer_config,
  secrets_ready,
  set_always_on,
  set_secret,
@@ -5317,4 +5421,68 @@ mod little_snitch_path_tests {
   let end = source[start..].find("fn stop_local_api").map(|offset| start + offset).unwrap_or(source.len());
   assert!(source[start..end].contains("configure_little_snitch_env(&mut cmd, &home_dir);"));
  }
+}
+
+#[cfg(test)]
+mod secret_boundary_tests {
+    // R4-SEC-001: webviews read presence for every key and values only for
+    // RENDERER_READABLE_KEYS; deletions reach the sidecar as an unset.
+    use super::*;
+
+    fn every_key_set() -> HashMap<String, String> {
+        SUPPORTED_SECRET_KEYS
+            .iter()
+            .map(|key| ((*key).to_string(), format!("value-of-{key}")))
+            .collect()
+    }
+
+    #[test]
+    fn status_reports_presence_for_every_key_and_never_a_value() {
+        let mut secrets = every_key_set();
+        secrets.insert("ANTHROPIC_API_KEY".to_string(), "   ".to_string());
+        let status = secret_status_from(&secrets);
+        assert_eq!(status.len(), SUPPORTED_SECRET_KEYS.len());
+        assert!(status.iter().any(|s| s.key == "ANTHROPIC_API_KEY" && !s.present), "blank is not present");
+        assert!(status.iter().any(|s| s.key == "CRYSTALBALL_API_KEY" && s.present));
+        let json = serde_json::to_string(&status).expect("serializes");
+        assert!(!json.contains("value-of-"), "status must not carry values: {json}");
+        assert!(secret_status_from(&HashMap::new()).iter().all(|s| !s.present));
+    }
+
+    #[test]
+    fn renderer_config_returns_exactly_the_allowlist() {
+        let config = renderer_config_from(&every_key_set());
+        let mut expected: Vec<&str> = RENDERER_READABLE_KEYS.to_vec();
+        expected.sort_unstable();
+        assert_eq!(config.keys().map(String::as_str).collect::<Vec<_>>(), expected);
+        assert_eq!(config.get("MAPBOX_API_KEY").map(String::as_str), Some("value-of-MAPBOX_API_KEY"));
+        for secret_only in ["ANTHROPIC_API_KEY", "GROQ_API_KEY", "OPENROUTER_API_KEY"] {
+            assert!(!config.contains_key(secret_only), "{secret_only} must stay write-only");
+        }
+        let mut blank = every_key_set();
+        blank.insert("MAPBOX_API_KEY".to_string(), " ".to_string());
+        assert!(!renderer_config_from(&blank).contains_key("MAPBOX_API_KEY"));
+        assert!(renderer_config_from(&HashMap::new()).is_empty());
+    }
+
+    #[test]
+    fn renderer_readable_keys_are_supported_and_unique() {
+        for key in RENDERER_READABLE_KEYS {
+            assert!(SUPPORTED_SECRET_KEYS.contains(&key), "{key} is not a supported key");
+        }
+        let unique: HashSet<&str> = RENDERER_READABLE_KEYS.iter().copied().collect();
+        assert_eq!(unique.len(), RENDERER_READABLE_KEYS.len());
+    }
+
+    #[test]
+    fn sidecar_update_body_unsets_a_deleted_key() {
+        assert_eq!(
+            sidecar_env_update_body("SHODAN_API_KEY", None),
+            serde_json::json!({ "key": "SHODAN_API_KEY", "value": null })
+        );
+        assert_eq!(
+            sidecar_env_update_body("SHODAN_API_KEY", Some("v")),
+            serde_json::json!({ "key": "SHODAN_API_KEY", "value": "v" })
+        );
+    }
 }

@@ -25,7 +25,7 @@
 import { isDesktopRuntime } from './runtime';
 import { safeSetItem } from '@/utils/safe-storage';
 import { isGhostMode } from './mode-manager';
-import { getRuntimeConfigSnapshot, type RuntimeSecretKey } from './runtime-config';
+import { isSecretSet, type RuntimeSecretKey } from './runtime-config';
 import { SITE_VARIANT } from '@/config/variant';
 
 // ── Analytics consent ──
@@ -401,9 +401,9 @@ export function trackPanelView(panelId: string): void {
 }
 
 export function trackApiKeysSnapshot(): void {
-  const config = getRuntimeConfigSnapshot();
+  // Presence only: sidecar-only values never reach this window (R4-SEC-001).
   const configured_key_count = (Object.keys(SECRET_ANALYTICS_NAMES) as RuntimeSecretKey[])
-    .filter(k => Boolean(config.secrets[k]?.value)).length;
+    .filter((key) => isSecretSet(key)).length;
   trackEvent('wm_api_keys_configured', { configured_key_count });
 }
 

@@ -8,7 +8,6 @@
  */
 
 const STORAGE_KEY = 'crystalball-alerting-preset-v1';
-const QUIET_HOURS_KEY = 'crystalball-quiet-hours-v1';
 
 export type AlertingPreset = 'loud' | 'visual' | 'silent';
 
@@ -43,34 +42,11 @@ export function setPreset(preset: AlertingPreset): void {
   document.dispatchEvent(new CustomEvent('cb:alerting-preset-changed', { detail: preset }));
 }
 
-export interface QuietHours { startHour: number; endHour: number; enabled: boolean; }
-
-export function getQuietHours(): QuietHours {
-  try {
-    const raw = localStorage.getItem(QUIET_HOURS_KEY);
-    if (raw) return JSON.parse(raw) as QuietHours;
-  } catch { /* noop */ }
-  return { startHour: 22, endHour: 7, enabled: false };
-}
-
-export function setQuietHours(q: QuietHours): void {
-  try { localStorage.setItem(QUIET_HOURS_KEY, JSON.stringify(q)); } catch { /* full */ }
-}
-
-function inQuietHours(): boolean {
-  const q = getQuietHours();
-  if (!q.enabled) return false;
-  const h = new Date().getHours();
-  if (q.startHour < q.endHour) return h >= q.startHour && h < q.endHour;
-  // Wraps midnight (e.g. 22 → 7)
-  return h >= q.startHour || h < q.endHour;
-}
-
+/**
+ * Reaction channels for the current preset. The old per-preset quiet-hours
+ * override had no writer anywhere in the app; quiet hours now live only in
+ * notification-settings-service (R4-BUG-003).
+ */
 export function getChannels(): AlertingChannels {
-  const base = PRESETS[getPreset()];
-  if (inQuietHours()) {
-    // Force visual: drop sound + border flash + desktop notif
-    return { ...base, sound: false, borderFlash: false, desktopNotif: false };
-  }
-  return base;
+  return PRESETS[getPreset()];
 }

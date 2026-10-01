@@ -108,10 +108,11 @@ test('settings: resetSettings restores defaults after mutations', () => {
   assert.equal(s.domains.cyber.threshold, 'medium');
 });
 
-test('settings: shouldNotify respects masterMute', () => {
+test('settings: shouldNotify respects masterMute except for critical (R4-BUG-003)', () => {
   resetSettings();
   updateGlobalSettings({ masterMute: true });
-  assert.equal(shouldNotify('weather', 'critical'), false);
+  assert.equal(shouldNotify('weather', 'high'), false);
+  assert.equal(shouldNotify('weather', 'critical'), true);
 });
 
 test('settings: shouldNotify respects threshold ladder', () => {

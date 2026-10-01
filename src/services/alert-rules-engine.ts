@@ -5,8 +5,8 @@
  * Lets users configure IF/THEN rules that override default notification behavior.
  * Rules are stored in localStorage and evaluated for every incoming UnifiedAlert.
  *
- * Quiet-hours config is owned by notification-dispatcher.ts under the
- * localStorage key `wm-quiet-hours` — this module does not duplicate it.
+ * Quiet hours are owned by notification-settings-service.ts (one window,
+ * per-domain toggles; R4-BUG-003) — this module does not duplicate them.
  */
 
 import type { UnifiedAlert, AlertSource, AlertSeverity } from './unified-alerts';
@@ -14,8 +14,6 @@ import { computeDistanceKm } from './unified-alerts';
 import type { NotificationAction } from './notification-dispatcher';
 
 const STORAGE_KEY = 'cb-alert-rules';
-/** Quiet-hours config is read by notification-dispatcher.ts; referenced here for discoverability. */
-export const QUIET_HOURS_KEY = 'wm-quiet-hours';
 
 export type RuleOperator = 'equals' | 'contains' | 'gte' | 'lte' | 'in' | 'within-km';
 

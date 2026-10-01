@@ -1975,7 +1975,7 @@ export class DataLoaderManager implements AppModule {
  // Run severe alerts through the Big Event Detector → Notification
  // Ladder → native/in-app dispatch. Only Extreme/Severe alerts enter
  // the ladder; lesser severities are not actionable at this rung.
- // Quiet-hours flag defaults false until settings exposes getQuietHoursActive().
+ // Quiet hours come from the one canonical window (R4-BUG-003).
  try {
  const [
  { detectBigEvent },
@@ -1983,7 +1983,7 @@ export class DataLoaderManager implements AppModule {
  { getNotificationTraceRegistry, getPipelineTraceRegistry },
  { recordAlgorithmEvaluation },
  { annotateModelOutput: annotateWeatherOutput },
- { getNotificationPreferencesService },
+ { ladderQuietHours },
  { computeAlertExposure },
  { getSavedPlaces },
  { resolveSavedPlaceZonesWithHealth, toMatcherPlace, savedPlacesMatchSignature },
@@ -1994,7 +1994,7 @@ export class DataLoaderManager implements AppModule {
  import('@/services/diagnostics/diagnostics-state'),
  import('@/services/algorithms/record-evaluation'),
  import('@/services/intelligence/assumption-producers'),
- import('@/services/notifications/notification-preferences'),
+ import('@/services/notifications/notification-settings-service'),
  import('@/services/weather/weather-exposure'),
  import('@/services/saved-places'),
  import('@/services/weather/saved-place-adapter'),
@@ -2011,15 +2011,11 @@ export class DataLoaderManager implements AppModule {
  silent: null,
  };
  const registry = getNotificationTraceRegistry();
- // Real quiet-hours state + the user's per-domain bypass, instead of hardcoding
- // them off. Non-safety weather alerts are now suppressible during quiet hours;
+ // Weather quiet hours from the canonical window + weather's own toggle
+ // (R4-BUG-003). Non-safety weather alerts are suppressible during quiet hours;
  // safety-critical (emergency/critical tier) events still override via the
  // ladder's safety path. Computed once per batch (same instant for all alerts).
- const notifPrefs = getNotificationPreferencesService();
- const quietHoursActive = notifPrefs.isQuietHour();
- const weatherQuietHoursBypass = notifPrefs
- .getPreferences()
- .domains.find((d) => d.domain === 'weather')?.quietHoursOverride ?? false;
+ const { quietHoursActive, quietHoursBypassEnabled: weatherQuietHoursBypass } = ladderQuietHours('weather');
  const severeAlertEntries = alerts
  .map((alert, index) => ({ alert, traceId: weatherTraceIds[index] ?? alert.id }))
  .filter(({ alert }) => isWeatherNotificationLadderSeverity(alert.severity));

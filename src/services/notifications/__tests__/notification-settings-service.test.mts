@@ -5,6 +5,7 @@ import {
   updateDomainSettings,
   updateGlobalSettings,
   shouldNotify,
+  evaluateNotificationPreference,
   resetSettings,
   type NotificationDomain,
   type NotificationSeverity,
@@ -71,10 +72,11 @@ test('shouldNotify returns false when domain is disabled', () => {
 });
 
 // ── 9. shouldNotify false when masterMute is true ─────────────────────────────
-test('shouldNotify returns false when masterMute is true', () => {
+test('shouldNotify returns false when masterMute is true, except for critical (R4-BUG-003)', () => {
   resetSettings();
   updateGlobalSettings({ masterMute: true });
-  assert.equal(shouldNotify('weather', 'critical'), false);
+  assert.equal(shouldNotify('weather', 'high'), false);
+  assert.equal(shouldNotify('weather', 'critical'), true);
 });
 
 // ── 10. updateDomainSettings persists enabled=false for 'weather' ─────────────
@@ -98,22 +100,25 @@ test('updateGlobalSettings persists masterMute true', () => {
   assert.equal(getSettings().global.masterMute, true);
 });
 
-// ── 13. Per-domain quietHours: shouldNotify returns false during quiet window ──
-// '00:00' === '00:00' → isInQuietHours returns true (all-day quiet window)
-test('shouldNotify returns false during all-day quiet window when quietHoursEnabled', () => {
+// ── 13. Per-domain quietHours: suppressed inside the window ──────────────────
+// R4-BUG-003: an equal start/end used to mean "24 h quiet"; it is now refused
+// at save time and never silences anything (see quiet-hours.test.mts).
+test('evaluateNotificationPreference suppresses non-critical inside the quiet window', () => {
   resetSettings();
-  updateGlobalSettings({ quietHoursStart: '00:00', quietHoursEnd: '00:00' });
+  assert.deepEqual(updateGlobalSettings({ quietHoursStart: '00:00', quietHoursEnd: '00:00' }), { ok: false, reason: 'equal' });
+  assert.deepEqual(updateGlobalSettings({ quietHoursStart: '22:00', quietHoursEnd: '06:00' }), { ok: true });
   updateDomainSettings('wildfire', { quietHoursEnabled: true });
-  // severity below critical so quiet hours are not bypassed
-  assert.equal(shouldNotify('wildfire', 'high'), false);
+  const night = new Date(2026, 0, 15, 23, 0);
+  assert.deepEqual(evaluateNotificationPreference('wildfire', 'high', night), { allowed: false, reason: 'domain-quiet-hours' });
+  assert.deepEqual(evaluateNotificationPreference('wildfire', 'high', new Date(2026, 0, 15, 12, 0)), { allowed: true, reason: 'allowed' });
 });
 
 // ── 14. Critical severity bypasses quiet hours ────────────────────────────────
-test('shouldNotify returns true for critical even during all-day quiet window', () => {
+test('evaluateNotificationPreference lets critical through inside the quiet window', () => {
   resetSettings();
-  updateGlobalSettings({ quietHoursStart: '00:00', quietHoursEnd: '00:00' });
+  updateGlobalSettings({ quietHoursStart: '22:00', quietHoursEnd: '06:00' });
   updateDomainSettings('wildfire', { quietHoursEnabled: true });
-  assert.equal(shouldNotify('wildfire', 'critical'), true);
+  assert.deepEqual(evaluateNotificationPreference('wildfire', 'critical', new Date(2026, 0, 15, 23, 0)), { allowed: true, reason: 'allowed' });
 });
 
 // ── 15. resetSettings restores defaults after mutation ────────────────────────

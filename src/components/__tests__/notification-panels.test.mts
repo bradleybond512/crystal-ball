@@ -11,7 +11,6 @@
  * strings, not state machines, so we test the deterministic boundary
  * between the panel and its services rather than mounting JSDOM.
  */
-/* eslint-disable @typescript-eslint/no-unused-vars -- tests intentionally introspect via aliased imports */
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -108,10 +107,11 @@ test('settings: resetSettings restores defaults after mutations', () => {
   assert.equal(s.domains.cyber.threshold, 'medium');
 });
 
-test('settings: shouldNotify respects masterMute', () => {
+test('settings: shouldNotify respects masterMute except for critical (R4-BUG-003)', () => {
   resetSettings();
   updateGlobalSettings({ masterMute: true });
-  assert.equal(shouldNotify('weather', 'critical'), false);
+  assert.equal(shouldNotify('weather', 'high'), false);
+  assert.equal(shouldNotify('weather', 'critical'), true);
 });
 
 test('settings: shouldNotify respects threshold ladder', () => {

@@ -5,32 +5,24 @@ import { routeBigEventToLadder, resetNotificationLadderState } from '../notifica
 import type { BigEventInput, BigEventResult } from '../big-event-detector.ts';
 import { createNotificationTraceRegistry } from '../../diagnostics/notification-trace.ts';
 import {
-  createNotificationPreferencesService,
-  type NotificationPreferencesService,
-  type StorageLike,
-} from '../../notifications/notification-preferences.ts';
+  ladderQuietHours,
+  resetSettings,
+  updateDomainSettings,
+  updateGlobalSettings,
+} from '../../notifications/notification-settings-service.ts';
 
 // Regression for the data-loader weather notification path, which previously
 // hardcoded quietHoursActive:false + quietHoursBypassEnabled:true — so real NWS
-// alerts ignored the user's quiet-hours setting entirely. This proves that when
-// the values are derived from the canonical notification-preferences service
-// (isQuietHour() + the weather domain's quietHoursOverride), a non-safety
-// weather alert is suppressed during quiet hours, while safety-critical alerts
-// still override.
+// alerts ignored the user's quiet-hours setting entirely. R4-BUG-003 moved the
+// source of truth to the one canonical window (Notification Settings) plus
+// weather's own quiet-hours toggle, read through ladderQuietHours() — the same
+// function data-loader calls. A non-safety weather alert is suppressed during
+// quiet hours, while safety-critical alerts still override.
 
 const NOW = 1_745_000_000_000;
 // A clock hour inside the 22:00–06:00 quiet window, and one outside it.
 const DURING_QUIET = new Date(2025, 0, 1, 23, 0, 0);
 const OUTSIDE_QUIET = new Date(2025, 0, 1, 12, 0, 0);
-
-function memStorage(): StorageLike {
-  const m = new Map<string, string>();
-  return {
-    getItem: (k) => m.get(k) ?? null,
-    setItem: (k, v) => { m.set(k, v); },
-    removeItem: (k) => { m.delete(k); },
-  };
-}
 
 function nonSafetyWeather(): BigEventResult {
   return {
@@ -51,53 +43,47 @@ function input(): BigEventInput {
   };
 }
 
-/** Mirrors src/app/data-loader.ts: derive quietHoursActive + the weather
- *  domain's quietHoursOverride from the canonical prefs service, then route. */
-function routeWeatherAsDataLoader(
-  svc: NotificationPreferencesService,
-  result: BigEventResult,
-  now: Date,
-) {
+/** Same call as src/app/data-loader.ts: ladderQuietHours('weather'), then route. */
+function routeWeatherAsDataLoader(result: BigEventResult, now: Date) {
   resetNotificationLadderState();
   const reg = createNotificationTraceRegistry({ now: () => NOW });
-  const quietHoursActive = svc.isQuietHour(now);
-  const bypass = svc.getPreferences().domains.find((d) => d.domain === 'weather')?.quietHoursOverride ?? false;
+  const { quietHoursActive, quietHoursBypassEnabled } = ladderQuietHours('weather', now);
   const decision = routeBigEventToLadder(reg, result, input(), {
     domain: 'weather',
     quietHoursActive,
-    quietHoursBypassEnabled: bypass,
+    quietHoursBypassEnabled,
     now: () => NOW,
   });
   return { decision, reg };
 }
 
-test('non-safety weather alert is SUPPRESSED when quiet hours active + bypass disabled', () => {
-  const svc = createNotificationPreferencesService(memStorage());
-  svc.setQuietHours({ enabled: true, startHour: 22, endHour: 6 });
-  // weather domain quietHoursOverride defaults to false (no bypass).
-  const { decision, reg } = routeWeatherAsDataLoader(svc, nonSafetyWeather(), DURING_QUIET);
+function weatherQuietHours(enabled: boolean): void {
+  resetSettings();
+  assert.deepEqual(updateGlobalSettings({ quietHoursStart: '22:00', quietHoursEnd: '06:00' }), { ok: true });
+  updateDomainSettings('weather', { quietHoursEnabled: enabled });
+}
+
+test('non-safety weather alert is SUPPRESSED inside the window when weather quiet hours are on', () => {
+  weatherQuietHours(true);
+  const { decision, reg } = routeWeatherAsDataLoader(nonSafetyWeather(), DURING_QUIET);
   assert.equal(decision.dispatched, false, 'non-safety alert should be suppressed during quiet hours');
   assert.equal(reg.get(decision.candidateId)!.decisionReason, 'quiet-hours-no-bypass');
 });
 
 test('safety-critical weather alert still DISPATCHES during quiet hours (safety override)', () => {
-  const svc = createNotificationPreferencesService(memStorage());
-  svc.setQuietHours({ enabled: true, startHour: 22, endHour: 6 });
-  const { decision } = routeWeatherAsDataLoader(svc, safetyWeather(), DURING_QUIET);
+  weatherQuietHours(true);
+  const { decision } = routeWeatherAsDataLoader(safetyWeather(), DURING_QUIET);
   assert.equal(decision.dispatched, true, 'safety-critical must never be silenced by quiet hours');
 });
 
-test('non-safety weather alert DISPATCHES when the user enables the weather quiet-hours bypass', () => {
-  const svc = createNotificationPreferencesService(memStorage());
-  svc.setQuietHours({ enabled: true, startHour: 22, endHour: 6 });
-  svc.setDomainPreference('weather', { quietHoursOverride: true });
-  const { decision } = routeWeatherAsDataLoader(svc, nonSafetyWeather(), DURING_QUIET);
-  assert.equal(decision.dispatched, true, 'user-enabled bypass should let it through');
+test('non-safety weather alert DISPATCHES when weather quiet hours are off', () => {
+  weatherQuietHours(false);
+  const { decision } = routeWeatherAsDataLoader(nonSafetyWeather(), DURING_QUIET);
+  assert.equal(decision.dispatched, true, 'weather quiet hours off should let it through');
 });
 
 test('non-safety weather alert DISPATCHES outside quiet hours', () => {
-  const svc = createNotificationPreferencesService(memStorage());
-  svc.setQuietHours({ enabled: true, startHour: 22, endHour: 6 });
-  const { decision } = routeWeatherAsDataLoader(svc, nonSafetyWeather(), OUTSIDE_QUIET);
+  weatherQuietHours(true);
+  const { decision } = routeWeatherAsDataLoader(nonSafetyWeather(), OUTSIDE_QUIET);
   assert.equal(decision.dispatched, true, 'outside the quiet window nothing is suppressed');
 });

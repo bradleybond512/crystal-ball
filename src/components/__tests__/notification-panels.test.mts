@@ -11,7 +11,6 @@
  * strings, not state machines, so we test the deterministic boundary
  * between the panel and its services rather than mounting JSDOM.
  */
-/* eslint-disable @typescript-eslint/no-unused-vars -- tests intentionally introspect via aliased imports */
 
 import assert from 'node:assert/strict';
 import test from 'node:test';

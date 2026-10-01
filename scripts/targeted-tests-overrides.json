@@ -71,7 +71,8 @@
     "test:ux026"
   ],
   "src/app/data-loader.ts": [
-    "test:ux059"
+    "test:ux059",
+    "test:quiet-hours"
   ],
   "src/services/gdacs-coverage.ts": [
     "test:gdacs-map"
@@ -100,5 +101,29 @@
   ],
   "src-tauri/tests/watchdog_contract.rs": [
     "test:native-responsiveness"
+  ],
+  "src/services/notifications/quiet-hours.ts": [
+    "test:quiet-hours"
+  ],
+  "src/services/notifications/notification-settings-service.ts": [
+    "test:quiet-hours"
+  ],
+  "src/services/notifications/alert-trace.ts": [
+    "test:quiet-hours"
+  ],
+  "src/services/notification-dispatcher.ts": [
+    "test:quiet-hours"
+  ],
+  "src/services/alerting-prefs.ts": [
+    "test:quiet-hours"
+  ],
+  "src/services/alert-rules-engine.ts": [
+    "test:quiet-hours"
+  ],
+  "src/components/NotificationSettingsPanel.ts": [
+    "test:quiet-hours"
+  ],
+  "src/components/NotificationPreferencesPanel.ts": [
+    "test:quiet-hours"
   ]
 }

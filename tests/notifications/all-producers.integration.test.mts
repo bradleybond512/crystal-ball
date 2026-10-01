@@ -374,10 +374,11 @@ test('settings:shouldNotify — domain mute suppresses critical', () => {
   assert.equal(shouldNotify('earthquakes', 'critical'), false);
 });
 
-test('settings:shouldNotify — master mute suppresses every domain', () => {
+test('settings:shouldNotify — master mute suppresses every domain except critical (R4-BUG-003)', () => {
   resetSettings();
   updateGlobalSettings({ masterMute: true });
-  assert.equal(shouldNotify('weather', 'critical'), false);
+  assert.equal(shouldNotify('weather', 'critical'), true);
+  assert.equal(shouldNotify('weather', 'high'), false);
   assert.equal(shouldNotify('cyber', 'high'), false);
 });
 

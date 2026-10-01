@@ -1,9 +1,9 @@
 /**
  * Notification Preferences Panel (panel id: `notification-preferences`).
  *
- * Per-domain mute, severity threshold, channel selection (system / sms /
- * email / menubar), and quiet-hours-override toggle. Plus global toggles:
- * on/off, quiet-hours window, rate limit.
+ * Per-domain mute, severity threshold and channel selection (system / sms /
+ * email / menubar). Plus global toggles: on/off, rate limit. Quiet hours are
+ * shown read-only here; they are set in Notification Settings (R4-BUG-003).
  *
  * Auto-saves every change to the NotificationPreferencesService singleton
  * (which persists to localStorage under STORAGE_KEY).
@@ -16,6 +16,8 @@ import {
   type Severity,
 } from '@/services/notifications/notification-preferences';
 import { getVoiceSettings, saveVoiceSettings } from '@/services/notifications/voice-alerter';
+import { getSettings } from '@/services/notifications/notification-settings-service';
+import { validateQuietWindow } from '@/services/notifications/quiet-hours';
 import { escapeHtml } from '@/utils/sanitize';
 
 const CHANNELS: NotificationChannel[] = ['system', 'sms', 'email', 'menubar'];
@@ -50,14 +52,18 @@ export class NotificationPreferencesPanel extends Panel {
       showCount: true,
       trackActivity: false,
       infoTooltip:
-        'Per-domain mute / threshold / channel selection (system / SMS / email / menubar) and quiet-hours override. Auto-saves on every change.',
+        'Per-domain mute / threshold / channel selection (system / SMS / email / menubar). Quiet hours are set in Notification Settings. Auto-saves on every change.',
     });
     this.unsubscribe = getNotificationPreferencesService().subscribe(() => this.render());
+    document.addEventListener('wm:notification-settings-changed', this.onSettingsChanged);
     this.render();
   }
 
+  private readonly onSettingsChanged = (): void => this.render();
+
   public override destroy(): void {
     if (this.unsubscribe) { this.unsubscribe(); this.unsubscribe = null; }
+    document.removeEventListener('wm:notification-settings-changed', this.onSettingsChanged);
     super.destroy();
   }
 
@@ -99,29 +105,19 @@ export class NotificationPreferencesPanel extends Panel {
         </div>
       </section>`;
 
-    const qh = prefs.quietHours;
+    // Quiet hours have one home: Notification Settings (R4-BUG-003).
+    const global = getSettings().global;
+    const quietDomains = Object.values(getSettings().domains).filter((d) => d.quietHoursEnabled).length;
+    const domainWord = quietDomains === 1 ? 'domain' : 'domains';
+    const quietSummary = validateQuietWindow(global.quietHoursStart, global.quietHoursEnd) === 'ok'
+      ? `Quiet hours ${escapeHtml(global.quietHoursStart)}–${escapeHtml(global.quietHoursEnd)} · on for ${quietDomains} ${domainWord}`
+      : 'Quiet hours window is not set';
     const quietBlock = `
       <section style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.08);">
         <div style="font-size:10px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Quiet Hours</div>
         <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:12px;color:#ddd;">
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-            <input type="checkbox" id="np-qh-enabled" ${qh.enabled ? 'checked' : ''}
-              style="accent-color:#4a9eff;width:14px;height:14px;cursor:pointer;">
-            Enable
-          </label>
-          <label style="display:flex;align-items:center;gap:6px;">
-            <span>Start (0–23):</span>
-            <input type="number" id="np-qh-start" min="0" max="23" step="1"
-              value="${qh.startHour}"
-              style="width:54px;background:#222;color:#ddd;border:1px solid rgba(255,255,255,0.15);border-radius:3px;padding:2px 4px;font-size:12px;">
-          </label>
-          <label style="display:flex;align-items:center;gap:6px;">
-            <span>End (0–23):</span>
-            <input type="number" id="np-qh-end" min="0" max="23" step="1"
-              value="${qh.endHour}"
-              style="width:54px;background:#222;color:#ddd;border:1px solid rgba(255,255,255,0.15);border-radius:3px;padding:2px 4px;font-size:12px;">
-          </label>
-          <span style="opacity:0.6;font-size:11px;">Wrap past midnight: set start &gt; end (e.g. 22 → 6).</span>
+          <span id="np-qh-summary">${quietSummary}</span>
+          <button type="button" id="np-qh-open" style="background:transparent;color:inherit;border:1px solid rgba(255,255,255,0.25);border-radius:3px;padding:2px 8px;font-size:12px;cursor:pointer;">Edit in Notification Settings</button>
         </div>
       </section>`;
 
@@ -130,7 +126,6 @@ export class NotificationPreferencesPanel extends Panel {
       '<th style="text-align:left;padding:6px 8px;">Domain</th>',
       '<th style="text-align:left;padding:6px 8px;">Min severity</th>',
       ...CHANNELS.map((c) => `<th style="text-align:center;padding:6px 8px;">${escapeHtml(CHANNEL_LABELS[c])}</th>`),
-      '<th style="text-align:center;padding:6px 8px;" title="Send even during quiet hours">QH override</th>',
     ].join('');
 
     const rows = prefs.domains.map((d) => {
@@ -159,11 +154,6 @@ export class NotificationPreferencesPanel extends Panel {
           </select>
         </td>
         ${channelCells}
-        <td style="padding:6px 8px;text-align:center;">
-          <input type="checkbox" data-domain="${escapeHtml(d.domain)}" data-field="quietHoursOverride"
-            ${d.quietHoursOverride ? 'checked' : ''}
-            style="accent-color:#4a9eff;width:14px;height:14px;cursor:pointer;">
-        </td>
       </tr>`;
     }).join('');
 
@@ -199,30 +189,14 @@ export class NotificationPreferencesPanel extends Panel {
       saveVoiceSettings({ ...getVoiceSettings(), enabled: voiceEnabledEl.checked });
     });
 
-    const qhEnabledEl = root.querySelector<HTMLInputElement>('#np-qh-enabled');
-    const qhStartEl = root.querySelector<HTMLInputElement>('#np-qh-start');
-    const qhEndEl = root.querySelector<HTMLInputElement>('#np-qh-end');
-    const writeQh = (): void => {
-      svc.setQuietHours({
-        enabled: !!qhEnabledEl?.checked,
-        startHour: Number(qhStartEl?.value ?? 0),
-        endHour: Number(qhEndEl?.value ?? 0),
-      });
-    };
-    qhEnabledEl?.addEventListener('change', writeQh);
-    qhStartEl?.addEventListener('change', writeQh);
-    qhEndEl?.addEventListener('change', writeQh);
+    root.querySelector<HTMLButtonElement>('#np-qh-open')?.addEventListener('click', () => {
+      document.dispatchEvent(new CustomEvent('cb:open-panel', { detail: { panelKey: 'notification-settings' } }));
+    });
 
     for (const el of root.querySelectorAll<HTMLInputElement>('input[data-field="enabled"]')) {
       el.addEventListener('change', () => {
         const domain = el.dataset.domain;
         if (domain) svc.setDomainPreference(domain, { enabled: el.checked });
-      });
-    }
-    for (const el of root.querySelectorAll<HTMLInputElement>('input[data-field="quietHoursOverride"]')) {
-      el.addEventListener('change', () => {
-        const domain = el.dataset.domain;
-        if (domain) svc.setDomainPreference(domain, { quietHoursOverride: el.checked });
       });
     }
     for (const el of root.querySelectorAll<HTMLSelectElement>('select[data-field="minSeverity"]')) {

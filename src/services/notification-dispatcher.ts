@@ -8,7 +8,7 @@
  * Features:
  *  - Ghost Mode suppression (reads `wm-app-mode` from localStorage)
  *  - Rate limiting: max 1 notification per source per 2 minutes
- *  - Quiet hours: suppresses non-critical alerts during configured hours
+ *  - Quiet hours: per-domain, via notification-settings-service (one rule, R4-BUG-003)
  */
 
 import type { UnifiedAlert, AlertSeverity, AlertSource } from './unified-alerts';
@@ -32,18 +32,12 @@ import type {
 
 export type NotificationAction = 'sound+banner' | 'banner' | 'badge' | 'silent';
 
-interface QuietHoursConfig {
-  enabled: boolean;
-  start: string; // "HH:MM" 24h format
-  end: string; // "HH:MM" 24h format
-}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Constants
 // ──────────────────────────────────────────────────────────────────────────────
 
 const MODE_STORAGE_KEY = 'wm-app-mode';
-const QUIET_HOURS_KEY = 'wm-quiet-hours';
 
 /** Minimum interval between notifications from the same source (ms). */
 const RATE_LIMIT_MS = 2 * 60 * 1000; // 2 minutes
@@ -66,41 +60,6 @@ export function actionForSeverity(severity: AlertSeverity): NotificationAction {
   if (severity === 'high') return 'banner';
   if (severity === 'medium') return 'badge';
   return 'silent';
-}
-
-/** Parse "HH:MM" into minutes since midnight. Returns NaN on bad input. */
-function parseTimeToMinutes(time: string): number {
-  const parts = time.split(':');
-  if (parts.length !== 2) return Number.NaN;
-  const h = Number.parseInt(parts[0] ?? '', 10);
-  const m = Number.parseInt(parts[1] ?? '', 10);
-  if (Number.isNaN(h) || Number.isNaN(m) || h < 0 || h > 23 || m < 0 || m > 59) return Number.NaN;
-  return h * 60 + m;
-}
-
-/** Check whether the current time falls within quiet hours. */
-function isQuietHoursActive(): boolean {
-  try {
- const raw = localStorage.getItem(QUIET_HOURS_KEY);
- if (!raw) return false;
- const config = JSON.parse(raw) as QuietHoursConfig;
- if (!config.enabled) return false;
-
- const startMin = parseTimeToMinutes(config.start);
- const endMin = parseTimeToMinutes(config.end);
- if (Number.isNaN(startMin) || Number.isNaN(endMin)) return false;
-
- const now = new Date();
- const nowMin = now.getHours() * 60 + now.getMinutes();
-
- // Handle overnight ranges (e.g. 22:00 → 07:00)
- if (startMin <= endMin) {
- return nowMin >= startMin && nowMin < endMin;
- }
- return nowMin >= startMin || nowMin < endMin;
-  } catch {
- return false;
-  }
 }
 
 /** Return true when app is in Ghost Mode. */
@@ -286,12 +245,6 @@ class NotificationDispatcher {
  const preference = evaluateNotificationPreference(domain, alert.severity);
  if (!preference.allowed) {
  suppressTrace(trace, preference.reason);
- return;
- }
-
- // ── Quiet hours (legacy wm-quiet-hours key) — suppress unless critical ──
- if (isQuietHoursActive() && alert.severity !== 'critical') {
- suppressTrace(trace, 'legacy-quiet-hours');
  return;
  }
 

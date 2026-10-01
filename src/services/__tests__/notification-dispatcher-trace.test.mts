@@ -172,7 +172,7 @@ test('a silent action neither delivers nor reserves a banner slot', async () => 
   assert.deepEqual(getNotificationTraceRegistry().summary().suppressedByReason, { 'silent-action': 1 });
 });
 
-for (const gate of ['ghost-mode', 'master-mute', 'domain-disabled', 'below-threshold', 'domain-quiet-hours', 'legacy-quiet-hours'] as const) {
+for (const gate of ['ghost-mode', 'master-mute', 'domain-disabled', 'below-threshold', 'domain-quiet-hours'] as const) {
   test(`badge delivery still respects ${gate} before the cooldown`, async (t) => {
     t.mock.method(Date.prototype, 'getHours', () => 23);
     t.mock.method(Date.prototype, 'getMinutes', () => 0);
@@ -181,9 +181,6 @@ for (const gate of ['ghost-mode', 'master-mute', 'domain-disabled', 'below-thres
     if (gate === 'domain-disabled') updateDomainSettings('weather', { enabled: false });
     if (gate === 'below-threshold') updateDomainSettings('weather', { threshold: 'high' });
     if (gate === 'domain-quiet-hours') updateDomainSettings('weather', { quietHoursEnabled: true });
-    if (gate === 'legacy-quiet-hours') {
-      localStorage.setItem('wm-quiet-hours', JSON.stringify({ enabled: true, start: '22:00', end: '07:00' }));
-    }
     const { notificationDispatcher } = await loadFresh();
     notificationDispatcher.dispatchNotification(alert('blocked-badge', 'medium'), 'badge');
     assert.equal(NotificationStub.calls.length, 0);
@@ -191,31 +188,44 @@ for (const gate of ['ghost-mode', 'master-mute', 'domain-disabled', 'below-thres
     assert.deepEqual(getNotificationTraceRegistry().summary().suppressedByReason, { [gate]: 1 });
 
     localStorage.removeItem('wm-app-mode');
-    localStorage.removeItem('wm-quiet-hours');
     resetSettings();
     notificationDispatcher.dispatchNotification(alert('allowed-warning', 'high'), 'banner');
     assert.deepEqual(NotificationStub.calls.map(({ title }) => title), ['Alert allowed-warning']);
   });
 }
 
-for (const gate of ['master-mute', 'domain-disabled'] as const) {
-  test(`critical alerts still respect ${gate}`, async () => {
-    if (gate === 'master-mute') updateGlobalSettings({ masterMute: true });
-    else updateDomainSettings('weather', { enabled: false });
-    const { notificationDispatcher } = await loadFresh();
-    notificationDispatcher.dispatchNotification(alert('blocked-critical'), 'sound+banner');
-    assert.equal(NotificationStub.calls.length, 0);
-    assert.deepEqual(getNotificationTraceRegistry().summary().suppressedByReason, { [gate]: 1 });
-  });
-}
+test('critical alerts still respect a disabled domain', async () => {
+  updateDomainSettings('weather', { enabled: false });
+  const { notificationDispatcher } = await loadFresh();
+  notificationDispatcher.dispatchNotification(alert('blocked-critical'), 'sound+banner');
+  assert.equal(NotificationStub.calls.length, 0);
+  assert.deepEqual(getNotificationTraceRegistry().summary().suppressedByReason, { 'domain-disabled': 1 });
+});
 
-test('critical alerts bypass both quiet-hours gates and an active source cooldown', async (t) => {
+test('critical alerts come through a forgotten master mute; others do not (R4-BUG-003)', async () => {
+  updateGlobalSettings({ masterMute: true });
+  const { notificationDispatcher } = await loadFresh();
+  notificationDispatcher.dispatchNotification(alert('muted-warning', 'high'), 'banner');
+  notificationDispatcher.dispatchNotification(alert('critical-through-mute'), 'sound+banner');
+  assert.deepEqual(NotificationStub.calls.map(({ title }) => title), ['Alert critical-through-mute']);
+  assert.deepEqual(getNotificationTraceRegistry().summary().suppressedByReason, { 'master-mute': 1 });
+});
+
+test('a stale legacy wm-quiet-hours value no longer silences anything (R4-BUG-003)', async (t) => {
+  t.mock.method(Date.prototype, 'getHours', () => 23);
+  t.mock.method(Date.prototype, 'getMinutes', () => 0);
+  localStorage.setItem('wm-quiet-hours', JSON.stringify({ enabled: true, start: '22:00', end: '07:00' }));
+  const { notificationDispatcher } = await loadFresh();
+  notificationDispatcher.dispatchNotification(alert('night-warning', 'high'), 'banner');
+  assert.deepEqual(NotificationStub.calls.map(({ title }) => title), ['Alert night-warning']);
+});
+
+test('critical alerts bypass quiet hours and an active source cooldown', async (t) => {
   t.mock.method(Date.prototype, 'getHours', () => 23);
   t.mock.method(Date.prototype, 'getMinutes', () => 0);
   const { notificationDispatcher } = await loadFresh();
   notificationDispatcher.dispatchNotification(alert('warning', 'high'), 'banner');
   updateDomainSettings('weather', { quietHoursEnabled: true });
-  localStorage.setItem('wm-quiet-hours', JSON.stringify({ enabled: true, start: '22:00', end: '07:00' }));
   notificationDispatcher.dispatchNotification(alert('critical'), 'sound+banner');
   assert.deepEqual(NotificationStub.calls.map(({ title }) => title), ['Alert warning', 'Alert critical']);
   assert.deepEqual(getNotificationTraceRegistry().summary().suppressedByReason, {});

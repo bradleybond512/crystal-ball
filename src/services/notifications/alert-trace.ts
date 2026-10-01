@@ -21,6 +21,7 @@ import type {
 } from './notification-settings-service';
 import type { SavedPlace } from '@/services/saved-places';
 import { haversineKm } from '@/services/proximity-filter';
+import { isWithinQuietWindow, validateQuietWindow } from './quiet-hours';
 
 export const ALERT_TRACE_SCHEMA_VERSION = 1;
 
@@ -168,28 +169,6 @@ function severityScoreFor(s: ObservationSeverity): number {
   }
 }
 
-function parseHm(hm: string): { h: number; m: number } {
-  const [h, m] = hm.split(':');
-  const hi = Number.parseInt(h ?? '', 10);
-  const mi = Number.parseInt(m ?? '', 10);
-  return {
-    h: Number.isFinite(hi) ? hi : 0,
-    m: Number.isFinite(mi) ? mi : 0,
-  };
-}
-
-function isWithinQuietWindow(currentMinutes: number, start: string, end: string): boolean {
-  const s = parseHm(start);
-  const e = parseHm(end);
-  const startMinutes = s.h * 60 + s.m;
-  const endMinutes = e.h * 60 + e.m;
-  if (startMinutes === endMinutes) return true;
-  if (startMinutes > endMinutes) {
-    return currentMinutes >= startMinutes || currentMinutes < endMinutes;
-  }
-  return currentMinutes >= startMinutes && currentMinutes < endMinutes;
-}
-
 function channelsFor(domainSettings: DomainSettings): AlertTraceChannel[] {
   if (domainSettings.channel === 'in_app') return ['in_app'];
   if (domainSettings.channel === 'native') return ['native'];
@@ -291,6 +270,14 @@ function stageQuietHours(
   const hour = hourOverride ?? now.getHours();
   const minute = minuteOverride ?? now.getMinutes();
   const currentMinutes = hour * 60 + minute;
+  // Same rule as delivery (R4-BUG-003): an unusable window never silences.
+  if (validateQuietWindow(settings.global.quietHoursStart, settings.global.quietHoursEnd) !== 'ok') {
+    return {
+      name: 'quiet-hours',
+      status: 'pass',
+      detail: `Quiet window ${settings.global.quietHoursStart || '(blank)'}–${settings.global.quietHoursEnd || '(blank)'} is not valid, so it never silences alerts.`,
+    };
+  }
   const inQuiet = isWithinQuietWindow(currentMinutes, settings.global.quietHoursStart, settings.global.quietHoursEnd);
   if (inQuiet) {
     return {
@@ -324,11 +311,11 @@ function stageThreshold(
       detail: 'Skipped — no domain classification.',
     };
   }
-  if (settings.global.masterMute) {
+  if (settings.global.masterMute && severity !== 'critical') {
     return {
       name: 'threshold-check',
       status: 'fail',
-      detail: 'Master mute is on — every domain is suppressed regardless of threshold.',
+      detail: 'Master mute is on — non-critical alerts are suppressed; critical alerts still come through.',
     };
   }
   const domainSettings = settings.domains[domain];

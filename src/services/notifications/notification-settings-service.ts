@@ -1,3 +1,5 @@
+import { hourToQuietTime, isWithinQuietWindow, minutesOfDay, validateQuietWindow } from './quiet-hours';
+
 export type NotificationSeverity = 'info' | 'low' | 'medium' | 'high' | 'critical';
 
 export type DeliveryChannel = 'in_app' | 'native' | 'both';
@@ -41,6 +43,9 @@ export type NotificationPreferenceReason =
   | 'domain-disabled'
   | 'below-threshold'
   | 'domain-quiet-hours';
+
+/** `invalid`/`equal` windows are refused at save time (R4-BUG-003). */
+export type GlobalSettingsUpdate = { ok: true } | { ok: false; reason: 'invalid' | 'equal' };
 
 export interface NotificationPreferenceDecision {
   allowed: boolean;
@@ -127,7 +132,55 @@ function mergeWithDefaults(saved: NotificationSettings | null): NotificationSett
   };
 }
 
-let currentSettings: NotificationSettings = mergeWithDefaults(loadFromStorage());
+/** Set once the Preferences-panel window has been considered for migration. */
+export const QUIET_HOURS_MIGRATION_KEY = 'wm-quiet-hours-unified-v1';
+const PREFERENCES_KEY = 'wm-notification-preferences';
+
+/**
+ * R4-BUG-003: the Notification Preferences window only ever reached the
+ * weather ladder. Carry it into the canonical store for weather only, and
+ * never add silence: skip when weather was overridden, when the shared
+ * window already serves another domain, or when the window is unusable.
+ * Returns null when nothing should change.
+ */
+export function migratePreferencesQuietHours(
+  settings: NotificationSettings,
+  preferencesRaw: string | null,
+): NotificationSettings | null {
+  let parsed: unknown;
+  try { parsed = JSON.parse(preferencesRaw ?? 'null'); } catch { return null; }
+  if (!parsed || typeof parsed !== 'object') return null;
+  const prefs = parsed as { quietHours?: Record<string, unknown>; domains?: unknown };
+  if (prefs.quietHours?.enabled !== true) return null;
+  const weather = Array.isArray(prefs.domains)
+    ? (prefs.domains as (Record<string, unknown> | null)[]).find((d) => d?.domain === 'weather')
+    : undefined;
+  if (weather?.quietHoursOverride === true) return null;
+  if (ALL_DOMAINS.some((domain) => settings.domains[domain].quietHoursEnabled)) return null;
+  const start = hourToQuietTime(prefs.quietHours.startHour);
+  const end = hourToQuietTime(prefs.quietHours.endHour);
+  if (!start || !end || validateQuietWindow(start, end) !== 'ok') return null;
+  return {
+    ...settings,
+    global: { ...settings.global, quietHoursStart: start, quietHoursEnd: end },
+    domains: { ...settings.domains, weather: { ...settings.domains.weather, quietHoursEnabled: true } },
+  };
+}
+
+function initialSettings(): NotificationSettings {
+  const settings = mergeWithDefaults(loadFromStorage());
+  try {
+    if (localStorage.getItem(QUIET_HOURS_MIGRATION_KEY) !== null) return settings;
+    const migrated = migratePreferencesQuietHours(settings, localStorage.getItem(PREFERENCES_KEY));
+    if (migrated) saveToStorage(migrated);
+    localStorage.setItem(QUIET_HOURS_MIGRATION_KEY, '1');
+    return migrated ?? settings;
+  } catch {
+    return settings; // No storage: nothing to migrate.
+  }
+}
+
+let currentSettings: NotificationSettings = initialSettings();
 
 function emitChange(): void {
   if (typeof document !== 'undefined') {
@@ -156,39 +209,45 @@ export function updateDomainSettings(
   emitChange();
 }
 
-export function updateGlobalSettings(patch: Partial<GlobalSettings>): void {
-  currentSettings = {
-    ...currentSettings,
-    global: { ...currentSettings.global, ...patch },
-  };
+export function updateGlobalSettings(patch: Partial<GlobalSettings>): GlobalSettingsUpdate {
+  const global = { ...currentSettings.global, ...patch };
+  if ('quietHoursStart' in patch || 'quietHoursEnd' in patch) {
+    const validity = validateQuietWindow(global.quietHoursStart, global.quietHoursEnd);
+    if (validity !== 'ok') return { ok: false, reason: validity };
+  }
+  currentSettings = { ...currentSettings, global };
   saveToStorage(currentSettings);
   emitChange();
+  return { ok: true };
 }
 
-function isInQuietHours(start: string, end: string): boolean {
-  const now = new Date();
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  const startParts = start.split(':').map((s) => { const n = Number.parseInt(s, 10); return Number.isNaN(n) ? 0 : n; });
-  const endParts = end.split(':').map((s) => { const n = Number.parseInt(s, 10); return Number.isNaN(n) ? 0 : n; });
-  const startMinutes = (startParts[0] ?? 0) * 60 + (startParts[1] ?? 0);
-  const endMinutes = (endParts[0] ?? 0) * 60 + (endParts[1] ?? 0);
+/** True when `domain` has quiet hours on and `now` is inside the shared window. */
+export function isDomainInQuietHours(domain: NotificationDomain, now: Date = new Date()): boolean {
+  const { global, domains } = currentSettings;
+  return domains[domain]?.quietHoursEnabled === true
+    && isWithinQuietWindow(minutesOfDay(now), global.quietHoursStart, global.quietHoursEnd);
+}
 
-  // Identical start and end means all 24 hours are quiet
-  if (startMinutes === endMinutes) return true;
-
-  // Window wraps midnight when start > end (e.g. 22:00–07:00)
-  if (startMinutes > endMinutes) {
-    return currentMinutes >= startMinutes || currentMinutes < endMinutes;
-  }
-  return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+/**
+ * Inputs for the notification ladder (weather path in data-loader). The
+ * ladder's separate "bypass" flag is folded into the domain's own quiet-hours
+ * toggle, so there is one switch per domain and one window (R4-BUG-003).
+ */
+export function ladderQuietHours(
+  domain: NotificationDomain,
+  now: Date = new Date(),
+): { quietHoursActive: boolean; quietHoursBypassEnabled: boolean } {
+  return { quietHoursActive: isDomainInQuietHours(domain, now), quietHoursBypassEnabled: false };
 }
 
 export function evaluateNotificationPreference(
   domain: NotificationDomain,
   severity: NotificationSeverity,
+  now: Date = new Date(),
 ): NotificationPreferenceDecision {
   const { global, domains } = currentSettings;
-  if (global.masterMute) return { allowed: false, reason: 'master-mute' };
+  // Life-safety critical alerts come through a forgotten mute (R4-BUG-003).
+  if (global.masterMute && severity !== 'critical') return { allowed: false, reason: 'master-mute' };
 
   const domainSettings = domains[domain];
   if (!domainSettings.enabled) return { allowed: false, reason: 'domain-disabled' };
@@ -198,7 +257,7 @@ export function evaluateNotificationPreference(
   if (severityIndex < thresholdIndex) return { allowed: false, reason: 'below-threshold' };
 
   // Critical always bypasses quiet hours
-  if (domainSettings.quietHoursEnabled && severity !== 'critical' && isInQuietHours(global.quietHoursStart, global.quietHoursEnd)) {
+  if (severity !== 'critical' && isDomainInQuietHours(domain, now)) {
     return { allowed: false, reason: 'domain-quiet-hours' };
   }
 

@@ -5,6 +5,7 @@ import {
   resetSettings,
   updateDomainSettings,
   updateGlobalSettings,
+  type GlobalSettingsUpdate,
   type NotificationDomain,
 } from '@/services/notifications/notification-settings-service';
 import { record as recordHistory } from '@/services/notifications/notification-history-service';
@@ -14,6 +15,14 @@ import {
   SETTINGS_DOMAIN_LABELS as DOMAIN_LABELS,
   SETTINGS_DOMAINS as ALL_DOMAINS,
 } from './notification-settings-helpers';
+
+/** Inline feedback for a refused quiet-hours window (R4-BUG-003). */
+export function quietWindowMessage(result: GlobalSettingsUpdate): string {
+  if (result.ok) return '';
+  return result.reason === 'equal'
+    ? 'Not saved: start and end must be different times.'
+    : 'Not saved: enter both times.';
+}
 
 export class NotificationSettingsPanel extends Panel {
   private settingsChangeListener: (() => void) | null = null;
@@ -68,7 +77,7 @@ export class NotificationSettingsPanel extends Panel {
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#ddd;">
             <input type="checkbox" id="ns-master-mute" ${g.masterMute ? 'checked' : ''}
               style="accent-color:var(--accent,#4a9eff);width:14px;height:14px;cursor:pointer;">
-            Mute all notifications
+            Mute notifications (critical alerts still come through)
           </label>
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#ddd;">
             <input type="checkbox" id="ns-daily-summary" ${g.dailySummaryEnabled ? 'checked' : ''}
@@ -82,6 +91,7 @@ export class NotificationSettingsPanel extends Panel {
             <span style="color:var(--text-secondary,#aaa);">to</span>
             <input type="time" id="ns-quiet-end" value="${escapeHtml(g.quietHoursEnd)}"
               style="background:#222;color:#ddd;border:1px solid var(--border-subtle,#333);border-radius:3px;padding:2px 6px;font-size:12px;cursor:pointer;">
+            <span id="ns-quiet-error" role="alert" style="color:var(--mac-alert-warning, var(--hs-warn));font-size:12px;"></span>
           </div>
         </div>
       </div>`;
@@ -179,15 +189,18 @@ export class NotificationSettingsPanel extends Panel {
       updateGlobalSettings({ dailySummaryEnabled: dailySummary.checked });
     });
 
+    // Save the window as a pair so moving one end past the other never
+    // stores an equal or half-entered window; refused drafts stay on screen.
     const quietStart = root.querySelector<HTMLInputElement>('#ns-quiet-start');
-    quietStart?.addEventListener('change', () => {
-      updateGlobalSettings({ quietHoursStart: quietStart.value });
-    });
-
     const quietEnd = root.querySelector<HTMLInputElement>('#ns-quiet-end');
-    quietEnd?.addEventListener('change', () => {
-      updateGlobalSettings({ quietHoursEnd: quietEnd.value });
-    });
+    const quietError = root.querySelector<HTMLElement>('#ns-quiet-error');
+    const saveQuietWindow = (): void => {
+      if (!quietStart || !quietEnd) return;
+      const result = updateGlobalSettings({ quietHoursStart: quietStart.value, quietHoursEnd: quietEnd.value });
+      if (quietError) quietError.textContent = quietWindowMessage(result);
+    };
+    quietStart?.addEventListener('change', saveQuietWindow);
+    quietEnd?.addEventListener('change', saveQuietWindow);
 
     const resetBtn = root.querySelector<HTMLButtonElement>('#ns-reset-defaults');
     resetBtn?.addEventListener('click', () => {

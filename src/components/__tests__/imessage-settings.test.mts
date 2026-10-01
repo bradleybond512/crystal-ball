@@ -28,11 +28,13 @@ const thresholds = await import('../../services/config/alert-thresholds.ts');
 let state = { enabled: true, recipient: '+15551234567', ready: true, migrationAvailable: false, threshold: 'critical' };
 const calls: unknown[][] = [];
 let legacy: { enabled: boolean; recipient: string } | null = null;
+let pause: Record<string, unknown> = { paused: false };
 let refresh = async () => ({ ok: true });
 let configure = async (_recipient: string, _enabled: boolean): Promise<any> => ({ ok: true });
 let disable = async (): Promise<any> => { state.enabled = false; return { ok: true }; };
 const bridge = {
   getImessageSettings: () => ({ ...state }), getLegacyImessageSuggestion: () => legacy,
+  getImessagePauseState: () => pause,
   refreshImessageSettings: () => refresh(),
   configureImessage: (recipient: string, enabled: boolean) => { calls.push(['configure', recipient, enabled]); return configure(recipient, enabled); },
   disableImessage: () => { calls.push(['disable']); return disable(); },
@@ -82,7 +84,7 @@ function mount() {
   settings.open();
 }
 afterEach(() => {
-  settings?.destroy(); document.body.replaceChildren(); calls.length = 0; legacy = null;
+  settings?.destroy(); document.body.replaceChildren(); calls.length = 0; legacy = null; pause = { paused: false };
   state = { enabled: true, recipient: '+15551234567', ready: true, migrationAvailable: false, threshold: 'critical' };
   refresh = async () => ({ ok: true }); configure = async () => ({ ok: true });
   disable = async () => { state.enabled = false; return { ok: true }; };
@@ -184,4 +186,28 @@ test('one-time legacy suggestion is visibly a draft and never silently prompts o
   assert.equal(calls.length, 0);
   el('us-imessage-save').click(); await flush();
   assert.deepEqual(calls, [['configure', '+15550000000', true]]);
+});
+
+// ── R4-BUG-001 ──────────────────────────────────────────────────────────
+test('a pause with no legacy recipient explains itself with the redacted hint', async () => {
+  state = { enabled: false, recipient: '', ready: true, migrationAvailable: false, threshold: 'critical' };
+  pause = { paused: true, hint: '…9999', since: 1, notified: true };
+  mount(); await flush();
+  assert.equal(el('us-imessage-status').textContent,
+    'iMessage alerts are paused (previous recipient …9999). Enter the recipient, then Save and confirm to resume.');
+  assert.equal(el<HTMLInputElement>('us-imessage-recipient').value, '', 'nothing is prefilled from the hint');
+  assert.equal(calls.length, 0, 'nothing is authorized automatically');
+});
+test('a pending legacy migration keeps the review prompt', async () => {
+  legacy = { enabled: true, recipient: '+15559999999' };
+  pause = { paused: true, hint: '…9999', since: 1, notified: false };
+  mount(); await flush();
+  assert.equal(el('us-imessage-status').textContent, 'Review previous iMessage settings, then Save and confirm.');
+});
+test('the paused notice deep link focuses the iMessage recipient once loaded', async () => {
+  settings = new UnifiedSettings({ getPanelSettings: () => ({}), togglePanel: () => {}, setPanelsEnabled: () => {}, getDisabledSources: () => new Set(), toggleSource: () => {}, setSourcesEnabled: () => {}, getAllSourceNames: () => [], getLocalizedPanelName: (_key, fallback) => fallback, isDesktopApp: true });
+  settings.open('general', 'imessage'); await flush();
+  assert.ok(document.activeElement === el('us-imessage-recipient'), 'the recipient has focus');
+  settings.close(); settings.open(); await flush();
+  assert.ok(document.activeElement !== el('us-imessage-recipient'), 'a plain open does not jump to iMessage');
 });

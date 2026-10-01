@@ -264,6 +264,14 @@ Promise.all([
 ]).then(([{ offlineStalenessBanner }, { notificationStack }]) => {
   offlineStalenessBanner.mount(notificationStack.element);
 }).catch((error: unknown) => console.warn('[boot] OfflineStalenessBanner failed to mount', error));
+// R4-BUG-001: paused iMessage relays stay visible outside Settings (classic view;
+// HomeShellOverlay mounts its own copy because it covers this stack).
+Promise.all([
+  import('./components/ImessagePausedNotice'),
+  import('./components/NotificationStack'),
+]).then(([{ mountImessagePausedNotice }, { notificationStack }]) => {
+  mountImessagePausedNotice(notificationStack.element);
+}).catch((error: unknown) => console.warn('[boot] ImessagePausedNotice failed to mount', error));
 import('./services/api-diagnostic').then(({ attachDiagnosticToWindow }) => { attachDiagnosticToWindow(); }).catch((error: unknown) => console.warn('[boot] api-diagnostic failed to mount', error));
 
 // Catch QuotaExceededError from any bare localStorage.setItem across the

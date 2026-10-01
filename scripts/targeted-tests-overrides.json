@@ -195,5 +195,14 @@
   ],
   "src-tauri/src/notify_policy.rs": [
     "test:native-notify"
+  ],
+  "src/components/ImessagePausedNotice.ts": [
+    "test:imessage"
+  ],
+  "src/services/notifications/imessage-pause-alerts.ts": [
+    "test:imessage"
+  ],
+  "src/main.ts": [
+    "test:imessage"
   ]
 }

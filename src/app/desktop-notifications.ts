@@ -4,6 +4,7 @@ import type { BreakingAlert } from '@/services/breaking-news-alerts';
 import { getAlertSettings } from '@/services/breaking-news-alerts';
 import { isGhostMode } from '@/services/mode-manager';
 import { getImessageSettings, refreshImessageSettings, sendImessage } from '@/services/imessage-bridge';
+import { notifyImessagePausedOnce, recordPausedImessageRelay } from '@/services/notifications/imessage-pause-alerts';
 
 /**
  * Routes breaking alerts to native macOS notifications on desktop (osascript
@@ -25,7 +26,8 @@ export class DesktopNotifications implements AppModule {
   }
 
   init(): void {
- if (this.ctx.isDesktopApp) void refreshImessageSettings();
+ // Hydrate native iMessage state, then tell the user once if relays are paused (R4-BUG-001).
+ if (this.ctx.isDesktopApp) void refreshImessageSettings().then(() => notifyImessagePausedOnce()).catch(() => undefined);
  if (!this.ctx.isDesktopApp && typeof Notification === 'undefined') {
  this.webPermission = 'unsupported';
  }
@@ -39,7 +41,6 @@ export class DesktopNotifications implements AppModule {
  document.removeEventListener('wm:breaking-news', this.boundHandler);
   }
 
-  // eslint-disable-next-line sonarjs/cognitive-complexity -- threshold gating + native + web + iMessage paths inline
   private async onBreakingNews(alert: BreakingAlert): Promise<void> {
  if (isGhostMode()) return;  // Ghost Mode: notifications suppressed
  const settings = getAlertSettings();
@@ -55,26 +56,34 @@ export class DesktopNotifications implements AppModule {
  sound,
  priority: 'high',
  });
- // Best-effort iMessage routing if the user has it configured. Threshold
- // gating happens here so we never wake the user's phone for a 'high' if
- // they only opted into 'critical'.
- const imSettings = getImessageSettings();
- if (imSettings.ready && imSettings.enabled && imSettings.recipient) {
- const meetsThreshold = imSettings.threshold === 'critical'
- ? alert.threatLevel === 'critical'
- : alert.threatLevel === 'critical' || alert.threatLevel === 'high';
- if (meetsThreshold) {
- const result = await sendImessage(`Crystal Ball: ${body}`);
- if (!result.ok) {
- // eslint-disable-next-line no-console -- best-effort relay; user-actionable failure
- console.warn('[imessage] alert relay failed', result.reason);
- }
- }
- }
+ await this.relayToImessage(alert, body);
  return;
  }
 
  await this.showWebNotification(body);
+  }
+
+  /**
+   * Best-effort iMessage routing. Threshold gating happens first so we never
+   * wake the user's phone for a 'high' if they only opted into 'critical'. A
+   * relay skipped because iMessage is paused is traced, never silent (R4-BUG-001).
+   */
+  private async relayToImessage(alert: BreakingAlert, body: string): Promise<void> {
+    const imSettings = getImessageSettings();
+    const meetsThreshold = imSettings.threshold === 'critical'
+      ? alert.threatLevel === 'critical'
+      : alert.threatLevel === 'critical' || alert.threatLevel === 'high';
+    if (!meetsThreshold) return;
+    const paused = { source: 'breaking-news', urgency: alert.threatLevel === 'critical' ? 'critical' : 'high', headline: alert.headline } as const;
+    if (!imSettings.ready || !imSettings.enabled || !imSettings.recipient) {
+      recordPausedImessageRelay(paused);
+      return;
+    }
+    const result = await sendImessage(`Crystal Ball: ${body}`);
+    if (result.ok) return;
+    // eslint-disable-next-line no-console -- best-effort relay; user-actionable failure
+    console.warn('[imessage] alert relay failed', result.reason);
+    if (result.code === 'disabled') recordPausedImessageRelay(paused);
   }
 
   private async showWebNotification(body: string): Promise<void> {

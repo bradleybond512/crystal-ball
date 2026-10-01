@@ -22,7 +22,7 @@ import {
 import type { StatusPanel } from './StatusPanel';
 import { feedDisplayName } from './StatusPanel';
 import { isYouTubeConnected, signInToYouTube, signOutOfYouTube, initYouTubeAccountListeners } from '@/services/youtube-account';
-import { getImessageSettings, refreshImessageSettings, configureImessage, disableImessage, getLegacyImessageSuggestion, saveImessageThreshold, sendImessage, type ImessageResult } from '@/services/imessage-bridge';
+import { getImessageSettings, getImessagePauseState, refreshImessageSettings, configureImessage, disableImessage, getLegacyImessageSuggestion, saveImessageThreshold, sendImessage, type ImessageResult } from '@/services/imessage-bridge';
 import { getApiBaseUrl } from '@/services/runtime';
 import { tryInvokeTauri, invokeTauri } from '@/services/tauri-bridge';
 import {
@@ -122,6 +122,7 @@ export class UnifiedSettings {
   private imessageLoading = true;
   private imessageGeneration = 0;
   private imessageStatus = 'Loading iMessage settings…';
+  private imessageFocusPending = false;
   private activeSourceRegion = 'all';
   private sourceFilter = '';
   private activePanelCategory = 'all';
@@ -551,7 +552,8 @@ export class UnifiedSettings {
  });
   }
 
-  public open(tab?: TabId): void {
+  /** `focus: 'imessage'` is used by the paused-iMessage notice (R4-BUG-001). */
+  public open(tab?: TabId, focus?: 'imessage'): void {
  if (!this.overlay.classList.contains('active')) {
  this.previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
  }
@@ -562,6 +564,8 @@ export class UnifiedSettings {
  localStorage.setItem('wm-settings-open', '1');
  window.addEventListener('keydown', this.escapeHandler, true);
  this.focusFirstControl();
+ this.imessageFocusPending = focus === 'imessage';
+ if (this.imessageFocusPending) this.focusImessage();
  if (this.config.isDesktopApp) void this.loadImessage();
  this.focusObserver.observe(this.overlay, {
  childList: true, subtree: true, attributes: true,
@@ -597,6 +601,13 @@ export class UnifiedSettings {
   private focusableControls(): HTMLElement[] {
  return [...this.overlay.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex], summary, [contenteditable="true"]')]
  .filter((element) => this.isUsableFocusTarget(element));
+  }
+
+  private focusImessage(): void {
+    const recipient = this.overlay.querySelector<HTMLInputElement>('#us-imessage-recipient');
+    if (!recipient) return;
+    recipient.scrollIntoView?.({ block: 'center' });
+    if (!recipient.disabled) recipient.focus();
   }
 
   private focusFirstControl(): void {
@@ -665,9 +676,16 @@ export class UnifiedSettings {
     const legacy = getLegacyImessageSuggestion();
     this.imessageDraft = legacy ?? { enabled: this.imessageSaved.enabled, recipient: this.imessageSaved.recipient };
     this.imessageLoading = false;
-    const loadedStatus = legacy ? 'Review previous iMessage settings, then Save and confirm.' : '';
+    const pause = getImessagePauseState();
+    let loadedStatus = '';
+    if (legacy) loadedStatus = 'Review previous iMessage settings, then Save and confirm.';
+    else if (pause.paused) loadedStatus = `iMessage alerts are paused (previous recipient ${pause.hint}). Enter the recipient, then Save and confirm to resume.`;
     this.imessageStatus = result.ok ? loadedStatus : result.reason;
     this.updateImessageControls();
+    if (this.imessageFocusPending) {
+      this.imessageFocusPending = false;
+      this.focusImessage();
+    }
   }
 
   private finishImessage(request: number, result: ImessageResult, success: string): void {

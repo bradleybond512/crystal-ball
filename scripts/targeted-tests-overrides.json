@@ -87,7 +87,8 @@
     "test:imessage-native",
     "test:native-responsiveness",
     "test:native-notify",
-    "test:sidecar-supervisor"
+    "test:sidecar-supervisor",
+    "test:secret-boundary"
   ],
   "src-tauri/src/updater_policy.rs": [
     "test:desktop-updater"
@@ -219,7 +220,8 @@
     "test:sidecar-supervisor"
   ],
   "src/services/analytics.ts": [
-    "test:analytics-consent"
+    "test:analytics-consent",
+    "test:secret-boundary"
   ],
   "src/components/AnalyticsConsentBanner.ts": [
     "test:analytics-consent"
@@ -228,7 +230,8 @@
     "test:sidecar-routing"
   ],
   "src/services/runtime-config.ts": [
-    "test:sidecar-routing"
+    "test:sidecar-routing",
+    "test:secret-boundary"
   ],
   "src/services/cloud-fallback-policy.ts": [
     "test:sidecar-routing"
@@ -271,5 +274,20 @@
   ],
   "src/components/NotificationPreferencesPanel.ts": [
     "test:quiet-hours"
+  ],
+  "src/components/RuntimeConfigPanel.ts": [
+    "test:secret-boundary"
+  ],
+  "src-tauri/sidecar/local-api-server.mjs": [
+    "test:secret-boundary"
+  ],
+  "src/services/keychain.ts": [
+    "test:secret-boundary"
+  ],
+  "src/components/SetupWizard.ts": [
+    "test:secret-boundary"
+  ],
+  "src/components/KeyDashboard.ts": [
+    "test:secret-boundary"
   ]
 }

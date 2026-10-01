@@ -17,9 +17,12 @@ test('UCDP RPC is explicitly no-store at the cloud gateway', () => {
   assert.match(gateway, /'\/api\/conflict\/v1\/list-ucdp-events': 'no-store'/);
 });
 
-test('deleting a desktop secret sends the empty value to the live sidecar environment', () => {
-  assert.match(runtimeConfig, /pushSecretToSidecar\(key, sanitized\)/);
-  assert.doesNotMatch(runtimeConfig, /if \(sanitized\) \{\s*try \{\s*await pushSecretToSidecar/);
+test('deleting a desktop secret unsets it in the live sidecar environment (native push, R4-SEC-001)', () => {
+  const main = readFileSync('src-tauri/src/main.rs', 'utf8');
+  const deleteSecret = main.slice(main.indexOf('async fn delete_secret('), main.indexOf('fn migration_marker_path('));
+  assert.match(deleteSecret, /sync_secret_to_sidecar\(&sync_app, &sync_key\)\.await;/);
+  assert.match(main, /fn sidecar_env_update_body\(key: &str, value: Option<&str>\)/);
+  assert.doesNotMatch(runtimeConfig, /pushSecretToSidecar/);
 });
 
 test('startup invokes the bounded UCDP event fetch once without renderer retries', () => {

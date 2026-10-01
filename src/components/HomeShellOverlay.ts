@@ -64,6 +64,7 @@ import type { KeylessSourceStateLike } from '@/services/home-shell/startup-readi
 import { dataFreshness } from '@/services/data-freshness';
 import type { DataSourceId } from '@/services/data-freshness';
 import { safeSetItem } from '@/utils/safe-storage';
+import { mountImessagePausedNotice } from './ImessagePausedNotice';
 import {
   getStormSnapshot,
   hydrateStormPosture,
@@ -136,6 +137,7 @@ export class HomeShellOverlay {
   private deckEl: HTMLElement | null = null;
   private contextualEl: HTMLElement | null = null;
   private ribbonEl: HTMLElement | null = null;
+  private unmountImessageNotice: (() => void) | null = null;
   private mapHome: Comment | null = null;
   private loop: LoopHandle | null = null;
   private pins: string[] = [];
@@ -229,6 +231,10 @@ export class HomeShellOverlay {
       target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
     viewport.append(this.readinessEl, this.briefingEl, deckHint);
+    // R4-BUG-001: the Home Shell covers the notification stack, so a paused
+    // iMessage channel must be visible here too.
+    this.unmountImessageNotice?.();
+    this.unmountImessageNotice = mountImessagePausedNotice(viewport);
 
     this.deckEl = el('section', 'home-shell-deck');
     this.contextualEl = el('section', 'home-shell-contextual');
@@ -363,6 +369,8 @@ export class HomeShellOverlay {
 
   destroy(): void {
     this.hide();
+    this.unmountImessageNotice?.();
+    this.unmountImessageNotice = null;
     if (this._onOpenDossier) {
       document.removeEventListener('cb:open-dossier', this._onOpenDossier);
       this._onOpenDossier = null;

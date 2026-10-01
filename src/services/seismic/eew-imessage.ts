@@ -16,6 +16,7 @@
  */
 
 import { getImessageSettings, sendImessage } from '../imessage-bridge';
+import { recordPausedImessageRelay, type PausedRelay } from '../notifications/imessage-pause-alerts';
 import type { EewAlert } from './eew-alert-engine';
 
 export type EewImessageOutcome =
@@ -28,6 +29,8 @@ export interface EewImessageDeps {
   send?: (body: string) => Promise<{ ok: boolean; reason?: string; code?: string }>;
   /** Inject for tests; defaults to the real settings store. */
   getSettings?: () => { enabled: boolean; ready: boolean; recipient: string };
+  /** Inject for tests; defaults to tracing the skip when iMessage is paused (R4-BUG-001). */
+  recordPaused?: (relay: PausedRelay) => void;
   /** Master toggle from runtime-config. When false, never call the
    *  bridge regardless of saved settings. */
   enabled: boolean;
@@ -63,7 +66,12 @@ export async function escalateTier5ToImessage(
   }
 
   const settings = (deps.getSettings ?? getImessageSettings)();
-  if (!settings.enabled || !settings.ready) return { status: 'disabled', reason: 'feature_off' };
+  // The feature is on but the channel is not authorized: never silent (R4-BUG-001).
+  const recordPaused = () => (deps.recordPaused ?? recordPausedImessageRelay)({ source: 'eew-tier5', urgency: 'critical', headline: alert.reason });
+  if (!settings.enabled || !settings.ready) {
+    recordPaused();
+    return { status: 'disabled', reason: 'feature_off' };
+  }
   const recipient = settings.recipient.trim();
   if (recipient.length === 0) {
     return { status: 'disabled', reason: 'no_recipient' };
@@ -75,7 +83,10 @@ export async function escalateTier5ToImessage(
   try {
     const result = await send(body);
     if (result.ok) return { status: 'sent' };
-    if (result.code === 'disabled') return { status: 'disabled', reason: 'feature_off' };
+    if (result.code === 'disabled') {
+      recordPaused();
+      return { status: 'disabled', reason: 'feature_off' };
+    }
     return { status: 'failed', error: result.reason ?? 'unknown error' };
   } catch (error) {
     return {

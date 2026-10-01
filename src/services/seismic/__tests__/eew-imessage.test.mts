@@ -157,3 +157,37 @@ test('EEW passes body only and maps native revocation to disabled without retry'
   const out = await escalateTier5ToImessage(tier5(), NOW, { enabled: true, getSettings: () => ({ enabled: true, ready: true, recipient: '+15551234567' }), send: async (...args) => { calls.push(args); return { ok: false, code: 'disabled' }; } });
   assert.deepEqual(calls, [[buildBody(tier5(), NOW)]]); assert.equal(out.status, 'disabled');
 });
+
+// ── R4-BUG-001: a TIER_5 relay skipped while iMessage is off is traced ──
+test('TIER_5 with the feature on but iMessage off records the skipped relay', async () => {
+  const relays: unknown[] = [];
+  const outcome = await escalateTier5ToImessage(tier5(), NOW, {
+    enabled: true,
+    getSettings: () => ({ enabled: false, ready: true, recipient: '' }),
+    send: async () => { throw new Error('must not send'); },
+    recordPaused: (relay) => { relays.push(relay); },
+  });
+  assert.deepEqual(outcome, { status: 'disabled', reason: 'feature_off' });
+  assert.deepEqual(relays, [{ source: 'eew-tier5', urgency: 'critical', headline: 'M8.0 — M≥8.0 anywhere' }]);
+});
+
+test('TIER_5 refused by the native side as disabled records the skipped relay', async () => {
+  const relays: unknown[] = [];
+  const outcome = await escalateTier5ToImessage(tier5(), NOW, {
+    enabled: true,
+    getSettings: () => ({ enabled: true, ready: true, recipient: '+15551234567' }),
+    send: async () => ({ ok: false, code: 'disabled', reason: 'iMessage sending is disabled.' }),
+    recordPaused: (relay) => { relays.push(relay); },
+  });
+  assert.equal(outcome.status, 'disabled');
+  assert.equal(relays.length, 1);
+});
+
+test('TIER_5 records nothing when the EEW iMessage feature is off or the send works', async () => {
+  const relays: unknown[] = [];
+  const recordPaused = (relay: unknown) => { relays.push(relay); };
+  await escalateTier5ToImessage(tier5(), NOW, { enabled: false, getSettings: () => ({ enabled: false, ready: true, recipient: '' }), recordPaused });
+  await escalateTier5ToImessage(tier5(), NOW, { enabled: true, getSettings: () => ({ enabled: true, ready: true, recipient: '+15551234567' }), send: async () => ({ ok: true }), recordPaused });
+  await escalateTier5ToImessage(tier5(), NOW, { enabled: true, getSettings: () => ({ enabled: true, ready: true, recipient: '+15551234567' }), send: async () => ({ ok: false, code: 'send_failed', reason: 'x' }), recordPaused });
+  assert.deepEqual(relays, []);
+});

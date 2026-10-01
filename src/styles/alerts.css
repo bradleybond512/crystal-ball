@@ -1503,3 +1503,45 @@
     opacity: 0.65;
   }
 }
+
+/* R4-BUG-001: paused iMessage relays (Home Shell viewport + notification stack). */
+.cb-imessage-paused {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 8px 0;
+  padding: 6px 10px;
+  border-radius: var(--r-sm);
+  background: var(--mac-surface, var(--mat-solid-2));
+  box-shadow: var(--e-2), var(--edge-hairline);
+  color: var(--mac-alert-warning, var(--hs-warn));
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  pointer-events: auto;
+}
+
+.cb-imessage-paused[hidden] {
+  display: none;
+}
+
+.cb-imessage-paused-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.cb-imessage-paused-action {
+  padding: 2px 10px;
+  border: 1px solid currentColor;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.cb-imessage-paused-action:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}

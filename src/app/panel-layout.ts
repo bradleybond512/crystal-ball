@@ -3308,8 +3308,11 @@ export class PanelLayoutManager implements AppModule {
  document.addEventListener('wm:toggle-ghost-mode', () => {
  toggleGhostMode();
  });
- document.addEventListener('wm:open-settings', () => {
- this.ctx.unifiedSettings?.open();
+ document.addEventListener('wm:open-settings', (event) => {
+ // The paused-iMessage notice asks for General → iMessage (R4-BUG-001).
+ const detail = (event as CustomEvent<{ focus?: unknown } | null>).detail;
+ if (detail?.focus === 'imessage') this.ctx.unifiedSettings?.open('general', 'imessage');
+ else this.ctx.unifiedSettings?.open();
  });
 
  // React to mode changes: update body class + ghost button state

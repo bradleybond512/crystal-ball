@@ -36,7 +36,7 @@
     "lint:fix": "eslint . --fix",
     "lockfile:check": "node scripts/check-package-lock.mjs",
     "sidecar:bundle-check": "node scripts/check-sidecar-bundle.mjs",
-    "test:quota": "node --test src-tauri/sidecar/__tests__/quota-cache.test.mjs src-tauri/sidecar/__tests__/quota-routes.test.mjs tests/quota-budgets.test.mjs && node scripts/check-sidecar-bundle.mjs",
+    "test:quota": "node --test src-tauri/sidecar/__tests__/quota-cache.test.mjs src-tauri/sidecar/__tests__/quota-routes.test.mjs src-tauri/sidecar/__tests__/quota-governor.test.mjs src-tauri/sidecar/__tests__/quota-governor-routes.test.mjs tests/quota-budgets.test.mjs tests/quota-governor-gates.test.mjs && tsx --test src/services/diagnostics/__tests__/quota-budgets.test.mts && node scripts/check-sidecar-bundle.mjs",
     "bundle:check": "node scripts/check-bundle-size.mjs",
     "scenarios:check": "tsx scripts/check-scenario-coverage.mts",
     "version:sync": "node scripts/sync-desktop-version.mjs",

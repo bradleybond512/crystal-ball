@@ -112,5 +112,11 @@
   ],
   "src-tauri/tauri.conf.json": [
     "test:quota"
+  ],
+  "src/components/SystemDiagnosticPanel.ts": [
+    "test:quota"
+  ],
+  "src/components/system-diagnostic-budgets.ts": [
+    "test:quota"
   ]
 }

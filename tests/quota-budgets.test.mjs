@@ -45,8 +45,13 @@ test('quota-limited routes read and write the persisted cache with the policy TT
     assert.match(body, /_quotaCache\.set\(/, `${pathname} persists`);
     assert.doesNotMatch(body, /\bsetCached\((?!'greynoise-scanners:backoff')/, `${pathname} must not bypass the persisted cache`);
   }
-  assert.equal((server.match(/const OPENSKY_TTL = QUOTA_TTL_MS\.openskyStates;/g) ?? []).length, 3);
-  assert.doesNotMatch(server, /OPENSKY_TTL = \d/);
+  // One shared OpenSky snapshot, paced by the governor (R4-BUG-005 step 2).
+  const helper = server.slice(server.indexOf('async function getOpenskyStatesSnapshot()'));
+  assert.match(helper.slice(0, 600), /_quotaGovernor\.ttlFor\('opensky-states', QUOTA_TTL_MS\.openskyStates\)/);
+  assert.equal((server.match(/'https:\/\/opensky-network\.org\/api\/states\/all'/g) ?? []).length, 2, 'the helper and the bbox fusion source');
+  for (const pathname of ['/api/adsb', '/api/adsb-military', '/api/aviation/flights']) {
+    assert.match(route(pathname), /await getOpenskyStatesSnapshot\(\)/, `${pathname} uses the shared snapshot`);
+  }
 });
 
 test('GreyNoise never persists an empty (all-failed) refresh', () => {
@@ -54,7 +59,7 @@ test('GreyNoise never persists an empty (all-failed) refresh', () => {
   const empty = body.indexOf('if (results.length === 0) {');
   const persist = body.indexOf("_quotaCache.set('greynoise-scanners', results);");
   assert.ok(empty >= 0 && persist > empty, 'empty check precedes the persist');
-  assert.match(body.slice(empty, persist), /return json\(/);
+  assert.match(body.slice(empty, persist), /return stale \? json\(stale\) : json\(\{ error: [^\n]*\}, 503\);/, 'stale or a 503, never []');
 });
 
 test('PurpleAir keeps confidence, drops the redundant location_type field and filters silent sensors', () => {

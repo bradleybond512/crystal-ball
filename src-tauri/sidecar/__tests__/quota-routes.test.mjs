@@ -90,7 +90,30 @@ test('AbuseIPDB blacklist is fetched once and survives a sidecar restart', async
   assert.equal(lstatSync(path.join(dataDir, 'quota-cache.json')).mode & 0o777, 0o600);
 });
 
-test('an all-failed GreyNoise refresh is never cached and backs off instead of re-spending 20 lookups', async (t) => {
+test('an all-failed GreyNoise refresh is never cached, says so, and backs off instead of re-spending 20 lookups', async (t) => {
+  withEnv(t, { GREYNOISE_API_KEY: 'test-greynoise' });
+  const dataDir = tempDataDir(t);
+  const mock = mockHttps(() => ({ status: 500, payload: { message: 'upstream broke' } }));
+  t.after(() => mock.restore());
+  const upstream = () => mock.requests.filter((u) => u.hostname === 'api.greynoise.io').length;
+
+  const server = await startServer(dataDir);
+  const first = await server.get('/api/greynoise-scanners');
+  const spent = upstream();
+  const second = await server.get('/api/greynoise-scanners');
+  await server.close();
+  // R4-BUG-005 step 2: never an empty "all clear".
+  assert.equal(first.status, 503);
+  assert.equal(second.status, 503);
+  assert.match(first.body.error, /every lookup failed/);
+  assert.equal(spent, 20);
+  assert.equal(upstream(), 20, 'backoff: no second round of lookups');
+  const file = path.join(dataDir, 'quota-cache.json');
+  const persisted = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')).entries : {};
+  assert.equal('greynoise-scanners' in persisted, false, 'an empty failure is not cached for a week');
+});
+
+test('a GreyNoise 429 stops the refresh after the first batch and reports quota_exhausted (R4-BUG-005 step 2)', async (t) => {
   withEnv(t, { GREYNOISE_API_KEY: 'test-greynoise' });
   const dataDir = tempDataDir(t);
   const mock = mockHttps(() => ({ status: 429, payload: { message: 'rate limited' } }));
@@ -102,13 +125,16 @@ test('an all-failed GreyNoise refresh is never cached and backs off instead of r
   const spent = upstream();
   const second = await server.get('/api/greynoise-scanners');
   await server.close();
-  assert.deepEqual(first.body, []);
-  assert.deepEqual(second.body, []);
-  assert.equal(spent, 20);
-  assert.equal(upstream(), 20, 'backoff: no second round of lookups');
+  assert.equal(first.status, 503);
+  assert.equal(first.body.error, 'quota_exhausted');
+  assert.equal(first.body.provider, 'greynoise');
+  assert.ok(Date.parse(first.body.retryAt) > Date.now(), 'says when it can try again');
+  assert.equal(second.status, 503);
+  assert.ok(spent <= 5, `stopped after the first batch (${spent} lookups)`);
+  assert.equal(upstream(), spent, 'the cooldown sends nothing more');
   const file = path.join(dataDir, 'quota-cache.json');
   const persisted = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')).entries : {};
-  assert.equal('greynoise-scanners' in persisted, false, 'an empty failure is not cached for a week');
+  assert.equal('greynoise-scanners' in persisted, false);
 });
 
 test('PurpleAir asks for fewer points and reuses a saved-place box for an hour', async (t) => {

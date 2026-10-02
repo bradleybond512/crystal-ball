@@ -65,6 +65,8 @@ import type {
   PanelHealth,
 } from '@/services/diagnostics/system-health-types';
 import { escapeHtml } from '@/utils/sanitize';
+import { fetchQuotaStatus, type QuotaStatusResult } from '@/services/diagnostics/quota-budgets';
+import { renderQuotaBudgetsHtml } from './system-diagnostic-budgets';
 import {
   getMissionState,
   type MissionState,
@@ -72,7 +74,10 @@ import {
 
 const REFRESH_MS = 5000;
 
-type Tab = 'overview' | 'features' | 'panels' | 'notifications' | 'feeds' | 'quality_debt' | 'self_test';
+type Tab = 'overview' | 'features' | 'panels' | 'notifications' | 'feeds' | 'budgets' | 'quality_debt' | 'self_test';
+
+/** API budgets change slowly; refetch at most this often while the tab is open. */
+const QUOTA_REFRESH_MS = 30_000;
 
 const STATUS_COLOR: Record<HealthStatus, string> = {
   healthy: 'var(--severity-ok)',
@@ -108,6 +113,7 @@ export class SystemDiagnosticPanel extends Panel {
     summary: SidecarSelfTestSummary | null;
     error: string | null;
   } = { running: false, asOf: null, results: [], summary: null, error: null };
+  private quota: { loading: boolean; result: QuotaStatusResult | null; fetchedAt: number } = { loading: false, result: null, fetchedAt: 0 };
 
   constructor() {
     super({
@@ -254,6 +260,7 @@ export class SystemDiagnosticPanel extends Panel {
       { id: 'panels', label: 'Panels' },
       { id: 'notifications', label: 'Notifications' },
       { id: 'feeds', label: 'Feeds' },
+      { id: 'budgets', label: 'API Budgets' },
       { id: 'quality_debt', label: 'Quality Debt' },
       { id: 'self_test', label: 'Self-Test' },
     ];
@@ -282,6 +289,10 @@ export class SystemDiagnosticPanel extends Panel {
       case 'feeds': {
         return this.renderFeeds(ctx);
       }
+      case 'budgets': {
+        this.refreshQuotaIfStale();
+        return renderQuotaBudgetsHtml(this.quota);
+      }
       case 'quality_debt': {
         return this.renderQualityDebt();
       }
@@ -289,6 +300,16 @@ export class SystemDiagnosticPanel extends Panel {
         return this.renderSelfTest();
       }
     }
+  }
+
+  /** Fetch the sidecar's API budgets when the tab is open and the copy is old. */
+  private refreshQuotaIfStale(): void {
+    if (this.quota.loading || Date.now() - this.quota.fetchedAt < QUOTA_REFRESH_MS) return;
+    this.quota = { ...this.quota, loading: true };
+    void fetchQuotaStatus().then((result) => {
+      this.quota = { loading: false, result, fetchedAt: Date.now() };
+      if (this.activeTab === 'budgets') this.render();
+    });
   }
 
   private renderQualityDebt(): string {
@@ -328,7 +349,6 @@ export class SystemDiagnosticPanel extends Panel {
     const recHtml = recs.length === 0
       ? `<div style="color:var(--text-secondary,#aaa);font-size:12px;">No recommendations — all clear.</div>`
       : `<ul style="margin:0;padding-left:18px;">${recs.map((r) => `<li style="font-size:12px;margin:3px 0;">${escapeHtml(r)}</li>`).join('')}</ul>`;
-    // eslint-disable-next-line unicorn/no-array-reverse -- reversing a fresh copy, not the original.
     const recentEvents = [...ctx.recentEvents].reverse().slice(0, 5);
     const eventHtml = recentEvents.length === 0
       ? `<div style="color:var(--text-secondary,#aaa);font-size:11px;">No recent diagnostic events.</div>`

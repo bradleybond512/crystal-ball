@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { createSidecarLogger } from './sidecar-logger.mjs';
 import { OfacCache } from './ofac-cache.mjs';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import http, { createServer } from 'node:http';
 import { timingSafeEqual, randomUUID, createHash } from 'node:crypto';
 import https from 'node:https';
@@ -50,6 +51,7 @@ import { explain as explainEvent } from './explainer.mjs';
 import { EventStore } from './event-store.mjs';
 import { QUOTA_CACHE_FILE, createQuotaCache } from './quota-cache.mjs';
 import { PURPLEAIR_MAX_AGE_S, QUOTA_TTL_MS } from './quota-policy.mjs';
+import { QUOTA_LEDGER_FILE, QuotaExhaustedError, createQuotaGovernor, isQuotaExhausted } from './quota-governor.mjs';
 
 // ── Temporal World Store append helpers ──
 // These translate the renderer's observation/situation shapes into EventRecords
@@ -588,7 +590,11 @@ process.on('unhandledRejection', (reason) => {
 });
 process.on('SIGTERM', () => { console.log('[sidecar] received SIGTERM, exiting cleanly'); process.exit(0); });
 process.on('SIGINT', () => { console.log('[sidecar] received SIGINT, exiting cleanly'); process.exit(0); });
-process.on('exit', (code) => { console.log(`[sidecar] process exit code=${code} uptime_ms=${Date.now() - SIDECAR_START_MS}`); });
+process.on('exit', (code) => {
+  // Keep the quota ledger's last second of counts (R4-BUG-005 step 2).
+  try { _quotaGovernor.flush(); } catch { /* not initialized yet */ }
+  console.log(`[sidecar] process exit code=${code} uptime_ms=${Date.now() - SIDECAR_START_MS}`);
+});
 
 console.log(`[sidecar] starting pid=${process.pid} node=${process.versions.node} build=${SIDECAR_BUILD_TAG} trace=${SIDECAR_TRACE}`);
 
@@ -5280,7 +5286,22 @@ function warnIfSecretInQuery(u) {
   );
 }
 
+// Every outbound sidecar call goes through here, so this is where quota-limited
+// providers are governed (R4-BUG-005 step 2): the call is counted *before* the
+// socket opens, a denied call never reaches the network, and the provider's
+// status and rate-limit headers update the ledger afterwards.
 async function fetchWithTimeout(url, options = {}, timeoutMs = 12_000) {
+  const ticket = _quotaGovernor.admit(url, { priority: _quotaPriority.getStore() ?? 'background' });
+  if (!ticket.allowed) throw new QuotaExhaustedError(ticket);
+  const response = await transportFetchWithTimeout(url, options, timeoutMs);
+  // Governed hosts are https-only, so text() is the buffered body and can be
+  // read again by the caller.
+  const bodyText = _quotaGovernor.wantsBody(ticket) ? await response.text() : undefined;
+  _quotaGovernor.observe(ticket, { status: response.status, headers: response.headers, bodyText });
+  return response;
+}
+
+async function transportFetchWithTimeout(url, options = {}, timeoutMs = 12_000) {
   // Use node:https with IPv4 forced — Node.js built-in fetch (undici) tries IPv6
   // first and some servers (EIA, NASA FIRMS) have broken IPv6 causing ETIMEDOUT.
   const u = new URL(url);
@@ -5616,6 +5637,77 @@ export function initQuotaCache(filePath) {
   _quotaCache = createQuotaCache({ filePath });
 }
 
+// Quota Governor (R4-BUG-005 step 2): counts governed calls before they are
+// sent and persists the counts next to the quota cache. Memory-only until
+// startup points it at the data dir. Calls made inside runInteractiveQuota()
+// (key tests, manual lookups) may use the 20% reserve and are never blocked.
+let _quotaGovernor = createQuotaGovernor({ filePath: null });
+const _quotaPriority = new AsyncLocalStorage();
+export function initQuotaGovernor(filePath) {
+  _quotaGovernor.flush();
+  _quotaGovernor = createQuotaGovernor({ filePath });
+}
+function runInteractiveQuota(fn) {
+  return _quotaPriority.run('interactive', fn);
+}
+/** @internal — for tests. */
+export function _quotaGovernorForTests() {
+  return _quotaGovernor;
+}
+
+function isQuotaStatus(status) {
+  return status === 429 || status === 402;
+}
+
+/** A provider said "out of quota" in its status line: same handling as a denied call. */
+function providerQuotaError(ruleId) {
+  return new QuotaExhaustedError({ ruleId, reason: 'provider', retryAt: _quotaGovernor.blockedUntil(ruleId) });
+}
+
+/**
+ * A governed feed is out of quota. Serve its last good data marked
+ * `X-Quota-State: stale_quota`, or say so with a 503 — never an empty
+ * "all clear" — and record the failure, never a healthy vote.
+ */
+function quotaExhaustedResponse(json, { feedKey, error, stale = null, shape = {} }) {
+  recordFeedFailure(feedKey, 'quota_exhausted');
+  trackFailure(feedKey, 'quota_exhausted');
+  if (stale != null) return json(stale, 200, { 'X-Quota-State': 'stale_quota' });
+  const retryAt = Number.isFinite(error?.retryAt) ? new Date(error.retryAt).toISOString() : null;
+  return json({ ...shape, error: 'quota_exhausted', provider: error?.provider ?? feedKey, retryAt }, 503, { 'X-Quota-State': 'exhausted' });
+}
+
+/**
+ * One OpenSky /states/all snapshot shared by /api/adsb, /api/adsb-military and
+ * /api/aviation/flights: one fetch per TTL (720/day x 4 credits = 72% of the
+ * 4,000 daily credits), paced by the governor. Out of quota, it returns the
+ * last good snapshot marked stale, or throws QuotaExhaustedError.
+ */
+async function getOpenskyStatesSnapshot() {
+  const ttl = _quotaGovernor.ttlFor('opensky-states', QUOTA_TTL_MS.openskyStates);
+  const fresh = getCached('opensky:states:all', ttl);
+  if (fresh) return { data: fresh, stale: false };
+  const clientId = process.env.OPENSKY_CLIENT_ID?.trim() || '';
+  const clientSecret = process.env.OPENSKY_CLIENT_SECRET?.trim() || '';
+  const headers = { 'User-Agent': CHROME_UA };
+  if (clientId && clientSecret) {
+    headers['Authorization'] = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`;
+  }
+  try {
+    const r = await fetchWithTimeout('https://opensky-network.org/api/states/all', { headers }, 12_000);
+    if (isQuotaStatus(r.status)) throw providerQuotaError('opensky-states');
+    if (!r.ok) throw new Error(`OpenSky HTTP ${r.status}`);
+    const data = await r.json();
+    setCached('opensky:states:all', data, ttl);
+    return { data, stale: false };
+  } catch (error) {
+    if (!isQuotaExhausted(error)) throw error;
+    const stale = getCachedStale('opensky:states:all');
+    if (stale) return { data: stale, stale: true, quotaError: error };
+    throw error;
+  }
+}
+
 function getCached(key, ttlMs) {
   const entry = _sidecarCache.get(key);
   const effective = ttlMs ?? entry?.ttlMs;
@@ -5661,6 +5753,7 @@ export function odinRequestCanStart(inFlight, cacheKey, maximum = ODIN_IN_FLIGHT
 export function _resetSidecarCacheForTests() {
   _sidecarCache.clear();
   _quotaCache = createQuotaCache({ filePath: null });
+  _quotaGovernor = createQuotaGovernor({ filePath: null });
   _odinInFlight.clear();
   resetInfrastructureBgpCredentialState();
 }
@@ -10426,11 +10519,12 @@ async function dispatch(requestUrl, req, routes, context) {
  const encoded = type === 'url'
  ? Buffer.from(indicator).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
  : encodeURIComponent(indicator);
- const resp = await fetchWithTimeout(
+ // Click-triggered lookup: may use the quota reserve (R4-BUG-005 step 2).
+ const resp = await runInteractiveQuota(() => fetchWithTimeout(
  `https://www.virustotal.com/api/v3/${ep}/${encoded}`,
  { headers: { 'x-apikey': apiKey, Accept: 'application/json', 'User-Agent': CHROME_UA } },
  12000,
- );
+ ));
  if (!resp.ok) return json({ error: `VT responded ${resp.status}` }, resp.status);
  const data = await resp.json();
  const stats = data?.data?.attributes?.last_analysis_stats ?? {};
@@ -10456,11 +10550,12 @@ async function dispatch(requestUrl, req, routes, context) {
  const apiKey = process.env.GREYNOISE_API_KEY;
  if (!apiKey) return json({ error: 'GREYNOISE_API_KEY not set' }, 503);
  try {
- const r = await fetchWithTimeout(
+ // On-demand lookup: may use the quota reserve (R4-BUG-005 step 2).
+ const r = await runInteractiveQuota(() => fetchWithTimeout(
  `https://api.greynoise.io/v3/community/${ip}`,
  { headers: { key: apiKey, Accept: 'application/json' } },
  8000,
- );
+ ));
  if (r.status === 404) return json({ ip, seen: false, noise: false, riot: false, classification: 'unknown', message: 'Not seen in GreyNoise' });
  if (!r.ok) return json({ error: `GreyNoise ${r.status}` }, 502);
  const d = await r.json();
@@ -10558,7 +10653,7 @@ async function dispatch(requestUrl, req, routes, context) {
  const _newsCacheKey = `newsapi:${q}:${pageSize}`;
  // 100 requests/day free: 20 min TTL persisted across restarts = 72/day for
  // the one production query (R4-BUG-005).
- const _newsCached = _quotaCache.get(_newsCacheKey, QUOTA_TTL_MS.newsapi);
+ const _newsCached = _quotaCache.get(_newsCacheKey, _quotaGovernor.ttlFor('newsapi', QUOTA_TTL_MS.newsapi));
  if (_newsCached) return json(_newsCached);
  try {
  const params = new URLSearchParams({ q, pageSize: String(pageSize), language: 'en', sortBy: 'publishedAt', apiKey });
@@ -10567,6 +10662,7 @@ async function dispatch(requestUrl, req, routes, context) {
  { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } },
  12000,
  );
+ if (isQuotaStatus(resp.status)) throw providerQuotaError('newsapi');
  if (!resp.ok) return json([], 200);
  const data = await resp.json();
  const articles = Array.isArray(data?.articles) ? data.articles : [];
@@ -10581,7 +10677,10 @@ async function dispatch(requestUrl, req, routes, context) {
  }));
  _quotaCache.set(_newsCacheKey, items);
  return json(items);
- } catch {
+ } catch (error) {
+ if (isQuotaExhausted(error)) {
+ return quotaExhaustedResponse(json, { feedKey: 'newsapi', error, stale: _quotaCache.getStale(_newsCacheKey) });
+ }
  return json([], 200);
  }
   }
@@ -15461,6 +15560,7 @@ async function dispatch(requestUrl, req, routes, context) {
  'User-Agent': CHROME_UA,
  },
  }, 20_000);
+ if (isQuotaStatus(resp.status)) throw providerQuotaError('purpleair');
  if (!resp.ok) return json({ sensors: [], error: `purpleair upstream ${resp.status}` }, 502);
  const payload = await resp.json();
  const sensors = sidecarParseV1Sensors(payload);
@@ -15468,6 +15568,9 @@ async function dispatch(requestUrl, req, routes, context) {
  _quotaCache.set(cacheKey, result);
  return json(result);
  } catch (error) {
+ if (isQuotaExhausted(error)) {
+ return quotaExhaustedResponse(json, { feedKey: 'purpleair', error, stale: _quotaCache.getStale(cacheKey), shape: { sensors: [] } });
+ }
  return json({ sensors: [], error: String(error.message ?? error) }, 500);
  }
   }
@@ -15890,6 +15993,7 @@ async function dispatch(requestUrl, req, routes, context) {
  process.env[key] = String(value);
  context.logger.log(`[local-api] env set: ${key}`);
  }
+ _quotaGovernor.resetSignalsForSecret(key);
  if (key === 'AISSTREAM_API_KEY') aisOnKeyChanged(value || null);
  if (key === 'OPENAQ_API_KEY') invalidateOpenaqCredentialState();
  if (key === 'ACLED_REFRESH_TOKEN') acledTokenState.refreshToken = value || null;
@@ -15936,7 +16040,8 @@ async function dispatch(requestUrl, req, routes, context) {
  return json({ error: 'key not in allowlist' }, 403);
  }
  const safeContext = (context && typeof context === 'object') ? context : {};
- const result = await validateSecretAgainstProvider(key, value, safeContext);
+ // A key test is something Bradley triggered: it may use the quota reserve.
+ const result = await runInteractiveQuota(() => validateSecretAgainstProvider(key, value, safeContext));
  return json(result, result.valid ? 200 : 422);
  } catch {
  return json({ error: 'expected { key, value }' }, 400);
@@ -16320,34 +16425,14 @@ async function dispatch(requestUrl, req, routes, context) {
   // /api/adsb-military, and /api/aviation/flights — one fetch per 120 s:
  // 720/day x 4 credits = 72% of OpenSky's 4,000 daily credits (R4-BUG-005).
   if (requestUrl.pathname === '/api/adsb') {
- const OPENSKY_TTL = QUOTA_TTL_MS.openskyStates;
- const cached = getCached('opensky:states:all', OPENSKY_TTL);
- if (cached) return json(cached);
-
- const clientId = process.env.OPENSKY_CLIENT_ID?.trim() || '';
- const clientSecret = process.env.OPENSKY_CLIENT_SECRET?.trim() || '';
- const headers = { 'User-Agent': CHROME_UA };
- if (clientId && clientSecret) {
- const creds = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
- headers['Authorization'] = `Basic ${creds}`;
- }
-
  try {
- const res = await fetchWithTimeout(
- 'https://opensky-network.org/api/states/all',
- { headers },
- 12_000
- );
- if (res.status === 429) {
- return Response.json({ states: null, time: Math.floor(Date.now() / 1000), rateLimited: true }, {
- status: 429, headers: { 'Content-Type': 'application/json' },
- });
- }
- if (!res.ok) throw new Error(`OpenSky HTTP ${res.status}`);
- const data = await res.json();
- setCached('opensky:states:all', data, OPENSKY_TTL);
- return json(data);
+ const snapshot = await getOpenskyStatesSnapshot();
+ if (snapshot.stale) return quotaExhaustedResponse(json, { feedKey: 'opensky-states', error: snapshot.quotaError, stale: snapshot.data });
+ return json(snapshot.data);
  } catch (error) {
+ if (isQuotaExhausted(error)) {
+ return quotaExhaustedResponse(json, { feedKey: 'opensky-states', error, shape: { states: null, time: Math.floor(Date.now() / 1000), rateLimited: true } });
+ }
  return json({ states: null, time: Math.floor(Date.now() / 1000), error: error?.message ?? 'unknown' });
  }
   }
@@ -17365,10 +17450,12 @@ async function dispatch(requestUrl, req, routes, context) {
  // weekly and persist across restarts (R4-BUG-005). After a refresh where
  // every lookup failed, back off for an hour instead of retrying 20 calls on
  // every request, and keep serving the last good list.
- const cached = _quotaCache.get('greynoise-scanners', QUOTA_TTL_MS.greynoiseSeeds);
+ const cached = _quotaCache.get('greynoise-scanners', _quotaGovernor.ttlFor('greynoise', QUOTA_TTL_MS.greynoiseSeeds));
  if (cached) return json(cached);
  if (getCached('greynoise-scanners:backoff', 60 * 60 * 1000)) {
- return json(_quotaCache.getStale('greynoise-scanners') ?? []);
+ // Never an empty "all clear" (R4-BUG-005 step 2).
+ const stale = _quotaCache.getStale('greynoise-scanners');
+ return stale ? json(stale) : json({ error: 'greynoise-scanners: every lookup failed; retrying within the hour' }, 503);
  }
  const SEED_IPS = [
  '45.83.64.1', '80.82.77.33', '185.220.101.1', '193.32.127.1', '198.20.69.74',
@@ -17376,8 +17463,19 @@ async function dispatch(requestUrl, req, routes, context) {
  '71.6.146.130', '71.6.146.185', '71.6.158.166', '71.6.165.200', '71.6.167.142',
  '89.248.165.1', '89.248.167.1', '94.102.49.1', '94.102.49.190', '198.199.119.1',
  ];
+ // A refresh costs one lookup per seed IP. Start one only if all of it fits
+ // the background budget, so the week's list is never a partial one.
+ const greynoiseBlockedUntil = _quotaGovernor.blockedUntil('greynoise', SEED_IPS.length);
+ if (greynoiseBlockedUntil != null) {
+ return quotaExhaustedResponse(json, {
+ feedKey: 'greynoise-scanners',
+ stale: _quotaCache.getStale('greynoise-scanners'),
+ error: new QuotaExhaustedError({ ruleId: 'greynoise', reason: 'budget', retryAt: greynoiseBlockedUntil }),
+ });
+ }
  try {
  const results = [];
+ let quotaError = null;
  for (let i = 0; i < SEED_IPS.length; i += 5) {
  const batch = SEED_IPS.slice(i, i + 5);
  await Promise.all(batch.map(async (ip) => {
@@ -17387,18 +17485,29 @@ async function dispatch(requestUrl, req, routes, context) {
  { headers: { 'key': apiKey, 'User-Agent': CHROME_UA } },
  10000,
  );
+ if (isQuotaStatus(r.status)) {
+ quotaError ??= providerQuotaError('greynoise');
+ return;
+ }
  if (!r.ok) return;
  const d = await r.json();
  results.push({ ip: d.ip ?? ip, noise: d.noise ?? false, riot: d.riot ?? false, classification: d.classification ?? 'unknown', name: d.name ?? null, link: d.link ?? null });
- } catch {}
+ } catch (error) {
+ if (isQuotaExhausted(error)) quotaError ??= error;
+ }
  }));
+ if (quotaError) break;
  if (i + 5 < SEED_IPS.length) {
  await new Promise(r => setTimeout(r, 200));
  }
  }
+ if (quotaError) {
+ return quotaExhaustedResponse(json, { feedKey: 'greynoise-scanners', error: quotaError, stale: _quotaCache.getStale('greynoise-scanners') });
+ }
  if (results.length === 0) {
  setCached('greynoise-scanners:backoff', true);
- return json(_quotaCache.getStale('greynoise-scanners') ?? results);
+ const stale = _quotaCache.getStale('greynoise-scanners');
+ return stale ? json(stale) : json({ error: 'greynoise-scanners: every lookup failed; retrying within the hour' }, 503);
  }
  _quotaCache.set('greynoise-scanners', results);
  return json(results);
@@ -17444,7 +17553,7 @@ async function dispatch(requestUrl, req, routes, context) {
  if (!apiKey) return json({ error: 'ABUSEIPDB_API_KEY not configured' });
  // Blacklist endpoint: 5/day free. 8 h TTL persisted across restarts = 3/day
  // (R4-BUG-005).
- const cached = _quotaCache.get('abuseipdb-reports', QUOTA_TTL_MS.abuseipdbBlacklist);
+ const cached = _quotaCache.get('abuseipdb-reports', _quotaGovernor.ttlFor('abuseipdb-blacklist', QUOTA_TTL_MS.abuseipdbBlacklist));
  if (cached) return json(cached);
  try {
  const r = await fetchWithTimeout(
@@ -17452,6 +17561,7 @@ async function dispatch(requestUrl, req, routes, context) {
  { headers: { 'Key': apiKey, 'Accept': 'application/json', 'User-Agent': CHROME_UA } },
  12000,
  );
+ if (isQuotaStatus(r.status)) throw providerQuotaError('abuseipdb-blacklist');
  if (!r.ok) throw new Error(`AbuseIPDB API ${r.status}`);
  const data = await r.json();
  const entries = (data.data ?? []).map(entry => ({
@@ -17466,6 +17576,9 @@ async function dispatch(requestUrl, req, routes, context) {
  _quotaCache.set('abuseipdb-reports', entries);
  return json(entries);
  } catch (error) {
+ if (isQuotaExhausted(error)) {
+ return quotaExhaustedResponse(json, { feedKey: 'abuseipdb-reports', error, stale: _quotaCache.getStale('abuseipdb-reports') });
+ }
  return json({ error: `abuseipdb-reports error: ${error.message ?? error}` }, 502);
  }
   }
@@ -17474,22 +17587,9 @@ async function dispatch(requestUrl, req, routes, context) {
   if (requestUrl.pathname === '/api/adsb-military') {
  const cached = getCached('adsb-military', 3 * 60 * 1000);
  if (cached) return json(cached);
- const clientId = process.env.OPENSKY_CLIENT_ID?.trim() || '';
- const clientSecret = process.env.OPENSKY_CLIENT_SECRET?.trim() || '';
- const headers = { 'User-Agent': CHROME_UA };
- if (clientId && clientSecret) {
- const creds = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
- headers['Authorization'] = `Basic ${creds}`;
- }
  try {
- const OPENSKY_TTL = QUOTA_TTL_MS.openskyStates;
- let data = getCached('opensky:states:all', OPENSKY_TTL);
- if (!data) {
- const r = await fetchWithTimeout('https://opensky-network.org/api/states/all', { headers }, 12000);
- if (!r.ok) throw new Error(`OpenSky HTTP ${r.status}`);
- data = await r.json();
- setCached('opensky:states:all', data, OPENSKY_TTL);
- }
+ const snapshot = await getOpenskyStatesSnapshot();
+ const data = snapshot.data;
  const MILITARY_SQUAWKS = new Set(['7700', '7600', '7500']);
  // Verified country-tagged ICAO 24-bit hex ranges (ads-b.nl/icao.php).
  // Each range: [startHex, endHex]. Inclusive on both ends.
@@ -17545,9 +17645,11 @@ async function dispatch(requestUrl, req, routes, context) {
  velocity: state[9],
  squawk: state[14],
  }));
+ if (snapshot.stale) return quotaExhaustedResponse(json, { feedKey: 'opensky-states', error: snapshot.quotaError, stale: military });
  setCached('adsb-military', military);
  return json(military);
  } catch (error) {
+ if (isQuotaExhausted(error)) return quotaExhaustedResponse(json, { feedKey: 'opensky-states', error });
  return json({ error: `adsb-military error: ${error.message ?? error}` }, 502);
  }
   }
@@ -17560,14 +17662,6 @@ async function dispatch(requestUrl, req, routes, context) {
  const CACHE_TTL = 10 * 60 * 1000;
  const cached = getCached('aviation-flights', CACHE_TTL);
  if (cached) return json(cached);
-
- const clientId = process.env.OPENSKY_CLIENT_ID?.trim() || '';
- const clientSecret = process.env.OPENSKY_CLIENT_SECRET?.trim() || '';
- const headers = { 'User-Agent': CHROME_UA };
- if (clientId && clientSecret) {
- const creds = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
- headers['Authorization'] = `Basic ${creds}`;
- }
 
  const PASSENGER_AIRLINES = new Set([
  'AAL','DAL','UAL','SWA','JBU','ASA','SKW','RPA','ENY','ACA','WJA','BAW','VIR',
@@ -17661,21 +17755,8 @@ async function dispatch(requestUrl, req, routes, context) {
  };
  };
  try {
- const OPENSKY_TTL = QUOTA_TTL_MS.openskyStates;
- let data = getCached('opensky:states:all', OPENSKY_TTL);
- if (!data) {
- const r = await fetchWithTimeout('https://opensky-network.org/api/states/all', { headers }, 12000);
- if (r.status === 429) {
- const env = {
- flights: [], counts: { military: 0, commercial: 0, cargo: 0, helicopter: 0, general_aviation: 0, total: 0, emergency: 0, squawk7500: 0, squawk7600: 0, squawk7700: 0 },
- fetchedAt: Date.now(), degraded: true, reason: 'rate limited', source: 'opensky-network.org',
- };
- return json(env, 429);
- }
- if (!r.ok) throw new Error(`OpenSky HTTP ${r.status}`);
- data = await r.json();
- setCached('opensky:states:all', data, OPENSKY_TTL);
- }
+ const snapshot = await getOpenskyStatesSnapshot();
+ const data = snapshot.data;
  const flights = [];
  const counts = { military: 0, commercial: 0, cargo: 0, helicopter: 0, general_aviation: 0, total: 0, emergency: 0, squawk7500: 0, squawk7600: 0, squawk7700: 0 };
  for (const state of (data.states ?? [])) {
@@ -17699,9 +17780,26 @@ async function dispatch(requestUrl, req, routes, context) {
  degraded: false,
  source: 'opensky-network.org',
  };
+ if (snapshot.stale) {
+ return quotaExhaustedResponse(json, { feedKey: 'opensky-states', error: snapshot.quotaError, stale: { ...envelope, degraded: true, reason: 'stale_quota' } });
+ }
  setCached('aviation-flights', envelope);
  return json(envelope);
  } catch (error) {
+ if (isQuotaExhausted(error)) {
+ return quotaExhaustedResponse(json, {
+ feedKey: 'opensky-states',
+ error,
+ shape: {
+ flights: [],
+ counts: { military: 0, commercial: 0, cargo: 0, helicopter: 0, general_aviation: 0, total: 0, emergency: 0, squawk7500: 0, squawk7600: 0, squawk7700: 0 },
+ fetchedAt: Date.now(),
+ degraded: true,
+ reason: 'quota_exhausted',
+ source: 'opensky-network.org',
+ },
+ });
+ }
  return json({
  flights: [],
  counts: { military: 0, commercial: 0, cargo: 0, helicopter: 0, general_aviation: 0, total: 0, emergency: 0, squawk7500: 0, squawk7600: 0, squawk7700: 0 },
@@ -21412,6 +21510,7 @@ export async function createLocalApiServer(options = {}) {
   // tests stays memory-only, so no quota cache is written into the repo.
   const explicitDataDir = options.dataDir ?? process.env.LOCAL_API_DATA_DIR;
   initQuotaCache(explicitDataDir ? path.join(context.dataDir, QUOTA_CACHE_FILE) : null);
+  initQuotaGovernor(explicitDataDir ? path.join(context.dataDir, QUOTA_LEDGER_FILE) : null);
   const routes = await buildRouteTable(context.apiDir);
   const ofacCache = new OfacCache({ dataDir: context.dataDir });
   context.ofacCache = ofacCache;
@@ -21585,6 +21684,13 @@ export async function createLocalApiServer(options = {}) {
  // ── /api/feeds/health — per-feed resilience status ────────────────────
  if (requestUrl.pathname === '/api/feeds/health') {
    return sendJson({ feeds: getAllFeedStatuses(), asOf: new Date().toISOString() });
+ }
+
+ // ── /api/quota/status — API budgets for System Diagnostic (R4-BUG-005) ─
+ // Counts, limits, cooldowns and times only: no keys, URLs or bodies.
+ if (requestUrl.pathname === '/api/quota/status') {
+   if (req.method !== 'GET') return sendJson({ error: 'Method not allowed' }, 405);
+   return sendJson(_quotaGovernor.status());
  }
 
  if (requestUrl.pathname.startsWith('/api/feeds/health/')) {
@@ -22222,6 +22328,7 @@ export async function createLocalApiServer(options = {}) {
  return { port: boundPort };
  },
  async close() {
+ _quotaGovernor.flush();
  await new Promise((resolve, reject) => {
  server.close((error) => (error ? reject(error) : resolve()));
  });

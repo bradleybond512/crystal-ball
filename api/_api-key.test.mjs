@@ -3,14 +3,14 @@ import test from 'node:test';
 import { validateApiKey } from './_api-key.js';
 
 function makeRequest(headersInit = {}) {
-  return new Request('https://crystalball.app/api/test', {
+  return new Request('https://bradleybond512.github.io/api/test', {
  headers: new Headers(headersInit),
   });
 }
 
 test('rejects trusted referer without browser fetch metadata', () => {
   const result = validateApiKey(makeRequest({
- Referer: 'https://crystalball.app/dashboard',
+ Referer: 'https://bradleybond512.github.io/dashboard',
   }));
 
   assert.equal(result.valid, false);
@@ -20,7 +20,7 @@ test('rejects trusted referer without browser fetch metadata', () => {
 
 test('rejects missing Origin even when referer and browser fetch metadata are present', () => {
   const result = validateApiKey(makeRequest({
- Referer: 'https://crystalball.app/dashboard',
+ Referer: 'https://bradleybond512.github.io/dashboard',
  'Sec-Fetch-Site': 'same-origin',
  'Sec-Fetch-Mode': 'cors',
   }));
@@ -32,7 +32,7 @@ test('rejects missing Origin even when referer and browser fetch metadata are pr
 
 test('allows trusted browser origin when fetch metadata is present', () => {
   const result = validateApiKey(makeRequest({
- Origin: 'https://crystalball.app',
+ Origin: 'https://bradleybond512.github.io',
  'Sec-Fetch-Site': 'same-origin',
  'Sec-Fetch-Mode': 'cors',
   }));
@@ -41,24 +41,15 @@ test('allows trusted browser origin when fetch metadata is present', () => {
   assert.equal(result.required, false);
 });
 
-test('allows enumerated crystalball.app subdomains', () => {
-  for (const subdomain of ['tech', 'finance', 'happy', 'api']) {
- const result = validateApiKey(makeRequest({
- Origin: `https://${subdomain}.crystalball.app`,
- 'Sec-Fetch-Site': 'same-site',
- 'Sec-Fetch-Mode': 'cors',
- }));
- assert.equal(result.valid, true, `should allow ${subdomain}.crystalball.app`);
+test('rejects the former product domain and its subdomains (R4-SEC-008)', () => {
+  for (const origin of ['https://crystalball.app', 'https://tech.crystalball.app', 'https://api.crystalball.app']) {
+    const result = validateApiKey(makeRequest({
+      Origin: origin,
+      'Sec-Fetch-Site': 'same-site',
+      'Sec-Fetch-Mode': 'cors',
+    }));
+    assert.equal(result.valid, false, origin);
   }
-});
-
-test('allows bare crystalball.app origin', () => {
-  const result = validateApiKey(makeRequest({
- Origin: 'https://crystalball.app',
- 'Sec-Fetch-Site': 'same-origin',
- 'Sec-Fetch-Mode': 'cors',
-  }));
-  assert.equal(result.valid, true);
 });
 
 test('rejects non-enumerated crystalball.app subdomains', () => {
@@ -74,7 +65,6 @@ test('allows Vercel preview deploy origins', () => {
   const validPreviews = [
  'https://crystalball-my-branch-bradleybond512.vercel.app',
  'https://crystal-ball-fix-123-bradleybond512.vercel.app',
- 'https://crystalball-pr-42-elie-abc123.vercel.app',
   ];
   for (const origin of validPreviews) {
  const result = validateApiKey(makeRequest({
@@ -118,10 +108,10 @@ test('rejects origins with wrong protocol or port tricks', () => {
 });
 
 test('requires API key for trusted browser non-read requests', () => {
-  const request = new Request('https://crystalball.app/api/news/v1/summarize-article', {
+  const request = new Request('https://bradleybond512.github.io/api/news/v1/summarize-article', {
  method: 'POST',
  headers: new Headers({
- Origin: 'https://crystalball.app',
+ Origin: 'https://bradleybond512.github.io',
  'Sec-Fetch-Site': 'same-origin',
  'Sec-Fetch-Mode': 'cors',
  'Content-Type': 'application/json',

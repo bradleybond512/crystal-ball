@@ -4,13 +4,13 @@ import assert from 'node:assert/strict';
 import handler from './local-logistics.js';
 
 const request = (query = '', init = {}) => new Request(
-  `https://crystalball.app/api/local-logistics${query}`,
-  { headers: { origin: 'https://crystalball.app' }, ...init },
+  `https://bradleybond512.github.io/api/local-logistics${query}`,
+  { headers: { origin: 'https://bradleybond512.github.io' }, ...init },
 );
 
 const sessionRequest = (body, init = {}) => request('', {
   method: 'POST',
-  headers: { origin: 'https://crystalball.app', 'content-type': 'application/json' },
+  headers: { origin: 'https://bradleybond512.github.io', 'content-type': 'application/json' },
   body: typeof body === 'string' ? body : JSON.stringify(body),
   ...init,
 });
@@ -141,7 +141,7 @@ test('session POST strips anchor-derived distances from the wire while saved-pla
 });
 
 test('session POST rejects a disallowed origin with the exact private error envelope', async () => {
-  const response = await handler(new Request('https://crystalball.app/api/local-logistics', {
+  const response = await handler(new Request('https://bradleybond512.github.io/api/local-logistics', {
     method: 'POST',
     headers: { origin: 'https://attacker.example', 'content-type': 'application/json' },
     body: JSON.stringify(validSessionBody()),
@@ -195,7 +195,7 @@ test('session POST rejects malformed schemas, duplicate categories, wrong media,
       assert.equal(response.headers.get('cache-control'), 'private, no-store');
     }
     const wrongMedia = await handler(sessionRequest(validSessionBody(), {
-      headers: { origin: 'https://crystalball.app', 'content-type': 'text/plain' },
+      headers: { origin: 'https://bradleybond512.github.io', 'content-type': 'text/plain' },
     }));
     assert.equal(wrongMedia.status, 415);
     assert.deepEqual(await wrongMedia.json(), { error: 'unsupported_media_type' });

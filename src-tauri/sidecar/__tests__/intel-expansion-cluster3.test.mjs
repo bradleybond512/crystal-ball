@@ -662,7 +662,7 @@ test('BGP HTTP route enforces auth and reports a missing key through both health
   _resetSidecarCacheForTests();
   _resetFeedTracker();
   const server = await startBgpRouteServer();
-  const origin = 'https://crystalball.app';
+  const origin = 'https://bradleybond512.github.io';
   try {
     const unauthorized = await fetch(`http://127.0.0.1:${server.port}/api/infrastructure/bgp`, {
       headers: { Origin: origin },
@@ -722,7 +722,7 @@ test('BGP HTTP route retrieves two complete pages once, caches only normalized s
     [2, { success: true, result: { events: second }, result_info: { page: 2, per_page: 100, count: 1, total_count: 101 } }],
   ]));
   const server = await startBgpRouteServer();
-  const headers = { Authorization: 'Bearer test-token-bgp-route-success', Origin: 'https://crystalball.app' };
+  const headers = { Authorization: 'Bearer test-token-bgp-route-success', Origin: 'https://bradleybond512.github.io' };
   try {
     const firstResponse = await fetch(`http://127.0.0.1:${server.port}/api/infrastructure/bgp`, { headers });
     assert.equal(firstResponse.status, 200);

@@ -1046,7 +1046,7 @@ fn secrets_ready(webview: Webview, cache: tauri::State<'_, SecretsCache>) -> Res
 
 /// Values a webview may read (R4-SEC-001): the plaintext settings plus the
 /// keys that end up in client-side request URLs anyway (map/tile providers,
-/// crystalball.app). Every other secret is write-only from a webview; the
+/// the app's own cloud API key). Every other secret is write-only from a webview; the
 /// sidecar receives it from native. Must equal TS
 /// `PLAINTEXT_KEYS ∪ RENDERER_VALUE_KEYS` (tests/secret-boundary.test.mjs).
 const RENDERER_READABLE_KEYS: [&str; 17] = [

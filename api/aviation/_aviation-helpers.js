@@ -63,7 +63,7 @@ export async function fetchUpstream(url, init = {}) {
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
     const headers = {
-      'User-Agent': 'CrystalBall/aviation-intel (https://crystalball.app)',
+      'User-Agent': 'CrystalBall/aviation-intel (https://github.com/bradleybond512/crystal-ball)',
       Accept: 'application/json',
       ...init.headers,
     };

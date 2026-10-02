@@ -43,7 +43,7 @@ interface HapiCountryAgg {
 
 async function fetchHapiSummary(countryCode: string): Promise<HumanitarianCountrySummary | undefined> {
   try {
- const appId = btoa('crystalball:monitor@crystalball.app');
+ const appId = btoa('crystalball:github.com/bradleybond512/crystal-ball');
  let url = `https://hapi.humdata.org/api/v2/coordination-context/conflict-events?output_format=json&limit=1000&offset=0&app_identifier=${appId}`;
 
  // Filter by country — if a specific country was requested but has no ISO3 mapping,

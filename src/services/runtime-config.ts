@@ -305,7 +305,7 @@ export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [
  description: 'Desktop cloud fallback requests use X-CrystalBall-Key for Vercel API trust boundary validation.',
  requiredSecrets: [],
  desktopRequiredSecrets: ['CRYSTALBALL_API_KEY'],
- fallback: 'Cloud fallback to crystalball.app is blocked without a Crystal Ball API key.',
+ fallback: 'Cloud fallback is blocked without a Crystal Ball API key (and no cloud API is configured by default).',
   },
   {
  id: 'aiOllama',

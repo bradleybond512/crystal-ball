@@ -191,7 +191,7 @@ export function getProviderCredentials(provider: string): ProviderCredentials | 
  headers: {
  'Authorization': `Bearer ${apiKey}`,
  'Content-Type': 'application/json',
- 'HTTP-Referer': 'https://crystalball.app',
+ 'HTTP-Referer': 'https://github.com/bradleybond512/crystal-ball',
  'X-Title': 'CrystalBall',
  },
  };

@@ -1,4 +1,4 @@
-// Finance/Trading variant - finance.crystalball.app
+// Finance/Trading variant
 import type { PanelConfig, MapLayers } from '@/types';
 import type { VariantConfig } from './base';
 

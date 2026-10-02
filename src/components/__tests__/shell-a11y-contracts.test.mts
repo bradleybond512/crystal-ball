@@ -62,7 +62,7 @@ test('live news exposes its scroll container and active channel accessibly', () 
 });
 
 test('analytics consent dialog takes focus and traps Tab within its choices', async () => {
-  const happyWindow = new Window({ url: 'https://crystalball.app/' });
+  const happyWindow = new Window({ url: 'https://bradleybond512.github.io/' });
   const globals = globalThis as unknown as Record<string, unknown>;
   globals.window = happyWindow;
   globals.document = happyWindow.document;

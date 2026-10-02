@@ -2034,7 +2034,7 @@ function handleWorldBankRequest(req, res) {
   const request = https.get(wbUrl, {
  headers: {
  'Accept': 'application/json',
- 'User-Agent': 'Mozilla/5.0 (compatible; CrystalBall/1.0; +https://crystalball.app)',
+ 'User-Agent': 'Mozilla/5.0 (compatible; CrystalBall/1.0; +https://github.com/bradleybond512/crystal-ball)',
  },
  timeout: 15000,
   }, (response) => {
@@ -2634,9 +2634,7 @@ function handleNotamProxyRequest(req, res) {
 
 // CORS origin allowlist — only our domains can use this relay
 const ALLOWED_ORIGINS = [
-  'https://crystalball.app',
-  'https://tech.crystalball.app',
-  'https://finance.crystalball.app',
+  'https://bradleybond512.github.io', // GitHub Pages web build (owned; R4-SEC-008)
   'http://localhost:5173', // Vite dev
   'http://localhost:5174', // Vite dev alt port
   'http://localhost:4173', // Vite preview

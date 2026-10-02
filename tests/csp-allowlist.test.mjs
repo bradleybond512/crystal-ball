@@ -48,7 +48,6 @@ test('connect-src retains load-bearing direct-connect origins', () => {
     'https://nominatim.openstreetmap.org',
     'https://eonet.gsfc.nasa.gov',
     'https://www.fema.gov',
-    'https://*.crystalball.app',
     'https://api.github.com',
     // OWM weather-tile overlays (getOwmTileUrl) fetch from this host; without it
     // the Temperature/Precipitation/Clouds/Wind overlays are CSP-blocked.
@@ -111,8 +110,6 @@ test('index.html meta CSP connect-src keeps self + load-bearing web origins', ()
   // The web build talks to its relay over https + wss and reaches the same
   // direct-connect CDNs/providers as desktop. Dropping any silently breaks it.
   const required = [
-    'https://*.crystalball.app',
-    'wss://*.crystalball.app',
     'https://*.cesium.com',
     'https://*.basemaps.cartocdn.com',
     'https://api.anthropic.com',
@@ -130,5 +127,40 @@ test('every index.html connect-src entry is scheme-qualified or a safe keyword',
   for (const entry of metaConnectSrc) {
     if (keywords.has(entry)) continue;
     assert.match(entry, /^(https?|wss?):\/\//, `connect-src entry "${entry}" must be scheme-qualified`);
+  }
+});
+
+// ── R3-SEC-004 / R4-SEC-008 ──────────────────────────────────────────────────
+const SIDECAR_PORTS = Array.from({ length: 11 }, (_, i) => `http://127.0.0.1:${46123 + i}`);
+
+test('neither policy allows eval; both keep wasm compilation', () => {
+  for (const [label, scriptSrc] of [['tauri', directive('script-src')], ['index.html', metaDirective('script-src')]]) {
+    assert.ok(!scriptSrc.includes("'unsafe-eval'"), `${label} script-src must not allow 'unsafe-eval'`);
+    assert.ok(scriptSrc.includes("'wasm-unsafe-eval'"), `${label} script-src keeps 'wasm-unsafe-eval'`);
+  }
+});
+
+test('font-src is not an exfiltration channel', () => {
+  assert.deepEqual(directive('font-src'), ["'self'", 'data:']);
+  assert.deepEqual(metaDirective('font-src'), ["'self'", 'data:', 'https://fonts.gstatic.com']);
+});
+
+test('desktop loopback access is exactly the sidecar port range plus local model servers', () => {
+  const loopback = (list) => list.filter((entry) => /^https?:\/\/(?:127\.0\.0\.1|localhost)\b/.test(entry));
+  assert.deepEqual(loopback(connectSrc), [...SIDECAR_PORTS, 'http://127.0.0.1:11434', 'http://127.0.0.1:1234']);
+  assert.deepEqual(loopback(directive('frame-src')), SIDECAR_PORTS);
+  for (const entry of [...connectSrc, ...directive('frame-src')]) {
+    assert.doesNotMatch(entry, /:\*$/, `no wildcard port: ${entry}`);
+  }
+});
+
+test('the sidecar tries exactly the CSP port range before an OS-assigned port', async () => {
+  const { sidecarCandidatePorts, SIDECAR_PORT_FALLBACK_SPAN } = await import('../src-tauri/sidecar/local-api-server.mjs');
+  assert.equal(SIDECAR_PORT_FALLBACK_SPAN, 10);
+  assert.deepEqual(sidecarCandidatePorts(46123).map((p) => `http://127.0.0.1:${p}`), SIDECAR_PORTS);
+  assert.deepEqual(sidecarCandidatePorts(65534), [65534, 65535]);
+  // Port 0 asks the OS for a port: no range, and never privileged low ports.
+  for (const base of [0, -1, Number.NaN, 70_000, '46123x']) {
+    assert.deepEqual(sidecarCandidatePorts(base), [], `base ${String(base)}`);
   }
 });

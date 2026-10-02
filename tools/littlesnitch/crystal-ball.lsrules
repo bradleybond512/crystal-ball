@@ -421,14 +421,6 @@
     {
       "action": "allow",
       "process": "any",
-      "remote-hosts": "crystalball.app",
-      "ports": "443",
-      "protocol": "tcp",
-      "notes": "Crystal Ball remote server"
-    },
-    {
-      "action": "allow",
-      "process": "any",
       "remote-addresses": "127.0.0.1",
       "ports": "1234",
       "protocol": "tcp",

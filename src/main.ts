@@ -18,7 +18,7 @@ const sentryDsn = import.meta.env.VITE_SENTRY_DSN?.trim();
 Sentry.init({
   dsn: sentryDsn || undefined,
   release: `crystalball@${__APP_VERSION__}`,
-  environment: location.hostname === 'crystalball.app' ? 'production'
+  environment: location.hostname === 'bradleybond512.github.io' ? 'production'
  : (location.hostname.includes('vercel.app') ? 'preview'
  : 'development'),
   // eslint-disable-next-line no-restricted-syntax -- intentional: Sentry suppression for local web dev (localhost); Tauri runtime is covered by __TAURI_INTERNALS__ check
@@ -159,6 +159,7 @@ import { loadDesktopSecretsWhenReady } from '@/services/runtime-config';
 import { initAnalytics, isAnalyticsAllowed, migrateAnalyticsConsent, trackApiKeysSnapshot } from '@/services/analytics';
 import { applyStoredTheme, watchSystemTheme } from '@/utils/theme-manager';
 import { installLocalStoragePatch } from '@/utils/safe-storage';
+import { installCspViolationReporter } from '@/services/csp-violation-reporter';
 import { SITE_VARIANT, initializeVariant } from '@/config/variant';
 import { clearChunkReloadGuard, installChunkReloadGuard } from '@/bootstrap/chunk-reload';
 
@@ -266,12 +267,14 @@ Promise.all([
 }).catch((error: unknown) => console.warn('[boot] OfflineStalenessBanner failed to mount', error));
 import('./services/api-diagnostic').then(({ attachDiagnosticToWindow }) => { attachDiagnosticToWindow(); }).catch((error: unknown) => console.warn('[boot] api-diagnostic failed to mount', error));
 
+// Surface CSP violations in the desktop log instead of failing silently (R3-SEC-004).
+installCspViolationReporter();
 // Catch QuotaExceededError from any bare localStorage.setItem across the
 // codebase and auto-evict disposable cache entries instead of throwing.
 installLocalStoragePatch();
 // In desktop mode, route /api/* calls to the local Tauri sidecar backend.
 installRuntimeFetchPatch();
-// In web production, route RPC calls through api.crystalball.app (Cloudflare edge).
+// In web production, route RPC calls through the configured VITE_WS_API_URL (if any).
 installWebApiRedirect();
 loadDesktopSecretsWhenReady().then(async () => {
   await initAnalytics();

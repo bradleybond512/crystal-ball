@@ -27,7 +27,7 @@ test('is loopback-only and does no credential or upstream work at the Edge', asy
   delete process.env.UCDP_API_TOKEN;
   let calls = 0;
   globalThis.fetch = async () => { calls++; return Response.json(page([row('Ukraine', 369)])); };
-  const response = await handler(new Request('https://crystalball.app/api/ucdp-classifications'));
+  const response = await handler(new Request('https://bradleybond512.github.io/api/ucdp-classifications'));
   assert.equal(response.status, 503);
   assert.equal(calls, 0);
 });

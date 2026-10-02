@@ -4,8 +4,8 @@ import handler from './og-story.js';
 
 function renderOgStory(query = '') {
   const req = {
- url: `https://crystalball.app/api/og-story${query ? `?${query}` : ''}`,
- headers: { host: 'crystalball.app' },
+ url: `https://bradleybond512.github.io/api/og-story${query ? `?${query}` : ''}`,
+ headers: { host: 'bradleybond512.github.io' },
   };
 
   let statusCode = 0;

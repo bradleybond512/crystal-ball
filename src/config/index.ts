@@ -1,8 +1,8 @@
 // Configuration exports
 // For variant-specific builds, set VITE_VARIANT environment variable
-// VITE_VARIANT=tech → tech.crystalball.app (tech-focused)
-// VITE_VARIANT=full → crystalball.app (geopolitical)
-// VITE_VARIANT=finance → finance.crystalball.app (markets/trading)
+// VITE_VARIANT=tech → tech-focused build
+// VITE_VARIANT=full → geopolitical build (default; GitHub Pages)
+// VITE_VARIANT=finance → markets/trading build
 
 export { SITE_VARIANT } from './variant';
 

@@ -11,14 +11,12 @@ declare const process: { env: Record<string, string | undefined> };
 // Patterns MUST end with a trusted username segment — never a wildcard `*.vercel.app`
 // match that could let an unrelated third-party project gain CORS approval.
 const PRODUCTION_PATTERNS: RegExp[] = [
-  /^https:\/\/crystalball\.app$/,
-  /^https:\/\/(tech|finance|happy|api)\.crystalball\.app$/,
+  // Owned web origin only (R4-SEC-008: the former product domain is for sale).
+  /^https:\/\/bradleybond512\.github\.io$/,
   // `crystalball` (no dash) project previews.
-  /^https:\/\/crystalball-[a-z0-9-]+-elie-[a-z0-9]+\.vercel\.app$/,
   /^https:\/\/crystalball-[a-z0-9-]+-bradleybond512\.vercel\.app$/,
   // `crystal-ball` (hyphenated) project previews — anchored on the trusted user suffix.
   /^https:\/\/crystal-ball-[a-z0-9-]+-bradleybond512\.vercel\.app$/,
-  /^https:\/\/crystal-ball-[a-z0-9-]+-elie-[a-z0-9]+\.vercel\.app$/,
   /^https?:\/\/tauri\.localhost(:\d+)?$/,
   /^https?:\/\/[a-z0-9-]+\.tauri\.localhost(:\d+)?$/i,
   /^tauri:\/\/localhost$/,
@@ -41,7 +39,7 @@ function isAllowedOrigin(origin: string): boolean {
 
 export function getCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('origin') || '';
-  const allowOrigin = isAllowedOrigin(origin) ? origin : 'https://crystalball.app';
+  const allowOrigin = isAllowedOrigin(origin) ? origin : 'https://bradleybond512.github.io';
   return {
  'Access-Control-Allow-Origin': allowOrigin,
  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',

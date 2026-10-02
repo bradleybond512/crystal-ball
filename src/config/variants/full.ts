@@ -1,4 +1,4 @@
-// Full geopolitical variant - crystalball.app
+// Full geopolitical variant (default build)
 import type { PanelConfig, MapLayers } from '@/types';
 import type { VariantConfig } from './base';
 

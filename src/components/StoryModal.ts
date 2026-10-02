@@ -1,7 +1,8 @@
 import type { StoryData } from '@/services/story-data';
 import { renderStoryToCanvas } from '@/services/story-renderer';
-import { generateStoryDeepLink, getShareUrls, shareTexts } from '@/services/story-share';
+import { getShareUrls, shareTexts } from '@/services/story-share';
 import { t } from '@/services/i18n';
+import { logToDesktop } from '@/services/log-bridge';
 
 let modalEl: HTMLElement | null = null;
 let currentDataUrl: string | null = null;
@@ -42,10 +43,6 @@ export function openStoryModal(data: StoryData): void {
  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
  <span>${t('modals.story.linkedin')}</span>
  </button>
- <button class="story-share-btn story-copy" title="${t('modals.story.copyLink')}">
- <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
- <span>${t('modals.story.copyLink')}</span>
- </button>
  </div>
  </div>
   `;
@@ -55,23 +52,32 @@ export function openStoryModal(data: StoryData): void {
   });
   modalEl.querySelector('.story-close-x')?.addEventListener('click', closeStoryModal);
   modalEl.querySelector('.story-save')?.addEventListener('click', downloadStory);
-  modalEl.querySelector('.story-whatsapp')?.addEventListener('click', () => currentData && shareWhatsApp(currentData));
-  modalEl.querySelector('.story-twitter')?.addEventListener('click', () => currentData && shareTwitter(currentData));
-  modalEl.querySelector('.story-linkedin')?.addEventListener('click', () => currentData && shareLinkedIn(currentData));
-  modalEl.querySelector('.story-copy')?.addEventListener('click', () => currentData && copyDeepLink(currentData));
+  modalEl.querySelector('.story-whatsapp')?.addEventListener('click', () => {
+ if (currentData) void shareWhatsApp(currentData);
+  });
+  modalEl.querySelector('.story-twitter')?.addEventListener('click', () => {
+ if (currentData) shareTwitter(currentData);
+  });
+  modalEl.querySelector('.story-linkedin')?.addEventListener('click', () => {
+ if (currentData) shareLinkedIn(currentData);
+  });
 
   document.body.append(modalEl);
 
-  requestAnimationFrame(async () => {
- if (!modalEl) return;
- try {
+  requestAnimationFrame(() => {
+ void renderOrShowError(data);
+  });
+}
+
+async function renderOrShowError(data: StoryData): Promise<void> {
+  if (!modalEl) return;
+  try {
  await renderAndDisplay(data);
- } catch (error) {
- console.error('[StoryModal] Render error:', error);
+  } catch (error) {
+ logToDesktop('ERROR', '[StoryModal] Render error', { error: error instanceof Error ? error.message : String(error) });
  const content = modalEl?.querySelector('.story-modal-content');
  if (content) content.innerHTML = `<div class="story-error">${t('modals.story.error')}</div>`;
- }
-  });
+  }
 }
 
 async function renderAndDisplay(data: StoryData): Promise<void> {
@@ -79,8 +85,7 @@ async function renderAndDisplay(data: StoryData): Promise<void> {
   currentDataUrl = canvas.toDataURL('image/png');
 
   const binStr = atob(currentDataUrl.split(',')[1] ?? '');
-  const bytes = new Uint8Array(binStr.length);
-  for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+  const bytes = Uint8Array.from(binStr, (char) => char.codePointAt(0) ?? 0);
   currentBlob = new Blob([bytes], { type: 'image/png' });
 
   const content = modalEl?.querySelector('.story-modal-content');
@@ -111,7 +116,7 @@ function downloadStory(): void {
   if (!currentDataUrl) return;
   const a = document.createElement('a');
   a.href = currentDataUrl;
-  a.download = `crystalball-${currentData?.countryCode.toLowerCase() || 'story'}-${Date.now()}.png`;
+  a.download = `crystalball-${currentData?.countryCode.toLowerCase() ?? 'story'}-${Date.now()}.png`;
   a.click();
   flashButton('.story-save', t('modals.story.saved'), t('modals.story.save'));
 }
@@ -144,25 +149,19 @@ async function shareWhatsApp(data: StoryData): Promise<void> {
  downloadStory();
  flashButton('.story-whatsapp', t('modals.story.saved'), t('modals.story.whatsapp'));
   }
-  window.open(urls.whatsapp, '_blank');
+  window.open(urls.whatsapp, '_blank', 'noopener,noreferrer');
 }
 
-async function shareTwitter(data: StoryData): Promise<void> {
+function shareTwitter(data: StoryData): void {
   const urls = getShareUrls(data);
-  window.open(urls.twitter, '_blank');
+  window.open(urls.twitter, '_blank', 'noopener,noreferrer');
   flashButton('.story-twitter', t('modals.story.opening'), t('modals.story.twitter'));
 }
 
-async function shareLinkedIn(data: StoryData): Promise<void> {
+function shareLinkedIn(data: StoryData): void {
   const urls = getShareUrls(data);
-  window.open(urls.linkedin, '_blank');
+  window.open(urls.linkedin, '_blank', 'noopener,noreferrer');
   flashButton('.story-linkedin', t('modals.story.opening'), t('modals.story.linkedin'));
-}
-
-async function copyDeepLink(data: StoryData): Promise<void> {
-  const link = generateStoryDeepLink(data.countryCode);
-  await navigator.clipboard.writeText(link);
-  flashButton('.story-copy', t('modals.story.copied'), t('modals.story.copyLink'));
 }
 
 function flashButton(selector: string, flashText: string, originalText: string): void {
@@ -171,6 +170,6 @@ function flashButton(selector: string, flashText: string, originalText: string):
   const span = btn.querySelector('span');
   if (span) {
  span.textContent = flashText;
- setTimeout(() => { if (span) span.textContent = originalText; }, 2500);
+ setTimeout(() => { span.textContent = originalText; }, 2500);
   }
 }

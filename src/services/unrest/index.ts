@@ -5,6 +5,7 @@ import {
 } from '@/generated/client/crystalball/unrest/v1/service_client';
 import type { SocialUnrestEvent, ProtestSeverity, ProtestEventType, ProtestSource } from '@/types';
 import { createCircuitBreaker } from '@/utils';
+import { finiteOr, positiveCountOrUndefined } from '@/utils/finite-number';
 
 // ---- Client + Circuit Breaker ----
 
@@ -76,11 +77,12 @@ function toSocialUnrestEvent(e: UnrestEvent): SocialUnrestEvent {
  city: e.city || undefined,
  country: e.country,
  region: e.region || undefined,
- lat: e.location?.latitude ?? 0,
- lon: e.location?.longitude ?? 0,
+ lat: finiteOr(e.location?.latitude, 0),
+ lon: finiteOr(e.location?.longitude, 0),
  time: new Date(e.occurredAt),
  severity: mapSeverity(e.severity),
- fatalities: e.fatalities > 0 ? e.fatalities : undefined,
+ // Coerced here (R3-SEC-009): the protest popup interpolates it into HTML.
+ fatalities: positiveCountOrUndefined(e.fatalities),
  sources: e.sources,
  sourceType: mapSourceType(e.sourceType),
  tags: e.tags.length > 0 ? e.tags : undefined,
@@ -127,12 +129,12 @@ export async function fetchProtestEvents(): Promise<ProtestData> {
  });
   }, emptyFallback);
 
-  const events = resp.events.map(toSocialUnrestEvent);
+  const events = resp.events.map((e) => toSocialUnrestEvent(e));
 
   // Group by country
   const byCountry = new Map<string, SocialUnrestEvent[]>();
   for (const event of events) {
- const existing = byCountry.get(event.country) || [];
+ const existing = byCountry.get(event.country) ?? [];
  existing.push(event);
  byCountry.set(event.country, existing);
   }

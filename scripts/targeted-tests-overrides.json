@@ -100,5 +100,20 @@
   ],
   "src-tauri/tests/watchdog_contract.rs": [
     "test:native-responsiveness"
+  ],
+  "src/services/survival-advisor.ts": [
+    "test:untrusted-html"
+  ],
+  "src/services/unrest/index.ts": [
+    "test:untrusted-html"
+  ],
+  "src/services/maritime/index.ts": [
+    "test:untrusted-html"
+  ],
+  "src/services/resource-inventory/schema.ts": [
+    "test:untrusted-html"
+  ],
+  "src/utils/finite-number.ts": [
+    "test:untrusted-html"
   ]
 }

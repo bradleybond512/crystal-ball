@@ -16,6 +16,16 @@ export interface SecretStatusRow {
   present: boolean;
 }
 
+/** Value-free native write status (R3-BUG-001 slice B). */
+export interface SecretWriteState {
+  /** Committed vault writes this session. */
+  revision: number;
+  /** Saves still waiting on the Keychain after their caller stopped waiting. */
+  pending: number;
+  /** Where this session's keys came from: vault, absent, shadow, unavailable or pending. */
+  source: string;
+}
+
 class KeychainService {
   private supportedKeys: Promise<string[]> | null = null;
 
@@ -83,6 +93,16 @@ class KeychainService {
       }
     }
     return values;
+  }
+
+  /** Native write status; null when the shape is not what native returns. */
+  async writeState(): Promise<SecretWriteState | null> {
+    if (!hasTauriInvokeBridge()) return null;
+    const raw = await invokeTauri<unknown>('get_secret_write_state');
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const { revision, pending, source } = raw as Record<string, unknown>;
+    if (typeof revision !== 'number' || typeof pending !== 'number') return null;
+    return { revision, pending, source: typeof source === 'string' ? source : 'unknown' };
   }
 
   async set(key: string, value: string): Promise<void> {

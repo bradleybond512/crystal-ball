@@ -62,6 +62,7 @@
     "test:secret-boundary": "node --test tests/secret-boundary.test.mjs tests/sidecar-secret-routing-boundary.test.mjs tests/ucdp-local-boundary.test.mjs && tsx --test src/services/__tests__/secret-boundary.test.mts src/services/__tests__/keychain.test.mts src/components/__tests__/key-dashboard-secret-boundary.test.mts",
     "test:imessage": "node --test tests/imessage-native-boundary.test.mjs && tsx --test src/services/__tests__/imessage-bridge.test.mts src/components/__tests__/imessage-settings.test.mts src/app/__tests__/desktop-imessage.test.mts src/services/seismic/__tests__/eew-imessage.test.mts src/services/notifications/__tests__/imessage-bridge-extended.test.mts",
     "test:imessage-native": "node --test tests/imessage-native-gate.test.mjs",
+    "test:signing-phase-a": "node --test tests/desktop-signing.test.mjs tests/desktop-package-signing.test.mjs tests/main-sync-signing.test.mjs tests/vault-diagnostics-boundary.test.mjs && tsx --test src/services/diagnostics/__tests__/vault-diagnostics.test.mts",
     "test:vault-writer": "node --test tests/vault-writer-boundary.test.mjs tests/vault-writer-native.test.mjs && tsx --test src/services/__tests__/secret-write-pending.test.mts",
     "test:native-responsiveness": "node --test tests/native-responsiveness-boundary.test.mjs tests/native-responsiveness-native.test.mjs",
     "test:sidecar-supervisor": "node --test tests/sidecar-supervisor-boundary.test.mjs tests/sidecar-supervisor-native.test.mjs",

@@ -6,6 +6,9 @@ import path from 'node:path';
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const packageJson = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
 const desktopPackageScript = readFileSync(path.join(repoRoot, 'scripts', 'desktop-package.mjs'), 'utf8');
+// R3-SEC-003 phase A moved local signing (stable identity, ad-hoc fallback)
+// into scripts/desktop-signing.mjs; desktop-package.mjs calls it.
+const signingScript = readFileSync(path.join(repoRoot, 'scripts', 'desktop-signing.mjs'), 'utf8');
 
 test('macOS desktop packaging signs and verifies the app bundle before creating a dmg', () => {
   assert.match(
@@ -29,7 +32,7 @@ test('macOS desktop packaging signs and verifies the app bundle before creating 
  'desktop:build:app:full should build only the local app bundle for install sync',
   );
   assert.match(
- desktopPackageScript,
+ signingScript,
  /codesign["']?,?\s*\[[^\]]*--force[^\]]*--deep[^\]]*--sign[^\]]*-/s,
  'macOS packaging should ad-hoc sign the generated app bundle when developer signing is unavailable',
   );
@@ -92,22 +95,22 @@ test('macOS desktop packaging signs and verifies the app bundle before creating 
 
 test('local macOS packaging prefers a stable self-signed identity with hardened runtime', () => {
   assert.match(
- desktopPackageScript,
+ signingScript,
  /DEFAULT_LOCAL_SIGN_IDENTITY = 'Crystal Ball Dev'/,
  'should default the local signing identity to "Crystal Ball Dev" (no env var required)',
   );
   assert.match(
- desktopPackageScript,
+ signingScript,
  /CRYSTALBALL_SIGN_IDENTITY/,
  'should allow overriding the local signing identity via CRYSTALBALL_SIGN_IDENTITY',
   );
   assert.match(
- desktopPackageScript,
+ signingScript,
  /codesign["']?,?\s*\[[^\]]*--force[^\]]*--deep[^\]]*--options[^\]]*runtime[^\]]*--sign[^\]]*stableIdentity/s,
  'stable-identity signing should use --force --deep --options runtime --sign <identity>',
   );
   assert.match(
- desktopPackageScript,
+ signingScript,
  /STABLE SIGNING FAILED — falling back to AD-HOC/,
  'should emit a loud warning when the stable identity is missing and it falls back to ad-hoc',
   );

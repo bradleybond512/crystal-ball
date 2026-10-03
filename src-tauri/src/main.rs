@@ -374,10 +374,14 @@ fn read_vault_for_load(app: &AppHandle, vault_timeout: Duration) -> (LoadRead, b
             // gated while it is in use.
             match read_vault_shadow(app) {
                 Some(secrets) => {
+                    let fallbacks = record_shadow_fallback(app);
                     append_desktop_log(
                         app,
-                        "INFO",
-                        &format!("secrets-cache: keychain timed out, loaded {} keys from shadow vault", secrets.len()),
+                        "WARN",
+                        &format!(
+                            "secrets-cache: keychain timed out, loaded {} keys from shadow vault (shadow fallback #{fallbacks}); saves stay gated",
+                            secrets.len()
+                        ),
                     );
                     (LoadRead::Apply(ReadResult::Shadow(secrets)), true)
                 }
@@ -1226,6 +1230,144 @@ async fn get_secret_write_state(webview: Webview) -> Result<SecretWriteState, St
     })
     .await
     .map_err(|_| "Secret write state task failed".to_string())?
+}
+
+// ── Keys & signing diagnostics (R3-SEC-003 phase A) ─────────────────
+// Value-free: how the running app is signed, where this session's keys came
+// from, whether saves are gated, and how often the shadow vault was used.
+
+/// How the running app is signed. Mirrors `classifyCodesignDetails` in
+/// scripts/desktop-signing.mjs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+struct SigningInfo {
+    /// "stable", "adhoc" or "unknown".
+    kind: &'static str,
+    authority: Option<String>,
+}
+
+fn classify_codesign_details(output: &str) -> SigningInfo {
+    if output.lines().any(|line| line.trim() == "Signature=adhoc") {
+        return SigningInfo { kind: "adhoc", authority: None };
+    }
+    let authority = output
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("Authority="))
+        .map(str::trim)
+        .filter(|authority| !authority.is_empty());
+    match authority {
+        Some(authority) => SigningInfo { kind: "stable", authority: Some(authority.to_string()) },
+        None => SigningInfo { kind: "unknown", authority: None },
+    }
+}
+
+/// The `.app` bundle that contains `exe` (`X.app/Contents/MacOS/<exe>`).
+fn app_bundle_of(exe: &Path) -> Option<PathBuf> {
+    let macos = exe.parent()?;
+    let bundle = macos.parent()?.parent()?;
+    let in_bundle = macos.file_name().is_some_and(|name| name == "MacOS")
+        && bundle.extension().is_some_and(|ext| ext == "app");
+    in_bundle.then(|| bundle.to_path_buf())
+}
+
+static RUNNING_APP_SIGNING: std::sync::OnceLock<SigningInfo> = std::sync::OnceLock::new();
+
+/// Read once per launch with a read-only `codesign -dv` of the app's own
+/// bundle (no Keychain access). Blocks up to 5 s: call off the main thread.
+fn running_app_signing() -> SigningInfo {
+    RUNNING_APP_SIGNING
+        .get_or_init(|| {
+            let unknown = SigningInfo { kind: "unknown", authority: None };
+            let Some(bundle) = std::env::current_exe().ok().and_then(|exe| app_bundle_of(&exe)) else {
+                return unknown;
+            };
+            let (tx, rx) = mpsc::channel();
+            std::thread::spawn(move || {
+                let output = Command::new("/usr/bin/codesign").args(["-dv", "--verbose=2"]).arg(&bundle).output();
+                let _ = tx.send(output);
+            });
+            match rx.recv_timeout(Duration::from_secs(5)) {
+                Ok(Ok(output)) => classify_codesign_details(&format!(
+                    "{}\n{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr),
+                )),
+                _ => unknown,
+            }
+        })
+        .clone()
+}
+
+const SHADOW_FALLBACK_FILE: &str = "vault-shadow-fallbacks.json";
+
+/// How often a launch or reload fell back to the shadow vault, across launches.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ShadowFallbacks {
+    count: u64,
+    last_at_ms: Option<u64>,
+}
+
+fn parse_shadow_fallbacks(raw: &str) -> ShadowFallbacks {
+    serde_json::from_str(raw).unwrap_or_default()
+}
+
+fn shadow_fallbacks_path(app: &AppHandle) -> Option<PathBuf> {
+    app.path().app_data_dir().ok().map(|dir| dir.join(SHADOW_FALLBACK_FILE))
+}
+
+fn read_shadow_fallbacks(app: &AppHandle) -> ShadowFallbacks {
+    shadow_fallbacks_path(app)
+        .and_then(|path| fs::read_to_string(path).ok())
+        .map(|raw| parse_shadow_fallbacks(&raw))
+        .unwrap_or_default()
+}
+
+/// The next counter value; pure so it can be tested.
+fn bump_shadow_fallbacks(current: ShadowFallbacks, now_ms: u64) -> ShadowFallbacks {
+    ShadowFallbacks { count: current.count.saturating_add(1), last_at_ms: Some(now_ms) }
+}
+
+/// Count one shadow-vault fallback. Best effort; returns the new count.
+fn record_shadow_fallback(app: &AppHandle) -> u64 {
+    let now_ms = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64);
+    let next = bump_shadow_fallbacks(read_shadow_fallbacks(app), now_ms);
+    if let Some(path) = shadow_fallbacks_path(app) {
+        if let Some(parent) = path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        if let Ok(json) = serde_json::to_string(&next) {
+            let _ = fs::write(path, json);
+        }
+    }
+    next.count
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VaultDiagnostics {
+    signing: SigningInfo,
+    vault_source: &'static str,
+    saves_gated: bool,
+    shadow_fallbacks: ShadowFallbacks,
+}
+
+/// Keys & signing status for System Diagnostic. Never carries a secret value.
+#[tauri::command]
+async fn get_vault_diagnostics(webview: Webview) -> Result<VaultDiagnostics, String> {
+    require_trusted_window(webview.label())?;
+    let app = webview.app_handle().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let cache = app.state::<SecretsCache>();
+        let source = cache.state.source();
+        Ok(VaultDiagnostics {
+            signing: running_app_signing(),
+            vault_source: source.as_str(),
+            saves_gated: vault_coordinator::gate_message(source).is_some(),
+            shadow_fallbacks: read_shadow_fallbacks(&app),
+        })
+    })
+    .await
+    .map_err(|_| "Vault diagnostics task failed".to_string())?
 }
 
 /// Sentinel that marks "migration from individual keys has been attempted".
@@ -3294,6 +3436,43 @@ mod sanitize_path_tests {
 }
 
 #[cfg(test)]
+mod signing_diagnostics_tests {
+    use super::*;
+
+    #[test]
+    fn codesign_output_classifies_ad_hoc_stable_and_unknown() {
+        let adhoc = "Executable=/A.app/Contents/MacOS/a\nIdentifier=com.example\nSignature=adhoc\nTeamIdentifier=not set\n";
+        assert_eq!(classify_codesign_details(adhoc), SigningInfo { kind: "adhoc", authority: None });
+        let stable = "Identifier=com.bradleybond.crystalball\nAuthority=Crystal Ball Dev\nSigned Time=Oct 3, 2026\n";
+        assert_eq!(
+            classify_codesign_details(stable),
+            SigningInfo { kind: "stable", authority: Some("Crystal Ball Dev".to_string()) },
+        );
+        assert_eq!(classify_codesign_details("code object is not signed at all\n").kind, "unknown");
+        assert_eq!(classify_codesign_details("Authority=\n").kind, "unknown");
+    }
+
+    #[test]
+    fn only_an_executable_inside_an_app_bundle_has_a_bundle() {
+        assert_eq!(
+            app_bundle_of(Path::new("/Users/x/Applications/Crystal Ball.app/Contents/MacOS/crystalball")),
+            Some(PathBuf::from("/Users/x/Applications/Crystal Ball.app")),
+        );
+        assert_eq!(app_bundle_of(Path::new("/repo/src-tauri/target/debug/crystalball")), None);
+        assert_eq!(app_bundle_of(Path::new("/Crystal Ball.app/Contents/Resources/x")), None);
+    }
+
+    #[test]
+    fn the_shadow_fallback_counter_survives_bad_files_and_counts_up() {
+        assert_eq!(parse_shadow_fallbacks("not json"), ShadowFallbacks::default());
+        let stored = parse_shadow_fallbacks(r#"{"count":2,"lastAtMs":5}"#);
+        assert_eq!(stored, ShadowFallbacks { count: 2, last_at_ms: Some(5) });
+        assert_eq!(bump_shadow_fallbacks(stored, 9), ShadowFallbacks { count: 3, last_at_ms: Some(9) });
+        assert_eq!(bump_shadow_fallbacks(ShadowFallbacks { count: u64::MAX, last_at_ms: None }, 1).count, u64::MAX);
+    }
+}
+
+#[cfg(test)]
 mod keychain_read_tests {
     use super::*;
 
@@ -4858,6 +5037,7 @@ fn main() {
  get_secret_status,
  get_renderer_config,
  get_secret_write_state,
+ get_vault_diagnostics,
  secrets_ready,
  set_always_on,
  set_secret,
@@ -5106,6 +5286,14 @@ fn main() {
          &load_handle,
          "INFO",
          &format!("secrets-cache: vault source {}", source.map_or("not applied", VaultSource::as_str)),
+     );
+     // R3-SEC-003 phase A: record how this build is signed (ad hoc re-prompts
+     // for the Keychain after every rebuild).
+     let signing = running_app_signing();
+     append_desktop_log(
+         &load_handle,
+         if signing.kind == "stable" { "INFO" } else { "WARN" },
+         &format!("signing: {} ({})", signing.kind, signing.authority.as_deref().unwrap_or("no authority")),
      );
      (cache.state.read(|m| m.len()), timed_out)
  })

@@ -160,6 +160,9 @@ struct LocalApiState {
  shutting_down: AtomicBool,
  // Bumped on every successful spawn so status readers can tell restarts apart.
  generation: AtomicU64,
+ // Why the last start refused to spawn (R3-SEC-005), e.g. a missing or
+ // modified bundled Node. Fixed messages only, shown in System Diagnostic.
+ start_error: Mutex<Option<String>>,
 }
 
 const BUILD_SHA: &str = match option_env!("WM_BUILD_SHA") {
@@ -177,6 +180,7 @@ impl Default for LocalApiState {
  supervisor: Mutex::new(sidecar_supervisor::SupervisorState::new()),
  shutting_down: AtomicBool::new(false),
  generation: AtomicU64::new(0),
+ start_error: Mutex::new(None),
  }
  }
 }
@@ -3436,6 +3440,89 @@ mod sanitize_path_tests {
 }
 
 #[cfg(test)]
+mod node_pinning_tests {
+    use super::*;
+
+    struct TempDir(PathBuf);
+
+    impl TempDir {
+        fn new(label: &str) -> Self {
+            let dir = std::env::temp_dir().join(format!(
+                "crystalball-node-pin-{label}-{}-{}",
+                std::process::id(),
+                SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_nanos()),
+            ));
+            fs::create_dir_all(&dir).unwrap();
+            TempDir(dir)
+        }
+
+        fn file(&self, relative: &str, contents: &[u8]) -> PathBuf {
+            let path = self.0.join(relative);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, contents).unwrap();
+            path
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn a_release_build_never_falls_back_to_path_or_common_locations() {
+        let tmp = TempDir::new("release");
+        let on_path = tmp.file("path-bin/node", b"path node");
+        let common = tmp.file("homebrew/node", b"brew node");
+        let path_dirs = vec![on_path.parent().unwrap().to_path_buf()];
+        let missing_bundle = vec![tmp.0.join("Resources/sidecar/node/node")];
+        assert_eq!(select_node_binary(true, Some(on_path.clone()), &missing_bundle, &path_dirs, &[common.clone()], "node"), None);
+
+        let bundled = tmp.file("Resources/sidecar/node/node", b"bundled node");
+        assert_eq!(
+            select_node_binary(true, Some(on_path), &[bundled.clone()], &path_dirs, &[common], "node"),
+            Some(bundled),
+        );
+    }
+
+    #[test]
+    fn a_debug_build_keeps_the_developer_fallbacks_in_order() {
+        let tmp = TempDir::new("debug");
+        let explicit = tmp.file("explicit/node", b"explicit");
+        let on_path = tmp.file("path-bin/node", b"path node");
+        let common = tmp.file("homebrew/node", b"brew node");
+        let path_dirs = vec![on_path.parent().unwrap().to_path_buf()];
+        assert_eq!(select_node_binary(false, Some(explicit.clone()), &[], &path_dirs, &[common.clone()], "node"), Some(explicit));
+        assert_eq!(select_node_binary(false, Some(tmp.0.join("nope")), &[], &path_dirs, &[common.clone()], "node"), Some(on_path));
+        assert_eq!(select_node_binary(false, None, &[], &[], &[common.clone()], "node"), Some(common));
+        assert_eq!(select_node_binary(false, None, &[], &[], &[], "node"), None);
+    }
+
+    #[test]
+    fn the_pin_accepts_only_the_exact_bundled_file() {
+        let tmp = TempDir::new("pin");
+        let node = tmp.file("node", b"exact bundled bytes");
+        let expected = sha256_file_hex(&node).unwrap();
+        assert_eq!(expected.len(), 64);
+        assert_eq!(verify_node_pin(&node, &expected), Ok(()));
+        assert_eq!(verify_node_pin(&node, &expected.to_uppercase()), Ok(()));
+
+        fs::write(&node, b"exact bundled bytes, then tampered").unwrap();
+        assert_eq!(verify_node_pin(&node, &expected), Err(NODE_MODIFIED_MESSAGE.to_string()));
+        assert_eq!(verify_node_pin(&tmp.0.join("gone"), &expected), Err(NODE_MISSING_MESSAGE.to_string()));
+        assert_eq!(verify_node_pin(&node, ""), Err(NODE_UNPINNED_MESSAGE.to_string()));
+    }
+
+    #[test]
+    fn the_file_hash_matches_a_known_vector() {
+        let tmp = TempDir::new("vector");
+        let empty = tmp.file("empty", b"");
+        assert_eq!(sha256_file_hex(&empty).unwrap(), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    }
+}
+
+#[cfg(test)]
 mod signing_diagnostics_tests {
     use super::*;
 
@@ -3782,70 +3869,135 @@ fn configure_little_snitch_env(command: &mut Command, home_dir: &Path) {
   .env("LITTLE_SNITCH_BASELINE_PATH", sanitize_path_for_node(&baseline_path));
 }
 
-fn resolve_node_binary(app: &AppHandle) -> Option<PathBuf> {
- // The LOCAL_API_NODE_BIN override is honored in debug builds only. In a
- // release build, an attacker who can set this env var could redirect the
- // sidecar to an arbitrary executable that inherits the injected keychain
- // secrets, so the override must be ignored outside development.
- #[cfg(debug_assertions)]
- if let Ok(explicit) = env::var("LOCAL_API_NODE_BIN") {
- let explicit_path = PathBuf::from(explicit);
- if explicit_path.is_file() {
- return Some(explicit_path);
- }
- append_desktop_log(
- app,
- "WARN",
- &format!(
- "LOCAL_API_NODE_BIN is set but not a valid file: {}",
- explicit_path.display()
- ),
- );
- }
+/// SHA-256 of the Node binary bundled into this build (R3-SEC-005). build.rs
+/// embeds it for release builds from the exact file Tauri bundles; it is empty
+/// in debug builds and in a release build made without the bundled runtime.
+const BUNDLED_NODE_SHA256: &str = env!("CRYSTALBALL_BUNDLED_NODE_SHA256");
 
- if !cfg!(debug_assertions) {
- let node_name = if cfg!(windows) { "node.exe" } else { "node" };
- if let Ok(resource_dir) = app.path().resource_dir() {
- let mut candidates = vec![resource_dir.join("sidecar").join("node").join(node_name)];
- if cfg!(windows) {
- // NSIS resource paths can flatten nested names in some upgrade scenarios.
- // Keep this fallback so sidecar startup still succeeds if the runtime is
- // materialized as sidecar\node.node.exe instead of sidecar\node\node.exe.
- candidates.push(resource_dir.join("sidecar").join("node.node.exe"));
- }
- for bundled in candidates {
- if bundled.is_file() {
- return Some(bundled);
- }
- }
- }
- }
+const NODE_MISSING_MESSAGE: &str =
+    "Local engine can't start: its bundled Node runtime is missing. Reinstall Crystal Ball.";
+const NODE_MODIFIED_MESSAGE: &str =
+    "Local engine can't start: its bundled Node runtime was modified (hash mismatch). Reinstall Crystal Ball.";
+const NODE_UNPINNED_MESSAGE: &str =
+    "Local engine can't start: this build has no pinned Node runtime. Rebuild it with npm run desktop:build:app:full.";
 
- let node_name = if cfg!(windows) { "node.exe" } else { "node" };
- if let Some(path_var) = env::var_os("PATH") {
- for dir in env::split_paths(&path_var) {
- let candidate = dir.join(node_name);
- if candidate.is_file() {
- return Some(candidate);
- }
- }
- }
+/// Pure choice of the Node binary (R3-SEC-005). A release build considers
+/// only the bundled candidates: the sidecar receives the local API token and
+/// every Keychain secret, so it must never run a `PATH` or Homebrew `node`.
+/// A debug build keeps the developer fallbacks: explicit override, then
+/// `PATH`, then common install locations.
+fn select_node_binary(
+    release: bool,
+    explicit: Option<PathBuf>,
+    bundled: &[PathBuf],
+    path_dirs: &[PathBuf],
+    common: &[PathBuf],
+    node_name: &str,
+) -> Option<PathBuf> {
+    if release {
+        return bundled.iter().find(|candidate| candidate.is_file()).cloned();
+    }
+    if let Some(explicit) = explicit.filter(|candidate| candidate.is_file()) {
+        return Some(explicit);
+    }
+    path_dirs
+        .iter()
+        .map(|dir| dir.join(node_name))
+        .find(|candidate| candidate.is_file())
+        .or_else(|| common.iter().find(|candidate| candidate.is_file()).cloned())
+}
 
- let common_locations = if cfg!(windows) {
- vec![
- PathBuf::from(r"C:\Program Files\nodejs\node.exe"),
- PathBuf::from(r"C:\Program Files (x86)\nodejs\node.exe"),
- ]
- } else {
- vec![
- PathBuf::from("/opt/homebrew/bin/node"),
- PathBuf::from("/usr/local/bin/node"),
- PathBuf::from("/usr/bin/node"),
- PathBuf::from("/opt/local/bin/node"),
- ]
- };
+fn sha256_file_hex(path: &Path) -> std::io::Result<String> {
+    use std::io::Read;
+    let mut file = File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buffer = vec![0u8; 1 << 20];
+    loop {
+        let read = file.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(hasher.finalize().iter().map(|byte| format!("{byte:02x}")).collect())
+}
 
- common_locations.into_iter().find(|path| path.is_file())
+/// A release build runs only the exact Node it shipped with. An empty pin
+/// fails closed (approved decision B).
+fn verify_node_pin(path: &Path, expected_hex: &str) -> Result<(), String> {
+    if expected_hex.is_empty() {
+        return Err(NODE_UNPINNED_MESSAGE.to_string());
+    }
+    let actual = sha256_file_hex(path).map_err(|_| NODE_MISSING_MESSAGE.to_string())?;
+    if actual.eq_ignore_ascii_case(expected_hex) {
+        Ok(())
+    } else {
+        Err(NODE_MODIFIED_MESSAGE.to_string())
+    }
+}
+
+fn resolve_node_binary(app: &AppHandle) -> Result<PathBuf, String> {
+    let node_name = if cfg!(windows) { "node.exe" } else { "node" };
+    let release = !cfg!(debug_assertions);
+
+    // The LOCAL_API_NODE_BIN override is honored in debug builds only. In a
+    // release build, an attacker who can set this env var could redirect the
+    // sidecar to an arbitrary executable that inherits the injected keychain
+    // secrets, so the override must be ignored outside development.
+    #[allow(unused_mut)] // only debug builds read the override
+    let mut explicit = None;
+    #[cfg(debug_assertions)]
+    if let Ok(value) = env::var("LOCAL_API_NODE_BIN") {
+        let explicit_path = PathBuf::from(value);
+        if !explicit_path.is_file() {
+            append_desktop_log(
+                app,
+                "WARN",
+                &format!("LOCAL_API_NODE_BIN is set but not a valid file: {}", explicit_path.display()),
+            );
+        }
+        explicit = Some(explicit_path);
+    }
+
+    let mut bundled = Vec::new();
+    if release {
+        if let Ok(resource_dir) = app.path().resource_dir() {
+            bundled.push(resource_dir.join("sidecar").join("node").join(node_name));
+            if cfg!(windows) {
+                // NSIS resource paths can flatten nested names in some upgrade scenarios.
+                // Keep this fallback so sidecar startup still succeeds if the runtime is
+                // materialized as sidecar\node.node.exe instead of sidecar\node\node.exe.
+                bundled.push(resource_dir.join("sidecar").join("node.node.exe"));
+            }
+        }
+    }
+    let (path_dirs, common): (Vec<PathBuf>, Vec<PathBuf>) = if release {
+        (Vec::new(), Vec::new())
+    } else {
+        let path_dirs = env::var_os("PATH").map(|value| env::split_paths(&value).collect()).unwrap_or_default();
+        let common = if cfg!(windows) {
+            vec![
+                PathBuf::from(r"C:\Program Files\nodejs\node.exe"),
+                PathBuf::from(r"C:\Program Files (x86)\nodejs\node.exe"),
+            ]
+        } else {
+            vec![
+                PathBuf::from("/opt/homebrew/bin/node"),
+                PathBuf::from("/usr/local/bin/node"),
+                PathBuf::from("/usr/bin/node"),
+                PathBuf::from("/opt/local/bin/node"),
+            ]
+        };
+        (path_dirs, common)
+    };
+
+    let chosen = select_node_binary(release, explicit, &bundled, &path_dirs, &common, node_name);
+    if !release {
+        return chosen.ok_or_else(|| "Node.js executable not found. Install Node 18+ or set LOCAL_API_NODE_BIN".to_string());
+    }
+    let node = chosen.ok_or_else(|| NODE_MISSING_MESSAGE.to_string())?;
+    verify_node_pin(&node, BUNDLED_NODE_SHA256)?;
+    Ok(node)
 }
 
 fn read_port_file(path: &Path, timeout_ms: u64) -> Option<u16> {
@@ -3891,9 +4043,22 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  script.display()
  ));
  }
- let node_binary = resolve_node_binary(app).ok_or_else(|| {
- "Node.js executable not found. Install Node 18+ or set LOCAL_API_NODE_BIN".to_string()
- })?;
+ // R3-SEC-005: release builds run only the bundled, hash-pinned Node. The
+ // reason for a refusal is kept for System Diagnostic (fixed text, no paths).
+ let node_binary = match resolve_node_binary(app) {
+     Ok(node) => {
+         if let Ok(mut slot) = state.start_error.lock() {
+             *slot = None;
+         }
+         node
+     }
+     Err(error) => {
+         if let Ok(mut slot) = state.start_error.lock() {
+             *slot = Some(error.clone());
+         }
+         return Err(error);
+     }
+ };
 
  // ── Stale-sidecar reaper ─────────────────────────────────────────
  // Stop a listener on the canonical port only when it is provably this
@@ -4700,6 +4865,8 @@ struct LocalApiStatus {
     next_retry_in_ms: Option<u64>,
     failure_limit: usize,
     failure_window_ms: u64,
+    /// Why the sidecar refused to start (R3-SEC-005); fixed text only.
+    start_error: Option<String>,
 }
 
 fn local_api_status(state: &LocalApiState) -> LocalApiStatus {
@@ -4734,6 +4901,7 @@ fn local_api_status(state: &LocalApiState) -> LocalApiStatus {
         next_retry_in_ms: snapshot.next_retry_in_ms,
         failure_limit: sidecar_supervisor::FLAP_LIMIT,
         failure_window_ms: sidecar_supervisor::FLAP_WINDOW_MS,
+        start_error: state.start_error.lock().ok().and_then(|slot| slot.clone()),
     }
 }
 

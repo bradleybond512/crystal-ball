@@ -67,3 +67,17 @@ test('IPC helpers call the trusted commands and validate the answer', async () =
   assert.deepEqual(seen, ['get_local_api_status', 'restart_local_api']);
   assert.equal(await fetchLocalEngineStatus(async () => null), null);
 });
+
+test('a refusal to start says why (R3-SEC-005)', () => {
+  const reason = "Local engine can't start: its bundled Node runtime was modified (hash mismatch). Reinstall Crystal Ball.";
+  const stopped = parseLocalEngineStatus({ ...base, phase: 'stopped', startError: reason });
+  assert.equal(stopped?.startError, reason);
+  assert.deepEqual(buildLocalEngineView(stopped), { tone: 'bad', text: reason, canRestart: true });
+  assert.deepEqual(buildLocalEngineView(parseLocalEngineStatus({ ...base, phase: 'restarting', nextRetryInMs: 1000, startError: reason })), {
+    tone: 'bad', text: reason, canRestart: false,
+  });
+  assert.equal(buildLocalEngineView(parseLocalEngineStatus({ ...base, startError: reason })).text, 'Local engine running (1 restart this session)', 'a running engine ignores a stale reason');
+  assert.equal(parseLocalEngineStatus({ ...base, startError: null })?.startError, undefined);
+  assert.equal(parseLocalEngineStatus({ ...base, startError: 42 }), null);
+  assert.equal(parseLocalEngineStatus({ ...base, startError: 'x'.repeat(1000) })?.startError?.length, 300);
+});

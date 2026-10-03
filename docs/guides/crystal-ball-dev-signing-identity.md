@@ -62,6 +62,19 @@ login password and click **Always Allow**. The build should end without the
 The first launch of a stable-signed build asks for Keychain access one last
 time. Click **Always Allow**. Later rebuilds keep that answer.
 
+### The trade-off you accept with Always Allow
+
+Always Allow lets any program running as you use the "Crystal Ball Dev" key
+through `codesign`, with no prompt.
+
+- **What a malicious program could do with it:** change a copy of Crystal
+  Ball and re-sign it, and the Keychain would still trust that copy.
+- **Why we accept it (your decision, October 3, 2026):** unattended
+  main-sync needs it. It is still far better than the shadow vault, whose
+  key any program can derive without any prompt.
+- **The alternative:** choose **Allow** (once) instead. Every build then
+  waits for you to approve it, so main-sync stops being unattended.
+
 ## 4. Confirm
 
 - System Diagnostic (Self-Test tab) shows "Keys & signing: signed as

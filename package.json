@@ -59,6 +59,7 @@
     "typecheck:api": "tsc --noEmit -p tsconfig.api.json",
     "typecheck:all": "tsc --noEmit && tsc --noEmit -p tsconfig.api.json",
     "test:desktop-updater": "node --test tests/desktop-updater-signature.test.mjs tests/desktop-updater-authority.test.mjs && tsx --test src/app/__tests__/desktop-updater.test.mts",
+    "test:secret-boundary": "node --test tests/secret-boundary.test.mjs tests/sidecar-secret-routing-boundary.test.mjs tests/ucdp-local-boundary.test.mjs && tsx --test src/services/__tests__/secret-boundary.test.mts src/services/__tests__/keychain.test.mts src/components/__tests__/key-dashboard-secret-boundary.test.mts",
     "test:imessage": "node --test tests/imessage-native-boundary.test.mjs && tsx --test src/services/__tests__/imessage-bridge.test.mts src/components/__tests__/imessage-settings.test.mts src/app/__tests__/desktop-imessage.test.mts src/services/seismic/__tests__/eew-imessage.test.mts src/services/notifications/__tests__/imessage-bridge-extended.test.mts",
     "test:imessage-native": "node --test tests/imessage-native-gate.test.mjs",
     "test:native-responsiveness": "node --test tests/native-responsiveness-boundary.test.mjs tests/native-responsiveness-native.test.mjs",

@@ -28,9 +28,11 @@ function gatedBeforeFetch(body, label) {
   assert.ok(send > guard, `${label}: sends only to that base`);
 }
 
-test('Settings key sync and key validation only reach a confirmed sidecar', () => {
+test('Settings key validation only reaches a confirmed sidecar; key sync is native-only', () => {
   const runtimeConfig = read('src/services/runtime-config.ts');
-  gatedBeforeFetch(fnBody(runtimeConfig, 'pushSecretToSidecar'), 'pushSecretToSidecar');
+  // R4-SEC-001: the renderer no longer relays secret values; native pushes
+  // Settings changes through its own confirmed-port guard.
+  assert.doesNotMatch(runtimeConfig, /pushSecretToSidecar|\/api\/local-env-update/);
   gatedBeforeFetch(fnBody(runtimeConfig, 'callSidecarWithAuth'), 'callSidecarWithAuth');
   assert.doesNotMatch(runtimeConfig, /\bgetApiBaseUrl\b/, 'no default-port base for secret-bearing calls');
 });

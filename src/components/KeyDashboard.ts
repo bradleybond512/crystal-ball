@@ -3,7 +3,7 @@ import {
 } from '../services/settings-constants';
 import { getKeyStatus, setKeyStatus, type KeyStatusState } from '../services/wizard-state';
 import {
-  setSecretValue, verifySecretWithApi, type RuntimeSecretKey,
+  setSecretValue, verifySecretWithApi, verifyStoredSecretWithApi, type RuntimeSecretKey,
 } from '../services/runtime-config';
 import { featuresFor } from '../services/key-feature-index';
 import { invokeTauri } from '../services/tauri-bridge';
@@ -14,7 +14,10 @@ const STATUS_GLYPH: Record<KeyStatusState, string> = {
 };
 
 export interface KeyDashboardOpts {
-  getValue: (key: RuntimeSecretKey) => string | undefined;
+  /** Whether the key is set (saved or pending). Never needs the value (R4-SEC-001). */
+  isSet: (key: RuntimeSecretKey) => boolean;
+  /** Current value for PLAINTEXT_KEYS only; secrets are never read back. */
+  plaintextValue: (key: RuntimeSecretKey) => string | undefined;
   onRunWizard: () => void;
 }
 
@@ -40,7 +43,7 @@ export class KeyDashboard {
   private renderHeader(): HTMLElement {
     const totalAll = KEY_CATEGORIES.reduce((acc, c) => acc + c.keys.length, 0);
     const setAll = KEY_CATEGORIES.reduce(
-      (acc, c) => acc + c.keys.filter((k) => this.opts.getValue(k)).length, 0);
+      (acc, c) => acc + c.keys.filter((k) => this.opts.isSet(k)).length, 0);
     const header = document.createElement('div');
     header.className = 'key-dashboard-header';
     const label = document.createElement('div');
@@ -61,7 +64,7 @@ export class KeyDashboard {
       .reduce((acc, c) => acc + c.keys.length, 0);
     const setEss = KEY_CATEGORIES
       .filter((c) => ESSENTIAL_TIERS.has(c.tier))
-      .reduce((acc, c) => acc + c.keys.filter((k) => this.opts.getValue(k)).length, 0);
+      .reduce((acc, c) => acc + c.keys.filter((k) => this.opts.isSet(k)).length, 0);
     const pct = Math.round((setEss / totalEss) * 100);
     const bar = document.createElement('div');
     bar.className = 'key-dashboard-progress';
@@ -78,7 +81,7 @@ export class KeyDashboard {
   }
 
   private renderTier(cat: typeof KEY_CATEGORIES[number]): HTMLElement {
-    const setCount = cat.keys.filter((k) => this.opts.getValue(k)).length;
+    const setCount = cat.keys.filter((k) => this.opts.isSet(k)).length;
     const allSet = setCount === cat.keys.length;
     const det = document.createElement('details');
     det.className = 'key-tier';
@@ -95,7 +98,7 @@ export class KeyDashboard {
   }
 
   private renderCard(key: RuntimeSecretKey): HTMLElement {
-    const stored = this.opts.getValue(key);
+    const stored = this.opts.isSet(key);
     const status = getKeyStatus(key)?.state ?? (stored ? 'unvalidated' : 'unset');
     const isPlaintext = PLAINTEXT_KEYS.has(key);
     const card = document.createElement('div');
@@ -136,7 +139,7 @@ export class KeyDashboard {
     input.className = 'key-card-input';
     let placeholder = 'Paste key here';
     if (stored) {
-      placeholder = isPlaintext ? stored : '••••••' + stored.slice(-3);
+      placeholder = isPlaintext ? (this.opts.plaintextValue(key) ?? '') : '••••••';
     }
     input.placeholder = placeholder;
     input.dataset.inputFor = key;
@@ -219,10 +222,11 @@ export class KeyDashboard {
 
   private async handleTest(key: RuntimeSecretKey): Promise<void> {
     const typedRaw = this.getInput(key)?.value.trim();
-    const value = (typedRaw && typedRaw.length > 0) ? typedRaw : this.opts.getValue(key);
-    if (!value) { this.setFeedback(key, 'No value to test', 'err'); return; }
+    const typed = typedRaw && typedRaw.length > 0 ? typedRaw : '';
+    if (!typed && !this.opts.isSet(key)) { this.setFeedback(key, 'No value to test', 'err'); return; }
     this.setFeedback(key, 'Testing…', 'info');
-    const result = await verifySecretWithApi(key, value);
+    // A saved key is tested by the sidecar against its own copy (R4-SEC-001).
+    const result = typed ? await verifySecretWithApi(key, typed) : await verifyStoredSecretWithApi(key);
     if (result.valid) {
       setKeyStatus(key, { state: 'valid', lastChecked: Date.now() });
       const feats = featuresFor(key);
@@ -243,7 +247,7 @@ export class KeyDashboard {
   private updateCardStatus(key: RuntimeSecretKey): void {
     const card = this.root.querySelector<HTMLElement>(`.key-card[data-key="${key}"]`);
     if (!card) return;
-    const stored = this.opts.getValue(key);
+    const stored = this.opts.isSet(key);
     const status = getKeyStatus(key)?.state ?? (stored ? 'unvalidated' : 'unset');
     card.dataset.status = status;
     const glyph = card.querySelector('.key-card-glyph');

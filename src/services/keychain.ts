@@ -1,20 +1,22 @@
 /**
- * KeychainService — frontend cache in front of the Tauri `get_secret` IPC.
+ * KeychainService — the renderer's view of the native secret vault.
  *
- * `loadDesktopSecrets` is invoked at boot, when the settings window opens,
- * and on every `storage` cross-window sync event. Without memoization, each
- * pass reissues `get_secret` for every supported key, and any IPC round-trip
- * that races a keychain ACL refresh can surface a fresh permission prompt.
- *
- * The service guarantees one IPC call per key for the lifetime of the
- * renderer: cache hits return synchronously, in-flight requests dedupe, and
- * writes (`set` / `remove`) update the cache in place.
+ * R4-SEC-001: a webview may WRITE any supported secret (`set` / `remove`), but
+ * it reads back only presence for every key (`get_secret_status`) and values
+ * for the small renderer-readable allowlist (`get_renderer_config`: plaintext
+ * settings and the map/tile keys that end up in client-side URLs anyway).
+ * Sidecar-only values never enter this process; native pushes them to the
+ * sidecar itself. Both reads come from the native in-memory cache, never the
+ * Keychain, so they cannot raise an ACL prompt and need no memoization.
  */
 import { invokeTauri, hasTauriInvokeBridge } from '@/services/tauri-bridge';
 
+export interface SecretStatusRow {
+  key: string;
+  present: boolean;
+}
+
 class KeychainService {
-  private cache = new Map<string, string | null>();
-  private inflight = new Map<string, Promise<string | null>>();
   private supportedKeys: Promise<string[]> | null = null;
 
   async listSupportedKeys(): Promise<string[]> {
@@ -58,48 +60,41 @@ class KeychainService {
     }
   }
 
-  async get(key: string): Promise<string | null> {
-    if (!hasTauriInvokeBridge()) return null;
-    if (this.cache.has(key)) return this.cache.get(key) ?? null;
-    const existing = this.inflight.get(key);
-    if (existing) return existing;
+/** Which supported keys are set. Never carries a value. */
+  async status(): Promise<Map<string, boolean>> {
+    if (!hasTauriInvokeBridge()) return new Map();
+    const rows = await invokeTauri<unknown>('get_secret_status');
+    const present = new Map<string, boolean>();
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const candidate = row as Partial<SecretStatusRow> | null;
+      if (candidate && typeof candidate.key === 'string') present.set(candidate.key, candidate.present === true);
+    }
+    return present;
+  }
 
-    const pending = invokeTauri<string | null>('get_secret', { key })
-      .then((value) => {
-        this.cache.set(key, value);
-        this.inflight.delete(key);
-        return value;
-      })
-      .catch((error) => {
-        this.inflight.delete(key);
-        throw error;
-      });
-
-    this.inflight.set(key, pending);
-    return pending;
+  /** Values for the renderer-readable allowlist only (native enforces it). */
+  async rendererConfig(): Promise<Record<string, string>> {
+    if (!hasTauriInvokeBridge()) return {};
+    const config = await invokeTauri<unknown>('get_renderer_config');
+    const values: Record<string, string> = {};
+    if (config && typeof config === 'object' && !Array.isArray(config)) {
+      for (const [key, value] of Object.entries(config as Record<string, unknown>)) {
+        if (typeof value === 'string') values[key] = value;
+      }
+    }
+    return values;
   }
 
   async set(key: string, value: string): Promise<void> {
     await invokeTauri<void>('set_secret', { key, value });
-    const trimmed = value.trim();
-    this.cache.set(key, trimmed.length === 0 ? null : trimmed);
   }
 
   async remove(key: string): Promise<void> {
     await invokeTauri<void>('delete_secret', { key });
-    this.cache.set(key, null);
   }
 
-  /** Drop a single cached entry; the next `get` reissues the IPC call. */
-  invalidate(key: string): void {
-    this.cache.delete(key);
-    this.inflight.delete(key);
-  }
-
-  /** Drop every cached entry. Use sparingly — defeats the whole point. */
+  /** Forget the memoized supported-key list (e.g. after another window wrote). */
   invalidateAll(): void {
-    this.cache.clear();
-    this.inflight.clear();
     this.supportedKeys = null;
   }
 }

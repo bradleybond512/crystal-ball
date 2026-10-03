@@ -20,7 +20,8 @@ type StepView =
   | { kind: 'done' };
 
 export interface SetupWizardOpts {
-  getValue: (key: RuntimeSecretKey) => string | undefined;
+  /** Whether the key is set (saved or pending). Never needs the value (R4-SEC-001). */
+  isSet: (key: RuntimeSecretKey) => boolean;
   onClose: () => void;
 }
 
@@ -59,7 +60,7 @@ export class SetupWizard {
   // don't-ask, already saved, or providers that require an interactive
   // OAuth/account-connect flow (no standalone paste possible).
   private isExcludedKey(key: RuntimeSecretKey, dontAsk: Set<RuntimeSecretKey>, skipped: Set<RuntimeSecretKey>): boolean {
-    return dontAsk.has(key) || skipped.has(key) || OAUTH_CONNECT_KEYS.has(key) || !!this.opts.getValue(key);
+    return dontAsk.has(key) || skipped.has(key) || OAUTH_CONNECT_KEYS.has(key) || this.opts.isSet(key);
   }
 
   private resolveStep(startTier: number, startIndex: number): StepView {
@@ -174,7 +175,7 @@ export class SetupWizard {
     stopWatching();
     const cat = KEY_CATEGORIES.find((c) => c.tier === tier)!;
     const total = cat.keys.length;
-    const setCount = cat.keys.filter((k) => this.opts.getValue(k)).length;
+    const setCount = cat.keys.filter((k) => this.opts.isSet(k)).length;
     const skipped = getSkipped().filter((k) => cat.keys.includes(k)).length;
     const h = document.createElement('h2');
     h.textContent = 'Tier ' + tier + ' done';

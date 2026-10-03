@@ -2,7 +2,8 @@ name: Release Integrity
 
 on:
   pull_request:
-    # labeled/unlabeled: re-run when Bradley applies install-scripts-reviewed.
+    # labeled/unlabeled: re-run when Bradley applies install-scripts-reviewed
+    # or dependency-age-reviewed.
     types: [opened, synchronize, reopened, labeled, unlabeled]
   push:
     branches:
@@ -40,6 +41,15 @@ jobs:
         run: |
           git fetch --no-tags --depth=1 origin "$BASE_REF"
           node scripts/check-install-script-drift.mjs --base FETCH_HEAD
+
+      - name: Check dependency release age (R4-SEC-002 step 3)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE_REF"
+          node scripts/check-dependency-age.mjs --base FETCH_HEAD
 
   scenario-coverage:
     # Plan: docs/CLAUDE_POST_PR197_INTEGRATION_HANDOFF_2026-04-28.md item 6.

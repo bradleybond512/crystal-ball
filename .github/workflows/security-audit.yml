@@ -20,6 +20,10 @@ jobs:
       - run: npm ci
       - name: npm audit (high+)
         run: npm audit --audit-level=high
+      # R4-SEC-002 step 4: every installed package must carry a valid
+      # registry signature; published provenance attestations must verify.
+      - name: npm audit signatures
+        run: npm audit signatures
 
   cargo-audit:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository

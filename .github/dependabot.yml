@@ -7,6 +7,11 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    # R4-SEC-002 step 3: let a hijacked release be caught and pulled before
+    # it is proposed. Security updates are not delayed by cooldowns.
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
     ignore:
       # TypeScript 7 (the native "tsgo" port) changes internal APIs that
       # @typescript-eslint/typescript-estree reads, crashing the lint pass
@@ -36,6 +41,11 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 3
+    # R4-SEC-002 step 3: let a hijacked release be caught and pulled before
+    # it is proposed. Security updates are not delayed by cooldowns.
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
 
   # GitHub Actions — pin to hashed commits for supply-chain safety
   - package-ecosystem: "github-actions"
@@ -44,3 +54,7 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 3
+    # R4-SEC-002 step 3: let a hijacked release be caught and pulled before
+    # it is proposed. Security updates are not delayed by cooldowns.
+    cooldown:
+      default-days: 7

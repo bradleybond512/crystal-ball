@@ -169,7 +169,46 @@ jobs:
         with:
           fetch-depth: 0
 
+      # R4-SEC-002 step 5: never auto-merge a change to lockfiles, Cargo
+      # manifests, .npmrc, CI workflows or the supply-chain gates. Defense in
+      # depth: the binding check is dependency-change-gate.yml, which runs
+      # from the base branch. Any policy error counts as sensitive.
+      - name: Detect dependency or CI-policy changes
+        id: policy
+        shell: bash
+        run: |
+          if git diff --name-only origin/main...HEAD | node scripts/dependency-change-policy.mjs --stdin; then
+            echo "sensitive=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "sensitive=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Turn auto-merge off for a sensitive PR
+        if: steps.policy.outputs.sensitive == 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          github-token: ${{ secrets.AUTO_MERGE_PAT || secrets.GITHUB_TOKEN }}
+          script: |
+            const branch = '${{ github.ref_name }}';
+            const { data: prs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head: `${context.repo.owner}:${branch}`,
+              state: 'open'
+            });
+            if (prs.length === 0) return;
+            core.warning(`PR #${prs[0].number} changes dependency or CI-policy files: auto-merge stays off until Bradley reviews it.`);
+            try {
+              await github.graphql(
+                'mutation($id: ID!) { disablePullRequestAutoMerge(input: { pullRequestId: $id }) { pullRequest { number } } }',
+                { id: prs[0].node_id },
+              );
+            } catch (err) {
+              core.info(`Auto-merge was not on, or could not be turned off: ${String((err && err.message) || err)}`);
+            }
+
       - name: Enable GitHub auto-merge
+        if: steps.policy.outputs.sensitive != 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         with:
           # Prefer a PAT / App token (AUTO_MERGE_PAT) because the default

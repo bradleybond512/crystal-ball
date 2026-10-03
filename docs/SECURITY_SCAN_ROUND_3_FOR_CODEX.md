@@ -17,7 +17,7 @@ safety-critical weather logic.
 |----|----------|-------|----|--------|
 | R3-SEC-001 | High | Updater installs whatever URL + hash the renderer supplies | PR 1 — [validation](validation/R3-SEC-001-UPDATER.md) | ✅ |
 | R3-SEC-002 | High | `send_imessage` sends to any renderer-chosen recipient, ignores the enabled flag | PR 2 — [validation](validation/R3-SEC-002-IMESSAGE.md) | ✅ |
-| R3-SEC-003 | High | Shadow secrets vault key is derivable by any local process | PR 4a / 4b | 🔴 |
+| R3-SEC-003 | High | Shadow secrets vault key is derivable by any local process | PR 4a — [phase A validation](validation/R3-SEC-003-PHASE-A.md); PR 4b pending | 🟡 |
 | R3-SEC-004 | Medium | CSP still allows `'unsafe-eval'`; `img-src https:` is an exfil channel | PR 5 | 🔴 |
 | R3-SEC-005 | Medium | Release build silently falls back to an unpinned system `node` for the secret-bearing sidecar | PR 7 | 🔴 |
 | R3-BUG-001 | Medium | Sync Tauri commands block the macOS main thread (up to ~271 s) | PR 3 — [slice A validation](validation/R3-BUG-001-SLICE-A.md); [slice B validation](validation/R3-BUG-001-SLICE-B.md) | ✅ |

@@ -86,7 +86,8 @@
     "test:native-responsiveness",
     "test:sidecar-supervisor",
     "test:secret-boundary",
-    "test:vault-writer"
+    "test:vault-writer",
+    "test:signing-phase-a"
   ],
   "src-tauri/src/updater_policy.rs": [
     "test:desktop-updater"
@@ -134,7 +135,8 @@
     "test:sidecar-routing"
   ],
   "src/components/SystemDiagnosticPanel.ts": [
-    "test:sidecar-routing"
+    "test:sidecar-routing",
+    "test:signing-phase-a"
   ],
   "src/services/keychain.ts": [
     "test:secret-boundary",
@@ -160,5 +162,17 @@
   ],
   "src-tauri/tests/vault_coordinator_contract.rs": [
     "test:vault-writer"
+  ],
+  "scripts/desktop-signing.mjs": [
+    "test:signing-phase-a"
+  ],
+  "scripts/desktop-package.mjs": [
+    "test:signing-phase-a"
+  ],
+  "scripts/sync-main-to-mac.mjs": [
+    "test:signing-phase-a"
+  ],
+  "src/services/diagnostics/vault-diagnostics.ts": [
+    "test:signing-phase-a"
   ]
 }

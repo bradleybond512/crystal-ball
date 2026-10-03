@@ -7,3 +7,14 @@
 /AGENTS.md @bradleybond512
 /CLAUDE.md @bradleybond512
 /.github/copilot-instructions.md @bradleybond512
+# R4-SEC-002 step 5: dependency and supply-chain policy files.
+/package-lock.json @bradleybond512
+**/package-lock.json @bradleybond512
+**/.npmrc @bradleybond512
+/src-tauri/Cargo.toml @bradleybond512
+/src-tauri/Cargo.lock @bradleybond512
+/.github/dependabot.yml @bradleybond512
+/.github/CODEOWNERS @bradleybond512
+/scripts/check-install-script-drift.mjs @bradleybond512
+/scripts/check-dependency-age.mjs @bradleybond512
+/scripts/dependency-change-policy.mjs @bradleybond512

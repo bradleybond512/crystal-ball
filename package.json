@@ -36,6 +36,7 @@
     "lint:fix": "eslint . --fix",
     "lockfile:check": "node scripts/check-package-lock.mjs",
     "install-scripts:check": "node scripts/check-install-script-drift.mjs",
+    "test:supply-chain-gates": "node --test tests/dependency-age.test.mjs tests/dependency-change-gate.test.mjs",
     "test:install-scripts": "node --test tests/install-script-drift.test.mjs tests/main-sync-agent.test.mjs tests/install-mcp-deps.test.mjs tests/desktop-package-signing.test.mjs",
     "sidecar:bundle-check": "node scripts/check-sidecar-bundle.mjs",
     "bundle:check": "node scripts/check-bundle-size.mjs",

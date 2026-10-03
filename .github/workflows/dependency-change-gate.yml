@@ -1,0 +1,39 @@
+name: Dependency change gate
+
+# R4-SEC-002 step 5. A PR that changes lockfiles, Cargo manifests, .npmrc, CI
+# workflows, Dependabot policy, CODEOWNERS or the supply-chain gate scripts
+# needs Bradley's `dependency-change-approved` label before it can merge.
+#
+# pull_request_target runs THIS workflow from the BASE branch, so a PR cannot
+# edit the gate away. It never checks out or runs PR code: the base branch's
+# policy script lists the PR's files through the API. Read-only token.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  dependency-change-gate:
+    name: dependency-change-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Base branch only (the pull_request_target default): trusted policy code.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22'
+
+      - name: Check for dependency or CI-policy changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: node scripts/dependency-change-policy.mjs --pr "$PR_NUMBER"

@@ -186,6 +186,13 @@ setting to make an install work; if a package genuinely needs its install step,
 add a reviewed `npm rebuild <pkg>`. The required `integrity-checks` job fails a
 PR whose lockfiles add an install script, bump a scripted package or add a
 `bin` entry, unless Bradley applies the `install-scripts-reviewed` label.
+The same job fails a PR that brings in a registry package version (npm or
+crates.io) published less than 7 days ago, unless Bradley applies
+`dependency-age-reviewed`. The `dependency-change-gate` check (it runs from the
+base branch) fails any PR touching lockfiles, Cargo manifests, `.npmrc`, CI
+workflows, Dependabot policy, CODEOWNERS or these gate scripts until Bradley
+applies `dependency-change-approved`; auto-merge skips those PRs. **Agents never
+apply these labels**, even though they act through Bradley's GitHub account.
 
 Install built app: copy `src-tauri/target/release/bundle/macos/Crystal Ball.app` to `~/Applications/Crystal Ball.app` (use `node scripts/install-built-app.mjs --relaunch`).
 

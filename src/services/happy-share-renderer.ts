@@ -90,7 +90,10 @@ export async function renderHappyShareCard(item: NewsItem): Promise<HTMLCanvasEl
   canvas.height = SIZE;
   const ctx = canvas.getContext('2d')!;
 
-  const category: HappyContentCategory = item.happyCategory || DEFAULT_CATEGORY;
+  // Unknown or missing categories (e.g. stale stored items) use the default.
+  const category: HappyContentCategory = item.happyCategory !== undefined && Object.prototype.hasOwnProperty.call(CATEGORY_GRADIENTS, item.happyCategory)
+ ? item.happyCategory
+ : DEFAULT_CATEGORY;
   const [gradStart, gradEnd] = CATEGORY_GRADIENTS[category];
   const accent = CATEGORY_ACCENTS[category];
 
@@ -176,7 +179,7 @@ export async function renderHappyShareCard(item: NewsItem): Promise<HTMLCanvasEl
 
   ctx.font = '400 22px Nunito, system-ui, sans-serif';
   ctx.fillStyle = '#A0AEC0';
-  ctx.fillText('happy.crystalball.app', PAD, brandY + 34);
+  ctx.fillText('github.com/bradleybond512/crystal-ball', PAD, brandY + 34);
 
   return canvas;
 }

@@ -31,9 +31,8 @@ function normalizeLevel(rawLevel) {
 }
 
 export default function handler(req, res) {
-  const url = new URL(req.url, 'https://crystalball.app');
+  const url = new URL(req.url, 'https://bradleybond512.github.io');
   const countryCode = (url.searchParams.get('c') || '').toUpperCase();
-  const type = url.searchParams.get('t') || 'ciianalysis';
   const score = url.searchParams.get('s');
   const level = normalizeLevel(url.searchParams.get('l'));
 
@@ -54,6 +53,10 @@ export default function handler(req, res) {
   const arcEndX = arcCx - arcRadius * Math.cos(scoreAngle);
   const arcEndY = arcCy - arcRadius * Math.sin(scoreAngle);
   const largeArc = scoreNum > 50 ? 1 : 0;
+  const arcFill = scoreNum > 0
+ ? `<path d="M ${arcCx + arcRadius},${arcCy} A ${arcRadius} ${arcRadius} 0 ${largeArc} 0 ${arcEndX.toFixed(1)},${arcEndY.toFixed(1)}"
+ fill="none" stroke="${levelColor}" stroke-width="16" stroke-linecap="round"/>`
+ : '';
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
   <defs>
@@ -163,8 +166,7 @@ export default function handler(req, res) {
   <path d="M ${arcCx - arcRadius},${arcCy} A ${arcRadius} ${arcRadius} 0 1 1 ${arcCx + arcRadius},${arcCy}"
  fill="none" stroke="#1a1a2e" stroke-width="16" stroke-linecap="round"/>
   <!-- Arc fill -->
-  ${scoreNum > 0 ? `<path d="M ${arcCx + arcRadius},${arcCy} A ${arcRadius} ${arcRadius} 0 ${largeArc} 0 ${arcEndX.toFixed(1)},${arcEndY.toFixed(1)}"
- fill="none" stroke="${levelColor}" stroke-width="16" stroke-linecap="round"/>` : ''}
+  ${arcFill}
   <!-- Score in center of arc -->
   <text x="${arcCx}" y="${arcCy - 20}" font-family="system-ui, -apple-system, sans-serif" font-size="52" font-weight="800" fill="${levelColor}" text-anchor="middle"
  >${scoreNum}</text>
@@ -217,7 +219,7 @@ export default function handler(req, res) {
 
   <!-- URL + date -->
   <text x="60" y="610" font-family="system-ui, sans-serif" font-size="14" fill="#555"
- >crystalball.app · ${dateStr} · Free &amp; open source</text>
+ >github.com/bradleybond512/crystal-ball · ${dateStr} · Free &amp; open source</text>
 </svg>`;
 
   res.setHeader('Content-Type', 'image/svg+xml');

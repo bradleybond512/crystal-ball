@@ -1,7 +1,7 @@
 /* eslint-disable sonarjs/no-nested-conditional, sonarjs/function-return-type, sonarjs/no-async-constructor, no-console */
 import { Panel } from './Panel';
 import { t } from '@/services/i18n';
-import { getLocalApiPort, isDesktopRuntime } from '@/services/runtime';
+import { getLocalApiPort, getRemoteApiBaseUrl, isDesktopRuntime } from '@/services/runtime';
 import {
   getDesktopReadinessChecks,
   getKeyBackedAvailabilitySummary,
@@ -12,6 +12,11 @@ import {
   type ServiceStatusResult as ServiceStatus,
 } from '@/services/infrastructure';
 import { h, replaceChildren, type DomChild } from '@/utils/dom-utils';
+
+/** Host of the configured cloud API, or a plain note when none is configured. */
+function remoteApiLabel(): string {
+  try { return new URL(getRemoteApiBaseUrl()).host; } catch { return 'no cloud API configured'; }
+}
 
 interface LocalBackendStatus {
   enabled?: boolean;
@@ -151,7 +156,7 @@ export class ServiceStatusPanel extends Panel {
  : 'Cloud API unreachable — features that rely on server proxying may fail.');
  const stateClass = reachable === false ? 'service-status-backend warning' : 'service-status-backend';
  return h('div', { className: stateClass },
- label, ' · ', h('strong', null, 'api.crystalball.app'),
+ label, ' · ', h('strong', null, remoteApiLabel()),
  );
  }
 
@@ -162,7 +167,8 @@ export class ServiceStatusPanel extends Panel {
  }
 
  const port = this.localBackend.port ?? getLocalApiPort();
- const remote = this.localBackend.remoteBase ?? 'https://crystalball.app';
+ const remoteBase = this.localBackend.remoteBase?.trim() ?? '';
+ const remote = remoteBase === '' ? 'none (local only)' : remoteBase;
 
  return h('div', { className: 'service-status-backend' },
  'Local backend active on ', h('strong', null, `127.0.0.1:${port}`),

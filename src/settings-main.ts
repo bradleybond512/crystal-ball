@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/prefer-nullish-coalescing, sonarjs/no-nested-conditional, sonarjs/cognitive-complexity, unicorn/no-nested-ternary, no-console, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-misused-promises, @typescript-eslint/no-empty-function, sonarjs/no-nested-template-literals, unicorn/prefer-top-level-await, unicorn/no-array-reverse */
+/* eslint-disable @typescript-eslint/prefer-nullish-coalescing, sonarjs/no-nested-conditional, sonarjs/cognitive-complexity, unicorn/no-nested-ternary, no-console, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-misused-promises, @typescript-eslint/no-empty-function, sonarjs/no-nested-template-literals, unicorn/prefer-top-level-await */
 import './styles/main.css';
 import './styles/settings-window.css';
 import { SettingsManager } from '@/services/settings-manager';
@@ -33,6 +33,10 @@ import { initI18n, t } from '@/services/i18n';
 import { applyStoredTheme, watchSystemTheme } from '@/utils/theme-manager';
 import { initializeVariant } from '@/config/variant';
 import { trackFeatureToggle } from '@/services/analytics';
+import { installCspViolationReporter } from '@/services/csp-violation-reporter';
+
+// Surface CSP violations in the desktop log instead of failing silently (R3-SEC-004).
+installCspViolationReporter();
 
 let activeSection = 'overview';
 let settingsManager: SettingsManager;

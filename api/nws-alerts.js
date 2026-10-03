@@ -25,7 +25,7 @@ export default async function handler(req) {
   try {
     const r = await fetch(UPSTREAM, {
       headers: {
-        'User-Agent': 'CrystalBall/2.10.21 (contact@crystalball.app)',
+        'User-Agent': 'CrystalBall/2.10.21 (https://github.com/bradleybond512/crystal-ball)',
         'Accept': 'application/geo+json',
       },
       signal: AbortSignal.timeout(10_000),

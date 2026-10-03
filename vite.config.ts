@@ -8,7 +8,14 @@ import { brotliCompress } from 'zlib';
 import { promisify } from 'util';
 import pkg from './package.json';
 import { isSafetyFeedPath } from './src/utils/sw-safety-feeds';
-import { removeWebLoopbackCspSources } from './src/config/csp-policy';
+import {
+  LOCAL_MODEL_CSP_ORIGINS,
+  SIDECAR_CSP_ORIGINS,
+  removeWebLoopbackCspSources,
+  rewriteIndirectEvalThis,
+} from './src/config/csp-policy';
+import { OWNED_SITE_URL } from './src/config/owned-origins';
+import { checkDist, formatReport } from './scripts/check-dist-eval.mjs';
 
 const isE2E = process.env.VITE_E2E === '1';
 const isDesktopBuild = process.env.VITE_DESKTOP_RUNTIME === '1';
@@ -86,7 +93,7 @@ const VARIANT_META: Record<BuildVariant, {
  title: 'Tech Monitor - Technology Intelligence Dashboard',
  description: 'Real-time technology intelligence for AI, startups, cloud services, developer ecosystems, and emerging technology.',
  keywords: 'technology intelligence, AI monitoring, startup intelligence, cloud status, developer ecosystem, cybersecurity, tech news, artificial intelligence',
- url: 'https://tech.crystalball.app/',
+ url: OWNED_SITE_URL,
  siteName: 'Tech Monitor',
  shortName: 'TechMonitor',
  subject: 'Real-Time Technology Intelligence',
@@ -104,7 +111,7 @@ const VARIANT_META: Record<BuildVariant, {
  title: 'Finance Monitor - Global Markets Dashboard',
  description: 'Real-time financial intelligence for markets, forex, bonds, commodities, crypto, and central banks.',
  keywords: 'financial intelligence, markets dashboard, forex, bonds, commodities, crypto, central banks, economic indicators',
- url: 'https://finance.crystalball.app/',
+ url: OWNED_SITE_URL,
  siteName: 'Finance Monitor',
  shortName: 'FinanceMonitor',
  subject: 'Real-Time Financial and Market Intelligence',
@@ -122,7 +129,7 @@ const VARIANT_META: Record<BuildVariant, {
  title: 'Happy Monitor - Positive News Dashboard',
  description: 'A calm dashboard for positive news, human progress, science, conservation, and renewable energy.',
  keywords: 'positive news, human progress, conservation, renewable energy, science breakthroughs, good news dashboard',
- url: 'https://happy.crystalball.app/',
+ url: OWNED_SITE_URL,
  siteName: 'Happy Monitor',
  shortName: 'HappyMonitor',
  subject: 'Positive News and Human Progress',
@@ -187,24 +194,25 @@ function htmlVariantPlugin(): Plugin {
  .replace(/<meta name="twitter:description" content=".*?" \/>/, `<meta name="twitter:description" content="${activeMeta.description}" />`)
  .replace(/"name": "Crystal Ball"/, `"name": "${activeMeta.siteName}"`)
  .replace(/"alternateName": "CrystalBall"/, `"alternateName": "${activeMeta.siteName.replace(' ', '')}"`)
- .replace(/"url": "https:\/\/crystalball\.app\/"/, `"url": "${activeMeta.url}"`)
+ .replace(/"url": "https:\/\/bradleybond512\.github\.io\/crystal-ball\/"/, `"url": "${activeMeta.url}"`)
  .replace(/"description": "[^"]*"/, `"description": "${activeMeta.description}"`)
  .replace(/"featureList": \[[\s\S]*?\]/, `"featureList": ${JSON.stringify(activeMeta.features, null, 8).replace(/\n/g, '\n ')}`);
 
- // Desktop CSP: inject loopback wildcard for the dynamic sidecar port so the
- // index.html meta-CSP (which intersects with the authoritative tauri.conf.json
- // CSP) cannot block 127.0.0.1:<port>. The production *web* allowlist
- // intentionally excludes localhost to avoid exposing the user's local services
- // as attack surface from a hijacked page.
+ // Desktop CSP: allow exactly the sidecar's port range (it may fall back
+ // from 46123) and the local model servers, mirroring the authoritative
+ // tauri.conf.json CSP it intersects with. Never a loopback wildcard: that
+ // would expose every local service to a hijacked page (R4-SEC-008). The
+ // production *web* allowlist excludes loopback entirely.
  if (isDesktopBuild) {
+ const loopbackConnect = [...SIDECAR_CSP_ORIGINS, ...LOCAL_MODEL_CSP_ORIGINS].join(' ');
  result = result
  .replace(
  /connect-src 'self' blob: data:/,
- "connect-src 'self' blob: data: http://127.0.0.1:* http://localhost:*"
+ `connect-src 'self' blob: data: ${loopbackConnect}`
  )
  .replace(
  /frame-src 'self'/,
- "frame-src 'self' http://127.0.0.1:*"
+ `frame-src 'self' ${SIDECAR_CSP_ORIGINS.join(' ')}`
  );
  }
 
@@ -220,6 +228,42 @@ function htmlVariantPlugin(): Plugin {
 
  return result;
  },
+  };
+}
+
+/**
+ * R3-SEC-004: remove the only main-thread eval (Cesium's bundled Knockout,
+ * `(0,eval)("this")`) so the CSP can drop 'unsafe-eval'. Scoped to Cesium
+ * modules; scripts/check-dist-eval.mjs fails the build if any main-thread
+ * chunk still contains an eval-family construct.
+ */
+function cspSafeGlobalThisPlugin(): Plugin {
+  return {
+    name: 'csp-safe-global-this',
+    enforce: 'pre',
+    transform(code, id) {
+      if (!/[\\/]node_modules[\\/](?:cesium|@cesium)[\\/]/.test(id) || !code.includes('eval')) return null;
+      const { code: rewritten, count } = rewriteIndirectEvalThis(code);
+      return count > 0 ? { code: rewritten, map: null } : null;
+    },
+  };
+}
+
+/** Fail the build if a main-thread chunk still needs 'unsafe-eval' (R3-SEC-004). */
+function distEvalGatePlugin(): Plugin {
+  let outDir = 'dist';
+  return {
+    name: 'dist-eval-gate',
+    apply: 'build',
+    configResolved(config) {
+      outDir = resolve(config.root, config.build.outDir);
+    },
+    closeBundle() {
+      const result = checkDist(outDir);
+      if (result.violations.length > 0) {
+        throw new Error(`[dist-eval-gate] eval-family construct in a main-thread chunk:\n${formatReport(result)}`);
+      }
+    },
   };
 }
 
@@ -756,6 +800,8 @@ export default defineConfig({
  __BUILD_ARCH__: JSON.stringify(process.arch === 'arm64' ? 'aarch64' : 'x64'),
   },
   plugins: [
+ cspSafeGlobalThisPlugin(),
+ distEvalGatePlugin(),
  satelliteWasmStripPlugin(),
  htmlVariantPlugin(),
  polymarketPlugin(),
@@ -994,6 +1040,9 @@ export default defineConfig({
   resolve: {
  alias: {
  '@': resolve(__dirname, 'src'),
+ // R3-SEC-004: the SPZ splat decoder compiles code at runtime; no
+ // 'unsafe-eval' means it cannot run, so ship a rejecting stand-in instead.
+ '@spz-loader/core': resolve(__dirname, 'src/shims/spz-loader-unsupported.ts'),
  child_process: resolve(__dirname, 'src/shims/child-process.ts'),
  'node:child_process': resolve(__dirname, 'src/shims/child-process.ts'),
  '@loaders.gl/worker-utils/dist/lib/process-utils/child-process-proxy.js': resolve(

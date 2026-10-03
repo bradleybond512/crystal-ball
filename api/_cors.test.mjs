@@ -7,7 +7,7 @@ function makeRequest(origin) {
   if (origin !== null) {
  headers.set('origin', origin);
   }
-  return new Request('https://crystalball.app/api/test', { headers });
+  return new Request('https://bradleybond512.github.io/api/test', { headers });
 }
 
 test('allows desktop Tauri origins', () => {
@@ -31,7 +31,7 @@ test('rejects unrelated external origins', () => {
   const req = makeRequest('https://evil.example.com');
   assert.equal(isDisallowedOrigin(req), true);
   const cors = getCorsHeaders(req);
-  assert.equal(cors['Access-Control-Allow-Origin'], 'https://crystalball.app');
+  assert.equal(cors['Access-Control-Allow-Origin'], 'https://bradleybond512.github.io');
 });
 
 test('requests without origin remain allowed', () => {
@@ -39,23 +39,19 @@ test('requests without origin remain allowed', () => {
   assert.equal(isDisallowedOrigin(req), false);
 });
 
-test('allows enumerated crystalball.app subdomains', () => {
-  const subdomains = ['tech', 'finance', 'happy', 'api'];
-  for (const sub of subdomains) {
- const origin = `https://${sub}.crystalball.app`;
- const req = makeRequest(origin);
- assert.equal(isDisallowedOrigin(req), false, `subdomain should be allowed: ${sub}`);
- const cors = getCorsHeaders(req);
- assert.equal(cors['Access-Control-Allow-Origin'], origin);
-  }
-});
-
-test('allows bare crystalball.app origin', () => {
-  const origin = 'https://crystalball.app';
+test('allows the owned GitHub Pages origin', () => {
+  const origin = 'https://bradleybond512.github.io';
   const req = makeRequest(origin);
   assert.equal(isDisallowedOrigin(req), false);
-  const cors = getCorsHeaders(req);
-  assert.equal(cors['Access-Control-Allow-Origin'], origin);
+  assert.equal(getCorsHeaders(req)['Access-Control-Allow-Origin'], origin);
+});
+
+test('rejects the former product domain and its subdomains (R4-SEC-008)', () => {
+  for (const origin of ['https://crystalball.app', 'https://tech.crystalball.app', 'https://api.crystalball.app']) {
+    const req = makeRequest(origin);
+    assert.equal(isDisallowedOrigin(req), true, origin);
+    assert.equal(getCorsHeaders(req)['Access-Control-Allow-Origin'], 'https://bradleybond512.github.io', origin);
+  }
 });
 
 test('rejects non-enumerated crystalball.app subdomains', () => {
@@ -72,10 +68,8 @@ test('rejects non-enumerated crystalball.app subdomains', () => {
 
 test('allows Vercel preview deploy origins', () => {
   const origins = [
- 'https://crystalball-abc123-elie-xyz.vercel.app',
  'https://crystalball-main-bradleybond512.vercel.app',
  'https://crystal-ball-feature-abc-bradleybond512.vercel.app',
- 'https://crystal-ball-preview-elie-xyz.vercel.app',
  'http://localhost:5173',
  'http://localhost',
  'https://localhost:3000',
@@ -91,6 +85,8 @@ test('rejects unrelated third-party Vercel projects that share the crystal-ball 
   // would let any Vercel project starting with "crystal-ball" bypass CORS.
   // Every trusted pattern must terminate on a known username segment.
   const bad = [
+ 'https://crystalball-abc123-elie-xyz.vercel.app', // another account's previews (R4-SEC-008)
+ 'https://crystal-ball-preview-elie-xyz.vercel.app',
  'https://crystal-ball.vercel.app',
  'https://crystal-ball-attacker.vercel.app',
  'https://crystal-ball-foo-bar-baz.vercel.app',
@@ -116,16 +112,16 @@ test('rejects origins with wrong protocol or port tricks', () => {
 });
 
 test('Vary header is always set to Origin', () => {
-  const cors = getCorsHeaders(makeRequest('https://crystalball.app'));
+  const cors = getCorsHeaders(makeRequest('https://bradleybond512.github.io'));
   assert.equal(cors['Vary'], 'Origin');
 });
 
 test('getCorsHeaders returns correct default methods', () => {
-  const cors = getCorsHeaders(makeRequest('https://crystalball.app'));
+  const cors = getCorsHeaders(makeRequest('https://bradleybond512.github.io'));
   assert.equal(cors['Access-Control-Allow-Methods'], 'GET, OPTIONS');
 });
 
 test('getCorsHeaders accepts custom methods parameter', () => {
-  const cors = getCorsHeaders(makeRequest('https://crystalball.app'), 'GET, POST, OPTIONS');
+  const cors = getCorsHeaders(makeRequest('https://bradleybond512.github.io'), 'GET, POST, OPTIONS');
   assert.equal(cors['Access-Control-Allow-Methods'], 'GET, POST, OPTIONS');
 });

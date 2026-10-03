@@ -5,8 +5,8 @@ import handler, * as gridOutages from './grid-outages.js';
 
 const { parseOdinOutagesV1 } = gridOutages;
 
-const request = (query = '', init = {}) => new Request(`https://crystalball.app/api/grid-outages${query}`, {
-  headers: { origin: 'https://crystalball.app' }, ...init,
+const request = (query = '', init = {}) => new Request(`https://bradleybond512.github.io/api/grid-outages${query}`, {
+  headers: { origin: 'https://bradleybond512.github.io' }, ...init,
 });
 
 test('ODIN parser accepts real zero outages and drops malformed or nonmatching FIPS rows', () => {

@@ -1,3 +1,4 @@
+import { OWNED_WEB_HOSTS } from '../config/owned-origins';
 import { hasTauriInvokeBridge, tryInvokeTauri } from './tauri-bridge';
 import { mayFallBack, prepareCloudTarget } from './cloud-fallback-policy';
 
@@ -191,12 +192,9 @@ function extractHostnames(...urls: (string | undefined)[]): string[] {
   return hosts;
 }
 
+// Only hosts Bradley controls (R4-SEC-008); see src/config/owned-origins.ts.
 const APP_HOSTS = new Set([
-  'crystalball.app',
-  'www.crystalball.app',
-  'tech.crystalball.app',
-  'api.crystalball.app',
-
+  ...OWNED_WEB_HOSTS,
   'localhost',
   '127.0.0.1',
   ...extractHostnames(WS_API_URL, VITE_ENV.VITE_WS_RELAY_URL),
@@ -206,7 +204,7 @@ function isAppOriginUrl(urlStr: string): boolean {
   try {
  const u = new URL(urlStr);
  const host = u.hostname;
- return APP_HOSTS.has(host) || host.endsWith('.crystalball.app');
+ return APP_HOSTS.has(host);
   } catch {
  return false;
   }
@@ -562,7 +560,7 @@ function ambientFetchRouting(): FetchRoutingEnv {
  *
  * It matches per input shape rather than on a normalized path, and the shapes
  * are not equivalent: for a string it tests the RAW value against an anchored
- * pattern, so `https://crystalball.app/api/military/v1/x` written as a string
+ * pattern, so `https://<another-app-host>/api/military/v1/x` written as a string
  * is NOT redirected, while the same URL as a `URL` is. `URL`/`Request` inputs
  * additionally have to be exactly same-origin — a sibling app host is not.
  */

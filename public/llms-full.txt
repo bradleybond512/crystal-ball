@@ -11,9 +11,6 @@ The project is built with TypeScript, Vite, MapLibre GL JS, deck.gl, D3.js, and 
 ## Live Instances
 
 - [GitHub Pages Web App](https://bradleybond512.github.io/crystal-ball/): Full web build
-- [Crystal Ball](https://crystalball.app): Geopolitics, military, conflicts, infrastructure — 264 panels, military bases, nuclear facilities, hotspots
-- [Tech Monitor](https://tech.crystalball.app): Startups, AI/ML, cloud, cybersecurity — 35 panels, tech HQs, cloud regions, startup hubs
-- [Finance Monitor](https://finance.crystalball.app): Global markets, trading, central banks, Gulf FDI — 31 panels, stock exchanges, central banks, Gulf investments
 
 ## Documentation
 
@@ -159,10 +156,10 @@ English (en), French (fr), Spanish (es), German (de), Italian (it), Polish (pl),
 
 A single codebase produces four specialized dashboards controlled by the VITE_VARIANT environment variable:
 
-- **Crystal Ball** (crystalball.app): 264 panels. Focus: geopolitics, military, conflicts, infrastructure security, cyber, weather, seismic, aviation, space, alerts, and AI reasoning. Unique layers: military bases, nuclear facilities, hotspots, APT groups, spaceports, critical minerals
-- **Tech Monitor** (tech.crystalball.app): 35 panels. Focus: AI/ML, startups, cybersecurity, cloud. Unique layers: tech HQs, cloud regions, startup hubs, accelerators, tech events
-- **Finance Monitor** (finance.crystalball.app): 31 panels. Focus: global markets, trading, central banks, Gulf FDI. Unique layers: 92 stock exchanges, 19 financial centers, 13 central banks, 10 commodity hubs, 64 Gulf FDI investments
-- **Happy Monitor** (happy.crystalball.app): 10 panels. Focus: positive news, progress, science, conservation, and constructive global signals
+- **Crystal Ball** (VITE_VARIANT build): 264 panels. Focus: geopolitics, military, conflicts, infrastructure security, cyber, weather, seismic, aviation, space, alerts, and AI reasoning. Unique layers: military bases, nuclear facilities, hotspots, APT groups, spaceports, critical minerals
+- **Tech Monitor** (VITE_VARIANT build): 35 panels. Focus: AI/ML, startups, cybersecurity, cloud. Unique layers: tech HQs, cloud regions, startup hubs, accelerators, tech events
+- **Finance Monitor** (VITE_VARIANT build): 31 panels. Focus: global markets, trading, central banks, Gulf FDI. Unique layers: 92 stock exchanges, 19 financial centers, 13 central banks, 10 commodity hubs, 64 Gulf FDI investments
+- **Happy Monitor** (VITE_VARIANT build): 10 panels. Focus: positive news, progress, science, conservation, and constructive global signals
 
 Build-time: Vite HTML plugin transforms meta tags, Open Graph data, PWA manifest, and JSON-LD structured data. Each variant tree-shakes unused data files. Runtime: variant selector in header navigates between deployed domains (web) or sets localStorage preference (desktop).
 

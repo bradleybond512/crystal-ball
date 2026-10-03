@@ -25,8 +25,8 @@
 
 ## Checklist
 
-- [ ] Tested on [crystalball.app](https://crystalball.app) variant
-- [ ] Tested on [tech.crystalball.app](https://tech.crystalball.app) variant (if applicable)
+- [ ] Tested in the desktop app and the web build (GitHub Pages)
+- [ ] Tested the tech/finance/happy variant build (if applicable)
 - [ ] New RSS feed domains added to `api/rss-proxy.js` allowlist (if adding feeds)
 - [ ] No API keys or secrets committed
 - [ ] TypeScript compiles without errors (`npm run typecheck`)

@@ -6,6 +6,7 @@ import { t } from '../services/i18n';
 import { escapeHtml } from '@/utils/sanitize';
 import { loadFromStorage, rafSchedule, saveToStorage } from '@/utils';
 import { STORAGE_KEYS, SITE_VARIANT } from '@/config';
+import { OWNED_SITE_ORIGIN } from '@/config/owned-origins';
 import { getStreamQuality } from '@/services/ai-flow-settings';
 
 // YouTube IFrame Player API types
@@ -405,7 +406,8 @@ export class LiveNewsPanel extends Panel {
 
   private get embedOrigin(): string {
  if (isDesktopRuntime()) return `http://127.0.0.1:${getLocalApiPort()}`;
- try { return new URL(getRemoteApiBaseUrl()).origin; } catch { return 'https://crystalball.app'; }
+ // No configured remote API: only same-origin embed messages are accepted (R4-SEC-008).
+ try { return new URL(getRemoteApiBaseUrl()).origin; } catch { return window.location.origin; }
   }
 
   private setupBridgeMessageListener(): void {
@@ -449,9 +451,8 @@ export class LiveNewsPanel extends Panel {
   }
 
   private static resolveYouTubeOrigin(): string | null {
- const fallbackOrigin = SITE_VARIANT === 'tech'
- ? 'https://crystalball.app'
- : 'https://crystalball.app';
+ // The public origin we declare for desktop embeds: our own Pages site (R4-SEC-008).
+ const fallbackOrigin = OWNED_SITE_ORIGIN;
 
  try {
  const { protocol, origin, host } = window.location;

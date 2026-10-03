@@ -11,9 +11,6 @@ The project is built with TypeScript, Vite, MapLibre GL JS, deck.gl, D3.js, and 
 ## Live Instances
 
 - [GitHub Pages Web App](https://bradleybond512.github.io/crystal-ball/): Full web build
-- [Crystal Ball](https://crystalball.app): Geopolitics, military, conflicts, infrastructure
-- [Tech Monitor](https://tech.crystalball.app): Startups, AI/ML, cloud, cybersecurity
-- [Finance Monitor](https://finance.crystalball.app): Global markets, trading, central banks, Gulf FDI
 
 ## Documentation
 
@@ -43,10 +40,10 @@ The project is built with TypeScript, Vite, MapLibre GL JS, deck.gl, D3.js, and 
 
 ## Desktop App
 
-- [Windows Installer](https://crystalball.app/api/download?platform=windows-exe): Windows .exe installer
-- [macOS Apple Silicon](https://crystalball.app/api/download?platform=macos-arm64): macOS ARM64 build
-- [macOS Intel](https://crystalball.app/api/download?platform=macos-x64): macOS x64 build
-- [Linux AppImage](https://crystalball.app/api/download?platform=linux-appimage): Linux .AppImage
+- [Windows Installer](https://github.com/bradleybond512/crystal-ball/releases/latest): Windows .exe installer
+- [macOS Apple Silicon](https://github.com/bradleybond512/crystal-ball/releases/latest): macOS ARM64 build
+- [macOS Intel](https://github.com/bradleybond512/crystal-ball/releases/latest): macOS x64 build
+- [Linux AppImage](https://github.com/bradleybond512/crystal-ball/releases/latest): Linux .AppImage
 
 ## Tech Stack
 

@@ -151,5 +151,35 @@
   ],
   "src-tauri/sidecar/local-api-server.mjs": [
     "test:secret-boundary"
+  ],
+  "api/_api-key.js": [
+    "test:csp-owned"
+  ],
+  "api/_cors.js": [
+    "test:csp-owned"
+  ],
+  "api/aviation/_aviation-helpers.js": [
+    "test:csp-owned"
+  ],
+  "api/fwdstart.js": [
+    "test:csp-owned"
+  ],
+  "api/nws-alerts.js": [
+    "test:csp-owned"
+  ],
+  "api/og-story.js": [
+    "test:csp-owned"
+  ],
+  "api/story.js": [
+    "test:csp-owned"
+  ],
+  "api/youtube/embed.js": [
+    "test:csp-owned"
+  ],
+  "scripts/check-dist-eval.mjs": [
+    "test:csp-owned"
+  ],
+  "src/main.ts": [
+    "test:csp-owned"
   ]
 }

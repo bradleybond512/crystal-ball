@@ -60,8 +60,8 @@ test.describe('desktop runtime routing guardrails', () => {
  hasTauriGlobals: false,
  userAgent: 'Mozilla/5.0',
  locationProtocol: 'https:',
- locationHost: 'crystalball.app',
- locationOrigin: 'https://crystalball.app',
+ locationHost: 'bradleybond512.github.io',
+ locationOrigin: 'https://bradleybond512.github.io',
  }),
  };
  });

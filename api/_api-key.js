@@ -6,8 +6,8 @@ const DESKTOP_ORIGIN_PATTERNS = [
 ];
 
 const BROWSER_ORIGIN_PATTERNS = [
-  /^https:\/\/crystalball\.app$/,
-  /^https:\/\/(tech|finance|happy|api)\.crystalball\.app$/,
+  // Owned web origin only (R4-SEC-008: the former product domain is for sale).
+  /^https:\/\/bradleybond512\.github\.io$/,
   // Vercel preview URLs anchored to known owner accounts (mirrors _cors.ts).
   // The `-<account-slug>` suffix (e.g. `-bradleybond512`) is appended by Vercel
   // from the OWNING account and cannot be forged by a third party. Without it,
@@ -16,8 +16,6 @@ const BROWSER_ORIGIN_PATTERNS = [
   // granting it trusted-browser CORS. Keep every preview pattern account-anchored.
   /^https:\/\/crystalball-[a-z0-9-]+-bradleybond512\.vercel\.app$/,
   /^https:\/\/crystal-ball-[a-z0-9-]+-bradleybond512\.vercel\.app$/,
-  /^https:\/\/crystalball-[a-z0-9-]+-elie-[a-z0-9]+\.vercel\.app$/,
-  /^https:\/\/crystal-ball-[a-z0-9-]+-elie-[a-z0-9]+\.vercel\.app$/,
   ...(process.env.NODE_ENV === 'production' ? [] : [
 	/^https?:\/\/localhost(:\d+)?$/,
 	/^https?:\/\/127\.0\.0\.1(:\d+)?$/,

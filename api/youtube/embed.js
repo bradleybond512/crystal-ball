@@ -11,8 +11,8 @@ function sanitizeVideoId(value) {
 }
 
 const ALLOWED_ORIGINS = [
-  /^https:\/\/crystalball\.app$/,
-  /^https:\/\/(tech|finance|happy|api)\.crystalball\.app$/,
+  // Owned web origin only (R4-SEC-008: the former product domain is for sale).
+  /^https:\/\/bradleybond512\.github\.io$/,
   // Vercel preview URLs anchored to known owner accounts (mirrors _cors.ts).
   // The `-<account-slug>` suffix (e.g. `-bradleybond512`) is appended by Vercel
   // from the OWNING account and cannot be forged by a third party. Without it,
@@ -21,8 +21,6 @@ const ALLOWED_ORIGINS = [
   // granting it a trusted embed origin. Keep every preview pattern account-anchored.
   /^https:\/\/crystalball-[a-z0-9-]+-bradleybond512\.vercel\.app$/,
   /^https:\/\/crystal-ball-[a-z0-9-]+-bradleybond512\.vercel\.app$/,
-  /^https:\/\/crystalball-[a-z0-9-]+-elie-[a-z0-9]+\.vercel\.app$/,
-  /^https:\/\/crystal-ball-[a-z0-9-]+-elie-[a-z0-9]+\.vercel\.app$/,
   /^https?:\/\/localhost(:\d+)?$/,
   /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
   /^tauri:\/\/localhost$/,
@@ -49,7 +47,7 @@ function sanitizeAllowedOrigin(raw, fallback, allowList = ALLOWED_ORIGINS) {
 }
 
 function sanitizeOrigin(raw) {
-  return sanitizeAllowedOrigin(raw, 'https://crystalball.app', ALLOWED_ORIGINS);
+  return sanitizeAllowedOrigin(raw, 'https://bradleybond512.github.io', ALLOWED_ORIGINS);
 }
 
 function sanitizeParentOrigin(raw, fallback) {

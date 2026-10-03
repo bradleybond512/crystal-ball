@@ -2914,7 +2914,9 @@ async function importHandler(modulePath) {
 
 function resolveConfig(options = {}) {
   const port = Number(options.port ?? process.env.LOCAL_API_PORT ?? 46_123);
-  const remoteBase = String(options.remoteBase ?? process.env.LOCAL_API_REMOTE_BASE ?? 'https://crystalball.app').replace(/\/$/, '');
+  // No default cloud: the former product domain is not ours (R4-SEC-008). An empty base
+  // means cloud pass-through has no target and is never attempted.
+  const remoteBase = String(options.remoteBase ?? process.env.LOCAL_API_REMOTE_BASE ?? '').replace(/\/$/, '');
   const resourceDir = String(options.resourceDir ?? process.env.LOCAL_API_RESOURCE_DIR ?? process.cwd());
   const apiDir = options.apiDir
  ? String(options.apiDir)
@@ -2993,15 +2995,12 @@ async function tryCloudFallback(requestUrl, req, context, reason) {
   }
 }
 
-// Known crystalball.app subdomains. Enumerated rather than glob-matched so a
-// future DNS / certificate misconfig can't silently grant CORS access to an
-// unrelated subdomain (e.g. an attacker-controlled preview host).
-const SIDECAR_PROD_HOSTS = new Set([
-  'crystalball.app',
-  'tech.crystalball.app',
-  'finance.crystalball.app',
-  'happy.crystalball.app',
-  'api.crystalball.app',
+// Web origins allowed to read sidecar responses cross-origin, besides the
+// Tauri webview and local dev servers. Only origins Bradley controls belong
+// here (R4-SEC-008: the former product domain is for sale) — mirror of
+// src/config/owned-origins.ts, guarded by tests/owned-domains.test.mjs.
+const SIDECAR_OWNED_WEB_HOSTS = new Set([
+  'bradleybond512.github.io',
 ]);
 
 // Dev-server ports the sidecar may legitimately serve. Other localhost ports
@@ -3026,16 +3025,33 @@ const SIDECAR_TAURI_PATTERNS = [
 // the port against SIDECAR_DEV_PORTS rather than letting any port through.
 const SIDECAR_LOCALHOST_RE = /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::(\d+))?$/;
 
+/**
+ * Ports to try, in order: the configured port and the next ten. The Tauri CSP
+ * lists exactly 46123–46133 (tests/csp-allowlist.test.mjs), so a busy default
+ * port no longer strands the renderer on an unreachable OS-assigned port.
+ */
+export const SIDECAR_PORT_FALLBACK_SPAN = 10;
+export function sidecarCandidatePorts(basePort) {
+  const base = Number(basePort);
+  // Port 0 means "let the OS choose" (tests, ad-hoc runs): there is no fixed
+  // range to walk, and offsets from 0 would land on privileged ports.
+  if (!Number.isInteger(base) || base <= 0 || base > 65_535) return [];
+  const ports = [];
+  for (let offset = 0; offset <= SIDECAR_PORT_FALLBACK_SPAN; offset += 1) {
+    if (base + offset <= 65_535) ports.push(base + offset);
+  }
+  return ports;
+}
+
 export function isSidecarOriginAllowed(origin) {
   if (!origin) return false;
   for (const p of SIDECAR_TAURI_PATTERNS) {
     if (p.test(origin)) return true;
   }
-  // Match prod host suffix (handles https://crystalball.app and the four
-  // enumerated subdomains; anything else is denied).
+  // Exact owned web hosts only; anything else is denied.
   if (origin.startsWith('https://')) {
     const host = origin.slice('https://'.length);
-    if (SIDECAR_PROD_HOSTS.has(host)) return true;
+    if (SIDECAR_OWNED_WEB_HOSTS.has(host)) return true;
   }
   const localMatch = SIDECAR_LOCALHOST_RE.test(origin)
     ? (origin.match(SIDECAR_LOCALHOST_RE) || [])
@@ -13127,7 +13143,7 @@ async function dispatch(requestUrl, req, routes, context) {
  });
  const r = await fetchWithTimeout(
  `https://efts.sec.gov/LATEST/search-index?${params}`,
- { headers: { 'User-Agent': 'CrystalBall contact@crystalball.app', Accept: 'application/json' } },
+ { headers: { 'User-Agent': 'CrystalBall (https://github.com/bradleybond512/crystal-ball)', Accept: 'application/json' } },
  12000,
  );
  if (!r.ok) throw new Error(`EDGAR ${r.status}`);
@@ -13164,7 +13180,7 @@ async function dispatch(requestUrl, req, routes, context) {
  });
  const r = await fetchWithTimeout(
  `https://efts.sec.gov/LATEST/search-index?${params}`,
- { headers: { 'User-Agent': 'CrystalBall contact@crystalball.app', Accept: 'application/json' } },
+ { headers: { 'User-Agent': 'CrystalBall (https://github.com/bradleybond512/crystal-ball)', Accept: 'application/json' } },
  10000,
  );
  if (!r.ok) throw new Error(`EDGAR search ${r.status}`);
@@ -15931,21 +15947,8 @@ async function dispatch(requestUrl, req, routes, context) {
   if (requestUrl.pathname === '/api/military/v1/get-theater-posture') {
  const cached = getCached('theater-posture', 5 * 60 * 1000);
  if (cached) return json(cached);
- try {
- // Node.js is not subject to browser CORS — proxy directly to cloud API server-side
- const cloudUrl = 'https://api.crystalball.app/api/military/v1/get-theater-posture' + requestUrl.search;
- const cloudResp = await fetchWithTimeout(cloudUrl, {
- headers: { Accept: 'application/json', 'User-Agent': CHROME_UA },
- }, 10_000);
- if (cloudResp.ok) {
- const body = await cloudResp.json();
- if (body && Array.isArray(body.theaters)) {
- setCached('theater-posture', body, 5 * 60 * 1000);
- return json(body);
- }
- }
- } catch { /* timeout / network error — fall through to local computation */ }
-
+ // Always computed locally. It used to prefer the former product domain's API,
+ // which is not ours, so whoever owns it could inject data (R4-SEC-008).
  // Compute from locally cached ACLED, AIS, and ADSB data
  const THEATER_DEFS = [
  { theater: 'iran-theater', latMin: 23, latMax: 38, lonMin: 44, lonMax: 63 },
@@ -16424,7 +16427,7 @@ async function dispatch(requestUrl, req, routes, context) {
  headers: {
  'Content-Type': 'application/x-www-form-urlencoded',
  Accept: 'application/sparql-results+json',
- 'User-Agent': 'CrystalBall/2.10.20 (https://crystalball.app)',
+ 'User-Agent': 'CrystalBall/2.10.20 (https://github.com/bradleybond512/crystal-ball)',
  },
  body: 'query=' + encodeURIComponent(sparql),
  },
@@ -22110,17 +22113,28 @@ export async function createLocalApiServer(options = {}) {
  server.listen(port, '127.0.0.1');
  });
 
+ // Never kill arbitrary listeners on occupied ports. Try the fixed range
+ // the webview CSP allows first, so the renderer can always reach us.
+ const candidatePorts = sidecarCandidatePorts(context.port);
+ let bound = false;
+ for (const port of candidatePorts) {
  try {
- await tryListen(context.port);
+ await tryListen(port);
+ bound = true;
+ break;
  } catch (error) {
- if (error?.code === 'EADDRINUSE') {
- // Never kill arbitrary listeners on occupied ports. Instead, bind to a
- // random OS-assigned port and publish it through service-status/port file.
- context.logger.log(`[local-api] port ${context.port} already in use; falling back to OS-assigned port`);
- await tryListen(0);
- } else {
- throw error;
+ if (error?.code !== 'EADDRINUSE') throw error;
+ context.logger.log(`[local-api] port ${port} already in use; trying the next`);
  }
+ }
+ if (!bound) {
+ // Either an OS-assigned port was requested (port 0), or every CSP-allowed
+ // port is busy. In the second case bind an OS port so native health checks
+ // keep working; the webview cannot reach it (CSP), so say so loudly.
+ if (candidatePorts.length > 0) {
+ context.logger.log(`[local-api] ports ${candidatePorts[0]}-${candidatePorts.at(-1)} all in use; falling back to an OS-assigned port the webview cannot reach`);
+ }
+ await tryListen(0);
  }
 
  const address = server.address();

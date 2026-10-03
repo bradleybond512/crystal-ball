@@ -16,7 +16,7 @@ const COUNTRY_NAMES = {
 const BOT_UA = /twitterbot|facebookexternalhit|linkedinbot|slackbot|telegrambot|whatsapp|discordbot|redditbot|googlebot/i;
 
 export default function handler(req, res) {
-  const url = new URL(req.url, 'https://crystalball.app');
+  const url = new URL(req.url, 'https://bradleybond512.github.io');
   const countryCode = (url.searchParams.get('c') || '').toUpperCase();
   const type = url.searchParams.get('t') || 'ciianalysis';
   const ts = url.searchParams.get('ts') || '';
@@ -26,7 +26,7 @@ export default function handler(req, res) {
   const ua = req.headers['user-agent'] || '';
   const isBot = BOT_UA.test(ua);
 
-  const baseUrl = 'https://crystalball.app';
+  const baseUrl = 'https://bradleybond512.github.io/crystal-ball';
   // URL-encode every interpolated value so a crafted query param (e.g. `c=foo&admin=1`)
   // cannot smuggle additional query params into the downstream URL structure.
   const spaParams = new URLSearchParams({ c: countryCode, t: type });

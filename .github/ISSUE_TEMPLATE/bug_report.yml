@@ -13,9 +13,7 @@ body:
       label: Variant
       description: Which variant are you using?
       options:
-        - crystalball.app (Full / Geopolitical)
-        - tech.crystalball.app (Tech / Startup)
-        - finance.crystalball.app (Finance)
+        - Web build (GitHub Pages)
         - Desktop app (Windows)
         - Desktop app (macOS)
         - Desktop app (Linux)

@@ -85,7 +85,8 @@
     "test:imessage-native",
     "test:native-responsiveness",
     "test:sidecar-supervisor",
-    "test:secret-boundary"
+    "test:secret-boundary",
+    "test:vault-writer"
   ],
   "src-tauri/src/updater_policy.rs": [
     "test:desktop-updater"
@@ -114,7 +115,8 @@
   ],
   "src/services/runtime-config.ts": [
     "test:sidecar-routing",
-    "test:secret-boundary"
+    "test:secret-boundary",
+    "test:vault-writer"
   ],
   "src/services/cloud-fallback-policy.ts": [
     "test:sidecar-routing"
@@ -135,7 +137,8 @@
     "test:sidecar-routing"
   ],
   "src/services/keychain.ts": [
-    "test:secret-boundary"
+    "test:secret-boundary",
+    "test:vault-writer"
   ],
   "src/components/KeyDashboard.ts": [
     "test:secret-boundary"
@@ -151,5 +154,11 @@
   ],
   "src-tauri/sidecar/local-api-server.mjs": [
     "test:secret-boundary"
+  ],
+  "src-tauri/src/vault_coordinator.rs": [
+    "test:vault-writer"
+  ],
+  "src-tauri/tests/vault_coordinator_contract.rs": [
+    "test:vault-writer"
   ]
 }

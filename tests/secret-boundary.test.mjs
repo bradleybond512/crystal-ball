@@ -58,18 +58,25 @@ test('get_secret is gone; status and renderer config replace it', () => {
 });
 
 test('Settings writes reach the sidecar from native, after the vault write', () => {
+  // R3-BUG-001 slice B: the one vault writer writes the vault, commits, then pushes.
+  const coordinator = read('src-tauri/src/vault_coordinator.rs');
+  const mutate = coordinator.slice(
+    coordinator.indexOf('    fn mutate(&self, key: &str, value: Option<&str>)'),
+    coordinator.indexOf('    fn apply_load('),
+  );
+  const persist = mutate.indexOf('self.store.write_vault(&proposed)?;');
+  const push = mutate.indexOf('self.store.push_key(key, value);');
+  assert.ok(persist > 0 && push > persist, 'the writer pushes after persisting');
   for (const name of ['set_secret', 'delete_secret']) {
     const start = main.indexOf(`async fn ${name}(`);
     const body = main.slice(start, main.indexOf('\n}\n', start));
-    const persist = body.indexOf('save_vault(&proposed)?;');
-    const push = body.indexOf('sync_secret_to_sidecar(&sync_app, &sync_key).await;');
-    assert.ok(persist > 0 && push > persist, `${name} pushes after persisting`);
+    assert.match(body, /save_secret_change\(&app, &key, /, `${name} goes through the vault writer`);
   }
-  const sync = main.slice(main.indexOf('async fn sync_secret_to_sidecar('), main.indexOf('// ── Sidecar supervision (R4-BUG-004)'));
+  const store = main.slice(main.indexOf('impl VaultStore for TauriVaultStore'), main.indexOf('    fn late_outcome('));
+  assert.match(store, /fn push_key[\s\S]*push_secret_value\(&self\.app, key, value\)/);
+  const sync = main.slice(main.indexOf('async fn push_secret_value('), main.indexOf('// ── Sidecar supervision (R4-BUG-004)'));
   assert.match(sync, /confirmed_sidecar_target\(app\)/, 'only to our confirmed, live sidecar');
-  const afterRead = sync.slice(sync.indexOf('let value = app'), sync.indexOf('post_secret_update('));
-  assert.ok(afterRead.length > 0 && !/\breturn\b/.test(afterRead), 'a missing (deleted) key is still posted');
-  assert.match(sync, /post_secret_update\(&client, port, &token, key, value\.as_deref\(\)\)/, 'a deleted key is sent as an unset');
+  assert.match(sync, /post_secret_update\(&client, port, &token, key, value\)/, 'a deleted key is sent as an unset');
   const target = main.slice(main.indexOf('fn confirmed_sidecar_target('), main.indexOf('fn sidecar_env_update_body('));
   assert.match(target, /matches!\(child\.try_wait\(\), Ok\(None\)\)/, 'our child must be alive');
   assert.match(target, /if !alive \{\s*return Err/);

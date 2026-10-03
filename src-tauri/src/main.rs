@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufWriter, Write};
@@ -26,8 +26,13 @@ mod current_location;
 mod imessage;
 mod sidecar_supervisor;
 mod updater_policy;
+mod vault_coordinator;
 mod watchdog;
 use updater_policy::{BrowserReason, SignerRequirement, UpdateError, UpdateOutcome};
+use vault_coordinator::{
+    LateOutcome, LoadGuard, LoadPhase, OutcomeStatus, ReadResult, VaultCoordinator, VaultSource,
+    VaultState, VaultStore,
+};
 
 const DEFAULT_LOCAL_API_PORT: u16 = 46123;
 const KEYRING_SERVICE: &str = "crystal-ball";
@@ -176,19 +181,14 @@ impl Default for LocalApiState {
  }
 }
 
-/// In-memory cache for keychain secrets. Populated once at startup to avoid
-/// repeated macOS Keychain prompts (each `Entry::get_password()` triggers one).
+/// The native secrets cache (R3-BUG-001 slice B). `state` holds the cache and
+/// the load readiness; readers use it directly and only to copy or inspect.
+/// `writer` is the one vault-writer thread: the only code that changes the
+/// cache, writes the vault or the shadow copy, or pushes secrets to the
+/// sidecar. It starts in `setup()`, once an AppHandle exists.
 struct SecretsCache {
- secrets: Mutex<HashMap<String, String>>,
- // Keys the user explicitly set or deleted via Settings since launch. The
- // async keychain read works from a snapshot taken before these edits, so its
- // merge must skip them — otherwise a just-deleted key gets resurrected (and
- // re-injected into the sidecar). Lock order is always `secrets` then this.
- user_mutated: Mutex<HashSet<String>>,
- // False until the async keychain read finishes (success, empty, or timeout).
- // The renderer's boot-time secret load must wait on this — reading the cache
- // before it flips would memoize a null for every key for the whole session.
- loaded: AtomicBool,
+    state: Arc<VaultState>,
+    writer: std::sync::OnceLock<VaultCoordinator>,
 }
 
 /// In-memory mirror of persistent-cache.json. The file can grow to 10+ MB,
@@ -265,228 +265,229 @@ fn read_keychain_entry_with_timeout(
 }
 
 impl SecretsCache {
- /// Empty cache, ready to be `manage()`d at builder time without
- /// touching the macOS Keychain. The actual secrets are populated
- /// asynchronously from `setup()` so the UI window renders before
- /// any blocking keychain calls happen — see issue notes on the
- /// startup-freeze bug this fixes.
- fn empty() -> Self {
- SecretsCache {
- secrets: Mutex::new(HashMap::new()),
- user_mutated: Mutex::new(HashSet::new()),
- loaded: AtomicBool::new(false),
- }
- }
+    /// Empty cache, ready to be `manage()`d at builder time without touching
+    /// the macOS Keychain. The boot task reads the Keychain off the main
+    /// thread and hands the result to the writer.
+    fn empty() -> Self {
+        SecretsCache { state: Arc::new(VaultState::new()), writer: std::sync::OnceLock::new() }
+    }
 
- /// Blocking keychain query. Replaces the in-memory map atomically.
- /// MUST be called off the main thread (`spawn_blocking` etc.).
- ///
- /// `app` is optional so non-Tauri callers (tests, the
- /// `load_from_keychain` shim) can invoke this without an
- /// `AppHandle`. When provided, timeout warnings land in the
- /// desktop log so the operator can tell which keychain entries
- /// are blocked by an ACL prompt.
- fn populate_from_keychain(&self, app: Option<&AppHandle>, vault_timeout: Duration) -> bool {
- let (loaded, vault_timed_out) = Self::read_keychain_blocking(app, vault_timeout);
- if let Ok(mut guard) = self.secrets.lock() {
- // Preserve edits made concurrently with the (up to 120s) keychain
- // read — the UI is usable before boot finishes, so a Settings save
- // or delete can land mid-flight. Those edits are newer than this
- // snapshot: skip any key the user touched (a delete leaves it absent
- // from the map, so a blind or_insert would resurrect it), and never
- // clobber a key we already hold.
- let touched = self.user_mutated.lock().ok();
- for (key, value) in loaded {
- if touched.as_ref().is_some_and(|t| t.contains(&key)) {
- continue;
- }
- guard.entry(key).or_insert(value);
- }
- }
- // Mark ready even on timeout/empty — the read is done, the cache is as
- // populated as it will get this launch, and the renderer should stop
- // waiting and reload from whatever loaded.
- self.loaded.store(true, Ordering::SeqCst);
- vault_timed_out
- }
+    fn writer(&self) -> Result<&VaultCoordinator, String> {
+        self.writer
+            .get()
+            .ok_or_else(|| vault_coordinator::STOPPED_MESSAGE.to_string())
+    }
+}
 
- /// Vault-ONLY re-read for the boot self-heal retry. Reads solely the
- /// consolidated `secrets-vault` entry and NEVER the legacy per-key
- /// migration scan — that scan issues a keychain call (and a delete) per
- /// supported key, which we must not do from a background retry (per-key
- /// ACL prompts + the delete path that caused a past key-loss incident).
- /// On a successful vault read the recovered keys are merged into the cache
- /// (respecting concurrent user edits, never clobbering held keys) and the
- /// shadow file is refreshed. Returns true only when the vault read
- /// succeeded; a timeout or absent entry returns false and touches nothing.
- fn repopulate_vault_only(&self, app: &AppHandle, timeout: Duration) -> bool {
- let json = match read_keychain_entry_with_timeout(
- KEYRING_SERVICE,
- "secrets-vault".to_string(),
- timeout,
- ) {
- Ok(Some(json)) => json,
- // Err(()) = timed out again, Ok(None) = entry absent. Either way do
- // NOT fall through to migration — just leave the shadow in place.
- _ => return false,
- };
- let Ok(map) = serde_json::from_str::<HashMap<String, String>>(&json) else {
- return false;
- };
- let secrets: HashMap<String, String> = map
- .into_iter()
- .filter(|(k, v)| SUPPORTED_SECRET_KEYS.contains(&k.as_str()) && !v.trim().is_empty())
- .map(|(k, v)| (k, v.trim().to_string()))
- .collect();
- if let Ok(mut guard) = self.secrets.lock() {
- let touched = self.user_mutated.lock().ok();
- for (key, value) in secrets.iter() {
- if touched.as_ref().is_some_and(|t| t.contains(key)) {
- continue;
- }
- guard.entry(key.clone()).or_insert_with(|| value.clone());
- }
- }
- // Refresh the shadow so the next launch's timeout fallback is current.
- write_vault_shadow(app, &secrets);
- true
- }
+/// How long a Settings save waits, first for the boot load and then for the
+/// Keychain write (approved decision C). A write that started but did not
+/// finish in time reports "pending" and completes in the background.
+const SECRET_SAVE_WAIT: Duration = Duration::from_secs(15);
 
- /// Pulled out so callers can run the load on whichever thread they
- /// like and write the result into a shared cache themselves.
- ///
- /// Each `Entry::get_password()` call is wrapped in
- /// `read_keychain_entry_with_timeout` so a hung ACL prompt on
- /// any single key does NOT stall the rest of the load (or the
- /// sidecar startup that depends on it). On timeout we log a
- /// warning and skip that key — features that need it will return
- /// the existing 503 + `keyMissing` error path until it's
- /// re-fetched on the next launch.
- fn read_keychain_blocking(app: Option<&AppHandle>, vault_timeout: Duration) -> (HashMap<String, String>, bool) {
- // `vault_timed_out` tells the caller the consolidated read hit its deadline
- // (as opposed to the entry being absent) — the boot path uses it to fire a
- // longer background retry that captures the keychain's late answer.
- let mut vault_timed_out = false;
- // Try consolidated vault first — single keychain read.
- match read_keychain_entry_with_timeout(
- KEYRING_SERVICE,
- "secrets-vault".to_string(),
- vault_timeout,
- ) {
- Ok(Some(json)) => {
- if let Ok(map) = serde_json::from_str::<HashMap<String, String>>(&json) {
- let secrets: HashMap<String, String> = map
- .into_iter()
- .filter(|(k, v)| {
- SUPPORTED_SECRET_KEYS.contains(&k.as_str()) && !v.trim().is_empty()
- })
- .map(|(k, v)| (k, v.trim().to_string()))
- .collect();
- // Update the shadow file so the next timeout-fallback is fresh.
- if let Some(a) = app { write_vault_shadow(a, &secrets); }
- return (secrets, vault_timed_out);
- }
- }
- Ok(None) => {
-     // No vault entry. If migration was already attempted, there is nothing to
-     // migrate — skip the 73-key scan to avoid one macOS ACL prompt per key.
-     if app.is_some_and(|a| migration_done(a)) {
-         return (HashMap::new(), vault_timed_out);
-     }
- }
- Err(()) => {
- vault_timed_out = true;
- log_keychain_timeout(app, "secrets-vault", vault_timeout);
- // Keychain prompt dismissed or timed out — fall back to the
- // shadow file written on the last successful save/read.
- if let Some(secrets) = app.and_then(read_vault_shadow) {
-     if let Some(a) = app {
-         append_desktop_log(a, "INFO", &format!(
-             "secrets-cache: keychain timed out, loaded {} keys from shadow vault",
-             secrets.len(),
-         ));
-     }
-     return (secrets, vault_timed_out);
- }
- }
- }
+/// How long a background read waits for the writer to apply its result. The
+/// writer is idle at boot; this only bounds a reload queued behind a hung write.
+const VAULT_APPLY_WAIT: Duration = Duration::from_secs(30);
 
- // Migration: read individual keys (old format), consolidate into vault.
- // Each call has its own timeout so a single stuck ACL prompt can't
- // halt the whole loop.
- let mut secrets = HashMap::new();
- let mut migration_attempted = false;
- let mut migration_had_timeout = false;
- for key in SUPPORTED_SECRET_KEYS.iter() {
- migration_attempted = true;
- match read_keychain_entry_with_timeout(
- KEYRING_SERVICE,
- (*key).to_string(),
- KEYCHAIN_PER_CALL_TIMEOUT,
- ) {
- Ok(Some(value)) => {
- secrets.insert((*key).to_string(), value);
- }
- Ok(None) => { /* not present; skip silently */ }
- Err(()) => {
- log_keychain_timeout(app, key, KEYCHAIN_PER_CALL_TIMEOUT);
- migration_had_timeout = true;
- // continue — other keys may still respond
- }
- }
- }
- let _ = migration_attempted;
+/// One Keychain item read, classified. Unlike `read_keychain_entry_with_timeout`
+/// this keeps "the item does not exist" apart from "the read failed" (a denied
+/// prompt, a locked keychain): only the first means a new vault loses nothing.
+#[derive(Debug, PartialEq, Eq)]
+enum KeychainRead {
+    Value(String),
+    Absent,
+    Error,
+    TimedOut,
+}
 
- // Write consolidated vault and clean up individual entries —
- // only if we actually loaded something. Vault writes are also
- // best-effort: if Keychain refuses, the next launch will retry.
- let mut vault_written = false;
- // Don't write a partial vault if any per-key reads timed out: the timed-out
- // keys would become unreachable once a vault entry exists (the next launch
- // returns the vault directly and never re-runs migration). Wait for a clean
- // scan before committing.
- if !secrets.is_empty() && !migration_had_timeout {
- if let Ok(json) = serde_json::to_string(&secrets) {
- if let Ok(vault_entry) = Entry::new(KEYRING_SERVICE, "secrets-vault") {
- if vault_entry.set_password(&json).is_ok() {
- vault_written = true;
- if let Some(a) = app { write_vault_shadow(a, &secrets); }
- // Only delete keys we successfully read — not the full set.
- // Non-timeout errors collapse to Ok(None) so those entries
- // stay untouched and can be retried next launch.
- for key in secrets.keys() {
- if let Ok(entry) = Entry::new(KEYRING_SERVICE, key.as_str()) {
- let _ = entry.delete_credential();
- }
- }
- }
- }
- }
- }
+fn classify_keychain_read(result: Result<String, keyring::Error>) -> KeychainRead {
+    match result {
+        Ok(value) if value.trim().is_empty() => KeychainRead::Absent,
+        Ok(value) => KeychainRead::Value(value.trim().to_string()),
+        Err(keyring::Error::NoEntry) => KeychainRead::Absent,
+        Err(_) => KeychainRead::Error,
+    }
+}
 
- // Mark migration done ONLY when the scan was clean (no per-key timeouts)
- // AND either (a) nothing was found — nothing to migrate, or (b) secrets
- // were found AND the consolidated vault write succeeded. If the vault
- // write failed, leave the marker unset so the next launch retries.
- let migration_complete = !migration_had_timeout
- && (secrets.is_empty() || vault_written);
- if migration_complete {
- if let Some(app) = app { mark_migration_done(app); }
- }
+/// Read one Keychain item on a worker thread, waiting at most `timeout`. On a
+/// timeout the worker is orphaned, as in `read_keychain_entry_with_timeout`.
+fn read_keychain_item_with_timeout(service: &'static str, key: &str, timeout: Duration) -> KeychainRead {
+    let (tx, rx) = mpsc::channel::<KeychainRead>();
+    let key = key.to_string();
+    std::thread::spawn(move || {
+        let read = match Entry::new(service, &key) {
+            Ok(entry) => classify_keychain_read(entry.get_password()),
+            Err(_) => KeychainRead::Error,
+        };
+        let _ = tx.send(read);
+    });
+    rx.recv_timeout(timeout).unwrap_or(KeychainRead::TimedOut)
+}
 
- (secrets, vault_timed_out)
- }
+/// Parse vault JSON, keeping only supported, non-empty keys.
+fn parse_vault_json(json: &str) -> Option<HashMap<String, String>> {
+    let map: HashMap<String, String> = serde_json::from_str(json).ok()?;
+    Some(
+        map.into_iter()
+            .filter(|(k, v)| SUPPORTED_SECRET_KEYS.contains(&k.as_str()) && !v.trim().is_empty())
+            .map(|(k, v)| (k, v.trim().to_string()))
+            .collect(),
+    )
+}
 
- /// Convenience constructor — synchronous load for tests + any
- /// non-Tauri caller. Behaviour identical to the pre-fix version
- /// except that per-call timeouts now apply (so this can no longer
- /// hang on a stuck ACL prompt).
- #[allow(dead_code)]
- fn load_from_keychain() -> Self {
- let cache = Self::empty();
- cache.populate_from_keychain(None, KEYCHAIN_VAULT_TIMEOUT);
- cache
- }
+/// What one load read produced, for the vault writer to apply.
+enum LoadRead {
+    Apply(ReadResult),
+    /// The vault is absent and the legacy per-key scan found keys cleanly.
+    Migrate(HashMap<String, String>),
+}
+
+/// Read the vault for the boot load or a user reload. Runs off the writer
+/// thread and writes nothing to the Keychain: the migration's consolidated
+/// write and cleanup are writer jobs. Also returns whether the vault read
+/// timed out (the boot path then schedules its background retry).
+fn read_vault_for_load(app: &AppHandle, vault_timeout: Duration) -> (LoadRead, bool) {
+    match read_keychain_item_with_timeout(KEYRING_SERVICE, "secrets-vault", vault_timeout) {
+        KeychainRead::Value(json) => match parse_vault_json(&json) {
+            Some(secrets) => (LoadRead::Apply(ReadResult::Vault(secrets)), false),
+            None => {
+                append_desktop_log(
+                    app,
+                    "ERROR",
+                    "secrets-cache: the secrets-vault item is unreadable; saves stay disabled so it is not overwritten. Restore it with `npm run restore-keys`.",
+                );
+                (LoadRead::Apply(ReadResult::Unavailable(HashMap::new())), false)
+            }
+        },
+        KeychainRead::Absent => (read_legacy_for_migration(app), false),
+        KeychainRead::Error => {
+            append_desktop_log(
+                app,
+                "WARN",
+                "secrets-cache: the Keychain refused or failed the vault read; saves stay disabled until a read succeeds",
+            );
+            (LoadRead::Apply(ReadResult::Unavailable(HashMap::new())), false)
+        }
+        KeychainRead::TimedOut => {
+            log_keychain_timeout(Some(app), "secrets-vault", vault_timeout);
+            // Keychain prompt dismissed or timed out: fall back to the shadow
+            // copy written on the last successful save or read. Saves stay
+            // gated while it is in use.
+            match read_vault_shadow(app) {
+                Some(secrets) => {
+                    append_desktop_log(
+                        app,
+                        "INFO",
+                        &format!("secrets-cache: keychain timed out, loaded {} keys from shadow vault", secrets.len()),
+                    );
+                    (LoadRead::Apply(ReadResult::Shadow(secrets)), true)
+                }
+                None => (LoadRead::Apply(ReadResult::Unavailable(HashMap::new())), true),
+            }
+        }
+    }
+}
+
+/// The vault does not exist. Once the legacy migration has run, that means
+/// nothing is stored. Otherwise scan the legacy per-key entries; the writer
+/// consolidates and cleans them up. Unchanged policy: no vault write when any
+/// per-key read timed out (those keys would become unreachable), and cleanup
+/// only after the vault write succeeds.
+fn read_legacy_for_migration(app: &AppHandle) -> LoadRead {
+    if migration_done(app) {
+        return LoadRead::Apply(ReadResult::Absent);
+    }
+    let mut secrets = HashMap::new();
+    let mut had_timeout = false;
+    for key in SUPPORTED_SECRET_KEYS.iter() {
+        match read_keychain_entry_with_timeout(KEYRING_SERVICE, (*key).to_string(), KEYCHAIN_PER_CALL_TIMEOUT) {
+            Ok(Some(value)) => {
+                secrets.insert((*key).to_string(), value);
+            }
+            Ok(None) => {}
+            Err(()) => {
+                log_keychain_timeout(Some(app), key, KEYCHAIN_PER_CALL_TIMEOUT);
+                had_timeout = true;
+            }
+        }
+    }
+    if had_timeout {
+        LoadRead::Apply(ReadResult::Unavailable(secrets))
+    } else if secrets.is_empty() {
+        mark_migration_done(app);
+        LoadRead::Apply(ReadResult::Absent)
+    } else {
+        LoadRead::Migrate(secrets)
+    }
+}
+
+/// Vault-only re-read for the boot self-heal retry: never the legacy per-key
+/// scan (one ACL prompt and one delete per key) and never the shadow copy.
+fn read_vault_only(timeout: Duration) -> Option<HashMap<String, String>> {
+    match read_keychain_item_with_timeout(KEYRING_SERVICE, "secrets-vault", timeout) {
+        KeychainRead::Value(json) => parse_vault_json(&json),
+        _ => None,
+    }
+}
+
+/// Hand a load read to the vault writer; returns the session's vault source.
+fn apply_load_read(writer: &VaultCoordinator, read: LoadRead, started_generation: u64) -> Option<VaultSource> {
+    match read {
+        LoadRead::Apply(result) => writer.load(result, started_generation, VAULT_APPLY_WAIT),
+        LoadRead::Migrate(secrets) => writer.migrate(secrets, VAULT_APPLY_WAIT),
+    }
+}
+
+/// The real side effects behind the vault writer. Only the writer thread
+/// calls these, one at a time.
+struct TauriVaultStore {
+    app: AppHandle,
+}
+
+impl VaultStore for TauriVaultStore {
+    fn write_vault(&self, secrets: &HashMap<String, String>) -> Result<(), String> {
+        save_vault(secrets)
+    }
+
+    fn write_shadow(&self, secrets: &HashMap<String, String>) {
+        write_vault_shadow(&self.app, secrets);
+    }
+
+    fn push_key(&self, key: &str, value: Option<&str>) {
+        // The writer is a plain thread, not a runtime worker, so blocking on
+        // the push is safe, and it keeps sidecar pushes in commit order.
+        tauri::async_runtime::block_on(push_secret_value(&self.app, key, value));
+    }
+
+    fn push_all(&self, secrets: &HashMap<String, String>) {
+        let entries: Vec<(String, String)> = secrets.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        tauri::async_runtime::block_on(inject_secrets_into_running_sidecar(&self.app, entries));
+    }
+
+    fn finish_migration(&self, migrated_keys: &[String]) {
+        // Unchanged policy: remove only the legacy entries that were read, and
+        // only after the consolidated vault write succeeded.
+        for key in migrated_keys {
+            if let Ok(entry) = Entry::new(KEYRING_SERVICE, key.as_str()) {
+                let _ = entry.delete_credential();
+            }
+        }
+        mark_migration_done(&self.app);
+    }
+
+    fn late_outcome(&self, outcome: &LateOutcome) {
+        let (level, status) = match outcome.status {
+            OutcomeStatus::Saved => ("INFO", "saved"),
+            OutcomeStatus::Failed => ("WARN", "failed"),
+        };
+        append_desktop_log(
+            &self.app,
+            level,
+            &format!(
+                "secrets: pending change to {} {status} after the Keychain answered (revision {})",
+                outcome.key, outcome.revision
+            ),
+        );
+    }
 }
 
 /// Standalone helper so callers can log keychain timeouts without
@@ -1041,7 +1042,7 @@ fn list_supported_secret_keys(webview: Webview) -> Result<Vec<String>, String> {
 #[tauri::command]
 fn secrets_ready(webview: Webview, cache: tauri::State<'_, SecretsCache>) -> Result<bool, String> {
  require_trusted_window(webview.label())?;
- Ok(cache.loaded.load(Ordering::SeqCst))
+ Ok(cache.state.phase() != LoadPhase::Loading)
 }
 
 /// Values a webview may read (R4-SEC-001): the plaintext settings plus the
@@ -1106,8 +1107,7 @@ async fn get_secret_status(webview: Webview) -> Result<Vec<SecretStatus>, String
     let app = webview.app_handle().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let cache = app.state::<SecretsCache>();
-        let secrets = cache.secrets.lock().map_err(|_| "Lock poisoned".to_string())?;
-        Ok(secret_status_from(&secrets))
+        Ok(cache.state.read(secret_status_from))
     })
     .await
     .map_err(|_| "Secret status task failed".to_string())?
@@ -1120,161 +1120,112 @@ async fn get_renderer_config(webview: Webview) -> Result<std::collections::BTree
     let app = webview.app_handle().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let cache = app.state::<SecretsCache>();
-        let secrets = cache.secrets.lock().map_err(|_| "Lock poisoned".to_string())?;
-        Ok(renderer_config_from(&secrets))
+        Ok(cache.state.read(renderer_config_from))
     })
     .await
     .map_err(|_| "Renderer config task failed".to_string())?
 }
 
-/// Block until the async keychain load has finished before a Settings write
-/// builds its `proposed` vault. The window now renders before hydration, so a
-/// user can hit Save while the in-memory cache is still empty; cloning that
-/// partial snapshot as the save base would persist a vault containing only the
-/// edited key and wipe every other stored secret. Waiting guarantees the cache
-/// is the full source of truth first. Bounded by the same worst-case the
-/// renderer waits on (`save_vault` already blocks on the keychain, so blocking
-/// here is consistent). Returns false if it never loads — the caller then
-/// refuses the write rather than risk a partial-vault overwrite.
-fn wait_until_secrets_loaded(cache: &SecretsCache) -> bool {
- if cache.loaded.load(Ordering::SeqCst) {
- return true;
- }
- // Match the keychain read's own worst case: the 120s vault read plus, on a
- // one-time migration from the legacy per-key format, up to one 3s ACL timeout
- // per supported key. Giving up sooner would reject a save while the cache is
- // still legitimately loading. Mirrors the renderer's waitUntilLoaded cap.
- let max_wait = KEYCHAIN_VAULT_TIMEOUT
- + KEYCHAIN_PER_CALL_TIMEOUT * (SUPPORTED_SECRET_KEYS.len() as u32)
- + Duration::from_secs(30);
- let deadline = Instant::now() + max_wait;
- while Instant::now() < deadline {
- if cache.loaded.load(Ordering::SeqCst) {
- return true;
- }
- std::thread::sleep(Duration::from_millis(50));
- }
- cache.loaded.load(Ordering::SeqCst)
+/// Wait for the boot load, then hand one change to the vault writer, which
+/// writes the vault, commits the cache, refreshes the shadow copy and pushes
+/// the change to the sidecar itself, in order (R4-SEC-001: webviews never
+/// relay values). Saves are refused while the vault source is incomplete.
+fn save_secret_change(app: &AppHandle, key: &str, value: Option<String>) -> Result<(), String> {
+    let cache = app.state::<SecretsCache>();
+    match cache.state.wait_loaded(SECRET_SAVE_WAIT) {
+        LoadPhase::Ready => {}
+        LoadPhase::Loading => return Err(vault_coordinator::LOADING_MESSAGE.to_string()),
+        LoadPhase::Failed => return Err(vault_coordinator::LOAD_FAILED_MESSAGE.to_string()),
+    }
+    cache.writer()?.mutate(key, value, SECRET_SAVE_WAIT).into_result()
 }
 
 #[tauri::command]
 async fn set_secret(
- webview: Webview,
- key: String,
- value: String,
+    webview: Webview,
+    key: String,
+    value: String,
 ) -> Result<(), String> {
- require_trusted_window(webview.label())?;
- if !SUPPORTED_SECRET_KEYS.contains(&key.as_str()) {
- return Err(format!("Unsupported secret key: {key}"));
- }
- let app = webview.app_handle().clone();
- let sync_app = app.clone();
- let sync_key = key.clone();
- tauri::async_runtime::spawn_blocking(move || {
- let cache = app.state::<SecretsCache>();
- if !wait_until_secrets_loaded(&cache) {
- return Err("Secrets are still loading from the keychain; please try again in a moment.".to_string());
- }
- let mut secrets = cache
- .secrets
- .lock()
- .map_err(|_| "Lock poisoned".to_string())?;
- let trimmed = value.trim().to_string();
- // Build proposed state, persist first, then commit to cache
- let mut proposed = secrets.clone();
- if trimmed.is_empty() {
- proposed.remove(&key);
- } else {
- proposed.insert(key.clone(), trimmed);
- }
- save_vault(&proposed)?;
- write_vault_shadow(&app, &proposed);
- *secrets = proposed;
- // Shield this edit from a still-in-flight async keychain read (see merge).
- if let Ok(mut touched) = cache.user_mutated.lock() {
- touched.insert(key);
- }
- Ok(())
- })
- .await
- .map_err(|_| "Secret save task failed".to_string())??;
- // Native pushes the change to the sidecar; webviews no longer relay
- // secret values (R4-SEC-001). Best-effort; the vault is authoritative.
- sync_secret_to_sidecar(&sync_app, &sync_key).await;
- Ok(())
+    require_trusted_window(webview.label())?;
+    if !SUPPORTED_SECRET_KEYS.contains(&key.as_str()) {
+        return Err(format!("Unsupported secret key: {key}"));
+    }
+    let app = webview.app_handle().clone();
+    let trimmed = value.trim().to_string();
+    let change = if trimmed.is_empty() { None } else { Some(trimmed) };
+    tauri::async_runtime::spawn_blocking(move || save_secret_change(&app, &key, change))
+        .await
+        .map_err(|_| "Secret save task failed".to_string())?
 }
 
 /// User-initiated re-read of the keychain vault. The boot read runs on a
 /// background worker with a fail-fast 10s timeout so a not-yet-granted ACL can't
 /// stall startup — which means if the macOS "Always Allow" dialog isn't answered
 /// in that window (e.g. it never surfaced because the app wasn't frontmost), the
-/// app falls back to the shadow vault and never retries until the next launch.
-/// This command lets the user force the read on demand from Settings: the window
-/// is frontmost and they just clicked, so the ACL dialog reliably presents, and
-/// a generous 60s timeout gives them time to answer. On success the freshly
-/// loaded keys are re-injected into the running sidecar so keyed feeds recover
-/// without a relaunch. Returns the number of keys now in the cache.
+/// app falls back to the shadow vault and saves stay gated. This command lets
+/// the user force the read on demand from Settings: the window is frontmost and
+/// they just clicked, so the ACL dialog reliably presents, and a generous 60s
+/// timeout gives them time to answer. A successful read lifts the save gate,
+/// and the writer re-pushes the cache to the running sidecar in order.
+/// Returns the number of keys now in the cache.
 #[tauri::command]
 async fn reload_secrets_from_keychain(webview: Webview) -> Result<usize, String> {
- require_trusted_window(webview.label())?;
- let app = webview.app_handle().clone();
- let load_app = app.clone();
- let secrets: Vec<(String, String)> = tauri::async_runtime::spawn_blocking(move || {
- let cache = load_app.state::<SecretsCache>();
- cache.populate_from_keychain(Some(&load_app), KEYCHAIN_VAULT_INTERACTIVE_TIMEOUT);
- cache
- .secrets
- .lock()
- .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
- .unwrap_or_default()
- })
- .await
- .map_err(|e| format!("keychain reload task failed: {e}"))?;
- let count = secrets.len();
- inject_secrets_into_running_sidecar(&app, secrets).await;
- append_desktop_log(
- &app,
- "INFO",
- &format!("reload_secrets_from_keychain: loaded {count} keys, re-injected into sidecar"),
- );
- Ok(count)
+    require_trusted_window(webview.label())?;
+    let app = webview.app_handle().clone();
+    let load_app = app.clone();
+    let (count, source) = tauri::async_runtime::spawn_blocking(move || {
+        let cache = load_app.state::<SecretsCache>();
+        let writer = cache.writer()?;
+        let started = cache.state.generation();
+        let (read, _) = read_vault_for_load(&load_app, KEYCHAIN_VAULT_INTERACTIVE_TIMEOUT);
+        let source = apply_load_read(writer, read, started)
+            .ok_or_else(|| vault_coordinator::BUSY_MESSAGE.to_string())?;
+        writer.push_all();
+        Ok::<(usize, VaultSource), String>((cache.state.read(|m| m.len()), source))
+    })
+    .await
+    .map_err(|e| format!("keychain reload task failed: {e}"))??;
+    append_desktop_log(
+        &app,
+        "INFO",
+        &format!("reload_secrets_from_keychain: {count} keys, vault source {}, queued for the sidecar", source.as_str()),
+    );
+    Ok(count)
 }
 
 #[tauri::command]
 async fn delete_secret(webview: Webview, key: String) -> Result<(), String> {
- require_trusted_window(webview.label())?;
- if !SUPPORTED_SECRET_KEYS.contains(&key.as_str()) {
- return Err(format!("Unsupported secret key: {key}"));
- }
- let app = webview.app_handle().clone();
- let sync_app = app.clone();
- let sync_key = key.clone();
- tauri::async_runtime::spawn_blocking(move || {
- let cache = app.state::<SecretsCache>();
- if !wait_until_secrets_loaded(&cache) {
- return Err("Secrets are still loading from the keychain; please try again in a moment.".to_string());
- }
- let mut secrets = cache
- .secrets
- .lock()
- .map_err(|_| "Lock poisoned".to_string())?;
- let mut proposed = secrets.clone();
- proposed.remove(&key);
- save_vault(&proposed)?;
- write_vault_shadow(&app, &proposed);
- *secrets = proposed;
- // Shield this deletion from a still-in-flight async keychain read (see merge).
- if let Ok(mut touched) = cache.user_mutated.lock() {
- touched.insert(key);
- }
- Ok(())
- })
- .await
- .map_err(|_| "Secret delete task failed".to_string())??;
- // Native pushes the change to the sidecar; webviews no longer relay
- // secret values (R4-SEC-001). Best-effort; the vault is authoritative.
- sync_secret_to_sidecar(&sync_app, &sync_key).await;
- Ok(())
+    require_trusted_window(webview.label())?;
+    if !SUPPORTED_SECRET_KEYS.contains(&key.as_str()) {
+        return Err(format!("Unsupported secret key: {key}"));
+    }
+    let app = webview.app_handle().clone();
+    tauri::async_runtime::spawn_blocking(move || save_secret_change(&app, &key, None))
+        .await
+        .map_err(|_| "Secret delete task failed".to_string())?
+}
+
+#[derive(Debug, Serialize)]
+struct SecretWriteState {
+    revision: u64,
+    pending: u64,
+    source: &'static str,
+}
+
+/// Value-free write status. After a save reported "pending", the renderer
+/// polls this and reloads secret status once nothing is pending, so Settings
+/// updates on its own when the Keychain answers.
+#[tauri::command]
+async fn get_secret_write_state(webview: Webview) -> Result<SecretWriteState, String> {
+    require_trusted_window(webview.label())?;
+    let app = webview.app_handle().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let cache = app.state::<SecretsCache>();
+        let state = cache.writer()?.write_state();
+        Ok(SecretWriteState { revision: state.revision, pending: state.pending, source: cache.state.source().as_str() })
+    })
+    .await
+    .map_err(|_| "Secret write state task failed".to_string())?
 }
 
 /// Sentinel that marks "migration from individual keys has been attempted".
@@ -3343,6 +3294,32 @@ mod sanitize_path_tests {
 }
 
 #[cfg(test)]
+mod keychain_read_tests {
+    use super::*;
+
+    fn boxed(message: &str) -> Box<dyn std::error::Error + Send + Sync> {
+        Box::new(std::io::Error::other(message.to_string()))
+    }
+
+    #[test]
+    fn only_a_missing_item_counts_as_absent() {
+        assert_eq!(classify_keychain_read(Err(keyring::Error::NoEntry)), KeychainRead::Absent);
+        assert_eq!(classify_keychain_read(Ok("   ".to_string())), KeychainRead::Absent);
+        assert_eq!(classify_keychain_read(Err(keyring::Error::NoStorageAccess(boxed("locked")))), KeychainRead::Error);
+        assert_eq!(classify_keychain_read(Err(keyring::Error::PlatformFailure(boxed("denied")))), KeychainRead::Error);
+        assert_eq!(classify_keychain_read(Ok(" {} ".to_string())), KeychainRead::Value("{}".to_string()));
+    }
+
+    #[test]
+    fn vault_json_keeps_only_supported_non_empty_keys() {
+        let parsed = parse_vault_json(r#"{"GROQ_API_KEY":" gsk ","NOT_A_KEY":"x","OLLAMA_MODEL":"  "}"#).unwrap();
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed.get("GROQ_API_KEY").map(String::as_str), Some("gsk"));
+        assert_eq!(parse_vault_json("not json"), None);
+    }
+}
+
+#[cfg(test)]
 mod vault_shadow_crypto_tests {
  use super::{decrypt_vault_shadow, encrypt_vault_shadow};
 
@@ -3879,12 +3856,12 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  // Pass cached keychain secrets to sidecar as env vars (no keychain re-read)
  let mut secret_count = 0u32;
  let secrets_cache = app.state::<SecretsCache>();
- if let Ok(secrets) = secrets_cache.secrets.lock() {
+ secrets_cache.state.read(|secrets| {
  for (key, value) in secrets.iter() {
  cmd.env(key, value);
  secret_count += 1;
  }
- }
+ });
  append_desktop_log(
  app,
  "INFO",
@@ -4346,22 +4323,12 @@ async fn inject_secrets_into_running_sidecar(app: &AppHandle, secrets: Vec<(Stri
     let mut skipped = 0usize;
     for (key, _snapshot) in secrets {
         // Re-read the live cache value per key rather than trusting this snapshot.
-        // If the user edited the secret in Settings after the snapshot was taken,
-        // the cache holds the newer value and we post that (never the stale one).
-        // If the key was deleted since the snapshot it's gone from the cache, so
-        // skip it rather than resurrect a just-removed credential.
-        let value = match secrets_cache.secrets.lock() {
-            Ok(map) => match map.get(&key) {
-                Some(v) => v.clone(),
-                None => {
-                    skipped += 1;
-                    continue;
-                }
-            },
-            Err(_) => {
-                skipped += 1;
-                continue;
-            }
+        // The vault writer runs this push in order with every save, so the
+        // cache is current; a key deleted since the snapshot is skipped rather
+        // than resurrected.
+        let Some(value) = secrets_cache.state.get(&key) else {
+            skipped += 1;
+            continue;
         };
         if post_secret_update(&client, port, &token, &key, Some(&value)).await {
             pushed += 1;
@@ -4374,12 +4341,12 @@ async fn inject_secrets_into_running_sidecar(app: &AppHandle, secrets: Vec<(Stri
     );
 }
 
-/// Push one Settings edit or deletion to the running sidecar (R4-SEC-001).
-/// Webviews no longer relay secret values, so native does it after the vault
-/// write. Reads the live cache: a deleted key is sent as an unset, so it stops
+/// Push one Settings change to the running sidecar (R4-SEC-001). Called only
+/// by the vault writer, after the vault write and the cache commit, so pushes
+/// arrive in commit order. A deleted key is sent as an unset, so it stops
 /// working immediately instead of staying live until the sidecar restarts. If
 /// the sidecar is down, its next start takes its env from the same cache.
-async fn sync_secret_to_sidecar(app: &AppHandle, key: &str) {
+async fn push_secret_value(app: &AppHandle, key: &str, value: Option<&str>) {
     let (token, port) = match confirmed_sidecar_target(app) {
         Ok(target) => target,
         Err(reason) => {
@@ -4394,14 +4361,8 @@ async fn sync_secret_to_sidecar(app: &AppHandle, key: &str) {
             return;
         }
     };
-    let value = app
-        .state::<SecretsCache>()
-        .secrets
-        .lock()
-        .ok()
-        .and_then(|map| map.get(key).cloned());
     let action = if value.is_some() { "set" } else { "unset" };
-    let level = if post_secret_update(&client, port, &token, key, value.as_deref()).await { "INFO" } else { "WARN" };
+    let level = if post_secret_update(&client, port, &token, key, value).await { "INFO" } else { "WARN" };
     append_desktop_log(app, level, &format!("Settings change pushed to sidecar: {action} {key} (ok={})", level == "INFO"));
 }
 
@@ -4896,6 +4857,7 @@ fn main() {
  list_supported_secret_keys,
  get_secret_status,
  get_renderer_config,
+ get_secret_write_state,
  secrets_ready,
  set_always_on,
  set_secret,
@@ -5061,6 +5023,23 @@ fn main() {
  ),
  );
 
+ // ── Vault writer (R3-BUG-001 slice B) ──────────────────────────────
+ // Start the one writer before anything can load or save secrets. If it
+ // cannot start, the load is marked failed so saves report it at once.
+ {
+     let cache = app.state::<SecretsCache>();
+     let store: Arc<dyn VaultStore> = Arc::new(TauriVaultStore { app: app.handle().clone() });
+     match VaultCoordinator::start(cache.state.clone(), store) {
+         Ok((writer, _thread)) => {
+             let _ = cache.writer.set(writer);
+         }
+         Err(err) => {
+             append_desktop_log(app.handle(), "ERROR", &format!("vault writer failed to start: {err}"));
+             cache.state.mark_failed();
+         }
+     }
+ }
+
  // ── Async boot: sidecar FIRST, keychain SECOND ───────────────────
  //
  // Nothing on the Tauri builder's main UI thread may block on the
@@ -5111,80 +5090,80 @@ fn main() {
  // We just skip the IPC injection below — there's no sidecar to inject into,
  // and its port_confirmed/liveness guards would no-op the push anyway.
 
- // 2. Read the keychain on a worker thread. Bounded by the per-call
- //    timeouts (≤120s for the consolidated vault), but the UI and
- //    sidecar are already live so this no longer blocks startup.
+ // 2. Read the keychain on a worker thread and hand the result to the
+ //    vault writer, which owns every cache change. Bounded by the per-call
+ //    timeouts; the UI and sidecar are already live, so this no longer
+ //    blocks startup. If this task dies before the writer applies a result,
+ //    the guard marks the load failed so saves get a clear error at once.
  let load_handle = setup_handle.clone();
- let (secrets, vault_timed_out): (Vec<(String, String)>, bool) = tauri::async_runtime::spawn_blocking(move || {
- let cache = load_handle.state::<SecretsCache>();
- let timed_out = cache.populate_from_keychain(Some(&load_handle), KEYCHAIN_VAULT_TIMEOUT);
- let snapshot: Vec<(String, String)> = cache
- .secrets
- .lock()
- .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
- .unwrap_or_default();
- (snapshot, timed_out)
+ let (initial_count, vault_timed_out): (usize, bool) = tauri::async_runtime::spawn_blocking(move || {
+     let cache = load_handle.state::<SecretsCache>();
+     let _guard = LoadGuard::new(cache.state.clone());
+     let started = cache.state.generation();
+     let (read, timed_out) = read_vault_for_load(&load_handle, KEYCHAIN_VAULT_TIMEOUT);
+     let source = cache.writer().ok().and_then(|writer| apply_load_read(writer, read, started));
+     append_desktop_log(
+         &load_handle,
+         "INFO",
+         &format!("secrets-cache: vault source {}", source.map_or("not applied", VaultSource::as_str)),
+     );
+     (cache.state.read(|m| m.len()), timed_out)
  })
  .await
  .unwrap_or_default();
  append_desktop_log(
- &setup_handle,
- "INFO",
- &format!(
- "secrets-cache: loaded {} keys from keychain (async)",
- secrets.len()
- ),
+     &setup_handle,
+     "INFO",
+     &format!("secrets-cache: loaded {initial_count} keys from keychain (async)"),
  );
 
- // 3. Inject the loaded secrets into the live sidecar via IPC — no
- //    restart. Until this completes, key-dependent routes return
- //    503 + `keyMissing`, exactly as on a cold cache. Skipped when the
- //    sidecar never started — the renderer already has the secrets.
- let initial_count = secrets.len();
+ // 3. Push the loaded secrets into the live sidecar via IPC — no restart.
+ //    The writer runs the push in order behind the load. Until it lands,
+ //    key-dependent routes return 503 + `keyMissing`, exactly as on a cold
+ //    cache. Skipped when the sidecar never started.
  if sidecar_ok {
- inject_secrets_into_running_sidecar(&setup_handle, secrets).await;
+     if let Ok(writer) = setup_handle.state::<SecretsCache>().writer() {
+         writer.push_all();
+     }
  }
 
  // 4. Self-heal: if the boot vault read TIMED OUT (not merely empty), we
- //    are running on the possibly-stale shadow copy. The macOS keychain
- //    frequently answers a few seconds after the 10s boot cutoff, but the
- //    boot path orphans that worker and discards the late answer. Fire ONE
- //    detached retry with a long deadline; on success re-inject the
- //    recovered keys so the session heals with no relaunch or ACL prompt.
+ //    are running on the shadow copy or nothing, with saves gated. The
+ //    macOS keychain frequently answers a few seconds after the 10s boot
+ //    cutoff, but the boot path orphans that worker and discards the late
+ //    answer. Fire ONE detached vault-only retry with a long deadline; on
+ //    success the real vault replaces the cache, saves are enabled, and the
+ //    writer re-pushes the cache, so the session heals with no relaunch.
  if vault_timed_out {
- let retry_handle = setup_handle.clone();
- tauri::async_runtime::spawn(async move {
- let blocking_handle = retry_handle.clone();
- let recovered: Vec<(String, String)> = tauri::async_runtime::spawn_blocking(move || {
- let cache = blocking_handle.state::<SecretsCache>();
- // Vault-ONLY read — must never reach the per-key migration/delete path.
- if cache.repopulate_vault_only(&blocking_handle, KEYCHAIN_VAULT_RETRY_TIMEOUT) {
- cache
- .secrets
- .lock()
- .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
- .unwrap_or_default()
- } else {
- Vec::new()
- }
- })
- .await
- .unwrap_or_default();
- if recovered.len() > initial_count {
- append_desktop_log(
- &retry_handle,
- "INFO",
- &format!(
- "secrets-cache: background retry recovered {} keys (boot read had {})",
- recovered.len(),
- initial_count,
- ),
- );
- if sidecar_ok {
- inject_secrets_into_running_sidecar(&retry_handle, recovered).await;
- }
- }
- });
+     let retry_handle = setup_handle.clone();
+     tauri::async_runtime::spawn(async move {
+         let blocking_handle = retry_handle.clone();
+         let recovered: usize = tauri::async_runtime::spawn_blocking(move || {
+             let cache = blocking_handle.state::<SecretsCache>();
+             let started = cache.state.generation();
+             // Vault-ONLY read — must never reach the per-key migration/delete path.
+             let Some(secrets) = read_vault_only(KEYCHAIN_VAULT_RETRY_TIMEOUT) else { return 0 };
+             let Ok(writer) = cache.writer() else { return 0 };
+             if writer.load(ReadResult::Vault(secrets), started, VAULT_APPLY_WAIT).is_none() {
+                 return 0;
+             }
+             if sidecar_ok {
+                 writer.push_all();
+             }
+             cache.state.read(|m| m.len())
+         })
+         .await
+         .unwrap_or_default();
+         if recovered > 0 {
+             append_desktop_log(
+                 &retry_handle,
+                 "INFO",
+                 &format!(
+                     "secrets-cache: background retry read the vault ({recovered} keys; boot read had {initial_count}); saves are enabled",
+                 ),
+             );
+         }
+     });
  }
  });
 
@@ -5470,7 +5449,7 @@ mod secret_boundary_tests {
         for key in RENDERER_READABLE_KEYS {
             assert!(SUPPORTED_SECRET_KEYS.contains(&key), "{key} is not a supported key");
         }
-        let unique: HashSet<&str> = RENDERER_READABLE_KEYS.iter().copied().collect();
+        let unique: std::collections::HashSet<&str> = RENDERER_READABLE_KEYS.iter().copied().collect();
         assert_eq!(unique.len(), RENDERER_READABLE_KEYS.len());
     }
 

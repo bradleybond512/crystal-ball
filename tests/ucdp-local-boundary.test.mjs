@@ -20,7 +20,11 @@ test('UCDP RPC is explicitly no-store at the cloud gateway', () => {
 test('deleting a desktop secret unsets it in the live sidecar environment (native push, R4-SEC-001)', () => {
   const main = readFileSync('src-tauri/src/main.rs', 'utf8');
   const deleteSecret = main.slice(main.indexOf('async fn delete_secret('), main.indexOf('fn migration_marker_path('));
-  assert.match(deleteSecret, /sync_secret_to_sidecar\(&sync_app, &sync_key\)\.await;/);
+  // R3-BUG-001 slice B: the deletion goes through the one vault writer, which
+  // pushes it to the sidecar as an unset after the vault write.
+  assert.match(deleteSecret, /save_secret_change\(&app, &key, None\)/);
+  const store = main.slice(main.indexOf('impl VaultStore for TauriVaultStore'), main.indexOf('    fn late_outcome('));
+  assert.match(store, /push_secret_value\(&self\.app, key, value\)/);
   assert.match(main, /fn sidecar_env_update_body\(key: &str, value: Option<&str>\)/);
   assert.doesNotMatch(runtimeConfig, /pushSecretToSidecar/);
 });

@@ -4,7 +4,9 @@ import test from 'node:test';
 
 const source = readFileSync(new URL('../src-tauri/src/main.rs', import.meta.url), 'utf8');
 const commands = {
-  get_secret: ['.state::<SecretsCache>()', '.secrets', '.lock()', 'secrets.get(&key)'],
+  // R4-SEC-001 replaced get_secret with these two value-limited reads.
+  get_secret_status: ['.state::<SecretsCache>()', '.secrets', '.lock()', 'secret_status_from('],
+  get_renderer_config: ['.state::<SecretsCache>()', '.secrets', '.lock()', 'renderer_config_from('],
   set_secret: ['.state::<SecretsCache>()', 'wait_until_secrets_loaded(', '.lock()', 'save_vault(', 'write_vault_shadow('],
   delete_secret: ['.state::<SecretsCache>()', 'wait_until_secrets_loaded(', '.lock()', 'save_vault(', 'write_vault_shadow('],
   read_cache_entry: ['.state::<PersistentCache>()', 'cache.get(&key)'],

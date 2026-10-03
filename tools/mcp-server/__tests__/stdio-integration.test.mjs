@@ -6,16 +6,44 @@ import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
-const serverRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+import { TOOL_CATALOG } from '../tool-registry.mjs';
 
-test('stdio server exposes the canonical registry with annotations and structured results', async () => {
+const serverRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+const READ_ONLY_TOOL_COUNT = Object.values(TOOL_CATALOG)
+  .filter((metadata) => metadata.annotations.readOnlyHint === true).length;
+
+function startClient(profile) {
   const client = new Client({ name: 'crystalball-test', version: '1.0.0' });
   const installedExecutable = process.env.CRYSTALBALL_MCP_EXECUTABLE;
+  const env = { ...process.env };
+  delete env.CRYSTALBALL_MCP_PROFILE;
+  if (profile) env.CRYSTALBALL_MCP_PROFILE = profile;
   const transport = new StdioClientTransport({
     command: installedExecutable || process.execPath,
     args: installedExecutable ? [] : [join(serverRoot, 'index.mjs')],
+    env,
     stderr: 'pipe',
   });
+  return { client, transport };
+}
+
+test('stdio server defaults to the read-only profile', async () => {
+  const { client, transport } = startClient(undefined);
+  try {
+    await client.connect(transport);
+    const listed = await client.listTools();
+
+    assert.equal(READ_ONLY_TOOL_COUNT, 53);
+    assert.equal(listed.tools.length, READ_ONLY_TOOL_COUNT);
+    for (const tool of listed.tools) assert.equal(tool.annotations.readOnlyHint, true, tool.name);
+    assert.equal(listed.tools.some((tool) => tool.name === 'generate_weekly_evaluation_report'), false);
+  } finally {
+    await client.close();
+  }
+});
+
+test('stdio server exposes the canonical registry with annotations and structured results', async () => {
+  const { client, transport } = startClient('analyst');
 
   try {
     await client.connect(transport);

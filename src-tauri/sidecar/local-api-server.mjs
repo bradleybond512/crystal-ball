@@ -7764,6 +7764,10 @@ async function dispatch(requestUrl, req, routes, context) {
   // Write-back path for external agents (MCP tools) to submit feedback,
   // dismiss hypotheses, or trigger a skeptic pass. Sidecar holds an in-
   // memory queue that the renderer drains every few seconds.
+  // R4-SEC-004: only outside callers use this route (the renderer applies its
+  // own feedback in-process), so every queued command is tagged
+  // origin: 'external'. The renderer holds external thumbs and dismissals for
+  // the user's confirmation instead of applying them.
   if (requestUrl.pathname === '/api/analyst-commands') {
     if (!context._analystCommands) context._analystCommands = [];
     if (req.method === 'POST') {
@@ -7783,8 +7787,9 @@ async function dispatch(requestUrl, req, routes, context) {
           id: `cmd-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
           issuedAt: Date.now(),
           kind,
-          hypothesisId: typeof body.hypothesisId === 'string' ? body.hypothesisId : null,
-          signature: typeof body.signature === 'string' ? body.signature : null,
+          origin: 'external',
+          hypothesisId: typeof body.hypothesisId === 'string' ? body.hypothesisId.slice(0, 128) : null,
+          signature: typeof body.signature === 'string' ? body.signature.slice(0, 512) : null,
           note: typeof body.note === 'string' ? body.note.slice(0, 400) : null,
         };
         // Cap queue to 64 so a runaway agent can't balloon memory.

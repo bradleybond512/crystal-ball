@@ -45,26 +45,30 @@ export function signatureFor(h: Pick<Hypothesis, 'kind' | 'evidence' | 'region'>
   return `${h.kind}|${sources}|${region}`;
 }
 
-export function thumbsUp(h: Hypothesis): void {
+export type FeedbackVote = 'up' | 'down';
+
+/**
+ * Record one vote for a signature. Used by the HUD's own thumbs and by an
+ * agent suggestion the user confirmed (R4-SEC-004), which is keyed by the
+ * signature captured when the agent made it.
+ */
+export function recordFeedbackForSignature(key: string, vote: FeedbackVote): void {
   ensureLoaded();
-  const key = signatureFor(h);
   const cur = stats.get(key) ?? { up: 0, down: 0, lastTouched: 0 };
-  cur.up += 1;
+  if (vote === 'up') cur.up += 1;
+  else cur.down += 1;
   cur.lastTouched = Date.now();
   stats.set(key, cur);
   save();
   document.dispatchEvent(new CustomEvent<{ key: string }>('cb:hypothesis-feedback', { detail: { key } }));
 }
 
+export function thumbsUp(h: Hypothesis): void {
+  recordFeedbackForSignature(signatureFor(h), 'up');
+}
+
 export function thumbsDown(h: Hypothesis): void {
-  ensureLoaded();
-  const key = signatureFor(h);
-  const cur = stats.get(key) ?? { up: 0, down: 0, lastTouched: 0 };
-  cur.down += 1;
-  cur.lastTouched = Date.now();
-  stats.set(key, cur);
-  save();
-  document.dispatchEvent(new CustomEvent<{ key: string }>('cb:hypothesis-feedback', { detail: { key } }));
+  recordFeedbackForSignature(signatureFor(h), 'down');
 }
 
 /** Pure multiplier formula. up/down are vote counts; downPenalty is the

@@ -42,6 +42,8 @@ test('temporary-prefix install exposes both new and existing command names', { t
   assert.equal(doctorReport.checks.mcp.version, '0.3.0');
   const installedRoot = join(prefix, 'lib', 'node_modules', 'crystalball-mcp');
   for (const file of [
+    'framing.mjs',
+    'profile.mjs',
     'local-lock.mjs',
     'weekly-evaluation-report.mjs',
     join('tools', 'evaluation-report.mjs'),

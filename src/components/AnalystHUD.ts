@@ -18,6 +18,9 @@ import { subscribeAnalyst, getAnalystSnapshot, type Hypothesis, type HypothesisE
 import { subscribeModeAdvisory, getForecastSnapshot, type ForecastSnapshot, type ModeAdvisory } from '@/services/mode-forecast';
 import { subscribeAutoBrief, getLatestBriefs, isAutoBriefEnabled, setAutoBriefEnabled, type AutoBrief } from '@/services/auto-brief';
 import { thumbsUp, thumbsDown } from '@/services/hypothesis-feedback';
+import { listAgentSuggestions, subscribeAgentSuggestions } from '@/services/agent-suggestions';
+import { confirmAgentSuggestion, rejectAgentSuggestion } from '@/services/analyst-command-listener';
+import { agentSuggestionActionFrom, buildAgentSuggestionsSection } from './agent-suggestions-view';
 import { getKindAccuracy } from '@/services/hypothesis-accuracy';
 import { getThreadFor } from '@/services/hypothesis-threads';
 import { entitiesForHypothesis, entitiesFromHypothesis, getHotEntities, type EntityMention } from '@/services/hypothesis-entities';
@@ -278,6 +281,7 @@ export class AnalystHUD {
       this.scheduleRender();
     });
     const unsubLlmEgressChange = subscribeLlmEgressChange(() => { this.scheduleRender(); });
+    const unsubAgentSuggestions = subscribeAgentSuggestions(() => { this.scheduleRender(); });
     document.addEventListener('cb:llm-egress-disclosure-needed', this.onEgressDisclosure);
     document.addEventListener('cb:toggle-analyst-hud', this.onToggle);
     document.addEventListener('cb:hypothesis-feedback', this.onFeedback);
@@ -299,6 +303,7 @@ export class AnalystHUD {
       unsubSnapshotArchive,
       unsubEnsemble,
       unsubLlmEgressChange,
+      unsubAgentSuggestions,
       () => document.removeEventListener('cb:llm-egress-disclosure-needed', this.onEgressDisclosure),
       () => document.removeEventListener('cb:toggle-analyst-hud', this.onToggle),
       () => document.removeEventListener('cb:hypothesis-feedback', this.onFeedback),
@@ -458,8 +463,11 @@ export class AnalystHUD {
   private render(): void {
     const card = document.createElement('div');
     card.className = 'analyst-hud-card';
+    card.append(this.buildHeader());
+    // R4-SEC-004: external-agent feedback waits here for Confirm / Discard.
+    const agentSuggestions = buildAgentSuggestionsSection(listAgentSuggestions(), Date.now());
+    if (agentSuggestions) card.append(agentSuggestions);
     card.append(
-      this.buildHeader(),
       this.buildAdvisorySection(),
       this.buildHotEntitiesSection(),
       this.buildHypothesesSection(),
@@ -1323,6 +1331,13 @@ export class AnalystHUD {
     if (e.target === this.root) { this.hide(); return; }
     const target = e.target as HTMLElement;
     if (target.closest?.('.analyst-hud-close')) { this.hide(); return; }
+    const suggestion = agentSuggestionActionFrom(target);
+    if (suggestion) {
+      if (suggestion.action === 'confirm') confirmAgentSuggestion(suggestion.id);
+      else rejectAgentSuggestion(suggestion.id);
+      this.render();
+      return;
+    }
     // Hypothesis action row (thumbs / outcome / simulate / perspectives /
     // deep forecast / copy). The hypothesis is re-resolved by id at click time.
     const actionBtn = target.closest?.<HTMLElement>('[data-hyp-action]');

@@ -100,5 +100,26 @@
   ],
   "src-tauri/tests/watchdog_contract.rs": [
     "test:native-responsiveness"
+  ],
+  "tools/mcp-server/index.mjs": [
+    "test:mcp-untrusted"
+  ],
+  "tools/mcp-server/framing.mjs": [
+    "test:mcp-untrusted"
+  ],
+  "tools/mcp-server/profile.mjs": [
+    "test:mcp-untrusted"
+  ],
+  "tools/mcp-server/result.mjs": [
+    "test:mcp-untrusted"
+  ],
+  "tools/mcp-server/tool-registry.mjs": [
+    "test:mcp-untrusted"
+  ],
+  "src/components/AnalystHUD.ts": [
+    "test:mcp-untrusted"
+  ],
+  "src/components/agent-suggestions-view.ts": [
+    "test:mcp-untrusted"
   ]
 }

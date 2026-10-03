@@ -7,10 +7,12 @@
  * sidecar-pusher handles the outbound half (renderer state → sidecar).
  *
  * Commands:
- *   - thumbs_up     → thumbsUp(h)     on matching hypothesis
- *   - thumbs_down   → thumbsDown(h)   on matching hypothesis
- *   - dismiss       → mark hypothesis as dismissed (persisted locally)
- *   - run_skeptic   → enqueue an immediate skeptic review for the hypothesis
+ *   - thumbs_up, thumbs_down, dismiss → held as a pending agent suggestion
+ *     until the user confirms it in the Analyst HUD (R4-SEC-004). An agent
+ *     reads feed text anyone can publish, so it must not be able to move
+ *     calibration or hide a hypothesis on its own.
+ *   - run_skeptic → enqueue an immediate skeptic review for the hypothesis
+ *     (it only adds a review; it changes no ranking or visibility).
  *
  * Matching uses signature first (stable across cycles), hypothesisId
  * second (stable within a snapshot). Commands that can't match current
@@ -26,7 +28,13 @@
 import { isDesktopRuntime } from './runtime';
 import { isGhostMode } from './mode-manager';
 import type { Hypothesis, AnalystSnapshot } from './analyst-loop';
-import { thumbsUp, thumbsDown, signatureFor } from './hypothesis-feedback';
+import { recordFeedbackForSignature, signatureFor } from './hypothesis-feedback';
+import {
+  discardAgentSuggestion,
+  queueAgentSuggestion,
+  takeAgentSuggestion,
+  type AgentSuggestionKind,
+} from './agent-suggestions';
 import { putMemory, getMemory } from './reasoning-memory';
 import { logDebug } from './reasoning-debug';
 import { recordLatency, incrementCounter } from './reasoning-metrics';
@@ -43,16 +51,42 @@ const DISMISSED_TTL_MS = 24 * 60 * 60 * 1000;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+type AnalystCommandKind = AgentSuggestionKind | 'run_skeptic';
+
 interface AnalystCommand {
   id: string;
   issuedAt: number;
-  kind: 'thumbs_up' | 'thumbs_down' | 'dismiss' | 'run_skeptic';
+  kind: AnalystCommandKind;
+  /** Set by the sidecar to 'external'; never treated as a reason to skip confirmation. */
+  origin?: string;
   hypothesisId: string | null;
   signature: string | null;
   note?: string | null;
 }
 
-interface CommandResponse { commands?: AnalystCommand[] }
+const COMMAND_KINDS: readonly AnalystCommandKind[] = ['thumbs_up', 'thumbs_down', 'dismiss', 'run_skeptic'];
+
+const optionalString = (value: unknown): string | null => (typeof value === 'string' ? value : null);
+
+/** Shape-check one command from the sidecar; null when it is malformed. */
+export function parseAnalystCommand(raw: unknown): AnalystCommand | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.id !== 'string' || !r.id) return null;
+  if (typeof r.issuedAt !== 'number' || !Number.isFinite(r.issuedAt)) return null;
+  if (typeof r.kind !== 'string' || !(COMMAND_KINDS as readonly string[]).includes(r.kind)) return null;
+  return {
+    id: r.id,
+    issuedAt: r.issuedAt,
+    kind: r.kind as AnalystCommandKind,
+    origin: optionalString(r.origin) ?? undefined,
+    hypothesisId: optionalString(r.hypothesisId),
+    signature: optionalString(r.signature),
+    note: optionalString(r.note),
+  };
+}
+
+interface CommandResponse { commands?: unknown[] }
 
 // ── Dismissed set (cross-session) ────────────────────────────────────────────
 
@@ -112,13 +146,18 @@ export function isDismissed(h: Pick<Hypothesis, 'kind' | 'evidence' | 'region'>)
   return true;
 }
 
-export function markDismissed(h: Pick<Hypothesis, 'kind' | 'evidence' | 'region'>): void {
+/** Dismiss by feedback signature (used by a confirmed agent suggestion). */
+export function markDismissedSignature(signature: string): void {
   loadDismissed();
-  dismissed.set(signatureFor(h), Date.now());
+  dismissed.set(signature, Date.now());
   saveDismissed();
   document.dispatchEvent(new CustomEvent<{ signature: string }>(EVENT_DISMISSED, {
-    detail: { signature: signatureFor(h) },
+    detail: { signature },
   }));
+}
+
+export function markDismissed(h: Pick<Hypothesis, 'kind' | 'evidence' | 'region'>): void {
+  markDismissedSignature(signatureFor(h));
 }
 
 export function clearDismissed(): void {
@@ -144,20 +183,57 @@ function findHypothesis(cmd: AnalystCommand): Hypothesis | null {
   return null;
 }
 
-/** Returns true iff a matching hypothesis was found and the command applied. */
-function applyCommand(cmd: AnalystCommand): boolean {
+type CommandOutcome = 'applied' | 'queued' | 'dropped';
+
+/**
+ * Skeptic requests apply at once. Feedback and dismissals become pending
+ * agent suggestions, whatever origin the command carries. Commands that
+ * match no current hypothesis are dropped: the agent may hold stale data.
+ */
+function applyCommand(cmd: AnalystCommand): CommandOutcome {
   const h = findHypothesis(cmd);
-  if (!h) return false; // stale or unknown — drop silently
-  switch (cmd.kind) {
-    case 'thumbs_up': { thumbsUp(h); break; }
-    case 'thumbs_down': { thumbsDown(h); break; }
-    case 'dismiss': { markDismissed(h); break; }
-    case 'run_skeptic': {
-      document.dispatchEvent(new CustomEvent<Hypothesis>(EVENT_RUN_SKEPTIC, { detail: h }));
-      break;
-    }
+  if (!h) return 'dropped';
+  if (cmd.kind === 'run_skeptic') {
+    document.dispatchEvent(new CustomEvent<Hypothesis>(EVENT_RUN_SKEPTIC, { detail: h }));
+    return 'applied';
   }
+  const queued = queueAgentSuggestion({
+    id: cmd.id,
+    kind: cmd.kind,
+    signature: signatureFor(h),
+    hypothesisId: h.id,
+    statement: h.statement,
+    note: cmd.note ?? null,
+    issuedAt: cmd.issuedAt,
+  });
+  return queued ? 'queued' : 'dropped';
+}
+
+/**
+ * Apply a pending agent suggestion the user confirmed. Returns false when it
+ * no longer exists (already handled, discarded or expired).
+ */
+export function confirmAgentSuggestion(id: string): boolean {
+  const suggestion = takeAgentSuggestion(id);
+  if (!suggestion) return false;
+  switch (suggestion.kind) {
+    case 'thumbs_up': { recordFeedbackForSignature(suggestion.signature, 'up'); break; }
+    case 'thumbs_down': { recordFeedbackForSignature(suggestion.signature, 'down'); break; }
+    case 'dismiss': { markDismissedSignature(suggestion.signature); break; }
+  }
+  logDebug({ level: 'info', category: 'commands', source: 'analyst-command-listener',
+    message: 'agent suggestion confirmed', data: { kind: suggestion.kind } });
   return true;
+}
+
+/** Drop a pending agent suggestion without applying it. */
+export function rejectAgentSuggestion(id: string): boolean {
+  const removed = discardAgentSuggestion(id);
+  if (removed) {
+    logDebug({ level: 'info', category: 'commands', source: 'analyst-command-listener',
+      message: 'agent suggestion discarded', data: {} });
+  }
+  return removed;
 }
 
 // ── Polling loop ─────────────────────────────────────────────────────────────
@@ -165,6 +241,18 @@ function applyCommand(cmd: AnalystCommand): boolean {
 let started = false;
 let timer: ReturnType<typeof setTimeout> | null = null;
 let lastSeenAt = 0;
+
+/** Validate and apply one drained batch; exported for tests. */
+export function processAnalystCommands(commands: readonly unknown[]): Record<CommandOutcome, number> {
+  const counts: Record<CommandOutcome, number> = { applied: 0, queued: 0, dropped: 0 };
+  for (const raw of commands) {
+    const cmd = parseAnalystCommand(raw);
+    if (!cmd) { counts.dropped += 1; continue; }
+    lastSeenAt = Math.max(lastSeenAt, cmd.issuedAt);
+    counts[applyCommand(cmd)] += 1;
+  }
+  return counts;
+}
 
 async function poll(): Promise<void> {
   if (!isDesktopRuntime()) return;
@@ -184,20 +272,15 @@ async function poll(): Promise<void> {
       return;
     }
     const commands = parsed.commands;
-    let matched = 0;
-    let dropped = 0;
-    for (const cmd of commands) {
-      lastSeenAt = Math.max(lastSeenAt, cmd.issuedAt);
-      const applied = applyCommand(cmd);
-      if (applied) matched += 1; else dropped += 1;
-    }
+    const counts = processAnalystCommands(commands);
     recordLatency('cmd-poll', performance.now() - t0);
     if (commands.length > 0) {
       logDebug({ level: 'info', category: 'commands', source: 'analyst-command-listener',
         message: `drained ${commands.length}`,
-        data: { total: commands.length, matched, dropped } });
+        data: { total: commands.length, ...counts } });
       incrementCounter('cmd-poll.drained', commands.length);
-      incrementCounter('cmd-poll.dropped', dropped);
+      incrementCounter('cmd-poll.queued', counts.queued);
+      incrementCounter('cmd-poll.dropped', counts.dropped);
     }
   } catch (error) {
     recordLatency('cmd-poll', performance.now() - t0);

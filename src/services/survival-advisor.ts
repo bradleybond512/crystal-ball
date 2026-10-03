@@ -18,6 +18,7 @@
  */
 
 import { loadProximityConfig, type ProximityConfig } from './proximity-filter';
+import { partitionStoredItems, type ResourceItem } from './resource-inventory/schema';
 import { getMembers, type FamilyMember } from './family-tracker';
 import { getSavedRoutes, type EvacRoute } from './evacuation-router';
 import {
@@ -72,17 +73,6 @@ export interface SurvivalAdvice {
 }
 
 // ── Resource inventory IndexedDB access ──────────────────────────────────────
-
-interface ResourceItem {
-  id: string;
-  name: string;
-  quantity: number;
-  unit: string;
-  dailyRate: number;
-  category: string;
-  lastUpdated: number;
-  consumptionLog?: { timestamp: number; amount: number }[];
-}
 
 const DB_NAME = 'crystalball-resources';
 const STORE_NAME = 'items';
@@ -144,7 +134,9 @@ async function loadResourceItems(): Promise<ResourceItem[]> {
  return new Promise((resolve, reject) => {
  const tx = db.transaction(STORE_NAME, 'readonly');
  const req = tx.objectStore(STORE_NAME).getAll(undefined, MAX_ITEMS);
- req.onsuccess = () => resolve(req.result as ResourceItem[]);
+ // Same validation as the panel (R4-SEC-005): only well-formed rows reach
+ // the advice math and the AI prompt.
+ req.onsuccess = () => resolve(partitionStoredItems(req.result as unknown[]).items);
  req.onerror = () => reject(req.error);
  });
   } catch {

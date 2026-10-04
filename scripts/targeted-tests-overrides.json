@@ -153,7 +153,8 @@
     "test:secret-boundary"
   ],
   "api/_api-key.js": [
-    "test:csp-owned"
+    "test:csp-owned",
+    "test:latent-cloud"
   ],
   "api/_cors.js": [
     "test:csp-owned"
@@ -181,5 +182,41 @@
   ],
   "src/main.ts": [
     "test:csp-owned"
+  ],
+  "api/claude-agent.js": [
+    "test:latent-cloud"
+  ],
+  "api/newsapi-headlines.js": [
+    "test:latent-cloud"
+  ],
+  "api/mediastack-news.js": [
+    "test:latent-cloud"
+  ],
+  "api/[domain]/v1/[rpc].ts": [
+    "test:latent-cloud"
+  ],
+  "server/_shared/rate-limit.ts": [
+    "test:latent-cloud"
+  ],
+  "server/_shared/llm-guard.ts": [
+    "test:latent-cloud"
+  ],
+  "server/_shared/country-codes.ts": [
+    "test:latent-cloud"
+  ],
+  "server/crystalball/intelligence/v1/get-country-intel-brief.ts": [
+    "test:latent-cloud"
+  ],
+  "scripts/generate-country-code-allowlist.mjs": [
+    "test:latent-cloud"
+  ],
+  "public/data/countries.geojson": [
+    "test:latent-cloud"
+  ],
+  "src/services/country-geometry.ts": [
+    "test:latent-cloud"
+  ],
+  "server/crystalball/intelligence/v1/_shared.ts": [
+    "test:latent-cloud"
   ]
 }

@@ -54,14 +54,28 @@ function isReadRequest(req) {
 const IS_SIDECAR = (process.env.LOCAL_API_MODE || '').includes('sidecar');
 const SIDECAR_PASS = { valid: true, required: false };
 
+/** True inside the desktop sidecar, where LOCAL_API_TOKEN already gates every
+ *  request and cloud-only cost rules (R4-SEC-007) must not apply. */
+export function isSidecarRuntime() {
+  return IS_SIDECAR;
+}
+
 function requireKey(key, validKeys, errorMsg) {
   if (!key) return { valid: false, required: true, error: errorMsg };
   if (!validKeys.has(key)) return { valid: false, required: true, error: 'Invalid API key' };
   return { valid: true, required: true };
 }
 
-export function validateApiKey(req) {
+/**
+ * @param {Request} req
+ * @param {{ costBearing?: boolean }} [options] `costBearing` marks a route that
+ *   spends money (LLM calls). Browser fetch-metadata headers are trivially
+ *   forged outside a browser, so they never stand in for a key on such a route,
+ *   whatever the method (R4-SEC-007).
+ */
+export function validateApiKey(req, options = {}) {
   if (IS_SIDECAR) return SIDECAR_PASS;
+  const costBearing = options.costBearing === true;
 
   const key = req.headers.get('X-CrystalBall-Key');
   const origin = req.headers.get('Origin') || '';
@@ -72,6 +86,9 @@ export function validateApiKey(req) {
   }
 
   if (isTrustedBrowserRequest(req, origin)) {
+	if (costBearing) {
+	  return requireKey(key, validKeys, 'API key required for cost-bearing requests');
+	}
 	if (!isReadRequest(req)) {
 	  return requireKey(key, validKeys, 'API key required for trusted browser non-read requests');
 	}

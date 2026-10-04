@@ -63,7 +63,11 @@ Dependabot.
 - `tests/dependency-change-gate.test.mjs`: 9 tests, updated intentionally
   for the new sensitive paths, the fourth Dependabot ecosystem, and the
   trigger's ignore comment.
-- New script: `test:workflow-security`.
+- `tests/lint-workflow.test.mjs`: its regex now also accepts
+  `"origin/$BASE_REF...HEAD"`. CI's ESLint job caught that it had pinned the
+  old interpolated form.
+- New script: `test:workflow-security`. It runs these and the four other
+  workflow-pinning suites, all passing.
 
 `bash scripts/agentic-validate.sh --tests "test:workflow-security"` on the
 Mac printed "Agentic validation gate passed." It covered lint:strict

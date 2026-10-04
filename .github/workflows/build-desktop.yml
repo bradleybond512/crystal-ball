@@ -45,6 +45,11 @@ concurrency:
 env:
   CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
 
+# Least privilege (zizmor excessive-permissions): read-only by default;
+# a job that needs more declares it itself.
+permissions:
+  contents: read
+
 jobs:
   release-context:
     runs-on: ubuntu-latest
@@ -60,6 +65,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -133,6 +139,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          persist-credentials: false
           # In publish-mode workflow_dispatch the workflow runs at main so we
           # always use the latest automation code — but the build must reflect
           # the tagged release. The release-context job resolves the tag, so
@@ -414,6 +421,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          persist-credentials: false
           fetch-depth: 0
           ref: ${{ needs.release-context.outputs.tag || github.ref }}
 

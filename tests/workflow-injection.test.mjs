@@ -1,12 +1,17 @@
 // Q20 (R4-LOW-002, R4-LOW-003): workflow expressions never reach script text,
 // the zizmor audit stays wired and pinned, and agent MCP servers are pinned.
+// zizmor medium ratchet: checkouts drop their credentials and every workflow
+// defaults to least privilege, so medium findings can fail the build.
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const root = path.resolve(import.meta.dirname, '..');
 const read = (file) => readFileSync(path.join(root, file), 'utf8');
+const WORKFLOWS = readdirSync(path.join(root, '.github/workflows'))
+  .filter((f) => /\.ya?ml$/.test(f))
+  .map((f) => `.github/workflows/${f}`);
 
 /** Lines of every `run: |` / `script: |` block scalar in a workflow. */
 function scriptBlocks(yaml) {
@@ -58,10 +63,10 @@ test('the PAT value never enters a script, only whether it exists', () => {
   assert.equal(wf.includes("Boolean('${{ secrets.AUTO_MERGE_PAT }}')"), false);
 });
 
-test('zizmor runs in CI, pinned by version and hash, failing on high findings', () => {
+test('zizmor runs in CI, pinned by version and hash, failing on medium findings', () => {
   const wf = read('.github/workflows/actionlint.yml');
   assert.match(wf, /pip" install --require-hashes --only-binary=:all: -r \.github\/tools\/zizmor\/requirements\.txt/);
-  assert.match(wf, /zizmor" --offline --min-severity high --format github \.github\/workflows/);
+  assert.match(wf, /zizmor" --offline --min-severity medium --format github \.github\/workflows/);
   const req = read('.github/tools/zizmor/requirements.txt');
   assert.match(req, /^zizmor==\d+\.\d+\.\d+ \\$/m);
   assert.ok((req.match(/--hash=sha256:[0-9a-f]{64}/g) ?? []).length >= 4, 'hashes for every platform wheel');
@@ -94,4 +99,47 @@ test('release builds restore no package or Rust cache', () => {
   }
   const rust = wf.slice(wf.indexOf('- name: Rust cache'), wf.indexOf('- name: Rust cache') + 200);
   assert.match(rust, /if: needs\.release-context\.outputs\.publish != 'true'/);
+});
+
+/** Text of the step containing line `i`: from its `- ` line to the next sibling. */
+function stepAround(lines, i) {
+  let start = i;
+  while (start > 0 && !/^\s*- /.test(lines[start])) start -= 1;
+  const indent = lines[start].search(/\S/);
+  let end = start + 1;
+  while (end < lines.length && (lines[end].trim() === '' || lines[end].search(/\S/) > indent)) end += 1;
+  return lines.slice(start, end).join('\n');
+}
+
+// Only these checkouts keep the token in .git/config, because the job pushes
+// with it afterwards. Each one must carry a reasoned zizmor annotation.
+const PUSHING_CHECKOUTS = new Set(['.github/workflows/auto-tag.yml']);
+
+test('checkouts drop their credentials unless the job pushes and says why', () => {
+  let checkouts = 0;
+  for (const file of WORKFLOWS) {
+    const lines = read(file).split('\n');
+    lines.forEach((line, i) => {
+      if (!/uses: actions\/checkout@/.test(line)) return;
+      checkouts += 1;
+      const step = stepAround(lines, i);
+      const ignored = /# zizmor: ignore\[artipacked\] \S/.test(step);
+      assert.equal(ignored, PUSHING_CHECKOUTS.has(file), `${file}:${i + 1} artipacked exemption`);
+      if (!ignored) assert.match(step, /\n\s+persist-credentials: false\b/, `${file}:${i + 1}`);
+    });
+  }
+  assert.ok(checkouts >= 32, `found ${checkouts} checkouts`);
+});
+
+test('every workflow defaults to least privilege', () => {
+  for (const file of WORKFLOWS) {
+    const wf = read(file);
+    const jobsAt = wf.indexOf('\njobs:');
+    assert.ok(jobsAt > 0, file);
+    assert.doesNotMatch(wf, /permissions: write-all/, file);
+    if (/^permissions:\n {2}\S/m.test(wf.slice(0, jobsAt))) continue;
+    const jobs = wf.slice(jobsAt).split(/\n(?= {2}[\w-]+:\s*$)/m).slice(1);
+    assert.ok(jobs.length > 0, file);
+    for (const job of jobs) assert.match(job, /\n {4}permissions:/, `${file}: ${job.split('\n')[0].trim()}`);
+  }
 });

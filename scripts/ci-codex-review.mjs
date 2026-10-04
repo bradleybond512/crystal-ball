@@ -42,6 +42,20 @@ export function parseVerdictLine(output) {
   return parsed;
 }
 
+// Reviewer model policy: see REVIEWER_MODEL_RULES in verify-review-verdict.mjs.
+// CI extracts each script from origin/main on its own, so the id is repeated
+// here and tests/agentic-pipeline.test.mjs keeps the two in step. Medium
+// reasoning keeps the per-review cost down.
+export const CI_REVIEW_MODEL = 'gpt-6.1-sol';
+export const CI_REVIEW_EFFORT = 'medium';
+
+export function codexExecArgs(branch) {
+  return [
+    'exec', '--model', CI_REVIEW_MODEL, '--config', `model_reasoning_effort="${CI_REVIEW_EFFORT}"`,
+    '--sandbox', 'read-only', '--skip-git-repo-check', buildPrompt(branch),
+  ];
+}
+
 export function buildPrompt(branch) {
   return [
     `You are the independent cross-agent reviewer for Crystal Ball branch ${branch}.`,
@@ -71,7 +85,7 @@ function main() {
   // codex would load the PR-controlled AGENTS.md as its own instructions —
   // a PR could tell its reviewer to approve it.
   const reviewCwd = mkdtempSync(path.join(tmpdir(), 'ci-codex-review-'));
-  const r = spawnSync('codex', ['exec', '--sandbox', 'read-only', '--skip-git-repo-check', buildPrompt(branch)], {
+  const r = spawnSync('codex', codexExecArgs(branch), {
     cwd: reviewCwd, input: diff, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
   });
   const output = `${r.stdout ?? ''}\n${r.stderr ?? ''}`;

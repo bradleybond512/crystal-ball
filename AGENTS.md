@@ -28,12 +28,21 @@ The cross-agent review gate verifies a SHA-pinned verdict commit, not free
 text. A marker sentence in the PR body proves nothing and is no longer read.
 
 1. Run the real cross-agent review (`claude/*` → Codex; `codex/*` → Claude)
-   against the branch tip.
+   against the branch tip, on the required model:
+   - **Codex:** the newest GPT Sol model, today `gpt-6.1-sol`, at medium
+     reasoning (`.codex/agents/independent-reviewer.toml`; `review_model` in
+     `.codex/config.toml` for `/review`).
+   - **Claude:** a Sonnet model only, never Opus
+     (`.claude/agents/cross-agent-reviewer.md`, `model: sonnet`, medium effort).
+
+   The gate rejects a verdict from any other model. When a newer Sol model
+   ships, raise `MIN_SOL_VERSION` in `scripts/verify-review-verdict.mjs` and
+   the pins in the same PR.
 2. When it concludes with zero blocking findings, save the reviewer's actual
    concluding output to a file and record it:
 
    ```bash
-   node scripts/verify-review-verdict.mjs --record --reviewer codex --evidence-file /path/to/conclusion.txt
+   node scripts/verify-review-verdict.mjs --record --reviewer codex --model gpt-6.1-sol --evidence-file /path/to/conclusion.txt
    ```
 
    This writes `.agentic/reviews/<tip-sha>.json` and commits it as the new tip.

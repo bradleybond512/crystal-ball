@@ -48,6 +48,33 @@ the newest Sol slug in the local Codex model catalog (after `gpt-5.6-sol` and
 - **Docs:** `AGENTS.md`, `CLAUDE.md` and `docs/UI_PERF_HANDOFF_FOR_CODEX.md`
   describe the policy and the `--model` flag.
 
+## Correction after Sol's review of e28c64624
+
+Sol (`gpt-6.1-sol`, medium) reviewed the first commit and found one blocking
+routing issue, plus two follow-ups:
+
+- **Blocking: CI routing.** With `CI_CODEX_REVIEW=on`, the workflow sent
+  every same-repo agent branch to the CI Sol review. That included `codex/*`,
+  which bypassed the Sonnet requirement.
+  - **Workflow:** `.github/workflows/cross-agent-review.yml` now routes only
+    `claude/*` and `copilot/*` to that path. `codex/*` always takes the
+    SHA-pinned verdict check.
+  - **Script:** `ci-codex-review.mjs` refuses a branch that a Codex reviewer
+    may not approve (`codexMayReview`), so a misrouted `codex/*` run fails
+    closed.
+- **Sonnet validator:** it accepted malformed ids (`sonnet-4-opus`,
+  `sonnet-4..`, `claude-sonnet-4-6-evil`). It now accepts exactly `sonnet`
+  or `claude-sonnet-<major>[-<minor>][-<yyyymmdd>]`, optionally with
+  `[1m]`.
+  - The Sol validator also rejects leading zeros (`gpt-06.1-sol`).
+- **Migration guidance:** the old text said to re-record a verdict, but
+  `--record` refuses to stack verdicts. `AGENTS.md` now gives a concrete
+  migration that replaces the old verdict commit (see Rollout).
+
+The routing test runs the workflow's real "Review gate" script against
+stubbed `git`, `npm` and `node`, and checks which verifier each branch
+reaches.
+
 ## Limit
 
 Without CI-side review, the recording agent reports the model itself, just
@@ -64,26 +91,39 @@ one PR:
 - the two reviewer agents;
 - `CI_REVIEW_MODEL`.
 
-The tests fail if any pin falls below the floor.
+The tests fail if any pin falls below the floor. Raising the floor makes
+unmerged verdicts from the older model fail; migrate them as described in
+Rollout.
 
 ## Tests
 
-`tests/agentic-pipeline.test.mjs` (`test:agentic-pipeline`), 63 tests:
+`tests/agentic-pipeline.test.mjs` (`test:agentic-pipeline`), 65 tests, all green:
 
-- the model allow and reject lists for both reviewers;
+- the model allow and reject lists for both reviewers, including the
+  malformed ids from Sol's review and leading-zero Sol ids;
 - verdicts without an allowed model are rejected;
 - a Sonnet verdict on `codex/*` passes, and an Opus one fails;
 - end to end, `--record` with no model or an old model commits nothing;
 - CI arguments and recording advice use the policy model at medium;
 - both reviewer roles are pinned at medium, and the Claude reviewer is on
-  Sonnet at medium and is not git-ignored.
+  Sonnet at medium and is not git-ignored;
+- CI Sol review applies only where a Codex reviewer may approve, and the
+  script refuses `codex/*`;
+- the workflow's real routing script, run against stubs, sends `codex/*` to
+  the verdict check even with CI Codex on. `claude/*` and `copilot/*` go to
+  CI Sol, and non-agent branches go nowhere.
 
 The existing fixtures now carry `model`.
 
 ## Mutation proof
 
 Each mutation was applied, the suite run, the file restored, and the SHA-256
-verified. All 17 turned red (run on the Mac, where the git-ignore test can call git).
+verified. Runs were on the Mac, where the git-ignore test can call git.
+
+First round (M01–M17): all 17 turned red at `e28c64624`. They were re-run on
+the corrected code. M02 and M03 targeted the two validator regexes that the
+correction replaced, so they no longer apply; C06–C08 cover them. The other
+15 are still red.
 
 | ID | Mutation | Fails |
 |---|---|---|
@@ -105,9 +145,32 @@ verified. All 17 turned red (run on the Mac, where the git-ignore test can call 
 | M16 | Claude reviewer effort high | 1 |
 | M17 | Claude reviewer git-ignored again | 1 |
 
+Correction round (C01–C08): all 8 red.
+
+| ID | Mutation | Fails |
+|---|---|---|
+| C01 | workflow lets `codex/*` take the CI Sol path | 1 |
+| C02 | workflow ignores the routing flag | 1 |
+| C03 | `copilot/*` dropped from the gate | 1 |
+| C04 | script would review `codex/*` | 1 |
+| C05 | script refusal removed | 1 |
+| C06 | old loose Sonnet validator | 1 |
+| C07 | Sonnet id with a trailing suffix accepted | 1 |
+| C08 | Sol major with a leading zero accepted | 1 |
+
 ## Rollout
 
-The gate runs from `origin/main`, so the policy applies to every verdict
-recorded after this PR merges. Verdicts recorded earlier without `--model`
-must be recorded again. The merge plan puts this PR second, right after
-the npm-audit fix (#1762), so only #1762 is affected.
+The gate runs from `origin/main`, so once this merges every agent PR is
+checked against the policy.
+
+- **No verdict yet** (#1762 today): record it with `--model`, using the
+  model the review actually ran on.
+- **Tip is a verdict recorded without `--model`:** it fails, and `--record`
+  will not stack a second verdict on it. Follow the "Migrating a verdict"
+  steps in `AGENTS.md`:
+  1. `git reset --keep HEAD^` drops only the verdict commit.
+  2. Re-record on the same reviewed sha with the original evidence and
+     `--model`. Re-run the review first if it did not run on an allowed
+     model.
+  3. `git push --force-with-lease`.
+- **Alternative:** merge such PRs before this one lands.

@@ -216,5 +216,11 @@
   ],
   "src-tauri/tests/sidecar_supervisor_contract.rs": [
     "test:sidecar-supervisor"
+  ],
+  "src/services/analytics.ts": [
+    "test:analytics-consent"
+  ],
+  "src/components/AnalyticsConsentBanner.ts": [
+    "test:analytics-consent"
   ]
 }

@@ -9,10 +9,11 @@
  * 'true'  → user explicitly opted in (analytics enabled)
  * 'false' → user explicitly opted out
  * absent  → not consented (analytics disabled by default)
- * - A one-time consent prompt is surfaced on first boot for new installs
- * (see AnalyticsConsentBanner); 'wm-analytics-consent-prompt-seen' records it.
- * - Installs that predate consent gating are migrated once to 'true' so their
- * prior (opt-out-era) behaviour is preserved — see migrateAnalyticsConsent().
+ * - The consent prompt (AnalyticsConsentBanner) asks every install that has
+ * no explicit choice on file; 'wm-analytics-consent-prompt-seen' records it.
+ * - Consent is never implied. Older builds auto-migrated pre-banner installs
+ * to 'true'; that value is reset to unanswered so the banner asks once more
+ * (R4-LOW-001) — see migrateAnalyticsConsent().
  * - Ghost Mode always suppresses analytics regardless of consent.
  *
  * Data safety:
@@ -31,6 +32,11 @@ import { SITE_VARIANT } from '@/config/variant';
 // ── Analytics consent ──
 
 const CONSENT_KEY = 'wm-analytics-consent';
+/** Marks a consent value as an explicit choice made through the banner or
+ *  Settings (R4-LOW-001). Older builds auto-wrote 'true' during migration, so a
+ *  'true' without this marker cannot be told apart from implied consent. */
+const CONSENT_VERSION_KEY = 'wm-analytics-consent-version';
+const EXPLICIT_CONSENT_VERSION = '2';
 
 export function hasAnalyticsConsent(): boolean {
   // Absent key = no consent (default-off). Only 'true' means consented.
@@ -49,6 +55,9 @@ export function setAnalyticsConsent(allow: boolean): void {
   // when the stored choice is already what we'd write.
   if (localStorage.getItem(CONSENT_KEY) !== next) {
     safeSetItem(CONSENT_KEY, next);
+  }
+  if (localStorage.getItem(CONSENT_VERSION_KEY) !== EXPLICIT_CONSENT_VERSION) {
+    safeSetItem(CONSENT_VERSION_KEY, EXPLICIT_CONSENT_VERSION);
   }
   if (!allow) {
     // Clear the persistent installation ID so re-identification is not possible.
@@ -78,27 +87,28 @@ export function markConsentPromptSeen(): void {
 }
 
 /**
- * One-time consent migration. Runs at boot before initAnalytics().
+ * Consent migration. Runs at boot before initAnalytics(). It never grants
+ * consent: only an explicit click (banner or Settings) writes 'true'
+ * (R4-LOW-001; analytics in a privacy-first app is opt-in, never implied).
  *
- * - Already prompted/migrated → no-op.
- * - Explicit choice already on file (key present) → just mark prompt seen.
- * - Pre-consent-gate install (no choice, but a prior installation id exists) →
- *   migrate to 'true' to preserve the opt-out-era behaviour these users had.
- * - Brand-new install (no choice, no installation id) → leave unconsented so the
- *   first-run banner can ask. markConsentPromptSeen() is the banner's job here.
+ * - 'true' recorded without the explicit-choice marker → it may be the implied
+ *   consent older builds auto-wrote for pre-banner installs, so reset it to
+ *   unanswered and let the banner ask once more.
+ * - Any other recorded choice ('false', or 'true' with the marker) → keep it and
+ *   mark the prompt seen.
+ * - No choice on file (new or pre-banner install) → leave it unanswered; the
+ *   banner asks and marks the prompt seen.
  */
 export function migrateAnalyticsConsent(): void {
   try {
-    if (hasSeenConsentPrompt()) return;
-    if (localStorage.getItem(CONSENT_KEY) !== null) {
-      markConsentPromptSeen();
+    const recorded = localStorage.getItem(CONSENT_KEY);
+    const explicit = localStorage.getItem(CONSENT_VERSION_KEY) === EXPLICIT_CONSENT_VERSION;
+    if (recorded === 'true' && !explicit) {
+      localStorage.removeItem(CONSENT_KEY);
+      localStorage.removeItem(CONSENT_PROMPT_SEEN_KEY);
       return;
     }
-    const isExistingInstall = localStorage.getItem('wm-installation-id') !== null;
-    if (isExistingInstall) {
-      safeSetItem(CONSENT_KEY, 'true');
-      markConsentPromptSeen();
-    }
+    if (recorded !== null) markConsentPromptSeen();
   } catch { /* localStorage unavailable — treat as unconsented */ }
 }
 

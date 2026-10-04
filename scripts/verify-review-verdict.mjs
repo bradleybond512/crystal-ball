@@ -53,13 +53,17 @@ export const REVIEWER_MODEL_RULES = Object.freeze({
 export function reviewerModelAllowed(reviewer, model) {
   const id = String(model ?? '').trim().toLowerCase();
   if (reviewer === 'codex') {
-    const m = /^gpt-(\d+)(?:\.(\d+))?-sol$/.exec(id);
+    const m = /^gpt-(0|[1-9]\d*)(?:\.(0|[1-9]\d*))?-sol$/.exec(id);
     if (!m) return false;
     const major = Number(m[1]);
     const minor = Number(m[2] ?? 0);
     return major > MIN_SOL_VERSION[0] || (major === MIN_SOL_VERSION[0] && minor >= MIN_SOL_VERSION[1]);
   }
-  if (reviewer === 'claude') return /^(?:claude-)?sonnet(?:-\d[\da-z.-]*)?$/.test(id);
+  // Exactly the `sonnet` alias or a full Anthropic Sonnet id:
+  // claude-sonnet-<major>[-<minor>][-<yyyymmdd>], optionally with the [1m]
+  // long-context suffix. Anything else (sonnet-4-opus, claude-sonnet-4-6-evil,
+  // dotted versions) is rejected.
+  if (reviewer === 'claude') return /^(?:sonnet|claude-sonnet-[1-9]\d?(?:-\d{1,2})?(?:-\d{8})?)(?:\[1m\])?$/.test(id);
   return false;
 }
 

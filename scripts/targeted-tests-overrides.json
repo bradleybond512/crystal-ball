@@ -118,5 +118,8 @@
   ],
   ".codex/agents/sidecar-reviewer.toml": [
     "test:agentic-pipeline"
+  ],
+  ".github/workflows/cross-agent-review.yml": [
+    "test:agentic-pipeline"
   ]
 }

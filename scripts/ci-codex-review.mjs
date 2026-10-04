@@ -49,6 +49,15 @@ export function parseVerdictLine(output) {
 export const CI_REVIEW_MODEL = 'gpt-6.1-sol';
 export const CI_REVIEW_EFFORT = 'medium';
 
+// Only code that a Codex (Sol) reviewer may approve takes the CI Codex path:
+// claude/* (Codex required) and copilot/* (Codex or Claude). codex/* code
+// needs a Sonnet verdict, so this path refuses it even if the workflow routes
+// it here. Mirrors requiredReviewers() in verify-review-verdict.mjs, which CI
+// extracts separately; tests keep the two in step.
+export function codexMayReview(branch) {
+  return branch.startsWith('claude/') || branch.startsWith('copilot/');
+}
+
 export function codexExecArgs(branch) {
   return [
     'exec', '--model', CI_REVIEW_MODEL, '--config', `model_reasoning_effort="${CI_REVIEW_EFFORT}"`,
@@ -73,6 +82,11 @@ export function buildPrompt(branch) {
 
 function main() {
   const branch = process.env.GITHUB_HEAD_REF || 'unknown-branch';
+  if (!codexMayReview(branch)) {
+    console.error(`[ci-codex-review] ${branch} needs a Sonnet verdict, not a CI Sol review: `
+      + 'it must pass verify-review-verdict.mjs --ci instead.');
+    process.exit(1);
+  }
   const baseRef = process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : 'origin/main';
   const diff = execFileSync('git', ['diff', `${baseRef}...HEAD`], {
     cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,

@@ -56,7 +56,22 @@ Pushing any code after the verdict makes the check red until a fresh review is
 recorded — a stale approval cannot ride a new push into main. That is the
 failure that merged #1601 mid-review. If the `CI_CODEX_REVIEW` repo variable is
 `on` (requires an `OPENAI_API_KEY` Actions secret), CI runs the Codex review
-itself and the verdict commit is not consulted.
+itself for `claude/*` and `copilot/*` and the verdict commit is not consulted.
+`codex/*` code never takes that path: it always needs a recorded Sonnet verdict.
+
+**Migrating a verdict that no longer passes** (recorded without `--model`, or by
+a model below a raised floor). `--record` refuses to stack a verdict on a
+verdict tip, so replace the old verdict commit instead of adding one:
+
+1. Check that the tip is only the old verdict: `git show --stat HEAD` lists just
+   `.agentic/reviews/<parent-sha>.json`.
+2. Drop it, keeping the reviewed code untouched: `git reset --keep HEAD^`.
+3. If the original review ran on an allowed model, record it again with the
+   same evidence and that model id (`--record --reviewer <agent> --model <id>
+   --evidence-file <file>`). Otherwise re-run the review on the required model
+   first.
+4. `git push --force-with-lease`. Only the verdict commit changes; the reviewed
+   code commit keeps its sha.
 
 ## Branch Discipline (MANDATORY — start every session here)
 

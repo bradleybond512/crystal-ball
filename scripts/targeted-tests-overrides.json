@@ -100,5 +100,38 @@
   ],
   "src-tauri/tests/watchdog_contract.rs": [
     "test:native-responsiveness"
+  ],
+  "src-tauri/sidecar/evidence-store.mjs": [
+    "test:evidence-journal"
+  ],
+  "src-tauri/sidecar/local-api-server.mjs": [
+    "test:evidence-journal"
+  ],
+  "src/services/intelligence/evidence-bus.ts": [
+    "test:evidence-journal"
+  ],
+  "src/services/intelligence/evidence-projection.ts": [
+    "test:evidence-journal"
+  ],
+  "src/services/intelligence/evidence-journal.ts": [
+    "test:evidence-journal"
+  ],
+  "src/services/intelligence/evidence-journal-wiring.ts": [
+    "test:evidence-journal"
+  ],
+  "src/components/evidence-journal-view.ts": [
+    "test:evidence-journal"
+  ],
+  "src/components/BeliefCalibrationPanel.ts": [
+    "test:evidence-journal"
+  ],
+  "src/services/intelligence/outcome-ledger.ts": [
+    "test:evidence-journal"
+  ],
+  "src/services/intelligence/forecast-calibration-adapter.ts": [
+    "test:evidence-journal"
+  ],
+  "src/services/forecast-accuracy.ts": [
+    "test:evidence-journal"
   ]
 }

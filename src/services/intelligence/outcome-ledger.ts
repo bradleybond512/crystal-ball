@@ -13,6 +13,7 @@
  */
 
 import { buildInputHash, getAlgoEvalLedger, type PredictionValue } from './algo-eval-ledger';
+import { notifyEvidenceChanged } from './evidence-bus';
 
 // ── Enum allowlists (fix: validate on deserialise, not just cast) ─────
 
@@ -81,6 +82,8 @@ export type OutcomeListener = (records: OutcomeRecord[]) => void;
 
 const STORAGE_KEY = 'wm-outcome-ledger';
 const MAX_RECORDS = 2000;
+/** Working-set size; the evidence journal rebuilds at most this many. */
+export const OUTCOME_LEDGER_CAPACITY = MAX_RECORDS;
 const DEFAULT_RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 /** Minimum sample size before a domain's calibration is allowed to move
  *  its attention multiplier away from the neutral 1.0. Below this the
@@ -309,6 +312,7 @@ export class OutcomeLedger {
       const blob: PersistedBlob = { v: 2, data, cs: computeChecksum(data) };
       store.setItem(STORAGE_KEY, JSON.stringify(blob));
       this._tamperDetected = false;
+      notifyEvidenceChanged('alert-outcome');
     } catch {
       // Quota or storage disabled — best-effort.
     }
@@ -351,6 +355,25 @@ export class OutcomeLedger {
     if (this.records.length <= MAX_RECORDS) return;
     // Drop oldest first — outcomes are time-ordered by insertion.
     this.records.splice(0, this.records.length - MAX_RECORDS);
+  }
+
+  /**
+   * Merge outcomes rebuilt from the evidence journal (R4-LOW-008) after the
+   * local blob was lost or failed its checksum. Records already present win;
+   * no AlgoEvalLedger side effects run, because the original record already
+   * resolved its prediction. Returns how many records were added.
+   */
+  mergeRebuilt(records: readonly OutcomeRecord[]): number {
+    this.ensureHydrated();
+    const known = new Set(this.records.map((r) => r.id));
+    const added = records.filter((r) => !known.has(r.id)).map((r) => cloneRecord(r));
+    if (added.length === 0) return 0;
+    this.records = [...this.records, ...added]
+      .sort((a, b) => a.recordedAt.getTime() - b.recordedAt.getTime());
+    this.enforceCapacity();
+    this.persist();
+    this.notify();
+    return added.length;
   }
 
   list(): OutcomeRecord[] {

@@ -40,6 +40,7 @@
       "sidecar/local-api-server.mjs",
       "sidecar/sidecar-logger.mjs",
       "sidecar/event-store.mjs",
+      "sidecar/evidence-store.mjs",
       "sidecar/sitrep-severity.mjs",
       "sidecar/sitrep-filter.mjs",
       "sidecar/s2u-xmpp.bundle.mjs",

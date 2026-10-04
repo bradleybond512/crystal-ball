@@ -15,12 +15,17 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
 
+# R4-LOW-002: values derived from the push (branch name, step outputs) are
+# passed to scripts only through env: and read as "$VAR" / process.env.VAR.
+# A branch name containing $(...) or a quote can then never become code.
 jobs:
   auto-pr:
     name: Create or update PR
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -29,8 +34,9 @@ jobs:
       - name: Generate PR metadata
         id: meta
         shell: bash
+        env:
+          BRANCH: ${{ github.ref_name }}
         run: |
-          BRANCH="${{ github.ref_name }}"
           # Cap inside git, not with `| head -20`. Under this step's
           # `-e -o pipefail`, head closes the pipe once it has 20 lines; if
           # git log is still writing it dies of SIGPIPE (141), pipefail
@@ -62,13 +68,16 @@ jobs:
       - name: Create or update pull request
         id: create-pr
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        env:
+          BRANCH: ${{ steps.meta.outputs.branch }}
+          TITLE: ${{ steps.meta.outputs.title }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
             const body = fs.readFileSync('/tmp/pr-body.md', 'utf8');
-            const branch = '${{ steps.meta.outputs.branch }}';
-            const title = '${{ steps.meta.outputs.title }}';
+            const branch = process.env.BRANCH;
+            const title = process.env.TITLE;
 
             const { data: prs } = await github.rest.pulls.list({
               owner: context.repo.owner,
@@ -120,11 +129,14 @@ jobs:
       - name: Label PR by branch prefix
         if: steps.create-pr.outputs.pr_number != ''
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        env:
+          BRANCH: ${{ steps.meta.outputs.branch }}
+          PR_NUMBER: ${{ steps.create-pr.outputs.pr_number }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const branch = '${{ steps.meta.outputs.branch }}';
-            const prNumber = parseInt('${{ steps.create-pr.outputs.pr_number }}');
+            const branch = process.env.BRANCH;
+            const prNumber = Number.parseInt(process.env.PR_NUMBER, 10);
             const labelMap = {
               'claude/':  ['ai-generated', 'claude'],
               'codex/': ['ai-generated', 'codex'],
@@ -186,10 +198,12 @@ jobs:
       - name: Turn auto-merge off for a sensitive PR
         if: steps.policy.outputs.sensitive == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        env:
+          BRANCH: ${{ github.ref_name }}
         with:
           github-token: ${{ secrets.AUTO_MERGE_PAT || secrets.GITHUB_TOKEN }}
           script: |
-            const branch = '${{ github.ref_name }}';
+            const branch = process.env.BRANCH;
             const { data: prs } = await github.rest.pulls.list({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -210,6 +224,9 @@ jobs:
       - name: Enable GitHub auto-merge
         if: steps.policy.outputs.sensitive != 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        env:
+          BRANCH: ${{ github.ref_name }}
+          HAS_PAT: ${{ secrets.AUTO_MERGE_PAT != '' }}
         with:
           # Prefer a PAT / App token (AUTO_MERGE_PAT) because the default
           # GITHUB_TOKEN cannot call enablePullRequestAutoMerge in this repo —
@@ -219,8 +236,9 @@ jobs:
           # check stays green instead of blocking the PR.
           github-token: ${{ secrets.AUTO_MERGE_PAT || secrets.GITHUB_TOKEN }}
           script: |
-            const usingPat = Boolean('${{ secrets.AUTO_MERGE_PAT }}');
-            const branch = '${{ github.ref_name }}';
+            // Only whether the PAT exists reaches the script, never its value.
+            const usingPat = process.env.HAS_PAT === 'true';
+            const branch = process.env.BRANCH;
             const { data: prs } = await github.rest.pulls.list({
               owner: context.repo.owner,
               repo: context.repo.repo,

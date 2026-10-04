@@ -8,7 +8,8 @@ name: Dependency change gate
 # edit the gate away. It never checks out or runs PR code: the base branch's
 # policy script lists the PR's files through the API. Read-only token.
 on:
-  pull_request_target:
+  # Safe by construction (see above): no PR checkout, read-only token.
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
     types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review]
 
 permissions:

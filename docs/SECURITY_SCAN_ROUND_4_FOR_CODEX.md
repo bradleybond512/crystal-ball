@@ -1140,6 +1140,92 @@ reports; it does not attempt them):
   in links (R4-SEC-008).
 - Nothing to do in Vercel: no project is deployed.
 
+## Merge Plan (October 4, 2026)
+
+Bradley's decisions: merge in severity order, Codex reviews locally, and
+Claude does the rebases. The queue is done; 30 PRs are open and nothing has
+merged since September 28.
+
+### Why The PRs Merge One At A Time
+
+- `main` requires linear history and up-to-date branches (strict checks).
+- The required `cross-agent-review` check accepts only a Codex verdict commit
+  pinned to the exact tip it reviewed.
+- So every merge leaves the next PR out of date, and its rebase needs a fresh
+  verdict. Rebasing a later PR early is wasted work: it goes stale at the
+  next merge.
+- GitHub auto-merge (rebase method) is already on for the PRs based on
+  `main`. A PR that is up to date, approved and green merges itself.
+- `npm-audit` is not a required check. #1762 still goes first so every later
+  run is clean.
+
+### The Cycle For Each PR
+
+1. **Claude rebases** the next PR onto `origin/main`:
+   - A stacked PR replays only its own commits:
+     `git rebase --onto origin/main <old parent tip>`. Parent tips are
+     recorded before each parent merges, because GitHub deletes merged
+     branches and retargets their children to `main`.
+   - The conflicts that recur in `package.json` scripts and
+     `scripts/targeted-tests-overrides.json` (27 PRs touch both) resolve as
+     the union of both sides.
+   - Claude re-runs the PR's targeted tests and `agentic-validate`, then
+     pushes with `--force-with-lease`.
+2. **Codex reviews** that tip.
+   - Codex may read the PR early. If `git range-diff` shows the rebase changed
+     only context, the re-review can be short.
+   - The verdict still has to be recorded on the final tip:
+     `node scripts/verify-review-verdict.mjs --record --reviewer codex --evidence-file <file>`.
+3. **CI merges it.**
+   - Once #1772 is merged, a PR that touches sensitive paths needs Bradley's
+     `dependency-change-approved` label. Its auto-merge stays off, so Bradley
+     merges it himself.
+4. **Bradley smoke-tests** where the table asks. Main-sync installs every
+   merge on his Mac, so a native or CSP change is live within minutes.
+
+### Order
+
+"On" is the PR each one is stacked on today; after its parent merges, each
+one targets `main`.
+
+| Step | PR | Fixes | Severity | On | Bradley |
+|---|---|---|---|---|---|
+| 1 | #1762 | npm audit advisories | — | main | — |
+| 2 | #1764 | R4-SEC-002 steps 1–2 | High | main | review recommended (install policy) |
+| 3 | #1772 | R4-SEC-002 steps 3–5 | High | #1764 | review recommended; turns the dependency-change gate on |
+| 4 | #1763 | R4-BUG-006 | High | main | then Q16b, with his go-ahead |
+| 5 | #1757 | R4-BUG-002 | High | main | smoke: a test alert arrives |
+| 6 | #1766 | R4-BUG-001 | Medium | #1757 | smoke: paused iMessage alerts show a notice |
+| 7 | #1758 | R4-BUG-004 (A) | High | main | smoke: app launches, sidecar up |
+| 8 | #1759 | R4-BUG-004 (B) | High | #1758 | — |
+| 9 | #1768 | R4-SEC-001, R4-SEC-006 | High | #1759 | smoke: saved keys still work |
+| 10 | #1761 | R4-BUG-005 step 1 | Medium-High | main | — |
+| 11 | #1770 | R4-BUG-005 step 2 | Medium-High | #1761 | smoke: quota status in System Diagnostic |
+| 12 | #1765 | R4-SEC-003, R4-SEC-009 | Medium | main | label |
+| 13 | #1773 | R4-SEC-004 | Medium | main | — |
+| 14 | #1771 | R4-SEC-005, R3-SEC-009, R4-LOW-005 | Medium | main | — |
+| 15 | #1769 | R3-SEC-004, R4-SEC-008 (CSP) | Medium | #1768 | smoke: map, panels and links load |
+| 16 | #1778 | R4-SEC-007, R4-LOW-006 | Medium | #1769 | — |
+| 17 | #1783 | H1 constant-time key checks | Low | #1778 | — |
+| 18 | #1774 | R3-BUG-001 slice B | — | #1768 | smoke: app unlocks, keys load |
+| 19 | #1775 | R3-SEC-003 phase A | — | #1774 | — |
+| 20 | #1776 | R3-SEC-005 | — | #1775 | label (Cargo.toml) |
+| 21 | #1782 | R3-SEC-008, R4-LOW-007 | Low | #1776 | smoke: map, System Diagnostic, briefing |
+| 22 | #1760 | R3-BUG-002 | — | main | — |
+| 23 | #1767 | R4-BUG-003 | Low-Medium | main | — |
+| 24 | #1781 | R4-LOW-002, R4-LOW-003 | Low | #1772 | label |
+| 25 | #1785 | zizmor medium ratchet | Low | #1781 | label |
+| 26 | #1779 | R3-SEC-006/007, R4-LOW-004 | Low | main | — |
+| 27 | #1780 | R4-LOW-001 | Low | main | — |
+| 28 | #1777 | R4-LOW-008 | Low | main | smoke: calibration panel loads |
+| 29 | #1784 | H2 forecast store validation | Low | #1777 | — |
+| 30 | #1756 | this handoff | — | main | Claude first marks the merged rows ✅ |
+
+Not part of this plan:
+
+- the nine Dependabot PRs (#1747–#1755);
+- Codex's conflicting #1695.
+
 ---
 
 ## Verified — Do Not Reopen

@@ -240,6 +240,6 @@ Stated plainly, because "we have them all" is not a claim any review can make. E
 - One roadmap task per PR; #1732 remains held pending its owner-stated H16/H17/H22 requirements. Coordinate dependent PRs without silently weakening that acceptance.
 - Claim a `UX-NNN` row in `docs/USABILITY_UPLIFT_FOR_CODEX.md` in the same PR.
 - Behaviour changes need runnable behavior tests and actual applied mutation diffs, failing counts, restored checksums and clean-tree evidence. Historical reported counts alone are not proof for the current head.
-- `codex/*` branches are reviewed by Claude: record the verdict with `scripts/verify-review-verdict.mjs --record`, then `bash scripts/pr-closeout.sh`.
+- `codex/*` branches are reviewed by Claude: record the verdict with `scripts/verify-review-verdict.mjs --record --reviewer claude --model <sonnet id>` (Sonnet only), then `bash scripts/pr-closeout.sh`.
 - The pre-commit hook lints every touched file **in full**; pre-existing errors in a file you touch must be fixed or explicitly justified.
 - Items 1–3 and P0 touch situation/alerting logic and the boot path — "high assurance" under `AGENTS.md`: stop for human approval after design, before implementation.

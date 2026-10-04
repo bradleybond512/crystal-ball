@@ -100,5 +100,23 @@
   ],
   "src-tauri/tests/watchdog_contract.rs": [
     "test:native-responsiveness"
+  ],
+  "scripts/verify-review-verdict.mjs": [
+    "test:agentic-pipeline"
+  ],
+  "scripts/ci-codex-review.mjs": [
+    "test:agentic-pipeline"
+  ],
+  ".codex/config.toml": [
+    "test:agentic-pipeline"
+  ],
+  ".claude/agents/cross-agent-reviewer.md": [
+    "test:agentic-pipeline"
+  ],
+  ".codex/agents/independent-reviewer.toml": [
+    "test:agentic-pipeline"
+  ],
+  ".codex/agents/sidecar-reviewer.toml": [
+    "test:agentic-pipeline"
   ]
 }

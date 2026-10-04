@@ -38,6 +38,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         if: github.event_name == 'pull_request'
         with:
+          persist-credentials: false
           # The default pull_request checkout is the SYNTHETIC MERGE commit;
           # the verdict protocol must examine the actual branch tip.
           ref: ${{ github.event.pull_request.head.sha }}

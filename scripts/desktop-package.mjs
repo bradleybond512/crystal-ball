@@ -255,7 +255,9 @@ if (targetOs === 'macos') {
   // `--require-stable-identity` (or CRYSTALBALL_REQUIRE_STABLE_IDENTITY=1, which
   // main-sync sets) makes a failed stable signature fatal instead of falling
   // back to ad hoc. `--options runtime` matches tauri.conf `hardenedRuntime:
-  // true`; the sidecar's V8 JIT is covered by the allow-jit entitlements.
+  // true`. The bundled Node keeps the Node.js Foundation's own signature and
+  // entitlements (Resources aren't re-signed), and our binary needs no
+  // unsigned executable memory (R3-SEC-008: only allow-jit remains).
   if (sign) {
  // Tauri already signed with the developer identity; just verify.
  try {

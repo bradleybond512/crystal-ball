@@ -88,7 +88,8 @@
     "test:secret-boundary",
     "test:vault-writer",
     "test:signing-phase-a",
-    "test:node-pinning"
+    "test:node-pinning",
+    "test:native-lows"
   ],
   "src-tauri/src/updater_policy.rs": [
     "test:desktop-updater"
@@ -169,7 +170,8 @@
     "test:signing-phase-a"
   ],
   "scripts/desktop-package.mjs": [
-    "test:signing-phase-a"
+    "test:signing-phase-a",
+    "test:native-lows"
   ],
   "scripts/sync-main-to-mac.mjs": [
     "test:signing-phase-a"
@@ -185,5 +187,11 @@
   ],
   "scripts/download-node.sh": [
     "test:node-pinning"
+  ],
+  "src-tauri/Entitlements.plist": [
+    "test:native-lows"
+  ],
+  "src-tauri/src/log_rotation.rs": [
+    "test:native-lows"
   ]
 }

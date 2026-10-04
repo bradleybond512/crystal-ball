@@ -24,7 +24,7 @@ safety-critical weather logic.
 | R3-BUG-002 | Medium | Datacenter weather posture freezes when NWS `/points` fails | PR 6 | 🔴 |
 | R3-SEC-006 | Low | SMS webhook fails open without `TWILIO_AUTH_TOKEN`; config patch unvalidated | PR 8 | 🔴 |
 | R3-SEC-007 | Low | `/api/feed-discovery` first hop not IP-pinned (DNS-rebinding TOCTOU) | PR 8 | 🔴 |
-| R3-SEC-008 | Low | `allow-unsigned-executable-memory` entitlement is broader than needed | PR 9 | 🔴 |
+| R3-SEC-008 | Low | `allow-unsigned-executable-memory` entitlement is broader than needed | PR 9 — [validation](validation/Q20-C-NATIVE-LOWS.md) | ✅ |
 | R3-SEC-009 | Low | Numeric feed fields interpolated raw into HTML without runtime coercion | PR 9 | 🔴 |
 
 Prior-scan status observed at `b7a82262a` (for reconciling the older docs):

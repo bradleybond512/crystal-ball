@@ -69,29 +69,29 @@ re-orders them into one queue with the new findings.
 
 | ID | Severity | Title | Status |
 |----|----------|-------|--------|
-| R4-BUG-002 | High | Native notification limiter silently drops critical alerts and reports success | 🔴 |
-| R4-BUG-004 | High | Crashed sidecar never restarted; requests (incl. location) silently fail over to the cloud | 🔴 |
-| R4-BUG-006 | High | Key backup/restore scripts can't see the consolidated `secrets-vault` item | 🔴 |
-| R4-BUG-005 | Medium-High | GreyNoise, AbuseIPDB, OpenSky, NewsAPI, PurpleAir quotas exhausted daily or weekly | 🔴 |
-| R4-SEC-001 | High | Main window holds sidecar-only secret values in renderer memory | 🔴 |
-| R4-SEC-002 | High | Main-sync auto-install runs npm lifecycle scripts from unreviewed, freshly published dependency versions | 🔴 |
-| R4-SEC-003 | Medium | Main-sync check gate passes vacuously on an empty required-check list; check-runs not paginated | 🔴 |
-| R4-SEC-004 | Medium | MCP server feeds raw, attacker-influenced feed text to coding agents that can run commands and write app state | 🔴 |
-| R4-BUG-001 | Medium | Upgrade silently pauses previously-enabled iMessage alerts (incl. EEW) | 🔴 |
-| R4-SEC-005 | Medium | Resource inventory JSON import is a stored-XSS path into the main window | 🔴 |
-| R4-SEC-007 | Medium (latent: no API deployed) | Public LLM endpoint callable without a key via spoofed browser headers; cache trivially bypassed | 🔴 |
-| R4-SEC-008 | Medium | App still trusts and links to `crystalball.app`, a domain Bradley doesn't own (for sale) | 🔴 |
-| R4-SEC-009 | Medium | Security checks (Semgrep, cargo-deny, …) run but are not required for merge or auto-install | 🔴 |
-| R4-SEC-006 | Low-Medium | Renderer sends the bearer token to an unconfirmed default port | 🔴 |
-| R4-BUG-003 | Low-Medium | Master mute silences critical alerts; two quiet-hours implementations disagree | 🔴 |
-| R4-LOW-001 | Low | Analytics consent auto-granted for pre-existing installs | 🔴 |
-| R4-LOW-002 | Low | Actions expression injection in `auto-merge-agent-branches.yml` | 🔴 |
-| R4-LOW-003 | Low | `.github/mcp.json` runs unpinned `npx -y` / `uvx` / container images | 🔴 |
-| R4-LOW-004 | Low | Patreon OAuth callback embeds JSON in an inline `<script>` without escaping `<` | 🔴 |
-| R4-LOW-005 | Low | Unescaped error text in S2 Underground panel | 🔴 |
-| R4-LOW-006 | Low | Ungated quota-bearing feed endpoints accept caller params (NewsAPI drain, Mediastack cache poisoning) | 🔴 |
-| R4-LOW-007 | Low | Sidecar console log only rotates at spawn | 🔴 |
-| R4-LOW-008 | Low | Calibration evidence capped and renderer-only | 🔴 |
+| R4-BUG-002 | High | Native notification limiter silently drops critical alerts and reports success | 🟡 PR #1757 |
+| R4-BUG-004 | High | Crashed sidecar never restarted; requests (incl. location) silently fail over to the cloud | 🟡 PR #1758, #1759 |
+| R4-BUG-006 | High | Key backup/restore scripts can't see the consolidated `secrets-vault` item | 🟡 PR #1763 |
+| R4-BUG-005 | Medium-High | GreyNoise, AbuseIPDB, OpenSky, NewsAPI, PurpleAir quotas exhausted daily or weekly | 🟡 PR #1761 (step 1), #1770 (step 2) |
+| R4-SEC-001 | High | Main window holds sidecar-only secret values in renderer memory | 🟡 PR #1768 |
+| R4-SEC-002 | High | Main-sync auto-install runs npm lifecycle scripts from unreviewed, freshly published dependency versions | 🟡 PR #1764 (steps 1-2), #1772 (steps 3-5); step 6 optional |
+| R4-SEC-003 | Medium | Main-sync check gate passes vacuously on an empty required-check list; check-runs not paginated | 🟡 PR #1765 |
+| R4-SEC-004 | Medium | MCP server feeds raw, attacker-influenced feed text to coding agents that can run commands and write app state | 🟡 PR #1773 |
+| R4-BUG-001 | Medium | Upgrade silently pauses previously-enabled iMessage alerts (incl. EEW) | 🟡 PR #1766 |
+| R4-SEC-005 | Medium | Resource inventory JSON import is a stored-XSS path into the main window | 🟡 PR #1771 |
+| R4-SEC-007 | Medium (latent: no API deployed) | Public LLM endpoint callable without a key via spoofed browser headers; cache trivially bypassed | 🟡 PR #1778 |
+| R4-SEC-008 | Medium | App still trusts and links to `crystalball.app`, a domain Bradley doesn't own (for sale) | 🟡 PR #1769 |
+| R4-SEC-009 | Medium | Security checks (Semgrep, cargo-deny, …) run but are not required for merge or auto-install | 🟡 PR #1765 (local gate); GitHub settings deferred by Bradley |
+| R4-SEC-006 | Low-Medium | Renderer sends the bearer token to an unconfirmed default port | 🟡 PR #1768 |
+| R4-BUG-003 | Low-Medium | Master mute silences critical alerts; two quiet-hours implementations disagree | 🟡 PR #1767 |
+| R4-LOW-001 | Low | Analytics consent auto-granted for pre-existing installs | 🟡 PR #1780 |
+| R4-LOW-002 | Low | Actions expression injection in `auto-merge-agent-branches.yml` | 🟡 PR #1781 |
+| R4-LOW-003 | Low | `.github/mcp.json` runs unpinned `npx -y` / `uvx` / container images | 🟡 PR #1781 |
+| R4-LOW-004 | Low | Patreon OAuth callback embeds JSON in an inline `<script>` without escaping `<` | 🟡 PR #1779 |
+| R4-LOW-005 | Low | Unescaped error text in S2 Underground panel | 🟡 PR #1771 |
+| R4-LOW-006 | Low | Ungated quota-bearing feed endpoints accept caller params (NewsAPI drain, Mediastack cache poisoning) | 🟡 PR #1778 |
+| R4-LOW-007 | Low | Sidecar console log only rotates at spawn | 🟡 PR #1782 |
+| R4-LOW-008 | Low | Calibration evidence capped and renderer-only | 🟡 PR #1777 |
 
 ---
 
@@ -1092,34 +1092,35 @@ it. Otherwise, persist outcomes append-only in the sidecar (like the
 
 ## Unified Queue
 
-Ordered by value ÷ effort. Rows marked *cheap* suit a lower-cost model or
+Status (October 4, 2026): every row except 16b has an open PR awaiting Codex
+cross-agent review and Bradley's merge. Ordered by value ÷ effort. Rows marked *cheap* suit a lower-cost model or
 low reasoning effort. The design gates marked **high** are where deeper
 reasoning pays off.
 
 | Q | Item | Spec | Why this position | Effort |
 |---|------|------|-------------------|--------|
 | 0 | ✅ Land this doc + CLAUDE.md pointer (docs-only, Fast) — landed by Claude on `claude/sec-r4-handoff` | R4 | — | done |
-| 1 | R4-BUG-002 native notification limiter drops critical alerts + false "delivered" traces | R4 | Life-safety alerts lost during bursts | medium |
-| 2 | R4-BUG-004 sidecar supervisor restart + fallback per Bradley's decision (5xx/connection only, coarsened coordinates) | R4 + Part 1b | A single crash blacks out IPAWS and other feeds for the session | medium-high |
-| 3 | R3-BUG-002 datacenter posture freezes on NWS `/points` failure | R3 | Safety-critical, a few lines | low, *cheap* |
-| 4 | R4-BUG-005 step 1: one-line TTL/field fixes (GreyNoise weekly, AbuseIPDB 8 h, OpenSky ≥120 s or bbox, NewsAPI 20 min/one query, PurpleAir fields/bbox/60 min) | R4 | Stops today's daily feed blackouts | low, *cheap* |
-| 5 | R4-BUG-006 backup/restore scripts read and write the `secrets-vault` item | R4 | Restores the key-loss safeguard; prerequisite for Q16b | low-medium |
-| 6 | R4-SEC-002 steps 1-2 (`ignore-scripts` + install-script drift gate) | R4 | Closes the highest-likelihood full-compromise path | medium |
-| 7 | R4-SEC-003 + R4-SEC-009 main-sync gate: pinned minimum checks (including the security checks) + pagination | R4 | Fail-open gate on auto-install | low, *cheap* |
-| 8 | R4-BUG-001 surface paused iMessage alerts | R4 | Safety comms, small, renderer-only | low-medium |
-| 9 | R4-BUG-003 critical alerts bypass master mute (decided) + unify quiet hours | R4 + Part 1b | Safety UX; decision made | low-medium |
-| 10 | R4-SEC-001 + R4-SEC-006 sidecar-only secrets write-only to webviews; confirmed-port-only token use | R4 | Largest remaining renderer-compromise payoff | **high** (design gate) |
-| 11 | R3-SEC-004 CSP (`unsafe-eval`, `img-src https:`) + R4-SEC-008 remove `crystalball.app` from CSP and links + fix the stale `runtime.ts` comment | R3/R4 | Pairs with Q10; same files | medium-high |
-| 12 | R4-BUG-005 step 2: Quota Governor (persisted budgets, header-aware, diagnostics view) | R4 | Makes quota safety durable across restarts | medium |
-| 13 | R4-SEC-005 inventory import validation + R3-SEC-009 numeric coercion + R4-LOW-005 | R3/R4 | Untrusted data into `innerHTML` | low-medium, *cheap* |
-| 14 | R4-SEC-002 steps 3-6 (cooldown, `audit signatures`, auto-merge skip for sensitive paths, optional sandboxed build) | R4 | Completes supply-chain hardening | medium |
-| 15 | R4-SEC-004 MCP untrusted-content envelope + read-only default profile | R4 | Agent prompt-injection containment | medium |
-| 16 | R3-BUG-001 slice B, then R3-SEC-003 phase A | R3 | Same secret write path; prerequisites for 16b | medium |
-| 16b | R3-SEC-003 phase B (retire shadow vault) | R3 | Needs Q5 landed + Bradley's go-ahead + his own backup | **high** |
-| 17 | R3-SEC-005 release sidecar uses bundled, hash-verified `node` only | R3 | Secret-bearing process integrity | low-medium |
-| 18 | R4-LOW-008 durable calibration evidence (design question first) | R4 | Protects the measurement spine | medium |
-| 19 | Latent cloud items: R4-SEC-007 + R4-LOW-006 (before any API deployment) | R4 | No API is deployed today (Part 1b) | low-medium |
-| 20 | R3-SEC-006/007/008 + R4-LOW-001/002/003/004/007 | R3/R4 | — | low, *cheap* |
+| 1 | 🟡 PR #1757 — R4-BUG-002 native notification limiter drops critical alerts + false "delivered" traces | R4 | Life-safety alerts lost during bursts | medium |
+| 2 | 🟡 PR #1758 + #1759 — R4-BUG-004 sidecar supervisor restart + fallback per Bradley's decision (5xx/connection only, coarsened coordinates) | R4 + Part 1b | A single crash blacks out IPAWS and other feeds for the session | medium-high |
+| 3 | 🟡 PR #1760 — R3-BUG-002 datacenter posture freezes on NWS `/points` failure | R3 | Safety-critical, a few lines | low, *cheap* |
+| 4 | 🟡 PR #1761 — R4-BUG-005 step 1: one-line TTL/field fixes (GreyNoise weekly, AbuseIPDB 8 h, OpenSky ≥120 s or bbox, NewsAPI 20 min/one query, PurpleAir fields/bbox/60 min) | R4 | Stops today's daily feed blackouts | low, *cheap* |
+| 5 | 🟡 PR #1763 — R4-BUG-006 backup/restore scripts read and write the `secrets-vault` item | R4 | Restores the key-loss safeguard; prerequisite for Q16b | low-medium |
+| 6 | 🟡 PR #1764 — R4-SEC-002 steps 1-2 (`ignore-scripts` + install-script drift gate) | R4 | Closes the highest-likelihood full-compromise path | medium |
+| 7 | 🟡 PR #1765 — R4-SEC-003 + R4-SEC-009 main-sync gate: pinned minimum checks (including the security checks) + pagination | R4 | Fail-open gate on auto-install | low, *cheap* |
+| 8 | 🟡 PR #1766 — R4-BUG-001 surface paused iMessage alerts | R4 | Safety comms, small, renderer-only | low-medium |
+| 9 | 🟡 PR #1767 — R4-BUG-003 critical alerts bypass master mute (decided) + unify quiet hours | R4 + Part 1b | Safety UX; decision made | low-medium |
+| 10 | 🟡 PR #1768 — R4-SEC-001 + R4-SEC-006 sidecar-only secrets write-only to webviews; confirmed-port-only token use | R4 | Largest remaining renderer-compromise payoff | **high** (design gate) |
+| 11 | 🟡 PR #1769 — R3-SEC-004 CSP (`unsafe-eval`, `img-src https:`) + R4-SEC-008 remove `crystalball.app` from CSP and links + fix the stale `runtime.ts` comment | R3/R4 | Pairs with Q10; same files | medium-high |
+| 12 | 🟡 PR #1770 — R4-BUG-005 step 2: Quota Governor (persisted budgets, header-aware, diagnostics view) | R4 | Makes quota safety durable across restarts | medium |
+| 13 | 🟡 PR #1771 — R4-SEC-005 inventory import validation + R3-SEC-009 numeric coercion + R4-LOW-005 | R3/R4 | Untrusted data into `innerHTML` | low-medium, *cheap* |
+| 14 | 🟡 PR #1772 — R4-SEC-002 steps 3-6 (cooldown, `audit signatures`, auto-merge skip for sensitive paths, optional sandboxed build) | R4 | Completes supply-chain hardening | medium |
+| 15 | 🟡 PR #1773 — R4-SEC-004 MCP untrusted-content envelope + read-only default profile | R4 | Agent prompt-injection containment | medium |
+| 16 | 🟡 PR #1774 + #1775 — R3-BUG-001 slice B, then R3-SEC-003 phase A | R3 | Same secret write path; prerequisites for 16b | medium |
+| 16b | 🔴 blocked (needs #1763 merged, Bradley's own backup and his go-ahead) — R3-SEC-003 phase B (retire shadow vault) | R3 | Needs Q5 landed + Bradley's go-ahead + his own backup | **high** |
+| 17 | 🟡 PR #1776 — R3-SEC-005 release sidecar uses bundled, hash-verified `node` only | R3 | Secret-bearing process integrity | low-medium |
+| 18 | 🟡 PR #1777 — R4-LOW-008 durable calibration evidence (design question first) | R4 | Protects the measurement spine | medium |
+| 19 | 🟡 PR #1778 — Latent cloud items: R4-SEC-007 + R4-LOW-006 (before any API deployment) | R4 | No API is deployed today (Part 1b) | low-medium |
+| 20 | 🟡 PR #1779, #1780, #1781, #1782 — R3-SEC-006/007/008 + R4-LOW-001/002/003/004/007 | R3/R4 | — | low, *cheap* |
 
 **Actions only Bradley can take** (Codex lists these in completion
 reports; it does not attempt them):

@@ -10,9 +10,10 @@ export const config = { runtime: 'edge' };
 import { createRouter } from '../../../server/router';
 import { getCorsHeaders, isDisallowedOrigin } from '../../../server/cors';
 // @ts-expect-error — JS module, no declaration file
-import { validateApiKey } from '../../_api-key.js';
+import { isSidecarRuntime, validateApiKey } from '../../_api-key.js';
 import { mapErrorToResponse } from '../../../server/error-mapper';
 import { checkRateLimit } from '../../../server/_shared/rate-limit';
+import { checkDailySpend, dailyCapFromEnv, isCostBearingRpc, upstashIncrement } from '../../../server/_shared/llm-guard';
 import { drainResponseHeaders } from '../../../server/_shared/response-headers';
 import { createSeismologyServiceRoutes } from '../../../src/generated/server/crystalball/seismology/v1/service_server';
 import { seismologyHandler } from '../../../server/crystalball/seismology/v1/handler';
@@ -99,7 +100,10 @@ const RPC_CACHE_TIER: Record<string, CacheTier> = {
   '/api/research/v1/list-arxiv-papers': 'static',
   '/api/research/v1/list-trending-repos': 'static',
   '/api/giving/v1/get-giving-summary': 'static',
-  '/api/intelligence/v1/get-country-intel-brief': 'static',
+  // LLM output behind an API key: never cache it in a shared CDN, or a keyless
+  // caller could read what a keyed caller paid for (R4-SEC-007). Redis still
+  // prevents repeat LLM calls.
+  '/api/intelligence/v1/get-country-intel-brief': 'no-store',
   '/api/climate/v1/list-climate-anomalies': 'static',
   '/api/research/v1/list-tech-events': 'static',
   '/api/military/v1/get-usni-fleet-report': 'static',
@@ -191,8 +195,13 @@ export default async function handler(originalRequest: Request): Promise<Respons
  return new Response(null, { status: 204, headers: corsHeaders });
   }
 
+  // Cost-bearing (LLM) routes: key required for every method, limiter must be
+  // present, daily cap enforced. Cloud only; the sidecar is token-gated.
+  const costBearing = isCostBearingRpc(new URL(request.url).pathname);
+  const cloudCostGuard = costBearing && !isSidecarRuntime();
+
   // API key validation (origin-aware)
-  const keyCheck = validateApiKey(request);
+  const keyCheck = validateApiKey(request, { costBearing });
   if (keyCheck.required && !keyCheck.valid) {
  return new Response(JSON.stringify({ error: keyCheck.error }), {
  status: 401,
@@ -201,8 +210,23 @@ export default async function handler(originalRequest: Request): Promise<Respons
   }
 
   // IP-based rate limiting (60 req/min sliding window)
-  const rateLimitResponse = await checkRateLimit(request, corsHeaders);
+  const rateLimitResponse = await checkRateLimit(request, corsHeaders, { failClosed: cloudCostGuard });
   if (rateLimitResponse) return rateLimitResponse;
+
+  if (cloudCostGuard) {
+ const spend = await checkDailySpend(new URL(request.url).pathname, {
+ increment: upstashIncrement,
+ now: () => Date.now(),
+ cap: dailyCapFromEnv(),
+ });
+ if (spend.status !== 'allowed') {
+ const exceeded = spend.status === 'exceeded';
+ return new Response(JSON.stringify({ error: exceeded ? 'Daily limit reached' : 'Daily limit unavailable' }), {
+ status: exceeded ? 429 : 503,
+ headers: { 'Content-Type': 'application/json', 'Retry-After': exceeded ? '3600' : '1', ...corsHeaders },
+ });
+ }
+  }
 
   // Route matching — if POST doesn't match, convert to GET for stale clients
   // that still send POST to endpoints converted in PR #468.

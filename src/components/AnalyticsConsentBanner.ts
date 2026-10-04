@@ -1,13 +1,14 @@
 /**
  * First-run analytics consent banner (opt-in).
  *
- * Shown once for brand-new installs that have no recorded consent choice. The
+ * Shown once for any install with no explicit consent choice on file. The
  * user must explicitly Accept to enable PostHog/Vercel analytics — declining (or
  * dismissing) leaves analytics off. Either choice records 'wm-analytics-consent'
  * and marks the prompt as seen so this never re-appears.
  *
- * Migrated / already-decided installs never reach here (migrateAnalyticsConsent
- * marks the prompt seen), so mounting is gated on hasSeenConsentPrompt().
+ * Already-decided installs never reach here (migrateAnalyticsConsent marks the
+ * prompt seen), so mounting is gated on hasSeenConsentPrompt(). Consent that an
+ * older build implied is reset first, so those installs are asked (R4-LOW-001).
  */
 
 import {

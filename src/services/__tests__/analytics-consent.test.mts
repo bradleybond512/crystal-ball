@@ -29,7 +29,9 @@ const store = new Map<string, string>();
 
 const {
   hasAnalyticsConsent,
+  hasSeenConsentPrompt,
   isAnalyticsAllowed,
+  migrateAnalyticsConsent,
   setAnalyticsConsent,
   trackApiKeysSnapshot,
   _setPosthogForTest,
@@ -141,5 +143,56 @@ describe('wm_api_keys_configured payload minimization', () => {
     const forbidden = keys.filter(k => k.startsWith('has_') || k === 'ollama_model' || k === 'OLLAMA_MODEL');
     assert.deepEqual(forbidden, [], 'no per-key names or OLLAMA_MODEL in payload');
     assert.equal(keys.length, 1, 'exactly one property in payload');
+  });
+});
+
+describe('consent migration never implies consent (R4-LOW-001)', () => {
+  const PROMPT_SEEN_KEY = 'wm-analytics-consent-prompt-seen';
+  const VERSION_KEY = 'wm-analytics-consent-version';
+
+  beforeEach(() => {
+    store.clear();
+    setMode(null);
+    _setPosthogForTest(null);
+  });
+
+  it('a pre-banner install with no choice stays unanswered so the banner asks', () => {
+    store.set('wm-installation-id', 'install-1');
+    migrateAnalyticsConsent();
+    assert.equal(store.get(CONSENT_KEY), undefined);
+    assert.equal(hasSeenConsentPrompt(), false);
+    assert.equal(hasAnalyticsConsent(), false);
+  });
+
+  it('implied consent written by an older build is reset and asked again', () => {
+    store.set('wm-installation-id', 'install-1');
+    store.set(CONSENT_KEY, 'true');
+    store.set(PROMPT_SEEN_KEY, 'true');
+    migrateAnalyticsConsent();
+    assert.equal(store.get(CONSENT_KEY), undefined);
+    assert.equal(hasSeenConsentPrompt(), false);
+    assert.equal(isAnalyticsAllowed(), false);
+  });
+
+  it('an explicit opt-in survives every later boot', () => {
+    setAnalyticsConsent(true);
+    assert.equal(store.get(VERSION_KEY), '2');
+    migrateAnalyticsConsent();
+    migrateAnalyticsConsent();
+    assert.equal(hasAnalyticsConsent(), true);
+    assert.equal(hasSeenConsentPrompt(), true);
+  });
+
+  it('an opt-out is kept, and migration never writes true', () => {
+    store.set(CONSENT_KEY, 'false');
+    migrateAnalyticsConsent();
+    assert.equal(store.get(CONSENT_KEY), 'false');
+    assert.equal(hasSeenConsentPrompt(), true);
+    for (const seed of [[], [['wm-installation-id', 'x']], [[PROMPT_SEEN_KEY, 'true']]]) {
+      store.clear();
+      for (const [k, v] of seed) store.set(k, v);
+      migrateAnalyticsConsent();
+      assert.notEqual(store.get(CONSENT_KEY), 'true', JSON.stringify(seed));
+    }
   });
 });

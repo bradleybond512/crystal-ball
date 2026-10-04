@@ -21,6 +21,8 @@
  *   forgets to configure the gate does not leak the provider key.
  */
 
+import { timingSafeEqualString } from './_timing-safe.js';
+
 const CORS_HEADER_NAME = 'X-CrystalBall-Key';
 
 function jsonError(status, payload, cors) {
@@ -49,7 +51,9 @@ export function requireAppAuth(req, cors) {
     }, cors);
   }
   const provided = req.headers.get('x-crystalball-key') || '';
-  if (provided !== expected) {
+  // Constant-time: a plain !== would leak, through timing, how much of a
+  // guessed key is right.
+  if (!timingSafeEqualString(provided, expected)) {
     return jsonError(401, { error: 'Auth required' }, cors);
   }
   return null;

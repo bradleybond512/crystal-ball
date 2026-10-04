@@ -25,6 +25,14 @@ test('UCDP routes are exact local-only targets, including query strings', () => 
   assert.equal(isLocalOnlyApiTarget('/api/ucdp-classifications/extra'), false);
 });
 
+test("the sidecar's event-store routes never fall back to the cloud", () => {
+  for (const route of ['health', 'query', 'count', 'prune']) {
+    assert.equal(isLocalOnlyApiTarget(`/api/events/${route}`), true, route);
+  }
+  assert.equal(isLocalOnlyApiTarget('/api/events/query?domain=weather&limit=50'), true);
+  assert.equal(isLocalOnlyApiTarget('/api/events/other'), false, 'exact reviewed paths only');
+});
+
 test('UCDP is unavailable in the web runtime even before the vault is unlocked', () => {
   assert.equal(isFeatureAvailable('ucdpEvents'), false);
 });

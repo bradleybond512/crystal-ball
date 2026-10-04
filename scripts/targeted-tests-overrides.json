@@ -110,7 +110,8 @@
     "test:sidecar-supervisor"
   ],
   "src/services/runtime.ts": [
-    "test:sidecar-routing"
+    "test:sidecar-routing",
+    "test:key-compare"
   ],
   "src/services/runtime-config.ts": [
     "test:sidecar-routing",
@@ -154,7 +155,8 @@
   ],
   "api/_api-key.js": [
     "test:csp-owned",
-    "test:latent-cloud"
+    "test:latent-cloud",
+    "test:key-compare"
   ],
   "api/_cors.js": [
     "test:csp-owned"
@@ -218,5 +220,11 @@
   ],
   "server/crystalball/intelligence/v1/_shared.ts": [
     "test:latent-cloud"
+  ],
+  "api/_timing-safe.js": [
+    "test:key-compare"
+  ],
+  "api/_auth.js": [
+    "test:key-compare"
   ]
 }

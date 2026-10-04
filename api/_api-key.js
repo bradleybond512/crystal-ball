@@ -1,3 +1,5 @@
+import { timingSafeIncludes } from './_timing-safe.js';
+
 const DESKTOP_ORIGIN_PATTERNS = [
   /^https?:\/\/tauri\.localhost(:\d+)?$/,
   /^https?:\/\/[a-z0-9-]+\.tauri\.localhost(:\d+)?$/i,
@@ -62,7 +64,7 @@ export function isSidecarRuntime() {
 
 function requireKey(key, validKeys, errorMsg) {
   if (!key) return { valid: false, required: true, error: errorMsg };
-  if (!validKeys.has(key)) return { valid: false, required: true, error: 'Invalid API key' };
+  if (!timingSafeIncludes(validKeys, key)) return { valid: false, required: true, error: 'Invalid API key' };
   return { valid: true, required: true };
 }
 
@@ -92,7 +94,7 @@ export function validateApiKey(req, options = {}) {
 	if (!isReadRequest(req)) {
 	  return requireKey(key, validKeys, 'API key required for trusted browser non-read requests');
 	}
-	if (key && !validKeys.has(key)) return { valid: false, required: true, error: 'Invalid API key' };
+	if (key && !timingSafeIncludes(validKeys, key)) return { valid: false, required: true, error: 'Invalid API key' };
 	return { valid: true, required: false };
   }
 

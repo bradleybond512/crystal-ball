@@ -22,8 +22,8 @@ safety-critical weather logic.
 | R3-SEC-005 | Medium | Release build silently falls back to an unpinned system `node` for the secret-bearing sidecar | PR 7 | 🔴 |
 | R3-BUG-001 | Medium | Sync Tauri commands block the macOS main thread (up to ~271 s) | PR 3 — [slice A validation](validation/R3-BUG-001-SLICE-A.md); slice B pending | 🟡 |
 | R3-BUG-002 | Medium | Datacenter weather posture freezes when NWS `/points` fails | PR 6 | 🔴 |
-| R3-SEC-006 | Low | SMS webhook fails open without `TWILIO_AUTH_TOKEN`; config patch unvalidated | PR 8 | 🔴 |
-| R3-SEC-007 | Low | `/api/feed-discovery` first hop not IP-pinned (DNS-rebinding TOCTOU) | PR 8 | 🔴 |
+| R3-SEC-006 | Low | SMS webhook fails open without `TWILIO_AUTH_TOKEN`; config patch unvalidated | PR 8 — [validation](validation/Q20-A-SIDECAR-LOWS.md) | ✅ |
+| R3-SEC-007 | Low | `/api/feed-discovery` first hop not IP-pinned (DNS-rebinding TOCTOU) | PR 8 — [validation](validation/Q20-A-SIDECAR-LOWS.md) | ✅ |
 | R3-SEC-008 | Low | `allow-unsigned-executable-memory` entitlement is broader than needed | PR 9 | 🔴 |
 | R3-SEC-009 | Low | Numeric feed fields interpolated raw into HTML without runtime coercion | PR 9 | 🔴 |
 

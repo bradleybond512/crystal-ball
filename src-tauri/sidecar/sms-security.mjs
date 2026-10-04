@@ -47,8 +47,10 @@ export function loadAllowlist(filePath = DEFAULT_ALLOWLIST_PATH) {
   try {
     const raw = readFileSync(filePath, 'utf8');
     const parsed = JSON.parse(raw);
-    const list = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.allowlist) ? parsed.allowlist : [];
-    return list.map(normalizeEntry).filter(entry => entry && entry.phoneNumber);
+    let list = [];
+    if (Array.isArray(parsed)) list = parsed;
+    else if (Array.isArray(parsed?.allowlist)) list = parsed.allowlist;
+    return list.map((raw) => normalizeEntry(raw)).filter(entry => entry && entry.phoneNumber);
   } catch {
     return [];
   }
@@ -56,7 +58,7 @@ export function loadAllowlist(filePath = DEFAULT_ALLOWLIST_PATH) {
 
 export function saveAllowlist(list, filePath = DEFAULT_ALLOWLIST_PATH) {
   const normalized = (list ?? [])
-    .map(normalizeEntry)
+    .map((raw) => normalizeEntry(raw))
     .filter(entry => entry && entry.phoneNumber);
   mkdirSync(path.dirname(filePath), { recursive: true });
   writeFileSync(filePath, JSON.stringify(normalized, null, 2), { mode: 0o600 });
@@ -73,7 +75,7 @@ export function isAllowed(phoneNumber, allowlist, requiredTier = 'readonly') {
   const target = normalizePhone(phoneNumber);
   if (!target) return { allowed: false, reason: 'invalid_phone' };
   const entry = (allowlist ?? [])
-    .map(normalizeEntry)
+    .map((raw) => normalizeEntry(raw))
     .find(item => item && normalizePhone(item.phoneNumber) === target);
   if (!entry) return { allowed: false, reason: 'not_allowlisted' };
   if (requiredTier === 'admin' && entry.tier !== 'admin') {
@@ -141,4 +143,81 @@ export function validateTwilioSignature(authToken, url, params, signature) {
   const expBuf = Buffer.from(expected, 'base64');
   if (sigBuf.length !== expBuf.length) return false;
   return timingSafeEqual(sigBuf, expBuf);
+}
+
+// ── Config patch validation (R3-SEC-006) ────────────────────────────────────
+// POST /api/sms/config used to spread any JSON into the live config. Only two
+// keys are accepted now, each with a strict shape. New or changed numbers must
+// be E.164 once formatting characters are stripped; numbers already saved are
+// kept as they are, so an older config can still be edited.
+
+export const SMS_ALLOWLIST_MAX = 25;
+const SMS_CONFIG_KEYS = new Set(['enabled', 'allowlist']);
+const SMS_ENTRY_KEYS = new Set(['phoneNumber', 'name', 'tier']);
+const E164_RE = /^\+[1-9]\d{6,14}$/;
+const NAME_MAX = 64;
+
+function hasControlChar(value) {
+  for (const char of value) {
+    const code = char.codePointAt(0);
+    if (code < 32 || code === 127) return true;
+  }
+  return false;
+}
+
+/** Strip spaces, dashes, dots and parentheses: "+1 (555) 000-0000" → "+15550000000". */
+export function toE164(raw) {
+  const compact = String(raw ?? '').replaceAll(/[\s().-]/g, '');
+  return E164_RE.test(compact) ? compact : null;
+}
+
+function validateEntry(raw, savedNumbers) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { error: 'allowlist entries must be objects' };
+  for (const key of Object.keys(raw)) {
+    if (!SMS_ENTRY_KEYS.has(key)) return { error: `unknown allowlist field: ${key}` };
+  }
+  const given = typeof raw.phoneNumber === 'string' ? raw.phoneNumber.trim() : '';
+  if (!given) return { error: 'phoneNumber is required' };
+  const phoneNumber = savedNumbers.has(given) ? given : toE164(given);
+  if (!phoneNumber) return { error: 'phoneNumber must be E.164, for example +15551234567' };
+  if (raw.name !== undefined && typeof raw.name !== 'string') return { error: 'name must be a string' };
+  const name = (raw.name ?? '').trim();
+  if (name.length > NAME_MAX || hasControlChar(name)) return { error: `name must be at most ${NAME_MAX} plain characters` };
+  if (raw.tier !== undefined && raw.tier !== 'admin' && raw.tier !== 'readonly') return { error: 'tier must be admin or readonly' };
+  return { entry: { phoneNumber, name, tier: raw.tier ?? 'readonly' } };
+}
+
+/**
+ * Validate a POST /api/sms/config body against the current config.
+ * Returns `{ config }` (the merged result) or `{ error }` (a value-free reason).
+ */
+export function validateSmsConfigPatch(patch, current) {
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return { error: 'config must be a JSON object' };
+  for (const key of Object.keys(patch)) {
+    if (!SMS_CONFIG_KEYS.has(key)) return { error: `unknown config field: ${key}` };
+  }
+  const next = { enabled: Boolean(current?.enabled), allowlist: [...(current?.allowlist ?? [])] };
+  if (patch.enabled !== undefined) {
+    if (typeof patch.enabled !== 'boolean') return { error: 'enabled must be a boolean' };
+    next.enabled = patch.enabled;
+  }
+  if (patch.allowlist !== undefined) {
+    const result = validateAllowlist(patch.allowlist, current?.allowlist ?? []);
+    if (result.error) return { error: result.error };
+    next.allowlist = result.entries;
+  }
+  return { config: next };
+}
+
+function validateAllowlist(list, savedList) {
+  if (!Array.isArray(list)) return { error: 'allowlist must be an array' };
+  if (list.length > SMS_ALLOWLIST_MAX) return { error: `allowlist holds at most ${SMS_ALLOWLIST_MAX} numbers` };
+  const savedNumbers = new Set(savedList.map((entry) => entry?.phoneNumber).filter(Boolean));
+  const entries = [];
+  for (const raw of list) {
+    const result = validateEntry(raw, savedNumbers);
+    if (result.error) return { error: result.error };
+    entries.push(result.entry);
+  }
+  return { entries };
 }

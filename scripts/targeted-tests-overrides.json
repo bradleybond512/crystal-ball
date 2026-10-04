@@ -129,9 +129,13 @@
     "test:evidence-journal"
   ],
   "src/services/intelligence/forecast-calibration-adapter.ts": [
-    "test:evidence-journal"
+    "test:evidence-journal",
+    "test:forecast-load"
   ],
   "src/services/forecast-accuracy.ts": [
     "test:evidence-journal"
+  ],
+  "src/services/intelligence/forecast-calibration-load.ts": [
+    "test:forecast-load"
   ]
 }

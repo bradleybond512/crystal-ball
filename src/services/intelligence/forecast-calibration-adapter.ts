@@ -53,6 +53,7 @@ import {
 } from '@/services/algorithms/forecast-outcome-grading';
 import { buildHierarchicalBaseRatePrediction } from './hierarchical-base-rate';
 import { buildPersistenceBaselinePrediction } from './persistence-baseline';
+import { notifyEvidenceChanged } from './evidence-bus';
 import {
   buildMomentumBaselinePrediction,
   type MomentumSample,
@@ -65,6 +66,8 @@ let _calibrationStore: ForecastCalibrationStore | null = null;
 
 const STORAGE_KEY = 'crystalball-forecast-calibration-v1';
 const MAX_RECORDS = 500;
+/** Working-set size; the evidence journal rebuilds at most this many. */
+export const FORECAST_CALIBRATION_CAPACITY = MAX_RECORDS;
 
 function loadPersisted(store: ForecastCalibrationStore): void {
   try {
@@ -83,7 +86,22 @@ function persist(store: ForecastCalibrationStore): void {
     const trimmed = all.slice(Math.max(0, all.length - MAX_RECORDS));
     if (trimmed.length < all.length) store.loadJson(trimmed);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+    notifyEvidenceChanged('forecast');
   } catch { /* quota — calibration is best-effort */ }
+}
+
+/**
+ * Merge forecasts rebuilt from the evidence journal (R4-LOW-008) after the
+ * local blob was lost. Records already present win; the merged set is
+ * trimmed to the newest MAX_RECORDS by `persist`. Returns how many were added.
+ */
+export function mergeRebuiltPredictions(records: readonly PredictionRecord[]): number {
+  const store = getCalibrationStore();
+  const added = records.filter((r) => store.get(r.id) === undefined);
+  if (added.length === 0) return 0;
+  store.loadJson([...store.all(), ...added]);
+  persist(store);
+  return added.length;
 }
 
 export function getCalibrationStore(): ForecastCalibrationStore {

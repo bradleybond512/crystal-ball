@@ -48,6 +48,7 @@ import { validateTwilioSignature } from './sms-security.mjs';
 import { buildRecentChanges } from './recent-changes.mjs';
 import { explain as explainEvent } from './explainer.mjs';
 import { EventStore } from './event-store.mjs';
+import { EvidenceFullError, EvidenceInputError, EvidenceStore } from './evidence-store.mjs';
 
 // ── Temporal World Store append helpers ──
 // These translate the renderer's observation/situation shapes into EventRecords
@@ -304,6 +305,76 @@ function warnEventStoreWriteFailure(kind, err) {
   if (now - last < 60_000) return;
   _eventStoreWriteWarnAt.set(kind, now);
   console.warn(`[sidecar] event-store ${kind} append failed: ${message}`);
+}
+
+// ── Calibration evidence journal routes (evidence.db, R4-LOW-008) ──────────
+// Renderer-only: no MCP tool calls these routes. The `/api/local-` prefix makes
+// the renderer's fetch patch treat them as local-only (isLocalOnlyApiTarget),
+// so evidence is never retried against the cloud API when the sidecar is
+// unreachable. Bodies are capped at 1 MB
+// (200 entries x 4 KB, or 5,000 missing-query triples), every entry is
+// allowlisted per kind in evidence-store.mjs, and the traffic recorder skips
+// the whole prefix so evidence never lands in the traffic log.
+const EVIDENCE_BODY_LIMIT_BYTES = 1024 * 1024;
+const EVIDENCE_ROUTE_METHODS = Object.freeze({
+  '/api/local-evidence/append': 'POST',
+  '/api/local-evidence/missing': 'POST',
+  '/api/local-evidence/records': 'GET',
+  '/api/local-evidence/summary': 'GET',
+  '/api/local-evidence/export': 'GET',
+});
+
+async function readEvidenceJson(req) {
+  const raw = await readBody(req, EVIDENCE_BODY_LIMIT_BYTES);
+  return raw && raw.length > 0 ? JSON.parse(raw.toString('utf8')) : null;
+}
+
+function optionalInt(value) {
+  const parsed = Number.parseInt(value ?? '', 10);
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
+
+async function handleEvidenceRequest(requestUrl, req, context) {
+  const method = EVIDENCE_ROUTE_METHODS[requestUrl.pathname];
+  if (!method) return json({ error: 'Not found' }, 404);
+  if (req.method !== method) return json({ error: 'Method not allowed' }, 405);
+  const store = context.evidenceStore;
+  if (!store) return json({ error: 'evidence journal unavailable' }, 503);
+  const noStore = { 'cache-control': 'no-store' };
+  try {
+    switch (requestUrl.pathname) {
+      case '/api/local-evidence/append': {
+        const body = await readEvidenceJson(req);
+        return json(store.append(body?.entries), 200, noStore);
+      }
+      case '/api/local-evidence/missing': {
+        const body = await readEvidenceJson(req);
+        return json({ missing: store.missing(body?.entries) }, 200, noStore);
+      }
+      case '/api/local-evidence/records': {
+        const params = requestUrl.searchParams;
+        return json(store.records({
+          kind: params.get('kind') ?? '',
+          beforeSeq: optionalInt(params.get('before_seq')),
+          limit: optionalInt(params.get('limit')),
+        }), 200, noStore);
+      }
+      case '/api/local-evidence/summary':
+        return json(store.summary(), 200, noStore);
+      default:
+        return new Response(store.exportJsonl(), {
+          status: 200,
+          headers: { 'content-type': 'application/x-ndjson; charset=utf-8', ...noStore },
+        });
+    }
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) return json({ error: 'request body too large' }, 413);
+    if (error instanceof SyntaxError) return json({ error: 'invalid JSON' }, 400);
+    if (error instanceof EvidenceInputError) return json({ error: error.message }, 400);
+    if (error instanceof EvidenceFullError) return json({ error: 'evidence journal is full' }, 507);
+    context.logger?.error?.('[evidence-store] request failed', String(error?.message || error));
+    return json({ error: 'evidence journal error' }, 500);
+  }
 }
 
 // ── Event-store payload redaction ──────────────────────────────────────────
@@ -8663,6 +8734,11 @@ async function dispatch(requestUrl, req, routes, context) {
     }
     const deleted = context.eventStore.pruneOlderThan(months);
     return json({ ok: true, deleted });
+  }
+
+  // ── Calibration evidence journal (evidence.db, R4-LOW-008) ──────────────
+  if (requestUrl.pathname.startsWith('/api/local-evidence/')) {
+    return handleEvidenceRequest(requestUrl, req, context);
   }
 
   // ── /api/intelligence/playbook — pure-data playbook lookup ──────────────
@@ -21393,6 +21469,19 @@ export async function createLocalApiServer(options = {}) {
     context.logger?.error?.('[event-store] failed to initialize', String(error?.message || error));
     context.eventStore = null;
   }
+  // ── Calibration evidence journal (evidence.db, R4-LOW-008) ──
+  // Durable, append-only record behind the renderer's calibration ledgers.
+  // Never pruned; a failed open leaves the routes answering 503.
+  try {
+    context.evidenceStore = new EvidenceStore({ dataDir: context.dataDir });
+    const { chain } = context.evidenceStore.summary();
+    if (!chain.ok) {
+      context.logger?.error?.('[evidence-store] hash chain broken', `seq=${chain.brokenAtSeq ?? 'head'}`);
+    }
+  } catch (error) {
+    context.logger?.error?.('[evidence-store] failed to initialize', String(error?.message || error));
+    context.evidenceStore = null;
+  }
   const _eventStorePruneTimer = setInterval(() => {
     if (context.eventStore) context.eventStore.pruneOlderThan(context.eventStore.retentionMonths);
   }, 24 * 60 * 60 * 1000);
@@ -22005,7 +22094,8 @@ export async function createLocalApiServer(options = {}) {
  || requestUrl.pathname === '/api/local-traffic-log'
  || requestUrl.pathname === '/api/local-debug-toggle'
  || requestUrl.pathname === '/api/local-env-update'
- || requestUrl.pathname === '/api/local-validate-secret';
+ || requestUrl.pathname === '/api/local-validate-secret'
+ || requestUrl.pathname.startsWith('/api/local-evidence/');
 
  try {
  const response = await dispatch(requestUrl, req, routes, context);
@@ -22187,6 +22277,7 @@ export async function createLocalApiServer(options = {}) {
  await new Promise((resolve, reject) => {
  server.close((error) => (error ? reject(error) : resolve()));
  });
+ context.evidenceStore?.close();
  },
   };
 }

@@ -134,6 +134,7 @@ condition and continue with another unblocked task.
 | `src/services/cognition/shadow-rollout.ts` | Paired live/shadow comparison and flip reports |
 | `src/services/cognition/recalibration.ts` | Reliability-curve recalibration |
 | `src/services/algorithms/algorithm-evaluation-ledger.ts` | Runtime algorithm evidence |
+| `src/services/intelligence/evidence-journal.ts` + `src-tauri/sidecar/evidence-store.mjs` | Durable, append-only, hash-chained evidence journal behind the forecast, alert-outcome and EMA ledgers (R4-LOW-008); rebuilds them after a WebKit reset and exports JSONL |
 | `src/services/algorithms/algorithm-diagnostics.ts` | Version-scoped runtime and calibration diagnostics |
 | `src/components/BeliefCalibrationPanel.ts` | Existing calibration surface to extend |
 | `src/components/calibration-report-view.ts` | Pure calibration view models |

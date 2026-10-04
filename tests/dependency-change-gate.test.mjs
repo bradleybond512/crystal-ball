@@ -22,6 +22,7 @@ test('lockfiles, Cargo manifests, .npmrc, workflows and the gates are sensitive;
     'src-tauri/Cargo.lock', 'src-tauri/Cargo.toml', '.github/workflows/new.yml', '.github/dependabot.yml',
     '.github/CODEOWNERS', 'scripts/check-install-script-drift.mjs', 'scripts/check-dependency-age.mjs',
     'scripts/dependency-change-policy.mjs', './package-lock.json', String.raw`src-tauri\Cargo.lock`,
+    '.github/tools/zizmor/requirements.txt', '.github/mcp.json',
   ];
   assert.deepEqual(sensitiveFiles(sensitive).map((h) => h.path).length, sensitive.length);
   const ordinary = ['package.json', 'src/main.ts', 'docs/x.md', 'scripts/other.mjs', 'my-package-lock.json.md', '.github/pull_request_template.md', ''];
@@ -64,7 +65,8 @@ test('a PR too large for GitHub to list is treated as sensitive', async () => {
 
 test('the gate workflow runs from the base branch, never checks out PR code, and is read-only', () => {
   const wf = read('.github/workflows/dependency-change-gate.yml');
-  assert.match(wf, /^on:\n {2}pull_request_target:\n {4}types: \[opened, synchronize, reopened, labeled, unlabeled, ready_for_review\]/m);
+  // The trigger may carry a zizmor ignore (Q20: safe by construction, documented in the file).
+  assert.match(wf, /^on:\n(?: {2}#[^\n]*\n)? {2}pull_request_target:(?: # zizmor: ignore\[dangerous-triggers\])?\n {4}types: \[opened, synchronize, reopened, labeled, unlabeled, ready_for_review\]/m);
   assert.doesNotMatch(wf, /pull_request\.head|head_ref|ref:\s/, 'never checks out the PR');
   assert.match(wf, /persist-credentials: false/);
   assert.match(wf, /^permissions:\n {2}contents: read\n {2}pull-requests: read\n\n/m);
@@ -92,7 +94,7 @@ test('CI verifies registry signatures and dependency age', () => {
 
 test('Dependabot waits 7 days (14 for majors) on every ecosystem', () => {
   const entries = read('.github/dependabot.yml').split(/\n {2}- package-ecosystem: /).slice(1);
-  assert.equal(entries.length, 3);
+  assert.equal(entries.length, 4);
   for (const entry of entries) {
     assert.match(entry, /\n {4}cooldown:\n {6}default-days: 7\n/, entry.split('\n')[0]);
     if (!entry.startsWith('"github-actions"')) assert.match(entry, /\n {6}semver-major-days: 14\n/, entry.split('\n')[0]);

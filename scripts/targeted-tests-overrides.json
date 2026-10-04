@@ -127,6 +127,34 @@
     "test:supply-chain-gates"
   ],
   "scripts/dependency-change-policy.mjs": [
-    "test:supply-chain-gates"
+    "test:supply-chain-gates",
+    "test:workflow-security"
+  ],
+  ".github/workflows/auto-merge-agent-branches.yml": [
+    "test:workflow-security"
+  ],
+  ".github/workflows/build-desktop.yml": [
+    "test:workflow-security"
+  ],
+  ".github/workflows/lint.yml": [
+    "test:workflow-security"
+  ],
+  ".github/workflows/pages.yml": [
+    "test:workflow-security"
+  ],
+  ".github/workflows/actionlint.yml": [
+    "test:workflow-security"
+  ],
+  ".github/workflows/dependency-change-gate.yml": [
+    "test:workflow-security"
+  ],
+  ".github/mcp.json": [
+    "test:workflow-security"
+  ],
+  ".github/tools/zizmor/requirements.txt": [
+    "test:workflow-security"
+  ],
+  ".github/dependabot.yml": [
+    "test:workflow-security"
   ]
 }

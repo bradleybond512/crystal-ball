@@ -66,22 +66,30 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '22'
+          package-manager-cache: false
 
       - name: Resolve release context
         id: context
         shell: bash
+        env:
+          # R4-LOW-002: through env, never pasted into the script text.
+          RELEASE_REF: ${{ inputs.release_tag || github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+          VARIANT: ${{ inputs.variant || 'full' }}
+          PUBLISH_MODE: ${{ inputs.publish_mode || 'build' }}
+          COMMIT_SHA: ${{ github.sha }}
         run: |
           # For publish-mode workflow_dispatch, the tag comes from the
           # release_tag input (because the workflow runs at main, not at the
           # tag — see trigger comment). For everything else, github.ref_name
           # is either the pushed tag or the dispatched branch.
-          REF_NAME="${{ inputs.release_tag || github.ref_name }}"
+          REF_NAME="$RELEASE_REF"
           node scripts/release-context.mjs \
-            --event "${{ github.event_name }}" \
+            --event "$EVENT_NAME" \
             --ref "$REF_NAME" \
-            --variant "${{ inputs.variant || 'full' }}" \
-            --publish-mode "${{ inputs.publish_mode || 'build' }}" \
-            --sha "${{ github.sha }}" \
+            --variant "$VARIANT" \
+            --publish-mode "$PUBLISH_MODE" \
+            --sha "$COMMIT_SHA" \
             --github-output "$GITHUB_OUTPUT"
 
   build-tauri:
@@ -139,7 +147,9 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '22'
-          cache: 'npm'
+          # Release artifacts are built from a clean npm install: no restored
+          # package cache that another workflow could have written.
+          package-manager-cache: false
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7
@@ -147,8 +157,12 @@ jobs:
           toolchain: stable
           targets: ${{ contains(matrix.platform, 'macos') && 'aarch64-apple-darwin,x86_64-apple-darwin' || (matrix.label == 'Linux-ARM64' && 'aarch64-unknown-linux-gnu' || '') }}
 
+      # A publishing build compiles from scratch so a release binary never
+      # links objects restored from a cache (cache poisoning). Build-only runs
+      # keep the cache for speed; they produce no published artifact.
       - name: Rust cache
-        uses: swatinem/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db
+        if: needs.release-context.outputs.publish != 'true'
+        uses: swatinem/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db # zizmor: ignore[cache-poisoning] skipped when publishing (see if:)
         with:
           workspaces: './src-tauri -> target'
           cache-on-failure: true
@@ -407,6 +421,7 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '22'
+          package-manager-cache: false
 
       - name: Download release bundles
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c

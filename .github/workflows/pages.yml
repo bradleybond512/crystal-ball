@@ -19,10 +19,10 @@ concurrency:
   group: pages-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege: only the deploy job (which declares its own) can write to
+# Pages or mint an OIDC token.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 jobs:
   build-web:

@@ -1,35 +1,35 @@
 {
   "mcpServers": {
- "github": {
- "type": "stdio",
- "command": "docker",
- "args": [
- "run",
- "-i",
- "--rm",
- "-e",
- "GITHUB_PERSONAL_ACCESS_TOKEN",
- "ghcr.io/github/github-mcp-server"
- ],
- "env": {
- "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
- }
- },
- "filesystem": {
- "type": "stdio",
- "command": "npx",
- "args": [
- "-y",
- "@modelcontextprotocol/server-filesystem",
- "${workspaceFolder}"
- ]
- },
- "fetch": {
- "type": "stdio",
- "command": "uvx",
- "args": [
- "mcp-server-fetch"
- ]
- }
+    "github": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "ghcr.io/github/github-mcp-server@sha256:508a0857ec762b1ab1cece29193345b501fab1dd9d1228a7b617062954cecac6"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
+    },
+    "filesystem": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem@2026.8.31",
+        "${workspaceFolder}"
+      ]
+    },
+    "fetch": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "mcp-server-fetch==2026.8.18"
+      ]
+    }
   }
 }

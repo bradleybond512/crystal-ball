@@ -45,9 +45,11 @@ jobs:
         # base_ref is empty in a merge_group event, where the full-tree pass
         # above validates the combined result instead.
         if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          git fetch origin "${{ github.base_ref }}" --depth=1
-          git diff --name-only --diff-filter=ACMRT "origin/${{ github.base_ref }}...HEAD" -- '*.md' > "$RUNNER_TEMP/markdown-files.list"
+          git fetch origin "$BASE_REF" --depth=1
+          git diff --name-only --diff-filter=ACMRT "origin/$BASE_REF...HEAD" -- '*.md' > "$RUNNER_TEMP/markdown-files.list"
           if [ ! -s "$RUNNER_TEMP/markdown-files.list" ]; then
             echo "No markdown files changed"
             exit 0

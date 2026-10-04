@@ -54,6 +54,7 @@ import {
 import { buildHierarchicalBaseRatePrediction } from './hierarchical-base-rate';
 import { buildPersistenceBaselinePrediction } from './persistence-baseline';
 import { notifyEvidenceChanged } from './evidence-bus';
+import { parsePersistedPredictions } from './forecast-calibration-load';
 import {
   buildMomentumBaselinePrediction,
   type MomentumSample,
@@ -75,7 +76,9 @@ function loadPersisted(store: ForecastCalibrationStore): void {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     const parsed: unknown = JSON.parse(raw);
-    if (Array.isArray(parsed)) store.loadJson(parsed as PredictionRecord[]);
+    // Validated, never cast: a corrupt or tampered entry must not reach
+    // Brier scores or promotion gates.
+    store.loadJson(parsePersistedPredictions(parsed, MAX_RECORDS));
   } catch { /* corrupted store — start fresh */ }
 }
 

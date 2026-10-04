@@ -100,5 +100,14 @@
   ],
   "src-tauri/tests/watchdog_contract.rs": [
     "test:native-responsiveness"
+  ],
+  "src-tauri/sidecar/sms-security.mjs": [
+    "test:sidecar-lows"
+  ],
+  "src/components/SmsSettingsPanel.ts": [
+    "test:sidecar-lows"
+  ],
+  "src-tauri/sidecar/local-api-server.mjs": [
+    "test:sidecar-lows"
   ]
 }

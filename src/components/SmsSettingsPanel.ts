@@ -35,6 +35,8 @@ export class SmsSettingsPanel extends Panel {
   private config: SmsConfig = { enabled: false, allowlist: [] };
   private status: SmsStatus = {};
   private lastTestResponse: { ok: boolean; text: string; segments?: number; status?: number } | null = null;
+  /** Why the last save was refused (the sidecar validates every change). */
+  private lastSaveError: string | null = null;
 
   constructor() {
     super({ id: 'sms-command-interface', title: 'SMS Command Interface' });
@@ -105,12 +107,20 @@ export class SmsSettingsPanel extends Panel {
       body: JSON.stringify(updated),
     });
     if (res.ok) {
+      this.lastSaveError = null;
       const raw = await res.json() as { enabled?: boolean; allowlist?: unknown[] };
       if (!raw || typeof raw !== 'object') return;
       this.config = {
         enabled: Boolean(raw.enabled),
         allowlist: this.normalizeAllowlist(raw.allowlist),
       };
+    } else {
+      let reason = `Save failed (${res.status}).`;
+      try {
+        const body = await res.json() as { error?: unknown };
+        if (typeof body?.error === 'string') reason = body.error;
+      } catch { /* keep the status-only reason */ }
+      this.lastSaveError = reason;
     }
   }
 
@@ -208,6 +218,7 @@ export class SmsSettingsPanel extends Panel {
       <section class="sms-section">
         <h3>Allowlist</h3>
         ${this.renderAllowlistTable()}
+        ${this.lastSaveError ? `<p class="sms-save-error" role="alert">${escapeHtml(this.lastSaveError)}</p>` : ''}
         <div class="sms-add-row">
           <input type="text" id="sms-add-num" placeholder="+1 (555) 000-0000" />
           <input type="text" id="sms-add-name" placeholder="Name (optional)" />

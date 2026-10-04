@@ -44,7 +44,7 @@ import {
   loadSmsConfig, saveSmsConfig,
   handleSmsCommand,
 } from './sms-command-parser.mjs';
-import { validateTwilioSignature } from './sms-security.mjs';
+import { validateSmsConfigPatch, validateTwilioSignature } from './sms-security.mjs';
 import { buildRecentChanges } from './recent-changes.mjs';
 import { explain as explainEvent } from './explainer.mjs';
 import { EventStore } from './event-store.mjs';
@@ -304,6 +304,55 @@ function warnEventStoreWriteFailure(kind, err) {
   if (now - last < 60_000) return;
   _eventStoreWriteWarnAt.set(kind, now);
   console.warn(`[sidecar] event-store ${kind} append failed: ${message}`);
+}
+
+// ── Inline-script serialization (R4-LOW-004) ──────────────────────────────
+// JSON.stringify does not escape `<`, so a payload holding `</script>` would
+// close an inline <script> early and inject markup on the sidecar origin.
+// Escaping <, >, & and the two JS line terminators keeps the value inert
+// inside a script element while JSON.parse/JS still read it unchanged.
+export function serializeForInlineScript(value) {
+  return JSON.stringify(value)
+    .replaceAll('<', String.raw`\u003c`)
+    .replaceAll('>', String.raw`\u003e`)
+    .replaceAll('&', String.raw`\u0026`)
+    .replaceAll(String.fromCodePoint(0x2028), String.raw`\u2028`)
+    .replaceAll(String.fromCodePoint(0x2029), String.raw`\u2029`);
+}
+
+// ── Pinned fetch with manual redirects (R3-SEC-007) ───────────────────────
+// Each hop connects to the address isSafeUrl() resolved for it, so DNS cannot
+// be re-pointed at an internal host between the check and the connection
+// (rebinding). Redirects are followed by hand and every target is re-checked.
+// Same mechanism /api/rss-proxy uses; IPv6-only hosts fall back to an
+// unpinned connection there too.
+export class SsrfBlockedError extends Error {
+  constructor(reason) {
+    super(reason || 'Blocked URL');
+    this.name = 'SsrfBlockedError';
+  }
+}
+
+export async function fetchPinnedFollowingRedirects(url, init = {}, timeoutMs = 10_000, firstSafety = null, deps = {}) {
+  const fetchImpl = deps.fetchImpl ?? fetchWithTimeout;
+  const checkUrl = deps.checkUrl ?? isSafeUrl;
+  const maxRedirects = deps.maxRedirects ?? 3;
+  let currentUrl = url;
+  let safety = firstSafety ?? await checkUrl(currentUrl);
+  for (let hop = 0; ; hop += 1) {
+    if (!safety?.safe) throw new SsrfBlockedError(safety?.reason);
+    const pinned = safety.resolvedAddresses?.find((address) => address.includes('.'));
+    const response = await fetchImpl(currentUrl, {
+      ...init,
+      redirect: 'manual',
+      ...(pinned ? { resolvedAddress: pinned } : {}),
+    }, timeoutMs);
+    if (response.status < 300 || response.status >= 400) return response;
+    const location = response.headers?.get?.('location');
+    if (!location || hop >= maxRedirects) return response;
+    currentUrl = new URL(location, currentUrl).href;
+    safety = await checkUrl(currentUrl);
+  }
 }
 
 // ── Event-store payload redaction ──────────────────────────────────────────
@@ -7474,7 +7523,7 @@ async function dispatch(requestUrl, req, routes, context) {
     // tokens to whatever window happens to be the opener.
     const page = (msg, payload) => new Response(
       `<!doctype html><meta charset=utf-8><body style="font:14px system-ui;background:#111;color:#eee;padding:24px">${msg}` +
-      `<script>try{window.opener&&window.opener.postMessage(${JSON.stringify(payload)},'tauri://localhost')}catch(e){}setTimeout(function(){window.close()},1500)</script>`,
+      `<script>try{window.opener&&window.opener.postMessage(${serializeForInlineScript(payload)},'tauri://localhost')}catch(e){}setTimeout(function(){window.close()},1500)</script>`,
       { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } });
     if (!ok) return page('Patreon connect failed (bad state).', { type: 'patreon-oauth', ok: false });
     try {
@@ -7509,6 +7558,19 @@ async function dispatch(requestUrl, req, routes, context) {
 
     if (!_smsConfig.enabled) return json({ error: 'SMS command interface is disabled.' }, 503);
 
+    // R3-SEC-006: without a Twilio token there is no way to prove a webhook
+    // came from Twilio (the From number is caller-controlled), so only the
+    // bearer-token in-app test caller is accepted. Fail closed, before reading
+    // the body.
+    const twilioToken = process.env.TWILIO_AUTH_TOKEN || '';
+    if (!twilioToken && !trustedLocalCaller) {
+      if (!_smsTwilioTokenWarned) {
+        _smsTwilioTokenWarned = true;
+        context.logger.warn('[local-api] SMS webhook refused: set TWILIO_AUTH_TOKEN so incoming requests can be signature-checked.');
+      }
+      return json({ error: 'Twilio signature required' }, 503);
+    }
+
     const rawBodyBuf = await readBody(req);
     const rawBody = rawBodyBuf ? rawBodyBuf.toString('utf8') : '';
     const contentType = String(req.headers['content-type'] || '').toLowerCase();
@@ -7522,29 +7584,22 @@ async function dispatch(requestUrl, req, routes, context) {
       try { params = JSON.parse(rawBody || '{}'); } catch { return json({ error: 'Invalid JSON' }, 400); }
     }
 
-    // Caller-ID (From) is spoofable. When a TWILIO_AUTH_TOKEN is configured we
-    // require a valid HMAC-SHA1 request signature before trusting the webhook;
-    // without a token we log once and fall back to phone-number-only validation.
+    // Caller-ID (From) is spoofable, so every webhook must carry a valid
+    // HMAC-SHA1 Twilio signature (callers without a token were refused above).
     //
     // The in-app test command (SmsSettingsPanel) POSTs to this same pre-auth
     // route but carries a valid LOCAL_API_TOKEN via the renderer's fetch
     // wrapper. A valid token already proves a trusted local caller, so skip the
     // Twilio-signature requirement for it — external webhooks never have one.
-    const twilioToken = process.env.TWILIO_AUTH_TOKEN || '';
-    if (twilioToken) {
-      if (!trustedLocalCaller) {
-        const signature = req.headers['x-twilio-signature'] || '';
-        const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim() || 'https';
-        const host = req.headers['x-forwarded-host'] || req.headers.host || '';
-        const fullUrl = `${proto}://${host}${requestUrl.pathname}${requestUrl.search}`;
-        if (!validateTwilioSignature(twilioToken, fullUrl, params, signature)) {
-          context.logger.warn(`[local-api] rejected SMS webhook: invalid Twilio signature (from ${host || 'unknown host'})`);
-          return json({ error: 'Invalid Twilio signature' }, 403);
-        }
+    if (twilioToken && !trustedLocalCaller) {
+      const signature = req.headers['x-twilio-signature'] || '';
+      const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim() || 'https';
+      const host = req.headers['x-forwarded-host'] || req.headers.host || '';
+      const fullUrl = `${proto}://${host}${requestUrl.pathname}${requestUrl.search}`;
+      if (!validateTwilioSignature(twilioToken, fullUrl, params, signature)) {
+        context.logger.warn(`[local-api] rejected SMS webhook: invalid Twilio signature (from ${host || 'unknown host'})`);
+        return json({ error: 'Invalid Twilio signature' }, 403);
       }
-    } else if (!_smsTwilioTokenWarned) {
-      _smsTwilioTokenWarned = true;
-      context.logger.warn('[local-api] TWILIO_AUTH_TOKEN not configured — SMS webhook accepted on phone-number allowlist only (set TWILIO_AUTH_TOKEN to require signed requests).');
     }
 
     const from = String(params.From ?? params.from ?? '');
@@ -7587,8 +7642,11 @@ async function dispatch(requestUrl, req, routes, context) {
     }
     if (req.method === 'POST') {
       let patch;
-      try { patch = JSON.parse(await readBody(req)); } catch { return json({ error: 'Invalid JSON' }, 400); }
-      _smsConfig = { ..._smsConfig, ...patch };
+      try { patch = JSON.parse(await readBody(req, 64 * 1024)); } catch { return json({ error: 'Invalid JSON' }, 400); }
+      // R3-SEC-006: allowlisted keys and shapes only; unknown keys are refused.
+      const checked = validateSmsConfigPatch(patch, _smsConfig);
+      if (checked.error) return json({ error: checked.error }, 400);
+      _smsConfig = checked.config;
       saveSmsConfig(_smsConfig);
       return json(_smsConfig);
     }
@@ -15686,7 +15744,7 @@ async function dispatch(requestUrl, req, routes, context) {
 
  // 1. Parse homepage <link rel="alternate"> entries.
  try {
- const home = await fetchWithTimeout(target.href, { headers, redirect: 'follow' }, 10_000);
+ const home = await fetchPinnedFollowingRedirects(target.href, { headers }, 10_000, safety);
  if (home.ok) {
  const html = await home.text();
  // matchAll instead of regex.exec() — avoids tripping security-hook
@@ -15712,7 +15770,8 @@ async function dispatch(requestUrl, req, routes, context) {
  const probeUrl = new URL(suffix, target.origin).href;
  if (feeds.has(probeUrl)) return;
  try {
- const res = await fetchWithTimeout(probeUrl, { method: 'HEAD', headers, redirect: 'follow' }, 6_000);
+ // Same host as the homepage, so the first hop reuses its pinned address.
+ const res = await fetchPinnedFollowingRedirects(probeUrl, { method: 'HEAD', headers }, 6_000, safety);
  if (!res.ok) return;
  const ct = (res.headers?.get?.('content-type') ?? '').toLowerCase();
  if (ct.includes('rss') || ct.includes('atom') || ct.includes('xml')) {

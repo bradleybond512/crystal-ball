@@ -143,5 +143,8 @@
   ],
   "package.json": [
     "test:install-scripts"
+  ],
+  "scripts/desktop-build-full.mjs": [
+    "test:install-scripts"
   ]
 }

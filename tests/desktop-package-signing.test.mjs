@@ -6,12 +6,23 @@ import path from 'node:path';
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const packageJson = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
 const desktopPackageScript = readFileSync(path.join(repoRoot, 'scripts', 'desktop-package.mjs'), 'utf8');
+const desktopBuildFullScript = readFileSync(path.join(repoRoot, 'scripts', 'desktop-build-full.mjs'), 'utf8');
 
 test('macOS desktop packaging signs and verifies the app bundle before creating a dmg', () => {
-  assert.match(
+  assert.equal(
  packageJson.scripts['desktop:build:full'],
- /scripts\/desktop-package\.mjs --os macos --variant full/,
- 'desktop:build:full should use the desktop packaging script instead of raw tauri build',
+ 'node scripts/desktop-build-full.mjs',
+ 'desktop:build:full should run the packaging orchestrator instead of raw tauri build',
+  );
+  assert.match(
+ desktopBuildFullScript,
+ /PACKAGE_ARGS = Object\.freeze\(\['--os', 'macos', '--variant', 'full'\]\)/,
+ 'the orchestrator should package the full macOS variant with the desktop packaging script',
+  );
+  assert.match(
+ desktopBuildFullScript,
+ /\{ script: 'desktop-package\.mjs', args: \[\.\.\.PACKAGE_ARGS, \.\.\.forwarded\] \}/,
+ 'the orchestrator should hand every forwarded flag to desktop-package.mjs',
   );
   assert.match(
  packageJson.scripts['desktop:build:tech'],

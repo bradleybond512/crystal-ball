@@ -182,8 +182,12 @@ npm run release:prepare -- --bump patch --push   # only supported release path
 Dependency install scripts are disabled (`ignore-scripts=true` in `.npmrc` and
 `tools/mcp-server/.npmrc`, R4-SEC-002). After a fresh clone run
 `npm ci && npm run prepare` (git hooks + MCP server deps). Never remove the
-setting to make an install work; if a package genuinely needs its install step,
-add a reviewed `npm rebuild <pkg>`. The required `integrity-checks` job fails a
+setting to make an install work. If a package genuinely needs its install step,
+review that package version's scripts, then run only that package's scripts with
+`npm rebuild <pkg> --ignore-scripts=false` (a plain `npm rebuild` inherits the
+setting and skips them). That flag executes the package's install scripts with
+your full user access, so never use it unreviewed, without a package name, or in
+an automated install. The required `integrity-checks` job fails a
 PR whose lockfiles add an install script, bump a scripted package or add a
 `bin` entry, unless Bradley applies the `install-scripts-reviewed` label.
 

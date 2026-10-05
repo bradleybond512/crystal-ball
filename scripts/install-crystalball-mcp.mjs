@@ -17,6 +17,8 @@ const npmExec = process.env.npm_execpath;
 if (!npmExec) throw new Error('Run this installer through npm run mcp:install-local.');
 const npmArgs = [
   'install',
+  // Global installs ignore the project .npmrc: be explicit (R4-SEC-002).
+  '--ignore-scripts',
   '--global',
   '--install-links=true',
   '--prefix',

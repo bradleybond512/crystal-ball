@@ -80,6 +80,10 @@ test('auto-merge is skipped (and turned off) for sensitive PRs', () => {
   assert.ok(policy > 0 && enable > policy, 'policy runs first');
   assert.match(wf.slice(enable, enable + 120), /if: steps\.policy\.outputs\.sensitive != 'true'/);
   assert.match(wf, /disablePullRequestAutoMerge/);
+  // The branch name reaches the script through env, never pasted into its code.
+  const off = wf.slice(wf.indexOf('- name: Turn auto-merge off for a sensitive PR'), enable);
+  assert.match(off, /env:\n\s+BRANCH: \$\{\{ github\.ref_name \}\}/);
+  assert.doesNotMatch(off.slice(off.indexOf('script: |')), /\$\{\{/, 'no expression inside the script');
 });
 
 test('CI verifies registry signatures and dependency age', () => {

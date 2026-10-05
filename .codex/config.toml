@@ -1,3 +1,9 @@
+# Reviewer model policy (Bradley, October 4, 2026): Codex reviews use the
+# newest GPT Sol model. Reviewer roles run at medium reasoning
+# (.codex/agents/*-reviewer.toml); scripts/verify-review-verdict.mjs rejects
+# verdicts from older models.
+review_model = "gpt-6.1-sol"
+
 [agents]
 enabled = true
 max_concurrent_threads_per_session = 6

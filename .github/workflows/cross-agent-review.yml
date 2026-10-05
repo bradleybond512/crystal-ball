@@ -52,16 +52,20 @@ jobs:
           IS_SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
+          # Reviewer routing: claude/* and copilot/* code may be approved by
+          # Codex (Sol), so they can take the CI Codex path. codex/* code needs
+          # a Sonnet verdict and always takes the SHA-pinned verdict check.
           case "$GITHUB_HEAD_REF" in
-            claude/*|codex/*|copilot/*) AGENT_BRANCH=1 ;;
-            *) AGENT_BRANCH=0 ;;
+            claude/*|copilot/*) AGENT_BRANCH=1; CODEX_MAY_REVIEW=1 ;;
+            codex/*) AGENT_BRANCH=1; CODEX_MAY_REVIEW=0 ;;
+            *) AGENT_BRANCH=0; CODEX_MAY_REVIEW=0 ;;
           esac
           if [ "$AGENT_BRANCH" = "0" ]; then
             echo "Not an agent branch; cross-agent review not required."
             exit 0
           fi
           git fetch origin main --quiet
-          if [ "$CI_CODEX_MODE" = "on" ] && [ "$IS_SAME_REPO" = "true" ]; then
+          if [ "$CI_CODEX_MODE" = "on" ] && [ "$IS_SAME_REPO" = "true" ] && [ "$CODEX_MAY_REVIEW" = "1" ]; then
             if [ -z "$OPENAI_API_KEY" ]; then
               echo "CI_CODEX_REVIEW is on but the OPENAI_API_KEY secret is missing." >&2
               exit 1

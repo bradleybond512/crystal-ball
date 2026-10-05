@@ -28,7 +28,8 @@
 // Usage:
 //   node scripts/verify-review-verdict.mjs [--ci]        verify HEAD
 //   node scripts/verify-review-verdict.mjs --record \
-//     --reviewer codex --evidence-file <path>            record for HEAD
+//     --reviewer codex --model gpt-6.1-sol \
+//     --evidence-file <path>                             record for HEAD
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -36,6 +37,35 @@ import { fileURLToPath } from 'node:url';
 
 const REVIEWS_DIR = '.agentic/reviews';
 const MIN_EVIDENCE_LENGTH = 40;
+
+// Reviewer model policy (Bradley, October 4, 2026): Codex reviews run on the
+// newest GPT Sol model (gpt-6.1-sol or later) and Claude reviews run on a
+// Sonnet model. Medium reasoning is a cost setting pinned in .codex/, not a
+// gate condition. Like the reviewer name, the model is attested by the
+// recording agent unless the review runs in CI, so this check catches a
+// review run on the wrong model; it cannot catch a forged one.
+export const MIN_SOL_VERSION = Object.freeze([6, 1]);
+export const REVIEWER_MODEL_RULES = Object.freeze({
+  codex: `a GPT Sol model, gpt-${MIN_SOL_VERSION.join('.')}-sol or newer`,
+  claude: 'a Claude Sonnet model (for example claude-sonnet-4-6 or sonnet)',
+});
+
+export function reviewerModelAllowed(reviewer, model) {
+  const id = String(model ?? '').trim().toLowerCase();
+  if (reviewer === 'codex') {
+    const m = /^gpt-(0|[1-9]\d*)(?:\.(0|[1-9]\d*))?-sol$/.exec(id);
+    if (!m) return false;
+    const major = Number(m[1]);
+    const minor = Number(m[2] ?? 0);
+    return major > MIN_SOL_VERSION[0] || (major === MIN_SOL_VERSION[0] && minor >= MIN_SOL_VERSION[1]);
+  }
+  // Exactly the `sonnet` alias or a full Anthropic Sonnet id:
+  // claude-sonnet-<major>[-<minor>][-<yyyymmdd>], optionally with the [1m]
+  // long-context suffix. Anything else (sonnet-4-opus, claude-sonnet-4-6-evil,
+  // dotted versions) is rejected.
+  if (reviewer === 'claude') return /^(?:sonnet|claude-sonnet-[1-9]\d?(?:-\d{1,2})?(?:-\d{8})?)(?:\[1m\])?$/.test(id);
+  return false;
+}
 
 function git(args, options = {}) {
   return execFileSync('git', args, { encoding: 'utf8', ...options }).trim();
@@ -68,7 +98,7 @@ export function validateVerdict({ branch, headEntries, headParent, verdictJson }
       'HEAD is not a verdict-only commit. The tip of an agent branch must be a commit '
         + `that only adds or modifies files under ${REVIEWS_DIR}/, recording the cross-agent review of its parent. `
         + (offending.length > 0 ? `Offending entries: ${offending.map((e) => [e.status, e.file].join(' ')).join(', ')}. ` : '')
-        + 'Run the review, then: node scripts/verify-review-verdict.mjs --record --reviewer <agent> --evidence-file <transcript>',
+        + 'Run the review, then: node scripts/verify-review-verdict.mjs --record --reviewer <agent> --model <id> --evidence-file <transcript>',
     );
     return { ok: false, failures };
   }
@@ -91,10 +121,16 @@ export function validateVerdict({ branch, headEntries, headParent, verdictJson }
   if (verdict.reviewedSha !== headParent) {
     failures.push(`Verdict pins ${verdict.reviewedSha}, but the reviewed commit is ${headParent}.`);
   }
-  if (!reviewers.includes(String(verdict.reviewer || '').toLowerCase())) {
+  const reviewer = String(verdict.reviewer || '').toLowerCase();
+  if (!reviewers.includes(reviewer)) {
     failures.push(
       `Reviewer "${verdict.reviewer}" is not a valid cross-agent for ${branch.split('/')[0]}/* — `
         + `required: ${reviewers.join(' or ')}. Self-review does not count.`,
+    );
+  } else if (!reviewerModelAllowed(reviewer, verdict.model)) {
+    failures.push(
+      `Review model "${verdict.model ?? '(none)'}" is not allowed for ${reviewer} reviews — `
+        + `required: ${REVIEWER_MODEL_RULES[reviewer]}. Re-run the review on that model and record it with --model <id>.`,
     );
   }
   if (verdict.verdict !== 'approve') {
@@ -145,12 +181,15 @@ export function verify(cwd = process.cwd()) {
   return { branch, ...validateVerdict({ branch, headEntries, headParent, verdictJson }) };
 }
 
-function record(cwd, { reviewer, evidenceFile }) {
+function record(cwd, { reviewer, model, evidenceFile }) {
   const branch = currentBranch(cwd);
   const reviewers = requiredReviewers(branch);
   if (reviewers === null) throw new Error(`${branch} is not an agent branch; nothing to record.`);
   if (!reviewers.includes(reviewer)) {
     throw new Error(`Reviewer "${reviewer}" is not a valid cross-agent for this branch (required: ${reviewers.join(' or ')}).`);
+  }
+  if (!reviewerModelAllowed(reviewer, model)) {
+    throw new Error(`Model "${model}" is not allowed for ${reviewer} reviews (required: ${REVIEWER_MODEL_RULES[reviewer]}).`);
   }
   // Untracked files (evidence transcripts, worktree node_modules symlinks) do
   // not change the committed state the verdict pins; tracked modifications do.
@@ -170,6 +209,7 @@ function record(cwd, { reviewer, evidenceFile }) {
   writeFileSync(file, `${JSON.stringify({
     reviewedSha: headSha,
     reviewer,
+    model: String(model).trim().toLowerCase(),
     verdict: 'approve',
     blockingFindings: 0,
     reviewedAt: new Date().toISOString(),
@@ -189,12 +229,13 @@ function main() {
 
   if (args.includes('--record')) {
     const reviewer = get('--reviewer');
+    const model = get('--model');
     const evidenceFile = get('--evidence-file');
-    if (!reviewer || !evidenceFile) {
-      console.error('Usage: verify-review-verdict.mjs --record --reviewer <codex|claude> --evidence-file <path>');
+    if (!reviewer || !model || !evidenceFile) {
+      console.error('Usage: verify-review-verdict.mjs --record --reviewer <codex|claude> --model <id> --evidence-file <path>');
       process.exit(2);
     }
-    const result = record(process.cwd(), { reviewer: reviewer.toLowerCase(), evidenceFile });
+    const result = record(process.cwd(), { reviewer: reviewer.toLowerCase(), model, evidenceFile });
     if (!result.ok) {
       console.error('[review-verdict] Recorded verdict failed self-verification:');
       for (const f of result.failures) console.error(`  - ${f}`);

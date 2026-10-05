@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { validateVerdict, requiredReviewers } from '../scripts/verify-review-verdict.mjs';
+import { validateVerdict, requiredReviewers, reviewerModelAllowed } from '../scripts/verify-review-verdict.mjs';
 import {
   OVERRIDES,
   deriveScriptIndex,
@@ -17,7 +17,7 @@ import {
   prDeclaredOverrides,
   mergeOverrides,
 } from '../scripts/targeted-tests.mjs';
-import { parseVerdictLine } from '../scripts/ci-codex-review.mjs';
+import { parseVerdictLine, codexExecArgs, codexMayReview, CI_REVIEW_MODEL } from '../scripts/ci-codex-review.mjs';
 import { expectedReviewer, verdictAdvice } from '../scripts/cross-agent-check.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -31,6 +31,7 @@ function goodVerdict(overrides = {}) {
   return JSON.stringify({
     reviewedSha: SHA_A,
     reviewer: 'codex',
+    model: 'gpt-6.1-sol',
     verdict: 'approve',
     blockingFindings: 0,
     reviewedAt: '2026-08-01T00:00:00.000Z',
@@ -175,7 +176,7 @@ test('end-to-end: --record produces a tip that verifies, and a later code push b
   delete env.GITHUB_HEAD_REF;
   const rec = spawnSync(
     process.execPath,
-    [join(root, 'scripts/verify-review-verdict.mjs'), '--record', '--reviewer', 'codex', '--evidence-file', evidencePath],
+    [join(root, 'scripts/verify-review-verdict.mjs'), '--record', '--reviewer', 'codex', '--model', 'gpt-6.1-sol', '--evidence-file', evidencePath],
     { cwd: dir, encoding: 'utf8', env },
   );
   assert.equal(rec.status, 0, rec.stderr);
@@ -184,7 +185,7 @@ test('end-to-end: --record produces a tip that verifies, and a later code push b
   // Stacking a second verdict on a verdict tip must refuse.
   const rec2 = spawnSync(
     process.execPath,
-    [join(root, 'scripts/verify-review-verdict.mjs'), '--record', '--reviewer', 'codex', '--evidence-file', evidencePath],
+    [join(root, 'scripts/verify-review-verdict.mjs'), '--record', '--reviewer', 'codex', '--model', 'gpt-6.1-sol', '--evidence-file', evidencePath],
     { cwd: dir, encoding: 'utf8', env },
   );
   assert.equal(rec2.status, 1);
@@ -197,6 +198,146 @@ test('end-to-end: --record produces a tip that verifies, and a later code push b
   const after = runVerify(dir);
   assert.equal(after.status, 1, 'stale approval must not survive a new push');
   assert.match(`${after.stderr}`, /not a verdict-only commit/);
+});
+
+// ── reviewer model policy (Codex: newest Sol; Claude: Sonnet only) ──
+
+test('reviewer models: Codex needs gpt-6.1-sol or newer, Claude needs Sonnet', () => {
+  for (const id of ['gpt-6.1-sol', 'GPT-6.1-Sol', 'gpt-6.2-sol', 'gpt-7-sol', 'gpt-10.0-sol']) {
+    assert.equal(reviewerModelAllowed('codex', id), true, id);
+  }
+  for (const id of ['gpt-6-sol', 'gpt-5.6-sol', 'gpt-6.1-sol-mini', 'gpt-6.1-luna', 'gpt-6.1', 'gpt-06.1-sol', 'gpt-6.01-sol', '', undefined, 'claude-sonnet-4-6']) {
+    assert.equal(reviewerModelAllowed('codex', id), false, String(id));
+  }
+  for (const id of ['claude-sonnet-4-6', 'sonnet', 'claude-sonnet-5', 'claude-sonnet-4-5-20250929', 'claude-sonnet-4-20250514', 'claude-sonnet-4-6[1m]', 'sonnet[1m]']) {
+    assert.equal(reviewerModelAllowed('claude', id), true, id);
+  }
+  for (const id of ['claude-opus-5-5', 'opus', 'claude-haiku-4-5', 'sonnet-evil', 'gpt-6.1-sol', '', undefined,
+    'sonnet-4-opus', 'sonnet-4..', 'claude-sonnet-4-6-evil', 'claude-sonnet-4.6', 'claude-sonnet-', 'sonnet-4', 'claude-sonnet-4-6[2m]', 'claude-3-5-sonnet-20241022']) {
+    assert.equal(reviewerModelAllowed('claude', id), false, String(id));
+  }
+});
+
+test('a verdict without an allowed model is rejected', () => {
+  for (const model of [undefined, 'gpt-6-sol', 'claude-sonnet-4-6']) {
+    const r = validateVerdict({
+      branch: 'claude/feature', headEntries: [verdictEntry()], headParent: SHA_A, verdictJson: goodVerdict({ model }),
+    });
+    assert.equal(r.ok, false, String(model));
+    assert.match(r.failures.join('\n'), /Review model/);
+  }
+});
+
+test('a Sonnet verdict on codex/* passes; an Opus one is rejected', () => {
+  const base = { branch: 'codex/feature', headEntries: [verdictEntry()], headParent: SHA_A };
+  const ok = validateVerdict({ ...base, verdictJson: goodVerdict({ reviewer: 'claude', model: 'claude-sonnet-4-6' }) });
+  assert.equal(ok.ok, true, JSON.stringify(ok.failures ?? []));
+  const r = validateVerdict({ ...base, verdictJson: goodVerdict({ reviewer: 'claude', model: 'claude-opus-5-5' }) });
+  assert.equal(r.ok, false);
+  assert.match(r.failures.join('\n'), /Sonnet/);
+});
+
+test('--record refuses a missing or disallowed model and commits nothing', () => {
+  const { dir, git } = fixtureRepo('claude/model-policy');
+  const evidencePath = join(dir, 'evidence.txt');
+  writeFileSync(evidencePath, 'Confirmed sound and complete after full inspection of the diff. No blocking findings.');
+  const env = { ...process.env };
+  delete env.GITHUB_HEAD_REF;
+  const tip = git('rev-parse', 'HEAD');
+  const run = (...extra) => spawnSync(
+    process.execPath,
+    [join(root, 'scripts/verify-review-verdict.mjs'), '--record', '--reviewer', 'codex', ...extra, '--evidence-file', evidencePath],
+    { cwd: dir, encoding: 'utf8', env },
+  );
+  assert.equal(run().status, 2, 'no --model');
+  const old = run('--model', 'gpt-6-sol');
+  assert.notEqual(old.status, 0);
+  assert.match(old.stderr, /not allowed for codex/);
+  assert.equal(git('rev-parse', 'HEAD'), tip, 'nothing may be committed');
+  assert.equal(existsSync(join(dir, '.agentic')), false);
+});
+
+test('CI Sol review applies only where a Codex reviewer may approve', () => {
+  for (const branch of ['claude/x', 'codex/x', 'copilot/x', 'feature/x', 'main', 'unknown-branch']) {
+    assert.equal(codexMayReview(branch), requiredReviewers(branch)?.includes('codex') ?? false, branch);
+  }
+  // Even if the workflow misroutes codex/* here, the script refuses before reviewing.
+  const r = spawnSync(process.execPath, [join(root, 'scripts/ci-codex-review.mjs')], {
+    cwd: mkdtempSync(join(tmpdir(), 'ci-route-')), encoding: 'utf8',
+    env: { ...process.env, GITHUB_HEAD_REF: 'codex/x' },
+  });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /needs a Sonnet verdict/);
+});
+
+/** The workflow's Review gate script, dedented, so its routing can run against stubs. */
+function reviewGateScript() {
+  const lines = readFileSync(join(root, '.github/workflows/cross-agent-review.yml'), 'utf8').split('\n');
+  const start = lines.findIndex((l) => l.trim() === '- name: Review gate');
+  const runAt = lines.findIndex((l, i) => i > start && /^\s+run: \|$/.test(l));
+  const indent = lines[runAt].search(/\S/);
+  const body = [];
+  for (const line of lines.slice(runAt + 1)) {
+    if (line.trim() !== '' && line.search(/\S/) <= indent) break;
+    body.push(line);
+  }
+  const pad = Math.min(...body.filter((l) => l.trim()).map((l) => l.search(/\S/)));
+  return body.map((l) => l.slice(pad)).join('\n');
+}
+
+test('workflow routing: codex/* always takes the Sonnet verdict check, even with CI Codex on', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'review-gate-'));
+  const bin = join(dir, 'bin');
+  mkdirSync(bin);
+  const calls = join(dir, 'calls.txt');
+  const stub = (name, body) => writeFileSync(join(bin, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+  stub('git', 'case "$1" in show) echo "// stub" ;; *) exit 0 ;; esac');
+  stub('npm', 'exit 0');
+  stub('node', `echo "$(basename "$1") $2" >> "${calls}"`);
+  const script = reviewGateScript();
+  const route = (branch, mode) => {
+    writeFileSync(calls, '');
+    const r = spawnSync('bash', ['-c', script], {
+      encoding: 'utf8',
+      env: {
+        PATH: `${bin}:/usr/bin:/bin`, RUNNER_TEMP: dir, GITHUB_HEAD_REF: branch,
+        CI_CODEX_MODE: mode, IS_SAME_REPO: 'true', OPENAI_API_KEY: 'test-only',
+      },
+    });
+    assert.equal(r.status, 0, r.stderr);
+    return readFileSync(calls, 'utf8').trim();
+  };
+  assert.equal(route('codex/x', 'on'), 'verify-review-verdict.mjs --ci');
+  assert.equal(route('claude/x', 'on'), 'ci-codex-review.mjs');
+  assert.equal(route('copilot/x', 'on'), 'ci-codex-review.mjs');
+  assert.equal(route('claude/x', 'off'), 'verify-review-verdict.mjs --ci');
+  assert.equal(route('feature/x', 'on'), '');
+});
+
+test('CI review and recording advice use the policy model at medium reasoning', () => {
+  assert.deepEqual(codexExecArgs('claude/x').slice(0, 5), ['exec', '--model', CI_REVIEW_MODEL, '--config', 'model_reasoning_effort="medium"']);
+  assert.equal(reviewerModelAllowed('codex', CI_REVIEW_MODEL), true);
+  const line = verdictAdvice('claude/x').find((l) => l.includes('--model'));
+  assert.equal(reviewerModelAllowed('codex', line.split('--model ')[1].split(' ')[0]), true);
+});
+
+test('reviewer roles pin the policy model at medium; the Claude reviewer is Sonnet and tracked', () => {
+  const dir = join(root, '.codex/agents');
+  const reviewers = readdirSync(dir).filter((f) => f.endsWith('-reviewer.toml'));
+  assert.deepEqual(reviewers.sort(), ['independent-reviewer.toml', 'sidecar-reviewer.toml']);
+  for (const f of reviewers) {
+    const toml = readFileSync(join(dir, f), 'utf8');
+    assert.equal(reviewerModelAllowed('codex', /^model = "([^"]+)"$/m.exec(toml)?.[1]), true, f);
+    assert.match(toml, /^model_reasoning_effort = "medium"$/m, f);
+  }
+  const config = readFileSync(join(root, '.codex/config.toml'), 'utf8');
+  assert.equal(reviewerModelAllowed('codex', /^review_model = "([^"]+)"$/m.exec(config)?.[1]), true);
+  const agent = join(root, '.claude/agents/cross-agent-reviewer.md');
+  const front = readFileSync(agent, 'utf8').split('---')[1];
+  assert.match(front, /^model: sonnet$/m);
+  assert.match(front, /^effort: medium$/m);
+  const ignored = spawnSync('git', ['check-ignore', '-q', '--no-index', '.claude/agents/cross-agent-reviewer.md'], { cwd: root });
+  assert.equal(ignored.status, 1, 'the Claude reviewer must not be git-ignored');
 });
 
 // ── targeted-tests: derived mapping ──

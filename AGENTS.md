@@ -28,12 +28,21 @@ The cross-agent review gate verifies a SHA-pinned verdict commit, not free
 text. A marker sentence in the PR body proves nothing and is no longer read.
 
 1. Run the real cross-agent review (`claude/*` → Codex; `codex/*` → Claude)
-   against the branch tip.
+   against the branch tip, on the required model:
+   - **Codex:** the newest GPT Sol model, today `gpt-6.1-sol`, at medium
+     reasoning (`.codex/agents/independent-reviewer.toml`; `review_model` in
+     `.codex/config.toml` for `/review`).
+   - **Claude:** a Sonnet model only, never Opus
+     (`.claude/agents/cross-agent-reviewer.md`, `model: sonnet`, medium effort).
+
+   The gate rejects a verdict from any other model. When a newer Sol model
+   ships, raise `MIN_SOL_VERSION` in `scripts/verify-review-verdict.mjs` and
+   the pins in the same PR.
 2. When it concludes with zero blocking findings, save the reviewer's actual
    concluding output to a file and record it:
 
    ```bash
-   node scripts/verify-review-verdict.mjs --record --reviewer codex --evidence-file /path/to/conclusion.txt
+   node scripts/verify-review-verdict.mjs --record --reviewer codex --model gpt-6.1-sol --evidence-file /path/to/conclusion.txt
    ```
 
    This writes `.agentic/reviews/<tip-sha>.json` and commits it as the new tip.
@@ -47,7 +56,22 @@ Pushing any code after the verdict makes the check red until a fresh review is
 recorded — a stale approval cannot ride a new push into main. That is the
 failure that merged #1601 mid-review. If the `CI_CODEX_REVIEW` repo variable is
 `on` (requires an `OPENAI_API_KEY` Actions secret), CI runs the Codex review
-itself and the verdict commit is not consulted.
+itself for `claude/*` and `copilot/*` and the verdict commit is not consulted.
+`codex/*` code never takes that path: it always needs a recorded Sonnet verdict.
+
+**Migrating a verdict that no longer passes** (recorded without `--model`, or by
+a model below a raised floor). `--record` refuses to stack a verdict on a
+verdict tip, so replace the old verdict commit instead of adding one:
+
+1. Check that the tip is only the old verdict: `git show --stat HEAD` lists just
+   `.agentic/reviews/<parent-sha>.json`.
+2. Drop it, keeping the reviewed code untouched: `git reset --keep HEAD^`.
+3. If the original review ran on an allowed model, record it again with the
+   same evidence and that model id (`--record --reviewer <agent> --model <id>
+   --evidence-file <file>`). Otherwise re-run the review on the required model
+   first.
+4. `git push --force-with-lease`. Only the verdict commit changes; the reviewed
+   code commit keeps its sha.
 
 ## Branch Discipline (MANDATORY — start every session here)
 

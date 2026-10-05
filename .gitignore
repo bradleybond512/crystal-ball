@@ -10,7 +10,11 @@ scripts/telegram/telegram-session.txt
 .vercel
 api/\[domain\]/v1/\[rpc\].js
 api/\[\[...path\]\].js
-.claude/
+.claude/*
+# Tracked so every checkout gets the Sonnet-pinned cross-agent reviewer.
+!.claude/agents/
+.claude/agents/*
+!.claude/agents/cross-agent-reviewer.md
 .cursor/
 .env.vercel-backup
 .env.vercel-export

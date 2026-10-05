@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { requiredReviewers } from './verify-review-verdict.mjs';
+import { requiredReviewers, MIN_SOL_VERSION, REVIEWER_MODEL_RULES } from './verify-review-verdict.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = new Set(process.argv.slice(2));
@@ -97,12 +97,15 @@ export function verdictAdvice(branch) {
   const reviewers = requiredReviewers(branch);
   if (reviewers === null) return null;
   const slug = reviewers.length === 1 ? reviewers[0] : `<${reviewers.join('|')}>`;
+  const MODEL_HINTS = { codex: `gpt-${MIN_SOL_VERSION.join('.')}-sol`, claude: '<sonnet-model-id>' };
+  const model = MODEL_HINTS[slug] ?? '<model-id>';
   return [
     'After the second review, record the verdict as a SHA-pinned commit (a PR-body',
     'marker no longer satisfies the gate — see .github/workflows/cross-agent-review.yml):',
     '```',
-    `node scripts/verify-review-verdict.mjs --record --reviewer ${slug} --evidence-file <review-output>`,
+    `node scripts/verify-review-verdict.mjs --record --reviewer ${slug} --model ${model} --evidence-file <review-output>`,
     '```',
+    `Reviewer models: Codex must be ${REVIEWER_MODEL_RULES.codex}; Claude must be ${REVIEWER_MODEL_RULES.claude}.`,
     'That flag both writes .agentic/reviews/<sha>.json and commits it — do not commit again.',
     'It pins the reviewed SHA, so record it LAST: any later code commit invalidates the',
     'verdict and the gate stays red until a fresh review is recorded.',

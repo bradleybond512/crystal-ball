@@ -149,7 +149,19 @@ test('our own scripts do not depend on lifecycle hooks that ignore-scripts would
       }
     }
   }
-  assert.match(scripts['desktop:build:full'], /^node scripts\/download-vault-textures\.mjs && node scripts\/desktop-package\.mjs --os macos --variant full && node scripts\/local-install\.mjs$/);
+  // The former pre/post hooks run from an explicit orchestrator; its argument
+  // forwarding, help and fail-closed order are tested in desktop-build-full.test.mjs.
+  assert.equal(scripts['desktop:build:full'], 'node scripts/desktop-build-full.mjs');
+});
+
+test('the documented remedy re-enables scripts for one reviewed package only', () => {
+  // A plain `npm rebuild <pkg>` inherits ignore-scripts=true and silently skips
+  // the install step, so the guidance must name the explicit override and its risk.
+  for (const file of ['.npmrc', 'tools/mcp-server/.npmrc', 'CLAUDE.md']) {
+    const text = read(file);
+    assert.match(text, /npm rebuild <pkg> --ignore-scripts=false/, `${file} names the per-package override`);
+    assert.match(text, /never use it unreviewed, without a\s+(?:#\s+)?package name/, `${file} states the security limits`);
+  }
 });
 
 test('the drift gate runs in the required integrity-checks job and re-runs on labels', () => {

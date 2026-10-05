@@ -186,10 +186,12 @@ jobs:
       - name: Turn auto-merge off for a sensitive PR
         if: steps.policy.outputs.sensitive == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        env:
+          BRANCH: ${{ github.ref_name }}
         with:
           github-token: ${{ secrets.AUTO_MERGE_PAT || secrets.GITHUB_TOKEN }}
           script: |
-            const branch = '${{ github.ref_name }}';
+            const branch = process.env.BRANCH;
             const { data: prs } = await github.rest.pulls.list({
               owner: context.repo.owner,
               repo: context.repo.repo,

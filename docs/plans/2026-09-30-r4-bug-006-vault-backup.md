@@ -57,6 +57,14 @@ that shape.
      directly restorable.
    - The next run refuses to start until they are checked and removed.
    - This was added in repair cycle 1, after Sol's review.
+   - Only one openssl run at a time may publish the pair. Before encrypting,
+     a run takes an exclusive lock: a `keys-backup-YYYYMMDD-openssl.enc.lock`
+     folder, created atomically with `mkdir`.
+     - The holder owns the pair, its snapshots and their rollback.
+     - A run that cannot take the lock exits without touching anything.
+     - A lock left by a killed run is never taken over automatically; the
+       message says how to check the kept pair and remove the lock.
+     - This was added in repair cycle 2, after Sol's second review.
 4. **Legacy fallback:** only when **no vault item exists**, collect the old
    per-key items. The list is the app's supported names, parsed from
    `main.rs` at run time rather than a stale hard-coded copy. They are

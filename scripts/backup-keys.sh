@@ -149,13 +149,12 @@ fi
 # hard links under PRIOR_PATH: a failure rolls it back, and a run killed
 # outright leaves it there, directly restorable with restore-keys.
 PRIOR_PATH="${ENC_PATH%-openssl.enc}-prior-openssl.enc"
-if [[ "$ENGINE" == "openssl" ]] && [[ -e "$PRIOR_PATH" || -e "$PRIOR_PATH.hmac" ]]; then
-  echo "An earlier backup run was interrupted while replacing today's backup." >&2
-  echo "The previous backup pair is kept as: $PRIOR_PATH (+ .hmac)" >&2
-  echo "Check it with: npm run restore-keys -- --verify \"$PRIOR_PATH\"" >&2
-  echo "Then keep or delete those two files and run the backup again. Nothing was written." >&2
-  exit 1
-fi
+# Only one openssl run at a time may own that publication: the run holding
+# LOCK_DIR (mkdir is atomic) owns the pair, its snapshots and their rollback,
+# and a run that cannot take the lock touches nothing. A lock left by a killed
+# run is never taken over automatically.
+LOCK_DIR="$ENC_PATH.lock"
+OWN_LOCK=0
 
 # ── Encrypt straight from memory ────────────────────────────────────
 mkdir -p "$ICLOUD_DIR"
@@ -188,8 +187,31 @@ cleanup() {
     fi
   fi
   rm -f "$OUT_TMP" "$OUT_TMP.hmac"
+  if (( OWN_LOCK == 1 )); then
+    rm -f "$LOCK_DIR/owner"
+    rmdir "$LOCK_DIR" 2>/dev/null || true
+  fi
 }
 trap cleanup EXIT
+
+if [[ "$ENGINE" == "openssl" ]]; then
+  if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    echo "Another backup run is replacing today's backup, or an earlier run was interrupted." >&2
+    echo "Lock: $LOCK_DIR" >&2
+    echo "If no backup is running, check any kept pair ($PRIOR_PATH) with restore-keys --verify," >&2
+    echo "then remove the lock folder and run the backup again. Nothing was written." >&2
+    exit 1
+  fi
+  OWN_LOCK=1
+  echo "$$" > "$LOCK_DIR/owner"
+  if [[ -e "$PRIOR_PATH" || -e "$PRIOR_PATH.hmac" ]]; then
+    echo "An earlier backup run was interrupted while replacing today's backup." >&2
+    echo "The previous backup pair is kept as: $PRIOR_PATH (+ .hmac)" >&2
+    echo "Check it with: npm run restore-keys -- --verify \"$PRIOR_PATH\"" >&2
+    echo "Then keep or delete those two files and run the backup again. Nothing was written." >&2
+    exit 1
+  fi
+fi
 
 case "$ENGINE" in
   age)

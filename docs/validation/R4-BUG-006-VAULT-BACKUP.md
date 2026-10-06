@@ -21,9 +21,17 @@ real.
   - It encrypts to a `.partial` name and moves the file into place only on
     success. A failed or interrupted run removes the partial file and never
     clobbers the day's good backup.
+  - **openssl pair:** the ciphertext and its `.hmac` sidecar are published
+    with the previous pair kept as hard links
+    (`keys-backup-YYYYMMDD-prior-openssl.enc` + `.hmac`).
+    - A failure or SIGTERM between the two renames puts the previous pair
+      back exactly.
+    - A run killed outright leaves that snapshot, which restore-keys accepts
+      directly. The next run then refuses until it is checked.
   - It falls back to legacy per-key items (names from `SUPPORTED_SECRET_KEYS`
     in `main.rs`) **only** on item-not-found (exit 44). Denied access is an
-    error.
+    error, both for the vault item and for every legacy key. A legacy key it
+    cannot read aborts the backup before anything is written.
   - `--dry-run` lists names only.
 - **`restore-keys.sh`**
   - It decrypts into memory and accepts `-age.enc`, `-gpg.enc`,
@@ -74,6 +82,43 @@ real.
   - `test:keys-backup`: 17/17.
   - The other suites and the agentic gate are listed in the task's result
     file.
+
+## Repair cycle 1 (Sol's review of `96611cc3d`)
+
+Sol (`gpt-6.1-sol`, medium) found two P2 blockers in `backup-keys.sh`. Both
+are fixed within the approved design. The formats, names and engines are
+unchanged.
+
+1. **A denied legacy key was skipped.** Every failed per-key read counted as
+   absent, so a denied key produced a successful but incomplete backup.
+   - Now only exit 44 (item not found) skips a key. Any other status exits 1
+     before encryption.
+   - New test: no vault item, one readable key and one denied key. It
+     asserts exit 1, the error message, no secret in output, argv or
+     `TMPDIR`, and that the existing complete backup is byte-identical.
+2. **The OpenSSL sidecar was published first.** The new `.hmac` replaced the
+   old one before the ciphertext moved, so a failure in between left the old
+   ciphertext with the new sidecar, which cannot be restored.
+   - The previous pair is now kept as hard links during publication, as
+     described in Behavior.
+   - Rollback uses `-ef`, because macOS `mv` between two links to the same
+     file does nothing.
+   - New OpenSSL scenarios use stub `openssl` (a real HMAC-SHA256 over the
+     file) and a stub `mv` that fails, sends SIGTERM or SIGKILL exactly
+     between the two renames. The OpenSSL sandbox hides any system age, gpg
+     or openssl.
+   - The scenarios cover:
+     - a successful re-run;
+     - failure and SIGTERM, where the previous pair is byte-identical and
+       verifies with the old passphrase;
+     - SIGKILL, where the previous pair is kept and verifiable, and the next
+       run refuses and changes nothing;
+     - an encryption failure.
+
+**Red first:** with only the new tests added, the unchanged script failed 3
+of 22. The two new coverage-only tests (the successful re-run and the
+encryption failure) already passed. After the fix, 22/22 passed. The raw
+logs are in `repair1-logs/` in the task folder.
 
 ## Mutation proof
 

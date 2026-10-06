@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -40,6 +40,7 @@ if [[ "$1" == "find-generic-password" ]]; then
   [[ -n "$STUB_DENY" ]] && exit 51
   account=""
   while [[ $# -gt 0 ]]; do case "$1" in -a) account="$2"; shift 2;; *) shift;; esac; done
+  [[ -n "$STUB_DENY_ACCOUNTS" && ",$STUB_DENY_ACCOUNTS," == *",$account,"* ]] && exit 51
   [[ -f "$STUB/items/$account" ]] || exit 44
   cat "$STUB/items/$account"; exit 0
 fi
@@ -66,8 +67,68 @@ const PGREP_STUB = `#!/bin/bash
 [[ -f "$STUB/running" ]] && exit 0
 exit 1
 `;
+// openssl stub: "enc" stores base64 behind a marker (-d reverses it;
+// STUB_OPENSSL_FAIL fails after writing a partial file). "dgst -hmac" is a real
+// HMAC-SHA256 over the file, so a wrong passphrase or a mismatched sidecar is
+// rejected by restore exactly as with the real tool.
+const OPENSSL_STUB = `#!/bin/bash
+cmd="$1"; shift
+if [[ "$cmd" == "enc" ]]; then
+  decrypt=0; out=""; in=""
+  while [[ $# -gt 0 ]]; do case "$1" in -d) decrypt=1; shift;; -out) out="$2"; shift 2;; -in) in="$2"; shift 2;; *) shift;; esac; done
+  if (( decrypt == 1 )); then
+    tail -n +2 "$in" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(Buffer.from(s,"base64")))'
+    exit 0
+  fi
+  if [[ -n "$STUB_OPENSSL_FAIL" ]]; then echo PARTIAL > "$out"; exit 1; fi
+  { echo "OPENSSL-STUB"; node -e 'let b=[];process.stdin.on("data",d=>b.push(d)).on("end",()=>process.stdout.write(Buffer.concat(b).toString("base64")))'; } > "$out"
+  exit 0
+fi
+if [[ "$cmd" == "dgst" ]]; then
+  key=""; file=""
+  while [[ $# -gt 0 ]]; do case "$1" in -hmac) key="$2"; shift 2;; -*) shift;; *) file="$1"; shift;; esac; done
+  node -e 'const c=require("crypto"),f=require("fs");process.stdout.write(c.createHmac("sha256",process.argv[1]).update(f.readFileSync(process.argv[2])).digest())' "$key" "$file"
+  exit 0
+fi
+exit 2
+`;
+const REAL_MV = ['/bin/mv', '/usr/bin/mv'].find((p) => existsSync(p));
+// mv stub (OpenSSL scenarios): the real mv, except that STUB_MV_FAIL,
+// STUB_MV_TERM or STUB_MV_KILL fire when a partial file is about to be
+// published onto the final -openssl.enc name, i.e. between the sidecar and the
+// ciphertext renames.
+const MV_STUB = `#!/bin/bash
+src=""; dst=""
+for a in "$@"; do
+  case "$a" in -*) ;; *) if [[ -z "$src" ]]; then src="$a"; else dst="$a"; fi ;; esac
+done
+if [[ "$src" == *.partial.* && "$dst" == *-openssl.enc ]]; then
+  [[ -n "$STUB_MV_FAIL" ]] && exit 1
+  if [[ -n "$STUB_MV_TERM" ]]; then kill -TERM "$PPID"; sleep 1; exit 1; fi
+  if [[ -n "$STUB_MV_KILL" ]]; then kill -KILL "$PPID"; exit 1; fi
+fi
+exec ${REAL_MV} "$@"
+`;
+// OpenSSL scenarios get the system tools minus every encryption engine and the
+// stubbed commands, so the script can only pick the openssl stub even on hosts
+// that have age, gpg or openssl in /usr/bin.
+const HIDDEN_TOOLS = new Set(['security', 'age', 'gpg', 'gpg2', 'openssl', 'pgrep', 'mv']);
+function systemBin(dir) {
+  const out = path.join(dir, 'sysbin');
+  mkdirSync(out);
+  const seen = new Set();
+  for (const src of ['/usr/bin', '/bin']) {
+    if (!existsSync(src)) continue;
+    for (const name of readdirSync(src)) {
+      if (HIDDEN_TOOLS.has(name) || seen.has(name)) continue;
+      seen.add(name);
+      symlinkSync(path.join(src, name), path.join(out, name));
+    }
+  }
+  return out;
+}
 
-function sandbox(t) {
+function sandbox(t, { engine = 'age' } = {}) {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'cb-keys-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const bin = path.join(dir, 'bin');
@@ -75,21 +136,28 @@ function sandbox(t) {
   const home = path.join(dir, 'home');
   const tmp = path.join(dir, 'tmp');
   for (const d of [bin, path.join(stub, 'items'), path.join(home, 'Library/Mobile Documents/com~apple~CloudDocs'), tmp]) mkdirSync(d, { recursive: true });
-  for (const [name, body] of [['security', SECURITY_STUB], ['age', AGE_STUB], ['pgrep', PGREP_STUB]]) {
+  const stubs = engine === 'openssl'
+    ? [['security', SECURITY_STUB], ['openssl', OPENSSL_STUB], ['pgrep', PGREP_STUB], ['mv', MV_STUB]]
+    : [['security', SECURITY_STUB], ['age', AGE_STUB], ['pgrep', PGREP_STUB]];
+  for (const [name, body] of stubs) {
     writeFileSync(path.join(bin, name), body);
     chmodSync(path.join(bin, name), 0o755);
   }
   const env = {
-    PATH: `${bin}:${path.dirname(process.execPath)}:/usr/bin:/bin`,
+    PATH: `${bin}:${path.dirname(process.execPath)}:${engine === 'openssl' ? systemBin(dir) : '/usr/bin:/bin'}`,
     HOME: home,
     TMPDIR: tmp,
     STUB: stub,
     LANG: 'C',
   };
   // Hard stop: the scripts must only ever reach the stub, never /usr/bin/security.
-  for (const tool of ['security', 'age', 'pgrep']) {
+  for (const [tool] of stubs) {
     const resolved = spawnSync('bash', ['-c', `command -v ${tool}`], { env, encoding: 'utf8' }).stdout.trim();
     if (resolved !== path.join(bin, tool)) throw new Error(`${tool} resolves to ${resolved}, not the stub; refusing to run`);
+  }
+  for (const tool of engine === 'openssl' ? ['age', 'gpg'] : []) {
+    const resolved = spawnSync('bash', ['-c', `command -v ${tool}`], { env, encoding: 'utf8' }).stdout.trim();
+    if (resolved !== '') throw new Error(`${tool} resolves to ${resolved}; the OpenSSL scenarios must not see it`);
   }
   const icloud = path.join(home, 'Library/Mobile Documents/com~apple~CloudDocs/CrystalBall');
   return {
@@ -208,6 +276,103 @@ test('a failed encryption removes its partial file and keeps an existing backup'
   assert.notEqual(r.status, 0);
   assert.deepEqual(box.backups(), [file], 'no partial file left behind');
   assert.equal(readFileSync(path.join(box.icloud, file), 'utf8'), before, 'the good backup survived');
+});
+
+test('a denied legacy key fails the backup instead of being skipped, and keeps the existing backup', (t) => {
+  const box = sandbox(t);
+  box.setItem('GROQ_API_KEY', SECRET_A);
+  box.setItem('OPENROUTER_API_KEY', SECRET_C);
+  assert.equal(box.run(BACKUP).status, 0);
+  const [file] = box.backups();
+  const before = readFileSync(path.join(box.icloud, file));
+  const r = box.run(BACKUP, [], { extraEnv: { STUB_DENY_ACCOUNTS: 'OPENROUTER_API_KEY' } });
+  assert.equal(r.status, 1, r.out);
+  assert.match(r.out, /Could not read the legacy Keychain item OPENROUTER_API_KEY \(security exit 51\)/);
+  assert.doesNotMatch(r.out, /Done\./);
+  assert.deepEqual(box.backups(), [file], 'nothing new was published');
+  assert.deepEqual(readFileSync(path.join(box.icloud, file)), before, 'the complete backup survived');
+  assertNoSecrets(r.out, 'backup output');
+  assertNoSecrets(box.log('argv.log'), 'security argv');
+  assertTmpClean(box);
+});
+
+const PW_OLD = 'TEST-pass-old';
+const PW_NEW = 'TEST-pass-new';
+const VAULT_3 = JSON.stringify({ ...JSON.parse(VAULT), OPENROUTER_API_KEY: SECRET_C });
+const opensslBackup = (box, pw, extraEnv = {}) => box.run(BACKUP, [], { input: `${pw}\n${pw}\n`, extraEnv });
+const verify = (box, file, pw) => box.run(RESTORE, ['--verify', path.join(box.icloud, file)], { input: `${pw}\n` });
+/** Every file in the backup folder with its exact bytes. */
+const folderState = (box) => Object.fromEntries(box.backups().sort().map((f) => [f, readFileSync(path.join(box.icloud, f)).toString('base64')]));
+
+function opensslWithPair(t) {
+  const box = sandbox(t, { engine: 'openssl' });
+  box.setItem('secrets-vault', VAULT);
+  const first = opensslBackup(box, PW_OLD);
+  assert.equal(first.status, 0, first.out);
+  const before = folderState(box);
+  const [enc] = Object.keys(before);
+  assert.match(enc, /^keys-backup-\d{8}-openssl\.enc$/);
+  assert.deepEqual(Object.keys(before), [enc, `${enc}.hmac`]);
+  box.setItem('secrets-vault', VAULT_3);
+  return { box, before, enc };
+}
+
+test('openssl: a successful re-run replaces both files and leaves no snapshot behind', (t) => {
+  const { box, enc } = opensslWithPair(t);
+  const r = opensslBackup(box, PW_NEW);
+  assert.equal(r.status, 0, r.out);
+  assert.deepEqual(box.backups().sort(), [enc, `${enc}.hmac`]);
+  const v = verify(box, enc, PW_NEW);
+  assert.equal(v.status, 0, v.out);
+  assert.match(v.out, /Total: 3 keys/);
+  assert.notEqual(verify(box, enc, PW_OLD).status, 0, 'the old passphrase no longer matches the new sidecar');
+});
+
+test('openssl: a failure or SIGTERM between publishing the sidecar and the ciphertext keeps the previous pair restorable', (t) => {
+  for (const extraEnv of [{ STUB_MV_FAIL: '1' }, { STUB_MV_TERM: '1' }]) {
+    const { box, before, enc } = opensslWithPair(t);
+    const r = opensslBackup(box, PW_NEW, extraEnv);
+    assert.notEqual(r.status, 0, `${JSON.stringify(extraEnv)}: ${r.out}`);
+    assert.deepEqual(folderState(box), before, `${JSON.stringify(extraEnv)}: the previous pair is back in place and nothing else is left`);
+    const v = verify(box, enc, PW_OLD);
+    assert.equal(v.status, 0, `${JSON.stringify(extraEnv)}: ${v.out}`);
+    assert.match(v.out, /Total: 2 keys/);
+    assertNoSecrets(r.out, 'backup output');
+    assertTmpClean(box);
+  }
+});
+
+test('openssl: a run killed between the two renames keeps the previous pair restorable, and the next run refuses to touch it', (t) => {
+  const { box, before, enc } = opensslWithPair(t);
+  const prior = enc.replace(/-openssl\.enc$/, '-prior-openssl.enc');
+  const killed = opensslBackup(box, PW_NEW, { STUB_MV_KILL: '1' });
+  assert.notEqual(killed.status, 0);
+  const after = folderState(box);
+  assert.equal(after[prior], before[enc], 'the previous ciphertext is kept');
+  assert.equal(after[`${prior}.hmac`], before[`${enc}.hmac`], 'the previous sidecar is kept');
+  const v = verify(box, prior, PW_OLD);
+  assert.equal(v.status, 0, v.out);
+  assert.match(v.out, /Total: 2 keys/);
+  const next = opensslBackup(box, PW_NEW);
+  assert.equal(next.status, 1, next.out);
+  assert.match(next.out, /interrupted/);
+  assert.deepEqual(folderState(box), after, 'the refused run changes nothing');
+  for (const [name, bytes] of Object.entries(after)) assertNoSecrets(Buffer.from(bytes, 'base64').toString('utf8'), name);
+});
+
+test('openssl: a first backup of the day that fails between the two renames leaves no half pair', (t) => {
+  const box = sandbox(t, { engine: 'openssl' });
+  box.setItem('secrets-vault', VAULT);
+  const r = opensslBackup(box, PW_OLD, { STUB_MV_FAIL: '1' });
+  assert.notEqual(r.status, 0);
+  assert.deepEqual(box.backups(), [], 'no sidecar without its ciphertext');
+});
+
+test('openssl: a failed encryption leaves the existing pair untouched and no partial files', (t) => {
+  const { box, before } = opensslWithPair(t);
+  const r = opensslBackup(box, PW_NEW, { STUB_OPENSSL_FAIL: '1' });
+  assert.notEqual(r.status, 0);
+  assert.deepEqual(folderState(box), before);
 });
 
 test('--dry-run lists names and writes nothing', (t) => {

@@ -65,6 +65,10 @@ from `a255546ee`.
      `delivered`**. Otherwise it records `suppressed: native-rate-limited`
      or `native-failed`, with no ledger entry, so the next cycle can retry.
    - `notification-router` records `delivered: true` only on `delivered`.
+     Repair cycle 1 (Sol's review of `ea6588a68`): an undelivered router
+     alert stays pending, the threat reactor releases it from its 24 h
+     dedupe, and the next ingest retries only the native send. Inbox,
+     toast and map marker stay one-time.
    - `proximity-alerts` sets `alerted[id]` only on `delivered`. When a scan
      yields more than 3 newly qualifying incidents, it sends one summary
      notification that names them ("4 new incidents near you: …") and marks

@@ -2,7 +2,8 @@
  * Threat Reactor — pure scoring + tiny event emitter. Evaluates incoming
  * normalized cyber threats against the user's DeviceFingerprint and emits
  * ReactorAlert events for relevant matches. Dedupes via an in-memory map
- * with a 24h window.
+ * with a 24h window, unless a subscriber reports it could not deliver the
+ * alert (R4-BUG-002).
  */
 
 import type { DeviceFingerprint } from './device-identity';
@@ -106,7 +107,13 @@ export function evaluateThreat(
   return null;
 }
 
-type AlertHandler = (alert: ReactorAlert) => void;
+/**
+ * A handler may return a promise. If it resolves to `false`, the handler
+ * could not deliver the alert, so the reactor releases it from the dedupe
+ * window and offers it again on the next ingest (R4-BUG-002). Any other
+ * result, a throw or a rejection keeps the 24 h dedupe.
+ */
+type AlertHandler = (alert: ReactorAlert) => unknown;
 
 const subscribers = new Set<AlertHandler>();
 const dedupe = new Map<string, number>();
@@ -123,6 +130,23 @@ function pruneDedupe(nowMs: number): void {
   for (const [key, ts] of dedupe) {
  if (nowMs - ts > DEDUPE_WINDOW_MS) dedupe.delete(key);
   }
+}
+
+/** Only the emission that set the dedupe entry may release it. */
+function releaseForRetry(alertId: string, emittedAt: number): void {
+  if (dedupe.get(alertId) === emittedAt) dedupe.delete(alertId);
+}
+
+function watchDelivery(result: unknown, alertId: string, emittedAt: number): void {
+  if (!(result instanceof Promise)) return;
+  void result.then(
+    (delivered: unknown) => {
+      if (delivered === false) releaseForRetry(alertId, emittedAt);
+    },
+    () => {
+      // a rejected handler keeps the dedupe, like a throwing one
+    },
+  );
 }
 
 async function defaultFingerprintProvider(): Promise<DeviceFingerprint> {
@@ -165,7 +189,7 @@ export async function ingest(
  emitted.push(alert);
  for (const sub of subscribers) {
  try {
- sub(alert);
+ watchDelivery(sub(alert), alertId, nowMs);
  } catch {
  // isolate subscriber failures
  }

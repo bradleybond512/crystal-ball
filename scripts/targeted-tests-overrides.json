@@ -211,6 +211,9 @@
   "src-tauri/src/sidecar_supervisor.rs": [
     "test:sidecar-supervisor"
   ],
+  "src-tauri/src/sidecar_publication.rs": [
+    "test:sidecar-supervisor"
+  ],
   "src-tauri/tests/sidecar_supervisor_contract.rs": [
     "test:sidecar-supervisor"
   ]

@@ -148,6 +148,24 @@ clock). Unit-tested like `notify_policy.rs`.
   `port_confirmed`. The renderer can therefore never be handed an unverified
   port.
 
+#### PR A repair cycle 1: generation-owned port publication
+
+Review of `6a4f6170b` found that a starter which stalled past its child's
+exit could overwrite the next child's confirmed port with the dead one. The
+late confirmation and the timeout fallback had the same gap. All port
+publication and revocation now goes through
+`src-tauri/src/sidecar_publication.rs`, which works as follows:
+
+- Every publisher names its generation.
+- A publisher changes nothing unless that generation is the live child and
+  shutdown has not begun.
+- Every publisher takes the child lock before the port lock.
+- The timeout fallback never downgrades a confirmation.
+- Secret injection never falls back to the default port.
+
+It is contract-tested with fake children
+(`sidecar_supervisor_contract.rs`) and pinned in `main.rs` by source gates.
+
 ### PR B — Renderer
 
 **Confirmed-port routing (`runtime.ts`)**

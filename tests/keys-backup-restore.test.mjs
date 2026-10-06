@@ -82,7 +82,7 @@ if [[ "$cmd" == "enc" ]]; then
   fi
   if [[ -n "$STUB_ENC_BARRIER" ]]; then
     : > "$STUB_ENC_BARRIER/paused"
-    while [[ ! -e "$STUB_ENC_BARRIER/release" ]]; do sleep 0.05; done
+    while [[ -d "$STUB_ENC_BARRIER" && ! -e "$STUB_ENC_BARRIER/release" ]]; do sleep 0.05; done
   fi
   if [[ -n "$STUB_OPENSSL_FAIL" ]]; then echo PARTIAL > "$out"; exit 1; fi
   { echo "OPENSSL-STUB"; node -e 'let b=[];process.stdin.on("data",d=>b.push(d)).on("end",()=>process.stdout.write(Buffer.concat(b).toString("base64")))'; } > "$out"
@@ -109,7 +109,7 @@ done
 if [[ "$src" == *.partial.* && "$dst" == *-openssl.enc ]]; then
   if [[ -n "$STUB_MV_BARRIER" ]]; then
     : > "$STUB_MV_BARRIER/paused"
-    while [[ ! -e "$STUB_MV_BARRIER/release" ]]; do sleep 0.05; done
+    while [[ -d "$STUB_MV_BARRIER" && ! -e "$STUB_MV_BARRIER/release" ]]; do sleep 0.05; done
   fi
   [[ -n "$STUB_MV_FAIL" ]] && exit 1
   if [[ -n "$STUB_MV_TERM" ]]; then kill -TERM "$PPID"; sleep 1; exit 1; fi
@@ -334,11 +334,19 @@ const folderState = (box) => Object.fromEntries(box.backups().sort().map((f) => 
   return [f, `dir:${readdirSync(file).sort().map((e) => `${e}=${readFileSync(path.join(file, e), 'utf8')}`).join(',')}`];
 }));
 const PW_B = 'TEST-pass-b';
-/** A file barrier the stubs wait on: they create `paused`, then block until `release` exists. */
-function barrier(box, name) {
+/**
+ * A file barrier the stubs wait on: they create `paused`, then block until
+ * `release` exists (or the sandbox is gone). It is always released when the
+ * test ends, so a failing assertion can never leave a paused run behind.
+ */
+function barrier(t, box, name) {
   const dir = path.join(box.stub, `barrier-${name}`);
   mkdirSync(dir);
-  return { dir, paused: () => existsSync(path.join(dir, 'paused')), release: () => writeFileSync(path.join(dir, 'release'), '') };
+  const release = () => {
+    try { writeFileSync(path.join(dir, 'release'), ''); } catch { /* sandbox already removed: the stub stops waiting */ }
+  };
+  t.after(release);
+  return { dir, paused: () => existsSync(path.join(dir, 'paused')), release };
 }
 async function waitFor(check, what, timeoutMs = 30000) {
   const start = Date.now();
@@ -424,8 +432,8 @@ test('openssl: overlapping runs never mix pairs; exactly one publishes a coheren
     box.setItem('secrets-vault', VAULT);
     if (withPredecessor) assert.equal(opensslBackup(box, PW_OLD).status, 0);
     box.setItem('secrets-vault', VAULT_3);
-    const bEnc = barrier(box, 'b-enc');
-    const aMv = barrier(box, 'a-mv');
+    const bEnc = barrier(t, box, 'b-enc');
+    const aMv = barrier(t, box, 'a-mv');
     // B gets past every start-up check, then pauses inside encryption.
     const b = box.start(BACKUP, [], { input: `${PW_B}\n${PW_B}\n`, extraEnv: { STUB_ENC_BARRIER: bEnc.dir } });
     await waitFor(bEnc.paused, `${label}: B paused in encryption`);
@@ -451,7 +459,7 @@ test('openssl: overlapping runs never mix pairs; exactly one publishes a coheren
 
 test('openssl: a run started while another is mid-publication changes none of its files', async (t) => {
   const { box, enc } = opensslWithPair(t);
-  const aMv = barrier(box, 'a-mv');
+  const aMv = barrier(t, box, 'a-mv');
   const a = box.start(BACKUP, [], { input: `${PW_NEW}\n${PW_NEW}\n`, extraEnv: { STUB_MV_BARRIER: aMv.dir } });
   await waitFor(aMv.paused, 'A paused between its renames');
   const during = folderState(box);

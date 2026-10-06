@@ -72,6 +72,10 @@ destination. That is correct and stays. But the upgrade path fails silently:
    - **Not now** hides the notice for this session only.
 
    It updates on a `cb:imessage-pause-changed` event.
+
+   Repair cycle 1 (Sol's review of `2b58defee`): the event also fires when
+   startup hydration makes an unchanged stored marker reportable. A failed
+   Keep off stays visible with its reason while its marker is still stored.
 3. **One-time native notification** per pause episode.
    - After boot's `refreshImessageSettings()`, if paused and not yet
      notified, it calls `notifyNative(…, priority 'high')`.

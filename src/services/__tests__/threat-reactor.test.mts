@@ -143,3 +143,65 @@ test('onAlert unsubscribe stops notifications', async () => {
   await mod.ingest([makeThreat({ severity: 'critical' })]);
   assert.equal(seen.length, 0);
 });
+
+const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
+
+test('a subscriber that reports non-delivery releases the threat for the next ingest (R4-BUG-002)', async () => {
+  const mod = await loadModule();
+  const results = [false, true];
+  const seen: unknown[] = [];
+  mod.onAlert(async (a) => {
+    seen.push(a);
+    return results.shift() ?? true;
+  });
+  const t = makeThreat({ severity: 'high' });
+  await mod.ingest([t]);
+  await flush();
+  now += 60_000;
+  await mod.ingest([t]);
+  await flush();
+  now += 60_000;
+  await mod.ingest([t]);
+  await flush();
+  assert.equal(seen.length, 2, 'retried once after non-delivery, then deduped after delivery');
+});
+
+test('a late non-delivery report cannot release a newer emission of the same threat', async () => {
+  const mod = await loadModule();
+  let reportFirst: (settled: boolean) => void = () => undefined;
+  const reports = [
+    new Promise<boolean>((resolve) => { reportFirst = resolve; }),
+    Promise.resolve(true),
+  ];
+  const seen: unknown[] = [];
+  mod.onAlert((a) => {
+    seen.push(a);
+    return reports.shift() ?? Promise.resolve(true);
+  });
+  const t = makeThreat({ severity: 'high' });
+  await mod.ingest([t]);
+  now += 24 * 60 * 60 * 1000 + 1;
+  await mod.ingest([t]);
+  reportFirst(false);
+  await flush();
+  now += 60_000;
+  await mod.ingest([t]);
+  await flush();
+  assert.equal(seen.length, 2, 'the stale report from the expired emission is ignored');
+});
+
+test('a subscriber that rejects keeps the 24 h dedupe', async () => {
+  const mod = await loadModule();
+  const seen: unknown[] = [];
+  mod.onAlert(async (a) => {
+    seen.push(a);
+    throw new Error('subscriber failed');
+  });
+  const t = makeThreat({ severity: 'high' });
+  await mod.ingest([t]);
+  await flush();
+  now += 60_000;
+  await mod.ingest([t]);
+  await flush();
+  assert.equal(seen.length, 1);
+});

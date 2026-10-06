@@ -3,7 +3,9 @@
  * into all configured output channels (inbox, toast, native notification,
  * map marker). Severity-gated, deduped against alertDB, rate-limited per
  * severity for native notifications only. Honors Ghost Mode by skipping
- * native notification + map marker.
+ * native notification + map marker. An alert whose native send was not
+ * delivered stays pending; when the reactor offers it again, only the
+ * native send is retried (R4-BUG-002).
  */
 
 import type { ReactorAlert } from './threat-reactor';
@@ -54,6 +56,12 @@ const RATE_LIMIT_MS: Record<Severity, number> = {
 };
 
 const lastNotifiedBySeverity = new Map<Severity, number>();
+/**
+ * Alerts whose native send was attempted but not delivered, by alert id and
+ * the time of that first attempt. In memory only: after a restart the stored
+ * inbox row dedupes the alert as before.
+ */
+const pendingNative = new Map<string, number>();
 let nextTraceId = 1;
 
 const DEFAULT_CONFIG: RouterConfig = {
@@ -267,27 +275,33 @@ function safeToast(deps: RouterDeps, alert: ReactorAlert): void {
   }
 }
 
+/**
+ * `skipped`: native is disabled, Ghost Mode is on, or the router's own
+ * per-severity window is still open.
+ */
+type NativeAttempt = 'delivered' | 'not_delivered' | 'skipped';
+
 async function safeNative(
   deps: RouterDeps,
   alert: ReactorAlert,
   ghost: boolean,
   nowMs: number,
   trace?: RouterTrace,
-): Promise<void> {
+): Promise<NativeAttempt> {
   if (!config.notifyNative) {
  recordRouterNativeResult(trace, { delivered: false, surface: 'in_app', error: 'native-disabled' });
- return;
+ return 'skipped';
   }
   if (ghost) {
  recordRouterNativeResult(trace, { delivered: false, surface: 'in_app', error: 'ghost-mode' });
- return;
+ return 'skipped';
   }
   const sev = alert.threat.severity;
   const limit = RATE_LIMIT_MS[sev];
   const last = lastNotifiedBySeverity.get(sev) ?? 0;
   if (limit !== 0 && nowMs - last < limit) {
  recordRouterNativeResult(trace, { delivered: false, surface: 'in_app', error: 'severity-rate-limit' });
- return;
+ return 'skipped';
   }
   let outcome: NativeNotifyOutcome;
   try {
@@ -296,8 +310,8 @@ async function safeNative(
  outcome = 'failed';
   }
   // Only a delivered notification counts: it starts the per-severity window
-  // and is recorded as seen. Anything else stays retryable and is traced as
-  // not delivered (R4-BUG-002).
+  // and settles the alert. Any other outcome is traced as not delivered and
+  // leaves the alert pending for the next reactor ingest (R4-BUG-002).
   if (outcome === 'delivered') {
  lastNotifiedBySeverity.set(sev, nowMs);
  recordRouterNativeResult(trace, {
@@ -311,6 +325,7 @@ async function safeNative(
   } else {
  recordRouterNativeResult(trace, { delivered: false, surface: 'failed', error: 'native-delivery-failed' });
   }
+  return outcome === 'delivered' ? 'delivered' : 'not_delivered';
 }
 
 function safeMarker(deps: RouterDeps, alert: ReactorAlert, ghost: boolean): void {
@@ -324,23 +339,59 @@ function safeMarker(deps: RouterDeps, alert: ReactorAlert, ghost: boolean): void
   }
 }
 
-async function deliver(alert: ReactorAlert, deps: RouterDeps): Promise<void> {
+/**
+ * Fans one reactor alert out to the inbox, toast, native notification and map
+ * marker. Resolves `false` only while a native send it attempted is still
+ * undelivered, so the reactor offers the alert again on its next ingest
+ * (R4-BUG-002). The inbox row, toast and marker are one-time.
+ */
+async function deliver(alert: ReactorAlert, deps: RouterDeps): Promise<boolean> {
   const nowMs = deps.now();
+  prunePendingNative(nowMs);
   const trace = createRouterTrace(alert, nowMs);
   if (SEVERITY_RANK[alert.threat.severity] < SEVERITY_RANK[config.minSeverity]) {
- suppressRouterTrace(trace, 'below-min-severity');
- return;
+    suppressRouterTrace(trace, 'below-min-severity');
+    return true;
   }
+  if (pendingNative.has(alert.alertId)) return retryNative(alert, deps, nowMs, trace);
   if (await isDuplicate(alert, deps, nowMs)) {
- suppressRouterTrace(trace, 'duplicate-within-window');
- return;
+    suppressRouterTrace(trace, 'duplicate-within-window');
+    return true;
   }
   const ghost = await safeIsGhost(deps);
   await safePut(deps, alertToUnified(alert));
   safeToast(deps, alert);
   dispatchRouterTrace(trace, nowMs);
-  await safeNative(deps, alert, ghost, nowMs, trace);
+  const attempt = await safeNative(deps, alert, ghost, nowMs, trace);
   safeMarker(deps, alert, ghost);
+  if (attempt !== 'not_delivered') return true;
+  pendingNative.set(alert.alertId, nowMs);
+  return false;
+}
+
+/**
+ * The same alert again after an undelivered native send: retry only the native
+ * send, under the current Ghost Mode, settings and severity window. The alert
+ * stays pending until a send is delivered or the dedupe window passes.
+ */
+async function retryNative(
+  alert: ReactorAlert,
+  deps: RouterDeps,
+  nowMs: number,
+  trace: RouterTrace | undefined,
+): Promise<boolean> {
+  recordRouterEvent(trace, 'Native retry after an undelivered send; inbox, toast and map are not repeated.');
+  dispatchRouterTrace(trace, nowMs);
+  const ghost = await safeIsGhost(deps);
+  if ((await safeNative(deps, alert, ghost, nowMs, trace)) !== 'delivered') return false;
+  pendingNative.delete(alert.alertId);
+  return true;
+}
+
+function prunePendingNative(nowMs: number): void {
+  for (const [alertId, firstAttempt] of pendingNative) {
+    if (nowMs - firstAttempt > DEDUPE_WINDOW_MS) pendingNative.delete(alertId);
+  }
 }
 
 interface RouterTrace {
@@ -393,6 +444,12 @@ function suppressRouterTrace(trace: RouterTrace | undefined, reason: string): vo
   } catch { /* diagnostics must not block delivery */ }
 }
 
+function recordRouterEvent(trace: RouterTrace | undefined, reason: string): void {
+  try {
+    trace?.registry.recordEvent(trace.candidateId, { kind: 'dedupe_check', reason });
+  } catch { /* diagnostics must not block delivery */ }
+}
+
 function dispatchRouterTrace(trace: RouterTrace | undefined, at: number): void {
   try {
     trace?.registry.dispatch(trace.candidateId, 'in_app', at);
@@ -422,9 +479,9 @@ export function startNotificationRouter(deps?: RouterDeps): () => void {
   void (async () => {
  try {
  const mod = await import('./threat-reactor');
- unsubscribe = mod.onAlert((alert) => {
- void deliver(alert, resolved);
- });
+ // deliver() resolves false while a native send is undelivered; the
+ // reactor then offers the same alert again on its next ingest.
+ unsubscribe = mod.onAlert((alert) => deliver(alert, resolved));
  } catch {
  // threat-reactor not available — router is inert
  }
@@ -448,6 +505,7 @@ export async function __deliverForTesting(alert: ReactorAlert): Promise<void> {
 /** Test hook: reset module state. */
 export function __resetForTesting(): void {
   lastNotifiedBySeverity.clear();
+  pendingNative.clear();
   nextTraceId = 1;
   config = { ...DEFAULT_CONFIG };
   activeDeps = null;

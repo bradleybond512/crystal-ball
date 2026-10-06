@@ -169,6 +169,9 @@
   "src/services/notification-router.ts": [
     "test:native-notify"
   ],
+  "src/services/threat-reactor.ts": [
+    "test:native-notify"
+  ],
   "src/services/proximity-alerts.ts": [
     "test:native-notify"
   ],

@@ -12,6 +12,7 @@
 import {
   disableImessage,
   getImessagePauseState,
+  hasImessagePauseMarker,
   IMESSAGE_PAUSE_EVENT,
   type ImessagePauseState,
   type ImessageResult,
@@ -19,12 +20,15 @@ import {
 
 export interface ImessagePausedNoticeDeps {
   pauseState: () => ImessagePauseState;
+  /** Whether the stored pause marker survives while native state is unknown. */
+  pauseRetained?: () => boolean;
   keepOff: () => Promise<ImessageResult>;
   review: () => void;
 }
 
 const DEFAULT_DEPS: ImessagePausedNoticeDeps = {
   pauseState: getImessagePauseState,
+  pauseRetained: hasImessagePauseMarker,
   keepOff: disableImessage,
   review: () => document.dispatchEvent(new CustomEvent('wm:open-settings', { detail: { focus: 'imessage' } })),
 };
@@ -69,11 +73,14 @@ export function mountImessagePausedNotice(
   let failure = '';
   const render = (): void => {
     const state = deps.pauseState();
-    root.hidden = !state.paused || hiddenForSession;
-    if (state.paused) {
-      // textContent only: the hint comes from local storage.
-      text.textContent = failure || `iMessage alerts are paused. Confirm the recipient (${state.hint}) to resume.`;
-    }
+    // A failed Keep off leaves native state unknown, so the pause is no longer
+    // reportable. Keep the failure visible while the marker it could not clear
+    // is still stored; once the pause has ended, the failure no longer applies.
+    if (failure && !state.paused && !(deps.pauseRetained ?? hasImessagePauseMarker)()) failure = '';
+    root.hidden = hiddenForSession || (!state.paused && !failure);
+    // textContent only: the hint comes from local storage.
+    if (failure) text.textContent = failure;
+    else if (state.paused) text.textContent = `iMessage alerts are paused. Confirm the recipient (${state.hint}) to resume.`;
     for (const button of [review, keepOff, later]) button.disabled = busy;
   };
 

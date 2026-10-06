@@ -85,6 +85,10 @@ export function getImessageSettings(): ImessageSettings {
 export function saveImessageThreshold(threshold: ImessageThreshold): void {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...localSettings(), threshold }));
 }
+/** Whether a valid pause marker is stored, even while native state is unknown. */
+export function hasImessagePauseMarker(): boolean {
+  return readPauseMarker(localSettings().paused) !== undefined;
+}
 export function getImessagePauseState(): ImessagePauseState {
   if (!nativeSettings.ready || nativeSettings.enabled) return { paused: false };
   const marker = readPauseMarker(localSettings().paused);
@@ -116,6 +120,7 @@ function acceptState(value: unknown, origin: StateOrigin): void {
     || typeof state.migrationAvailable !== 'boolean'
     || (state.recipient !== null && typeof state.recipient !== 'string')
     || (state.enabled && (!state.ready || !state.recipient))) throw new Error('Invalid settings');
+  const shownBefore = JSON.stringify(getImessagePauseState());
   nativeSettings = { enabled: state.enabled, ready: state.ready, recipient: state.recipient as string ?? '', migrationAvailable: state.migrationAvailable };
   const stored = localSettings();
   const previous = readPauseMarker(stored.paused);
@@ -126,7 +131,10 @@ function acceptState(value: unknown, origin: StateOrigin): void {
     : { threshold: getImessageSettings().threshold };
   const next = paused ? { ...base, paused } : base;
   if (JSON.stringify(next) !== JSON.stringify(stored)) storeSettings(next);
-  if (JSON.stringify(paused) !== JSON.stringify(previous)) announcePauseChange();
+  // Announce a marker change, and also an unchanged stored marker that only
+  // now becomes reportable because native state is known.
+  if (JSON.stringify(paused) !== JSON.stringify(previous)
+    || JSON.stringify(getImessagePauseState()) !== shownBefore) announcePauseChange();
 }
 async function requestState(command: string, origin: StateOrigin, payload?: Record<string, unknown>): Promise<ImessageResult> {
   const request = ++generation;

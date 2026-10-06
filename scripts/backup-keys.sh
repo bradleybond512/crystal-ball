@@ -94,7 +94,21 @@ if (( status == ERR_ITEM_NOT_FOUND )); then
   NAMES="$(node "$VAULT_TOOL" supported-keys "$MAIN_RS")"
   while IFS= read -r key; do
     [[ -z "$key" ]] && continue
-    if value="$(security find-generic-password -s "$SERVICE" -a "$key" -w 2>/dev/null)" && [[ -n "$value" ]]; then
+    set +e
+    value="$(security find-generic-password -s "$SERVICE" -a "$key" -w 2>/dev/null)"
+    key_status=$?
+    set -e
+    # Only a missing item is skipped. Denied access or any other error fails
+    # closed: an incomplete backup must never replace a complete one.
+    if (( key_status == ERR_ITEM_NOT_FOUND )); then
+      continue
+    elif (( key_status != 0 )); then
+      unset value RAW
+      echo "Could not read the legacy Keychain item $key (security exit $key_status). Nothing was written." >&2
+      echo "If macOS asked for access, choose Allow and run the backup again." >&2
+      exit 1
+    fi
+    if [[ -n "$value" ]]; then
       RAW+="$key=$value"$'\n'
     fi
   done <<< "$NAMES"
@@ -130,13 +144,49 @@ if (( DRY_RUN == 1 )); then
   exit 0
 fi
 
+# OpenSSL writes a pair (ciphertext + .hmac sidecar) and two renames cannot be
+# atomic together. While a new pair is published, the previous pair is kept as
+# hard links under PRIOR_PATH: a failure rolls it back, and a run killed
+# outright leaves it there, directly restorable with restore-keys.
+PRIOR_PATH="${ENC_PATH%-openssl.enc}-prior-openssl.enc"
+if [[ "$ENGINE" == "openssl" ]] && [[ -e "$PRIOR_PATH" || -e "$PRIOR_PATH.hmac" ]]; then
+  echo "An earlier backup run was interrupted while replacing today's backup." >&2
+  echo "The previous backup pair is kept as: $PRIOR_PATH (+ .hmac)" >&2
+  echo "Check it with: npm run restore-keys -- --verify \"$PRIOR_PATH\"" >&2
+  echo "Then keep or delete those two files and run the backup again. Nothing was written." >&2
+  exit 1
+fi
+
 # ── Encrypt straight from memory ────────────────────────────────────
 mkdir -p "$ICLOUD_DIR"
 umask 077
 # Encrypt to a temporary name and move it into place only on success, so a
 # failed run (wrong confirmation, Ctrl-C) never clobbers today's good backup.
 OUT_TMP="$ENC_PATH.partial.$$"
+PUBLISHING=0
+HAD_ENC=0
+HAD_HMAC=0
+# Undo a half-finished pair publication: put back each previous file (or
+# remove a new one that had no predecessor). `-ef`: a snapshot still linked to
+# the untouched final only needs removing; mv between two links of the same
+# file is a no-op that would leave the snapshot behind.
+rollback_one() { # <final> <snapshot> <had a previous file>
+  if (( $3 == 1 )); then
+    if [[ -e "$2" ]]; then
+      if [[ "$1" -ef "$2" ]]; then rm -f "$2"; else mv -f "$2" "$1"; fi
+    fi
+  else
+    rm -f "$1"
+  fi
+}
 cleanup() {
+  if (( PUBLISHING == 1 )); then
+    rollback_one "$ENC_PATH.hmac" "$PRIOR_PATH.hmac" "$HAD_HMAC" || true
+    rollback_one "$ENC_PATH" "$PRIOR_PATH" "$HAD_ENC" || true
+    if [[ -e "$PRIOR_PATH" || -e "$PRIOR_PATH.hmac" ]]; then
+      echo "Could not put the previous backup back; it is kept as $PRIOR_PATH (+ .hmac)." >&2
+    fi
+  fi
   rm -f "$OUT_TMP" "$OUT_TMP.hmac"
 }
 trap cleanup EXIT
@@ -178,12 +228,23 @@ case "$ENGINE" in
     openssl dgst -sha256 -hmac "$PW1" -binary "$OUT_TMP" > "$OUT_TMP.hmac"
     unset PW1
     chmod 600 "$OUT_TMP.hmac"
-    mv -f "$OUT_TMP.hmac" "$ENC_PATH.hmac"
     ;;
 esac
 unset VAULT_JSON
 chmod 600 "$OUT_TMP"
-mv -f "$OUT_TMP" "$ENC_PATH"
+if [[ "$ENGINE" == "openssl" ]]; then
+  if [[ -e "$ENC_PATH" ]]; then HAD_ENC=1; fi
+  if [[ -e "$ENC_PATH.hmac" ]]; then HAD_HMAC=1; fi
+  PUBLISHING=1
+  if (( HAD_ENC == 1 )); then ln "$ENC_PATH" "$PRIOR_PATH"; fi
+  if (( HAD_HMAC == 1 )); then ln "$ENC_PATH.hmac" "$PRIOR_PATH.hmac"; fi
+  mv -f "$OUT_TMP.hmac" "$ENC_PATH.hmac"
+  mv -f "$OUT_TMP" "$ENC_PATH"
+  PUBLISHING=0
+  rm -f "$PRIOR_PATH" "$PRIOR_PATH.hmac"
+else
+  mv -f "$OUT_TMP" "$ENC_PATH"
+fi
 
 # ── Summary ─────────────────────────────────────────────────────────
 echo

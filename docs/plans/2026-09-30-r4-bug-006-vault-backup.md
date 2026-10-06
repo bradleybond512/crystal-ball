@@ -49,10 +49,21 @@ that shape.
 
    The output is `keys-backup-YYYYMMDD-{engine}.enc` in the iCloud
    `CrystalBall` folder, mode 0600. It is removed if encryption fails.
+   - openssl writes a ciphertext plus an `.hmac` sidecar, and both are
+     needed to restore. While a new pair replaces today's pair, the previous
+     pair is kept as hard links named `keys-backup-YYYYMMDD-prior-openssl.enc`
+     (+ `.hmac`).
+   - A failure rolls those links back. A run killed outright leaves them,
+     directly restorable.
+   - The next run refuses to start until they are checked and removed.
+   - This was added in repair cycle 1, after Sol's review.
 4. **Legacy fallback:** only when **no vault item exists**, collect the old
    per-key items. The list is the app's supported names, parsed from
    `main.rs` at run time rather than a stale hard-coded copy. They are
    converted to the same JSON shape.
+   - Only item-not-found skips a key. Any other per-key error (for example
+     denied access) aborts the backup before anything is written. This was
+     made explicit in repair cycle 1.
 5. `--dry-run` prints the count and names only, and writes nothing.
 
 **Restore (`scripts/restore-keys.sh [--verify] [--replace] <file>`)**

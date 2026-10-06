@@ -251,6 +251,40 @@ helper test now pins the exact validation messages.
 | R8 | snapshot left after a successful publication | 22/1 |
 | R9 | new file without a predecessor kept on rollback | 22/1 |
 
+**Repair cycle 2 proof:**
+
+- **Where it ran:** the isolated QA worktree, detached at `3ed732e4c`. That
+  commit is the fix `16ab6a0a6` plus a test-harness-only hardening;
+  `backup-keys.sh` is unchanged by the hardening.
+- **Baseline:** 26/26 before and after.
+- **Evidence location:**
+  `~/Documents/Codex/2026-10-04/task/approved-batch/pr1763/mutation-evidence-repair2/`.
+- **All proofs on `backup-keys.sh` were re-run,** because the file changed
+  again (now `48f82b819b51`):
+  - E1–E3, plus E3b with an adapted edit because `cleanup()` now also
+    releases the lock;
+  - R1–R9, with R7 now targeting the snapshot check under the lock.
+- **New proofs:**
+  - L1, a non-exclusive lock (`mkdir -p`): red in the overlap,
+    mid-publication and killed-run tests.
+  - L2, a run that releases a lock it does not own: red in the
+    mid-publication and killed-run tests.
+  - L3, a lock that is never released: red in 8 openssl tests.
+- **Result:** all 16 turned red, and each restored hash matched with a clean
+  status before and after.
+- **Proofs reused:** E4–E12 from the run at `96611cc3d`
+  (`mutation-evidence/`), as in cycle 1. `restore-keys.sh` and
+  `vault-json.mjs` are still byte-identical.
+- **Aborted run, not used:** a first attempt at `16ab6a0a6` is kept in
+  `mutation-evidence-repair2-aborted-16ab6a0/`.
+  - Under L1, the mid-publication test failed before releasing its barrier,
+    so the paused stub run never exited and `node --test` hung.
+  - The runner was stopped, and the QA worktree was restored with `git
+    checkout` and verified clean.
+  - That led to the hardening: barriers are now always released in
+    `t.after`, and the stub wait loops also stop when the sandbox is
+    removed.
+
 ## For Bradley (manual, when convenient)
 
 1. `npm run backup-keys -- --dry-run`. Choose **Allow** if macOS asks. You

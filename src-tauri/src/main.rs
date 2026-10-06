@@ -25,6 +25,7 @@ mod corelocation;
 mod current_location;
 mod imessage;
 mod notify_policy;
+mod sidecar_publication;
 mod sidecar_supervisor;
 mod updater_policy;
 mod watchdog;
@@ -3659,6 +3660,19 @@ fn read_port_file(path: &Path, timeout_ms: u64) -> Option<u16> {
  None
 }
 
+/// The shared sidecar fields that port publication reads and changes. Every
+/// publication and revocation goes through this generation-owned view, which
+/// takes the child lock before the port lock.
+fn local_api_cell(state: &LocalApiState) -> sidecar_publication::PortCell<'_, Child> {
+    sidecar_publication::PortCell {
+        child: &state.child,
+        port: &state.port,
+        confirmed: &state.port_confirmed,
+        generation: &state.generation,
+        shutting_down: &state.shutting_down,
+    }
+}
+
 fn start_local_api(app: &AppHandle) -> Result<(), String> {
  let state = app.state::<LocalApiState>();
  let mut slot = state
@@ -3857,8 +3871,7 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  "INFO",
  &format!("local API sidecar started pid={child_pid}"),
  );
- *slot = Some(child);
- let generation = state.generation.fetch_add(1, Ordering::SeqCst) + 1;
+ let generation = local_api_cell(&state).install(&mut slot, child);
  let restarts = match state.supervisor.lock() {
  Ok(mut supervisor) => {
  let now = supervisor_clock_ms();
@@ -3913,26 +3926,20 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  }
  let status = {
  let Some(state) = app_handle.try_state::<LocalApiState>() else { return; };
- let Ok(mut slot) = state.child.lock() else { return; };
- let Some(child) = slot.as_mut() else { return; }; // already cleared by stop_local_api
- if child.id() != child_pid { return; } // a newer sidecar replaced us
- match child.try_wait() {
- Ok(Some(status)) => {
- *slot = None;
- // The port is no longer ours. Until a restart confirms a new one,
- // nothing may be sent there: another process can bind it.
- state.port_confirmed.store(false, Ordering::SeqCst);
- if let Ok(mut port) = state.port.lock() {
- *port = None;
+ // Only this generation's monitor may reap it, revoke its port (no
+ // longer ours: another process can bind it) or confirm a port file
+ // that appeared after the boot wait, all under the child lock.
+ match local_api_cell(&state).tick(generation, || parse_port_file(&late_port_file)) {
+ sidecar_publication::Tick::Exited(status) => status,
+ sidecar_publication::Tick::Running(late) => {
+ if let Some(port) = late {
+ append_desktop_log(&app_handle, "INFO", &format!("sidecar confirmed port={port} (late)"));
  }
- status
- }
- Ok(None) => {
- drop(slot);
- confirm_port_late(&app_handle, &late_port_file);
  continue; // still running
  }
- Err(e) => {
+ // Stopped by stop_local_api, or a newer sidecar replaced us.
+ sidecar_publication::Tick::Gone => return,
+ sidecar_publication::Tick::Failed(e) => {
  append_desktop_log(
  &app_handle,
  "ERROR",
@@ -3958,27 +3965,28 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  });
  }
 
- // Wait for sidecar to write confirmed port (up to 15s — Node.js ESM startup can be slow)
- if let Some(confirmed_port) = read_port_file(&port_file, 15000) {
- append_desktop_log(
- app,
- "INFO",
- &format!("sidecar confirmed port={confirmed_port}"),
- );
- if let Ok(mut port_slot) = state.port.lock() {
- *port_slot = Some(confirmed_port);
+ // Wait for sidecar to write confirmed port (up to 15s — Node.js ESM startup can be slow).
+ // Publish only while this generation is still the live child: a starter that
+ // stalls past its child's exit must never overwrite the next child's port.
+ let waited = read_port_file(&port_file, 15000);
+ match local_api_cell(&state).publish_start(generation, waited, DEFAULT_LOCAL_API_PORT) {
+ sidecar_publication::Publication::Confirmed(port) => {
+ append_desktop_log(app, "INFO", &format!("sidecar confirmed port={port}"));
  }
- state.port_confirmed.store(true, Ordering::SeqCst);
- } else {
+ sidecar_publication::Publication::Unconfirmed(_) => {
  append_desktop_log(
  app,
  "WARN",
  "sidecar port file not found within timeout, using default",
  );
- if let Ok(mut port_slot) = state.port.lock() {
- *port_slot = Some(DEFAULT_LOCAL_API_PORT);
  }
- state.port_confirmed.store(false, Ordering::SeqCst);
+ sidecar_publication::Publication::Stale => {
+ append_desktop_log(
+ app,
+ "WARN",
+ &format!("sidecar generation={generation} is no longer live; its port was not published"),
+ );
+ }
  }
 
  Ok(())
@@ -4250,7 +4258,16 @@ async fn inject_secrets_into_running_sidecar(app: &AppHandle, secrets: Vec<(Stri
  return;
  }
  let token = state.token.lock().ok().and_then(|t| t.clone()).unwrap_or_default();
- let port = state.port.lock().ok().and_then(|p| *p).unwrap_or(DEFAULT_LOCAL_API_PORT);
+ // Re-read under the child lock: a revocation since the checks above must
+ // never turn into the default port, which a foreign process may own.
+ let Some(port) = local_api_cell(&state).confirmed_live_port() else {
+ append_desktop_log(
+ app,
+ "WARN",
+ "sidecar port revoked at secret-injection time — secrets not pushed (will load on next launch)",
+ );
+ return;
+ };
  (token, port)
  };
  let client = match reqwest::Client::builder()
@@ -4342,22 +4359,6 @@ fn supervisor_clock_ms() -> u64 {
 fn parse_port_file(path: &Path) -> Option<u16> {
     let port = fs::read_to_string(path).ok()?.trim().parse::<u16>().ok()?;
     (port > 0).then_some(port)
-}
-
-/// The boot wait gives up after 15 s and leaves the port unconfirmed. Keep
-/// watching the port file on the monitor tick so a slow Node start becomes
-/// usable without ever trusting the default port blindly.
-fn confirm_port_late(app: &AppHandle, port_file: &Path) {
-    let Some(state) = app.try_state::<LocalApiState>() else { return; };
-    if state.port_confirmed.load(Ordering::SeqCst) {
-        return;
-    }
-    let Some(port) = parse_port_file(port_file) else { return; };
-    if let Ok(mut slot) = state.port.lock() {
-        *slot = Some(port);
-    }
-    state.port_confirmed.store(true, Ordering::SeqCst);
-    append_desktop_log(app, "INFO", &format!("sidecar confirmed port={port} (late)"));
 }
 
 /// Signal a listener on the canonical port only if its full command line is
@@ -4552,14 +4553,10 @@ fn stop_local_api(app: &AppHandle) {
  if let Ok(mut supervisor) = state.supervisor.lock() {
  supervisor.on_shutdown();
  }
- if let Ok(mut slot) = state.child.lock() {
- if let Some(mut child) = slot.take() {
+ // Take the child and revoke its port under one child lock.
+ if let Some(mut child) = local_api_cell(&state).take_for_shutdown() {
  let _ = child.kill();
  append_desktop_log(app, "INFO", "local API sidecar stopped");
- }
- }
- if let Ok(mut port_slot) = state.port.lock() {
- *port_slot = None;
  }
  if let Ok(log_dir) = logs_dir_path(app) {
  let _ = fs::remove_file(log_dir.join("sidecar.port"));

@@ -146,5 +146,11 @@
   ],
   "scripts/desktop-build-full.mjs": [
     "test:install-scripts"
+  ],
+  "scripts/check-dependency-age.mjs": [
+    "test:supply-chain-gates"
+  ],
+  "scripts/dependency-change-policy.mjs": [
+    "test:supply-chain-gates"
   ]
 }

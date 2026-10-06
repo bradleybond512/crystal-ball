@@ -3,7 +3,7 @@
 // throwaway HOME: the real Keychain is never reachable from this test.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -80,6 +80,10 @@ if [[ "$cmd" == "enc" ]]; then
     tail -n +2 "$in" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(Buffer.from(s,"base64")))'
     exit 0
   fi
+  if [[ -n "$STUB_ENC_BARRIER" ]]; then
+    : > "$STUB_ENC_BARRIER/paused"
+    while [[ ! -e "$STUB_ENC_BARRIER/release" ]]; do sleep 0.05; done
+  fi
   if [[ -n "$STUB_OPENSSL_FAIL" ]]; then echo PARTIAL > "$out"; exit 1; fi
   { echo "OPENSSL-STUB"; node -e 'let b=[];process.stdin.on("data",d=>b.push(d)).on("end",()=>process.stdout.write(Buffer.concat(b).toString("base64")))'; } > "$out"
   exit 0
@@ -103,6 +107,10 @@ for a in "$@"; do
   case "$a" in -*) ;; *) if [[ -z "$src" ]]; then src="$a"; else dst="$a"; fi ;; esac
 done
 if [[ "$src" == *.partial.* && "$dst" == *-openssl.enc ]]; then
+  if [[ -n "$STUB_MV_BARRIER" ]]; then
+    : > "$STUB_MV_BARRIER/paused"
+    while [[ ! -e "$STUB_MV_BARRIER/release" ]]; do sleep 0.05; done
+  fi
   [[ -n "$STUB_MV_FAIL" ]] && exit 1
   if [[ -n "$STUB_MV_TERM" ]]; then kill -TERM "$PPID"; sleep 1; exit 1; fi
   if [[ -n "$STUB_MV_KILL" ]]; then kill -KILL "$PPID"; exit 1; fi
@@ -112,7 +120,15 @@ exec ${REAL_MV} "$@"
 // OpenSSL scenarios get the system tools minus every encryption engine and the
 // stubbed commands, so the script can only pick the openssl stub even on hosts
 // that have age, gpg or openssl in /usr/bin.
-const HIDDEN_TOOLS = new Set(['security', 'age', 'gpg', 'gpg2', 'openssl', 'pgrep', 'mv']);
+const REAL_LN = ['/bin/ln', '/usr/bin/ln'].find((p) => existsSync(p));
+// ln stub (OpenSSL scenarios): the real ln, except that STUB_LN_FAIL_HMAC fails
+// the snapshot of the previous sidecar (a partial snapshot acquisition).
+const LN_STUB = `#!/bin/bash
+last="\${@: -1}"
+if [[ -n "$STUB_LN_FAIL_HMAC" && "$last" == *-prior-openssl.enc.hmac ]]; then exit 1; fi
+exec ${REAL_LN} "$@"
+`;
+const HIDDEN_TOOLS = new Set(['security', 'age', 'gpg', 'gpg2', 'openssl', 'pgrep', 'mv', 'ln']);
 function systemBin(dir) {
   const out = path.join(dir, 'sysbin');
   mkdirSync(out);
@@ -137,7 +153,7 @@ function sandbox(t, { engine = 'age' } = {}) {
   const tmp = path.join(dir, 'tmp');
   for (const d of [bin, path.join(stub, 'items'), path.join(home, 'Library/Mobile Documents/com~apple~CloudDocs'), tmp]) mkdirSync(d, { recursive: true });
   const stubs = engine === 'openssl'
-    ? [['security', SECURITY_STUB], ['openssl', OPENSSL_STUB], ['pgrep', PGREP_STUB], ['mv', MV_STUB]]
+    ? [['security', SECURITY_STUB], ['openssl', OPENSSL_STUB], ['pgrep', PGREP_STUB], ['mv', MV_STUB], ['ln', LN_STUB]]
     : [['security', SECURITY_STUB], ['age', AGE_STUB], ['pgrep', PGREP_STUB]];
   for (const [name, body] of stubs) {
     writeFileSync(path.join(bin, name), body);
@@ -176,6 +192,16 @@ function sandbox(t, { engine = 'age' } = {}) {
     run(script, args = [], { input = '', extraEnv = {} } = {}) {
       const r = spawnSync('bash', [script, ...args], { env: { ...env, ...extraEnv }, input, encoding: 'utf8', cwd: ROOT });
       return { status: r.status, out: `${r.stdout}${r.stderr}` };
+    },
+    /** Like run(), but in the background: `done` resolves with { status, signal, out }. */
+    start(script, args = [], { input = '', extraEnv = {} } = {}) {
+      const child = spawn('bash', [script, ...args], { env: { ...env, ...extraEnv }, cwd: ROOT });
+      let out = '';
+      child.stdout.on('data', (d) => { out += d; });
+      child.stderr.on('data', (d) => { out += d; });
+      child.stdin.end(input);
+      const done = new Promise((resolve) => child.on('close', (status, signal) => resolve({ status, signal, out })));
+      return { child, done };
     },
     backups() { return existsSync(icloud) ? readdirSync(icloud) : []; },
     decodeBackup(file) {
@@ -302,7 +328,25 @@ const VAULT_3 = JSON.stringify({ ...JSON.parse(VAULT), OPENROUTER_API_KEY: SECRE
 const opensslBackup = (box, pw, extraEnv = {}) => box.run(BACKUP, [], { input: `${pw}\n${pw}\n`, extraEnv });
 const verify = (box, file, pw) => box.run(RESTORE, ['--verify', path.join(box.icloud, file)], { input: `${pw}\n` });
 /** Every file in the backup folder with its exact bytes. */
-const folderState = (box) => Object.fromEntries(box.backups().sort().map((f) => [f, readFileSync(path.join(box.icloud, f)).toString('base64')]));
+const folderState = (box) => Object.fromEntries(box.backups().sort().map((f) => {
+  const file = path.join(box.icloud, f);
+  if (!lstatSync(file).isDirectory()) return [f, readFileSync(file).toString('base64')];
+  return [f, `dir:${readdirSync(file).sort().map((e) => `${e}=${readFileSync(path.join(file, e), 'utf8')}`).join(',')}`];
+}));
+const PW_B = 'TEST-pass-b';
+/** A file barrier the stubs wait on: they create `paused`, then block until `release` exists. */
+function barrier(box, name) {
+  const dir = path.join(box.stub, `barrier-${name}`);
+  mkdirSync(dir);
+  return { dir, paused: () => existsSync(path.join(dir, 'paused')), release: () => writeFileSync(path.join(dir, 'release'), '') };
+}
+async function waitFor(check, what, timeoutMs = 30000) {
+  const start = Date.now();
+  while (!check()) {
+    if (Date.now() - start > timeoutMs) throw new Error(`timed out waiting for ${what}`);
+    await new Promise((r) => setTimeout(r, 20));
+  }
+}
 
 function opensslWithPair(t) {
   const box = sandbox(t, { engine: 'openssl' });
@@ -358,6 +402,77 @@ test('openssl: a run killed between the two renames keeps the previous pair rest
   assert.match(next.out, /interrupted/);
   assert.deepEqual(folderState(box), after, 'the refused run changes nothing');
   for (const [name, bytes] of Object.entries(after)) assertNoSecrets(Buffer.from(bytes, 'base64').toString('utf8'), name);
+  // Recovery: clearing a leftover lock alone is not enough while the kept pair
+  // is there; once Bradley has dealt with that pair, backups work again.
+  rmSync(path.join(box.icloud, `${enc}.lock`), { recursive: true, force: true });
+  const stillKept = opensslBackup(box, PW_NEW);
+  assert.equal(stillKept.status, 1, stillKept.out);
+  assert.equal(folderState(box)[prior], before[enc], 'the kept ciphertext survives a run after the lock was removed');
+  assert.equal(folderState(box)[`${prior}.hmac`], before[`${enc}.hmac`], 'the kept sidecar survives too');
+  rmSync(path.join(box.icloud, prior));
+  rmSync(path.join(box.icloud, `${prior}.hmac`));
+  const recovered = opensslBackup(box, PW_NEW);
+  assert.equal(recovered.status, 0, recovered.out);
+  const rv = verify(box, enc, PW_NEW);
+  assert.equal(rv.status, 0, rv.out);
+});
+
+test('openssl: overlapping runs never mix pairs; exactly one publishes a coherent, restorable pair', async (t) => {
+  for (const withPredecessor of [true, false]) {
+    const label = withPredecessor ? 'over an existing pair' : 'first backup of the day';
+    const box = sandbox(t, { engine: 'openssl' });
+    box.setItem('secrets-vault', VAULT);
+    if (withPredecessor) assert.equal(opensslBackup(box, PW_OLD).status, 0);
+    box.setItem('secrets-vault', VAULT_3);
+    const bEnc = barrier(box, 'b-enc');
+    const aMv = barrier(box, 'a-mv');
+    // B gets past every start-up check, then pauses inside encryption.
+    const b = box.start(BACKUP, [], { input: `${PW_B}\n${PW_B}\n`, extraEnv: { STUB_ENC_BARRIER: bEnc.dir } });
+    await waitFor(bEnc.paused, `${label}: B paused in encryption`);
+    // A runs until it sits between publishing its sidecar and its ciphertext,
+    // unless it is turned away first.
+    const a = box.start(BACKUP, [], { input: `${PW_NEW}\n${PW_NEW}\n`, extraEnv: { STUB_MV_BARRIER: aMv.dir } });
+    let aResult = null;
+    a.done.then((r) => { aResult = r; });
+    await waitFor(() => aMv.paused() || aResult !== null, `${label}: A between its renames or finished`);
+    bEnc.release();
+    const bResult = await b.done;
+    aMv.release();
+    aResult = await a.done;
+    const winners = [[aResult, PW_NEW], [bResult, PW_B]].filter(([r]) => r.status === 0);
+    assert.equal(winners.length, 1, `${label}: exactly one run publishes (A ${aResult.status}, B ${bResult.status})\n${aResult.out}\n${bResult.out}`);
+    const files = box.backups().sort();
+    assert.equal(files.length, 2, `${label}: only the final pair is left: ${files.join(', ')}`);
+    const v = verify(box, files[0], winners[0][1]);
+    assert.equal(v.status, 0, `${label}: the published pair is coherent and restorable: ${v.out}`);
+    assert.match(v.out, /Total: 3 keys/);
+  }
+});
+
+test('openssl: a run started while another is mid-publication changes none of its files', async (t) => {
+  const { box, enc } = opensslWithPair(t);
+  const aMv = barrier(box, 'a-mv');
+  const a = box.start(BACKUP, [], { input: `${PW_NEW}\n${PW_NEW}\n`, extraEnv: { STUB_MV_BARRIER: aMv.dir } });
+  await waitFor(aMv.paused, 'A paused between its renames');
+  const during = folderState(box);
+  const b = box.run(BACKUP, [], { input: `${PW_B}\n${PW_B}\n` });
+  assert.equal(b.status, 1, b.out);
+  assert.deepEqual(folderState(box), during, "the losing run changed nothing the winner owns (snapshots, sidecar, lock)");
+  aMv.release();
+  const ar = await a.done;
+  assert.equal(ar.status, 0, ar.out);
+  assert.deepEqual(box.backups().sort(), [enc, `${enc}.hmac`]);
+  const v = verify(box, enc, PW_NEW);
+  assert.equal(v.status, 0, v.out);
+  assert.match(v.out, /Total: 3 keys/);
+});
+
+test('openssl: a failure while taking the snapshots leaves the existing pair, no snapshot and no lock', (t) => {
+  const { box, before } = opensslWithPair(t);
+  const r = opensslBackup(box, PW_NEW, { STUB_LN_FAIL_HMAC: '1' });
+  assert.notEqual(r.status, 0);
+  assert.deepEqual(folderState(box), before);
+  assert.equal(opensslBackup(box, PW_NEW).status, 0, 'the next run is not blocked');
 });
 
 test('openssl: a first backup of the day that fails between the two renames leaves no half pair', (t) => {

@@ -28,6 +28,9 @@ real.
       back exactly.
     - A run killed outright leaves that snapshot, which restore-keys accepts
       directly. The next run then refuses until it is checked.
+    - Only the run holding the per-output lock (`<backup>.lock`, created
+      with `mkdir`) publishes, snapshots or rolls back. A concurrent run
+      that cannot take the lock exits 1 and changes nothing.
   - It falls back to legacy per-key items (names from `SUPPORTED_SECRET_KEYS`
     in `main.rs`) **only** on item-not-found (exit 44). Denied access is an
     error, both for the vault item and for every legacy key. A legacy key it
@@ -119,6 +122,40 @@ unchanged.
 of 22. The two new coverage-only tests (the successful re-run and the
 encryption failure) already passed. After the fix, 22/22 passed. The raw
 logs are in `repair1-logs/` in the task folder.
+
+## Repair cycle 2 (Sol's review of `c15f8d520`)
+
+Sol confirmed that both cycle-1 fixes are in place for a single run, and
+found one remaining P2: two concurrent openssl runs could both pass the
+early snapshot check.
+
+- **The race:** A takes the snapshots and publishes its new sidecar. B, whose
+  own snapshot `ln` then fails, rolled back A's snapshots in its cleanup. A
+  then published its ciphertext and reported success, leaving A's
+  ciphertext with the old sidecar and no kept copy of the old ciphertext.
+- **Fix:**
+  - Each openssl run takes an exclusive per-output lock (`mkdir
+    <backup>.lock`) before encrypting.
+  - The snapshot check now runs under the lock.
+  - Cleanup releases the lock only if this run owns it, and rollback runs
+    only inside publication, which only the lock holder can reach.
+  - The formats, names, engines and refusal behavior are unchanged. A
+    killed run leaves the lock, so the next run refuses.
+- **New deterministic tests:** they use file barriers in the stub `openssl`
+  (paused during encryption) and stub `mv` (paused between the two renames),
+  rather than timing.
+  - Two overlapping runs, over an existing pair and as the first backup of
+    the day: exactly one publishes, and the pair it leaves is coherent and
+    restorable with the winner's passphrase.
+  - A run started while another is mid-publication exits 1 and leaves every
+    file, snapshot and the lock byte-identical.
+  - A failed snapshot of the sidecar (stub `ln`) leaves the existing pair,
+    no snapshot and no lock.
+  - After a killed run: removing only the lock still refuses and keeps the
+    pair; removing the kept pair as well lets backups resume.
+- **Red first:** against repair cycle 1, the new overlap test failed with
+  "HMAC mismatch". The suite was 25/26. After the fix, 26/26 passed. The raw
+  logs are in `repair2-logs/`.
 
 ## Mutation proof
 

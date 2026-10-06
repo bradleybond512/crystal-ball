@@ -1,7 +1,9 @@
 # R4-BUG-006 validation — backup and restore the `secrets-vault`
 
 Validated September 30, 2026 on branch `claude/r4-bug-006-vault-backup`
-(base `a255546ee`). Approved design (merge by default):
+(base `a255546ee`). On October 6 it was rebased onto `main` at `0c83415a6`
+and re-validated (see "Rebase (October 6)"). Approved design (merge by
+default):
 [plan](../plans/2026-09-30-r4-bug-006-vault-backup.md).
 
 **No real Keychain access.** Every run used stub `security`, `age` and `pgrep`
@@ -53,11 +55,54 @@ real.
 - `lint:shell`, `lint:md` and ESLint on the new files: clean.
 - Agentic gate: see the PR description.
 
+## Rebase (October 6)
+
+- **Rebase range:** only this PR's commit was replayed:
+  `git -c rerere.enabled=false rebase --onto 0c83415a6 a255546ee`.
+  - The one conflict, `scripts/targeted-tests-overrides.json`, was resolved
+    as the union of `main`'s mappings and this PR's three `test:keys-backup`
+    mappings, with nothing dropped.
+  - `package.json` and CLAUDE.md merged without conflicts. The only
+    `package.json` change against `main` is the `test:keys-backup` script.
+- **Unchanged since September 30:**
+  - `backup-keys.sh`, `restore-keys.sh`, `vault-json.mjs` and the test file
+    are byte-identical, with the same hashes as in the table below.
+  - `src-tauri/src/main.rs`, which supplies the supported key names, has not
+    changed since the old base.
+- **Results on Bradley's Mac** (Node 22.23.1; the tests run the scripts
+  with `/bin/bash` 3.2.57 and stub `security`, `age` and `pgrep`):
+  - `test:keys-backup`: 17/17.
+  - The other suites and the agentic gate are listed in the task's result
+    file.
+
 ## Mutation proof
 
-Each mutation was applied alone against `npm run test:keys-backup` (baseline
-17/0 before and after). The table records the SHA-256 prefix of the file
-before mutating. Every file was restored and its hash re-verified.
+**First run (September 30):** each mutation was applied alone against
+`npm run test:keys-backup` (baseline 17/0 before and after). That run kept
+only a summary table, with no applied diffs, raw output or post-restore
+hashes; it is preserved as `original-q5-evidence/`.
+
+**Regenerated proof (October 6):**
+
+- **Where it ran:** an isolated QA worktree (`.worktrees/claude-pr1763-qa`)
+  detached at the rebased commit `96611cc3d`.
+- **Command:** `node --test --test-reporter=tap
+  tests/keys-backup-restore.test.mjs`, with the same stub fixtures.
+- **Each mutation:**
+  1. Checks that `git status` is clean.
+  2. Applies one edit and records a non-empty `git diff`.
+  3. Keeps the raw TAP output and the failing assertions.
+  4. Restores the file, then checks its SHA-256 and that `git status` is
+     clean again.
+- **Baseline:** 17/17 before and after.
+- **Evidence location:**
+  `~/Documents/Codex/2026-10-04/task/approved-batch/pr1763/mutation-evidence/`:
+  - `<id>.diff`;
+  - `<id>.test.log`;
+  - `<id>.restore.log`;
+  - `manifest.json`.
+- **Result:** all 13 turned red again, with the same pass/fail counts as the
+  first run.
 
 | Mutation | File (sha before) | Pass/fail | Red test(s) |
 |---|---|---|---|

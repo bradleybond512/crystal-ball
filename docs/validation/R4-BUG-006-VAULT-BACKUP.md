@@ -170,6 +170,50 @@ The first pass surfaced a surviving mutant: a non-string value was still
 rejected, but by an accidental `TypeError` rather than by the validation. The
 helper test now pins the exact validation messages.
 
+**Repair cycle 1 proof:**
+
+- **Where it ran:** the same isolated QA worktree, detached at `c15f8d520`
+  (the repair commit), with stub fixtures only.
+- **Baseline:** 23/23 before and after.
+- **Evidence location:**
+  `~/Documents/Codex/2026-10-04/task/approved-batch/pr1763/mutation-evidence-repair1/`:
+  - `<id>.diff`;
+  - `<id>.test.log`;
+  - `<id>.restore.log`;
+  - `manifest.json`.
+- **Proofs re-run, because `backup-keys.sh` changed** (now
+  `6b8ea6ded7e1`):
+  - E1, E2 and E3;
+  - E3b, with an adapted edit because `cleanup()` was rewritten.
+- **New proofs:**
+  - R1–R2 cover the legacy error handling.
+  - R3–R9 cover the openssl pair: rollback, both snapshots, the `-ef` check,
+    the refusal after a killed run, snapshot removal on success, and no half
+    pair on a first-run failure.
+- **Proofs reused:** E4–E12 from the October 6 run at `96611cc3d`
+  (`mutation-evidence/`). Their guarded code is byte-identical
+  (`restore-keys.sh` `bf178a99a0c5`, `vault-json.mjs` `5cf423d22936`), and
+  the tests that turn red are unchanged. The fixture's default (age) setup
+  behaves the same; the repair only added opt-in stub switches.
+
+**Result: all 13 new proofs turned red.**
+
+| Id | Mutation | Pass/fail |
+|---|---|---|
+| E1 | legacy fallback on denied vault access | 22/1 |
+| E2 | plaintext staged on disk | 21/2 |
+| E3 | encrypts straight to the final name | 18/5 |
+| E3b | partial file not cleaned up | 19/4 |
+| R1 | denied legacy key skipped again | 22/1 |
+| R2 | missing legacy key treated as an error | 20/3 |
+| R3 | no rollback of a half-published pair | 21/2 |
+| R4 | previous ciphertext not snapshotted | 22/1 |
+| R5 | previous sidecar not snapshotted | 21/2 |
+| R6 | rollback without the `-ef` check | 22/1 |
+| R7 | no refusal after an interrupted publication | 22/1 |
+| R8 | snapshot left after a successful publication | 22/1 |
+| R9 | new file without a predecessor kept on rollback | 22/1 |
+
 ## For Bradley (manual, when convenient)
 
 1. `npm run backup-keys -- --dry-run`. Choose **Allow** if macOS asks. You

@@ -38,7 +38,7 @@ merged PRs, newest run per name. 28 were green. The 2 misses were Dependabot
 Cargo-only PRs where static-lint was missing (#1709, #1717). That led to the
 approved amendment above. There were no non-success results.
 
-## Actual validation
+## September 30 validation (original source)
 
 - `test:main-sync-gate` (new, 13 tests) and `main-sync-agent` (18) pass
   31/31 on Linux (Node 22).
@@ -50,7 +50,7 @@ approved amendment above. There were no non-success results.
   `test:eslint-runner`, `test:main-sync-gate`.
 - ESLint on the changed files and the agentic gate: see the PR description.
 
-## Mutation proof
+## September 30 mutation history (original source)
 
 Each mutation was applied alone against `main-sync-check-gate`,
 `main-sync-agent` and `lint-workflow` (baseline 34/0 before and after,
@@ -94,34 +94,86 @@ Revert the commit. The gate then goes back to the protection list only,
 without pagination or newest-run handling, and static-lint gets its path
 filter back.
 
-## October 8 Codex repair — preliminary code freeze
+## October 8 Codex repair — fresh local evidence
 
-The original Sol review found that a completed success could outrank a newer
-queued attempt whose start and completion clocks are absent. The integrated
-pre-fix regression run produced `16 pass / 10 fail`. The repair compares
-corresponding completion, start, and positive identity fields separately;
-missing clocks are not silently older. Conflicting attempts whose latest state
-cannot be established yield `unknown`, which blocks the gate. All contenders
-are retained so response permutations cannot discard an unorderable pending
-attempt. A determinate newer success still clears obsolete failures.
+The existing Sol P1 finding was reproduced before the repair with the integrated
+new regression suite: `16 pass / 10 fail`. An older completed success incorrectly
+hid a newer queued attempt with missing start/completion clocks, including both
+response orders and injected commit/merged-PR verification paths.
 
-Integration starts from canonical main `b9122ab23e2658aa6628bae8702dde6b01a1ae61`
-and only the original own commit `c7d25d0f0afb2c8eb993a2188ab7789604208ea3`.
-Main's `npm ci --ignore-scripts` and install-script test selection are preserved.
-The pinned set, pagination, merged-PR fallback flow, and actual installer path
-are unchanged. Tests use injected GitHub fixtures; no real main-sync or install
-operation was run.
+The repair compares corresponding valid completion clocks, then start clocks,
+then positive identities. A missing clock is not silently older. Check-run
+identity is compared within its own entry kind. An incomplete run starting
+strictly after another run completed is demonstrably newer; overlapping clocks
+without enough identity remain ambiguous. Conflicting contenders without a
+provably newest state yield `unknown`, which blocks the gate. Keeping all
+contenders prevents a pairwise response-order fold from dropping an unorderable
+pending attempt. Determinate later successes still clear obsolete failures.
 
-Actual Node 22 results before this preliminary freeze:
+Integration uses canonical main `b9122ab23e2658aa6628bae8702dde6b01a1ae61` and the
+original own PR commit `c7d25d0f0afb2c8eb993a2188ab7789604208ea3`. Main's
+`npm ci --ignore-scripts` and existing install-script test selection are preserved.
+Pinned checks, pagination, merged-PR fallback flow, and actual installer path
+remain as designed. Fixtures simulate GitHub responses. No real main-sync,
+install, launch-agent setup, release, or version change was performed.
 
-- Main-sync gate, agent, and workflow fixtures: `48 pass / 0 fail`.
-- Install-script fixtures: `56 pass / 0 fail`.
-- Data fixtures: `1268 pass / 0 fail` before the last additional permutation test.
-- ESLint-runner fixtures: `10 pass / 0 fail`.
-- Changed-file ESLint and lockfile validation: exit `0`.
-- Fresh `npm ci --ignore-scripts --no-audit --no-fund`: exit `0`, lockfile unchanged.
+Actual Node 22 commands and results:
 
-This local code commit establishes the clean starting point for fresh mutation
-proofs. Mutation evidence and the final full gate will be recorded in the
-following evidence update. Independent Sonnet medium review and publication
-remain pending; no approval verdict has been recorded.
+| Command | Actual result |
+|---|---|
+| `node --test tests/main-sync-check-gate.test.mjs tests/main-sync-agent.test.mjs tests/lint-workflow.test.mjs` | `48 pass / 0 fail` before and after all mutations |
+| `npm run test:install-scripts` | `56 pass / 0 fail` |
+| `npm run test:data` (initial selected run, before last permutation fixture) | `1268 pass / 0 fail` |
+| `npm run test:eslint-runner` | `10 pass / 0 fail` |
+| Changed-file ESLint and `npm run lockfile:check` | Both exit `0` |
+| `npm ci --ignore-scripts --no-audit --no-fund` | Exit `0`, lockfile unchanged |
+
+The final frozen review payload includes the exact-head repository gate's
+actual log and result. Independent Sonnet medium review and publication remain
+pending; no approval verdict has been recorded.
+
+### Fresh mutation proof
+
+All 23 mutations were applied separately from clean implementation commit
+`34830ae9992ff9f4b60add90fe1d5b9192c644fb`. Each actual Git diff was checked,
+48-test fixtures went red with named assertion failures, the exact source bytes
+were restored, and Git status returned clean. The restored suite was
+`48 pass / 0 fail`. [Proof manifest](R4-SEC-003-QUEUED-ATTEMPTS-MUTATIONS.json)
+records commands, full before/mutated/restored checksums, actual counts and failing
+tests, and raw log/diff digests. Raw logs/diffs are retained privately for review.
+All 23 saved patches were applied to scratch copies of the frozen source and
+matched the executed mutant checksums. Two saved patches lost a final blank
+context line during serialization; the manifest records the correction and
+original digest. Their actual mutation runs and logs were unchanged.
+The original 18 behaviors and the new missing-clock/ambiguity behaviors are
+covered by these fresh proofs; shared mutation targets are executed once.
+
+| Mutation | Actual pass/fail | Restored file checksum prefix |
+|---|---|---|
+| restore-coalesced-ordering | 37/11 | 7b558ce71a9edaf1 |
+| missing-completion-ranked-oldest | 39/9 | 7b558ce71a9edaf1 |
+| ignore-start-comparison | 45/3 | 7b558ce71a9edaf1 |
+| streaming-fold-discards-contenders | 45/3 | 7b558ce71a9edaf1 |
+| ambiguity-accepted-as-success | 41/7 | 7b558ce71a9edaf1 |
+| remove-nonoverlap-proof | 47/1 | 7b558ce71a9edaf1 |
+| required-union-removed | 44/4 | 7b558ce71a9edaf1 |
+| verification-bypasses-pinned-set | 45/3 | 7b558ce71a9edaf1 |
+| pagination-removed | 47/1 | 7b558ce71a9edaf1 |
+| default-check-page-size | 47/1 | 7b558ce71a9edaf1 |
+| oldest-dominant-run | 36/12 | 7b558ce71a9edaf1 |
+| first-response-entry-wins | 30/18 | 7b558ce71a9edaf1 |
+| last-response-entry-wins | 32/16 | 7b558ce71a9edaf1 |
+| identity-order-inverted | 43/5 | 7b558ce71a9edaf1 |
+| advisory-audit-pinned | 46/2 | 7b558ce71a9edaf1 |
+| smoke-unpinned | 43/5 | 7b558ce71a9edaf1 |
+| pinned-set-mutable | 47/1 | 7b558ce71a9edaf1 |
+| empty-protection-warning-removed | 47/1 | 7b558ce71a9edaf1 |
+| pr-fallback-bypasses-pinned-set | 47/1 | 7b558ce71a9edaf1 |
+| blank-ndjson-parsed | 44/4 | 7b558ce71a9edaf1 |
+| static-lint-path-filter-restored | 47/1 | 254a83bb0c6d5bbf |
+| semgrep-context-renamed | 47/1 | 0b8896dfb90e7ac6 |
+| cargo-deny-path-ignore-added | 47/1 | 3ece0b530b43f36a |
+
+Rollback: revert the bounded repair to the original PR ordering behavior, which
+restores the reproduced P1. A full PR revert also removes the pinned-check and
+pagination protections documented in the original September 30 section.

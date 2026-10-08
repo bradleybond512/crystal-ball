@@ -1,0 +1,521 @@
+{
+  "startedAt": "2026-10-08T15:32:47.067112+00:00",
+  "mutationBaseCodeSha": "34830ae9992ff9f4b60add90fe1d5b9192c644fb",
+  "command": [
+    "node",
+    "--test",
+    "tests/main-sync-check-gate.test.mjs",
+    "tests/main-sync-agent.test.mjs",
+    "tests/lint-workflow.test.mjs"
+  ],
+  "baseline": {
+    "exit": 0,
+    "pass": 48,
+    "fail": 0,
+    "logSha256": "bfa32cce7390916badd0ceebd068973b4555b450232235bc4b2ffb60ec51c325",
+    "failingTests": []
+  },
+  "cases": [
+    {
+      "name": "restore-coalesced-ordering",
+      "file": "scripts/sync-main-to-mac.mjs",
+      "beforeSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "mutationApplied": true,
+      "mutationSha256": "649fd5c455675be6b47bbc7c9197997f57d42ac08bb96a96f30dd297edbc4ae2",
+      "diffSha256": "2a7c247d1c5fbd36db2b5c3936a32264d0dd120b1ee9f5917fbb20de79d8c425",
+      "exit": 1,
+      "pass": 37,
+      "fail": 11,
+      "logSha256": "b3f10f30ddf7a8a1e5b503df179ebcabe68d6baddb2c8e7b95cff2288181c149",
+      "failingTests": [
+        "a newer queued check run blocks an older completed success in both response orders",
+        "overlapping attempts use identity when available and block ambiguous clocks without identity",
+        "equal completion timestamps compare start times before opposing IDs",
+        "a queued rollup entry without identity or clocks cannot inherit a completed success",
+        "three mixed-metadata attempts block consistently across all response permutations",
+        "an unorderable pending attempt is not forgotten between ordered successes",
+        "conflicting states with indistinguishable metadata block in both response orders",
+        "status updates tied in time compare creation times before IDs",
+        "invalid clocks and nonpositive IDs do not establish a newer attempt",
+        "verification rejects a pinned check with a newer queued commit attempt",
+        "verification rejects an ambiguous queued attempt in the merged-PR rollup"
+      ],
+      "restoredSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "statusCleanAfterRestore": true
+    },
+    {
+      "name": "missing-completion-ranked-oldest",
+      "file": "scripts/sync-main-to-mac.mjs",
+      "beforeSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "mutationApplied": true,
+      "mutationSha256": "ef8216c0e863c7287d0605f105a0b68731e5db160bb26d88ce2372385fefb43f",
+      "diffSha256": "2d91f812747388b82b6d7b7b90eadcf9d9ccbabff2de640b3a1f32fd8c87eef9",
+      "exit": 1,
+      "pass": 39,
+      "fail": 9,
+      "logSha256": "e8fce4a0abdff657a02afb5aa32b7c48bd47926b970841f7ab9e09e5d69b9a04",
+      "failingTests": [
+        "the newest check run decides, whichever order the API lists them in",
+        "a newer queued check run blocks an older completed success in both response orders",
+        "overlapping attempts use identity when available and block ambiguous clocks without identity",
+        "a queued rollup entry without identity or clocks cannot inherit a completed success",
+        "a no-ID active run starting after the old completion is determinately newer",
+        "three mixed-metadata attempts block consistently across all response permutations",
+        "an unorderable pending attempt is not forgotten between ordered successes",
+        "verification rejects a pinned check with a newer queued commit attempt",
+        "verification rejects an ambiguous queued attempt in the merged-PR rollup"
+      ],
+      "restoredSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "statusCleanAfterRestore": true
+    },
+    {
+      "name": "ignore-start-comparison",
+      "file": "scripts/sync-main-to-mac.mjs",
+      "beforeSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "mutationApplied": true,
+      "mutationSha256": "cb4788e2e13191686d05a0f95b1b0f72fd40d89731d4f5f7dd99dabb8e9d5189",
+      "diffSha256": "6ce3ba161bf23070027140c70c3e5f02fbfb59d355c7afc6fecdb7f7bb4f5f96",
+      "exit": 1,
+      "pass": 45,
+      "fail": 3,
+      "logSha256": "c2a0fdfe392ef06287cc93605c510e3626a8f6d06b4ff03a49c95fb9d2a2e505",
+      "failingTests": [
+        "equal completion timestamps compare start times before opposing IDs",
+        "a determinate newer success unblocks every obsolete attempt in all permutations",
+        "status updates tied in time compare creation times before IDs"
+      ],
+      "restoredSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "statusCleanAfterRestore": true
+    },
+    {
+      "name": "streaming-fold-discards-contenders",
+      "file": "scripts/sync-main-to-mac.mjs",
+      "beforeSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "mutationApplied": true,
+      "mutationSha256": "1a6fc6efaa8b0ce4ff4c2c52d3dc3e90cd3cf2c8994c5643ee0e62cacb2db3e6",
+      "diffSha256": "e9b7d80e7f0f94981bb88617a49a919dfe77e5403aacbfddbccaca56da5b00fc",
+      "exit": 1,
+      "pass": 45,
+      "fail": 3,
+      "logSha256": "44d4772686200af9044ea4e40575da59ecb4398a224cf8395d6e5f2d9c0235d1",
+      "failingTests": [
+        "three mixed-metadata attempts block consistently across all response permutations",
+        "an unorderable pending attempt is not forgotten between ordered successes",
+        "conflicting states with indistinguishable metadata block in both response orders"
+      ],
+      "restoredSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "statusCleanAfterRestore": true
+    },
+    {
+      "name": "ambiguity-accepted-as-success",
+      "file": "scripts/sync-main-to-mac.mjs",
+      "beforeSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "mutationApplied": true,
+      "mutationSha256": "e332955625d046820267bea90cc9bebb5aefe12fc8a618bdee67cd4cb3181d68",
+      "diffSha256": "a991153ec26b6abaa76b4efdfa54637c87f0361415d68cadb46f2e961d9bdc87",
+      "exit": 1,
+      "pass": 41,
+      "fail": 7,
+      "logSha256": "f09e6de48c17f36ef00d3777dc66895ebdf7c713951723cf4f446b737cf89cb3",
+      "failingTests": [
+        "overlapping attempts use identity when available and block ambiguous clocks without identity",
+        "a queued rollup entry without identity or clocks cannot inherit a completed success",
+        "three mixed-metadata attempts block consistently across all response permutations",
+        "an unorderable pending attempt is not forgotten between ordered successes",
+        "conflicting states with indistinguishable metadata block in both response orders",
+        "invalid clocks and nonpositive IDs do not establish a newer attempt",
+        "verification rejects an ambiguous queued attempt in the merged-PR rollup"
+      ],
+      "restoredSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "statusCleanAfterRestore": true,
+      "originalTrimmedDiffSha256": "bba520bb9e72ee391e27e44c10ac27be21cf96f7f48d80d593dbbf58b6572789",
+      "serializationCorrection": "Restored final blank context line lost by strip(); no source mutation or test rerun."
+    },
+    {
+      "name": "remove-nonoverlap-proof",
+      "file": "scripts/sync-main-to-mac.mjs",
+      "beforeSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "mutationApplied": true,
+      "mutationSha256": "eabecd7cf42bae67b9cb1c842bf049542b4d076b468b2d9f20446cecaf4d2481",
+      "diffSha256": "e7b18ef785ad0b7cdc50da887de95403cf19bf4491cad08446140c3cdf113c66",
+      "exit": 1,
+      "pass": 47,
+      "fail": 1,
+      "logSha256": "0238b43813e8456b073bfc75931b9ee40f563724edbea55f06edae89995eccca",
+      "failingTests": [
+        "a no-ID active run starting after the old completion is determinately newer"
+      ],
+      "restoredSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "statusCleanAfterRestore": true
+    },
+    {
+      "name": "required-union-removed",
+      "file": "scripts/sync-main-to-mac.mjs",
+      "beforeSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "mutationApplied": true,
+      "mutationSha256": "2cf6ca73dd46d6bf998fa4455dcc4e87e50382cdf8b33ebcdc59dde53dba708b",
+      "diffSha256": "3ac605085849b3f39c63b9e02e8467d2ee486f3b91d439fe985f8e3c762d6eef",
+      "exit": 1,
+      "pass": 44,
+      "fail": 4,
+      "logSha256": "142f645ce751da125a2be37dc251c5edcca1431eb593b5f2d750d602ea037530",
+      "failingTests": [
+        "buildRequiredChecks unions pinned and remote checks and reports gaps",
+        "an empty protection list cannot make an unchecked commit look green",
+        "a protection list that drops a pinned check still requires it",
+        "the merged-PR fallback is judged against the pinned set as well"
+      ],
+      "restoredSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "statusCleanAfterRestore": true
+    },
+    {
+      "name": "verification-bypasses-pinned-set",
+      "file": "scripts/sync-main-to-mac.mjs",
+      "beforeSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "mutationApplied": true,
+      "mutationSha256": "0d6aea7d1b08346da2be5d274af2949b4779aac61917e54a806783ff7e15d6b9",
+      "diffSha256": "33e7e2f79c7c3d19e54e0889fb62206f383d6b4858deb2b336074f7c02d48d52",
+      "exit": 1,
+      "pass": 45,
+      "fail": 3,
+      "logSha256": "49c105a4615316378d09dec8803e61aa6649e68a72f08b499ec1fc3eef8d75d2",
+      "failingTests": [
+        "an empty protection list cannot make an unchecked commit look green",
+        "a protection list that drops a pinned check still requires it",
+        "the merged-PR fallback is judged against the pinned set as well"
+      ],
+      "restoredSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "statusCleanAfterRestore": true
+    },
+    {
+      "name": "pagination-removed",
+      "file": "scripts/sync-main-to-mac.mjs",
+      "beforeSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "mutationApplied": true,
+      "mutationSha256": "152ffb5c06652326ee500792ec85f90b718f2acf99276a8158fa5b395348ac41",
+      "diffSha256": "16620bb8b50e2642fd3399715085c37cf201eef765ac19f2ccaf9d3f321a8417",
+      "exit": 1,
+      "pass": 47,
+      "fail": 1,
+      "logSha256": "d9ddf5b5da42c23a94f1a46fbf06df77ecdf71431cdc5cd71ad6f96adf38033b",
+      "failingTests": [
+        "check runs on a later API page are read (pagination)"
+      ],
+      "restoredSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "statusCleanAfterRestore": true
+    },
+    {
+      "name": "default-check-page-size",
+      "file": "scripts/sync-main-to-mac.mjs",
+      "beforeSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "mutationApplied": true,
+      "mutationSha256": "61e7e2c9d8f6ac0d795b115c3e467bb9484900537beb490c9d7d01845fee6140",
+      "diffSha256": "6a2a1201c801788e0c73f088dd03bfa0d1a1b4ae6e8f78ba02205eb0c753b6c5",
+      "exit": 1,
+      "pass": 47,
+      "fail": 1,
+      "logSha256": "bc37b475c1193a6945ef442ef0e522a6209b0f6f54a2f56cf1edb941086663c0",
+      "failingTests": [
+        "check runs on a later API page are read (pagination)"
+      ],
+      "restoredSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "statusCleanAfterRestore": true
+    },
+    {
+      "name": "oldest-dominant-run",
+      "file": "scripts/sync-main-to-mac.mjs",
+      "beforeSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "mutationApplied": true,
+      "mutationSha256": "d541a1eb120dd531d4c3148b4aabc69f7db88aa8116a5e4b8671f2b9432f97e9",
+      "diffSha256": "022c7033483dae0eb87383adc20a312ca2cdf84ac68ce2a7069ce016a19772bc",
+      "exit": 1,
+      "pass": 36,
+      "fail": 12,
+      "logSha256": "e48bb67edf4b7e293c670b970c38965cd119e0e6a41bae3a97ac128b3aaf445a",
+      "failingTests": [
+        "the newest check run decides, whichever order the API lists them in",
+        "equal timestamps fall back to the higher run id",
+        "the newest commit status and PR rollup entry decide too",
+        "a stale failure no longer blocks once the re-run is green",
+        "a newer queued check run blocks an older completed success in both response orders",
+        "overlapping attempts use identity when available and block ambiguous clocks without identity",
+        "equal completion timestamps compare start times before opposing IDs",
+        "determinate completion timestamps retain priority before opposing IDs",
+        "a no-ID active run starting after the old completion is determinately newer",
+        "a determinate newer success unblocks every obsolete attempt in all permutations",
+        "status updates tied in time compare creation times before IDs",
+        "verification rejects a pinned check with a newer queued commit attempt"
+      ],
+      "restoredSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "statusCleanAfterRestore": true
+    },
+    {
+      "name": "first-response-entry-wins",
+      "file": "scripts/sync-main-to-mac.mjs",
+      "beforeSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "mutationApplied": true,
+      "mutationSha256": "4217d647de9875611571d2fc66506a57ed34bbf8fa89c625fa7879d9c8b273c1",
+      "diffSha256": "e673d8e44a754beeae422b63d1f19446008e7cda34284dbe44681e3d50eac01c",
+      "exit": 1,
+      "pass": 30,
+      "fail": 18,
+      "logSha256": "2ba9cfdd5a661808e0bb23445a4ec32309533315dc437afbe04d7f8ef3c9fd1b",
+      "failingTests": [
+        "the newest check run decides, whichever order the API lists them in",
+        "equal timestamps fall back to the higher run id",
+        "the newest commit status and PR rollup entry decide too",
+        "a stale failure no longer blocks once the re-run is green",
+        "a newer queued check run blocks an older completed success in both response orders",
+        "overlapping attempts use identity when available and block ambiguous clocks without identity",
+        "equal completion timestamps compare start times before opposing IDs",
+        "determinate completion timestamps retain priority before opposing IDs",
+        "a queued rollup entry without identity or clocks cannot inherit a completed success",
+        "a no-ID active run starting after the old completion is determinately newer",
+        "three mixed-metadata attempts block consistently across all response permutations",
+        "an unorderable pending attempt is not forgotten between ordered successes",
+        "a determinate newer success unblocks every obsolete attempt in all permutations",
+        "conflicting states with indistinguishable metadata block in both response orders",
+        "status updates tied in time compare creation times before IDs",
+        "invalid clocks and nonpositive IDs do not establish a newer attempt",
+        "verification rejects a pinned check with a newer queued commit attempt",
+        "verification rejects an ambiguous queued attempt in the merged-PR rollup"
+      ],
+      "restoredSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "statusCleanAfterRestore": true
+    },
+    {
+      "name": "last-response-entry-wins",
+      "file": "scripts/sync-main-to-mac.mjs",
+      "beforeSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "mutationApplied": true,
+      "mutationSha256": "5b08657ee56191606a953157219d43a0b8031511cb98e4d71376c3f992c5ae72",
+      "diffSha256": "0bcdad2c4a29e27512ec2cade574470c2fd5bfe99ceed2d9107683d644923853",
+      "exit": 1,
+      "pass": 32,
+      "fail": 16,
+      "logSha256": "077cde94bf693114bb8f234d7971308dfa7ff2b075d3befc54a4435ead816b9d",
+      "failingTests": [
+        "the newest check run decides, whichever order the API lists them in",
+        "equal timestamps fall back to the higher run id",
+        "the newest commit status and PR rollup entry decide too",
+        "a newer queued check run blocks an older completed success in both response orders",
+        "overlapping attempts use identity when available and block ambiguous clocks without identity",
+        "equal completion timestamps compare start times before opposing IDs",
+        "determinate completion timestamps retain priority before opposing IDs",
+        "a queued rollup entry without identity or clocks cannot inherit a completed success",
+        "a no-ID active run starting after the old completion is determinately newer",
+        "three mixed-metadata attempts block consistently across all response permutations",
+        "an unorderable pending attempt is not forgotten between ordered successes",
+        "a determinate newer success unblocks every obsolete attempt in all permutations",
+        "conflicting states with indistinguishable metadata block in both response orders",
+        "status updates tied in time compare creation times before IDs",
+        "invalid clocks and nonpositive IDs do not establish a newer attempt",
+        "verification rejects an ambiguous queued attempt in the merged-PR rollup"
+      ],
+      "restoredSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "statusCleanAfterRestore": true
+    },
+    {
+      "name": "identity-order-inverted",
+      "file": "scripts/sync-main-to-mac.mjs",
+      "beforeSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "mutationApplied": true,
+      "mutationSha256": "431f5eaeaf330a2abd5329690a7e8dbfdb9bd71fbde524c134acec83c73ed3f8",
+      "diffSha256": "de4d0f70a4fe33fbc21c53734e2415901c044526985da8db7cb4992bf39ce11e",
+      "exit": 1,
+      "pass": 43,
+      "fail": 5,
+      "logSha256": "d11de00d5b121d2e21aa874cd8183044f55f2e33179986311eefadcfb9197dcd",
+      "failingTests": [
+        "the newest check run decides, whichever order the API lists them in",
+        "equal timestamps fall back to the higher run id",
+        "a newer queued check run blocks an older completed success in both response orders",
+        "overlapping attempts use identity when available and block ambiguous clocks without identity",
+        "verification rejects a pinned check with a newer queued commit attempt"
+      ],
+      "restoredSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "statusCleanAfterRestore": true
+    },
+    {
+      "name": "advisory-audit-pinned",
+      "file": "scripts/sync-main-to-mac.mjs",
+      "beforeSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "mutationApplied": true,
+      "mutationSha256": "0917cacbe7db7d0de72dfbf8911d76e89607ffba5dd0f18d7057965abb0b9598",
+      "diffSha256": "2541ca5f766e7f021faeb0031d2240dc8118f36d2b48d79d75c2765392d05e0a",
+      "exit": 1,
+      "pass": 46,
+      "fail": 2,
+      "logSha256": "6e8f7bbdab7597ed1ae887204fab014034e0814192d93e48315a669b028e8d71",
+      "failingTests": [
+        "the pinned minimum is exactly the approved set and leaves out the advisory audits",
+        "every pinned check comes from a workflow that runs on every pull request"
+      ],
+      "restoredSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "statusCleanAfterRestore": true
+    },
+    {
+      "name": "smoke-unpinned",
+      "file": "scripts/sync-main-to-mac.mjs",
+      "beforeSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "mutationApplied": true,
+      "mutationSha256": "434d032bab147f99c7267e67233eb94f1b924a6e3045ce19931013670e9dfeab",
+      "diffSha256": "10f7e305d59d314d861d9bd50c716073c659d495d294acb5c520d88c273eb0ec",
+      "exit": 1,
+      "pass": 43,
+      "fail": 5,
+      "logSha256": "0002071fa641817b186a8849025221c93e85e8c5a0feb8f44b61baab09a547ef",
+      "failingTests": [
+        "the pinned minimum is exactly the approved set and leaves out the advisory audits",
+        "buildRequiredChecks unions pinned and remote checks and reports gaps",
+        "verification rejects a pinned check with a newer queued commit attempt",
+        "verification rejects an ambiguous queued attempt in the merged-PR rollup",
+        "every pinned check comes from a workflow that runs on every pull request"
+      ],
+      "restoredSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "statusCleanAfterRestore": true
+    },
+    {
+      "name": "pinned-set-mutable",
+      "file": "scripts/sync-main-to-mac.mjs",
+      "beforeSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "mutationApplied": true,
+      "mutationSha256": "c26a572d11b4bda9ed14c202c5ce0c2da885eed8f2c4e18494fb37657bba30df",
+      "diffSha256": "b56ca2a9e45264e68fe0645fd474e17b00e5074417185797d2b07fc57e75265d",
+      "exit": 1,
+      "pass": 47,
+      "fail": 1,
+      "logSha256": "b0a0c71a73e1938f201e223e336051285fd4be33286134e03cbe285ac1ca6829",
+      "failingTests": [
+        "the pinned minimum is exactly the approved set and leaves out the advisory audits"
+      ],
+      "restoredSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "statusCleanAfterRestore": true
+    },
+    {
+      "name": "empty-protection-warning-removed",
+      "file": "scripts/sync-main-to-mac.mjs",
+      "beforeSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "mutationApplied": true,
+      "mutationSha256": "cf9511401eefaca15a37d592d72b2e57004285671378018be9e9002103ce4db4",
+      "diffSha256": "acc711698bedb0231e5ef2a817ef363aefccc8cce34e84c61bf5a54ba286ca35",
+      "exit": 1,
+      "pass": 47,
+      "fail": 1,
+      "logSha256": "7d9ffc42d387ff7c76d51cfe0925b41c965adbdde757b40e3fefec7d5107382d",
+      "failingTests": [
+        "an empty protection list cannot make an unchecked commit look green"
+      ],
+      "restoredSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "statusCleanAfterRestore": true
+    },
+    {
+      "name": "pr-fallback-bypasses-pinned-set",
+      "file": "scripts/sync-main-to-mac.mjs",
+      "beforeSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "mutationApplied": true,
+      "mutationSha256": "b4fda5391c3dbc0744106ed76402d10674a7f83a971d165a38a8927d0f3ba947",
+      "diffSha256": "2b9bd416b981d05681b6bc51b54826f4aea32ceaea35ad7feab93ace2207fcb3",
+      "exit": 1,
+      "pass": 47,
+      "fail": 1,
+      "logSha256": "c80db81e6e83c54fabeb4eb0428418c92639eb0f322d9e8e6b95dfb75eafa0b8",
+      "failingTests": [
+        "the merged-PR fallback is judged against the pinned set as well"
+      ],
+      "restoredSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "statusCleanAfterRestore": true
+    },
+    {
+      "name": "blank-ndjson-parsed",
+      "file": "scripts/sync-main-to-mac.mjs",
+      "beforeSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "mutationApplied": true,
+      "mutationSha256": "bbbefb4bdf460fb3daaf7acd071804b031791f820cef3b3bcad38c0caff64c5e",
+      "diffSha256": "c305cd9521640d12d8c280f07bfd9356daacb0e7c869582bf726bc103984e728",
+      "exit": 1,
+      "pass": 44,
+      "fail": 4,
+      "logSha256": "7de20d0e55abb839ccb310817297abac746f135f244fceef87a0a98a5cea7bcd",
+      "failingTests": [
+        "an empty protection list cannot make an unchecked commit look green",
+        "parseCheckRunLines reads one JSON object per line and skips blank lines",
+        "the merged-PR fallback is judged against the pinned set as well",
+        "verification rejects an ambiguous queued attempt in the merged-PR rollup"
+      ],
+      "restoredSha256": "7b558ce71a9edaf135297cea7167a050d7c1632569830755421cada71b3432ee",
+      "statusCleanAfterRestore": true,
+      "originalTrimmedDiffSha256": "d34879e7e7509f1243649a37873b796e63429c82d42de432f1b5e4a9e7ab2be2",
+      "serializationCorrection": "Restored final blank context line lost by strip(); no source mutation or test rerun."
+    },
+    {
+      "name": "static-lint-path-filter-restored",
+      "file": ".github/workflows/lint.yml",
+      "beforeSha256": "254a83bb0c6d5bbf65d55bdb5e31a6e15e38abb71a942bcadcf6c2fcda889b72",
+      "mutationApplied": true,
+      "mutationSha256": "2ae36d335585f1e0097fca87b4f1d3e96dad838d2d17a0887e3b9b75d6f15b54",
+      "diffSha256": "300ca447aef7b563f2ad0a5cab72918870ce46836bbb8d8e813645ce2794aedf",
+      "exit": 1,
+      "pass": 47,
+      "fail": 1,
+      "logSha256": "be4d17d1bcfd273842d32ee4332033a2e39d34696f09223a00eefa38e7196958",
+      "failingTests": [
+        "every pinned check comes from a workflow that runs on every pull request"
+      ],
+      "restoredSha256": "254a83bb0c6d5bbf65d55bdb5e31a6e15e38abb71a942bcadcf6c2fcda889b72",
+      "statusCleanAfterRestore": true
+    },
+    {
+      "name": "semgrep-context-renamed",
+      "file": ".github/workflows/sast.yml",
+      "beforeSha256": "0b8896dfb90e7ac6327340c0512911f05f2abfa8ff6ce85516e02d205106e199",
+      "mutationApplied": true,
+      "mutationSha256": "c17a882a74284684baf6d843bef250d7085cffcb480d2afbc73383af055ab103",
+      "diffSha256": "72bf728edf69879d75156d311c2901207a24735bb64a0446c0f41ff079476329",
+      "exit": 1,
+      "pass": 47,
+      "fail": 1,
+      "logSha256": "5313a95cd6a53823acfc320958fbcbc2978df60e20d4612b1c4483df193bc648",
+      "failingTests": [
+        "every pinned check comes from a workflow that runs on every pull request"
+      ],
+      "restoredSha256": "0b8896dfb90e7ac6327340c0512911f05f2abfa8ff6ce85516e02d205106e199",
+      "statusCleanAfterRestore": true
+    },
+    {
+      "name": "cargo-deny-path-ignore-added",
+      "file": ".github/workflows/security-audit.yml",
+      "beforeSha256": "3ece0b530b43f36a3e3763b551f5b987ccdc7d1cf08f5cc56865dc59ba02d857",
+      "mutationApplied": true,
+      "mutationSha256": "2a2b1390f19b0c52b8a842650e5d74d02ae94187cee5a483cc485bcbd57f614a",
+      "diffSha256": "fef751fb0af9aa8abe903c667b9deb05ac433f963407ba2c3c4edfabb60359a9",
+      "exit": 1,
+      "pass": 47,
+      "fail": 1,
+      "logSha256": "29ea700b463c3f38f5896772936c085e08d664fe40e6650eebf244e08b08312c",
+      "failingTests": [
+        "every pinned check comes from a workflow that runs on every pull request"
+      ],
+      "restoredSha256": "3ece0b530b43f36a3e3763b551f5b987ccdc7d1cf08f5cc56865dc59ba02d857",
+      "statusCleanAfterRestore": true
+    }
+  ],
+  "actualProofs": true,
+  "finishedAt": "2026-10-08T15:33:12.047293+00:00",
+  "restored": {
+    "exit": 0,
+    "pass": 48,
+    "fail": 0,
+    "logSha256": "7a6c4ff76ae1678b9d263a8b96a583d3053e1b0bea0a726fd7bc8d2fc7a383b9",
+    "failingTests": []
+  },
+  "allMutationsKilled": true,
+  "caseCount": 23,
+  "finalStatusClean": true,
+  "artifactIntegrity": {
+    "verifiedAt": "2026-10-08T15:40:33.245017+00:00",
+    "casesVerified": 23,
+    "serializationCorrections": 2,
+    "actualTestsRerun": false
+  }
+}

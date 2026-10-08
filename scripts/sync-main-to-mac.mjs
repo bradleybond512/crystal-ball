@@ -29,6 +29,113 @@ export const NPM_VERIFICATION_COMMANDS = [
   ['run', 'desktop:build:app:full'],
 ];
 
+// Minimum checks main-sync requires before installing, whatever branch
+// protection currently lists (R4-SEC-003 / R4-SEC-009). The enforced set is
+// PINNED ∪ remote, so an emptied or shrunken protection list cannot weaken the
+// install gate. npm-audit / cargo-audit are deliberately absent: a new
+// advisory unrelated to a commit must not freeze installs (they still alert
+// on every PR).
+export const PINNED_REQUIRED_CHECKS = Object.freeze([
+  // Branch-protection required checks.
+  'typecheck',
+  'secret-scan',
+  'actionlint',
+  'integrity-checks',
+  'release-doctor',
+  'cross-agent-review',
+  'targeted-tests',
+  // Security and quality checks branch protection does not (yet) require.
+  'Semgrep static analysis',
+  'cargo-deny',
+  'sidecar-http-guardrail',
+  'ESLint',
+  'static-lint',
+  'smoke',
+]);
+
+export function buildRequiredChecks(remoteChecks, pinned = PINNED_REQUIRED_CHECKS) {
+  const remote = (remoteChecks ?? []).filter((name) => typeof name === 'string' && name.length > 0);
+  return {
+    requiredChecks: [...new Set([...pinned, ...remote])],
+    remoteEmpty: remote.length === 0,
+    missingFromRemote: pinned.filter((name) => !remote.includes(name)),
+  };
+}
+
+/** `gh api --paginate --jq '.check_runs[]'` prints one JSON object per line across all pages. */
+export function parseCheckRunLines(text) {
+  return String(text ?? '')
+    .split('\n')
+    .filter((line) => line.trim().length > 0)
+    .map((line) => JSON.parse(line));
+}
+
+function runTime(entry, snakeCase, camelCase) {
+  const value = entry?.[snakeCase] ?? entry?.[camelCase];
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) return null;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function runMetadata(entry) {
+  const isStatus = typeof entry?.context === 'string' || entry?.__typename === 'StatusContext';
+  const id = entry?.id ?? entry?.databaseId;
+  return {
+    kind: isStatus ? 'status' : 'check',
+    completed: isStatus ? runTime(entry, 'updated_at', 'updatedAt') : runTime(entry, 'completed_at', 'completedAt'),
+    started: isStatus ? runTime(entry, 'created_at', 'createdAt') : runTime(entry, 'started_at', 'startedAt'),
+    id: Number.isSafeInteger(id) && id > 0 ? id : null,
+  };
+}
+
+// Completion, start, then identity retain the approved priority when both
+// attempts provide corresponding fields. Missing clocks do not mean older.
+function compareRuns(candidate, current) {
+  const a = runMetadata(candidate);
+  const b = runMetadata(current);
+  let comparable = false;
+  for (const field of ['completed', 'started']) {
+    if (a[field] !== null && b[field] !== null) {
+      comparable = true;
+      if (a[field] !== b[field]) return Math.sign(a[field] - b[field]);
+    }
+  }
+  if (a.kind === b.kind && a.id !== null && b.id !== null) {
+    comparable = true;
+    if (a.id !== b.id) return Math.sign(a.id - b.id);
+  }
+  // A start after another attempt completed proves non-overlap. A start
+  // before that completion cannot order overlapping attempts without IDs.
+  if (a.kind === 'check' && b.kind === 'check') {
+    if (a.completed === null && a.started !== null && b.completed !== null && a.started > b.completed) return 1;
+    if (b.completed === null && b.started !== null && a.completed !== null && b.started > a.completed) return -1;
+  }
+  return comparable ? 0 : null;
+}
+
+function newestStates(entries) {
+  const groups = new Map();
+  for (const { name, entry, state } of entries) {
+    const attempts = groups.get(name) ?? [];
+    attempts.push({ entry, state });
+    groups.set(name, attempts);
+  }
+  return new Map([...groups].map(([name, attempts]) => {
+    const states = new Set(attempts.map(attempt => attempt.state));
+    // Every possible latest attempt agrees, including single-entry groups.
+    if (states.size === 1) return [name, attempts[0].state];
+    // Keep all contenders: a streaming pairwise fold can discard an
+    // unorderable pending attempt and become green in some response orders.
+    const latest = attempts.filter(candidate => attempts.every(other => {
+      if (candidate === other) return true;
+      const order = compareRuns(candidate.entry, other.entry);
+      return order !== null && order >= 0;
+    }));
+    const latestStates = new Set(latest.map(attempt => attempt.state));
+    return [name, latestStates.size === 1 ? latest[0].state : 'unknown'];
+  }));
+}
+
 export function assertSupportedMainSyncNode(version = process.versions.node) {
   const major = Number.parseInt(String(version).split('.')[0], 10);
   if (major !== 22) {
@@ -260,31 +367,32 @@ function normalizeCheckState(value) {
 }
 
 export function collectCheckStates(checkRunsPayload, statusPayload) {
-  const states = new Map();
-  for (const checkRun of checkRunsPayload?.check_runs ?? []) {
+  // Accepts the raw API object or the flattened run list from --paginate.
+  const runs = Array.isArray(checkRunsPayload) ? checkRunsPayload : checkRunsPayload?.check_runs ?? [];
+  const entries = [];
+  for (const checkRun of runs) {
  if (checkRun?.name) {
- states.set(checkRun.name, normalizeCheckState(checkRun.conclusion ?? checkRun.status));
+ entries.push({ name: checkRun.name, entry: checkRun, state: normalizeCheckState(checkRun.conclusion ?? checkRun.status) });
  }
   }
   for (const status of statusPayload?.statuses ?? []) {
  if (status?.context) {
- states.set(status.context, normalizeCheckState(status.state));
+ entries.push({ name: status.context, entry: status, state: normalizeCheckState(status.state) });
  }
   }
-  return states;
+  return newestStates(entries);
 }
 
 export function collectStatusCheckRollupStates(statusCheckRollup = []) {
-  const states = new Map();
+  const entries = [];
   for (const entry of statusCheckRollup) {
  const name = entry?.context ?? entry?.name;
  if (!name) {
  continue;
  }
- const state = entry?.state ?? entry?.conclusion ?? entry?.status;
- states.set(name, normalizeCheckState(state));
+ entries.push({ name, entry, state: normalizeCheckState(entry?.state ?? entry?.conclusion ?? entry?.status) });
   }
-  return states;
+  return newestStates(entries);
 }
 
 export function evaluateRequiredChecks(requiredChecks, checkStates) {
@@ -324,9 +432,9 @@ export function findMergedPullRequestForCommit(pulls, sha, branch) {
   )) ?? null;
 }
 
-function readMergedPullRequestCheckStates(repoSlug, branch, sha) {
+function readMergedPullRequestCheckStates(repoSlug, branch, sha, run = runCommand) {
   const pullsPayload = JSON.parse(
- runCommand('gh', ['api', `repos/${repoSlug}/commits/${sha}/pulls`]),
+ run('gh', ['api', `repos/${repoSlug}/commits/${sha}/pulls`]),
   );
   const mergedPull = findMergedPullRequestForCommit(pullsPayload, sha, branch);
   if (!mergedPull?.number) {
@@ -334,7 +442,7 @@ function readMergedPullRequestCheckStates(repoSlug, branch, sha) {
   }
 
   const prPayload = JSON.parse(
- runCommand('gh', [
+ run('gh', [
  'pr',
  'view',
  String(mergedPull.number),
@@ -354,18 +462,26 @@ function readMergedPullRequestCheckStates(repoSlug, branch, sha) {
   };
 }
 
-async function verifyRemoteChecks(options, sha) {
+/** `run` is injectable so tests can stand in for `gh` (same pattern as runVerificationAndBuild). */
+export async function verifyRemoteChecks(options, sha, run = runCommand) {
   const requiredPayload = JSON.parse(
- runCommand('gh', ['api', `repos/${options.repoSlug}/branches/${options.branch}/protection/required_status_checks`]),
+ run('gh', ['api', `repos/${options.repoSlug}/branches/${options.branch}/protection/required_status_checks`]),
   );
-  const requiredChecks = (requiredPayload.checks ?? []).map((entry) => entry.context).filter(Boolean);
-  const checkRunsPayload = JSON.parse(
- runCommand('gh', ['api', `repos/${options.repoSlug}/commits/${sha}/check-runs`]),
+  const remoteChecks = (requiredPayload.checks ?? []).map((entry) => entry.context).filter(Boolean);
+  const { requiredChecks, remoteEmpty, missingFromRemote } = buildRequiredChecks(remoteChecks);
+  if (remoteEmpty) {
+ console.warn('[sync-main-to-mac] branch protection lists no required checks; enforcing the pinned minimum set');
+  } else if (missingFromRemote.length > 0) {
+ console.warn(`[sync-main-to-mac] branch protection does not require ${missingFromRemote.join(', ')}; main-sync still does`);
+  }
+  // Every page: this repo produces more check runs per commit than one page holds.
+  const checkRuns = parseCheckRunLines(
+ run('gh', ['api', '--paginate', `repos/${options.repoSlug}/commits/${sha}/check-runs?per_page=100`, '--jq', '.check_runs[]']),
   );
   const statusPayload = JSON.parse(
- runCommand('gh', ['api', `repos/${options.repoSlug}/commits/${sha}/status`]),
+ run('gh', ['api', `repos/${options.repoSlug}/commits/${sha}/status?per_page=100`]),
   );
-  const commitCheckStates = collectCheckStates(checkRunsPayload, statusPayload);
+  const commitCheckStates = collectCheckStates(checkRuns, statusPayload);
   const commitResult = evaluateRequiredChecks(requiredChecks, commitCheckStates);
   if (commitResult.isGreen) {
  return {
@@ -379,7 +495,7 @@ async function verifyRemoteChecks(options, sha) {
   // emitting the required push workflow contexts on the merge commit itself.
   // In that case, fall back to the merged PR's status rollup, which is the
   // source GitHub used to allow the merge in the first place.
-  const mergedPullVerification = readMergedPullRequestCheckStates(options.repoSlug, options.branch, sha);
+  const mergedPullVerification = readMergedPullRequestCheckStates(options.repoSlug, options.branch, sha, run);
   if (mergedPullVerification) {
  const prResult = evaluateRequiredChecks(requiredChecks, mergedPullVerification.checkStates);
  if (prResult.isGreen) {

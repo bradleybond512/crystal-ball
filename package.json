@@ -256,6 +256,7 @@
     "test:bundle-budget-policy": "node --test tests/bundle-budget-policy.test.mjs",
     "mcp:install": "npm ci --ignore-scripts --prefix tools/mcp-server",
     "test:mcp-deps": "node --test tests/install-mcp-deps.test.mjs",
+    "test:main-sync-gate": "node --test tests/main-sync-check-gate.test.mjs",
     "test:map-compatibility": "node --test tests/map-compatibility.test.mjs",
     "test:local-basemap": "node --import tsx --test src/components/__tests__/deckgl-local-basemap.test.mts tests/countries-geojson.test.mjs"
   },

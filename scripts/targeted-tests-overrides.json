@@ -134,7 +134,9 @@
     "test:install-scripts"
   ],
   "scripts/sync-main-to-mac.mjs": [
-    "test:install-scripts"
+    "test:install-scripts",
+    "test:main-sync-gate",
+    "test:data"
   ],
   "scripts/install-crystalball-mcp.mjs": [
     "test:install-scripts"

@@ -95,12 +95,28 @@ test('a connection failure invalidates the port and may fall back', async () => 
   assert.equal(h.calls.at(-1)!.url, `${REMOTE}/api/gdacs?limit=5`);
 });
 
-test('a caller abort never falls back', async () => {
-  const controller = new AbortController();
-  const h = harness({ local: () => { controller.abort(); throw new DOMException('aborted', 'AbortError'); } });
-  await assert.rejects(h.fetch('/api/gdacs', { signal: controller.signal }));
-  assert.equal(h.calls.some((c) => c.url.startsWith(REMOTE)), false);
+test('a caller abort neither invalidates the port nor falls back', async () => {
+  for (const target of ['/api/gdacs', '/api/health', '/api/diag', '/api/local-traffic-log']) {
+    const controller = new AbortController();
+    const error = new DOMException('aborted', 'AbortError');
+    const h = harness({ local: () => { controller.abort(); throw error; } });
+    await assert.rejects(h.fetch(target, { signal: controller.signal }), (actual) => actual === error);
+    assert.equal(h.invalidations(), 0, target);
+    assert.equal(h.calls.length, 1, 'caller cancellation stops the startup retries');
+    assert.equal(h.calls.some((c) => c.url.startsWith(REMOTE)), false, target);
+  }
 });
+
+for (const target of ['/api/health', '/api/diag', '/api/local-traffic-log']) {
+  test(`a ${target} connection failure invalidates its port without cloud fallback`, async () => {
+    const error = new TypeError('fetch failed: ECONNREFUSED');
+    const h = harness({ local: () => { throw error; } });
+    await assert.rejects(h.fetch(target), (actual) => actual === error);
+    assert.equal(h.invalidations(), 1, 'the next request must resolve a fresh confirmed port');
+    assert.equal(h.calls.length, 4, 'the existing startup retries are preserved');
+    assert.ok(h.calls.every((c) => c.url === `http://127.0.0.1:46200${target}`));
+  });
+}
 
 test('with no confirmed port nothing is sent to localhost', async () => {
   const h = harness({ ports: [null] });
@@ -134,6 +150,7 @@ test('local health and local-* targets never fall back', async () => {
     const res = await h.fetch(target);
     assert.equal(res.status, 503, target);
     assert.equal(h.calls.length, 1, target);
+    assert.equal(h.invalidations(), 0, 'an HTTP response is not a connection failure');
   }
 });
 

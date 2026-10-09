@@ -1,6 +1,6 @@
 # R4-BUG-003 validation — critical alerts bypass mute; one quiet-hours rule
 
-Validated September 30, 2026 on branch `claude/r4-bug-003-mute-quiet-hours`
+Original author validation reported September 30, 2026 on branch `claude/r4-bug-003-mute-quiet-hours`
 (base `a255546ee`). Approved design:
 [plan](../plans/2026-09-30-r4-bug-003-mute-quiet-hours.md).
 
@@ -52,9 +52,11 @@ Validated September 30, 2026 on branch `claude/r4-bug-003-mute-quiet-hours`
   - the `legacy-quiet-hours` dispatcher gate;
   - the weather wiring test, now on the canonical store.
 
-## Actual validation
+## Historical author validation
 
-All tests use fakes and in-memory storage.
+The following results and mutation table are preserved historical author
+claims. Their September 30 raw artifacts were not supplied or independently
+audited in the October 9 work. All reported tests use fakes and in-memory storage.
 
 | Suite | Result (Bradley's Mac) |
 |---|---|
@@ -66,12 +68,12 @@ All tests use fakes and in-memory storage.
 
 - `tsc --noEmit` is clean. ESLint is clean on every changed source file.
   `lint:colors` is within its baseline.
-- `notification-panels.test.mts` has a pre-existing
-  `@typescript-eslint/no-unused-vars` directive error. It is not touched
-  here, and lint-staged does not lint `.mts` files.
+- The original text reported an undefined ESLint-rule directive in
+  `notification-panels.test.mts`. Original branch tip `efa5694a1` removes that
+  directive; the October 9 changed-file ESLint run passes, including `.mts` files.
 - Agentic gate: see the PR description.
 
-## Mutation proof
+## Historical mutation table
 
 Each mutation was applied alone against the 8 proof suites (baseline 163/0
 before and after). The table records the SHA-256 prefix of the file before
@@ -109,8 +111,89 @@ mutating. Every file was restored and its hash re-verified.
 | P5 | Preferences link opens the wrong panel | `NotificationPreferencesPanel.ts` (`f5690959ebc9`) | 162/1 | the Preferences panel shows the one window read-only and links to it |
 | P6 | Preferences summary goes stale | `NotificationPreferencesPanel.ts` (`f5690959ebc9`) | 162/1 | the Preferences panel shows the one window read-only and links to it |
 
-All 29 mutations went red on the first run, and every file was
-restored to its original hash.
+The original author reported all 29 mutations red on the first run and every
+file restored to its original hash. This is not fresh execution evidence.
+
+## October 9 isolated integration and regression evidence
+
+Original head `efa5694a1e1b0f8abb74b3231106096380e0535f` was unchanged.
+Its two commits were replayed in an independent clone onto canonical main
+`6a5ea9eed4970fe0b050e5e0587fb830af3a7383`. The only textual conflict was
+`scripts/targeted-tests-overrides.json`: an additive union preserves every main
+mapping, including `test:ux059` for data-loader. Main's package scripts,
+dependencies, lockfile and successful native-delivery fixture remain intact.
+The original worktree and refs were not edited.
+
+The preliminary P2 parser finding was **disproved by actual execution**.
+The existing JavaScript regex has no multiline flag and already rejects a
+terminal LF, CR, CRLF, U+2028 or U+2029 at either endpoint. ECMAScript's
+[`$` assertion](https://tc39.es/ecma262/multipage/text-processing.html#sec-compileassertion)
+admits a line terminator only with the multiline flag. No production parser
+change was made, and no redundant length guard is credited as a repair.
+
+Codex added malformed-input regression coverage for both endpoints, strict
+parsing, atomic save refusal (settings identity/content, stored bytes, write
+count and event count), allowed noncritical preference decisions, inactive
+ladder inputs and truthful passing traces. The unchanged parser passed these
+tests before any production change. The executor log named
+`test-first-red-approved` therefore records **GREEN 120/0**, not RED.
+
+Fresh results for the integrated code follow. The full gate and mutation proofs
+ran at code-proof commit `ef343d22d8d30cb288a76d05ef7e552650b03608`.
+Initial individual targeted checks, including adaptive-cadence, ran before
+that commit with the same production code and the added test working tree:
+
+```text
+npm run test:quiet-hours: # pass 120; # fail 0
+npm run test:notifications: # pass 227; # fail 0
+npm run test:insights: # pass 132; # fail 0
+npm run test:native-notify: # pass 5; # fail 0; # pass 75; # fail 0
+adaptive-cadence (node --import tsx --test): # pass 5; # fail 0
+proof suite (quiet-hours files plus all-producers): # pass 166; # fail 0
+Secret scan passed for 4993 file(s).
+Agentic validation gate passed.
+```
+
+The gate command was `bash scripts/agentic-validate.sh --tests
+"test:quiet-hours test:notifications test:insights test:native-notify"`.
+It ran lockfile, strict lint, both TypeScript configs, secrets, the cross-agent
+diagnostic, docs, roadmap and build. All changed TypeScript and `.mts` files
+also passed the ESLint runner. Nonfatal build warnings remain in the raw log.
+Normal pre-commit conflict, staged-secret and typecheck hooks passed. An initial
+default-sandbox tsx IPC error occurred before tests; an approved escalation
+ran the same test script successfully. There was no approval-review denial.
+
+### Fresh mutation equivalents
+
+Thirty unique mutations were executed against the clean code-proof commit:
+fresh equivalents of Q1–Q7, S1–S11, T1–T2, D1/A1/L1 and P1–P6, plus M1.
+Each retained an actual applied diff, raw TAP assertion RED, full checksums and
+a clean exact restoration. The proof suite was **166 pass / 0 fail** before
+and after. These reproduce behavior obligations, not historical run identity.
+
+M1 adds the `m` flag to the existing parser deliberately. It produces
+**159 pass / 7 fail**, including parser, atomic-save, delivery/ladder and trace
+regressions, then restores to **166 pass / 0 fail**. This proves test sensitivity;
+it is not removal of a newly authored production fix. A1 and L1 are source
+wiring assertions; D1 includes both runtime and source assertions.
+
+The first 30 applications produced real assertion RED and restoration, but the
+diff recorder stripped trailing context from some saved patches. Those records
+remain preserved and superseded. All 30 variants were rerun with raw Git diff
+bytes. The accepted attempt-2 audit reconstructs every mutated file from the
+immutable Git source and verifies diff, raw log and restoration SHA-256 values.
+The complete run therefore contains 60 applications and 30 accepted audited
+variants.
+
+The private local raw bundle is under
+`approved-batch/pr1767/oct9-repair/` in the task workspace: execution records,
+`mutation-proofs/manifest.json`, per-application diffs/logs/restores,
+`mutation-audit.json`, `mutation-summary.md` and `finding-correction.json`.
+This bundle is not published by this local step.
+
+No real notification, native delivery, credential, provider request or user-data
+operation was performed. No Anthropic payload was sent. Independent review and
+any repository approval verdict/publication remain separate requirements.
 
 ## Not changed here
 

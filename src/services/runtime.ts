@@ -484,13 +484,15 @@ export function createRuntimeFetch(nativeFetch: typeof window.fetch, deps: Runti
  return response;
  } catch (error) {
  if (debug) console.warn(`[runtime] Local API unavailable for ${target}`, error);
- if (!allowCloudFallback) {
- throw error;
- }
  if (!mayFallBack(callerSignal?.aborted ? { kind: 'caller-abort' } : { kind: 'connection' })) {
  throw error;
  }
+ // Local-only failures also need a fresh confirmed port on the next request.
+ // Caller cancellation above must leave the cached port alone.
  deps.invalidatePort();
+ if (!allowCloudFallback) {
+ throw error;
+ }
  return cloudFallback(() => { throw error; });
  }
   };

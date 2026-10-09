@@ -135,7 +135,9 @@ kept with the review evidence, not here.
 
 ## Mutation proof
 
-Each mutation was applied alone, in a clean QA worktree at the final head.
+Each mutation was applied alone, in a clean QA worktree at code head
+`10c6e35b7f108e6fc4fdf4c229a1747f38a4f02a`. The documentation-only
+commits leave every mutated source and test unchanged.
 For each one, the runner (`mutate-qa.mjs`) records:
 
 - the applied `git diff`;

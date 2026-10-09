@@ -16,6 +16,27 @@ const SETTINGS_KEY = 'wm-notification-settings-v1';
 const MIGRATION_KEY = 'wm-quiet-hours-unified-v1';
 const PREFS_KEY = 'wm-notification-preferences';
 
+const MALFORMED_TIMES: ReadonlyArray<readonly [string, (time: string) => string]> = [
+  ['trailing LF', (time) => `${time}\n`],
+  ['trailing CR', (time) => `${time}\r`],
+  ['trailing CRLF', (time) => `${time}\r\n`],
+  ['trailing line separator', (time) => `${time}\u2028`],
+  ['trailing paragraph separator', (time) => `${time}\u2029`],
+  ['trailing space', (time) => `${time} `],
+  ['leading space', (time) => ` ${time}`],
+  ['trailing tab', (time) => `${time}\t`],
+  ['trailing text', (time) => `${time}x`],
+  ['seconds', (time) => `${time}:00`],
+  ['embedded LF', (time) => `${time.slice(0, 3)}\n${time.slice(3)}`],
+  ['fullwidth digit', (time) => time.replace('0', '０')],
+  ['Arabic digit', (time) => time.replace('0', '٠')],
+];
+
+const MALFORMED_WINDOWS: ReadonlyArray<readonly [string, string, string]> = MALFORMED_TIMES.flatMap(([label, change]) => [
+  [`${label} in start`, change('22:00'), '07:00'],
+  [`${label} in end`, '22:00', change('07:00')],
+]);
+
 // [label, start, end, now (HH:MM), quiet?]
 const CASES: ReadonlyArray<readonly [string, string, string, string, boolean]> = [
   ['same-day inside', '09:00', '17:00', '12:00', true],
@@ -34,6 +55,7 @@ const CASES: ReadonlyArray<readonly [string, string, string, string, boolean]> =
   ['24:00 is invalid', '22:00', '24:00', '23:00', false],
   ['single digits are invalid', '7:05', '09:00', '08:00', false],
   ['letters are invalid', 'ab:cd', '07:00', '03:00', false],
+  ...MALFORMED_WINDOWS.map(([label, start, end]) => [label, start, end, '03:00', false] as const),
 ];
 
 function at(hhmm: string): Date {
@@ -122,6 +144,9 @@ test('time parsing is strict', () => {
   for (const bad of ['24:00', '23:60', '7:05', '07:5', ' 07:05', '07:05 ', '', null, 705]) {
     assert.equal(parseQuietTime(bad), null, String(bad));
   }
+  for (const [label, change] of MALFORMED_TIMES) {
+    assert.equal(parseQuietTime(change('07:00')), null, label);
+  }
   assert.equal(validateQuietWindow('22:00', '07:00'), 'ok');
   assert.equal(validateQuietWindow('07:00', '07:00'), 'equal');
   assert.equal(validateQuietWindow('', '07:00'), 'invalid');
@@ -144,6 +169,54 @@ test('invalid and equal windows are refused at save time and the old window is k
     assert.deepEqual(svc.updateGlobalSettings({ quietHoursStart: '23:00', quietHoursEnd: '06:00' }), { ok: true });
     assert.equal(JSON.parse(localStorage.getItem(SETTINGS_KEY)!).global.quietHoursStart, '23:00');
   } finally { Reflect.deleteProperty(globalThis, 'document'); }
+});
+
+test('malformed saves leave settings, stored bytes and change events untouched', async () => {
+  const original = JSON.stringify(settingsWith('22:00', '07:00'));
+  const svc = await freshService({ [SETTINGS_KEY]: original, [MIGRATION_KEY]: '1' });
+  const before = svc.getSettings();
+  const snapshot = structuredClone(before);
+  const store = localStorage;
+  const setItem = store.setItem;
+  let writes = 0;
+  store.setItem = (key, value) => { writes += 1; setItem(key, value); };
+  let events = 0;
+  const doc = new EventTarget();
+  doc.addEventListener('wm:notification-settings-changed', () => { events += 1; });
+  Object.assign(globalThis, { document: doc });
+  try {
+    for (const [label, start, end] of MALFORMED_WINDOWS) {
+      // Reject the whole patch, including another otherwise-valid setting.
+      assert.deepEqual(svc.updateGlobalSettings({ quietHoursStart: start, quietHoursEnd: end, masterMute: true }),
+        { ok: false, reason: 'invalid' }, label);
+      assert.equal(svc.getSettings(), before, `settings identity: ${label}`);
+      assert.deepEqual(svc.getSettings(), snapshot, `settings content: ${label}`);
+      assert.equal(store.getItem(SETTINGS_KEY), original, `stored bytes: ${label}`);
+      assert.equal(writes, 0, `storage writes: ${label}`);
+      assert.equal(events, 0, `change events: ${label}`);
+    }
+  } finally { Reflect.deleteProperty(globalThis, 'document'); }
+});
+
+test('malformed stored windows allow delivery and inactive ladder inputs', async () => {
+  for (const [label, start, end] of MALFORMED_WINDOWS) {
+    const svc = await freshService({ [SETTINGS_KEY]: JSON.stringify(settingsWith(start, end)), [MIGRATION_KEY]: '1' });
+    assert.deepEqual(svc.evaluateNotificationPreference('earthquakes', 'high', at('03:00')),
+      { allowed: true, reason: 'allowed' }, label);
+    assert.equal(svc.isDomainInQuietHours('earthquakes', at('03:00')), false, label);
+    assert.deepEqual(svc.ladderQuietHours('earthquakes', at('03:00')),
+      { quietHoursActive: false, quietHoursBypassEnabled: false }, label);
+  }
+});
+
+test('malformed stored windows have a passing trace with the invalid-window explanation', () => {
+  for (const [label, start, end] of MALFORMED_WINDOWS) {
+    const trace = traceAlert(EVENT, settingsWith(start, end), [], { nowMs: 0, hourOverride: 3, minuteOverride: 0 });
+    const stage = trace.stages.find((s) => s.name === 'quiet-hours')!;
+    assert.equal(stage.status, 'pass', label);
+    assert.match(stage.detail, /not valid, so it never silences alerts/, label);
+    assert.equal(trace.outcome, 'delivered', label);
+  }
 });
 
 test('other global changes still save while a stored window is invalid', async () => {

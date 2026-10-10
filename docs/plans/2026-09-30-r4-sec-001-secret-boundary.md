@@ -108,3 +108,34 @@ Q10. R4-SEC-006 already shipped in #1759.
 
 Per AGENTS.md High Assurance rules, implementation starts only after
 Bradley approves this design.
+
+## October 10 review repair
+
+The original sender retried a copied value. An old set could resume after a
+Settings deletion or rotation and overwrite the newer sidecar state. A timed-out
+request body could also finish after a newer request, so sender-only serialization
+was insufficient. The bounded repair retains persistence-before-sync and the
+write-only renderer boundary.
+
+- Reserve an app-lifetime u64 revision while holding the existing cache mutex
+  and copying the current optional value. Each of the three bounded attempts
+  repeats that snapshot and resolves the confirmed live sidecar target.
+- Native requests send `{ key, value, revision }`, with a canonical decimal
+  revision string and `null` for deletion. After body reading, the native
+  receiver compares per-key highwater before one synchronous environment,
+  credential-hook and cache-invalidation transaction. Stale/duplicate requests
+  have zero effects; other keys remain independent.
+- Sidecar launch reserves its floor while copying the environment under cache
+  ownership. Both normal and late confirmed publication reconcile only keys
+  changed since launch, including deletion. Other absent keys preserve inherited
+  development/build fallbacks. A pre-launch request cannot bypass the new floor.
+- Cache failure, revision exhaustion and revoked targets are unavailable, never
+  interpreted as absence or a default port. No cache mutex spans HTTP or waits.
+
+Tests exercise the production controller with fake cache/target/transport/delay
+seams and the production receiver with a fake synchronous sink. Source gates
+guard privileged call sites, both publication paths and bundled helper delivery.
+Fresh mutation evidence must distinguish behavioral assertions from source-only
+assertions. No real vault, Keychain, provider, native app IPC or desktop operation
+is used for validation. No token lifecycle, dependency or persisted schema changes
+are introduced; rollback the native/sidecar protocol pair together.

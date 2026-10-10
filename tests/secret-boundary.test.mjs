@@ -65,11 +65,18 @@ test('Settings writes reach the sidecar from native, after the vault write', () 
     const push = body.indexOf('sync_secret_to_sidecar(&sync_app, &sync_key).await;');
     assert.ok(persist > 0 && push > persist, `${name} pushes after persisting`);
   }
-  const sync = main.slice(main.indexOf('async fn sync_secret_to_sidecar('), main.indexOf('// ── Sidecar supervision (R4-BUG-004)'));
-  assert.match(sync, /confirmed_sidecar_target\(app\)/, 'only to our confirmed, live sidecar');
-  const afterRead = sync.slice(sync.indexOf('let value = app'), sync.indexOf('post_secret_update('));
-  assert.ok(afterRead.length > 0 && !/\breturn\b/.test(afterRead), 'a missing (deleted) key is still posted');
-  assert.match(sync, /post_secret_update\(&client, port, &token, key, value\.as_deref\(\)\)/, 'a deleted key is sent as an unset');
+  const sync = main.slice(main.indexOf('async fn sync_secret_to_sidecar('), main.indexOf('/// Both normal and late publication'));
+  assert.match(sync, /sync_secret_keys_to_sidecar\(app, vec!\[key\.to_string\(\)\]\)\.await/);
+  const sender = main.slice(main.indexOf('async fn post_secret_update('), main.indexOf('/// Snapshots select keys only'));
+  assert.match(sender, /secret_sync::send\(/, 'Settings uses the tested real controller');
+  assert.match(sender, /cache\.revisions\.snapshot\(&cache\.secrets, key\)/, 'missing is a revisioned null and poison is unavailable');
+  assert.match(sender, /confirmed_sidecar_target\(app\)\.map_err/, 'each attempt resolves only our confirmed live sidecar');
+  assert.match(sender, /sidecar_env_update_body\(key, &snapshot\)/, 'request includes the authoritative value and revision');
+  assert.match(main, /inject_secrets_into_running_sidecar\(&app, secrets\)\.await/, 'manual reload uses the sender');
+  assert.match(main, /inject_secrets_into_running_sidecar\(&setup_handle, secrets\)\.await/, 'boot uses the sender');
+  assert.match(main, /inject_secrets_into_running_sidecar\(&retry_handle, recovered\)\.await/, 'recovery uses the sender');
+  const boot = main.slice(main.indexOf('async fn inject_secrets_into_running_sidecar('), main.indexOf('async fn sync_secret_keys_to_sidecar('));
+  assert.match(boot, /sync_secret_keys_to_sidecar\(app, secrets\.into_iter\(\)\.map\(\|\(key, _\)\| key\)/, 'boot snapshots contribute keys only to the same controller');
   const target = main.slice(main.indexOf('fn confirmed_sidecar_target('), main.indexOf('fn sidecar_env_update_body('));
   assert.match(target, /matches!\(child\.try_wait\(\), Ok\(None\)\)/, 'our child must be alive');
   assert.match(target, /if !alive \{\s*return Err/);
@@ -106,4 +113,38 @@ test('the sidecar can verify a saved key without being sent its value', () => {
   assert.match(sidecar, /validateSecretAgainstProvider\(key, candidate, safeContext\)/);
   const stored = runtimeConfig.slice(runtimeConfig.indexOf('export async function verifyStoredSecretWithApi('));
   assert.match(stored.slice(0, 900), /requestSidecarVerification\(\{ key, useStored: true, context \}\)/);
+});
+
+
+test('native launch fences all allowed keys and reconciles both confirmation paths through the real sender', () => {
+  const start = main.slice(main.indexOf('fn start_local_api('), main.indexOf('/// Frontend → desktop log bridge'));
+  assert.match(start, /revisions\.launch\(&secrets_cache\.secrets\)/, 'launch snapshot and floor share cache ownership');
+  assert.ok(start.indexOf('drop(token_slot);') > start.indexOf('let local_api_token = token_slot.clone().unwrap();'));
+  assert.ok(start.indexOf('drop(token_slot);') < start.indexOf('let child = cmd'), 'release token ownership before publication can re-read it');
+  assert.match(start, /cmd\.env\("LOCAL_API_SECRET_REVISION_FLOOR", seed_floor\)/);
+  assert.match(start, /launch_secrets\.install\(generation, launch_secrets\)/);
+  assert.match(start, /Tick::Running\(late\)[\s\S]*?if let Some\(port\) = late \{[\s\S]*?schedule_launch_secret_reconciliation\(&app_handle, generation\)/, 'late confirmation reconciles');
+  assert.match(start, /Publication::Confirmed\(port\) => \{[\s\S]*?schedule_launch_secret_reconciliation\(app, generation\)/, 'normal confirmation reconciles');
+  const scheduler = main.slice(main.indexOf('fn schedule_launch_secret_reconciliation('), main.indexOf('// ── Sidecar supervision'));
+  assert.match(scheduler, /generation\.load\(Ordering::SeqCst\) != generation/);
+  assert.match(scheduler, /take_changed\(generation, &cache\.secrets\)/);
+  assert.match(scheduler, /sync_secret_keys_to_sidecar\(&handle, keys\)\.await/);
+});
+
+test('revision receiver is bundled and wraps every existing credential and cache effect', () => {
+  const server = readFileSync(path.join(root, 'src-tauri/sidecar/local-api-server.mjs'), 'utf8');
+  const config = JSON.parse(readFileSync(path.join(root, 'src-tauri/tauri.conf.json'), 'utf8'));
+  assert.ok(config.bundle.resources.includes('sidecar/secret-sync.mjs'));
+  assert.match(server, /import \{ createSecretUpdateReceiver \} from '\.\/secret-sync\.mjs'/);
+  const route = server.slice(server.indexOf("if (requestUrl.pathname === '/api/local-env-update')"), server.indexOf("if (requestUrl.pathname === '/api/local-validate-secret')"));
+  assert.ok(route.indexOf('isValidToken(') < route.indexOf('await readBody(req)'));
+  assert.ok(route.indexOf('await readBody(req)') < route.indexOf('context.secretUpdates(JSON.parse('));
+  assert.doesNotMatch(route, /delete process\.env|process\.env\[[^\]]+\]\s*=|moduleCache\.clear/);
+  const transaction = server.slice(server.indexOf('context.secretUpdates = createSecretUpdateReceiver('), server.indexOf('  loadVerboseState(context.dataDir);', server.indexOf('context.secretUpdates = createSecretUpdateReceiver(')));
+  assert.match(transaction, /native: context\.mode === 'tauri-sidecar'/);
+  assert.match(transaction, /floor: process\.env\.LOCAL_API_SECRET_REVISION_FLOOR/);
+  assert.doesNotMatch(transaction, /\bawait\b/);
+  for (const effect of ['delete process.env[key]', 'process.env[key] = String(value)', 'aisOnKeyChanged(', 'invalidateOpenaqCredentialState(', 'acledTokenState.refreshToken =', 'acledTokenState.expiresAt =', 'synchronizeInfrastructureBgpCredential(', 's2uXmppApplyCreds()', 'moduleCache.clear()', 'failedImports.clear()', 'cloudPreferred.clear()', '_sidecarCache.clear()', '_responseCache.clear()']) {
+    assert.ok(transaction.includes(effect), effect);
+  }
 });

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { createSidecarLogger } from './sidecar-logger.mjs';
+import { createSecretUpdateReceiver } from './secret-sync.mjs';
 import { OfacCache } from './ofac-cache.mjs';
 import http, { createServer } from 'node:http';
 import { timingSafeEqual, randomUUID, createHash } from 'node:crypto';
@@ -15854,7 +15855,7 @@ async function dispatch(requestUrl, req, routes, context) {
   if (requestUrl.pathname === '/api/local-env-update') {
  // Require bearer auth — these handlers mutate process.env and so
  // must not be reachable from any other process on 127.0.0.1.
- // Renderer already sends the token via runtime-config.ts.
+ // Native sync sends the token after the vault/cache update.
  if (!isValidToken(req.headers['authorization'] || '')) {
  return json({ error: 'Unauthorized' }, 401);
  }
@@ -15862,36 +15863,8 @@ async function dispatch(requestUrl, req, routes, context) {
  const body = await readBody(req);
  if (body) {
  try {
- const { key, value } = JSON.parse(body.toString());
- if (typeof key === 'string' && key.length > 0 && ALLOWED_ENV_KEYS.has(key)) {
- if (value == undefined || value === '') {
- delete process.env[key];
- context.logger.log(`[local-api] env unset: ${key}`);
- } else {
- process.env[key] = String(value);
- context.logger.log(`[local-api] env set: ${key}`);
- }
- if (key === 'AISSTREAM_API_KEY') aisOnKeyChanged(value || null);
- if (key === 'OPENAQ_API_KEY') invalidateOpenaqCredentialState();
- if (key === 'ACLED_REFRESH_TOKEN') acledTokenState.refreshToken = value || null;
- if (key === 'ACLED_ACCESS_TOKEN') acledTokenState.expiresAt = null; // expiry unknown after manual key update
- if (key === 'CLOUDFLARE_API_TOKEN') synchronizeInfrastructureBgpCredential(value || null);
- if (key === 'S2U_XMPP_JID' || key === 'S2U_XMPP_SECRET') {
- s2uXmppApplyCreds().catch((error) => {
- context.logger.log(`[s2u-xmpp] reapply creds failed: ${error?.message ?? error}`);
- });
- }
- moduleCache.clear();
- failedImports.clear();
- cloudPreferred.clear();
- // Async-boot timing: routes hit before this key arrived may have cached a
- // degraded/requiresKey response. Drop the route caches so the next request
- // re-fetches with the newly injected secret instead of serving stale.
- _sidecarCache.clear();
- _responseCache.clear();
- return json({ ok: true, key });
- }
- return json({ error: 'key not in allowlist' }, 403);
+ const result = context.secretUpdates(JSON.parse(body.toString()));
+ return json(result.body, result.status);
  } catch { /* bad JSON */ }
  }
  return json({ error: 'expected { key, value }' }, 400);
@@ -21375,6 +21348,38 @@ export async function createLocalApiServer(options = {}) {
     process.exit(1);
   }
   const context = resolveConfig(options);
+  context.secretUpdates = createSecretUpdateReceiver({
+    allowedKeys: ALLOWED_ENV_KEYS,
+    native: context.mode === 'tauri-sidecar',
+    floor: process.env.LOCAL_API_SECRET_REVISION_FLOOR,
+    apply(key, value) {
+ if (value == undefined || value === '') {
+ delete process.env[key];
+ context.logger.log(`[local-api] env unset: ${key}`);
+ } else {
+ process.env[key] = String(value);
+ context.logger.log(`[local-api] env set: ${key}`);
+ }
+ if (key === 'AISSTREAM_API_KEY') aisOnKeyChanged(value || null);
+ if (key === 'OPENAQ_API_KEY') invalidateOpenaqCredentialState();
+ if (key === 'ACLED_REFRESH_TOKEN') acledTokenState.refreshToken = value || null;
+ if (key === 'ACLED_ACCESS_TOKEN') acledTokenState.expiresAt = null; // expiry unknown after manual key update
+ if (key === 'CLOUDFLARE_API_TOKEN') synchronizeInfrastructureBgpCredential(value || null);
+ if (key === 'S2U_XMPP_JID' || key === 'S2U_XMPP_SECRET') {
+ s2uXmppApplyCreds().catch((error) => {
+ context.logger.log(`[s2u-xmpp] reapply creds failed: ${error?.message ?? error}`);
+ });
+ }
+ moduleCache.clear();
+ failedImports.clear();
+ cloudPreferred.clear();
+ // Async-boot timing: routes hit before this key arrived may have cached a
+ // degraded/requiresKey response. Drop the route caches so the next request
+ // re-fetches with the newly injected secret instead of serving stale.
+ _sidecarCache.clear();
+ _responseCache.clear();
+    },
+  });
   loadVerboseState(context.dataDir);
   initWatchboardEngine(path.join(context.dataDir, 'watchboards.json'));
   const routes = await buildRouteTable(context.apiDir);

@@ -263,7 +263,7 @@
     "test:main-sync-gate": "node --test tests/main-sync-check-gate.test.mjs",
     "test:map-compatibility": "node --test tests/map-compatibility.test.mjs",
     "test:local-basemap": "node --import tsx --test src/components/__tests__/deckgl-local-basemap.test.mts tests/countries-geojson.test.mjs",
-    "test:secret-boundary": "node --test tests/secret-boundary.test.mjs tests/sidecar-secret-routing-boundary.test.mjs tests/ucdp-local-boundary.test.mjs && tsx --test src/services/__tests__/secret-boundary.test.mts src/services/__tests__/keychain.test.mts src/components/__tests__/key-dashboard-secret-boundary.test.mts"
+    "test:secret-boundary": "node --test tests/secret-boundary.test.mjs tests/sidecar-secret-routing-boundary.test.mjs tests/ucdp-local-boundary.test.mjs src-tauri/sidecar/secret-sync.test.mjs && tsx --test src/services/__tests__/secret-boundary.test.mts src/services/__tests__/keychain.test.mts src/components/__tests__/key-dashboard-secret-boundary.test.mts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",

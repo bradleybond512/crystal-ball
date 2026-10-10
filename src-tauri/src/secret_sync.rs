@@ -24,6 +24,8 @@ pub struct RevisionClock {
     counter: AtomicU64,
     #[cfg(test)]
     reservation_probe: Option<Box<dyn Fn() + Send + Sync>>,
+    #[cfg(test)]
+    owned_map_probe: Option<Box<dyn Fn(&HashMap<String, String>) + Send + Sync>>,
 }
 impl RevisionClock {
     // Call only while owning the cache mutex, so revision order is value order.
@@ -55,20 +57,28 @@ impl RevisionClock {
     /// Caller must own the authoritative map lock for the entire allocation.
     pub(crate) fn snapshot_owned_map(&self, map: &HashMap<String, String>, key: &str) -> Result<Snapshot, ()> {
         let value = map.get(key).cloned();
+        #[cfg(test)]
+        if let Some(probe) = &self.owned_map_probe { probe(map); }
         let revision = self.reserve()?;
         Ok(Snapshot { value, revision })
     }
     /// Caller must own the authoritative map lock while copying and reserving.
     pub(crate) fn launch_owned_map(&self, map: &HashMap<String, String>) -> Result<(HashMap<String, String>, String), ()> {
         let values = map.clone();
+        #[cfg(test)]
+        if let Some(probe) = &self.owned_map_probe { probe(map); }
         let floor = self.reserve()?;
         Ok((values, floor))
     }
     #[cfg(test)]
-    pub(crate) fn exhausted_for_test() -> Self { Self { counter: AtomicU64::new(u64::MAX), reservation_probe: None } }
+    pub(crate) fn exhausted_for_test() -> Self { Self { counter: AtomicU64::new(u64::MAX), reservation_probe: None, owned_map_probe: None } }
     #[cfg(test)]
     pub(crate) fn with_reservation_probe_for_test(probe: impl Fn() + Send + Sync + 'static) -> Self {
-        Self { counter: AtomicU64::new(0), reservation_probe: Some(Box::new(probe)) }
+        Self { counter: AtomicU64::new(0), reservation_probe: Some(Box::new(probe)), owned_map_probe: None }
+    }
+    #[cfg(test)]
+    pub(crate) fn with_owned_map_probe_for_test(probe: impl Fn(&HashMap<String, String>) + Send + Sync + 'static) -> Self {
+        Self { counter: AtomicU64::new(0), reservation_probe: None, owned_map_probe: Some(Box::new(probe)) }
     }
 
 }

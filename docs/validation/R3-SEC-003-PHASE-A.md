@@ -12,6 +12,141 @@ and **UNATTESTED for the October 10 integration**. Fresh checks and mutation
 proof must be recorded against the integrated source; this report does not
 establish current installed-app identity, certificate validity or permissions.
 
+## October 10 executed integration evidence
+
+Fresh proof source: `6a1c0c0632127c4ee65d68669e9f636d52ad8df7`, tree `e87466335e93fbc43f35df4d2a2a5337aa220f65`,
+on main `898d957a34fae8154556844d2b9e29b5b26e62dd` after #1774.
+Only the original own 16-file Phase A delta was integrated additively, with the
+confirmed required-signing sentinel fix. Current `SecretsCache` remains the
+struct with `state`, `writer` and `revisions`. Original native changed lines
+match the original own delta; current vault writer, transport ownership,
+revisions/floors, tombstones, launch retry and renderer pending logic remain.
+Current package scripts and targeted-test routes were preserved, including
+native notification tests and the actual JS secret receiver regression.
+
+The new successful-fake-signer regression ran before the guard and actually
+reported `7 pass / 4 fail`; afterward it reported `11 pass / 0 fail`. It checks
+flag/environment required mode independently and the hyphen identity both
+without padding and with two spaces on each side,
+with zero signing/verification callbacks and no stable-success log on rejection.
+The separate clean frozen N01 removal proof is `11/0 → 7/4 → 11/0`.
+Main-sync's separate guard rejects ad hoc output before hash/install; this
+helper finding did not establish an actual unsafe installation.
+
+Actual selected regression script results at this source (counts overlap):
+
+| Script | Actual result |
+|---|---|
+| `test:signing-phase-a` | 22 pass / 0 fail, then 4 pass / 0 fail |
+| `test:vault-writer` | 9 pass / 0 fail, then 4 pass / 0 fail |
+| `test:native-responsiveness` | 15 pass / 0 fail |
+| `test:secret-boundary` | 21 pass / 0 fail, then 15 pass / 0 fail |
+| `test:sidecar-supervisor` | 9 pass / 0 fail |
+| `test:sidecar-routing` | 10 pass / 0 fail, then 56 pass / 0 fail |
+| `test:native-notify` | 5 pass / 0 fail, then 75 pass / 0 fail |
+| `test:desktop-updater` | 13 pass / 0 fail, then 22 pass / 0 fail |
+| `test:imessage` | 6 pass / 0 fail, then 108 pass / 0 fail |
+| `test:imessage-native` | 1 pass / 0 fail |
+
+Full offline native test harnesses reported `245 pass / 0 fail`: main units
+107/0, watchdog 9/0, iMessage 44/0, sidecar supervisor 24/0, location 9/0,
+vault coordinator 45/0 and notification policy 7/0. These ran on Darwin,
+with pure/fake effects and temporary filesystem contracts; they do not attest
+Linux, actual codesign, Keychain, native IPC, GUI startup or installation.
+The new pure signing diagnostics filter separately ran 3/0. Nine changed JS/TS
+files passed ESLint with `--max-warnings 0`; the `.mts` fixtures also passed
+the full TypeScript checks. Existing native warnings were retained.
+
+Fresh mutations reconstruct all 26 historical obligations and add N01:
+27 actually applied variants, 27 accepted named assertion reds, 31 case
+attempts including four rejected before-edit preparation/anchor attempts.
+There are 17 behavior proofs and 10 source contracts. Source-only mutants
+were never compiled or operationally invoked; no source check is represented
+as native IPC, CLI signing/install, persistence or UI integration execution.
+No applied survivor or compile/syntax failure was accepted. The four rejected
+attempts (P05 no-match, D02 ambiguous anchor, V01 IPC baseline, R01 missing
+ignored XMPP resource baseline) remain preserved separately.
+
+| Proof | Oracle | Baseline → red → restored (pass/fail) |
+|---|---|---|
+| D01 | source contract | 6/0 → 5/1 → 6/0 |
+| D02 | source contract | 6/0 → 5/1 → 6/0 |
+| N01 | fake helper | 11/0 → 7/4 → 11/0 |
+| P01 | fake helper | 11/0 → 10/1 → 11/0 |
+| P02 | fake helper | 11/0 → 8/3 → 11/0 |
+| P03 | fake helper | 11/0 → 10/1 → 11/0 |
+| P04 | source contract | 11/0 → 10/1 → 11/0 |
+| P05 | source contract | 11/0 → 10/1 → 11/0 |
+| P06 | fake helper | 3/0 → 2/1 → 3/0 |
+| P07 | source contract | 3/0 → 2/1 → 3/0 |
+| P08 | fake helper | 3/0 → 2/1 → 3/0 |
+| P09 | fake helper | 11/0 → 10/1 → 11/0 |
+| P10 | fake helper | 11/0 → 9/2 → 11/0 |
+| R01 | pure Rust | 3/0 → 2/1 → 3/0 |
+| R02 | pure Rust | 3/0 → 2/1 → 3/0 |
+| R03 | pure Rust | 3/0 → 2/1 → 3/0 |
+| R04 | source contract | 6/0 → 5/1 → 6/0 |
+| R05 | source contract | 6/0 → 5/1 → 6/0 |
+| R06 | source contract | 6/0 → 5/1 → 6/0 |
+| R07 | source contract | 6/0 → 5/1 → 6/0 |
+| R08 | source contract | 6/0 → 5/1 → 6/0 |
+| V01 | pure/injected TS | 4/0 → 3/1 → 4/0 |
+| V02 | pure/injected TS | 4/0 → 3/1 → 4/0 |
+| V03 | pure/injected TS | 4/0 → 3/1 → 4/0 |
+| V04 | pure/injected TS | 4/0 → 3/1 → 4/0 |
+| V05 | pure/injected TS | 4/0 → 3/1 → 4/0 |
+| V06 | pure/injected TS | 4/0 → 3/1 → 4/0 |
+
+Every accepted record includes the nonempty applied diff, before/mutant/
+restored SHA-256, exact command, raw logs, failing names and full tracked
+manifests. All 5,019 tracked file hashes were restored in the separate QA
+clone. Independent root inspection checked 379 indexed artifact hashes,
+81 unique baseline/red/restored logs and all 5,019 hashes in both clones.
+Final restored QA ran phase A 22/0 then 4/0, pure Rust 3/0, preservation
+source checks 27/0, pending/local-engine renderer checks 8/0 and
+`typecheck:all` exit 0. All owned commands were waited/reaped; sandbox-blocked
+global process inspection is not a claim that other Mac work stopped.
+
+Private bundle: `approved-batch/pr1775/oct10-repair/mutation-evidence/`
+`freeze-6a1c0c0632127c4ee65d68669e9f636d52ad8df7/`. Immutable SHA-256:
+
+- `final-summary.json`: `ab2d00216d733fd6aef1793cbd3a2cbc5f1f88b898985b7d77ec97a7cdff8079`
+- `artifact-index.json`: `390be7688c292e60b5201fd2bdb02d7dba856f499ecf657edfc812ddacde62b4`
+- `final-handoff.json`: `73e321347e7f39693bc1ec975f51cb6b72e6ebfec52ca947cae7c6222e16d68f`
+
+The final review freeze changes only this validation report and its security
+tracker status relative to the proof. The completion record binds every other
+tracked byte to the proof. Before publication that exact freeze must pass:
+
+```bash
+bash scripts/agentic-validate.sh --tests "test:signing-phase-a test:vault-writer test:native-responsiveness test:secret-boundary test:sidecar-supervisor test:sidecar-routing test:native-notify test:desktop-updater test:imessage test:imessage-native"
+```
+
+Its actual SHA-bound gate result, independent Sol medium conclusion,
+authorized focused Sonnet medium output, verdict, exact-lease publication and
+required CI are separate retained completion evidence. No gate, review or
+delivery pass is inferred from the command above. Sonnet is capped at three
+passes; no Opus. Launch configuration is not signed runtime model attestation.
+
+The first local commit lacked clone hook configuration; it remains preserved.
+After setting only this isolated clone's `core.hooksPath=.husky`, the code
+freeze was repeated with actual staged secret scanning, lint/type checks and
+lint-staged. The source tree was identical. No hook was bypassed and no global
+default changed; the initial metadata assumption was corrected with raw logs.
+
+Limits: the signing probe bounds caller wait, not OS child lifetime; fallback
+metadata is best effort, not atomic audit accounting. No actual signing,
+certificate expiry/private-key ACL, installed identity, Keychain, metadata
+persistence adapter, main-sync, desktop build/install/release, tag/version or
+vault retirement operation was performed. Manual certificate setup/checks
+remain operational prerequisites when needed, without a new premerge gate.
+Phase B and Bradley's backup/retirement approval remain separate.
+
+Rollback only this own Phase A delta through the normal PR path, preserving
+the #1774 base. A sentinel-only rollback would reopen required-helper success
+for `-`, while the separate main-sync guard would still block its ad hoc app.
+Counter metadata can remain harmlessly in place; no cleanup was performed.
+
 ## Behavior
 
 - **Fail closed** (`scripts/desktop-signing.mjs`, used by
@@ -47,8 +182,8 @@ establish current installed-app identity, certificate validity or permissions.
   build, the backup copy, or an unreadable Keychain is shown as critical.
 - **Manual** (`docs/guides/crystal-ball-dev-signing-identity.md`): how
   Bradley checks for or creates the identity in Keychain Access, with a
-  10-year validity, and lets `codesign` use it once. No script or agent
-  touches the Keychain.
+  10-year validity, and lets `codesign` use it once. Certificate setup stays manual; no certificate or Keychain changes were
+  performed in this batch.
 
 ### Historical installed-app observation (unattested)
 

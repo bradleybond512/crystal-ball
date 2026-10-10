@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 import { hashDirectory, verifyAppBundle } from './install-built-app.mjs';
+import { classifyCodesignDetails, REQUIRE_STABLE_ENV, SIGNING_GUIDE } from './desktop-signing.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..');
@@ -161,6 +162,9 @@ export function buildMainSyncToolchain(nodePath = process.execPath, env = proces
  env: {
  ...env,
  PATH: `${nodeDir}:${env.PATH}`,
+ // R3-SEC-003 phase A: main-sync never installs an ad-hoc build. The
+ // packaging step fails instead of falling back when stable signing fails.
+ [REQUIRE_STABLE_ENV]: '1',
  },
   };
 }
@@ -296,6 +300,25 @@ async function writeJson(filePath, value) {
 }
 
 class SyncBlockedError extends Error {}
+
+function readCodesignDetails(appPath) {
+  const result = spawnSync('/usr/bin/codesign', ['-dv', '--verbose=2', appPath], { encoding: 'utf8', timeout: 30_000 });
+  return `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+}
+
+/**
+ * Refuse to install a build that is not signed with a stable identity
+ * (R3-SEC-003 phase A). Ad-hoc builds change their designated requirement on
+ * every rebuild, which re-prompts for the Keychain on every install.
+ */
+export function assertStableSignedApp(appPath, readDetails = readCodesignDetails) {
+  const signing = classifyCodesignDetails(readDetails(appPath));
+  if (signing.kind !== 'stable') {
+    const what = signing.kind === 'adhoc' ? 'ad hoc signed' : 'not signed with a stable identity';
+    throw new SyncBlockedError(`Built app is ${what}; refusing to install it. See ${SIGNING_GUIDE}.`);
+  }
+  return signing;
+}
 
 // Lock files older than this are assumed to belong to a crashed process
 // and are removed automatically so a fresh run can proceed.
@@ -534,6 +557,7 @@ export function runVerificationAndBuild(repoDir, toolchain, run = runLoggedComma
 async function installBuiltApp(repoDir, installPath) {
   const appPath = path.join(repoDir, 'src-tauri', 'target', 'release', 'bundle', 'macos', 'Crystal Ball.app');
   await verifyAppBundle(appPath);
+  assertStableSignedApp(appPath);
   const appSha = await hashDirectory(appPath);
   runLoggedCommand(process.execPath, [
  path.join(repoDir, 'scripts', 'install-built-app.mjs'),

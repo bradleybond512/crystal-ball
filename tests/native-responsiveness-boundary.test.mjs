@@ -5,10 +5,14 @@ import test from 'node:test';
 const source = readFileSync(new URL('../src-tauri/src/main.rs', import.meta.url), 'utf8');
 const commands = {
   // R4-SEC-001 replaced get_secret with these two value-limited reads.
-  get_secret_status: ['.state::<SecretsCache>()', '.secrets', '.lock()', 'secret_status_from('],
-  get_renderer_config: ['.state::<SecretsCache>()', '.secrets', '.lock()', 'renderer_config_from('],
-  set_secret: ['.state::<SecretsCache>()', 'wait_until_secrets_loaded(', '.lock()', 'save_vault(', 'write_vault_shadow('],
-  delete_secret: ['.state::<SecretsCache>()', 'wait_until_secrets_loaded(', '.lock()', 'save_vault(', 'write_vault_shadow('],
+  get_secret_status: ['.state::<SecretsCache>()', 'cache.state.read(secret_status_from)'],
+  get_renderer_config: ['.state::<SecretsCache>()', 'cache.state.read(renderer_config_from)'],
+  // R3-BUG-001 slice B: saves wait for the load and the vault writer inside
+  // the worker (save_secret_change); tests/vault-writer-boundary.test.mjs
+  // pins what that helper does.
+  set_secret: ['save_secret_change('],
+  delete_secret: ['save_secret_change('],
+  get_secret_write_state: ['.state::<SecretsCache>()', '.write_state()'],
   read_cache_entry: ['.state::<PersistentCache>()', 'cache.get(&key)'],
   write_cache_entry: ['.state::<PersistentCache>()', 'serde_json::from_str', '.lock()', 'schedule_cache_flush('],
   delete_cache_entry: ['.state::<PersistentCache>()', '.lock()', 'schedule_cache_flush('],

@@ -20,7 +20,7 @@ safety-critical weather logic.
 | R3-SEC-003 | High | Shadow secrets vault key is derivable by any local process | PR 4a / 4b | 🔴 |
 | R3-SEC-004 | Medium | CSP still allows `'unsafe-eval'`; `img-src https:` is an exfil channel | PR 5 | 🔴 |
 | R3-SEC-005 | Medium | Release build silently falls back to an unpinned system `node` for the secret-bearing sidecar | PR 7 | 🔴 |
-| R3-BUG-001 | Medium | Sync Tauri commands block the macOS main thread (up to ~271 s) | PR 3 — [slice A validation](validation/R3-BUG-001-SLICE-A.md); slice B pending | 🟡 |
+| R3-BUG-001 | Medium | Sync Tauri commands block the macOS main thread (up to ~271 s) | PR 3 — [slice A validation](validation/R3-BUG-001-SLICE-A.md); [slice B validation](validation/R3-BUG-001-SLICE-B.md), integration awaiting fresh QA and review | 🟡 |
 | R3-BUG-002 | Medium | Datacenter weather posture freezes when NWS `/points` fails | PR 6 | 🔴 |
 | R3-SEC-006 | Low | SMS webhook fails open without `TWILIO_AUTH_TOKEN`; config patch unvalidated | PR 8 | 🔴 |
 | R3-SEC-007 | Low | `/api/feed-discovery` first hop not IP-pinned (DNS-rebinding TOCTOU) | PR 8 | 🔴 |
@@ -407,7 +407,7 @@ Tests: source assertion that these commands are `async`, and a lost-update
 test using an injected fake vault writer (never the real Keychain). Include a
 mutation proof.
 
-Current progress: approved slice A moves the seven identified secret/cache/brief command paths off the main thread and makes watchdog focus event-owned. It preserves existing vault policies. Safe writer coordination, signaled readiness and bounded late-write completion remain a separately approved slice B; R3-BUG-001 is not closed. See [slice A validation](validation/R3-BUG-001-SLICE-A.md).
+Current progress: approved slice A moves the seven identified secret/cache/brief command paths off the main thread and makes watchdog focus event-owned. It preserves existing vault policies. Slice B (approved October 3, 2026; October 10 integration awaiting fresh QA and independent review) adds the remaining parts: one vault writer owns every cache change, vault write, shadow write and sidecar push; saves wait a bounded 15 s and report "pending" for a write the Keychain has not confirmed; readiness is signalled, not polled; and saves are refused until the real vault has been read, so a read error or the shadow copy can no longer erase keys. See [slice A validation](validation/R3-BUG-001-SLICE-A.md) and [slice B validation](validation/R3-BUG-001-SLICE-B.md).
 
 ### R3-BUG-002: Datacenter Weather Posture Freezes When NWS `/points` Fails
 

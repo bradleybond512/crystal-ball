@@ -20,34 +20,57 @@ pub enum Outcome {
 }
 
 #[derive(Default)]
-pub struct RevisionClock(AtomicU64);
+pub struct RevisionClock {
+    counter: AtomicU64,
+    #[cfg(test)]
+    reservation_probe: Option<Box<dyn Fn() + Send + Sync>>,
+}
 impl RevisionClock {
     // Call only while owning the cache mutex, so revision order is value order.
     fn reserve(&self) -> Result<String, ()> {
-        self.0
+        #[cfg(test)]
+        if let Some(probe) = &self.reservation_probe { probe(); }
+        self.counter
             .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_add(1))
             .map(|n| (n + 1).to_string())
             .map_err(|_| ())
     }
+    #[cfg(test)]
     pub fn snapshot(
         &self,
         cache: &Mutex<HashMap<String, String>>,
         key: &str,
     ) -> Result<Snapshot, ()> {
         let map = cache.lock().map_err(|_| ())?;
-        let value = map.get(key).cloned();
-        let revision = self.reserve()?;
-        Ok(Snapshot { value, revision })
+        self.snapshot_owned_map(&map, key)
     }
+    #[cfg(test)]
     pub fn launch(
         &self,
         cache: &Mutex<HashMap<String, String>>,
     ) -> Result<(HashMap<String, String>, String), ()> {
         let map = cache.lock().map_err(|_| ())?;
+        self.launch_owned_map(&map)
+    }
+    /// Caller must own the authoritative map lock for the entire allocation.
+    pub(crate) fn snapshot_owned_map(&self, map: &HashMap<String, String>, key: &str) -> Result<Snapshot, ()> {
+        let value = map.get(key).cloned();
+        let revision = self.reserve()?;
+        Ok(Snapshot { value, revision })
+    }
+    /// Caller must own the authoritative map lock while copying and reserving.
+    pub(crate) fn launch_owned_map(&self, map: &HashMap<String, String>) -> Result<(HashMap<String, String>, String), ()> {
         let values = map.clone();
         let floor = self.reserve()?;
         Ok((values, floor))
     }
+    #[cfg(test)]
+    pub(crate) fn exhausted_for_test() -> Self { Self { counter: AtomicU64::new(u64::MAX), reservation_probe: None } }
+    #[cfg(test)]
+    pub(crate) fn with_reservation_probe_for_test(probe: impl Fn() + Send + Sync + 'static) -> Self {
+        Self { counter: AtomicU64::new(0), reservation_probe: Some(Box::new(probe)) }
+    }
+
 }
 
 pub fn changed_keys(
@@ -64,28 +87,66 @@ pub fn changed_keys(
         .collect()
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PushAdmission { Accepted, Full, Stopped }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReconcileAdmission { Idle, Accepted, Full, Stopped, StoppedPreviouslyReported }
+
+/// Check launch ownership before and after resolving the live target each attempt.
+pub fn target_for_generation<T>(expected: Option<u64>, owner: impl Fn() -> u64, target: impl FnOnce() -> Result<T, ()>) -> Result<T, ()> {
+    if expected.is_some_and(|generation| owner() != generation) { return Err(()); }
+    let destination = target()?;
+    if expected.is_some_and(|generation| owner() != generation) { return Err(()); }
+    Ok(destination)
+}
+
 /// Temporary native-only launch state, consumed once by normal or late publication.
 #[derive(Default)]
-pub struct LaunchReconciliation(Mutex<Option<(u64, HashMap<String, String>)>>);
+pub struct LaunchReconciliation(Mutex<Option<PendingLaunch>>);
+struct PendingLaunch { generation: u64, map: HashMap<String, String>, stopped_reported: bool }
 impl LaunchReconciliation {
     pub fn install(&self, generation: u64, launch: HashMap<String, String>) -> Result<(), ()> {
-        *self.0.lock().map_err(|_| ())? = Some((generation, launch));
+        *self.0.lock().map_err(|_| ())? = Some(PendingLaunch { generation, map: launch, stopped_reported: false });
         Ok(())
     }
+    pub fn try_enqueue_changed(
+        &self,
+        generation: u64,
+        current: impl FnOnce() -> Result<HashMap<String, String>, ()>,
+        enqueue: impl FnOnce(Vec<String>) -> PushAdmission,
+    ) -> Result<ReconcileAdmission, ()> {
+        let mut pending = self.0.lock().map_err(|_| ())?;
+        let Some(launch) = pending.as_ref() else { return Ok(ReconcileAdmission::Idle); };
+        if launch.generation != generation { return Ok(ReconcileAdmission::Idle); }
+        let mut keys = changed_keys(&launch.map, &current()?);
+        keys.sort();
+        keys.dedup();
+        let admission = if keys.is_empty() { PushAdmission::Accepted } else { enqueue(keys) };
+        Ok(match admission {
+            PushAdmission::Accepted => { pending.take(); ReconcileAdmission::Accepted }
+            PushAdmission::Full => ReconcileAdmission::Full,
+            PushAdmission::Stopped => {
+                let launch = pending.as_mut().ok_or(())?;
+                if launch.stopped_reported { ReconcileAdmission::StoppedPreviouslyReported }
+                else { launch.stopped_reported = true; ReconcileAdmission::Stopped }
+            },
+        })
+    }
+    #[cfg(test)]
     pub fn take_changed(
         &self,
         generation: u64,
         cache: &Mutex<HashMap<String, String>>,
     ) -> Result<Option<Vec<String>>, ()> {
         let mut pending = self.0.lock().map_err(|_| ())?;
-        let Some((owner, launch)) = pending.as_ref() else {
+        let Some(launch) = pending.as_ref() else {
             return Ok(None);
         };
-        if *owner != generation {
+        if launch.generation != generation {
             return Ok(None);
         }
         let current = cache.lock().map_err(|_| ())?;
-        let keys = changed_keys(launch, &current);
+        let keys = changed_keys(&launch.map, &current);
         pending.take();
         Ok(Some(keys))
     }
@@ -508,7 +569,7 @@ mod tests {
         let (_, next_floor) = clock.launch(&cache).unwrap();
         assert!(floor.parse::<u64>().unwrap() > first.revision.parse().unwrap());
         assert!(next_floor.parse::<u64>().unwrap() > floor.parse().unwrap());
-        let exhausted = RevisionClock(AtomicU64::new(u64::MAX));
+        let exhausted = RevisionClock::exhausted_for_test();
         let mut calls = 0;
         assert_eq!(
             run(send(

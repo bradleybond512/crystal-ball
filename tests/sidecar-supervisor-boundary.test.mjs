@@ -78,13 +78,11 @@ test('the renderer is only ever handed a confirmed port', () => {
   // Trace every caller edge: loaded snapshots select keys, and the actual
   // controller resolves the live target again inside each retry. These are
   // source wiring assertions, not execution of a real AppHandle or native IPC.
-  const inject = fnBody('inject_secrets_into_running_sidecar');
-  assert.match(inject, /sync_secret_keys_to_sidecar\(app, secrets\.into_iter\(\)\.map\(\|\(key, _\)\| key\)\.collect\(\)\)\.await/);
-  const syncKeys = fnBody('sync_secret_keys_to_sidecar');
-  assert.match(syncKeys, /for key in keys \{\s*let outcome = post_secret_update\(app, &client, &key\)\.await;/);
-  const post = fnBody('post_secret_update');
-  assert.match(post, /secret_sync::send\(\s*\|\| cache\.revisions\.snapshot\(&cache\.secrets, key\),\s*\|\| confirmed_sidecar_target\(app\)\.map_err\(\|_\| \(\)\),\s*\|\(token, port\), snapshot\| \{/,
-    'the production sender supplies fresh cache and confirmed-target closures to the real controller');
+  const syncKeys = fnBody('sync_selected_secret_keys');
+  assert.match(syncKeys, /for key in keys \{\s*let outcome = post_secret_update_owned\(app, &client, &key, generation\)\.await;/);
+  const post = fnBody('post_secret_update_owned');
+  assert.match(post, /secret_sync::send\(\s*\|\| cache\.state\.transport_snapshot\(&cache\.revisions, key\),\s*\|\| confirmed_sidecar_target_owned\(app, generation\),\s*\|\(token, port\), snapshot\| \{/,
+    'the production sender supplies authoritative cache and generation-aware fresh-target closures');
   assert.match(post, /client\.post\(format!\("http:\/\/127\.0\.0\.1:\{port\}\/api\/local-env-update"\)\)/,
     'transport uses the port supplied by that target');
   const controller = fnBody('send', SYNC);
@@ -98,7 +96,7 @@ test('the renderer is only ever handed a confirmed port', () => {
   assert.match(target, /let Some\(port\) = local_api_cell\(&state\)\.confirmed_live_port\(\) else \{\s*return Err\("sidecar port revoked"\);/,
     'the target refuses a revoked live port');
   assert.match(target, /Ok\(\(token, port\)\)/);
-  for (const body of [inject, syncKeys, post, controller, target]) {
+  for (const body of [syncKeys, post, controller, target]) {
     assert.doesNotMatch(body, /DEFAULT_LOCAL_API_PORT/, 'every secret-sync edge excludes default-port fallback');
   }
   assert.doesNotMatch(MAIN, /port_confirmed\.store\(true|generation\.fetch_add|fn confirm_port_late/, 'no publication outside the cell');
@@ -129,4 +127,29 @@ test('status and manual restart are trusted-window only and cannot kill a runnin
   assert.match(restart, /on_manual_retry\(/);
   assert.doesNotMatch(restart, /\.kill\(|stop_local_api/);
   assert.match(MAIN, /^mod sidecar_supervisor;$/m);
+});
+
+
+test('transport adapters reserve while owning the sole native map and fail closed on poison', () => {
+  const coordinator = readFileSync(new URL('../src-tauri/src/vault_coordinator.rs', import.meta.url), 'utf8');
+  const owned = fnBody('with_transport_map', coordinator);
+  assert.match(owned, /let inner = self\.inner\.lock\(\)\.map_err\(\|_\| \(\)\)\?;\s*f\(&inner\.map\)/);
+  assert.match(fnBody('transport_snapshot', coordinator), /self\.with_transport_map\(\|map\| clock\.snapshot_owned_map\(map, key\)\)/);
+  assert.match(fnBody('transport_launch', coordinator), /self\.with_transport_map\(\|map\| clock\.launch_owned_map\(map\)\)/);
+  assert.match(fnBody('start_local_api'), /state\.transport_launch\(&secrets_cache\.revisions\)/);
+});
+
+test('launch selections enter the bounded writer and retry admission after every live monitor tick', () => {
+  const schedule = fnBody('schedule_launch_secret_reconciliation');
+  order(schedule, 'confirmed_sidecar_target_owned(app, Some(generation))', 'try_enqueue_changed(', 'preflight precedes pending lock');
+  assert.match(schedule, /cache\.state\.with_transport_map\(\|map\| Ok\(map\.clone\(\)\)\)/);
+  assert.match(schedule, /writer\.try_push_keys\(generation, keys\)/);
+  assert.doesNotMatch(schedule, /spawn|block_on|\.await/);
+  const start = fnBody('start_local_api');
+  assert.match(start, /Tick::Running\(late\) => \{\s*if let Some\(port\) = late \{[\s\S]*?\}\s*\/\/ tick has released child ownership[^\n]*\n\s*schedule_launch_secret_reconciliation\(&app_handle, generation\);\s*continue;/);
+  assert.match(start, /Duration::from_millis\(1500\)/);
+  const target = fnBody('confirmed_sidecar_target_owned');
+  assert.match(target, /target_for_generation\(\s*generation,\s*\|\| state\.generation\.load\(Ordering::SeqCst\),\s*\|\| confirmed_sidecar_target\(app\)\.map_err/);
+  const guard = fnBody('target_for_generation', SYNC);
+  assert.equal((guard.match(/owner\(\) != generation/g) ?? []).length, 2, 'generation checked before and after target');
 });

@@ -666,7 +666,7 @@ mod transport_tests {
             let (value, revision) = done_rx.recv_timeout(DEADLINE).unwrap().unwrap();
             worker.join().unwrap();
             assert_eq!(value.as_deref(), Some("current"), "actual ownership returns current map");
-            assert!(revision.parse::<u64>().unwrap() > held_revision.parse().unwrap(), "allocation follows held owner revision");
+            assert!(revision.parse::<u64>().unwrap() > held_revision.parse::<u64>().unwrap(), "allocation follows held owner revision");
         }
     }
 
@@ -749,7 +749,7 @@ mod transport_tests {
                 },
             )), Outcome::Accepted);
             assert_eq!(snapshots[1].value.as_deref(), next);
-            assert!(snapshots[1].revision.parse::<u64>().unwrap() > snapshots[0].revision.parse().unwrap());
+            assert!(snapshots[1].revision.parse::<u64>().unwrap() > snapshots[0].revision.parse::<u64>().unwrap());
         }
         let state = VaultState::new(); let clock = RevisionClock::default();
         let live = std::cell::Cell::new(true); let mut requests = 0;

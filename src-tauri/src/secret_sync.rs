@@ -230,7 +230,7 @@ mod tests {
             ));
             assert_eq!(outcome, Outcome::Accepted);
             assert_eq!(sent[1].value.as_deref(), next);
-            assert!(sent[1].revision.parse::<u64>().unwrap() > sent[0].revision.parse().unwrap());
+            assert!(sent[1].revision.parse::<u64>().unwrap() > sent[0].revision.parse::<u64>().unwrap());
         }
     }
     #[test]
@@ -304,11 +304,11 @@ mod tests {
         drop(guard);
         let snapshot = rx.recv_timeout(Duration::from_secs(2)).unwrap().unwrap();
         worker.join().unwrap();
-        assert!(snapshot.revision.parse::<u64>().unwrap() > owned_floor.parse().unwrap());
+        assert!(snapshot.revision.parse::<u64>().unwrap() > owned_floor.parse::<u64>().unwrap());
         assert_eq!(snapshot.value.as_deref(), Some("new"));
         let (launch, floor) = clock.launch(&cache).unwrap();
         assert_eq!(launch.get("A").map(String::as_str), Some("new"));
-        assert!(floor.parse::<u64>().unwrap() > snapshot.revision.parse().unwrap());
+        assert!(floor.parse::<u64>().unwrap() > snapshot.revision.parse::<u64>().unwrap());
         assert!(
             clock
                 .snapshot(&cache, "A")
@@ -316,7 +316,7 @@ mod tests {
                 .revision
                 .parse::<u64>()
                 .unwrap()
-                > floor.parse().unwrap()
+                > floor.parse::<u64>().unwrap()
         );
 
         // Exercise launch itself under contention, not only snapshot(). Guards
@@ -350,7 +350,7 @@ mod tests {
         );
         assert_eq!(latest_launch.get("B").map(String::as_str), Some("rotated"));
         assert!(
-            latest_floor.parse::<u64>().unwrap() > holder_revision.parse().unwrap(),
+            latest_floor.parse::<u64>().unwrap() > holder_revision.parse::<u64>().unwrap(),
             "launch floor must follow revision reserved by current cache owner"
         );
     }
@@ -565,7 +565,7 @@ mod tests {
                 );
             }
             assert_eq!(delivered[0].value, None);
-            assert!(delivered[0].revision.parse::<u64>().unwrap() > floor.parse().unwrap());
+            assert!(delivered[0].revision.parse::<u64>().unwrap() > floor.parse::<u64>().unwrap());
             assert_eq!(pending.take_changed(7, &cache), Ok(None), "scheduled once");
         }
     }
@@ -577,8 +577,8 @@ mod tests {
         let first = clock.snapshot(&cache, "A").unwrap();
         let (_, floor) = clock.launch(&cache).unwrap();
         let (_, next_floor) = clock.launch(&cache).unwrap();
-        assert!(floor.parse::<u64>().unwrap() > first.revision.parse().unwrap());
-        assert!(next_floor.parse::<u64>().unwrap() > floor.parse().unwrap());
+        assert!(floor.parse::<u64>().unwrap() > first.revision.parse::<u64>().unwrap());
+        assert!(next_floor.parse::<u64>().unwrap() > floor.parse::<u64>().unwrap());
         let exhausted = RevisionClock::exhausted_for_test();
         let mut calls = 0;
         assert_eq!(

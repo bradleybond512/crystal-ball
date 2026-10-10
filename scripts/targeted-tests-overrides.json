@@ -289,5 +289,17 @@
   ],
   "src/components/KeyDashboard.ts": [
     "test:secret-boundary"
+  ],
+  "src-tauri/src/secret_sync.rs": [
+    "test:secret-boundary"
+  ],
+  "src-tauri/sidecar/secret-sync.mjs": [
+    "test:secret-boundary"
+  ],
+  "src-tauri/sidecar/secret-sync.test.mjs": [
+    "test:secret-boundary"
+  ],
+  "src-tauri/tauri.conf.json": [
+    "test:secret-boundary"
   ]
 }

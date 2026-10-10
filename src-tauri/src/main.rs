@@ -26,6 +26,7 @@ mod current_location;
 mod imessage;
 mod notify_policy;
 mod sidecar_publication;
+mod secret_sync;
 mod sidecar_supervisor;
 mod updater_policy;
 mod watchdog;
@@ -174,6 +175,7 @@ struct LocalApiState {
  shutting_down: AtomicBool,
  // Bumped on every successful spawn so status readers can tell restarts apart.
  generation: AtomicU64,
+ launch_secrets: secret_sync::LaunchReconciliation,
 }
 
 const BUILD_SHA: &str = match option_env!("WM_BUILD_SHA") {
@@ -191,6 +193,7 @@ impl Default for LocalApiState {
  supervisor: Mutex::new(sidecar_supervisor::SupervisorState::new()),
  shutting_down: AtomicBool::new(false),
  generation: AtomicU64::new(0),
+ launch_secrets: secret_sync::LaunchReconciliation::default(),
  }
  }
 }
@@ -199,6 +202,7 @@ impl Default for LocalApiState {
 /// repeated macOS Keychain prompts (each `Entry::get_password()` triggers one).
 struct SecretsCache {
  secrets: Mutex<HashMap<String, String>>,
+ revisions: secret_sync::RevisionClock,
  // Keys the user explicitly set or deleted via Settings since launch. The
  // async keychain read works from a snapshot taken before these edits, so its
  // merge must skip them — otherwise a just-deleted key gets resurrected (and
@@ -292,6 +296,7 @@ impl SecretsCache {
  fn empty() -> Self {
  SecretsCache {
  secrets: Mutex::new(HashMap::new()),
+ revisions: secret_sync::RevisionClock::default(),
  user_mutated: Mutex::new(HashSet::new()),
  loaded: AtomicBool::new(false),
  }
@@ -3913,20 +3918,16 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  cmd.current_dir(parent);
  }
 
- // Pass cached keychain secrets to sidecar as env vars (no keychain re-read)
- let mut secret_count = 0u32;
+ // Reserve the listener floor while copying the launch environment under
+ // cache ownership. Even absent allowed keys reject pre-launch requests.
  let secrets_cache = app.state::<SecretsCache>();
- if let Ok(secrets) = secrets_cache.secrets.lock() {
- for (key, value) in secrets.iter() {
+ let (launch_secrets, seed_floor) = secrets_cache.revisions.launch(&secrets_cache.secrets)
+ .map_err(|_| "Secrets cache unavailable at sidecar launch".to_string())?;
+ cmd.env("LOCAL_API_SECRET_REVISION_FLOOR", seed_floor);
+ for (key, value) in &launch_secrets {
  cmd.env(key, value);
- secret_count += 1;
  }
- }
- append_desktop_log(
- app,
- "INFO",
- &format!("injected {secret_count} keychain secrets into sidecar env"),
- );
+ append_desktop_log(app, "INFO", &format!("injected {} keychain secrets into sidecar env", launch_secrets.len()));
 
  // Inject build-time secrets (CI) with runtime env fallback (dev)
  if let Some(url) = option_env!("CONVEX_URL") {
@@ -3945,6 +3946,9 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  &format!("local API sidecar started pid={child_pid}"),
  );
  let generation = local_api_cell(&state).install(&mut slot, child);
+ // Store before releasing child ownership or starting its publication monitor.
+ state.launch_secrets.install(generation, launch_secrets)
+ .map_err(|_| "Secrets launch reconciliation unavailable".to_string())?;
  let restarts = match state.supervisor.lock() {
  Ok(mut supervisor) => {
  let now = supervisor_clock_ms();
@@ -4007,6 +4011,7 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  sidecar_publication::Tick::Running(late) => {
  if let Some(port) = late {
  append_desktop_log(&app_handle, "INFO", &format!("sidecar confirmed port={port} (late)"));
+ schedule_launch_secret_reconciliation(&app_handle, generation);
  }
  continue; // still running
  }
@@ -4045,6 +4050,7 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  match local_api_cell(&state).publish_start(generation, waited, DEFAULT_LOCAL_API_PORT) {
  sidecar_publication::Publication::Confirmed(port) => {
  append_desktop_log(app, "INFO", &format!("sidecar confirmed port={port}"));
+ schedule_launch_secret_reconciliation(app, generation);
  }
  sidecar_publication::Publication::Unconfirmed(_) => {
  append_desktop_log(
@@ -4311,133 +4317,76 @@ fn confirmed_sidecar_target(app: &AppHandle) -> Result<(String, u16), &'static s
     Ok((token, port))
 }
 
-/// Body for the sidecar's `/api/local-env-update`; `None` unsets the key.
-fn sidecar_env_update_body(key: &str, value: Option<&str>) -> Value {
-    serde_json::json!({ "key": key, "value": value })
+/// `None` is an explicit tombstone; revisions are canonical bounded decimal strings.
+fn sidecar_env_update_body(key: &str, snapshot: &secret_sync::Snapshot) -> Value {
+    serde_json::json!({ "key": key, "value": snapshot.value, "revision": snapshot.revision })
 }
 
 fn sidecar_http_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(3))
         .build()
-        .map_err(|e| e.to_string())
+        .map_err(|_| "secret sync HTTP client unavailable".to_string())
 }
 
-/// POST one key to the sidecar, with a few quick retries to absorb momentary
-/// unreadiness. Returns whether the sidecar accepted it.
-async fn post_secret_update(client: &reqwest::Client, port: u16, token: &str, key: &str, value: Option<&str>) -> bool {
-    let url = format!("http://127.0.0.1:{port}/api/local-env-update");
-    for attempt in 0..3 {
-        let result = client
-            .post(&url)
-            .header("Authorization", format!("Bearer {token}"))
-            .json(&sidecar_env_update_body(key, value))
-            .send()
-            .await;
-        if matches!(result, Ok(ref resp) if resp.status().is_success()) {
-            return true;
-        }
-        if attempt < 2 {
-            // Sleep off the async executor (no tokio timer in scope).
+/// Sole native sender: each attempt reserves current cache state and rechecks
+/// the confirmed live child. No cache lock survives HTTP or retry delay.
+async fn post_secret_update(app: &AppHandle, client: &reqwest::Client, key: &str) -> secret_sync::Outcome {
+    let cache = app.state::<SecretsCache>();
+    secret_sync::send(
+        || cache.revisions.snapshot(&cache.secrets, key),
+        || confirmed_sidecar_target(app).map_err(|_| ()),
+        |(token, port), snapshot| {
+            let request = client.post(format!("http://127.0.0.1:{port}/api/local-env-update"))
+                .header("Authorization", format!("Bearer {token}"))
+                .json(&sidecar_env_update_body(key, &snapshot));
+            async move {
+                matches!(request.send().await, Ok(ref resp) if resp.status().is_success())
+            }
+        },
+        || async {
             let _ = tauri::async_runtime::spawn_blocking(|| std::thread::sleep(Duration::from_millis(400))).await;
-        }
-    }
-    false
+        },
+    ).await
 }
 
-/// Push freshly-loaded keychain secrets into the already-running sidecar via
-/// its `/api/local-env-update` IPC endpoint. Secrets take effect without
-/// restarting the sidecar (or the app).
-///
-/// Used at boot so a slow Touch ID / Keychain read never gates sidecar startup:
-/// the sidecar boots with zero secrets, then these get injected the moment the
-/// keychain resolves. Best-effort — the keychain remains the source of truth,
-/// so a failed push just means those routes return 503 until the next launch.
+/// Snapshots select keys only: Settings deletion/rotation wins over every
+/// boot, reload and recovery producer, including updates during retries.
 async fn inject_secrets_into_running_sidecar(app: &AppHandle, secrets: Vec<(String, String)>) {
-    let total = secrets.len();
-    if total == 0 {
+    sync_secret_keys_to_sidecar(app, secrets.into_iter().map(|(key, _)| key).collect()).await;
+}
+
+async fn sync_secret_keys_to_sidecar(app: &AppHandle, keys: Vec<String>) {
+    let client = match sidecar_http_client() {
+        Ok(client) => client,
+        Err(reason) => { append_desktop_log(app, "WARN", &reason); return; }
+    };
+    for key in keys {
+        let outcome = post_secret_update(app, &client, &key).await;
+        append_desktop_log(app, if outcome == secret_sync::Outcome::Accepted { "INFO" } else { "WARN" },
+            &format!("sidecar secret sync: {key} {outcome:?}"));
+    }
+}
+
+async fn sync_secret_to_sidecar(app: &AppHandle, key: &str) {
+    sync_secret_keys_to_sidecar(app, vec![key.to_string()]).await;
+}
+
+/// Both normal and late publication consume one owning-generation launch
+/// delta. Absent keys outside that union keep inherited dev/build fallbacks.
+fn schedule_launch_secret_reconciliation(app: &AppHandle, generation: u64) {
+    let state = app.state::<LocalApiState>();
+    if state.generation.load(Ordering::SeqCst) != generation || confirmed_sidecar_target(app).is_err() {
         return;
     }
-    let (token, port) = match confirmed_sidecar_target(app) {
-        Ok(target) => target,
-        Err(reason) => {
-            append_desktop_log(
-                app,
-                "WARN",
-                &format!("{reason} at secret-injection time — secrets not pushed (will load on next launch)"),
-            );
-            return;
-        }
+    let cache = app.state::<SecretsCache>();
+    let keys = match state.launch_secrets.take_changed(generation, &cache.secrets) {
+        Ok(Some(keys)) => keys,
+        Ok(None) => return,
+        Err(_) => { append_desktop_log(app, "WARN", "sidecar launch reconciliation cache unavailable"); return; }
     };
-    let client = match sidecar_http_client() {
-        Ok(c) => c,
-        Err(e) => {
-            append_desktop_log(app, "WARN", &format!("secret injection skipped: http client build failed: {e}"));
-            return;
-        }
-    };
-    let secrets_cache = app.state::<SecretsCache>();
-    let mut pushed = 0usize;
-    let mut skipped = 0usize;
-    for (key, _snapshot) in secrets {
-        // Re-read the live cache value per key rather than trusting this snapshot.
-        // If the user edited the secret in Settings after the snapshot was taken,
-        // the cache holds the newer value and we post that (never the stale one).
-        // If the key was deleted since the snapshot it's gone from the cache, so
-        // skip it rather than resurrect a just-removed credential.
-        let value = match secrets_cache.secrets.lock() {
-            Ok(map) => match map.get(&key) {
-                Some(v) => v.clone(),
-                None => {
-                    skipped += 1;
-                    continue;
-                }
-            },
-            Err(_) => {
-                skipped += 1;
-                continue;
-            }
-        };
-        if post_secret_update(&client, port, &token, &key, Some(&value)).await {
-            pushed += 1;
-        }
-    }
-    append_desktop_log(
-        app,
-        "INFO",
-        &format!("injected {pushed}/{total} keychain secrets into running sidecar via IPC ({skipped} skipped: deleted or unreadable since load)"),
-    );
-}
-
-/// Push one Settings edit or deletion to the running sidecar (R4-SEC-001).
-/// Webviews no longer relay secret values, so native does it after the vault
-/// write. Reads the live cache: a deleted key is sent as an unset, so it stops
-/// working immediately instead of staying live until the sidecar restarts. If
-/// the sidecar is down, its next start takes its env from the same cache.
-async fn sync_secret_to_sidecar(app: &AppHandle, key: &str) {
-    let (token, port) = match confirmed_sidecar_target(app) {
-        Ok(target) => target,
-        Err(reason) => {
-            append_desktop_log(app, "WARN", &format!("{reason} — Settings change to {key} not pushed (applies on next sidecar start)"));
-            return;
-        }
-    };
-    let client = match sidecar_http_client() {
-        Ok(c) => c,
-        Err(e) => {
-            append_desktop_log(app, "WARN", &format!("Settings change to {key} not pushed: http client build failed: {e}"));
-            return;
-        }
-    };
-    let value = app
-        .state::<SecretsCache>()
-        .secrets
-        .lock()
-        .ok()
-        .and_then(|map| map.get(key).cloned());
-    let action = if value.is_some() { "set" } else { "unset" };
-    let level = if post_secret_update(&client, port, &token, key, value.as_deref()).await { "INFO" } else { "WARN" };
-    append_desktop_log(app, level, &format!("Settings change pushed to sidecar: {action} {key} (ok={})", level == "INFO"));
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move { sync_secret_keys_to_sidecar(&handle, keys).await; });
 }
 
 // ── Sidecar supervision (R4-BUG-004) ─────────────────────────────────
@@ -5492,12 +5441,12 @@ mod secret_boundary_tests {
     #[test]
     fn sidecar_update_body_unsets_a_deleted_key() {
         assert_eq!(
-            sidecar_env_update_body("SHODAN_API_KEY", None),
-            serde_json::json!({ "key": "SHODAN_API_KEY", "value": null })
+            sidecar_env_update_body("SHODAN_API_KEY", &secret_sync::Snapshot { value: None, revision: "1".into() }),
+            serde_json::json!({ "key": "SHODAN_API_KEY", "value": null, "revision": "1" })
         );
         assert_eq!(
-            sidecar_env_update_body("SHODAN_API_KEY", Some("v")),
-            serde_json::json!({ "key": "SHODAN_API_KEY", "value": "v" })
+            sidecar_env_update_body("SHODAN_API_KEY", &secret_sync::Snapshot { value: Some("v".into()), revision: "2".into() }),
+            serde_json::json!({ "key": "SHODAN_API_KEY", "value": "v", "revision": "2" })
         );
     }
 }

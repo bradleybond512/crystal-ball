@@ -1,6 +1,9 @@
 # R4-SEC-001 validation — sidecar-only secrets are write-only to webviews
 
-Validated September 30, 2026 on branch `claude/r4-sec-001-secret-boundary`.
+Original September 30, 2026 report for `claude/r4-sec-001-secret-boundary`.
+The September 30 raw mutation artifacts were not recovered during October 10
+integration; historical claims below are not independently attested. Fresh
+October 10 evidence is recorded separately after the clean implementation freeze.
 It is stacked on PR #1759 (`claude/r4-bug-004-renderer`, `031d874f7`), which
 is stacked on PR #1758. Approved design:
 [plan](../plans/2026-09-30-r4-sec-001-secret-boundary.md).
@@ -19,9 +22,18 @@ is stacked on PR #1758. Approved design:
   - `set_secret` / `delete_secret` push the change to the running sidecar
     **after** the vault write, through `confirmed_sidecar_target`: our child
     must be alive and its port confirmed.
-  - **A deletion is sent as an unset.** Before, a deleted key stayed live in
-    the sidecar until restart. Boot injection is unchanged; it now shares the
-    same guard and HTTP helper.
+  - **A deletion is sent as an unset.** Every Settings, boot, reload and
+    recovery attempt reads the authoritative cache again, reserves a bounded
+    monotonic revision while holding its mutex, and resolves a confirmed live
+    target again. Cache failure is unavailable, distinct from a deleted key.
+  - The native receiver compares decimal-string revisions after reading the
+    request body, before one synchronous environment/hook/cache transaction.
+    Stale and duplicate requests succeed without effects; native missing or
+    malformed revisions fail closed. Non-native development keeps its contract.
+  - Native launch copies the environment and reserves a revision floor under
+    the same cache mutex. Normal and late confirmed publication reconcile only
+    changed keys, including deletion, through the same sender. Other absent
+    keys retain intentional inherited development/build fallbacks.
 - **Renderer:**
   - `keychainService` has no value reader and no value cache.
   - `loadDesktopSecrets` holds presence for every key and values only for
@@ -40,6 +52,11 @@ is stacked on PR #1758. Approved design:
     the sidecar does not hold) verify the value this window already has.
 - Web builds are unchanged: values live in the web vault there.
 
+## Fresh October 10 validation
+
+Clean implementation freeze, mutation reconstruction, final gate and independent
+reviews are pending. This section will receive actual outcomes before publication.
+
 ## Residual risk (Bradley action)
 
 - **The six readable keys are exposed by nature** (client-side request
@@ -52,7 +69,7 @@ is stacked on PR #1758. Approved design:
 - Routing `CRYSTALBALL_API_KEY` through the sidecar is a follow-up that
   pairs with Q11.
 
-## Actual validation
+## Historical September 30 validation (raw artifacts not recovered)
 
 All tests use fakes. No real Keychain; native IPC and the sidecar are faked.
 
@@ -76,7 +93,7 @@ All tests use fakes. No real Keychain; native IPC and the sidecar are faked.
 - `keychain.test.mts` was not wired to any script. It is rewritten for the
   new API and now runs under `test:secret-boundary`.
 
-## Mutation proof
+## Historical September 30 mutation claims (not independently attested)
 
 Each mutation was applied alone. Rust behavior mutations ran
 `cargo test secret_boundary_tests` plus the node gates. TS mutations ran the
@@ -109,11 +126,15 @@ file before mutating. Every file was restored and its hash re-verified.
 | D3 | unset-key Test goes out | `KeyDashboard.ts` (`c4b745e6c55e`) | 27/1 | Test on an unset key sends nothing |
 | S1 | sidecar ignores useStored | `local-api-server.mjs` (`7091a36bf31a`) | 12/1 | the sidecar can verify a saved key without being sent its value |
 
-All 22 mutations went red on the first run, and every file was
-restored to its original hash.
+The original report claimed all 22 mutations went red on the first run and
+every file was restored. The October 10 repair does not attest those historical
+runs; its fresh equivalents retain actual applied diffs, outputs and hashes.
 
 ## Rollback
 
-Revert the commit. `get_secret` and the renderer value caches return, and
+Revert the native sender/launch and sidecar receiver changes together; their
+revision protocol is paired. No persisted vault migration is introduced.
+Reverting the original write-only boundary also restores `get_secret`.
+The original full-boundary rollback was: revert the commit. `get_secret` and the renderer value caches return, and
 deletions again stay live in the sidecar until restart. The vault format is
 unchanged.

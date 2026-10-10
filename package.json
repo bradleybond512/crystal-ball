@@ -304,7 +304,7 @@
     "@luma.gl/engine": "^9.4.0",
     "@luma.gl/gltf": "^9.4.0",
     "@luma.gl/shadertools": "^9.4.0",
-    "@luma.gl/webgl": "^9.4.0",
+    "@luma.gl/webgl": "^9.4.2",
     "@sentry/browser": "^10.39.0",
     "@types/three": "^0.184.0",
     "@upstash/ratelimit": "^2.0.8",

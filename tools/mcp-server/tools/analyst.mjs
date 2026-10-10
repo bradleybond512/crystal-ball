@@ -43,9 +43,9 @@ export const schemas = {
   },
   submit_hypothesis_feedback: {
     description:
-      'Record thumbs-up or thumbs-down on a specific analyst hypothesis. Feedback ' +
+      'Submit pending thumbs-up or thumbs-down feedback on a specific analyst hypothesis. Feedback ' +
       'is keyed by hypothesis signature (kind + evidence sources + region) so it ' +
-      'generalizes across cycles. Pushes a command to the renderer which applies it. ' +
+      'generalizes across cycles. The user must press Confirm in the Analyst HUD before it affects ranking. ' +
       'Reference a hypothesis by either hypothesis_id (from get_analyst_hypotheses) ' +
       'or signature.',
     inputSchema: z.object({
@@ -57,7 +57,8 @@ export const schemas = {
   },
   dismiss_hypothesis: {
     description:
-      'Hide a hypothesis from the HUD and from ranking for 24 hours. Use when a ' +
+      'Submit a pending dismissal suggestion. The user must press Confirm in the Analyst HUD ' +
+      'before the hypothesis is hidden from the HUD and ranking for 24 hours. Use when a ' +
       'hypothesis is clearly wrong or already addressed. Dismissal is keyed by ' +
       'signature so it applies to future cycles of the same pattern too.',
     inputSchema: z.object({
@@ -281,8 +282,8 @@ export function makeAnalystTools(client) {
         submitted: true,
         commandId: res.id,
         summary:
-          `Feedback queued (${kind}). The renderer drains the queue every ~10s; ` +
-          'the feedback will take effect on the next analyst cycle.',
+          `Feedback suggestion queued (${kind}). The user must press Confirm in the Analyst HUD ` +
+          'before the feedback affects ranking.',
       };
     },
 
@@ -300,7 +301,7 @@ export function makeAnalystTools(client) {
       return {
         submitted: true,
         commandId: res.id,
-        summary: 'Dismissal queued. Hypothesis will be hidden from HUD + ranking for 24h.',
+        summary: 'Dismissal suggestion queued. The user must press Confirm in the Analyst HUD before the hypothesis is hidden from HUD + ranking for 24h.',
       };
     },
 

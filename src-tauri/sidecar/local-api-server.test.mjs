@@ -1241,6 +1241,15 @@ test('rejects unknown key via /api/local-env-update', async () => {
 });
 
 test('accepts ICAO_API_KEY via /api/local-validate-secret', async () => {
+  let probeCount = 0;
+  const restoreHttps = mockHttpsRequestOnce({
+    statusCode: 200, headers: { 'content-type': 'application/json' }, body: '[]',
+    onRequest(options) {
+      probeCount += 1;
+      assert.equal(options.hostname, 'applications.icao.int');
+      assert.match(options.path, /api_key=icao-test-key/);
+    },
+  });
   const localApi = await setupApiDir({});
 
   const app = await createLocalApiServer({
@@ -1259,7 +1268,9 @@ test('accepts ICAO_API_KEY via /api/local-validate-secret', async () => {
  assert.equal(response.status, 200);
  const body = await response.json();
  assert.equal(body.valid, true);
+ assert.equal(probeCount, 1);
   } finally {
+ restoreHttps();
  await app.close();
  await localApi.cleanup();
   }

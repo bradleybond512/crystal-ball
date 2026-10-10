@@ -71,6 +71,8 @@ test('package metadata and executable match the server contract', async () => {
   assert.equal(packageJson.bin.crystalball, './cli.mjs');
   assert.ok(packageJson.files.includes('local-lock.mjs'));
   assert.ok(packageJson.files.includes('weekly-evaluation-report.mjs'));
+  assert.ok(packageJson.files.includes('framing.mjs'));
+  assert.ok(packageJson.files.includes('profile.mjs'));
   assert.match(indexSource, /^#!\/usr\/bin\/env node/);
   assert.ok(indexStat.mode & 0o111);
   assert.ok(monitorStat.mode & 0o111);

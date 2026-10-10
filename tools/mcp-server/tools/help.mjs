@@ -1,19 +1,54 @@
 import { z } from 'zod';
-import { readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { lstatSync, readFileSync, realpathSync } from 'node:fs';
+import { join, dirname, relative, isAbsolute, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TOOL_CATALOG, TOOL_INDEX } from '../tool-registry.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DOCS_DIR = join(__dirname, '..', 'docs');
+const PACKAGE_ROOT = join(__dirname, '..');
+const DOC_SLUG = /^[a-z][a-z0-9_-]*$/;
 
 function makeResponse(summary, data, sources, warnings = []) {
   return { summary, data, sources, warnings, timestamp: new Date().toISOString(), healthy: true };
 }
 
-function loadJSON(relPath) {
+function admittedIdentifier(identifier, category) {
+  if (typeof identifier !== 'string' || !DOC_SLUG.test(identifier)) return false;
+  if (category === 'tools') return Object.hasOwn(TOOL_CATALOG, identifier);
+  return TOOL_INDEX[category].includes(identifier);
+}
+
+function containedBy(root, target) {
+  const child = relative(root, target);
+  return child !== '' && child !== '..' && !child.startsWith(`..${sep}`) && !isAbsolute(child);
+}
+
+function checkedDirectory(parent, name) {
+  const expected = join(parent, name);
+  const stat = lstatSync(expected);
+  if (stat.isSymbolicLink() || !stat.isDirectory()) return null;
+  const canonical = realpathSync(expected);
+  if (!containedBy(parent, canonical) || dirname(canonical) !== parent || canonical !== expected) return null;
+  return canonical;
+}
+
+// Trust only admitted, regular resources below the installed package root.
+// An install/ancestor symlink is allowed; docs/category/file redirects are not.
+function loadJSON(category, identifier) {
+  if (!admittedIdentifier(identifier, category)) return null;
   try {
-    return JSON.parse(readFileSync(join(DOCS_DIR, relPath), 'utf8'));
+    const packageRoot = realpathSync(PACKAGE_ROOT);
+    const docs = checkedDirectory(packageRoot, 'docs');
+    if (!docs) return null;
+    const directory = checkedDirectory(docs, category);
+    if (!directory) return null;
+    const expected = join(directory, `${identifier}.json`);
+    const stat = lstatSync(expected);
+    if (stat.isSymbolicLink() || !stat.isFile()) return null;
+    const filename = realpathSync(expected);
+    if (!containedBy(packageRoot, filename) || !containedBy(docs, filename)
+      || !containedBy(directory, filename) || dirname(filename) !== directory || filename !== expected) return null;
+    return JSON.parse(readFileSync(filename, 'utf8'));
   } catch {
     return null;
   }
@@ -25,8 +60,8 @@ export function makeHelpTools() {
       return makeResponse('Crystal Ball MCP Tools — use help({ tool: "name" }) for details on any tool.', TOOL_INDEX, []);
     }
     if (tool) {
-      const doc = loadJSON(`tools/${tool}.json`);
-      if (!doc && TOOL_CATALOG[tool]) {
+      const doc = loadJSON('tools', tool);
+      if (!doc && admittedIdentifier(tool, 'tools')) {
         return makeResponse(`Generated man page for ${tool}.`, {
           name: tool,
           description: TOOL_CATALOG[tool].description,
@@ -38,12 +73,12 @@ export function makeHelpTools() {
       return makeResponse(`Man page for ${tool}.`, doc, []);
     }
     if (topic) {
-      const doc = loadJSON(`topics/${topic}.json`);
+      const doc = loadJSON('topics', topic);
       if (!doc) return makeResponse(`No topic guide found for "${topic}".`, {}, [], [`docs/topics/${topic}.json not found`]);
       return makeResponse(`Topic: ${doc.title}`, doc, []);
     }
     if (examples) {
-      const doc = loadJSON(`examples/${examples}.json`);
+      const doc = loadJSON('examples', examples);
       if (!doc) return makeResponse(`No examples found for "${examples}".`, {}, [], [`docs/examples/${examples}.json not found`]);
       return makeResponse(`Examples: ${doc.title}`, doc, []);
     }

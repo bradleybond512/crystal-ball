@@ -94,6 +94,9 @@ test('analyst tools', async (t) => {
     const tools = makeAnalystTools(fakeClient({ available: true }, posts));
     const res = await tools.submit_hypothesis_feedback({ vote: 'down', hypothesis_id: 'h1' });
     assert.equal(res.submitted, true);
+    assert.equal(res.commandId, 'cmd-1');
+    assert.match(res.summary, /suggestion queued/i);
+    assert.match(res.summary, /Confirm.*Analyst HUD/i);
     assert.equal(posts.length, 1);
     assert.equal(posts[0].route, '/api/analyst-commands');
     assert.equal(posts[0].body.kind, 'thumbs_down');
@@ -111,6 +114,10 @@ test('analyst tools', async (t) => {
     const tools = makeAnalystTools(fakeClient({ available: true }, posts));
     const res = await tools.dismiss_hypothesis({ signature: 'sig-1' });
     assert.equal(res.submitted, true);
+    assert.equal(res.commandId, 'cmd-1');
+    assert.match(res.summary, /suggestion queued/i);
+    assert.match(res.summary, /Confirm.*Analyst HUD/i);
+    assert.equal(posts[0].route, '/api/analyst-commands');
     assert.equal(posts[0].body.kind, 'dismiss');
     assert.equal(posts[0].body.signature, 'sig-1');
   });
@@ -220,4 +227,14 @@ test('analyst tools', async (t) => {
     assert.equal(result.entries.length, 1);
     assert.match(result.summary, /^1 of 2 trace entries/);
   });
+});
+
+test('feedback and dismissal descriptions state pending user confirmation while errors retain their contract', async () => {
+  for (const name of ['submit_hypothesis_feedback', 'dismiss_hypothesis']) {
+    assert.match(schemas[name].description, /pending/i);
+    assert.match(schemas[name].description, /Confirm.*Analyst HUD/i);
+  }
+  const tools = makeAnalystTools({ post: async () => ({ error: 'fixture command failure' }) });
+  assert.deepEqual(await tools.submit_hypothesis_feedback({ vote: 'up', hypothesis_id: 'h1' }), { submitted: false, error: 'fixture command failure' });
+  assert.deepEqual(await tools.dismiss_hypothesis({ hypothesis_id: 'h1' }), { submitted: false, error: 'fixture command failure' });
 });

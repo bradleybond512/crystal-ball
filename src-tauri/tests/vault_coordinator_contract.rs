@@ -645,6 +645,11 @@ fn queued_old_generation_cannot_clear_new_child_inherited_fallback() {
 fn generation_guard_detects_supersession_during_lookup_and_each_retry() {
     let owner = std::cell::Cell::new(1); let mut posts = 0;
     assert!(secret_sync::target_for_generation(Some(1), || owner.get(), || { owner.set(2); Ok(()) }).is_err());
+    let lookups = std::cell::Cell::new(0);
+    assert!(secret_sync::target_for_generation(Some(1), || owner.get(), || {
+        lookups.set(lookups.get() + 1); Ok(())
+    }).is_err());
+    assert_eq!(lookups.get(), 0, "a superseded owner never resolves the new child's target");
     owner.set(1); let state = VaultState::new(); let clock = secret_sync::RevisionClock::default();
     assert_eq!(tauri::async_runtime::block_on(secret_sync::send(
         || state.transport_snapshot(&clock, "B"),
@@ -706,4 +711,52 @@ fn actual_launch_floor_rejects_delayed_request_for_absent_native_key() {
     assert_eq!(sink.values.get("B").map(String::as_str), Some("inherited"));
     sink.apply("B", state.transport_snapshot(&clock, "B").unwrap());
     assert!(sink.values.is_empty(), "post-floor managed unset applies");
+}
+
+
+#[test]
+fn authoritative_removal_callbacks_are_sorted() {
+    let (writer, store, handle) = current_store();
+    let initial: HashMap<String, String> = (0..12)
+        .map(|index| (format!("KEY_{index:02}"), format!("fake_{index}")))
+        .collect();
+    assert_eq!(writer.load(ReadResult::Shadow(initial), 0, LONG), Some(VaultSource::Shadow));
+    assert_eq!(writer.load(ReadResult::Vault(HashMap::new()), 0, LONG), Some(VaultSource::Vault));
+    let expected: Vec<String> = (0..12).map(|index| format!("push:KEY_{index:02}:true")).collect();
+    assert_eq!(*store.events.lock().unwrap(), expected, "same-Load removal callbacks use sorted managed keys");
+    assert!(store.sink.lock().unwrap().values.is_empty());
+    drop(writer); handle.join().unwrap();
+}
+
+#[test]
+fn writer_thread_stops_when_all_coordinators_drop() {
+    let store = Arc::new(FakeStore::default());
+    let (writer, handle) = VaultCoordinator::start(Arc::new(VaultState::new()), store).unwrap();
+    assert_eq!(writer.load(ReadResult::Absent, 0, LONG), Some(VaultSource::Absent));
+    let other = writer.clone();
+    drop(writer); drop(other);
+    let (stopped_tx, stopped_rx) = mpsc::channel();
+    std::thread::spawn(move || { let _ = stopped_tx.send(handle.join()); });
+    stopped_rx.recv_timeout(Duration::from_secs(2))
+        .expect("the sole writer exits after its external senders are dropped")
+        .expect("the writer terminates normally");
+}
+
+
+#[test]
+fn launch_key_selections_are_normalized_and_follow_the_inflight_write() {
+    let (writer, store) = start_loaded(&[]);
+    let entered = store.watch_entries();
+    let release = store.hold_next_write();
+    let saving = writer.clone();
+    let save = std::thread::spawn(move || set(&saving, "A", "new"));
+    entered.recv_timeout(LONG).unwrap();
+    assert_eq!(writer.try_push_keys(7, vec!["B".into(), "A".into(), "B".into()]),
+        secret_sync::PushAdmission::Accepted);
+    assert!(store.events().is_empty(), "launch callbacks wait behind the physical write");
+    release.send(Ok(())).unwrap();
+    assert_eq!(save.join().unwrap(), MutateOutcome::Saved);
+    flush(&writer);
+    assert_eq!(store.events(), vec!["vault:A=new", "shadow:A=new", "push:A=new", "launch:7:A,B"],
+        "one normalized selection callback follows the committed write");
 }

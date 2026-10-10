@@ -80,8 +80,8 @@
         "get_mode_forecast": "Read the current cross-domain posture forecast.",
         "get_analyst_accuracy": "Read hypothesis accuracy metrics.",
         "get_hot_entities": "Read entities with elevated cross-domain activity.",
-        "submit_hypothesis_feedback": "Submit analyst hypothesis feedback.",
-        "dismiss_hypothesis": "Dismiss a hypothesis in renderer state.",
+        "submit_hypothesis_feedback": "Submit pending hypothesis feedback; requires Confirm in the Analyst HUD before affecting ranking.",
+        "dismiss_hypothesis": "Submit a pending dismissal; requires Confirm in the Analyst HUD before hiding the hypothesis for 24h.",
         "run_skeptic_now": "Trigger an on-demand skeptic analysis.",
         "get_reasoning_debug_log": "Read bounded reasoning debug events.",
         "get_reasoning_metrics": "Read reasoning latency and counter metrics.",
@@ -666,7 +666,7 @@
     },
     "submit_hypothesis_feedback": {
       "category": "Analyst",
-      "description": "Submit analyst hypothesis feedback.",
+      "description": "Submit pending hypothesis feedback; requires Confirm in the Analyst HUD before affecting ranking.",
       "permission": {
         "code": "change_local",
         "label": "Changes local state",
@@ -681,7 +681,7 @@
     },
     "dismiss_hypothesis": {
       "category": "Analyst",
-      "description": "Dismiss a hypothesis in renderer state.",
+      "description": "Submit a pending dismissal; requires Confirm in the Analyst HUD before hiding the hypothesis for 24h.",
       "permission": {
         "code": "manage_local",
         "label": "Manages local records",

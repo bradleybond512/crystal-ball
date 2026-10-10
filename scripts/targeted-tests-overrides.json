@@ -145,7 +145,9 @@
     "test:signing-phase-a"
   ],
   "scripts/install-crystalball-mcp.mjs": [
-    "test:install-scripts"
+    "test:install-scripts",
+    "test:mcp-install-smoke",
+    "test:mcp-companion"
   ],
   ".github/workflows/release-integrity.yml": [
     "test:install-scripts"
@@ -284,7 +286,9 @@
     "test:secret-boundary"
   ],
   "src-tauri/sidecar/local-api-server.mjs": [
-    "test:secret-boundary"
+    "test:secret-boundary",
+    "test:mcp-untrusted",
+    "test:mcp-companion"
   ],
   "src/services/keychain.ts": [
     "test:secret-boundary",
@@ -324,5 +328,103 @@
   ],
   "src/services/diagnostics/vault-diagnostics.ts": [
     "test:signing-phase-a"
+  ],
+  "tools/mcp-server/index.mjs": [
+    "test:mcp-untrusted"
+  ],
+  "tools/mcp-server/framing.mjs": [
+    "test:mcp-untrusted"
+  ],
+  "tools/mcp-server/profile.mjs": [
+    "test:mcp-untrusted"
+  ],
+  "tools/mcp-server/result.mjs": [
+    "test:mcp-untrusted"
+  ],
+  "tools/mcp-server/tool-registry.mjs": [
+    "test:mcp-untrusted"
+  ],
+  "src/components/AnalystHUD.ts": [
+    "test:mcp-untrusted"
+  ],
+  "src/components/agent-suggestions-view.ts": [
+    "test:mcp-untrusted"
+  ],
+  "tools/mcp-server/tools/help.mjs": [
+    "test:mcp-companion"
+  ],
+  "tools/mcp-server/tools/analyst.mjs": [
+    "test:mcp-companion"
+  ],
+  "tools/mcp-server/__tests__/help-tool.test.mjs": [
+    "test:mcp-companion"
+  ],
+  "tools/mcp-server/__tests__/analyst-tools.test.mjs": [
+    "test:mcp-companion"
+  ],
+  "src-tauri/sidecar/__tests__/analyst-diagnostics-mirror.test.mjs": [
+    "test:mcp-companion"
+  ],
+  "src/services/agent-suggestions.ts": [
+    "test:mcp-untrusted"
+  ],
+  "src/services/analyst-command-listener.ts": [
+    "test:mcp-untrusted"
+  ],
+  "src/services/hypothesis-feedback.ts": [
+    "test:mcp-untrusted"
+  ],
+  "src/services/__tests__/agent-suggestions.test.mts": [
+    "test:mcp-untrusted"
+  ],
+  "src/services/__tests__/analyst-command-listener.test.mts": [
+    "test:mcp-untrusted"
+  ],
+  "src/components/__tests__/analyst-hud-agent-suggestions.test.mts": [
+    "test:mcp-untrusted"
+  ],
+  "src-tauri/sidecar/__tests__/analyst-commands-origin.test.mjs": [
+    "test:mcp-untrusted"
+  ],
+  "tools/mcp-server/__tests__/install-smoke.test.mjs": [
+    "test:mcp-install-smoke",
+    "test:install-scripts",
+    "test:mcp-untrusted"
+  ],
+  "tests/helpers/mcp-runtime-fixture.mjs": [
+    "test:mcp-untrusted",
+    "test:mcp-companion",
+    "test:mcp-install-smoke",
+    "test:install-scripts"
+  ],
+  "tests/helpers/run-isolated-mcp.mjs": [
+    "test:mcp-untrusted",
+    "test:mcp-companion",
+    "test:mcp-install-smoke"
+  ],
+  "tests/helpers/loopback-only.mjs": [
+    "test:mcp-untrusted",
+    "test:mcp-companion",
+    "test:mcp-install-smoke",
+    "test:install-scripts"
+  ],
+  "tools/mcp-server/__tests__/runtime-isolation.test.mjs": [
+    "test:mcp-companion",
+    "test:install-scripts",
+    "test:mcp-untrusted"
+  ],
+  "scripts/install-crystalball-mcp.test.mjs": [
+    "test:install-scripts",
+    "test:mcp-install-smoke",
+    "test:mcp-companion"
+  ],
+  "tests/install-script-drift.test.mjs": [
+    "test:install-scripts"
+  ],
+  "tests/helpers/mcp-locked-cache.mjs": [
+    "test:install-scripts",
+    "test:mcp-untrusted",
+    "test:mcp-install-smoke",
+    "test:mcp-companion"
   ]
 }

@@ -130,7 +130,11 @@ test('main-sync and the MCP installers pass --ignore-scripts explicitly (in case
   assert.ok(installs.length > 0);
   for (const args of installs) assert.ok(args.includes('--ignore-scripts'), `main-sync: npm ${args.join(' ')}`);
   assert.match(read('scripts/install-mcp-deps.mjs'), /\[env\.npm_execpath, action, '--ignore-scripts'/);
-  assert.match(read('scripts/install-crystalball-mcp.mjs'), /'install',\n[^\]]*'--ignore-scripts',/);
+  const installer = read('scripts/install-crystalball-mcp.mjs');
+  for (const operation of ['pack', 'ci']) {
+    assert.match(installer, new RegExp(`\\[npm, '${operation}', '--ignore-scripts'`), `MCP npm ${operation} explicitly disables scripts`);
+  }
+  assert.doesNotMatch(installer, /'install'|--global/, 'MCP uses its locked project root rather than override-blind global resolution');
   const pkg = JSON.parse(read('package.json'));
   assert.match(pkg.scripts['mcp:install'], /npm ci --ignore-scripts /);
   assert.match(read('.github/workflows/smoke.yml'), /cd tools\/mcp-server && npm ci --ignore-scripts &&/);

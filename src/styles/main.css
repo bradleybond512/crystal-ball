@@ -20123,6 +20123,33 @@ body.is-desktop-macos .replay-scrubber { left: var(--mac-sidebar-width); }
   color: rgba(255, 255, 255, 0.4);
   font-style: italic;
 }
+/* R4-SEC-004: external-agent suggestions awaiting Confirm / Discard. */
+.analyst-hud-agent-suggestion {
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--status-warn);
+  border-radius: var(--r-xs);
+}
+.analyst-hud-agent-suggestion-kind { font-weight: 600; }
+.analyst-hud-agent-suggestion-statement { margin-top: 2px; overflow-wrap: anywhere; }
+.analyst-hud-agent-suggestion-note,
+.analyst-hud-agent-suggestion-meta {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.analyst-hud-agent-suggestion-actions { display: flex; gap: 6px; margin-top: 6px; }
+.analyst-hud-agent-suggestion-confirm,
+.analyst-hud-agent-suggestion-discard {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: var(--r-xs);
+  background: transparent;
+  cursor: pointer;
+}
+.analyst-hud-agent-suggestion-confirm { border: 1px solid var(--status-ok); color: var(--status-ok); }
+.analyst-hud-agent-suggestion-discard { border: 1px solid var(--border); color: var(--text-secondary); }
 .analyst-hud-advisory {
   margin-bottom: 8px;
 }

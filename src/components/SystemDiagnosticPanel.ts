@@ -38,6 +38,11 @@ import {
   type LocalEngineStatus,
   type LocalEngineTone,
 } from '@/services/diagnostics/local-engine-status';
+import {
+  buildVaultDiagnosticsView,
+  fetchVaultDiagnostics,
+  type VaultDiagnostics,
+} from '@/services/diagnostics/vault-diagnostics';
 import { getSavedPlaces } from '@/services/saved-places';
 import { runNwsPolygonSelfTestFixture } from '@/services/weather/self-test-fixture';
 import { runChampionRollbackSelfTestFixture } from '@/services/cognition/champion-rollback-fixture';
@@ -122,6 +127,8 @@ export class SystemDiagnosticPanel extends Panel {
   } = { running: false, asOf: null, results: [], summary: null, error: null };
   /** Native sidecar supervisor state (R4-BUG-004); desktop only. */
   private localEngine: { status: LocalEngineStatus | null; busy: boolean } = { status: null, busy: false };
+  /** Keys & signing status (R3-SEC-003 phase A); desktop only. */
+  private vaultDiagnostics: VaultDiagnostics | null = null;
 
   constructor() {
     super({
@@ -138,9 +145,11 @@ export class SystemDiagnosticPanel extends Panel {
   private start(): void {
     this.render();
     void this.refreshLocalEngine();
+    void this.refreshVaultDiagnostics();
     this.refreshTimer = setInterval(() => this.renderWhenVisible(() => {
       this.render();
       void this.refreshLocalEngine();
+      void this.refreshVaultDiagnostics();
     }), REFRESH_MS);
     this.detachDisclosure = attachDisclosureClickDelegation(this.content, 'system-diagnostic');
     this.unsubscribeDisclosure = disclosureService.subscribe('system-diagnostic', () => this.render());
@@ -346,7 +355,6 @@ export class SystemDiagnosticPanel extends Panel {
     const recHtml = recs.length === 0
       ? `<div style="color:var(--text-secondary,#aaa);font-size:12px;">No recommendations — all clear.</div>`
       : `<ul style="margin:0;padding-left:18px;">${recs.map((r) => `<li style="font-size:12px;margin:3px 0;">${escapeHtml(r)}</li>`).join('')}</ul>`;
-    // eslint-disable-next-line unicorn/no-array-reverse -- reversing a fresh copy, not the original.
     const recentEvents = [...ctx.recentEvents].reverse().slice(0, 5);
     const eventHtml = recentEvents.length === 0
       ? `<div style="color:var(--text-secondary,#aaa);font-size:11px;">No recent diagnostic events.</div>`
@@ -551,6 +559,7 @@ export class SystemDiagnosticPanel extends Panel {
       ${reportHtml}
       <div style="border-top:1px solid var(--border-subtle,#222);padding-top:10px;">
         ${this.renderLocalEngine()}
+        ${this.renderVaultDiagnostics()}
         ${this.renderSidecarSelfTest()}
       </div>
     </div>`;
@@ -571,6 +580,22 @@ export class SystemDiagnosticPanel extends Panel {
     const button = view.canRestart ? this.renderLocalEngineRestartButton() : '';
     return `<div class="syd-local-engine" style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;font-size:11px;">
       <span style="color:${color};">${escapeHtml(view.text)}</span>${button}
+    </div>`;
+  }
+
+  /** Re-render only when the keys & signing view actually changed. */
+  private async refreshVaultDiagnostics(): Promise<void> {
+    if (!isDesktopRuntime()) return;
+    const before = buildVaultDiagnosticsView(this.vaultDiagnostics).text;
+    this.vaultDiagnostics = await fetchVaultDiagnostics();
+    if (buildVaultDiagnosticsView(this.vaultDiagnostics).text !== before) this.render();
+  }
+
+  private renderVaultDiagnostics(): string {
+    if (!isDesktopRuntime()) return '';
+    const view = buildVaultDiagnosticsView(this.vaultDiagnostics);
+    return `<div class="syd-vault-diagnostics" style="margin-bottom:8px;font-size:11px;">
+      <span style="color:${LOCAL_ENGINE_TONE_COLOR[view.tone]};">${escapeHtml(view.text)}</span>
     </div>`;
   }
 

@@ -125,3 +125,14 @@ they do not copy user cache indexes/configs or fall back to network.
 ## Approval requirement
 
 Implementation starts only after Bradley approves (decisions A–D).
+
+## October 10 bounded integration evidence
+
+The original approved A–D behavior was integrated onto fresh main. Two bounded
+repair cycles are used: checked packaged help and locked installation/isolation,
+then trusted-selector-compatible finite test entries. Production/guard bytes
+were preserved by the routing cycle, and all previous mappings remain additive.
+The validation document separates historical UNATTESTED counts from actual
+October 10 execution, named-red proof carry, survivors and resource limits.
+Whole final Sol medium review, approved Sonnet medium supplement and exact-tip
+publication/CI/closeout remain pending. No third automatic repair is authorized.

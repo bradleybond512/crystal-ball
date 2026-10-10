@@ -20,7 +20,7 @@ test('UCDP RPC is explicitly no-store at the cloud gateway', () => {
 test('deleting a desktop secret unsets it in the live sidecar environment (native push, R4-SEC-001)', () => {
   const main = readFileSync('src-tauri/src/main.rs', 'utf8');
   const deleteSecret = main.slice(main.indexOf('async fn delete_secret('), main.indexOf('fn migration_marker_path('));
-  assert.match(deleteSecret, /sync_secret_to_sidecar\(&sync_app, &sync_key\)\.await;/);
+  assert.match(deleteSecret, /save_secret_change\(&app, &key, None\)/);
   assert.match(main, /fn sidecar_env_update_body\(key: &str, snapshot: &secret_sync::Snapshot\)/);
   assert.match(main, /"value": snapshot\.value, "revision": snapshot\.revision/);
   const controller = readFileSync('src-tauri/src/secret_sync.rs', 'utf8');

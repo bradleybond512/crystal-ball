@@ -58,25 +58,32 @@ test('get_secret is gone; status and renderer config replace it', () => {
 });
 
 test('Settings writes reach the sidecar from native, after the vault write', () => {
+  // R3-BUG-001 slice B: the one vault writer writes the vault, commits, then pushes.
+  const coordinator = read('src-tauri/src/vault_coordinator.rs');
+  const mutate = coordinator.slice(
+    coordinator.indexOf('    fn mutate(&self, key: &str, value: Option<&str>)'),
+    coordinator.indexOf('    fn apply_load('),
+  );
+  const persist = mutate.indexOf('self.store.write_vault(&proposed)?;');
+  const push = mutate.indexOf('self.store.push_key(key, value);');
+  assert.ok(persist > 0 && push > persist, 'the writer pushes after persisting');
   for (const name of ['set_secret', 'delete_secret']) {
     const start = main.indexOf(`async fn ${name}(`);
     const body = main.slice(start, main.indexOf('\n}\n', start));
-    const persist = body.indexOf('save_vault(&proposed)?;');
-    const push = body.indexOf('sync_secret_to_sidecar(&sync_app, &sync_key).await;');
-    assert.ok(persist > 0 && push > persist, `${name} pushes after persisting`);
+    assert.match(body, /save_secret_change\(&app, &key, /, `${name} goes through the vault writer`);
   }
   const sync = main.slice(main.indexOf('async fn sync_secret_to_sidecar('), main.indexOf('/// Both normal and late publication'));
   assert.match(sync, /sync_secret_keys_to_sidecar\(app, vec!\[key\.to_string\(\)\]\)\.await/);
-  const sender = main.slice(main.indexOf('async fn post_secret_update('), main.indexOf('/// Snapshots select keys only'));
+  const sender = main.slice(main.indexOf('async fn post_secret_update_owned('), main.indexOf('/// Select current keys only'));
   assert.match(sender, /secret_sync::send\(/, 'Settings uses the tested real controller');
-  assert.match(sender, /cache\.revisions\.snapshot\(&cache\.secrets, key\)/, 'missing is a revisioned null and poison is unavailable');
-  assert.match(sender, /confirmed_sidecar_target\(app\)\.map_err/, 'each attempt resolves only our confirmed live sidecar');
+  assert.match(sender, /cache\.state\.transport_snapshot\(&cache\.revisions, key\)/, 'missing is a revisioned null and poison is unavailable');
+  assert.match(sender, /confirmed_sidecar_target_owned\(app, generation\)/, 'each attempt resolves only our confirmed live sidecar');
   assert.match(sender, /sidecar_env_update_body\(key, &snapshot\)/, 'request includes the authoritative value and revision');
-  assert.match(main, /inject_secrets_into_running_sidecar\(&app, secrets\)\.await/, 'manual reload uses the sender');
-  assert.match(main, /inject_secrets_into_running_sidecar\(&setup_handle, secrets\)\.await/, 'boot uses the sender');
-  assert.match(main, /inject_secrets_into_running_sidecar\(&retry_handle, recovered\)\.await/, 'recovery uses the sender');
-  const boot = main.slice(main.indexOf('async fn inject_secrets_into_running_sidecar('), main.indexOf('async fn sync_secret_keys_to_sidecar('));
-  assert.match(boot, /sync_secret_keys_to_sidecar\(app, secrets\.into_iter\(\)\.map\(\|\(key, _\)\| key\)/, 'boot snapshots contribute keys only to the same controller');
+  const store = main.slice(main.indexOf('impl VaultStore for TauriVaultStore'), main.indexOf('    fn late_outcome('));
+  assert.match(store, /fn push_key[\s\S]*block_on\(sync_secret_to_sidecar\(&self\.app, key\)\)/);
+  assert.match(store, /fn push_all[\s\S]*secrets\.keys\(\)\.cloned\(\)/);
+  assert.match(store, /block_on\(sync_secret_keys_to_sidecar\(&self\.app, keys\)\)/);
+  assert.match(main, /writer\.push_all\(\)/, 'boot, reload and retry enqueue key selection on the writer');
   const target = main.slice(main.indexOf('fn confirmed_sidecar_target('), main.indexOf('fn sidecar_env_update_body('));
   assert.match(target, /matches!\(child\.try_wait\(\), Ok\(None\)\)/, 'our child must be alive');
   assert.match(target, /if !alive \{\s*return Err/);
@@ -118,7 +125,7 @@ test('the sidecar can verify a saved key without being sent its value', () => {
 
 test('native launch fences all allowed keys and reconciles both confirmation paths through the real sender', () => {
   const start = main.slice(main.indexOf('fn start_local_api('), main.indexOf('/// Frontend → desktop log bridge'));
-  assert.match(start, /revisions\.launch\(&secrets_cache\.secrets\)/, 'launch snapshot and floor share cache ownership');
+  assert.match(start, /state\.transport_launch\(&secrets_cache\.revisions\)/, 'launch snapshot and floor share cache ownership');
   assert.ok(start.indexOf('drop(token_slot);') > start.indexOf('let local_api_token = token_slot.clone().unwrap();'));
   assert.ok(start.indexOf('drop(token_slot);') < start.indexOf('let child = cmd'), 'release token ownership before publication can re-read it');
   assert.match(start, /cmd\.env\("LOCAL_API_SECRET_REVISION_FLOOR", seed_floor\)/);
@@ -126,9 +133,10 @@ test('native launch fences all allowed keys and reconciles both confirmation pat
   assert.match(start, /Tick::Running\(late\)[\s\S]*?if let Some\(port\) = late \{[\s\S]*?schedule_launch_secret_reconciliation\(&app_handle, generation\)/, 'late confirmation reconciles');
   assert.match(start, /Publication::Confirmed\(port\) => \{[\s\S]*?schedule_launch_secret_reconciliation\(app, generation\)/, 'normal confirmation reconciles');
   const scheduler = main.slice(main.indexOf('fn schedule_launch_secret_reconciliation('), main.indexOf('// ── Sidecar supervision'));
-  assert.match(scheduler, /generation\.load\(Ordering::SeqCst\) != generation/);
-  assert.match(scheduler, /take_changed\(generation, &cache\.secrets\)/);
-  assert.match(scheduler, /sync_secret_keys_to_sidecar\(&handle, keys\)\.await/);
+  assert.match(scheduler, /confirmed_sidecar_target_owned\(app, Some\(generation\)\)/);
+  assert.match(scheduler, /try_enqueue_changed\(/);
+  assert.match(scheduler, /writer\.try_push_keys\(generation, keys\)/);
+  assert.doesNotMatch(scheduler, /async_runtime::spawn|block_on|\.await/);
 });
 
 test('revision receiver is bundled and wraps every existing credential and cache effect', () => {

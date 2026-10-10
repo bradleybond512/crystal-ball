@@ -88,7 +88,8 @@
     "test:native-responsiveness",
     "test:native-notify",
     "test:sidecar-supervisor",
-    "test:secret-boundary"
+    "test:secret-boundary",
+    "test:vault-writer"
   ],
   "src-tauri/src/updater_policy.rs": [
     "test:desktop-updater"
@@ -231,7 +232,8 @@
   ],
   "src/services/runtime-config.ts": [
     "test:sidecar-routing",
-    "test:secret-boundary"
+    "test:secret-boundary",
+    "test:vault-writer"
   ],
   "src/services/cloud-fallback-policy.ts": [
     "test:sidecar-routing"
@@ -282,7 +284,8 @@
     "test:secret-boundary"
   ],
   "src/services/keychain.ts": [
-    "test:secret-boundary"
+    "test:secret-boundary",
+    "test:vault-writer"
   ],
   "src/components/SetupWizard.ts": [
     "test:secret-boundary"
@@ -291,7 +294,9 @@
     "test:secret-boundary"
   ],
   "src-tauri/src/secret_sync.rs": [
-    "test:secret-boundary"
+    "test:secret-boundary",
+    "test:vault-writer",
+    "test:sidecar-supervisor"
   ],
   "src-tauri/sidecar/secret-sync.mjs": [
     "test:secret-boundary"
@@ -301,5 +306,11 @@
   ],
   "src-tauri/tauri.conf.json": [
     "test:secret-boundary"
+  ],
+  "src-tauri/src/vault_coordinator.rs": [
+    "test:vault-writer"
+  ],
+  "src-tauri/tests/vault_coordinator_contract.rs": [
+    "test:vault-writer"
   ]
 }

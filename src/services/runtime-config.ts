@@ -1173,14 +1173,20 @@ export async function setSecretValue(key: RuntimeSecretKey, value: string): Prom
   }
 
   const sanitized = value.trim();
+  try {
+    await (sanitized ? keychainService.set(key, sanitized) : keychainService.remove(key));
+  } catch (error) {
+    // A save the Keychain has not confirmed yet ("pending") finishes in the
+    // background; follow it so Settings updates on its own (R3-BUG-001 B).
+    void watchPendingSecretWrites();
+    throw error;
+  }
   if (sanitized) {
- await keychainService.set(key, sanitized);
  desktopSecretPresence.add(key);
  // Only allowlisted values stay in this window (R4-SEC-001).
  if (RENDERER_READABLE_KEYS.has(key)) runtimeConfig.secrets[key] = { value: sanitized, source: 'vault' };
  else delete runtimeConfig.secrets[key];
   } else {
- await keychainService.remove(key);
  desktopSecretPresence.delete(key);
  delete runtimeConfig.secrets[key];
   }
@@ -1194,6 +1200,42 @@ export async function setSecretValue(key: RuntimeSecretKey, value: string): Prom
   } catch { /* localStorage may be unavailable */ }
 
   notifyConfigChanged();
+}
+
+const PENDING_SECRET_POLL_MS = 2000;
+const PENDING_SECRET_WATCH_MS = 180_000;
+let pendingSecretWatch: Promise<void> | null = null;
+
+/**
+ * After a failed or "pending" save, poll native's value-free write state until
+ * no save is waiting on the Keychain, then reload secret status and tell the
+ * other windows. Polling instead of a native event keeps the webviews without
+ * the Tauri event permission. One watch at a time; it gives up after 3 minutes.
+ */
+export function watchPendingSecretWrites(
+  pollMs = PENDING_SECRET_POLL_MS,
+  limitMs = PENDING_SECRET_WATCH_MS,
+): Promise<void> {
+  pendingSecretWatch ??= (async () => {
+    const deadline = Date.now() + limitMs;
+    try {
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, pollMs));
+        const state = await keychainService.writeState().catch(() => null);
+        if (!state) return;
+        if (state.pending === 0) {
+          await loadDesktopSecrets();
+          try {
+            localStorage.setItem('wm-secrets-updated', String(Date.now()));
+          } catch { /* localStorage may be unavailable */ }
+          return;
+        }
+      }
+    } finally {
+      pendingSecretWatch = null;
+    }
+  })();
+  return pendingSecretWatch;
 }
 
 async function getLocalApiToken(): Promise<string | null> {

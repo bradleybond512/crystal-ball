@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs';
 
 const MAIN = readFileSync(new URL('../src-tauri/src/main.rs', import.meta.url), 'utf8');
 const PUB = readFileSync(new URL('../src-tauri/src/sidecar_publication.rs', import.meta.url), 'utf8');
+const SYNC = readFileSync(new URL('../src-tauri/src/secret_sync.rs', import.meta.url), 'utf8');
 
 function fnBody(name, source = MAIN) {
   const start = source.search(new RegExp(`\\bfn ${name}\\s*[<(]`));
@@ -74,9 +75,32 @@ test('the renderer is only ever handed a confirmed port', () => {
   assert.match(monitor, /local_api_cell\(&state\)\.install\(&mut slot, child\)/, 'start installs through the cell');
   assert.match(monitor, /local_api_cell\(&state\)\.tick\(generation, /, 'the monitor ticks only its own generation');
   assert.match(monitor, /local_api_cell\(&state\)\.publish_start\(generation, waited, DEFAULT_LOCAL_API_PORT\)/, 'the starter publishes only for its own generation');
+  // Trace every caller edge: loaded snapshots select keys, and the actual
+  // controller resolves the live target again inside each retry. These are
+  // source wiring assertions, not execution of a real AppHandle or native IPC.
   const inject = fnBody('inject_secrets_into_running_sidecar');
-  assert.match(inject, /let Some\(port\) = local_api_cell\(&state\)\.confirmed_live_port\(\) else/, 'secrets go only to the live confirmed port');
-  assert.doesNotMatch(inject, /DEFAULT_LOCAL_API_PORT/, 'secrets never fall back to the default port');
+  assert.match(inject, /sync_secret_keys_to_sidecar\(app, secrets\.into_iter\(\)\.map\(\|\(key, _\)\| key\)\.collect\(\)\)\.await/);
+  const syncKeys = fnBody('sync_secret_keys_to_sidecar');
+  assert.match(syncKeys, /for key in keys \{\s*let outcome = post_secret_update\(app, &client, &key\)\.await;/);
+  const post = fnBody('post_secret_update');
+  assert.match(post, /secret_sync::send\(\s*\|\| cache\.revisions\.snapshot\(&cache\.secrets, key\),\s*\|\| confirmed_sidecar_target\(app\)\.map_err\(\|_\| \(\)\),\s*\|\(token, port\), snapshot\| \{/,
+    'the production sender supplies fresh cache and confirmed-target closures to the real controller');
+  assert.match(post, /client\.post\(format!\("http:\/\/127\.0\.0\.1:\{port\}\/api\/local-env-update"\)\)/,
+    'transport uses the port supplied by that target');
+  const controller = fnBody('send', SYNC);
+  assert.match(controller, /for attempt in 0\.\.3 \{\s*let state = match snapshot\(\) \{[\s\S]*?\};\s*let destination = match target\(\) \{[\s\S]*?\};\s*if post\(destination, state\)\.await/,
+    'each retry resolves both state and target before posting');
+  const target = fnBody('confirmed_sidecar_target');
+  assert.match(target, /let alive = match state\.child\.lock\(\) \{[\s\S]*?matches!\(child\.try_wait\(\), Ok\(None\)\)/,
+    'the target checks the owned child is alive');
+  assert.match(target, /if !alive \{\s*return Err\("sidecar not alive"\);/);
+  assert.match(target, /if !state\.port_confirmed\.load\(Ordering::SeqCst\) \{\s*return Err\("sidecar port unconfirmed"\);/);
+  assert.match(target, /let Some\(port\) = local_api_cell\(&state\)\.confirmed_live_port\(\) else \{\s*return Err\("sidecar port revoked"\);/,
+    'the target refuses a revoked live port');
+  assert.match(target, /Ok\(\(token, port\)\)/);
+  for (const body of [inject, syncKeys, post, controller, target]) {
+    assert.doesNotMatch(body, /DEFAULT_LOCAL_API_PORT/, 'every secret-sync edge excludes default-port fallback');
+  }
   assert.doesNotMatch(MAIN, /port_confirmed\.store\(true|generation\.fetch_add|fn confirm_port_late/, 'no publication outside the cell');
   const status = fnBody('local_api_status');
   order(status, 'let port = if port_confirmed', 'state.port.lock()', 'status port gate');

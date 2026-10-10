@@ -254,7 +254,7 @@
     "desktop:package": "node scripts/desktop-package.mjs",
     "test:mcp-storage": "node --test tools/mcp-server/__tests__/storage.test.mjs",
     "test:mcp-evaluation-report": "node --test tools/mcp-server/__tests__/evaluation-report-tools.test.mjs tools/mcp-server/__tests__/weekly-evaluation-report.test.mjs",
-    "test:mcp-untrusted": "node tests/helpers/run-isolated-mcp.mjs --import tsx --test src/services/__tests__/agent-suggestions.test.mts src/services/__tests__/analyst-command-listener.test.mts src/components/__tests__/analyst-hud-agent-suggestions.test.mts && node tests/helpers/run-isolated-mcp.mjs --test src-tauri/sidecar/__tests__/analyst-commands-origin.test.mjs tools/mcp-server/__tests__/profile.test.mjs tools/mcp-server/__tests__/framing.test.mjs tools/mcp-server/__tests__/untrusted-framing-stdio.test.mjs tools/mcp-server/__tests__/stdio-integration.test.mjs",
+    "test:mcp-untrusted": "node --test tests/mcp-untrusted-suite.test.mjs",
     "test:mcp-intel": "node --test tools/mcp-server/__tests__/intel-expansion-tools.test.mjs",
     "test:agentic-gate": "tsx --test tests/agentic-gate.test.mjs",
     "test:agentic-pipeline": "tsx --test tests/agentic-pipeline.test.mjs",
@@ -267,8 +267,8 @@
     "test:map-compatibility": "node --test tests/map-compatibility.test.mjs",
     "test:local-basemap": "node --import tsx --test src/components/__tests__/deckgl-local-basemap.test.mts tests/countries-geojson.test.mjs",
     "test:secret-boundary": "node --test tests/secret-boundary.test.mjs tests/sidecar-secret-routing-boundary.test.mjs tests/ucdp-local-boundary.test.mjs src-tauri/sidecar/secret-sync.test.mjs && tsx --test src/services/__tests__/secret-boundary.test.mts src/services/__tests__/keychain.test.mts src/components/__tests__/key-dashboard-secret-boundary.test.mts",
-    "test:mcp-companion": "node tests/helpers/run-isolated-mcp.mjs --test tools/mcp-server/__tests__/help-tool.test.mjs tools/mcp-server/__tests__/analyst-tools.test.mjs tools/mcp-server/__tests__/tool-registry.test.mjs tools/mcp-server/__tests__/stdio-integration.test.mjs src-tauri/sidecar/__tests__/analyst-diagnostics-mirror.test.mjs tools/mcp-server/__tests__/runtime-isolation.test.mjs",
-    "test:mcp-install-smoke": "node tests/helpers/run-isolated-mcp.mjs --test tools/mcp-server/__tests__/install-smoke.test.mjs"
+    "test:mcp-companion": "node --test tests/mcp-companion-suite.test.mjs tests/mcp-suite-entry.test.mjs",
+    "test:mcp-install-smoke": "node --test tests/mcp-install-smoke-suite.test.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",

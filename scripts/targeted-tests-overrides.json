@@ -330,19 +330,23 @@
     "test:signing-phase-a"
   ],
   "tools/mcp-server/index.mjs": [
-    "test:mcp-untrusted"
+    "test:mcp-untrusted",
+    "test:mcp-companion"
   ],
   "tools/mcp-server/framing.mjs": [
-    "test:mcp-untrusted"
+    "test:mcp-untrusted",
+    "test:mcp-companion"
   ],
   "tools/mcp-server/profile.mjs": [
-    "test:mcp-untrusted"
+    "test:mcp-untrusted",
+    "test:mcp-companion"
   ],
   "tools/mcp-server/result.mjs": [
     "test:mcp-untrusted"
   ],
   "tools/mcp-server/tool-registry.mjs": [
-    "test:mcp-untrusted"
+    "test:mcp-untrusted",
+    "test:mcp-companion"
   ],
   "src/components/AnalystHUD.ts": [
     "test:mcp-untrusted"
@@ -389,7 +393,8 @@
   "tools/mcp-server/__tests__/install-smoke.test.mjs": [
     "test:mcp-install-smoke",
     "test:install-scripts",
-    "test:mcp-untrusted"
+    "test:mcp-untrusted",
+    "test:mcp-companion"
   ],
   "tests/helpers/mcp-runtime-fixture.mjs": [
     "test:mcp-untrusted",
@@ -426,5 +431,41 @@
     "test:mcp-untrusted",
     "test:mcp-install-smoke",
     "test:mcp-companion"
+  ],
+  "tests/mcp-untrusted-suite.test.mjs": [
+    "test:mcp-untrusted"
+  ],
+  "tests/mcp-companion-suite.test.mjs": [
+    "test:mcp-companion"
+  ],
+  "tests/mcp-install-smoke-suite.test.mjs": [
+    "test:mcp-install-smoke"
+  ],
+  "tests/mcp-suite-entry.test.mjs": [
+    "test:mcp-companion"
+  ],
+  "tests/helpers/mcp-suite-entry.mjs": [
+    "test:mcp-untrusted",
+    "test:mcp-companion",
+    "test:mcp-install-smoke"
+  ],
+  "tools/mcp-server/__tests__/framing.test.mjs": [
+    "test:mcp-companion",
+    "test:mcp-untrusted"
+  ],
+  "tools/mcp-server/__tests__/profile.test.mjs": [
+    "test:mcp-companion",
+    "test:mcp-untrusted"
+  ],
+  "tools/mcp-server/__tests__/stdio-integration.test.mjs": [
+    "test:mcp-companion",
+    "test:mcp-untrusted"
+  ],
+  "tools/mcp-server/__tests__/tool-registry.test.mjs": [
+    "test:mcp-companion"
+  ],
+  "tools/mcp-server/__tests__/untrusted-framing-stdio.test.mjs": [
+    "test:mcp-companion",
+    "test:mcp-untrusted"
   ]
 }

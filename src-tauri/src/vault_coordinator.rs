@@ -688,6 +688,26 @@ mod transport_tests {
     }
 
     #[test]
+    fn actual_transport_allocates_from_authoritative_map_not_detached_clone() {
+        let state = Arc::new(VaultState::new());
+        state.lock().map.insert("A".into(), "current".into());
+        let authoritative_identity = state.with_transport_map(|map| Ok(map as *const HashMap<String, String> as usize)).unwrap();
+        let inspected = state.clone();
+        let probes = Arc::new(AtomicU64::new(0));
+        let counted = probes.clone();
+        let clock = RevisionClock::with_owned_map_probe_for_test(move |map| {
+            assert_eq!(map as *const HashMap<String, String> as usize, authoritative_identity,
+                "transport allocates from the authoritative map, never a detached clone");
+            assert!(matches!(inspected.inner.try_lock(), Err(std::sync::TryLockError::WouldBlock)),
+                "the authoritative map remains owned during allocation");
+            counted.fetch_add(1, Ordering::SeqCst);
+        });
+        assert_eq!(state.transport_snapshot(&clock, "A").unwrap().value.as_deref(), Some("current"));
+        assert_eq!(state.transport_launch(&clock).unwrap().0.get("A").map(String::as_str), Some("current"));
+        assert_eq!(probes.load(Ordering::SeqCst), 2, "both typed transport paths use the authoritative owned map");
+    }
+
+    #[test]
     fn actual_state_poison_and_exhaustion_issue_zero_transport_requests() {
         for poison in [true, false] {
             let state = Arc::new(VaultState::new());

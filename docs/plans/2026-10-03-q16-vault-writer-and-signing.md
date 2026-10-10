@@ -137,6 +137,16 @@ after child ownership is released. Accepted consumes once. Each queued launch
 attempt checks its generation before and after resolving the confirmed target.
 No new task, worker, queue or unbounded HTTP retry is introduced.
 
+Fresh fake validation at fc5cba175 includes242 native passes and all40 reconstructed
+historical mutation equivalents plus35 accepted new variants. The76th effect
+variant is an honest equal-floor survivor, with a distinct fresh-allocation
+contract proof. See the validation record for actual counts, hashes and limits.
+
+Absent retains the existing recovery map and can permit a later save to restore
+those keys; it is distinct from parsed Vault(empty). The approved plan does not
+settle out-of-app deletion versus recovery precedence. This repair preserves
+that policy, documents the uncertainty, and does not retire the shadow vault.
+
 ### Not changed
 
 - Shadow-vault policy: it is still written and read as today. Removing it is

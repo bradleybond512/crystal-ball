@@ -12,8 +12,8 @@ choices:
 The original report below is **UNATTESTED historical evidence**. Its counts,
 mutation reds, checksum prefixes and gate claims were imported from the original
 commit; the October 10 repair has no raw artifacts attesting those runs. They
-are not current execution results. Independent QA must reconstruct them against
-the frozen repaired implementation before a fresh completion claim.
+are not current execution results. The fresh reconstruction below is separately
+pinned to the repaired implementation and does not attest those historical runs.
 
 ## October 10 integration
 
@@ -44,8 +44,8 @@ controller with a stateful revision-aware effects sink. It covers partial/empty
 replacement, queue saturation, current-state retry, poison/exhaustion, map/floor
 ownership, listener floor, admission retention/once-only confirmation, and queued
 old-generation rejection. Source checks bind these helpers to native callbacks
-and monitor wiring. Current run logs remain external under `approved-batch/pr1774`
-until independent QA freezes and records final counts and mutation proofs.
+and monitor wiring. Fresh results and their precise limits appear below; raw
+run logs remain external under `approved-batch/pr1774`.
 
 No real Keychain, vault, native IPC, provider, installed app, signing or release
 operation was used for this integration. Native tests use fake stores and a
@@ -141,6 +141,197 @@ temporary frontend build fixture.
 - Sidecar transport is bounded best effort. Launch/current deltas are queued
   after owning confirmation; exhausted HTTP delivery still requires a later
   push or restart. A resolved target can be revoked during an in-flight request.
+
+## Fresh October 10 validation
+
+Proof freeze: `fc5cba175523a4dd8e1fd5b2f5a5a8963ba02823`; tree `ad9993efbb0261469b7d02719245ebfe7f87270a`. The later review
+freeze changes documentation only; production and test bytes are bound to this
+proof freeze. This new evidence does not attest the historical October 3 runs.
+
+The full fake native suite actually reported these seven result blocks:
+
+```text
+test result: ok. 104 passed; 0 failed;
+test result: ok. 9 passed; 0 failed;
+test result: ok. 44 passed; 0 failed;
+test result: ok. 7 passed; 0 failed;
+test result: ok. 24 passed; 0 failed;
+test result: ok. 45 passed; 0 failed;
+test result: ok. 9 passed; 0 failed;
+```
+
+That is 242 pass / 0 fail. Command: `cargo test --offline --manifest-path
+src-tauri/Cargo.toml`, with a temporary frontend fixture supplied through
+`TAURI_CONFIG`. Raw-log SHA-256:
+`5b84e0f5db7a59e61e08b52aa361298fda59eeb73d2e7a43e23935a42db27256`.
+
+Independent QA's final restored baselines were coordinator contract45/0,
+source42/0, renderer4/0, unchanged actual JS receiver6/0, and semantic TypeScript
+check exit0. These overlap with the full suite and wrappers; they are not one
+unique aggregate count.
+
+The actual five-script gate command was:
+
+```bash
+bash scripts/agentic-validate.sh --tests "test:vault-writer test:native-responsiveness test:secret-boundary test:sidecar-supervisor test:sidecar-routing"
+```
+
+Exit0. Its per-script Node results were 9/0 then4/0;15/0;21/0 then15/0;9/0;
+10/0 then56/0. A native-wrapper pass counts as one Node test and does not replace
+the underlying Rust result. Lockfile check, strict lint, full typecheck, secret
+scan, cross-agent configuration, documentation check, roadmap check and build
+also passed. The secret scan covered5010 files. Explicit ESLint with
+`--max-warnings 0` passed on all nine changed JS/TS files; their bytes are
+unchanged by later Rust-only test instrumentation. Gate raw-log SHA-256:
+`3f6c6d4d05d37247bc4bb50042558b817b786b68b0cf20f4c9e5b62da2a22eac`.
+
+Warnings remain in the raw logs: native binary11/test-build10 warnings include
+deprecated crypto array construction and unused helpers, including newly unused
+coordinator helpers. Roadmap overdue-task advisories, Vite API-extension warnings,
+ineffective dynamic imports and chunk-size warnings remain. Documentation check
+reported `Documentation appears fresh`. No check or assertion was weakened.
+
+### Actual mutation evidence
+
+QA executed 76 concrete variants in 80
+attempts at the proof freeze. All40 historical equivalents were reconstructed
+fresh; 35 new variants also produced accepted reds. Thus
+75 variants are accepted. The N24 equal-previous-floor effect
+experiment survived and is retained honestly: the receiver's <=floor rejection
+already blocks that value. N24R separately proves the fresh-allocation contract;
+N28 uses a genuinely older floor and measures fake-sink credential effects.
+
+Every accepted row has a nonempty applied diff, actual positive numeric failure
+count, intended named assertion, restored original SHA-256, restored green, and
+all5010 tracked checksums restored. The independent artifact audit checked
+290 actual log hashes and independently matched every
+tracked file in the implementation clone. Final QA has returned a clean tree at
+the exact proof SHA with no pending code change or owned runner.
+
+Taxonomy is explicit: source-policy tests guard wiring text; callback-parameter,
+prelookup, map-identity and revision-allocation contracts are narrower than
+credential effects. Native behavior cases execute actual production modules
+against a fake revision-aware sink. Actual JS receiver tests are separate.
+Neither source checks nor compile checks execute native IPC, the owning monitor,
+or a real native HTTP round trip.
+
+The a18ec8a detached-map N27 experiment survived before the final proof freeze.
+A per-clock cfg(test) observer then bound the map reference to the authoritative
+map while its real mutex is owned. N27 now has a named failing assertion on this
+freeze; the earlier survivor remains unaccepted. Production bodies are equal
+after removing only the narrow test instrumentation. Rejected S01 TAP-parser,
+T04 wrapped-Promise-parser, N06 noncompiling and N20 provisional wrong-oracle
+attempts remain recorded separately from their accepted reruns.
+
+The actual summary SHA-256 is `e07894b902695c98c2f58cf43ae56bf3fe55f4ca01310900262fa8605d726f23`. Raw logs, full applied
+diffs, attempt records, obligation mapping and restoration manifests are retained
+privately under `approved-batch/pr1774/oct10-repair/mutation-evidence/freeze-fc5cba175523a4dd8e1fd5b2f5a5a8963ba02823`.
+They are not reconstructed historical artifacts. The table quotes selected
+baseline/red/restored pass/fail counts and lists the real failing tests; all
+hashes are SHA-256.
+
+| ID | Taxonomy / disposition | Selected baseline → red → restored | Named failing assertions | Applied diff hash | Restored file hash |
+|---|---|---|---|---|---|
+| C01 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | saves_are_refused_until_the_vault_source_is_known_and_complete | `529d08c931b53853b39517f5787fe129f6b7220f5d51542e61c323d78eb869b6` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| C02 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | saves_are_refused_until_the_vault_source_is_known_and_complete | `6492ff52e8aa333a167928f0d943f0aa9ac1573a3324a4a50750c99abd35396b` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| C03 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | a_confirmed_absent_vault_allows_the_first_save | `6881a073a0df0c50472418d851ea984b0cbca504ce0140eeb91e0d8f75edf162` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| C04 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | a_hung_write_never_blocks_readers_and_later_saves_fail_fast | `30c50876a8ad2bde8ce041c56b5a7bec4f9addb2783e91f7e16b3cff3c1b50ea` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| C05 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | a_save_still_queued_when_its_caller_gives_up_never_runs | `85e53e10189f1a7e80f50a2c0af5ade6ab456913bfddbf598eaa334a449d484e` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| C06 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | a_save_still_queued_when_its_caller_gives_up_never_runs | `3fec8157e52c17fc0e4077905b22b354cce3a307a55aa0ed90f4c3b8a4083c9f` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| C07 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | a_started_save_reports_pending_then_commits_and_reports_its_late_success | `697748a67f50df15e6155ebdc6d8f1e9dd18c66e3943d3f4e70196e7f20d8640` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| C08 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | a_started_save_reports_pending_then_commits_and_reports_its_late_success | `b1bd5297f69d72d70ccd35c397d14880689d746aea95693980cad1d2bbd45484` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| C09 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | a_started_save_reports_pending_then_commits_and_reports_its_late_success | `efaf797753229e0a594c654b19cd63fa32366f4d76c5947a862360d2606449ff` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| C10 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | a_merge_never_resurrects_a_deleted_key_or_overrides_a_set_one | `408edcfe7111a2e10e211be3f4e5646a996029ac03904a75ecf0fc97baf6348e` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| C11 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | a_reload_into_a_verified_session_never_replaces_a_held_value | `b566007f7b9e5c5768fac7ff718a91e7c32c7fa568694b5bf14c033fbd5105ea` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| C12 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | a_stale_read_does_not_refresh_the_shadow_copy | `a9cd3b2420cc22e273471e6734b2e7d3e80fd624e173117613c0823b37c1d88b` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| C13 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | the_real_vault_replaces_a_shadow_cache_and_lifts_the_gate | `f616230c2c03e38106879c828096ea90dac92010c9bbf205a102545240815e3c` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| C14 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | a_verified_session_ignores_a_later_shadow_or_failed_read | `820a4e107232738d1f21a218d2a0ce547217035a6375b17478fd6124e3ce49a3` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| C15 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | migration_merges_into_the_cache_and_cleans_up_only_after_its_write | `82abea8d264d16d1d660f15f363c6be23ad87603df7fd7b0e0ceb1451ef8662e` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| C16 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | a_failed_migration_write_keeps_saves_gated_and_cleans_up_nothing | `69dc34f5ff8e04a3d8a14d07da24bede2bbc71a567f789e5d0947b7f233d2c12` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| C17 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | a_failed_migration_write_keeps_saves_gated_and_cleans_up_nothing | `4247949e13cf12c37ca3d8fff1f82c3bd08e1d62ffdb6b2035b92d4b4729a834` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| C18 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | readiness_wakes_waiters_and_a_dropped_guard_fails_an_unfinished_load | `6993c2c39ef92c5b55c7e794ddd2b29d8361a352ee8019f7fb3165ba836b5689` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| C19 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | readiness_wakes_waiters_and_a_dropped_guard_fails_an_unfinished_load | `b0244a33d7475f1c6ee940a7fb8e85a3879ed02dbdabf1b4aa59c9b5d3a20f05` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| C20 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | readiness_wakes_waiters_and_a_dropped_guard_fails_an_unfinished_load | `285dffc726d4ce54bf334ce5fa7fd82aa547acdedee35c69b74f953f0451d2ed` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| C21 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | a_hung_write_never_blocks_readers_and_later_saves_fail_fast | `efb961e5df1079ddc779b930ea37daf2c682886232e2c7a3db9fe446e3b11f11` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| C22 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | a_panicking_store_call_fails_that_save_and_the_writer_keeps_serving | `a2cd58259576da5dab9fc2a9de86cc68459718a328ed0ea0ee1213f57ff2e39c` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| C23 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | set_and_delete_keep_their_order_through_vault_shadow_and_sidecar | `9f55ab312cc5e216df190697a1093b1e619863c078c76ae554b1584827747764` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| C24 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | a_merge_never_resurrects_a_deleted_key_or_overrides_a_set_one | `eecd05a904cfcb13788b60445cc3e2e622c0396d0c90b51af61df48638af5825` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| S01 | SOURCE_POLICY / ACCEPT_SOURCE_POLICY_RED | 38/0 → 35/3 → 38/0 | set_secret validates its caller and keeps all blocking work inside an awaited worker<br>Settings writes reach the sidecar from native, after the vault write<br>saves wait on signalled readiness, then go through the writer with a bound | `10b6b999bf6a8a07439d3e6e5c73f74f9aacc32f80a4ff52d0108ffe0c4716d3` | `e6fa83f9f4e8e82b5ed97d0ed576b1aa1fc94f7a128261e2aacef8df582004d2` |
+| S02 | SOURCE_POLICY / ACCEPT_SOURCE_POLICY_RED | 38/0 → 37/1 → 38/0 | a read error never counts as an empty vault | `3fbae59772e4bd2de6322e65da5126a92273ea7cd4fcb9b7c1b8d2e87ac0e556` | `e6fa83f9f4e8e82b5ed97d0ed576b1aa1fc94f7a128261e2aacef8df582004d2` |
+| S03 | SOURCE_POLICY / ACCEPT_SOURCE_POLICY_RED | 38/0 → 37/1 → 38/0 | boot fails closed through a guard, and the retry stays vault-only | `e4453b36ce6d78ef4d23706939f4e48cc78bbeca55b4f95a984e4a2473a038a0` | `e6fa83f9f4e8e82b5ed97d0ed576b1aa1fc94f7a128261e2aacef8df582004d2` |
+| S04 | SOURCE_POLICY / ACCEPT_SOURCE_POLICY_RED | 38/0 → 37/1 → 38/0 | boot fails closed through a guard, and the retry stays vault-only | `a2b0620a1aa37c3f6ebc368bf421b51d560137abe66082adb9a1196269d7d13e` | `e6fa83f9f4e8e82b5ed97d0ed576b1aa1fc94f7a128261e2aacef8df582004d2` |
+| S05 | SOURCE_POLICY / ACCEPT_SOURCE_POLICY_RED | 38/0 → 37/1 → 38/0 | saves wait on signalled readiness, then go through the writer with a bound | `8435d0e2f4822531f6d3a174205ebbe19740e4ba9654bdc5ed8f9793d36f6eec` | `e6fa83f9f4e8e82b5ed97d0ed576b1aa1fc94f7a128261e2aacef8df582004d2` |
+| S06 | SOURCE_POLICY / ACCEPT_SOURCE_POLICY_RED | 38/0 → 36/2 → 38/0 | get_secret_write_state validates its caller and keeps all blocking work inside an awaited worker<br>the write state command is trusted-window only and carries no value | `f5538f9e93d4f810d2e89cca3be89f75cc6b20385c8a1b1fe42034ceb3164cee` | `e6fa83f9f4e8e82b5ed97d0ed576b1aa1fc94f7a128261e2aacef8df582004d2` |
+| S07 | SOURCE_POLICY / ACCEPT_SOURCE_POLICY_RED | 38/0 → 37/1 → 38/0 | the write state command is trusted-window only and carries no value | `67580260f768075869d03749b05af1180841f6412f5bcf857b2345c5f41c8e64` | `e6fa83f9f4e8e82b5ed97d0ed576b1aa1fc94f7a128261e2aacef8df582004d2` |
+| S08 | SOURCE_POLICY / ACCEPT_SOURCE_POLICY_RED | 38/0 → 37/1 → 38/0 | webviews still have no Tauri event permission (the late outcome is pulled) | `ec837beb3b451c7b1400e0493c1d9d4a0422ee80f742d032dc88ac17d26d34ef` | `8b783df53a15dd72c9f04c25ab71a2dcb6916e119c0c8b9c120e7357ed5c1257` |
+| S09 | SOURCE_POLICY / ACCEPT_SOURCE_POLICY_RED | 38/0 → 37/1 → 38/0 | boot fails closed through a guard, and the retry stays vault-only | `4be2ada234699029e761daea3f72807c37f543275e1560989b1e488986678f22` | `e6fa83f9f4e8e82b5ed97d0ed576b1aa1fc94f7a128261e2aacef8df582004d2` |
+| S10 | SOURCE_POLICY / ACCEPT_SOURCE_POLICY_RED | 38/0 → 37/1 → 38/0 | get_secret_status validates its caller and keeps all blocking work inside an awaited worker | `c6aa034c5ae67c8df31a31d3d874002662853a7da131c0b3e1d2413c8885c53e` | `e6fa83f9f4e8e82b5ed97d0ed576b1aa1fc94f7a128261e2aacef8df582004d2` |
+| T01 | ACTUAL_RENDERER_SERVICE_BEHAVIOR_FAKE_BRIDGE / ACCEPT_BEHAVIOR_RED | 4/0 → 3/1 → 4/0 | a pending save is followed until it lands, then status reloads and other windows hear it | `7a684f086cd0ba3de028eff8a9ba7c2ae78fb3bdacdf2a621064b4b1d28db4d1` | `6e4ab717b23b5e724d2c01974b72cbdc52fe83a1bd8778d72af28ec282c645f0` |
+| T02 | ACTUAL_RENDERER_SERVICE_BEHAVIOR_FAKE_BRIDGE / ACCEPT_BEHAVIOR_RED | 4/0 → 2/2 → 4/0 | a pending save is followed until it lands, then status reloads and other windows hear it<br>the watch gives up at its deadline while a write stays pending | `238428424e9205d274f2ec2887611f019b823d47adec61c8dda38eea67ff2151` | `6e4ab717b23b5e724d2c01974b72cbdc52fe83a1bd8778d72af28ec282c645f0` |
+| T03 | ACTUAL_RENDERER_SERVICE_BEHAVIOR_FAKE_BRIDGE / ACCEPT_BEHAVIOR_RED | 4/0 → 3/1 → 4/0 | the watch gives up at its deadline while a write stays pending | `5cb75fbdd79780903aef04a6dbd4bdddbc88852a3e7eb1776f10595eb96f240c` | `6e4ab717b23b5e724d2c01974b72cbdc52fe83a1bd8778d72af28ec282c645f0` |
+| T04 | ACTUAL_RENDERER_SERVICE_BEHAVIOR_FAKE_BRIDGE / ACCEPT_BEHAVIOR_RED | 4/0 → 3/1 → 4/0 | one watch at a time, and it stops on a bad or missing write state | `d59a5ba48d4b67b0bb96c39751464e9f84b85d084aaf607484c13ba6e9271a90` | `6e4ab717b23b5e724d2c01974b72cbdc52fe83a1bd8778d72af28ec282c645f0` |
+| T05 | ACTUAL_RENDERER_SERVICE_BEHAVIOR_FAKE_BRIDGE / ACCEPT_BEHAVIOR_RED | 4/0 → 3/1 → 4/0 | a pending save is followed until it lands, then status reloads and other windows hear it | `161c74ac0bf7845c63dbf3dec9d0c17786b9a8372935cffd1aeefeb9074ffa3a` | `6e4ab717b23b5e724d2c01974b72cbdc52fe83a1bd8778d72af28ec282c645f0` |
+| T06 | ACTUAL_RENDERER_SERVICE_BEHAVIOR_FAKE_BRIDGE / ACCEPT_BEHAVIOR_RED | 4/0 → 3/1 → 4/0 | one watch at a time, and it stops on a bad or missing write state | `24ba53fd0762e4c1b252f6dff08ce5879090b20c84c68af7cf447dc04effb23e` | `17b3510c1bb296b62fc21ae96c3b923ba44ddc9f0955487ab9cbe36950bb72fc` |
+| N01 | ACTUAL_TYPED_OWNERSHIP_CONTRACT / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | vault_coordinator::transport_tests::actual_transport_reservation_occurs_inside_inner_for_snapshot_and_launch | `35b37488da407a6f75d323cdc181fe4bac12a07d80a2e7ab81d549fa6eba9578` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| N02 | ACTUAL_TYPED_OWNERSHIP_CONTRACT / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | vault_coordinator::transport_tests::actual_transport_reservation_occurs_inside_inner_for_snapshot_and_launch | `ae32b55b6e9e5b6cd8df84c5dbf5cae22a9b4d542d6ffc40ed01b4f3d0a2ebd4` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| N03 | ACTUAL_TYPED_OWNERSHIP_CONTRACT / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | vault_coordinator::transport_tests::actual_transport_reservation_occurs_inside_inner_for_snapshot_and_launch | `7d70ac43442dc653ae97ecbff242a300078a04cfcaff34811009423ad185ed87` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| N04 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | vault_coordinator::transport_tests::actual_state_poison_and_exhaustion_issue_zero_transport_requests | `b0cda3a82680c1c066beee8a8691190f6773712964cd20cc2e5ed325bf2db32b` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| N05 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | vault_coordinator::transport_tests::actual_state_poison_and_exhaustion_issue_zero_transport_requests | `d77ce281a51ee8a181c3c3dfd73480bed1e7a46458c2e08c4714fe7103feabdf` | `cf2a6b53745ef97d150c7139175a754fbc1a3614eb6871f9c7917a5de6cca380` |
+| N06 | ACTUAL_NATIVE_CONTROLLER_WITH_FAKE_REVISION_SINK_EFFECT / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | authoritative_partial_and_empty_load_remove_effective_credentials | `725f4c135635a630696a1e5f0db89bb4b4253a02e84299358c0c5e779d37999d` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| N07 | ACTUAL_NATIVE_CONTROLLER_WITH_FAKE_REVISION_SINK_EFFECT / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | authoritative_partial_and_empty_load_remove_effective_credentials | `a30c930c9b4a0739020a6b3dd8f55a86c412cb9b4162c963c8b9d06ec2597e65` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| N08 | ACTUAL_NATIVE_CONTROLLER_WITH_FAKE_REVISION_SINK_EFFECT / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | authoritative_partial_and_empty_load_remove_effective_credentials | `31e3a6761844c5966546e6b2789f5d19ac80c697bed5af2b72ba75a65cc87660` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| N09 | CALLBACK_PARAMETER_CONTRACT / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | empty_load_removals_survive_full_queue_and_finish_before_later_save | `c2ad8c0638983eda669c334e1e4751ab1c93035a88daea67da3d140ba83d18d5` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| N10 | ACTUAL_CALLBACK_SELECTION_ORDER_CONTRACT / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | authoritative_removal_callbacks_are_sorted | `ad447c08fe604657495f760ba2570fad99da0dc034c8cce62aac8f77c14a9665` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| N11 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | launch_full_retains_and_recomputes_then_admits_once_on_later_tick | `b4bfad5957bcb8157cc5b259bd792b75542365f02378358923befa1130baa034` | `cf2a6b53745ef97d150c7139175a754fbc1a3614eb6871f9c7917a5de6cca380` |
+| N12 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | transactional_pending_keeps_owner_on_read_failure_stopped_and_foreign_confirmation | `7c24b808d33722d9954f445fc726f452856da4f3d1cadbc1b40b8dffd67b6175` | `cf2a6b53745ef97d150c7139175a754fbc1a3614eb6871f9c7917a5de6cca380` |
+| N13 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | transactional_pending_keeps_owner_on_read_failure_stopped_and_foreign_confirmation | `b340f08c24793c4d4edcf589f975614956eef9b1507bc3340914c7940d2b9f26` | `cf2a6b53745ef97d150c7139175a754fbc1a3614eb6871f9c7917a5de6cca380` |
+| N14 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | concurrent_normal_and_late_confirmation_admit_actual_state_delta_once | `0b24262e65e080f4646fd8df7a0c11b9bf8ad8e6d31f9eb0bb73311bf17fac02` | `cf2a6b53745ef97d150c7139175a754fbc1a3614eb6871f9c7917a5de6cca380` |
+| N15 | ACTUAL_NATIVE_CONTROLLER_WITH_FAKE_REVISION_SINK_EFFECT / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | queued_old_generation_cannot_clear_new_child_inherited_fallback | `75f09d459d850c17e3e7a4e6f95dc673a3bd5ffc3de83d19a6e7c8e2fd27fea1` | `cf2a6b53745ef97d150c7139175a754fbc1a3614eb6871f9c7917a5de6cca380` |
+| N16 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | generation_guard_detects_supersession_during_lookup_and_each_retry | `c505500d0fa160eee27f6cad560f3b9f5412f27276ec043b80592710602a4622` | `cf2a6b53745ef97d150c7139175a754fbc1a3614eb6871f9c7917a5de6cca380` |
+| N17 | ACTUAL_GENERATION_PRELOOKUP_CONTRACT / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | generation_guard_detects_supersession_during_lookup_and_each_retry | `9bc54f074a3f10698557d0def012470201bda054bd991e8ff755771c365f2078` | `cf2a6b53745ef97d150c7139175a754fbc1a3614eb6871f9c7917a5de6cca380` |
+| N18 | SOURCE_POLICY / ACCEPT_SOURCE_POLICY_RED | 38/0 → 36/2 → 38/0 | native launch fences all allowed keys and reconciles both confirmation paths through the real sender<br>launch selections enter the bounded writer and retry admission after every live monitor tick | `23b8a9ff003170571fc4125381894ca51f0bee15fc18168f3b0b09501e07a7eb` | `e6fa83f9f4e8e82b5ed97d0ed576b1aa1fc94f7a128261e2aacef8df582004d2` |
+| N19 | SOURCE_POLICY / ACCEPT_SOURCE_POLICY_RED | 38/0 → 37/1 → 38/0 | launch selections enter the bounded writer and retry admission after every live monitor tick | `e2078d24229a1cc1e8d6dfa22fd805fa85049b161f2c40bf77a212d99e5836dc` | `e6fa83f9f4e8e82b5ed97d0ed576b1aa1fc94f7a128261e2aacef8df582004d2` |
+| N20 | SOURCE_POLICY / ACCEPT_SOURCE_POLICY_RED | 38/0 → 36/2 → 38/0 | Settings writes reach the sidecar from native, after the vault write<br>the renderer is only ever handed a confirmed port | `2b39394a614e1b2ba5cc6f62f4b5f806b97647f9370c9454402ab00e116c4d0e` | `e6fa83f9f4e8e82b5ed97d0ed576b1aa1fc94f7a128261e2aacef8df582004d2` |
+| N21 | SOURCE_POLICY / ACCEPT_SOURCE_POLICY_RED | 38/0 → 37/1 → 38/0 | launch selections enter the bounded writer and retry admission after every live monitor tick | `df538f75a30a57d00a79338956d00f386ee9268b87ea56213a8b66e078dfd8b5` | `e6fa83f9f4e8e82b5ed97d0ed576b1aa1fc94f7a128261e2aacef8df582004d2` |
+| N22 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | vault_coordinator::transport_tests::actual_state_retry_resnapshots_delete_rotation_and_revoked_target | `fed10f4dcf344fa00d5810dec57bbf42d79ca64e6061dc3acad14b6704e85f43` | `cf2a6b53745ef97d150c7139175a754fbc1a3614eb6871f9c7917a5de6cca380` |
+| N23 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | vault_coordinator::transport_tests::actual_state_retry_resnapshots_delete_rotation_and_revoked_target | `81f5618db3475f28053b55649b8a8f8c410b4ceb1d7dfb4a7cfd3d87d8ef87c8` | `cf2a6b53745ef97d150c7139175a754fbc1a3614eb6871f9c7917a5de6cca380` |
+| N24 | EQUAL_PREVIOUS_FLOOR_EFFECT_EXPERIMENT / REJECT_SURVIVOR_EQUAL_PREVIOUS_FLOOR_EFFECT | 1/0 → 1/0 → 1/0 | none (survived) | `04364892393b91260db9bf135762b2faa3ae9d56f945b0ee337b12b7e0cb5b53` | `cf2a6b53745ef97d150c7139175a754fbc1a3614eb6871f9c7917a5de6cca380` |
+| N25 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | vault_coordinator::transport_tests::actual_state_poison_and_exhaustion_issue_zero_transport_requests | `b906e69e4f75ab1a12d84718c5fab11be57ad204daf1980fe4d056080faa438f` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| N26 | ACTUAL_TYPED_OWNERSHIP_CONTRACT / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | vault_coordinator::transport_tests::actual_transport_reservation_occurs_inside_inner_for_snapshot_and_launch | `73329e7f34252b7c5a4bb9f21de5fa06573a4b7a4813311d8401ef01b0aea172` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| N27 | ACTUAL_TYPED_OWNERSHIP_CONTRACT / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | vault_coordinator::transport_tests::actual_transport_allocates_from_authoritative_map_not_detached_clone | `80674ea78de1ae4998847fe13811d5370c4255ddbdc5e326329ff36e820abfca` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| N28 | ACTUAL_NATIVE_CONTROLLER_WITH_FAKE_REVISION_SINK_EFFECT / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | actual_launch_floor_rejects_delayed_request_for_absent_native_key | `7092a77aadf537214c742582f6be2b00740d7aebc07f6830eb14234c7fe8eb34` | `cf2a6b53745ef97d150c7139175a754fbc1a3614eb6871f9c7917a5de6cca380` |
+| N29 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | transactional_pending_keeps_owner_on_read_failure_stopped_and_foreign_confirmation | `6cee079814885efa127f4b897fd695c0204ef11eda97fb4064a953bb6efac219` | `cf2a6b53745ef97d150c7139175a754fbc1a3614eb6871f9c7917a5de6cca380` |
+| N30 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | launch_full_retains_and_recomputes_then_admits_once_on_later_tick | `501631596c4d4ddf73a16636cc37d788eb8a11be99a45cdb2a08eb87614f9670` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| N31 | ACTUAL_CALLBACK_SELECTION_ORDER_CONTRACT / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | launch_key_selections_are_normalized_and_follow_the_inflight_write | `ff88fbc1d471679db47f6dcf470476356169c5f7d1fa7d0c59165af1985b7dfd` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| N32 | ACTUAL_CALLBACK_SELECTION_ORDER_CONTRACT / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | launch_key_selections_are_normalized_and_follow_the_inflight_write | `5ed4bcbe24b010f6256f13554edb1672ed33654be8175879ad0644b53425fa1b` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| N33 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | writer_thread_stops_when_all_coordinators_drop | `13f7fd62ea9c3a140c6e4305f63b49d0486d5b1c9b2b8939026e93e6da7caedc` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| N34 | ACTUAL_GENERIC_SENDER_RETRY_BUDGET / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | secret_sync::tests::retry_budget_and_delay_are_bounded_and_cache_locks_are_released | `c4f103ffd42d247770514c884a38075affad9e783b1a7becba7331265f5491c4` | `cf2a6b53745ef97d150c7139175a754fbc1a3614eb6871f9c7917a5de6cca380` |
+| N35 | ACTUAL_NATIVE_CONTROLLER_WITH_FAKE_REVISION_SINK_EFFECT / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | authoritative_partial_and_empty_load_remove_effective_credentials | `27acfbcd960f44b637c83e01ce99246b30f99d817256604f2920b20c56a08c16` | `cb1d3bff3b964870757bce1f622070dfa271d65db041e26cbf1fdbbf0f4da363` |
+| N24R | ACTUAL_TYPED_FRESH_FLOOR_ALLOCATION_CONTRACT / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | vault_coordinator::transport_tests::actual_state_snapshot_and_launch_allocate_after_current_owner | `04364892393b91260db9bf135762b2faa3ae9d56f945b0ee337b12b7e0cb5b53` | `cf2a6b53745ef97d150c7139175a754fbc1a3614eb6871f9c7917a5de6cca380` |
+
+### Limits and unchanged recovery policy
+
+Absent is distinct from a parsed empty Vault. A manual reload classified
+NoEntry/Absent can retain an unverified shadow/recovery map, mark the source
+Absent, and permit the next save to restore those retained keys. Native and
+sidecar remain consistent. Absent means consolidated storage absent, not cache
+empty. Original1774 and prior additive behavior already preserved those values.
+The approved plan does not settle whether deletion outside the app should
+discard recovery values; this repair preserves existing behavior and records
+that policy uncertainty. No backup deletion or shadow-vault retirement is done.
+
+A caller can wait15 seconds for readiness, then independently15 seconds for a
+mutation. This is not a measured15-second end-to-end limit. Physical Keychain
+writes can remain hung on the sole writer; cached readers stay responsive and
+queue admission is bounded to eight. Started writes finish in the background;
+the renderer watches for up to three minutes. HTTP delivery remains bounded best
+effort; exhaustion may need a later push/reload/restart. A target can be revoked
+during an already-in-flight request.
+
+No real Keychain, vault, native IPC, provider, signing, installed-app, desktop
+release, tag/version or account/security operation was performed. Optional later
+human UX/signing checks are not additional Part1 premerge requirements.
+Independent review of the complete final diff is required before publication.
 
 ## Historical validation (UNATTESTED)
 

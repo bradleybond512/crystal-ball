@@ -16,8 +16,9 @@ establish current installed-app identity, certificate validity or permissions.
 
 Fresh proof source: `6a1c0c0632127c4ee65d68669e9f636d52ad8df7`, tree `e87466335e93fbc43f35df4d2a2a5337aa220f65`,
 on main `898d957a34fae8154556844d2b9e29b5b26e62dd` after #1774.
-Only the original own 16-file Phase A delta was integrated additively, with the
-confirmed required-signing sentinel fix. Current `SecretsCache` remains the
+At this first proof freeze, the original own 16-file Phase A delta was
+integrated additively, with the confirmed required-signing sentinel fix.
+The later cycle-two unload validation fixture is separately recorded below. Current `SecretsCache` remains the
 struct with `state`, `writer` and `revisions`. Original native changed lines
 match the original own delta; current vault writer, transport ownership,
 revisions/floors, tombstones, launch retry and renderer pending logic remain.
@@ -114,9 +115,10 @@ Private bundle: `approved-batch/pr1775/oct10-repair/mutation-evidence/`
 - `artifact-index.json`: `390be7688c292e60b5201fd2bdb02d7dba856f499ecf657edfc812ddacde62b4`
 - `final-handoff.json`: `73e321347e7f39693bc1ec975f51cb6b72e6ebfec52ca947cae7c6222e16d68f`
 
-The final review freeze changes only this validation report and its security
-tracker status relative to the proof. The completion record binds every other
-tracked byte to the proof. Before publication that exact freeze must pass:
+The first review freeze `0b45818c9a681d32a835b5d6fc41bd5bcc9bbf6f`
+changed only this report and its security tracker status relative to the proof.
+Its completion record binds the other 5,017 tracked files to that proof.
+That exact freeze actually passed this ten-script gate:
 
 ```bash
 bash scripts/agentic-validate.sh --tests "test:signing-phase-a test:vault-writer test:native-responsiveness test:secret-boundary test:sidecar-supervisor test:sidecar-routing test:native-notify test:desktop-updater test:imessage test:imessage-native"
@@ -146,6 +148,103 @@ Rollback only this own Phase A delta through the normal PR path, preserving
 the #1774 base. A sentinel-only rollback would reopen required-helper success
 for `-`, while the separate main-sync guard would still block its ad hoc app.
 Counter metadata can remain harmlessly in place; no cleanup was performed.
+
+## Cycle two: deterministic unload validation fixture
+
+The genuine first reviews at `0b45818c9a681d32a835b5d6fc41bd5bcc9bbf6f`
+found no blocking findings: whole-branch Sol medium and authorized Sonnet
+medium supplement pass 1 of 3. Published verdict
+`99042ec5b544b9242b91ed122f6b5c469677ba10` then had all seven required checks
+pass, but Smoke failed the named unload assertion on both its initial run and
+one unchanged-head retry. Each actual renderer run reported 15,286 pass / 1
+fail. The PR remained draft, without auto-merge; those failures are retained.
+They are not waived because the old fixture matched main.
+
+The fixture awaited real timers inside a 60 ms throttle interval without
+proving that a fan-out was still pending at unload. Scheduler delays could
+exhaust that interval first. Total CI durations alone do not establish which
+timer ordering occurred. This second and final automatic repair cycle changes
+only the final unload test in
+`src/services/__tests__/unified-alerts-batching.test.mts` beyond the original
+Phase A scope; all production bytes and the other nine test bodies remain
+unchanged. It adds no dependency, product seam or validation-policy change.
+
+The synchronous fixture scopes Node22 mock `Date` and `setTimeout` to a
+positive current epoch and a fresh ordinary `UnifiedAlertStore`. Two one-ms
+clock advances prove one leading callback and then a pending trailing fan-out
+inside the unchanged 60 ms interval. Read-only assertions prove persistence
+has drained while `notifyDirty` and its timer remain pending. The original
+named unload assertion remains intact, supplemented by exactly one additional
+callback, subscriber observation of both final IDs, timer cancellation and a
+second no-op unload. Cleanup unsubscribes and resets throttle and mocks.
+Ambient rAF/lifecycle listeners/IDB absence is checked; operations stay in the
+existing in-memory fixture. Experimental MockTimers warnings were retained.
+
+Actual proof freeze: `55ba9d7fd04a42422e94d7f88ea1e6d388517e94`, tree
+`d3808c35b57268319ce4677e3d9c9a997be89c3c`. Integration source freeze
+`d140ba18ef938568e91b0fbe21d76aea752c22a1` has the identical tree and all 5,019 tracked
+file hashes. Fixture SHA-256:
+`2c88755a03b86f84d69befe63043772546afceec02f3e897d4c52bf98574e71e`.
+Production `unified-alerts.ts` SHA-256 remains
+`ff12d3afb53ee0f595b6e2a95c3d7f7b21f905d652247261879547a1940aa6f2`.
+
+A real removal of only
+`if (immediate && this.notifyDirty) this.deliverNotifyNow();` produced
+`10 pass / 0 fail → 9 pass / 1 fail → 10 pass / 0 fail`. The red was the
+original assertion, "a pending throttled fan-out is force-delivered on unload",
+with `ERR_ASSERTION`, rather than a compiler or setup error. Its nonempty diff,
+raw logs, source/fixture hashes and full tracked restoration were inspected.
+Two applied proof attempts are preserved: one was aborted before its red
+command because of an inefficient private evidence recorder, then restored;
+the second is the accepted proof. The aborted attempt is not accepted or
+classified as a rejected-before-edit attempt.
+
+At that proof freeze, the full renderer actually reported
+`15287 pass / 0 fail`; `typecheck:all` and strict focused ESLint passed.
+The first full renderer command hit a local TSX IPC sandbox `EPERM` before
+tests; the identical supported escalation retry passed. Both logs remain.
+Normal local fixture-commit hooks actually ran staged secret scan and full
+types; the `.mts` hook selector does not run lint-staged, so focused strict
+ESLint was executed separately. Integration used another normal-hook commit.
+
+Private new bundle: `approved-batch/pr1775/oct10-repair/`
+`smoke-fixture-cycle2-evidence/`. Root inspected all 49 indexed hashes and
+all 5,019 restored tracked hashes. Immutable SHA-256:
+
+- `final-handoff.json`: `d7ccccd278a2096da6c3253f7ca2592b6af958368a7ed05f12494faa44d04635`
+- `artifact-index.json`: `572a590c55ff88cdb61ceb216ee53cae52777bf714ee664ccecf7438a3c2843b`
+
+The original 27 mutation variants retain their original source-freeze and raw
+execution provenance. The refreshed completion record compares every tracked
+file except this new unload fixture and the two documentation files: 5,016
+unchanged files, including every original production and original assertion
+input. This carries the earlier evidence by exact bytes; it is not a claim
+that all 27 variants ran again at the new freeze. The new unload proof is
+separate. Earlier full Darwin native245/0 is likewise carried by unchanged
+source/test bytes. Earlier targeted Linux CI at verdict99042 reported two
+actual45/0 Rust blocks with overlapping contracts, not full245 or the new3
+pure diagnostics tests on Linux. Final-head Linux CI remains required.
+
+Before another publication, the refreshed exact freeze must actually pass the
+following eleven-script gate, including the full renderer, and fresh genuine
+whole-branch Sol medium and Sonnet medium pass 2 of 3 reviews:
+
+```bash
+bash scripts/agentic-validate.sh --tests "test:renderer test:signing-phase-a test:vault-writer test:native-responsiveness test:secret-boundary test:sidecar-supervisor test:sidecar-routing test:native-notify test:desktop-updater test:imessage test:imessage-native"
+```
+
+Actual results and model launch controls are recorded separately; none is
+inferred from this command. A fresh verdict must pin the new reviewed code.
+The next publication lease is the prior published verdict99042, while
+Claude's original clean worktree stays at ab1b224. Fresh all-check CI and the
+mandatory protected closeout are required. Both automatic cycles are used;
+a remaining blocker must be escalated without a third repair, weakened test
+or quiet waiver. No operational signing, Keychain, native IPC, GUI, installation,
+release, tag/version or Phase B vault operation was performed by this repair.
+
+Reverting only the fixture through normal review restores its timing-sensitive
+oracle while production remains unchanged. Other Phase A rollback boundaries
+and certificate operational prerequisites remain as recorded above.
 
 ## Behavior
 

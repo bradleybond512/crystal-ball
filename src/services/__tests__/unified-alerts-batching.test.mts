@@ -205,19 +205,63 @@ test('throttles the subscriber fan-out yet always delivers the final state', asy
   }
 });
 
-test('unload delivers a pending throttled fan-out synchronously (no lost final state)', async () => {
-  _setNotifyThrottleForTest(60);
-  await new Promise((r) => setTimeout(r, 80)); // idle → next fan-out is a leading fire
+test('unload delivers a pending throttled fan-out synchronously (no lost final state)', (t) => {
+  const epoch = Date.now();
+  assert.ok(epoch > 0, 'the mock clock starts at a positive current epoch');
+  assert.equal(typeof requestAnimationFrame, 'undefined', 'the fixture drains through controlled timers');
+  assert.equal(typeof window.addEventListener, 'undefined', 'the fixture has no lifecycle listeners');
+  assert.equal(typeof indexedDB, 'undefined', 'the fixture keeps archive writes in memory');
+  assert.equal(localStorage, mockLocalStorage);
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: epoch });
+  let unsub: (() => void) | undefined;
   try {
+    _setNotifyThrottleForTest(60);
+    const fresh = new UnifiedAlertStore();
+    const scenarioIds = () => fresh.getAll().filter((alert) => ['u-a', 'u-b'].includes(alert.id)).map((alert) => alert.id).sort();
+    const pending = fresh as unknown as {
+      readonly flushDirty: boolean;
+      readonly flushScheduled: boolean;
+      readonly notifyDirty: boolean;
+      readonly notifyTimer: ReturnType<typeof setTimeout> | null;
+    };
     let count = 0;
-    const unsub = unifiedAlertStore.subscribe(() => { count += 1; });
-    unifiedAlertStore.ingest([makeAlert('u-a')]); await flush(); // leading fires
-    unifiedAlertStore.ingest([makeAlert('u-b')]); await flush(); // trailing pending, flushDirty=false
+    let lastObserved: string[] = [];
+    unsub = fresh.subscribe(() => {
+      count += 1;
+      lastObserved = scenarioIds();
+    });
+
+    fresh.ingest([makeAlert('u-a')]);
+    t.mock.timers.tick(1);
+    assert.equal(count, 1, 'the first flush delivers one leading fan-out');
+    assert.deepEqual(lastObserved, ['u-a']);
+
+    fresh.ingest([makeAlert('u-b')]);
+    t.mock.timers.tick(1);
+    assert.equal(count, 1, 'the second flush leaves its trailing fan-out pending');
+    assert.deepEqual(lastObserved, ['u-a']);
+    assert.deepEqual(scenarioIds(), ['u-a', 'u-b']);
+    assert.equal(pending.flushDirty, false, 'persistence has already drained');
+    assert.equal(pending.flushScheduled, false);
+    assert.equal(pending.notifyDirty, true, 'only subscriber delivery remains pending');
+    assert.notEqual(pending.notifyTimer, null);
+
     const beforeUnload = count;
-    (unifiedAlertStore as unknown as { _flushNowForTest: () => void })._flushNowForTest();
+    fresh._flushNowForTest();
     assert.ok(count > beforeUnload, 'a pending throttled fan-out is force-delivered on unload');
-    unsub();
+    assert.equal(count, beforeUnload + 1, 'unload delivers exactly one additional fan-out');
+    assert.equal(count, 2);
+    assert.deepEqual(lastObserved, ['u-a', 'u-b']);
+    assert.equal(pending.notifyDirty, false);
+    assert.equal(pending.notifyTimer, null, 'unload cancels the trailing timer');
+
+    t.mock.timers.tick(60);
+    assert.equal(count, 2, 'the cancelled timer cannot deliver a duplicate');
+    fresh._flushNowForTest();
+    assert.equal(count, 2, 'a bare unload with nothing pending does not notify');
   } finally {
+    unsub?.();
     _setNotifyThrottleForTest(0);
+    t.mock.timers.reset();
   }
 });

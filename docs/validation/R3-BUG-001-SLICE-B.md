@@ -144,9 +144,13 @@ temporary frontend build fixture.
 
 ## Fresh October 10 validation
 
-Proof freeze: `fc5cba175523a4dd8e1fd5b2f5a5a8963ba02823`; tree `ad9993efbb0261469b7d02719245ebfe7f87270a`. The later review
-freeze changes documentation only; production and test bytes are bound to this
-proof freeze. This new evidence does not attest the historical October 3 runs.
+First proof freeze: `fc5cba175523a4dd8e1fd5b2f5a5a8963ba02823`; tree
+`ad9993efbb0261469b7d02719245ebfe7f87270a`. Its first review freeze
+`abfddc34f9b99a0e26bded914fd08a4531986448` changed three documentation files
+only, with all5007 other tracked files byte-bound to that first proof. The
+results below retain that provenance. The later portability correction and
+selected fresh QA are recorded separately below; they do not replay all76
+variants or attest the historical October 3 runs.
 
 The full fake native suite actually reported these seven result blocks:
 
@@ -191,7 +195,83 @@ coordinator helpers. Roadmap overdue-task advisories, Vite API-extension warning
 ineffective dynamic imports and chunk-size warnings remain. Documentation check
 reported `Documentation appears fresh`. No check or assertion was weakened.
 
-### Actual mutation evidence
+### Linux CI portability correction and selected supplemental QA
+
+First publication `7e361ebb32b1a42272aa551bc6de55279a6a5c15` failed the Linux
+targeted run `38069369843`: ten new cfg(test) comparisons had ambiguous
+`.parse()` types (`E0283`, `u64: PartialOrd<u64>` and `PartialOrd<glib::types::ULong>`).
+The failed raw-log SHA-256 is
+`700e6cf15c03793cd79f45f326e06fbafda14b736090391311c878cb883bea99`.
+This was a compiler failure, not an accepted mutation red or a waived CI gate.
+
+Correction freeze `27686ed6a8ae3cec39d902d494abf46da4b7a000`, tree
+`e7d198aeacbd939a7baed37ffefbf96947f0582c`, adds only ten explicit
+`parse::<u64>()` annotations: coordinator lines669/752 and secret-sync
+lines233/307/311/319/353/568/580/581. Independent line comparison confirms
+production lines, assertion operators/values and test control flow unchanged.
+The two Rust test source files are no longer byte-identical to fc5.
+
+The full fake native command above was actually rerun on this correction freeze
+and again reported the same seven blocks,242 pass / 0 fail; raw-log SHA-256
+`b2abbcf962e472b02869161238e27e62b665056a7361f92e7e8de1b1c4a9d41d`.
+Fresh QA baselines and final restored checks both passed: contract45/0,
+source42/0, renderer4/0, actual JS receiver6/0 and TypeScript exit0.
+All are Darwin results. Fresh Linux CI success must be confirmed before merge.
+
+QA actually applied14 selected variants in14 attempts here:13 compiled,
+positive numeric, intended named reds and the legitimate N24 effect survivor.
+N01–N05/N22–N28/N24R are selected reruns; new P01 removes snapshot allocation
+and fails an actual post-floor fake-sink effect oracle plus five typed/helper
+numeric oracles under that one applied mutant. Helper Mutex fixtures execute
+production clock/sender functions but do not independently establish typed
+VaultState map ownership. N24R remains allocation-contract evidence; N28 is
+genuinely older-floor fake effect evidence. No new IPC/monitor/native HTTP or
+real Keychain proof is claimed.
+
+Each variant has an applied diff, before/mutated/restored SHA-256, raw numeric
+results and all5010 file hashes restored. The root independently checked all194
+indexed artifacts, all5010 tracked hashes in both isolated clones,71 distinct
+variant/final raw logs, and the ten annotation-only changes. The bundle has76
+raw logs including its five initial baselines. No compiler error or timeout was
+accepted as a red. QA returned ownership with a clean tree and no owned runner.
+
+The original76-row ledger remains immutable evidence at fc5:76 variants,
+80 attempts,75 accepted. Its original rejections and a18 N27 survivor remain.
+Unreplayed C/S/T and other cases carry only by exact production equality and
+unchanged assertion logic after explicit numeric typing. Fresh full green suites
+are not replayed mutation evidence. The overlapping prior and fresh counts must
+not be added as unique coverage. The later review freeze changes only these
+three docs; its5007 other files are bound to correction freeze27686.
+
+Supplemental summary SHA-256:
+`f5fd2f25a41c505de1e4b6a692686a7bc6468812c3c3681bb03b3384fc29bdc0`;
+manifest SHA-256:
+`5e162476fa92c10313a6dc3e4f4852696601ffff5e9652a228a198903c1a4654`;
+artifact-index SHA-256:
+`637be3e6da91fae0f7f4458160af28d72e5d7b447b04883438c01bdd94c33ab5`.
+Raw supplemental evidence is retained privately in
+`approved-batch/pr1774/oct10-repair/mutation-evidence/freeze-27686ed6a8ae3cec39d902d494abf46da4b7a000`.
+The previous five-script gate result above belongs to its first proof freeze;
+the new final review receives a fresh gate result at its exact reviewed head.
+
+| ID | Taxonomy / disposition | Actual baseline → red → restored pass/fail blocks | Named failing assertions | Applied diff hash | Restored file hash |
+|---|---|---|---|---|---|
+| N01 | ACTUAL_TYPED_OWNERSHIP_CONTRACT / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | vault_coordinator::transport_tests::actual_transport_reservation_occurs_inside_inner_for_snapshot_and_launch | `ef30095d7cb383f1c658f99c0b1e3002c4345722500fec55a126dcfeba4e7c7b` | `a9b37de3c5084557a9d80d3ea031ea2c28bd57da396f1d36dc361db648c4227a` |
+| N02 | ACTUAL_TYPED_OWNERSHIP_CONTRACT / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | vault_coordinator::transport_tests::actual_transport_reservation_occurs_inside_inner_for_snapshot_and_launch | `80b7affd35674abc8d31c0e3840c6c68ea01f1a9185e0f4c4b992a19d7c5b46e` | `a9b37de3c5084557a9d80d3ea031ea2c28bd57da396f1d36dc361db648c4227a` |
+| N03 | ACTUAL_TYPED_OWNERSHIP_CONTRACT / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | vault_coordinator::transport_tests::actual_transport_reservation_occurs_inside_inner_for_snapshot_and_launch | `a02fa14a892a2cc1ddffe1a4391ee0449ad9a5cabfb875f9be9992022ff38340` | `a9b37de3c5084557a9d80d3ea031ea2c28bd57da396f1d36dc361db648c4227a` |
+| N04 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | vault_coordinator::transport_tests::actual_state_poison_and_exhaustion_issue_zero_transport_requests | `1280278e4ea822132e0405a74799c96603a59edf935f41cbcbe178e31c92781e` | `a9b37de3c5084557a9d80d3ea031ea2c28bd57da396f1d36dc361db648c4227a` |
+| N05 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0, 1/0 → 0/1, 0/1 → 1/0, 1/0 | vault_coordinator::transport_tests::actual_state_poison_and_exhaustion_issue_zero_transport_requests; secret_sync::tests::native_clock_survives_listener_restarts_and_exhaustion_fails_closed | `33432ddb6732da49df4f887aa5c1410fd56a04f0db968af0356b15aef3c45b42` | `f632a5354d734a26f0247178fc1d7f6b91abee195007673acb94ef9f94f68f6b` |
+| N22 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0, 1/0 → 0/1, 0/1 → 1/0, 1/0 | vault_coordinator::transport_tests::actual_state_retry_resnapshots_delete_rotation_and_revoked_target; secret_sync::tests::retry_uses_current_delete_and_rotation | `93946bac73ec876504b9cea5db9a91680cb48ae88f6e7fcdbca7121995a72206` | `f632a5354d734a26f0247178fc1d7f6b91abee195007673acb94ef9f94f68f6b` |
+| N23 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | vault_coordinator::transport_tests::actual_state_retry_resnapshots_delete_rotation_and_revoked_target | `a50df382b6a625ed2afeb55ff89e9c84306c992029db98568bf5626d58a8bdae` | `f632a5354d734a26f0247178fc1d7f6b91abee195007673acb94ef9f94f68f6b` |
+| N24 | EQUAL_PREVIOUS_FLOOR_EFFECT_EXPERIMENT / REJECT_SURVIVOR_OR_WRONG_ASSERTION | 1/0 → 1/0 → 1/0 | none (survived) | `33d17903c0b2d0fee63d63af0da9f3956c27127cc33e96f064917157bb59530e` | `f632a5354d734a26f0247178fc1d7f6b91abee195007673acb94ef9f94f68f6b` |
+| N25 | ACTUAL_NATIVE_MODULE_CONTROLLER_BEHAVIOR_WITH_FAKES / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | vault_coordinator::transport_tests::actual_state_poison_and_exhaustion_issue_zero_transport_requests | `6ea9f8e5bb1e82ded21452f641dc030065d019d520e7d9f3e38562638a3da023` | `a9b37de3c5084557a9d80d3ea031ea2c28bd57da396f1d36dc361db648c4227a` |
+| N26 | ACTUAL_TYPED_OWNERSHIP_CONTRACT / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | vault_coordinator::transport_tests::actual_transport_reservation_occurs_inside_inner_for_snapshot_and_launch | `a2d09a3d1bae32e8e597be42a9a0ff67d856b7d3d7550163761094df7712888b` | `a9b37de3c5084557a9d80d3ea031ea2c28bd57da396f1d36dc361db648c4227a` |
+| N27 | ACTUAL_TYPED_OWNERSHIP_CONTRACT / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | vault_coordinator::transport_tests::actual_transport_allocates_from_authoritative_map_not_detached_clone | `c3d0b64f58fdeac69138b4d8c96de8968c7d072442a06ec4e0253ad963cf6045` | `a9b37de3c5084557a9d80d3ea031ea2c28bd57da396f1d36dc361db648c4227a` |
+| N28 | ACTUAL_NATIVE_CONTROLLER_WITH_FAKE_REVISION_SINK_EFFECT / ACCEPT_BEHAVIOR_RED | 1/0 → 0/1 → 1/0 | actual_launch_floor_rejects_delayed_request_for_absent_native_key | `2b361b829a46cf56912585dac16ff629c8606163a3ed439ad34d8772483c43e2` | `f632a5354d734a26f0247178fc1d7f6b91abee195007673acb94ef9f94f68f6b` |
+| N24R | ACTUAL_TYPED_FRESH_FLOOR_ALLOCATION_CONTRACT / ACCEPT_BEHAVIOR_RED | 1/0, 1/0 → 0/1, 0/1 → 1/0, 1/0 | vault_coordinator::transport_tests::actual_state_snapshot_and_launch_allocate_after_current_owner; secret_sync::tests::snapshot_and_launch_revision_order_follows_cache_ownership | `33d17903c0b2d0fee63d63af0da9f3956c27127cc33e96f064917157bb59530e` | `f632a5354d734a26f0247178fc1d7f6b91abee195007673acb94ef9f94f68f6b` |
+| P01 | ACTUAL_TYPED_SNAPSHOT_ALLOCATION_WITH_FAKE_REVISION_SINK_EFFECT / ACCEPT_BEHAVIOR_RED | 1/0, 1/0, 1/0, 1/0, 1/0, 1/0 → 0/1, 0/1, 0/1, 0/1, 0/1, 0/1 → 1/0, 1/0, 1/0, 1/0, 1/0, 1/0 | actual_launch_floor_rejects_delayed_request_for_absent_native_key; vault_coordinator::transport_tests::actual_state_snapshot_and_launch_allocate_after_current_owner; vault_coordinator::transport_tests::actual_state_retry_resnapshots_delete_rotation_and_revoked_target; secret_sync::tests::normal_and_late_publication_reconcile_launch_delete_once_for_owner; secret_sync::tests::retry_uses_current_delete_and_rotation; secret_sync::tests::snapshot_and_launch_revision_order_follows_cache_ownership | `4ace84bf119db048c70ff8645bc8ba17c12e46fe6f539b76924b4c35cfe081a2` | `f632a5354d734a26f0247178fc1d7f6b91abee195007673acb94ef9f94f68f6b` |
+
+### First-freeze actual mutation evidence
 
 QA executed 76 concrete variants in 80
 attempts at the proof freeze. All40 historical equivalents were reconstructed

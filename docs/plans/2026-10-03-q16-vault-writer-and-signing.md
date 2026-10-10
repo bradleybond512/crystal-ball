@@ -142,6 +142,14 @@ historical mutation equivalents plus35 accepted new variants. The76th effect
 variant is an honest equal-floor survivor, with a distinct fresh-allocation
 contract proof. See the validation record for actual counts, hashes and limits.
 
+The first published Linux run exposed ten ambiguous cfg(test) numeric parses.
+Correction27686 adds explicit u64 types only; production and assertion logic
+are unchanged. Fresh Darwin full-native242/0 and selected14 actual mutations
+(13 accepted named reds, legitimate N24 survivor) plus restored45/42/4/6 baselines
+are recorded separately. Earlier76-variant evidence retains its first-freeze
+provenance and qualified carry; it was not all rerun. Linux CI remains required
+before merge. The updated validation record states the hashes and limits.
+
 Absent retains the existing recovery map and can permit a later save to restore
 those keys; it is distinct from parsed Vault(empty). The approved plan does not
 settle out-of-app deletion versus recovery precedence. This repair preserves

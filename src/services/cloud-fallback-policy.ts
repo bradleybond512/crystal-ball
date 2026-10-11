@@ -51,6 +51,8 @@ export const PERSONAL_PARAMS: ReadonlySet<string> = new Set([
   'origin', 'destination', 'coords', 'route', 'waypoints',
   'watchlist', 'ip', 'domain', 'email', 'phone', 'user', 'username', 'account', 'value',
   'key', 'token', 'apikey', 'api_key',
+  // Local evidence journal sequence cursors must stay on this machine.
+  'before_seq',
 ]);
 
 /**

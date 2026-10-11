@@ -41,6 +41,7 @@
       "sidecar/sidecar-logger.mjs",
       "sidecar/secret-sync.mjs",
       "sidecar/event-store.mjs",
+      "sidecar/evidence-store.mjs",
       "sidecar/sitrep-severity.mjs",
       "sidecar/sitrep-filter.mjs",
       "sidecar/s2u-xmpp.bundle.mjs",

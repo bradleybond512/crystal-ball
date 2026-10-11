@@ -2,6 +2,7 @@
  * CountryIntelModal - Shows AI-generated intelligence brief when user clicks a country
  */
 import { escapeHtml } from '@/utils/sanitize';
+import { finiteOrUndefined, formatFiniteNumber } from '@/utils/finite-number';
 import { sanitizeHtml } from '@/utils/safe-html';
 import { t } from '@/services/i18n';
 import { sanitizeUrl } from '@/utils/sanitize';
@@ -265,12 +266,11 @@ export class CountryIntelModal {
  return;
  }
 
- const pct = Number.parseFloat(data.weekChangePercent);
- const sign = pct >= 0 ? '+' : '';
- const cls = pct >= 0 ? 'stock-up' : 'stock-down';
- const arrow = pct >= 0 ? '📈' : '📉';
- el.className = `signal-chip stock ${cls}`;
- el.innerHTML = `${arrow} ${escapeHtml(data.indexName)}: ${sign}${data.weekChangePercent}% (1W)`;
+ const pct = finiteOrUndefined(data.weekChangePercent);
+ const up = pct !== undefined && pct >= 0;
+ const sign = up ? '+' : '';
+ el.className = `signal-chip stock ${up ? 'stock-up' : 'stock-down'}`;
+ el.innerHTML = `${up ? '📈' : '📉'} ${escapeHtml(data.indexName)}: ${sign}${formatFiniteNumber(pct, 2)}% (1W)`;
   }
 
   private formatBrief(text: string): string {

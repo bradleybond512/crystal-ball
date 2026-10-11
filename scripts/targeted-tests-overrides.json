@@ -203,7 +203,8 @@
     "test:native-notify"
   ],
   "src/components/ResourceInventoryPanel.ts": [
-    "test:native-notify"
+    "test:native-notify",
+    "test:untrusted-html"
   ],
   "src-tauri/src/notify_policy.rs": [
     "test:native-notify"
@@ -489,5 +490,23 @@
   "src/services/datacenter/datacenter-posture.ts": [
     "test:datacenter",
     "test:datacenter-ownership"
+  ],
+  "src/utils/finite-number.ts": [
+    "test:untrusted-html"
+  ],
+  "src/components/CountryBriefPage.ts": [
+    "test:untrusted-html"
+  ],
+  "src/services/maritime/index.ts": [
+    "test:untrusted-html"
+  ],
+  "src/services/unrest/index.ts": [
+    "test:untrusted-html"
+  ],
+  "src/services/resource-inventory/schema.ts": [
+    "test:untrusted-html"
+  ],
+  "src/services/survival-advisor.ts": [
+    "test:untrusted-html"
   ]
 }

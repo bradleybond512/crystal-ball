@@ -5,6 +5,7 @@ import {
   type GetVesselSnapshotResponse,
 } from '@/generated/client/crystalball/maritime/v1/service_client';
 import { createCircuitBreaker } from '@/utils';
+import { finiteOr, finiteOrUndefined } from '@/utils/finite-number';
 import type { AisDisruptionEvent, AisDensityZone, AisDisruptionType } from '@/types';
 import { dataFreshness } from '../data-freshness';
 import { isFeatureAvailable } from '../runtime-config';
@@ -26,18 +27,20 @@ const SEVERITY_REVERSE: Record<string, 'low' | 'elevated' | 'high'> = {
   AIS_DISRUPTION_SEVERITY_HIGH: 'high',
 };
 
+// Numbers are coerced here, at the provider boundary (R3-SEC-009): the map
+// popups interpolate them into HTML.
 function toDisruptionEvent(proto: ProtoDisruption): AisDisruptionEvent {
   return {
  id: proto.id,
  name: proto.name,
  type: DISRUPTION_TYPE_REVERSE[proto.type] ?? 'gap_spike',
- lat: proto.location?.latitude ?? 0,
- lon: proto.location?.longitude ?? 0,
+ lat: finiteOr(proto.location?.latitude, 0),
+ lon: finiteOr(proto.location?.longitude, 0),
  severity: SEVERITY_REVERSE[proto.severity] ?? 'low',
- changePct: proto.changePct,
- windowHours: proto.windowHours,
- darkShips: proto.darkShips,
- vesselCount: proto.vesselCount,
+ changePct: finiteOr(proto.changePct, 0),
+ windowHours: finiteOr(proto.windowHours, 0),
+ darkShips: finiteOrUndefined(proto.darkShips),
+ vesselCount: finiteOrUndefined(proto.vesselCount),
  region: proto.region,
  description: proto.description,
   };
@@ -47,11 +50,11 @@ function toDensityZone(proto: ProtoDensityZone): AisDensityZone {
   return {
  id: proto.id,
  name: proto.name,
- lat: proto.location?.latitude ?? 0,
- lon: proto.location?.longitude ?? 0,
- intensity: proto.intensity,
- deltaPct: proto.deltaPct,
- shipsPerDay: proto.shipsPerDay,
+ lat: finiteOr(proto.location?.latitude, 0),
+ lon: finiteOr(proto.location?.longitude, 0),
+ intensity: finiteOr(proto.intensity, 0),
+ deltaPct: finiteOr(proto.deltaPct, 0),
+ shipsPerDay: finiteOrUndefined(proto.shipsPerDay),
  note: proto.note,
   };
 }

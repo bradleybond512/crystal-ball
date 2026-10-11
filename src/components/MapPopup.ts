@@ -9,6 +9,7 @@ import type { StartupHub, Accelerator, TechHQ, CloudRegion } from '@/config/tech
 import type { TechHubActivity } from '@/services/tech-activity';
 import type { GeoHubActivity } from '@/services/geo-activity';
 import { escapeHtml, sanitizeUrl } from '@/utils/sanitize';
+import { formatFiniteNumber } from '@/utils/finite-number';
 import { isMobileDevice, getCSSColor } from '@/utils';
 import { t } from '@/services/i18n';
 import { fetchHotspotContext, formatArticleDate, extractDomain, type GdeltArticle } from '@/services/gdelt-intel';
@@ -1032,9 +1033,7 @@ export class MapPopup {
  const typeLabel = event.type === 'gap_spike' ? t('popups.aisGapSpike') : t('popups.chokepointCongestion');
  const changeLabel = event.type === 'gap_spike' ? t('popups.darkening') : t('popups.density');
  const countLabel = event.type === 'gap_spike' ? t('popups.darkShips') : t('popups.vesselCount');
- const countValue = event.type === 'gap_spike'
- ? event.darkShips?.toString() || '—'
- : event.vesselCount?.toString() || '—';
+ const countValue = formatFiniteNumber(event.type === 'gap_spike' ? event.darkShips : event.vesselCount, 0);
 
  return `
  <div class="popup-header ais">
@@ -1047,7 +1046,7 @@ export class MapPopup {
  <div class="popup-stats">
  <div class="popup-stat">
  <span class="stat-label">${changeLabel}</span>
- <span class="stat-value">${event.changePct}% ↑</span>
+ <span class="stat-value">${formatFiniteNumber(event.changePct)}% ↑</span>
  </div>
  <div class="popup-stat">
  <span class="stat-label">${countLabel}</span>
@@ -1055,7 +1054,7 @@ export class MapPopup {
  </div>
  <div class="popup-stat">
  <span class="stat-label">${t('popups.window')}</span>
- <span class="stat-value">${event.windowHours}H</span>
+ <span class="stat-value">${formatFiniteNumber(event.windowHours)}H</span>
  </div>
  <div class="popup-stat">
  <span class="stat-label">${t('popups.region')}</span>
@@ -1075,7 +1074,7 @@ export class MapPopup {
  const sourceLabel = event.sourceType === 'acled' ? t('popups.protest.acledVerified') : t('popups.protest.gdelt');
  const validatedBadge = event.validated ? `<span class="popup-badge verified">${t('popups.verified')}</span>` : '';
  const fatalitiesSection = event.fatalities
- ? `<div class="popup-stat"><span class="stat-label">${t('popups.fatalities')}</span><span class="stat-value alert">${event.fatalities}</span></div>`
+ ? `<div class="popup-stat"><span class="stat-label">${t('popups.fatalities')}</span><span class="stat-value alert">${formatFiniteNumber(event.fatalities, 0)}</span></div>`
  : '';
  const actorsSection = event.actors?.length
  ? `<div class="popup-stat"><span class="stat-label">${t('popups.actors')}</span><span class="stat-value">${event.actors.map(a => escapeHtml(a)).join(', ')}</span></div>`

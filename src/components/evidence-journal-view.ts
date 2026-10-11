@@ -116,6 +116,13 @@ export function renderEvidenceJournalSection(
     ? `<p class="evidence-journal-message" style="margin:6px 0 0;font-size:11px;${messageStyle}">${escapeHtml(exportState.message)}</p>`
     : '';
   const disabled = state.status !== 'ready' || exportState.busy ? ' disabled' : '';
+  const retryDisabled = state.status === 'loading' || exportState.busy ? ' disabled' : '';
+  const retryLabel = state.status === 'loading' ? 'Checking evidence journal…' : 'Retry evidence journal';
+  const retry = state.status === 'ready'
+    ? ''
+    : `<button type="button" class="evidence-journal-retry" data-evidence-action="retry"${retryDisabled}>
+        ${retryLabel}
+      </button>`;
   return `
       <section class="evidence-journal-section" style="margin-bottom:12px;">
         <h3 style="margin:0 0 6px;font-size:13px;">Calibration evidence journal</h3>
@@ -131,6 +138,7 @@ export function renderEvidenceJournalSection(
         <button type="button" class="evidence-journal-export" data-evidence-action="export"${disabled}>
           ${exportState.busy ? 'Exporting…' : 'Export calibration evidence'}
         </button>
+        ${retry}
         ${message}
       </section>`;
 }

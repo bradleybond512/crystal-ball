@@ -305,6 +305,15 @@ type PanelState = { _items: unknown[]; _load: () => Promise<void>; _tail: Promis
 const state = (panel: InstanceType<typeof ResourceInventoryPanel>) => panel as unknown as PanelState;
 const log = (count: number) => Array.from({ length: count }, (_, index) => ({ timestamp: Date.now() - index, amount: index % 2 ? -0.5 : 0.5 }));
 const steady = { ...VALID, dailyRate: 0, alertedThresholds: [] };
+async function waitForBoundaryAction(panel: InstanceType<typeof ResourceInventoryPanel>, selector: string, expectedId: string): Promise<void> {
+  const deadline = Date.now() + 3000;
+  while (Date.now() < deadline) {
+    const button = panel.getContentElement().querySelector<HTMLButtonElement>(selector);
+    if (button?.dataset.id === expectedId) return;
+    await wait(10);
+  }
+  assert.fail(`${selector} for inventory row ${expectedId} did not render within 3 seconds`);
+}
 async function clickAction(panel: InstanceType<typeof ResourceInventoryPanel>, selector: string, input: string | null): Promise<void> {
   const original = globalThis.prompt;
   globalThis.prompt = () => input;
@@ -338,7 +347,9 @@ test('fake keys compare by IndexedDB value and writes publish only at completion
 for (const selector of ['.ri-use-btn', '.ri-resupply-btn']) {
   test(`${selector}: 9,999 history events accept one; 10,000 reject without changing evidence`, async (t) => {
     rows.clear(); rows.set(steady.id, { ...steady, quantity: 100, dailyRate: 1, consumptionLog: log(9999), alertedThresholds: ['7-day'] });
-    const panel = mount(t); await wait();
+    t.after(() => { nextReadDelay = 0; });
+    nextReadDelay = 700;
+    const panel = mount(t); await waitForBoundaryAction(panel, selector, steady.id);
     await clickAction(panel, selector, '0.0004');
     const accepted = rows.get(steady.id) as typeof steady & { consumptionLog: { timestamp: number; amount: number }[] };
     assert.equal(accepted.consumptionLog.length, 10000);

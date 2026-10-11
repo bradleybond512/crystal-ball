@@ -103,6 +103,7 @@ export class BeliefCalibrationPanel extends Panel {
   private evidenceState: EvidenceJournalViewState = { status: 'loading' };
   private evidenceExport: EvidenceExportViewState = { busy: false };
   private evidenceUpdateTimer: number | null = null;
+  private evidenceSummaryInFlight = false;
 
   constructor() {
     super({
@@ -648,22 +649,37 @@ export class BeliefCalibrationPanel extends Panel {
   }
 
   private async refreshEvidenceSummary(): Promise<void> {
-    const summary = await getEvidenceJournal().summary();
-    if (this.signal.aborted) return;
-    this.evidenceState = summary ? { status: 'ready', summary } : { status: 'unavailable' };
+    if (this.signal.aborted || this.evidenceSummaryInFlight) return;
+    this.evidenceSummaryInFlight = true;
+    this.evidenceState = { status: 'loading' };
     this.render();
+    try {
+      const summary = await getEvidenceJournal().summary();
+      if (this.signal.aborted) return;
+      this.evidenceState = summary ? { status: 'ready', summary } : { status: 'unavailable' };
+    } catch {
+      if (this.signal.aborted) return;
+      this.evidenceState = { status: 'unavailable' };
+    } finally {
+      this.evidenceSummaryInFlight = false;
+    }
+    if (!this.signal.aborted) this.render();
   }
 
   private handleEvidenceAction(event: MouseEvent): void {
     const button = (event.target as Element | null)?.closest<HTMLButtonElement>(
-      '[data-evidence-action="export"]',
+      '[data-evidence-action]',
     );
-    if (!button || this.evidenceExport.busy) return;
-    void this.exportEvidence();
+    if (!button || button.disabled || this.signal.aborted || this.evidenceExport.busy || this.evidenceSummaryInFlight) return;
+    if (button.dataset.evidenceAction === 'retry' && this.evidenceState.status === 'unavailable') {
+      void this.refreshEvidenceSummary();
+    } else if (button.dataset.evidenceAction === 'export' && this.evidenceState.status === 'ready') {
+      void this.exportEvidence();
+    }
   }
 
   private async exportEvidence(): Promise<void> {
-    if (this.signal.aborted || this.evidenceExport.busy) return;
+    if (this.signal.aborted || this.evidenceExport.busy || this.evidenceSummaryInFlight || this.evidenceState.status !== 'ready') return;
     this.evidenceExport = { busy: true };
     this.render();
     try {

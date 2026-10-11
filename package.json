@@ -269,7 +269,8 @@
     "test:secret-boundary": "node --test tests/secret-boundary.test.mjs tests/sidecar-secret-routing-boundary.test.mjs tests/ucdp-local-boundary.test.mjs src-tauri/sidecar/secret-sync.test.mjs && tsx --test src/services/__tests__/secret-boundary.test.mts src/services/__tests__/keychain.test.mts src/components/__tests__/key-dashboard-secret-boundary.test.mts",
     "test:mcp-companion": "node --test tests/mcp-companion-suite.test.mjs tests/mcp-suite-entry.test.mjs",
     "test:mcp-install-smoke": "node --test tests/mcp-install-smoke-suite.test.mjs",
-    "test:datacenter-ownership": "tsx --test src/services/datacenter/__tests__/site-zones.test.mts tests/datacenter-site-ownership-runtime.test.mts && node --test tests/datacenter-zone-degrade-wiring.test.mjs"
+    "test:datacenter-ownership": "tsx --test src/services/datacenter/__tests__/site-zones.test.mts tests/datacenter-site-ownership-runtime.test.mts && node --test tests/datacenter-zone-degrade-wiring.test.mjs",
+    "test:untrusted-html": "tsx --import ./tests/panels/register-hook.mjs --test src/services/resource-inventory/__tests__/schema.test.mts src/utils/__tests__/finite-number.test.mts src/components/__tests__/resource-inventory-untrusted.test.mts src/components/__tests__/untrusted-numeric-fields.test.mts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",

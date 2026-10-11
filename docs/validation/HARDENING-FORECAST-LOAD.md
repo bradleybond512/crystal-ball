@@ -299,3 +299,120 @@ and accepted #1777 evidence behavior. It restores the earlier admission defect;
 it cannot reconstruct rows removed by a later legitimate storage write. No
 publication, verdict, release, deployment or installation is implied by this
 private validation document.
+
+## Current main708 integration evidence
+
+PR #1784 remains private. The entire document prefix above is retained byte for byte from the archived c7d86 validation document; its earlier “current” wording and recorded reds apply to that historical source, not to a new runtime campaign.
+
+Current code tip: `ff83c9d014835b20578d84a57e457279992c548f`. Delivered main: `708c6535bc6bbad0073bbc8a3b70bfa4f3723ab3`, tree `f50a44fb1d15eaddd83472d8e9fd4d87f8afac36`. The sealed saved source contains 5081 records; all 5075 unowned main objects, types, modes and bytes remain preserved. Normal code-commit hooks exited 0 without source changes.
+
+The delivery counter remains 16 delivered of 28, with 12 remaining. Publication is not authorized for PR #1784.
+
+### Actual focused and selector execution
+
+- `forecastLoad`: exit 0, 3.737 seconds; receipt SHA-256 `ccb2cac59c28d55e94e397570d9007d4449099436dae4c16358f33d2a27417f7`; log SHA-256 `139745bc50c30ad7b7bd27e04dbeab72e59b16021f9b2b58eae26f0240fcd3c0`.
+- `evidenceJournal`: exit 0, 7.965 seconds; receipt SHA-256 `0d0d2575401f899f85b821877fbe6242b3d84e4afb0ea2db904c5099ab7fd8cd`; log SHA-256 `392e30b82c3eabd3f6cbc3a9daf7dcc734dca223facb04ab79f95a8d8a0f306d`.
+- `scopedLint`: exit 0, 7.868 seconds; receipt SHA-256 `b79e619046f3bfb54d03b01df79e0ba0c3454e4bbd719df483f3fd1b5ddc0060`; log SHA-256 `267407f6837d6031774718ed2d1f46199870e1f551ae067bc33a9ea5571d577e`.
+- `benchForecast`: exit 0, 1.29 seconds; receipt SHA-256 `61cde2e3b597689650b5117cccf52f41689acb457a82f1fc97f554309a9eb27f`; log SHA-256 `59fbfb55c65e4287caf6687a30f652576411e014eb47fccd73081a6c82b3d1b8`.
+- `benchBaselines`: exit 0, 1.213 seconds; receipt SHA-256 `c31d06e74e3793ce64423ff40e6230333e7ad73a287044fad08ceaf466674286`; log SHA-256 `1fe593f837dfb4c072fcfaae57068126382ae90dad6eb02701a5174d390283f4`.
+- `selectorList`: exit 0, 0.753 seconds; receipt SHA-256 `d3258295e0b752e865933a10c648d27e31ad09ee3cd13942bbdc88a4eb1bc5d3`; log SHA-256 `43926605b93c21c9c92b66789a67518afb4fcc95eae84cebcdf04821f6cf2f50`.
+- `selectorFull`: exit 0, 234.042 seconds; receipt SHA-256 `223bceeeebb3e158d644bb753448c09731bbf3b38369fab6761535cea28a9525`; log SHA-256 `18d115b118738b0d26715dc9e6d8dde6d01fa02c570783fb4434cd74656e421e`.
+
+Commands below are the verified actual receipt commands, including the owned bootstrap:
+
+```text
+forecastLoad: /opt/homebrew/opt/node@22/bin/node --import /Users/bradleybond/Documents/Codex/2026-10-04/task/approved-batch/pr1761/oct11-private-provider-preparation/copied-index-fixture-bootstrap.mjs /opt/homebrew/opt/node@22/lib/node_modules/npm/bin/npm-cli.js run test:forecast-load
+evidenceJournal: /opt/homebrew/opt/node@22/bin/node --import /Users/bradleybond/Documents/Codex/2026-10-04/task/approved-batch/pr1761/oct11-private-provider-preparation/copied-index-fixture-bootstrap.mjs /opt/homebrew/opt/node@22/lib/node_modules/npm/bin/npm-cli.js run test:evidence-journal
+scopedLint: /opt/homebrew/opt/node@22/bin/node --import /Users/bradleybond/Documents/Codex/2026-10-04/task/approved-batch/pr1761/oct11-private-provider-preparation/copied-index-fixture-bootstrap.mjs scripts/run-eslint.mjs src/services/intelligence/forecast-calibration-load.ts src/services/intelligence/forecast-calibration-adapter.ts src/services/intelligence/__tests__/forecast-calibration-load.test.mts --max-warnings 0
+benchForecast: /opt/homebrew/opt/node@22/bin/node --import /Users/bradleybond/Documents/Codex/2026-10-04/task/approved-batch/pr1761/oct11-private-provider-preparation/copied-index-fixture-bootstrap.mjs /opt/homebrew/opt/node@22/lib/node_modules/npm/bin/npm-cli.js run bench:forecast
+benchBaselines: /opt/homebrew/opt/node@22/bin/node --import /Users/bradleybond/Documents/Codex/2026-10-04/task/approved-batch/pr1761/oct11-private-provider-preparation/copied-index-fixture-bootstrap.mjs /opt/homebrew/opt/node@22/lib/node_modules/npm/bin/npm-cli.js run bench:baselines
+selectorList: /opt/homebrew/opt/node@22/bin/node --import /Users/bradleybond/Documents/Codex/2026-10-04/task/approved-batch/pr1761/oct11-private-provider-preparation/copied-index-fixture-bootstrap.mjs scripts/targeted-tests.mjs --list --strict
+selectorFull: /opt/homebrew/opt/node@22/bin/node --import /Users/bradleybond/Documents/Codex/2026-10-04/task/approved-batch/pr1761/oct11-private-provider-preparation/copied-index-fixture-bootstrap.mjs scripts/targeted-tests.mjs
+```
+
+The focused test footers below are exact lines from saved logs. They describe individual Node stages, with no deduplicated total inferred across logs.
+
+`forecastLoad` footer source SHA-256 `139745bc50c30ad7b7bd27e04dbeab72e59b16021f9b2b58eae26f0240fcd3c0`:
+
+```text
+# tests 238
+# suites 0
+# pass 238
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
+
+`evidenceJournal` footer source SHA-256 `392e30b82c3eabd3f6cbc3a9daf7dcc734dca223facb04ab79f95a8d8a0f306d`:
+
+```text
+# tests 40
+# suites 0
+# pass 40
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# tests 68
+# suites 0
+# pass 68
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
+
+The actual strict selector declaration and full execution both contain these 40 unique scripts; execution announcements and the final 40-script pass footer were verified:
+
+`test:acc509`, `test:alert-capacity`, `test:alert-deduplication`, `test:algorithms`, `test:analytics-consent`, `test:briefing-scheduler`, `test:command-center`, `test:crisis-signature-library`, `test:crisis-trajectory`, `test:cross-domain-contradictions`, `test:evidence-journal`, `test:fetch-attribution`, `test:forecast-load`, `test:gdacs-map`, `test:imessage`, `test:install-scripts`, `test:intelligence`, `test:intelligence-timeline`, `test:lifelines`, `test:little-snitch`, `test:maritime`, `test:ml-budget`, `test:native-notify`, `test:quiet-hours`, `test:reasoning`, `test:review-trail`, `test:rules-engine`, `test:satellite`, `test:secret-boundary`, `test:settings`, `test:sidecar-routing`, `test:situations`, `test:survival`, `test:ucdp-provider`, `test:ux010`, `test:ux026`, `test:ux059`, `test:vault-writer`, `test:warning-delivery`, `test:wildfire`
+
+Actual benchmark output excerpts:
+
+`benchForecast`:
+
+```text
+  Corpus                  crystal-ball-forecast-replay-v1 (120 records)
+  Walk-forward folds      4
+  Baseline model          hierarchical-base-rate@1.0.0
+  Scored / evaluation     65 / 80
+  Resolution coverage     88.8%
+  Brier score             0.2377
+  Brier skill             0.0051
+  Baseline Brier          0.2389
+  Global baseline Brier   0.2390
+  Log loss                0.6984
+  High-confidence misses  10
+  Top source loss       analyst-loop 75.4% of loss; Brier 0.448; 8 high-confidence misses
+  Top domain loss       macro 28.1% of loss; Brier 0.434; 3 high-confidence misses
+  Top horizon loss       1h-6h 46.4% of loss; Brier 0.448; 9 high-confidence misses
+  Top version loss       analyst-v1 37.7% of loss; Brier 0.448; 4 high-confidence misses
+PASS — all forecast replay gates are within the reviewed baseline.
+```
+
+`benchBaselines`:
+
+```text
+Baseline pairing benchmark — corpus baseline-pairing-v1 (72 fixtures)
+  Production incumbent   Brier 0.152317 over 72
+  hierarchical-base-rate   Brier 0.261052 over 36  skill vs production -0.115069
+  momentum-baseline        Brier 0.209604 over 12  skill vs production -0.057487
+  persistence-baseline     Brier 0.386255 over 40  skill vs production -0.238375
+PASS — all baseline-pairing gates are within the reviewed baseline.
+```
+
+### Historical proof carry qualification
+
+The accepted old source is `c7d86ac8cfbdc0ade4ee17c5e82284f7a6a78a9e`. The 65 runtime assertion reds and the independent audit of 854 artifacts remain historical evidence bound to that accepted source and its documented earlier code freeze. This refresh runs no new mutation campaign and does not claim 65 fresh runtime kills or a fresh 854-artifact audit.
+
+All 65 actual candidate source/test forward and inverse carries match the archived receipt/patch/source/test hashes. The forecast-load command and 12 named consumer anchors are unchanged. Actual validation receipt manifests match the same clean saved source and raw index before and after each successful command; owned child/process-group cleanup is complete.
+
+Historical independent audit SHA-256: `35895741f709b02af5894b3317d727e4106f7f68b0a96947f565564b33f598b9`. Actual 65-carry artifact SHA-256: `d80ed016bdec3cd1add5c7c33b5efdb17dbfea9ec38cecb5b24bc8f368106307`. Consumer/command anchor artifact SHA-256: `5c7b542c50d77580627c8daab0f0716c316d32f0ba1532b44824e32d7c90b1d7`.
+
+The attempted duplicate blanket 854-artifact rehash was interrupted and remains incomplete (owned attempts exited 130). Its bounded diagnostic verified 200 saved artifacts without a mismatch and supported slow I/O; the exact original termination file remains unknown. No corruption conclusion or stronger source-content-after claim is inferred. The completed static 65-carry qualification is separate from that incomplete duplicate audit.
+
+### Remaining validation and limits
+
+Final documentation adoption and its normal commit, the final named full gate on that documentation tip, private Sonnet medium review (at most three passes), and last nonimplementer Sol medium cycle 2 remain pending. After genuine final validation and freeze, private Sonnet triage precedes the last Sol cycle on the same exact validated tip. This section records no future documentation-tip gate or review pass.
+
+The persisted-loader contract remains structural: genuine absent legacy metadata and degraded empty-evidence journal history stay compatible; invalid present resolved metadata is rejected. No accuracy uplift, provider/native installed-app verification, real-user-data operation, or interrupted-campaign recovery result is claimed. Rollback removes only the own six-path delta while retaining delivered main protections.

@@ -49,3 +49,13 @@ test('stale/missing grid feed is reported in staleInputs, not hidden', () => {
   assert.ok(p.staleInputs.includes('grid'));
   assert.equal(p.power.gridUtilizationPct, null);
 });
+
+test('unverified weather zones are reported stale; polygon warnings still count (R3-BUG-002)', () => {
+  const clear = computeDatacenterPosture({ site: SITE, gridStatus: gridStatus(55), weatherAlerts: [], nearbyOutageCount: 0, now: NOW, weatherZonesUnverified: true });
+  assert.deepEqual(clear.staleInputs, ['weather zones']);
+  const verified = computeDatacenterPosture({ site: SITE, gridStatus: gridStatus(55), weatherAlerts: [], nearbyOutageCount: 0, now: NOW, weatherZonesUnverified: false });
+  assert.deepEqual(verified.staleInputs, []);
+  const storm = computeDatacenterPosture({ site: SITE, gridStatus: gridStatus(55), weatherAlerts: [alert('Severe Thunderstorm Warning')], nearbyOutageCount: 0, now: NOW, weatherZonesUnverified: true });
+  assert.ok(['warning', 'critical'].includes(storm.overall), 'polygon matching still runs');
+  assert.ok(storm.staleInputs.includes('weather zones'));
+});

@@ -28,6 +28,8 @@ export interface PostureInput {
   seismicNearby?: NearbySeismicEvent[];
   connectivity?: ConnectivitySignal | null;
   gridInfrastructure?: PowerContext | null;
+  /** The site's NWS zone lookup failed: zone-only warnings are unverified. */
+  weatherZonesUnverified?: boolean;
 }
 
 function blendOverall(power: DcLevel, weather: DcLevel): DcLevel {
@@ -61,6 +63,9 @@ export function computeDatacenterPosture(input: PostureInput): DataCenterPosture
   const staleInputs: string[] = [];
   if (!input.gridStatus) staleInputs.push('grid');
   if (input.nearbyOutageCount === null) staleInputs.push('outages');
+  // Polygon matching still runs; only zone-only products (ice/heat/flood are
+  // often issued by UGC zone) cannot be checked, so never read as a clean clear.
+  if (input.weatherZonesUnverified) staleInputs.push('weather zones');
 
   const power = computePowerPosture({
     gridUtilizationPct: input.gridStatus ? input.gridStatus.utilizationPct : null,

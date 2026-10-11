@@ -329,7 +329,8 @@ import type { ObservationEvent } from '@/types/intelligence';
 import { fetchDamSafetyAlerts } from '@/services/dam-safety';
 import { fetchPowerGridAlerts } from '@/services/power-grid-alerts';
 import { fetchGridStatus } from '@/services/power-grid';
-import { getDatacenterSite, setDatacenterSite, recomputeDatacenterPosture } from '@/services/datacenter/datacenter-state';
+import { getDatacenterSite, setDatacenterSite, recomputeDatacenterPosture, markDatacenterPostureStale } from '@/services/datacenter/datacenter-state';
+import { resolveSiteZonesBestEffort } from '@/services/datacenter/site-zones';
 import { toIsoString } from '@/services/weather/weather-exposure';
 import type { PowerContext } from '@/services/infrastructure/osm-power';
 import {
@@ -1847,35 +1848,31 @@ export class DataLoaderManager implements AppModule {
 
  // Feed weather alerts + grid status into the datacenter posture engine.
  // Only runs when the user has a saved place tagged data_center.
- if (getDatacenterSite()) {
+ const refreshDatacenterPosture = async (): Promise<void> => {
+ const selectedSite = getDatacenterSite();
+ if (!selectedSite) return;
+ let site = selectedSite;
  // Contain the datacenter posture computation: it runs many awaits and
  // timestamp coercions, and a throw here must never abort the weather tick's
  // downstream status-chip publication — otherwise a single malformed alert
  // could strand a stale "ALL CLEAR" over a live storm.
  try {
- let site = getDatacenterSite()!;
  // Resolve the site's own UGC zones once (forecast zone + county) so
  // zone-only NWS products (ice/heat/flood are often issued by UGC zone,
  // not polygon) can match the site instead of reading as clear. Cached
- // by lat,lon; best-effort — degrades to polygon-only matching on failure.
- if (!site.ugcZones) {
- const zoneKey = `${site.lat},${site.lon}`;
- let zones = _siteUgcZoneCache.get(zoneKey);
- if (!zones) {
- zones = await fetchUgcZonesForPoint(site.lat, site.lon);
- _siteUgcZoneCache.set(zoneKey, zones);
- }
- if (zones.length > 0) {
- // Re-read current site after async gap — only write back if it's still
- // the same site (prevents stale-site race if saved places changed).
- const current = getDatacenterSite();
- if (current && current.lat === site.lat && current.lon === site.lon) {
- setDatacenterSite({ ...current, ugcZones: zones });
- }
- site = getDatacenterSite() ?? site;
- }
+ // by lat,lon. Best-effort: a failed /points lookup (5xx/429/timeout/
+ // malformed) degrades to polygon-only matching and flags the posture's
+ // weather zones as unverified instead of skipping the tick (R3-BUG-002).
+ const zoneResolution = await resolveSiteZonesBestEffort(site, _siteUgcZoneCache, fetchUgcZonesForPoint);
+ if (getDatacenterSite() !== site) return;
+ if (!site.ugcZones && zoneResolution.zones.length > 0) {
+ // Own the enrichment before emitting; a listener may replace it or throw.
+ site = { ...site, ugcZones: [...zoneResolution.zones] };
+ setDatacenterSite(site);
+ if (getDatacenterSite() !== site) return;
  }
  const grid = await fetchGridStatus().catch(() => null);
+ if (getDatacenterSite() !== site) return;
  const gridStatus = grid?.find((g) => g.region === site.eiaRegion) ?? null;
  // Map WeatherAlert[] → NwsAlertMinimal[]. Shapes differ (severity casing,
  // Date vs ISO). Carry EVERY outer ring of the warning into polygon.rings so
@@ -1905,6 +1902,7 @@ export class DataLoaderManager implements AppModule {
    fetchSiteAirQuality(site.lat, site.lon),
    fetchConnectivitySignal(),
  ]);
+ if (getDatacenterSite() !== site) return;
  const rawCond = condResult.status === 'fulfilled' ? condResult.value : null;
  const siteConditions = rawCond ? {
    tempC: rawCond.temperature,
@@ -1930,6 +1928,7 @@ export class DataLoaderManager implements AppModule {
      occurredAt: eq.occurredAt,
    }));
  const gridInfrastructure = await resolveGridInfrastructure(site.lat, site.lon);
+ if (getDatacenterSite() !== site) return;
  recomputeDatacenterPosture({
    gridStatus,
    weatherAlerts: nwsAlerts,
@@ -1940,11 +1939,21 @@ export class DataLoaderManager implements AppModule {
    seismicNearby: nearbySeismic,
    connectivity: connResult.status === 'fulfilled' ? connResult.value : null,
    gridInfrastructure,
+ weatherZonesUnverified: zoneResolution.degraded,
  });
  } catch (error) {
  console.warn('[Datacenter] posture recompute failed; skipping this tick:', error);
+ // Never leave an owned prior posture (possibly "All clear") looking current.
+ if (getDatacenterSite() === site) {
+ try {
+ markDatacenterPostureStale('posture recompute failed');
+ } catch (staleError) {
+ console.warn('[Datacenter] stale posture notification failed (continuing weather tick):', staleError);
  }
  }
+ }
+ };
+ await refreshDatacenterPosture();
 
  const weatherTraceIds = weatherOccurrenceTraceIds(alerts.map((alert) => alert.id));
 

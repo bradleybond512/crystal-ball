@@ -42,4 +42,5 @@ test('stripSummary surfaces stale feeds so the strip never implies a fake all-cl
   assert.doesNotMatch(stripSummary(BASE), /stale/);
   const degraded = stripSummary({ ...BASE, staleInputs: ['grid', 'outages'] });
   assert.match(degraded, /grid, outages stale/);
+  assert.match(stripSummary({ ...BASE, overall: 'normal', staleInputs: ['weather zones'] }), /All clear.*⚠ weather zones stale/);
 });

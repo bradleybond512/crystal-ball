@@ -73,7 +73,9 @@
   ],
   "src/app/data-loader.ts": [
     "test:ux059",
-    "test:quiet-hours"
+    "test:quiet-hours",
+    "test:datacenter",
+    "test:datacenter-ownership"
   ],
   "src/services/gdacs-coverage.ts": [
     "test:gdacs-map"
@@ -467,5 +469,25 @@
   "tools/mcp-server/__tests__/untrusted-framing-stdio.test.mjs": [
     "test:mcp-companion",
     "test:mcp-untrusted"
+  ],
+  "tests/datacenter-zone-degrade-wiring.test.mjs": [
+    "test:datacenter",
+    "test:datacenter-ownership"
+  ],
+  "src/services/datacenter/datacenter-state.ts": [
+    "test:datacenter",
+    "test:datacenter-ownership"
+  ],
+  "tests/datacenter-site-ownership-runtime.test.mts": [
+    "test:datacenter",
+    "test:datacenter-ownership"
+  ],
+  "src/services/datacenter/site-zones.ts": [
+    "test:datacenter",
+    "test:datacenter-ownership"
+  ],
+  "src/services/datacenter/datacenter-posture.ts": [
+    "test:datacenter",
+    "test:datacenter-ownership"
   ]
 }

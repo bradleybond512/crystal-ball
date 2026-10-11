@@ -47,6 +47,16 @@ import type {
   ForecastWorkbenchView,
 } from './calibration-report-view';
 import { getCalibrationStore } from '@/services/intelligence/forecast-calibration-adapter';
+import { getEvidenceJournal } from '@/services/intelligence/evidence-journal-wiring';
+import { getEvidenceOutboxDiagnostics, subscribeEvidenceOutbox } from '@/services/intelligence/evidence-outbox';
+import { downloadFile } from '@/utils/export';
+import {
+  renderEvidenceJournalSection,
+  renderEvidenceCaptureDiagnostics,
+  describeEvidenceExportResult,
+  type EvidenceExportViewState,
+  type EvidenceJournalViewState,
+} from './evidence-journal-view';
 import { brierScore } from '@/services/intelligence/forecast-calibration';
 import { buildCurve } from '@/services/cognition/recalibration';
 import { conformalInterval } from '@/services/cognition/conformal';
@@ -90,6 +100,9 @@ function stalenessRow(caption: string, b: BeliefValue): string {
 
 export class BeliefCalibrationPanel extends Panel {
   private readonly workbenchState: ForecastWorkbenchState = createForecastWorkbenchState();
+  private evidenceState: EvidenceJournalViewState = { status: 'loading' };
+  private evidenceExport: EvidenceExportViewState = { busy: false };
+  private evidenceUpdateTimer: number | null = null;
 
   constructor() {
     super({
@@ -111,12 +124,25 @@ export class BeliefCalibrationPanel extends Panel {
       (event) => this.handleWorkbenchSort(event),
       { signal: this.signal },
     );
+    this.content.addEventListener(
+      'click',
+      (event) => this.handleEvidenceAction(event),
+      { signal: this.signal },
+    );
+    const unsubscribeEvidence = subscribeEvidenceOutbox(() => this.scheduleEvidenceUpdate());
+    this.signal.addEventListener('abort', () => {
+      unsubscribeEvidence();
+      if (this.evidenceUpdateTimer !== null) window.clearTimeout(this.evidenceUpdateTimer);
+      this.evidenceUpdateTimer = null;
+    }, { once: true });
     this.render();
+    this.loadEvidenceSummary();
   }
 
   private render(): void {
     this.setContent(
       [
+        renderEvidenceJournalSection(this.evidenceState, this.evidenceExport, getEvidenceOutboxDiagnostics()),
         this.buildCalibrationReportSection(),
         this.buildLexiconSection(),
         this.buildMigratedSection(),
@@ -605,6 +631,57 @@ export class BeliefCalibrationPanel extends Panel {
       }
     }
     this.render();
+  }
+
+  private scheduleEvidenceUpdate(): void {
+    if (this.signal.aborted || this.evidenceUpdateTimer !== null) return;
+    this.evidenceUpdateTimer = window.setTimeout(() => {
+      this.evidenceUpdateTimer = null;
+      if (this.signal.aborted) return;
+      const diagnostics = this.content.querySelector('.evidence-capture-diagnostics');
+      if (diagnostics) diagnostics.outerHTML = renderEvidenceCaptureDiagnostics(getEvidenceOutboxDiagnostics());
+    }, 100);
+  }
+
+  private loadEvidenceSummary(): void {
+    void this.refreshEvidenceSummary();
+  }
+
+  private async refreshEvidenceSummary(): Promise<void> {
+    const summary = await getEvidenceJournal().summary();
+    if (this.signal.aborted) return;
+    this.evidenceState = summary ? { status: 'ready', summary } : { status: 'unavailable' };
+    this.render();
+  }
+
+  private handleEvidenceAction(event: MouseEvent): void {
+    const button = (event.target as Element | null)?.closest<HTMLButtonElement>(
+      '[data-evidence-action="export"]',
+    );
+    if (!button || this.evidenceExport.busy) return;
+    void this.exportEvidence();
+  }
+
+  private async exportEvidence(): Promise<void> {
+    if (this.signal.aborted || this.evidenceExport.busy) return;
+    this.evidenceExport = { busy: true };
+    this.render();
+    try {
+      const jsonl = await getEvidenceJournal().exportJsonl();
+      if (this.signal.aborted) return;
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      downloadFile(jsonl, `crystal-ball-evidence-${stamp}.jsonl`, 'application/x-ndjson');
+      const entries = Math.max(0, jsonl.trimEnd().split('\n').length - 1);
+      this.evidenceExport = { busy: false, message: describeEvidenceExportResult(entries, getEvidenceOutboxDiagnostics()) };
+    } catch {
+      this.evidenceExport = {
+        busy: false,
+        error: true,
+        message: 'Export failed: pending captures could not be prepared or the local engine did not answer. Pending changes remain queued; capture failures are shown above. Try again in a moment.',
+      };
+    }
+    if (this.signal.aborted) return;
+    await this.refreshEvidenceSummary();
   }
 
   private handleWorkbenchSort(event: MouseEvent): void {

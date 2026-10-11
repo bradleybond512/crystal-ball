@@ -291,7 +291,8 @@
   "src-tauri/sidecar/local-api-server.mjs": [
     "test:secret-boundary",
     "test:mcp-untrusted",
-    "test:mcp-companion"
+    "test:mcp-companion",
+    "test:evidence-journal"
   ],
   "src/services/keychain.ts": [
     "test:secret-boundary",
@@ -508,5 +509,41 @@
   ],
   "src/services/survival-advisor.ts": [
     "test:untrusted-html"
+  ],
+  "src-tauri/sidecar/evidence-store.mjs": [
+    "test:evidence-journal"
+  ],
+  "src/components/__tests__/evidence-journal-panel.test.mts": [
+    "test:evidence-journal"
+  ],
+  "src/services/intelligence/outcome-ledger.ts": [
+    "test:evidence-journal"
+  ],
+  "src/services/intelligence/evidence-journal-wiring.ts": [
+    "test:evidence-journal"
+  ],
+  "src/services/intelligence/evidence-journal.ts": [
+    "test:evidence-journal"
+  ],
+  "src/services/forecast-accuracy.ts": [
+    "test:evidence-journal"
+  ],
+  "src/services/intelligence/evidence-projection.ts": [
+    "test:evidence-journal"
+  ],
+  "src/services/intelligence/evidence-outbox.ts": [
+    "test:evidence-journal"
+  ],
+  "src/components/BeliefCalibrationPanel.ts": [
+    "test:evidence-journal"
+  ],
+  "src/services/intelligence/evidence-bus.ts": [
+    "test:evidence-journal"
+  ],
+  "src/services/intelligence/forecast-calibration-adapter.ts": [
+    "test:evidence-journal"
+  ],
+  "src/components/evidence-journal-view.ts": [
+    "test:evidence-journal"
   ]
 }

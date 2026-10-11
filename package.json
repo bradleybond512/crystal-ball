@@ -270,7 +270,8 @@
     "test:mcp-companion": "node --test tests/mcp-companion-suite.test.mjs tests/mcp-suite-entry.test.mjs",
     "test:mcp-install-smoke": "node --test tests/mcp-install-smoke-suite.test.mjs",
     "test:datacenter-ownership": "tsx --test src/services/datacenter/__tests__/site-zones.test.mts tests/datacenter-site-ownership-runtime.test.mts && node --test tests/datacenter-zone-degrade-wiring.test.mjs",
-    "test:untrusted-html": "tsx --import ./tests/panels/register-hook.mjs --test src/services/resource-inventory/__tests__/schema.test.mts src/utils/__tests__/finite-number.test.mts src/components/__tests__/resource-inventory-untrusted.test.mts src/components/__tests__/untrusted-numeric-fields.test.mts"
+    "test:untrusted-html": "tsx --import ./tests/panels/register-hook.mjs --test src/services/resource-inventory/__tests__/schema.test.mts src/utils/__tests__/finite-number.test.mts src/components/__tests__/resource-inventory-untrusted.test.mts src/components/__tests__/untrusted-numeric-fields.test.mts",
+    "test:evidence-journal": "node --test src-tauri/sidecar/__tests__/evidence-store.test.mjs src-tauri/sidecar/__tests__/evidence-routes.test.mjs tests/evidence-journal-boundary.test.mjs && tsx --test src/services/intelligence/__tests__/evidence-journal.test.mts src/components/__tests__/evidence-journal-view.test.mts src/components/__tests__/evidence-journal-panel.test.mts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",

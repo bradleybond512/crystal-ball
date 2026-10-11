@@ -53,6 +53,7 @@ import {
 } from '@/services/algorithms/forecast-outcome-grading';
 import { buildHierarchicalBaseRatePrediction } from './hierarchical-base-rate';
 import { buildPersistenceBaselinePrediction } from './persistence-baseline';
+import { captureEvidence, notifyEvidenceChanged } from './evidence-bus';
 import {
   buildMomentumBaselinePrediction,
   type MomentumSample,
@@ -65,6 +66,8 @@ let _calibrationStore: ForecastCalibrationStore | null = null;
 
 const STORAGE_KEY = 'crystalball-forecast-calibration-v1';
 const MAX_RECORDS = 500;
+/** Working-set size; the evidence journal rebuilds at most this many. */
+export const FORECAST_CALIBRATION_CAPACITY = MAX_RECORDS;
 
 function loadPersisted(store: ForecastCalibrationStore): void {
   try {
@@ -72,7 +75,10 @@ function loadPersisted(store: ForecastCalibrationStore): void {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     const parsed: unknown = JSON.parse(raw);
-    if (Array.isArray(parsed)) store.loadJson(parsed as PredictionRecord[]);
+    if (Array.isArray(parsed)) {
+      store.loadJson(parsed as PredictionRecord[]);
+      for (const record of store.all()) captureEvidence({ kind: 'forecast', record });
+    }
   } catch { /* corrupted store — start fresh */ }
 }
 
@@ -83,13 +89,58 @@ function persist(store: ForecastCalibrationStore): void {
     const trimmed = all.slice(Math.max(0, all.length - MAX_RECORDS));
     if (trimmed.length < all.length) store.loadJson(trimmed);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+    notifyEvidenceChanged('forecast');
   } catch { /* quota — calibration is best-effort */ }
+}
+
+/**
+ * Merge forecasts rebuilt from the evidence journal (R4-LOW-008) after the
+ * local blob was lost. Records already present win; the merged set is
+ * trimmed to the newest MAX_RECORDS by `persist`. Returns how many were added.
+ */
+export function mergeRebuiltPredictions(records: readonly PredictionRecord[]): number {
+  const store = getCalibrationStore();
+  const added = records.filter((r) => store.get(r.id) === undefined);
+  if (added.length === 0) return 0;
+  for (const record of added) captureEvidence({ kind: 'forecast', record });
+  store.loadJson([...store.all(), ...added]);
+  persist(store);
+  return added.length;
 }
 
 export function getCalibrationStore(): ForecastCalibrationStore {
   if (!_calibrationStore) {
     _calibrationStore = createForecastCalibrationStore();
-    loadPersisted(_calibrationStore);
+    const store = _calibrationStore;
+    const record = store.record;
+    const resolve = store.resolve;
+    const expire = store.expire;
+    const expirePending = store.expirePending;
+    store.record = (prediction) => {
+      const existed = store.get(prediction.id);
+      record(prediction);
+      if (!existed) captureEvidence({ kind: 'forecast', record: store.get(prediction.id)! });
+    };
+    store.resolve = (...args) => {
+      const changed = resolve(...args);
+      if (changed) captureEvidence({ kind: 'forecast', record: store.get(args[0])! });
+      return changed;
+    };
+    store.expire = (...args) => {
+      const changed = expire(...args);
+      if (changed) captureEvidence({ kind: 'forecast', record: store.get(args[0])! });
+      return changed;
+    };
+    store.expirePending = (now) => {
+      const pending = store.all().filter(r => r.status === 'pending');
+      const changed = expirePending(now);
+      if (changed > 0) for (const previous of pending) {
+        const current = store.get(previous.id)!;
+        if (current.status !== previous.status) captureEvidence({ kind: 'forecast', record: current });
+      }
+      return changed;
+    };
+    loadPersisted(store);
   }
   return _calibrationStore;
 }

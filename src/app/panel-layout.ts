@@ -137,6 +137,7 @@ import { startCompoundAlertBridge } from '@/services/compound-alert-bridge';
 import { startAlertLifecycle } from '@/services/alert-lifecycle';
 import { startSituationFeed } from '@/services/situation-feed';
 import { startForecastAccuracy } from '@/services/forecast-accuracy';
+import { startEvidenceJournal } from '@/services/intelligence/evidence-journal-wiring';
 import { startWatchlistProximity } from '@/services/watchlist-proximity';
 import { CrystalBallSays } from '@/components/CrystalBallSays';
 import { RelatedStrip } from '@/components/RelatedStrip';
@@ -1381,6 +1382,7 @@ export class PanelLayoutManager implements AppModule {
  startAlertLifecycle();
  startSituationFeed();
  startForecastAccuracy();
+ startEvidenceJournal();
  startWatchlistProximity();
  startSeverityRecalibration();
  startAlertFatigue();

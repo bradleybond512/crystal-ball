@@ -24,6 +24,7 @@ use tauri::{AppHandle, Manager, RunEvent, TitleBarStyle, Webview, WebviewUrl, We
 mod corelocation;
 mod current_location;
 mod imessage;
+mod log_rotation;
 mod notify_policy;
 mod sidecar_publication;
 mod secret_sync;
@@ -1580,19 +1581,29 @@ fn desktop_log_path(app: &AppHandle) -> Result<PathBuf, String> {
 
 /// Rotate `path` if it exceeds MAX_LOG_BYTES. Keeps MAX_LOG_BACKUPS numbered copies.
 fn rotate_log_if_needed(path: &Path) {
- let size = path.metadata().map(|m| m.len()).unwrap_or(0);
- if size < MAX_LOG_BYTES {
- return;
+ log_rotation::rotate_by_rename(path, MAX_LOG_BYTES, MAX_LOG_BACKUPS);
+}
+
+/// R4-LOW-007: the sidecar writes stdout/stderr straight into `local-api.log`
+/// through an inherited append-mode descriptor, so rotating only at spawn let a
+/// multi-week session grow the file without bound. One background thread for
+/// the app's lifetime (supervisor restarts reuse it) copy-truncates the file
+/// once it passes MAX_LOG_BYTES, checking every minute.
+const SIDECAR_LOG_ROTATE_EVERY: std::time::Duration = std::time::Duration::from_secs(60);
+static SIDECAR_LOG_ROTATOR: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+
+fn start_sidecar_log_rotator(path: PathBuf) {
+ SIDECAR_LOG_ROTATOR.get_or_init(|| {
+ let spawned = std::thread::Builder::new()
+ .name("sidecar-log-rotator".into())
+ .spawn(move || loop {
+ std::thread::sleep(SIDECAR_LOG_ROTATE_EVERY);
+ log_rotation::rotate_by_copy_truncate(&path, MAX_LOG_BYTES, MAX_LOG_BACKUPS);
+ });
+ if let Err(e) = spawned {
+ eprintln!("[log] sidecar log rotator failed to start: {e}");
  }
- // Shift existing backups up: .log.2 → .log.3, .log.1 → .log.2, etc.
- for i in (1..MAX_LOG_BACKUPS).rev() {
- let from = path.with_extension(format!("log.{i}"));
- let to = path.with_extension(format!("log.{}", i + 1));
- let _ = fs::rename(&from, &to);
- }
- // Move current log to .log.1
- let first_backup = path.with_extension("log.1");
- let _ = fs::rename(path, &first_backup);
+ });
 }
 
 fn append_desktop_log(app: &AppHandle, level: &str, message: &str) {
@@ -4284,6 +4295,7 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  "INFO",
  &format!("local API sidecar started pid={child_pid}"),
  );
+ start_sidecar_log_rotator(log_path.clone());
  let generation = local_api_cell(&state).install(&mut slot, child);
  // Store before releasing child ownership or starting its publication monitor.
  state.launch_secrets.install(generation, launch_secrets)

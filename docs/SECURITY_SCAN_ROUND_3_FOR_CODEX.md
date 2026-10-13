@@ -22,8 +22,8 @@ safety-critical weather logic.
 | R3-SEC-005 | Medium | Release build silently falls back to an unpinned system `node` for the secret-bearing sidecar | PR 7 | 🔴 |
 | R3-BUG-001 | Medium | Sync Tauri commands block the macOS main thread (up to ~271 s) | PR 3 — [slice A validation](validation/R3-BUG-001-SLICE-A.md); [slice B validation](validation/R3-BUG-001-SLICE-B.md), fresh fake QA complete; independent review required before publication | 🟡 |
 | R3-BUG-002 | Medium | Datacenter weather posture freezes when NWS `/points` fails | PR 6 | 🔴 |
-| R3-SEC-006 | Low | SMS webhook fails open without `TWILIO_AUTH_TOKEN`; config patch unvalidated | PR 8 | 🔴 |
-| R3-SEC-007 | Low | `/api/feed-discovery` first hop not IP-pinned (DNS-rebinding TOCTOU) | PR 8 | 🔴 |
+| R3-SEC-006 | Low | SMS webhook fails open without `TWILIO_AUTH_TOKEN`; config patch unvalidated | PR 8 — [validation](validation/Q20-A-SIDECAR-LOWS.md); October 11 private validation, publication held | 🟡 |
+| R3-SEC-007 | Low | `/api/feed-discovery` first hop not IP-pinned (DNS-rebinding TOCTOU) | PR 8 — [validation](validation/Q20-A-SIDECAR-LOWS.md); October 11 private validation, publication held | 🟡 |
 | R3-SEC-008 | Low | `allow-unsigned-executable-memory` entitlement is broader than needed | PR 9 | 🔴 |
 | R3-SEC-009 | Low | Numeric feed fields interpolated raw into HTML without runtime coercion | PR 9 | 🔴 |
 
@@ -581,3 +581,29 @@ listed above.
   and `bash scripts/agentic-validate.sh --tests "<scripts run>"` pass, quoted
   as real output.
 - This doc's status table is updated in each PR.
+
+## October 11 Q20 sidecar private handoff
+
+R3-SEC-006 and R3-SEC-007 have fresh private repair and validation evidence
+in [Q20 PR A validation](validation/Q20-A-SIDECAR-LOWS.md). This own Q20
+scope also retains R4-LOW-004 inline serialization. Publication is held;
+independent Sol review is pending. The original approved plan and unrelated
+scan rows are unchanged. No merge or shipped-state claim is made.
+
+## October 11 Q20 F1 repair supplement
+
+The first independent Sol medium review blocked the private handoff on F1:
+a failed SMS save could leave the Enabled checkbox showing disabled while
+SMS remained enabled. The minimal panel/test repair is committed privately
+as `d3c2b55f27dc86b18f9a11b8575705b600981d0f`. Its real DOM suite passes
+14 / 0, sidecar-lows 89 / 0 and SMS 101 / 0; three supplemental behavior
+mutations have named reds and exact restoration. See the appended
+[Q20 validation evidence](validation/Q20-A-SIDECAR-LOWS.md).
+
+The UI reports an unconfirmed save and preserves last-confirmed state;
+a lost response is not represented as proof that the server refused a write.
+At this dated handoff, final-tip validation and the second independent Sol
+medium review remain pending. R3-SEC-006, R3-SEC-007 and the own inline
+serialization scope remain private and unpublished. All unrelated scan rows
+and historical evidence are preserved. No verdict or shipped-state claim
+is recorded here.

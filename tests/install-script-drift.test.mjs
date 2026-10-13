@@ -175,3 +175,14 @@ test('the drift gate runs in the required integrity-checks job and re-runs on la
   assert.match(job, /PR_LABELS: \$\{\{ join\(github\.event\.pull_request\.labels\.\*\.name, ','\) \}\}/);
   assert.match(workflow, /types: \[opened, synchronize, reopened, labeled, unlabeled\]/);
 });
+
+test('CLI: CI Codex command addition remains gated by human install-scripts review', (t) => {
+  const repo = gitRepo(t);
+  mkdirSync(path.join(repo.dir, '.github/tools/codex'), { recursive: true });
+  repo.write('.github/tools/codex/package-lock.json', lock({ 'node_modules/@openai/codex': { version: '0.146.0', bin: { codex: 'bin/codex.js' } } }));
+  const failed = repo.run(['--base', 'HEAD']);
+  assert.equal(failed.status, 1, failed.out);
+  assert.match(failed.out, /\.github\/tools\/codex\/package-lock\.json: NEW command\(s\) codex/);
+  assert.equal(repo.run(['--base', 'HEAD'], { PR_LABELS: OVERRIDE_LABEL }).status, 0);
+  assert.equal(repo.run(['--base', 'HEAD'], { PR_LABELS: 'dependency-change-approved' }).status, 1, 'dependency approval does not grant install-scripts review');
+});

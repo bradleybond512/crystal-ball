@@ -30,6 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          persist-credentials: false
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -45,8 +46,9 @@ jobs:
 
       - name: Check if tag already exists
         id: tag_check
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
-          TAG="v${{ steps.version.outputs.version }}"
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "Tag $TAG already exists"
@@ -58,21 +60,16 @@ jobs:
       - name: Create and push tag
         if: steps.tag_check.outputs.exists == 'false'
         env:
+          TAG: ${{ steps.version.outputs.tag }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="${{ steps.version.outputs.tag }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "$TAG" -m "Release $TAG"
-          git push origin "$TAG"
-          echo "Created and pushed tag: $TAG"
+        run: node scripts/push-auto-tag.mjs
 
       - name: Check if release already published
         id: release_check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
-          TAG="${{ steps.version.outputs.tag }}"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "released=true" >> "$GITHUB_OUTPUT"
             echo "Release for $TAG already exists — no dispatch needed"
@@ -85,8 +82,8 @@ jobs:
         if: steps.release_check.outputs.released == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
-          TAG="${{ steps.version.outputs.tag }}"
           # Dispatch at main (the default ref) so the workflow always uses the
           # latest automation code. Pass the tag via release_tag input; the
           # workflow checks it out for the actual app build.

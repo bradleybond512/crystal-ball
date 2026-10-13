@@ -45,6 +45,9 @@ concurrency:
 env:
   CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
 
+permissions:
+  contents: read
+
 jobs:
   release-context:
     runs-on: ubuntu-latest
@@ -60,28 +63,37 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '22'
+          package-manager-cache: false
 
       - name: Resolve release context
         id: context
         shell: bash
+        env:
+          # R4-LOW-002: through env, never pasted into the script text.
+          RELEASE_REF: ${{ inputs.release_tag || github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+          VARIANT: ${{ inputs.variant || 'full' }}
+          PUBLISH_MODE: ${{ inputs.publish_mode || 'build' }}
+          COMMIT_SHA: ${{ github.sha }}
         run: |
           # For publish-mode workflow_dispatch, the tag comes from the
           # release_tag input (because the workflow runs at main, not at the
           # tag — see trigger comment). For everything else, github.ref_name
           # is either the pushed tag or the dispatched branch.
-          REF_NAME="${{ inputs.release_tag || github.ref_name }}"
+          REF_NAME="$RELEASE_REF"
           node scripts/release-context.mjs \
-            --event "${{ github.event_name }}" \
+            --event "$EVENT_NAME" \
             --ref "$REF_NAME" \
-            --variant "${{ inputs.variant || 'full' }}" \
-            --publish-mode "${{ inputs.publish_mode || 'build' }}" \
-            --sha "${{ github.sha }}" \
+            --variant "$VARIANT" \
+            --publish-mode "$PUBLISH_MODE" \
+            --sha "$COMMIT_SHA" \
             --github-output "$GITHUB_OUTPUT"
 
   build-tauri:
@@ -125,6 +137,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          persist-credentials: false
           # In publish-mode workflow_dispatch the workflow runs at main so we
           # always use the latest automation code — but the build must reflect
           # the tagged release. The release-context job resolves the tag, so
@@ -139,7 +152,9 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '22'
-          cache: 'npm'
+          # Release artifacts are built from a clean npm install: no restored
+          # package cache that another workflow could have written.
+          package-manager-cache: false
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7
@@ -147,11 +162,8 @@ jobs:
           toolchain: stable
           targets: ${{ contains(matrix.platform, 'macos') && 'aarch64-apple-darwin,x86_64-apple-darwin' || (matrix.label == 'Linux-ARM64' && 'aarch64-unknown-linux-gnu' || '') }}
 
-      - name: Rust cache
-        uses: swatinem/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db
-        with:
-          workspaces: './src-tauri -> target'
-          cache-on-failure: true
+      # Every build mode receives application/signing secrets. Compile Rust
+      # from scratch so no secret-bearing build restores cached objects.
 
       - name: Install Linux system dependencies
         if: contains(matrix.platform, 'ubuntu')
@@ -333,15 +345,20 @@ jobs:
 
       - name: Collect release manifest
         shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.release-context.outputs.version }}
+          RELEASE_VARIANT: ${{ needs.release-context.outputs.variant }}
+          RELEASE_TAG: ${{ needs.release-context.outputs.tag }}
+          RELEASE_COMMIT_SHA: ${{ needs.release-context.outputs.commit_sha }}
         run: |
           mkdir -p release-dist/assets
           node scripts/release-manifest.mjs \
             --mode collect \
             --target-root src-tauri/target \
-            --version "${{ needs.release-context.outputs.version }}" \
-            --variant "${{ needs.release-context.outputs.variant }}" \
-            --tag "${{ needs.release-context.outputs.tag }}" \
-            --commit-sha "${{ needs.release-context.outputs.commit_sha }}" \
+            --version "$RELEASE_VERSION" \
+            --variant "$RELEASE_VARIANT" \
+            --tag "$RELEASE_TAG" \
+            --commit-sha "$RELEASE_COMMIT_SHA" \
             --platform "${{ matrix.label }}" \
             --generated-at "$WM_BUILD_TIMESTAMP" \
             --output release-dist/manifest.json
@@ -400,6 +417,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          persist-credentials: false
           fetch-depth: 0
           ref: ${{ needs.release-context.outputs.tag || github.ref }}
 
@@ -407,6 +425,7 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '22'
+          package-manager-cache: false
 
       - name: Download release bundles
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
@@ -438,10 +457,10 @@ jobs:
       - name: Create or update GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-context.outputs.tag }}
+          TITLE: ${{ needs.release-context.outputs.release_name }}
         shell: bash
         run: |
-          TAG="${{ needs.release-context.outputs.tag }}"
-          TITLE="${{ needs.release-context.outputs.release_name }}"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release edit "$TAG" --title "$TITLE"
           else
@@ -451,18 +470,18 @@ jobs:
       - name: Upload release assets and manifest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-context.outputs.tag }}
         shell: bash
         run: |
-          TAG="${{ needs.release-context.outputs.tag }}"
           mapfile -t ASSET_FILES < <(find downloaded-bundles -type f -path '*/assets/*' | sort)
           gh release upload "$TAG" "${ASSET_FILES[@]}" release-manifest.json --clobber
 
       - name: Verify uploaded release payload
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-context.outputs.tag }}
         shell: bash
         run: |
-          TAG="${{ needs.release-context.outputs.tag }}"
           mkdir -p downloaded-release
           gh release download "$TAG" --dir downloaded-release
           node scripts/release-manifest.mjs \

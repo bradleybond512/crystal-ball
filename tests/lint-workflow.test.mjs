@@ -21,11 +21,12 @@ test('markdown lint workflow only lints markdown files changed in the pull reque
  'lint workflow should fetch enough history to diff against the base branch',
   );
   // Two valid strategies — either fetch the base ref shallowly and diff
+ // (Q20 B: the base ref arrives through env as $BASE_REF, never pasted in)
  // against it, or rely on a checkout with fetch-depth: 0 and diff against
  // the recorded base.sha directly.
  assert.match(
  workflow,
- /git diff --name-only --diff-filter=ACMRT "(origin\/\$\{\{ github\.base_ref \}\}\.\.\.HEAD"|\$\{\{ github\.event\.pull_request\.base\.sha \}\}" HEAD) -- '\*\.md'/,
+ /git diff --name-only --diff-filter=ACMRT "(origin\/\$BASE_REF\.\.\.HEAD"|origin\/\$\{\{ github\.base_ref \}\}\.\.\.HEAD"|\$\{\{ github\.event\.pull_request\.base\.sha \}\}" HEAD) -- '\*\.md'/,
  'lint workflow should resolve the changed markdown file set from the pull request diff',
   );
   assert.match(

@@ -131,7 +131,8 @@
     "test:agentic-pipeline"
   ],
   ".github/workflows/cross-agent-review.yml": [
-    "test:agentic-pipeline"
+    "test:agentic-pipeline",
+    "test:workflow-security"
   ],
   ".npmrc": [
     "test:install-scripts"
@@ -154,10 +155,12 @@
     "test:mcp-companion"
   ],
   ".github/workflows/release-integrity.yml": [
-    "test:install-scripts"
+    "test:install-scripts",
+    "test:workflow-security"
   ],
   "package.json": [
-    "test:install-scripts"
+    "test:install-scripts",
+    "test:workflow-security"
   ],
   "scripts/desktop-build-full.mjs": [
     "test:install-scripts"
@@ -166,7 +169,8 @@
     "test:supply-chain-gates"
   ],
   "scripts/dependency-change-policy.mjs": [
-    "test:supply-chain-gates"
+    "test:supply-chain-gates",
+    "test:workflow-security"
   ],
   "scripts/backup-keys.sh": [
     "test:keys-backup"
@@ -585,5 +589,113 @@
   ],
   "src-tauri/src/log_rotation.rs": [
     "test:native-lows"
+  ],
+  ".github/workflows/auto-merge-agent-branches.yml": [
+    "test:workflow-security"
+  ],
+  ".github/workflows/build-desktop.yml": [
+    "test:workflow-security"
+  ],
+  ".github/workflows/lint.yml": [
+    "test:workflow-security"
+  ],
+  ".github/workflows/pages.yml": [
+    "test:workflow-security"
+  ],
+  ".github/workflows/actionlint.yml": [
+    "test:workflow-security"
+  ],
+  ".github/workflows/dependency-change-gate.yml": [
+    "test:workflow-security"
+  ],
+  ".github/mcp.json": [
+    "test:workflow-security"
+  ],
+  ".github/tools/zizmor/requirements.txt": [
+    "test:workflow-security"
+  ],
+  ".github/dependabot.yml": [
+    "test:workflow-security"
+  ],
+  ".github/workflows/accessibility.yml": [
+    "test:workflow-security"
+  ],
+  ".github/workflows/auto-tag.yml": [
+    "test:workflow-security"
+  ],
+  ".github/workflows/bundle-size.yml": [
+    "test:workflow-security"
+  ],
+  ".github/workflows/cleanup-stale-branches.yml": [
+    "test:workflow-security"
+  ],
+  ".github/workflows/eslint.yml": [
+    "test:workflow-security"
+  ],
+  ".github/workflows/roadmap-controller.yml": [
+    "test:workflow-security"
+  ],
+  ".github/workflows/sast.yml": [
+    "test:workflow-security"
+  ],
+  ".github/workflows/secret-scan.yml": [
+    "test:workflow-security"
+  ],
+  ".github/workflows/security-audit.yml": [
+    "test:workflow-security"
+  ],
+  ".github/workflows/smoke.yml": [
+    "test:workflow-security"
+  ],
+  ".github/workflows/targeted-tests.yml": [
+    "test:workflow-security"
+  ],
+  ".github/workflows/test-linux-app.yml": [
+    "test:workflow-security"
+  ],
+  ".github/workflows/typecheck.yml": [
+    "test:workflow-security"
+  ],
+  ".github/workflows/variant-e2e.yml": [
+    "test:workflow-security"
+  ],
+  "scripts/push-auto-tag.mjs": [
+    "test:workflow-security"
+  ],
+  "tests/workflow-security-boundaries.test.mjs": [
+    "test:workflow-security"
+  ],
+  "tests/auto-tag-auth.test.mjs": [
+    "test:workflow-security"
+  ],
+  "tests/workflow-injection.test.mjs": [
+    "test:workflow-security"
+  ],
+  ".github/tools/codex/package.json": [
+    "test:agentic-pipeline",
+    "test:supply-chain-gates",
+    "test:install-scripts"
+  ],
+  ".github/tools/codex/package-lock.json": [
+    "test:agentic-pipeline",
+    "test:supply-chain-gates",
+    "test:install-scripts"
+  ],
+  ".github/tools/codex/.npmrc": [
+    "test:agentic-pipeline",
+    "test:install-scripts"
+  ],
+  "tests/agentic-pipeline.test.mjs": [
+    "test:agentic-pipeline"
+  ],
+  "tests/dependency-age.test.mjs": [
+    "test:supply-chain-gates"
+  ],
+  "tests/dependency-change-gate.test.mjs": [
+    "test:supply-chain-gates",
+    "test:workflow-security"
+  ],
+  "tests/workflow-expression-runtime.test.mjs": [
+    "test:workflow-security"
   ]
 }

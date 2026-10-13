@@ -285,33 +285,196 @@ function reviewGateScript() {
   return body.map((l) => l.slice(pad)).join('\n');
 }
 
-test('workflow routing: codex/* always takes the Sonnet verdict check, even with CI Codex on', () => {
+function reviewGateFixture(t, { npmExit = 0, codexExit = 0, missingMain = '', omitCodex = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'review-gate-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
   const bin = join(dir, 'bin');
-  mkdirSync(bin);
-  const calls = join(dir, 'calls.txt');
-  const stub = (name, body) => writeFileSync(join(bin, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
-  stub('git', 'case "$1" in show) echo "// stub" ;; *) exit 0 ;; esac');
-  stub('npm', 'exit 0');
-  stub('node', `echo "$(basename "$1") $2" >> "${calls}"`);
-  const script = reviewGateScript();
-  const route = (branch, mode) => {
-    writeFileSync(calls, '');
-    const r = spawnSync('bash', ['-c', script], {
-      encoding: 'utf8',
-      env: {
-        PATH: `${bin}:/usr/bin:/bin`, RUNNER_TEMP: dir, GITHUB_HEAD_REF: branch,
-        CI_CODEX_MODE: mode, IS_SAME_REPO: 'true', OPENAI_API_KEY: 'test-only',
-      },
-    });
-    assert.equal(r.status, 0, r.stderr);
-    return readFileSync(calls, 'utf8').trim();
+  const checkout = join(dir, 'untrusted-checkout');
+  const runnerTemp = join(dir, 'runner-temp');
+  const trusted = join(dir, 'trusted-main');
+  for (const folder of [bin, checkout, runnerTemp, trusted]) mkdirSync(folder);
+  const calls = join(dir, 'calls.jsonl');
+  writeFileSync(calls, '');
+  const writeTool = (name, body) => writeFileSync(join(bin, name), `#!${process.execPath}\n${body}\n`, { mode: 0o755 });
+  const fixtures = {
+    'package.json': existsSync(join(root, '.github/tools/codex/package.json')) ? readFileSync(join(root, '.github/tools/codex/package.json'), 'utf8') : '{"dependencies":{"@openai/codex":"0.146.0"}}',
+    'package-lock.json': existsSync(join(root, '.github/tools/codex/package-lock.json')) ? readFileSync(join(root, '.github/tools/codex/package-lock.json'), 'utf8') : '{"lockfileVersion":3,"packages":{}}',
+    '.npmrc': 'ignore-scripts=true\nregistry=https://registry.npmjs.org/\n',
+    'ci-codex-review.mjs': readFileSync(join(root, 'scripts/ci-codex-review.mjs'), 'utf8'),
+    'verify-review-verdict.mjs': 'console.log("fixture verifier");\n',
   };
-  assert.equal(route('codex/x', 'on'), 'verify-review-verdict.mjs --ci');
-  assert.equal(route('claude/x', 'on'), 'ci-codex-review.mjs');
-  assert.equal(route('copilot/x', 'on'), 'ci-codex-review.mjs');
-  assert.equal(route('claude/x', 'off'), 'verify-review-verdict.mjs --ci');
-  assert.equal(route('feature/x', 'on'), '');
+  for (const [file, body] of Object.entries(fixtures)) writeFileSync(join(trusted, file), body);
+  mkdirSync(join(checkout, 'scripts'));
+  writeFileSync(join(checkout, 'scripts/ci-codex-review.mjs'), 'throw new Error("PR-controlled reviewer executed");\n');
+  writeFileSync(join(checkout, '.npmrc'), 'registry=https://untrusted.example.invalid/\nignore-scripts=false\n');
+  const logPrefix = `const fs = require('node:fs'); const path = require('node:path'); const log = (row) => fs.appendFileSync(${JSON.stringify(calls)}, JSON.stringify(row) + '\\n');\n`;
+  writeTool('git', logPrefix + `
+const args = process.argv.slice(2);
+log({tool:'git',args});
+if (args[0] === 'show' || args[0] === 'cat-file') {
+  const ref = args.at(-1);
+  if (!ref.startsWith('origin/main:')) process.exit(74);
+  const name = path.basename(ref);
+  if (name === ${JSON.stringify(missingMain)}) process.exit(75);
+  if (args[0] === 'show') process.stdout.write(fs.readFileSync(path.join(${JSON.stringify(trusted)}, name)));
+} else if (args[0] === 'diff') process.stdout.write('diff --git a/source b/source\\n+changed\\n');
+`);
+  const fakeCodex = logPrefix + `
+const args = process.argv.slice(2);
+log({tool:'codex',args,cwd:process.cwd(),keyPresent:!!process.env.OPENAI_API_KEY});
+if (${codexExit}) process.exit(${codexExit});
+process.stdin.resume();
+process.stdin.on('end', () => console.log('{"blockingFindings":0,"findings":[]}'));
+`;
+  writeTool('npm', logPrefix + `
+const args = process.argv.slice(2);
+log({tool:'npm',args,cwd:process.cwd(),env:Object.keys(process.env),config:fs.existsSync('.npmrc') ? fs.readFileSync('.npmrc','utf8') : null,manifest:fs.existsSync('package.json') ? fs.readFileSync('package.json','utf8') : null,lock:fs.existsSync('package-lock.json') ? fs.readFileSync('package-lock.json','utf8') : null});
+if (args.includes('ci') && !${omitCodex}) {
+  const dest = path.join(process.cwd(),'node_modules/.bin');
+  fs.mkdirSync(dest,{recursive:true});
+  fs.writeFileSync(path.join(dest,'codex'), ${JSON.stringify(`#!${process.execPath}\n${fakeCodex}`)}, {mode:0o755});
+}
+if (${npmExit}) process.exit(${npmExit});
+`);
+  writeTool('codex', logPrefix + "log({tool:'ambient-codex'}); process.exit(76);");
+  writeTool('node', logPrefix + `
+const args = process.argv.slice(2);
+log({tool:'node',args,path:process.env.PATH,keyPresent:!!process.env.OPENAI_API_KEY});
+const {spawnSync} = require('node:child_process');
+const result=spawnSync(${JSON.stringify(process.execPath)},args,{stdio:'inherit',env:process.env});
+process.exit(result.status ?? 1);
+`);
+  const after = join(dir, 'after-review.mjs');
+  writeFileSync(after, 'console.log("fixture subsequent child");\n');
+  return {
+    checkout, runnerTemp, fixtures,
+    run({ branch = 'claude/x', mode = 'on', sameRepo = 'true', key = 'fixture-key-not-a-credential' } = {}) {
+      writeFileSync(calls, '');
+      const result = spawnSync('/bin/bash', ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', `${reviewGateScript()}\nnode "$AFTER_SCRIPT"\n`], {
+        cwd: checkout, encoding: 'utf8',
+        env: { PATH: `${bin}:/usr/bin:/bin`, RUNNER_TEMP: runnerTemp, TMPDIR: tmpdir(), GITHUB_HEAD_REF: branch, CI_CODEX_MODE: mode, IS_SAME_REPO: sameRepo, OPENAI_API_KEY: key, AFTER_SCRIPT: after, NODE_OPTIONS: '--conditions=fixture', NPM_TOKEN: 'fixture-npm-token', NODE_AUTH_TOKEN: 'fixture-node-auth', NPM_CONFIG_REGISTRY: 'https://untrusted.example.invalid/', npm_config_userconfig: join(checkout, '.npmrc'), NPM_CONFIG_OMIT: 'optional' },
+      });
+      const events = readFileSync(calls, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
+      assert.equal(`${result.stdout}${result.stderr}`.includes('fixture-key-not-a-credential'), false, 'API key is never output');
+      return { result, events };
+    },
+  };
+}
+
+function reviewCalls(events) {
+  return events.filter((e) => e.tool === 'node' && /(?:ci-codex-review|verify-review-verdict)\.mjs$/.test(e.args[0]));
+}
+
+test('workflow routing keeps Codex/Sonnet, fork and mode boundaries under strict bash', (t) => {
+  const fixture = reviewGateFixture(t);
+  for (const [branch, mode, sameRepo, expected] of [
+    ['codex/x', 'on', 'true', 'verify-review-verdict.mjs'],
+    ['claude/x', 'on', 'true', 'ci-codex-review.mjs'],
+    ['copilot/x', 'on', 'true', 'ci-codex-review.mjs'],
+    ['claude/x', 'off', 'true', 'verify-review-verdict.mjs'],
+    ['claude/x', 'on', 'false', 'verify-review-verdict.mjs'],
+    ['feature/x', 'on', 'true', null],
+  ]) {
+    const { result, events } = fixture.run({ branch, mode, sameRepo });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(reviewCalls(events).map((e) => e.args[0].split('/').at(-1)).at(0) ?? null, expected);
+    assert.equal(events.filter((e) => e.tool === 'npm').length, expected === 'ci-codex-review.mjs' ? 1 : 0);
+  }
+});
+
+test('workflow installs only main-locked Codex without keys/config inheritance and scopes its PATH', (t) => {
+  const fixture = reviewGateFixture(t);
+  const { result, events } = fixture.run();
+  assert.equal(result.status, 0, result.stderr);
+  const npm = events.find((e) => e.tool === 'npm');
+  assert.ok(npm.args.includes('ci'));
+  for (const flag of ['--ignore-scripts', '--include=optional', '--no-audit', '--no-fund']) assert.ok(npm.args.includes(flag), flag);
+  assert.ok(npm.args.every((arg) => !['install', '-g', '--global', '@openai/codex'].includes(arg)));
+  for (const key of npm.env) assert.doesNotMatch(key, /^(?:OPENAI_API_KEY|NPM_TOKEN|NODE_AUTH_TOKEN|NODE_OPTIONS|NPM_CONFIG_|npm_config_)/, key);
+  assert.ok(npm.cwd.startsWith(fixture.runnerTemp + '/') && !npm.cwd.startsWith(fixture.checkout + '/'));
+  assert.equal(npm.manifest, fixture.fixtures['package.json']);
+  assert.equal(npm.lock, fixture.fixtures['package-lock.json']);
+  assert.equal(npm.config, fixture.fixtures['.npmrc']);
+  for (const flag of ['--userconfig', '--globalconfig']) {
+    const file = npm.args[npm.args.indexOf(flag) + 1];
+    assert.ok(file?.startsWith(npm.cwd + '/'), flag);
+  }
+  const codex = events.find((e) => e.tool === 'codex');
+  assert.deepEqual(codex.args.slice(0, 5), ['exec', '--model', CI_REVIEW_MODEL, '--config', 'model_reasoning_effort="medium"']);
+  assert.equal(codex.keyPresent, true);
+  assert.equal(events.some((e) => e.tool === 'ambient-codex'), false);
+  const nodes = events.filter((e) => e.tool === 'node');
+  assert.equal(nodes[0].path.split(':')[0], join(npm.cwd, 'node_modules/.bin'));
+  assert.equal(nodes.at(-1).path.includes('node_modules/.bin'), false, 'subsequent children retain the original PATH');
+  assert.equal(existsSync(npm.cwd), false, 'owned install temp directory is removed');
+});
+
+for (const missingMain of ['package.json', 'package-lock.json', '.npmrc', 'ci-codex-review.mjs']) {
+  test(`workflow fails closed when main lacks ${missingMain}`, (t) => {
+    const fixture = reviewGateFixture(t, { missingMain });
+    const { result, events } = fixture.run();
+    assert.notEqual(result.status, 0);
+    assert.equal(reviewCalls(events).length, 0);
+    assert.equal(events.some((e) => e.tool === 'codex' || e.tool === 'ambient-codex'), false);
+  });
+}
+
+test('workflow fails closed on npm failure instead of installing a global fallback', (t) => {
+  const { result, events } = reviewGateFixture(t, { npmExit: 43 }).run();
+  assert.equal(result.status, 43);
+  assert.equal(events.filter((e) => e.tool === 'npm').length, 1);
+  assert.equal(reviewCalls(events).length, 0);
+});
+
+test('workflow fails closed on a missing/failing installed native runtime', (t) => {
+  const { result, events } = reviewGateFixture(t, { codexExit: 44 }).run();
+  assert.notEqual(result.status, 0);
+  assert.equal(events.filter((e) => e.tool === 'codex').length, 1);
+  assert.equal(events.some((e) => e.tool === 'ambient-codex'), false);
+});
+
+test('workflow refuses an absent scoped Codex executable without trying ambient Codex', (t) => {
+  const { result, events } = reviewGateFixture(t, { omitCodex: true }).run();
+  assert.notEqual(result.status, 0);
+  assert.equal(reviewCalls(events).length, 0);
+  assert.equal(events.some((e) => e.tool === 'ambient-codex'), false);
+});
+
+test('workflow refuses missing API credentials before npm or reviewer execution', (t) => {
+  const { result, events } = reviewGateFixture(t).run({ key: '' });
+  assert.notEqual(result.status, 0);
+  assert.equal(events.some((e) => e.tool === 'npm'), false);
+  assert.equal(reviewCalls(events).length, 0);
+});
+
+test('CI Codex project pins the exact wrapper and every official native package with integrity', () => {
+  const base = join(root, '.github/tools/codex');
+  const manifest = JSON.parse(readFileSync(join(base, 'package.json'), 'utf8'));
+  const lock = JSON.parse(readFileSync(join(base, 'package-lock.json'), 'utf8'));
+  assert.equal(manifest.private, true);
+  assert.deepEqual(manifest.dependencies, { '@openai/codex': '0.146.0' });
+  assert.deepEqual(lock.packages[''].dependencies, manifest.dependencies);
+  assert.equal(lock.lockfileVersion, 3);
+  const wrapper = lock.packages['node_modules/@openai/codex'];
+  assert.equal(wrapper.version, '0.146.0');
+  assert.equal(wrapper.license, 'Apache-2.0');
+  assert.equal(wrapper.hasInstallScript, undefined);
+  const platforms = ['linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64', 'win32-x64', 'win32-arm64'];
+  assert.equal(Object.keys(wrapper.optionalDependencies).length, platforms.length);
+  for (const platform of platforms) {
+    const name = `@openai/codex-${platform}`;
+    assert.equal(wrapper.optionalDependencies[name], `npm:@openai/codex@0.146.0-${platform}`);
+    const native = lock.packages[`node_modules/${name}`];
+    assert.equal(native.name, '@openai/codex');
+    assert.equal(native.version, `0.146.0-${platform}`);
+    assert.equal(native.optional, true);
+    assert.equal(native.hasInstallScript, undefined);
+  }
+  for (const [name, entry] of Object.entries(lock.packages).filter(([name]) => name !== '')) {
+    assert.ok(entry.resolved.startsWith('https://registry.npmjs.org/'), name);
+    assert.match(entry.integrity, /^sha512-[A-Za-z0-9+/]+={0,2}$/);
+  }
+  assert.match(readFileSync(join(base, '.npmrc'), 'utf8'), /^ignore-scripts=true$/m);
 });
 
 test('CI review and recording advice use the policy model at medium reasoning', () => {

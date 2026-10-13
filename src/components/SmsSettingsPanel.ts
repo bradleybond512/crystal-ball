@@ -35,6 +35,8 @@ export class SmsSettingsPanel extends Panel {
   private config: SmsConfig = { enabled: false, allowlist: [] };
   private status: SmsStatus = {};
   private lastTestResponse: { ok: boolean; text: string; segments?: number; status?: number } | null = null;
+  /** Why the last save was refused (the sidecar validates every change). */
+  private lastSaveError: string | null = null;
 
   constructor() {
     super({ id: 'sms-command-interface', title: 'SMS Command Interface' });
@@ -98,19 +100,34 @@ export class SmsSettingsPanel extends Panel {
   }
 
   private async saveConfig(patch: Partial<SmsConfig>): Promise<void> {
-    const updated: SmsConfig = { ...this.config, ...patch };
-    const res = await fetch('/api/sms/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updated),
-    });
-    if (res.ok) {
-      const raw = await res.json() as { enabled?: boolean; allowlist?: unknown[] };
-      if (!raw || typeof raw !== 'object') return;
-      this.config = {
-        enabled: Boolean(raw.enabled),
-        allowlist: this.normalizeAllowlist(raw.allowlist),
-      };
+    const unconfirmedReason = 'Save could not be confirmed. Please try again.';
+    try {
+      const res = await fetch('/api/sms/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      if (res.ok) {
+        const raw = await res.json() as { enabled?: boolean; allowlist?: unknown[] };
+        if (!raw || typeof raw !== 'object') {
+          this.lastSaveError = unconfirmedReason;
+          return;
+        }
+        this.config = {
+          enabled: Boolean(raw.enabled),
+          allowlist: this.normalizeAllowlist(raw.allowlist),
+        };
+        this.lastSaveError = null;
+      } else {
+        let reason = `Save failed (${res.status}).`;
+        try {
+          const body = await res.json() as { error?: unknown };
+          if (typeof body?.error === 'string') reason = body.error;
+        } catch { /* keep the status-only reason */ }
+        this.lastSaveError = reason;
+      }
+    } catch {
+      this.lastSaveError = unconfirmedReason;
     }
   }
 
@@ -208,6 +225,7 @@ export class SmsSettingsPanel extends Panel {
       <section class="sms-section">
         <h3>Allowlist</h3>
         ${this.renderAllowlistTable()}
+        ${this.lastSaveError ? `<p class="sms-save-error" role="alert">${escapeHtml(this.lastSaveError)}</p>` : ''}
         <div class="sms-add-row">
           <input type="text" id="sms-add-num" placeholder="+1 (555) 000-0000" />
           <input type="text" id="sms-add-name" placeholder="Name (optional)" />
@@ -253,8 +271,10 @@ export class SmsSettingsPanel extends Panel {
       </section>
     </div>`;
 
-    this.setContent(html);
-    this.wireEvents();
+    // Reset the live checkbox even when Panel skips identical HTML after a refusal.
+    const enabledBox = this.content.querySelector<HTMLInputElement>('#sms-enabled');
+    if (enabledBox) enabledBox.checked = enabled;
+    this.setContent(html, () => this.wireEvents());
   }
 
   private wireEvents(): void {

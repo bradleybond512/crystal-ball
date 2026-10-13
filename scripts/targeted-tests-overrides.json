@@ -292,7 +292,11 @@
     "test:secret-boundary",
     "test:mcp-untrusted",
     "test:mcp-companion",
-    "test:evidence-journal"
+    "test:evidence-journal",
+    "test:sidecar-lows",
+    "test:sms-panel",
+    "test:sms",
+    "test:sidecar"
   ],
   "src/services/keychain.ts": [
     "test:secret-boundary",
@@ -549,5 +553,18 @@
   ],
   "src/services/intelligence/forecast-calibration-load.ts": [
     "test:forecast-load"
+  ],
+  "src-tauri/sidecar/sms-security.mjs": [
+    "test:sidecar-lows",
+    "test:sms-panel",
+    "test:sms"
+  ],
+  "src/components/SmsSettingsPanel.ts": [
+    "test:sidecar-lows",
+    "test:sms-panel",
+    "test:sms"
+  ],
+  "tests/panels/sms-settings-panel.test.mts": [
+    "test:sms-panel"
   ]
 }

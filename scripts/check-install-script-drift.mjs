@@ -21,7 +21,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
-export const LOCKFILES = ['package-lock.json', 'tools/mcp-server/package-lock.json'];
+export const LOCKFILES = ['package-lock.json', 'tools/mcp-server/package-lock.json', '.github/tools/codex/package-lock.json'];
 export const OVERRIDE_LABEL = 'install-scripts-reviewed';
 
 /** Packages with install scripts (key -> version) and bin names (key -> names). */

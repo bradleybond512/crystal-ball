@@ -22,7 +22,7 @@ import { pathToFileURL } from 'node:url';
 
 export const MIN_AGE_DAYS = 7;
 export const OVERRIDE_LABEL = 'dependency-age-reviewed';
-export const NPM_LOCKFILES = ['package-lock.json', 'tools/mcp-server/package-lock.json'];
+export const NPM_LOCKFILES = ['package-lock.json', 'tools/mcp-server/package-lock.json', '.github/tools/codex/package-lock.json'];
 export const CARGO_LOCKFILES = ['src-tauri/Cargo.lock'];
 const DAY_MS = 24 * 60 * 60 * 1000;
 const NPM_REGISTRY = 'https://registry.npmjs.org/';

@@ -118,6 +118,10 @@ function gitRepo(t) {
   process.chdir(dir);
   return {
     npm(packages) { writeFileSync(path.join(dir, 'package-lock.json'), JSON.stringify(npmLock(packages))); },
+    ciCodex(packages) {
+      mkdirSync(path.join(dir, '.github/tools/codex'), { recursive: true });
+      writeFileSync(path.join(dir, '.github/tools/codex/package-lock.json'), JSON.stringify(npmLock(packages)));
+    },
     cargo(entries) { writeFileSync(path.join(dir, 'src-tauri/Cargo.lock'), cargoLock(entries)); },
     mcp(packages) {
       mkdirSync(path.join(dir, 'tools/mcp-server'), { recursive: true });
@@ -159,4 +163,14 @@ test('gate: unchanged and old versions pass; a fresh npm or crates.io version fa
 test('gate: an unreadable base ref fails closed', async (t) => {
   gitRepo(t);
   assert.equal(await runAgeGate({ baseRef: 'no-such-ref', labels: [], fetchImpl: fakeFetch({}).impl, now: NOW, log: () => {} }), 2);
+});
+
+test('gate: new CI Codex tool versions receive actual release-age checks', async (t) => {
+  const repo = gitRepo(t);
+  repo.ciCodex({ 'node_modules/a': pkg('a', '1.1.0') });
+  const logs = [];
+  const run = (labels = []) => runAgeGate({ baseRef: 'HEAD', labels, fetchImpl: fakeFetch(ROUTES).impl, now: NOW, log: (line) => logs.push(line) });
+  assert.equal(await run(), 1, 'two-day CI tool version is rejected');
+  assert.ok(logs.some((line) => line.includes('.github/tools/codex/package-lock.json: a@1.1.0')));
+  assert.equal(await run([OVERRIDE_LABEL]), 0, 'only the existing age-review label can approve');
 });

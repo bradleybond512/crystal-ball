@@ -1,0 +1,8 @@
+{
+  "name": "crystal-ball-ci-codex",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@openai/codex": "0.146.0"
+  }
+}

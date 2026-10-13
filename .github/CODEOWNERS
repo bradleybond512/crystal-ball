@@ -1,5 +1,6 @@
 /.github/workflows/ @bradleybond512
 /scripts/release-*.mjs @bradleybond512
+/scripts/push-auto-tag.mjs @bradleybond512
 /scripts/sync-desktop-version*.mjs @bradleybond512
 /scripts/install-built-app.mjs @bradleybond512
 /scripts/sync-main-to-mac.mjs @bradleybond512
@@ -15,6 +16,8 @@
 /src-tauri/Cargo.lock @bradleybond512
 /.github/dependabot.yml @bradleybond512
 /.github/CODEOWNERS @bradleybond512
+/.github/tools/ @bradleybond512
+/.github/mcp.json @bradleybond512
 /scripts/check-install-script-drift.mjs @bradleybond512
 /scripts/check-dependency-age.mjs @bradleybond512
 /scripts/dependency-change-policy.mjs @bradleybond512

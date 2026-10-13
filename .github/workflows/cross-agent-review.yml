@@ -38,6 +38,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         if: github.event_name == 'pull_request'
         with:
+          persist-credentials: false
           # The default pull_request checkout is the SYNTHETIC MERGE commit;
           # the verdict protocol must examine the actual branch tip.
           ref: ${{ github.event.pull_request.head.sha }}
@@ -70,13 +71,32 @@ jobs:
               echo "CI_CODEX_REVIEW is on but the OPENAI_API_KEY secret is missing." >&2
               exit 1
             fi
-            npm install -g @openai/codex@0.146.0 || npm install -g @openai/codex
-            if git cat-file -e origin/main:scripts/ci-codex-review.mjs 2>/dev/null; then
-              git show origin/main:scripts/ci-codex-review.mjs > "$RUNNER_TEMP/ci-codex-review.mjs"
-            else
-              cp scripts/ci-codex-review.mjs "$RUNNER_TEMP/ci-codex-review.mjs"
-            fi
-            node "$RUNNER_TEMP/ci-codex-review.mjs"
+            # Install only the integrity-locked project from trusted main.
+            # Never read the PR's tool manifest/config or fall back to latest.
+            CODEX_TOOL_DIR="$(mktemp -d "$RUNNER_TEMP/ci-codex-tool.XXXXXX")"
+            trap 'rm -rf "$CODEX_TOOL_DIR"' EXIT
+            case "$CODEX_TOOL_DIR/" in
+              "$(pwd -P)/"*) echo "Codex install must be outside the PR checkout." >&2; exit 1 ;;
+            esac
+            git show origin/main:.github/tools/codex/package.json > "$CODEX_TOOL_DIR/package.json"
+            git show origin/main:.github/tools/codex/package-lock.json > "$CODEX_TOOL_DIR/package-lock.json"
+            git show origin/main:.github/tools/codex/.npmrc > "$CODEX_TOOL_DIR/.npmrc"
+            git show origin/main:scripts/ci-codex-review.mjs > "$CODEX_TOOL_DIR/ci-codex-review.mjs"
+            : > "$CODEX_TOOL_DIR/empty-user.npmrc"
+            : > "$CODEX_TOOL_DIR/empty-global.npmrc"
+            (
+              cd "$CODEX_TOOL_DIR"
+              # env -i removes API/npm credentials, NODE_OPTIONS and all npm
+              # overrides; explicit config paths exclude inherited npmrcs.
+              env -i PATH="$PATH" npm \
+                --userconfig "$CODEX_TOOL_DIR/empty-user.npmrc" \
+                --globalconfig "$CODEX_TOOL_DIR/empty-global.npmrc" \
+                --cache "$CODEX_TOOL_DIR/npm-cache" \
+                ci --ignore-scripts --include=optional --no-audit --no-fund
+            )
+            test -x "$CODEX_TOOL_DIR/node_modules/.bin/codex"
+            # Only the trusted reviewer child can resolve this scoped binary.
+            PATH="$CODEX_TOOL_DIR/node_modules/.bin:$PATH" node "$CODEX_TOOL_DIR/ci-codex-review.mjs"
           else
             # Trusted copy: a PR that deletes or edits the verifier is still
             # judged by main's version. Only before the protocol first lands

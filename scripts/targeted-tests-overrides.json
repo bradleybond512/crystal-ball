@@ -92,7 +92,8 @@
     "test:sidecar-supervisor",
     "test:secret-boundary",
     "test:vault-writer",
-    "test:signing-phase-a"
+    "test:signing-phase-a",
+    "test:node-pinning"
   ],
   "src-tauri/src/updater_policy.rs": [
     "test:desktop-updater"
@@ -246,7 +247,8 @@
     "test:sidecar-routing"
   ],
   "src/services/diagnostics/local-engine-status.ts": [
-    "test:sidecar-routing"
+    "test:sidecar-routing",
+    "test:node-pinning"
   ],
   "src/services/diagnostics/sidecar-probe.ts": [
     "test:sidecar-routing"
@@ -566,5 +568,14 @@
   ],
   "tests/panels/sms-settings-panel.test.mts": [
     "test:sms-panel"
+  ],
+  "scripts/download-node.sh": [
+    "test:node-pinning"
+  ],
+  "src-tauri/Cargo.toml": [
+    "test:node-pinning"
+  ],
+  "src-tauri/build.rs": [
+    "test:node-pinning"
   ]
 }

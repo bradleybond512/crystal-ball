@@ -18,6 +18,8 @@ export interface LocalEngineStatus {
   nextRetryInMs: number | null;
   failureLimit: number;
   failureWindowMs: number;
+  /** Why the sidecar refused to start (R3-SEC-005), e.g. a missing or modified bundled Node. */
+  startError?: string;
 }
 
 export type Invoke = <T>(command: string) => Promise<T | null>;
@@ -35,6 +37,17 @@ function optionalInt(value: unknown): number | null | undefined {
 
 /** Strictly validate the native payload; anything malformed is `null`. */
 export function parseLocalEngineStatus(raw: unknown): LocalEngineStatus | null {
+  const status = parseCoreStatus(raw);
+  return status ? withStartError(status, (raw as Record<string, unknown>).startError) : null;
+}
+
+/** The optional refusal reason (R3-SEC-005): bounded text, or the whole payload is rejected. */
+function withStartError(status: LocalEngineStatus, value: unknown): LocalEngineStatus | null {
+  if (value === null || value === undefined || value === '') return status;
+  return typeof value === 'string' ? { ...status, startError: value.slice(0, 300) } : null;
+}
+
+function parseCoreStatus(raw: unknown): LocalEngineStatus | null {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
   if (typeof o.phase !== 'string' || !PHASES.has(o.phase)) return null;
@@ -90,6 +103,10 @@ export interface LocalEngineView {
 
 export function buildLocalEngineView(status: LocalEngineStatus | null): LocalEngineView {
   if (!status) return { tone: 'warn', text: 'Local engine status unavailable', canRestart: false };
+  // A refusal to start (R3-SEC-005) says why, instead of a bare "stopped".
+  if (status.startError && status.phase !== 'running') {
+    return { tone: 'bad', text: status.startError, canRestart: status.phase === 'stopped' };
+  }
   const restarts = status.restarts === 1 ? '1 restart' : `${status.restarts} restarts`;
   switch (status.phase) {
     case 'running': {

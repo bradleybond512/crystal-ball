@@ -7,6 +7,9 @@ edition = "2021"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+# R3-SEC-005: build.rs pins the bundled Node binary's SHA-256 (same version
+# as the runtime dependency, so no new crate).
+sha2 = "0.11"
 
 [dependencies]
 tauri = { version = "2", features = ["macos-private-api"] }

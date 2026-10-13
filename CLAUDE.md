@@ -69,6 +69,7 @@ Integrity is verified BEFORE any keychain writes:
 - **Security scan findings**: `docs/SECURITY_SCAN_FINDINGS_FOR_CLAUDE.md` — current highest-standard cyber security hardening list: secret IPC minimization, CSP tightening, HTML sink governance, origin allowlist unification, proxy URL hardening, local token handling, and clipboard audit.
 - **Security scan round 2**: `docs/SECURITY_SCAN_ROUND_2_FOR_CLAUDE.md` — additional scan pass covering Rust audit tooling, SAST, CI permissions, sebuf wildcard CORS fallback, relay preview-origin/bypass risks, Linux WebKit sandbox exceptions, update manifest verification, and API test gaps.
 - **Security scan round 3**: `docs/SECURITY_SCAN_ROUND_3_FOR_CODEX.md` — active 11-finding hardening plan for updater trust, native messaging authorization, vault storage, CSP, main-thread blocking, weather posture and sidecar boundaries; follow its ordered PRs and design-approval gates.
+- **Security scan round 4**: `docs/SECURITY_SCAN_ROUND_4_FOR_CODEX.md` — dated scan, approved decisions and original ordered queue; read its October 11 private batch checkpoint before acting. Current delivery, held private reviews and excluded human-only work remain distinct.
 
 ## Orchestration Layer (UI + Wiring)
 

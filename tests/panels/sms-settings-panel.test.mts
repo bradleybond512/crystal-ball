@@ -79,8 +79,9 @@ async function fixture(seed: Config, run: (context: {
 }) => Promise<void>, injectedPresentationError?: string, saveFaults: Readonly<Record<number, SaveFault>> = {}): Promise<void> {
   // A separate Node process gives os.homedir() a separate native environment;
   // worker-thread process.env writes do not change libuv's native HOME lookup.
+  const fixtureToken = 'fixture-only-sidecar-token';
   const worker = spawn(process.execPath, ['--input-type=commonjs', '-e', serverWorker], {
-    env: { ...process.env, Q20_OWNED_PANEL_FIXTURE: JSON.stringify({
+    env: { ...process.env, LOCAL_API_TOKEN: fixtureToken, Q20_OWNED_PANEL_FIXTURE: JSON.stringify({
       seed, module: new URL('../../src-tauri/sidecar/local-api-server.mjs', import.meta.url).href,
     }) }, stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
   });
@@ -92,7 +93,7 @@ async function fixture(seed: Config, run: (context: {
       worker.once('message', result => result.error ? reject(new Error(result.error)) : resolve(result));
       worker.once('exit', code => { if (code !== 0) reject(new Error(`owned panel server exited ${code}`)); });
     });
-    const auth = { authorization: `Bearer ${process.env.LOCAL_API_TOKEN}` };
+    const auth = { authorization: `Bearer ${fixtureToken}` };
     const posts: Captured[] = [];
     globalThis.fetch = (input, init) => {
       assert.equal(typeof input, 'string', 'panel uses relative SMS path');

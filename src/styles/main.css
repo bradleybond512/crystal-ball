@@ -14921,10 +14921,46 @@ a.prediction-link:hover {
   height: 14px;
 }
 
+/* Settings and its Places handoff sit above persistent alerts and Home,
+   while safety toasts and the foreground command palette retain their layers. */
+#unifiedSettingsModal,
+#savedPlaceModal {
+  z-index: var(--z-modal-raised);
+}
+
+#unifiedSettingsModal {
+  padding: 16px;
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+/* Follow the existing active class instead of mutating background styles.
+   Closing, destroying, or handing off to Places releases these locks and
+   preserves each scroll container's previous position. main.css is in the
+   base cascade layer; scoped important declarations let this active lock win
+   over unlayered native and Home overflow rules in the production entry. */
+html:has(> body > #unifiedSettingsModal.active),
+body:has(> #unifiedSettingsModal.active),
+body:has(> #unifiedSettingsModal.active) .main-content,
+body:has(> #unifiedSettingsModal.active) .home-shell-scroll {
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+}
+
 .unified-settings-modal {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   max-width: 600px;
-  width: 95%;
-  max-height: 80vh;
+  width: 100%;
+  max-height: min(80vh, calc(100vh - 32px));
+  max-height: min(80dvh, calc(100dvh - 32px));
+  overflow: hidden;
+}
+
+#unifiedSettingsModal .modal-header,
+#unifiedSettingsModal .unified-settings-tabs {
+  flex-shrink: 0;
 }
 
 .unified-settings-tabs {
@@ -14982,12 +15018,21 @@ a.prediction-link:hover {
 
 .unified-settings-tab-panel.active {
   display: block;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
-/* API Keys tab: let the embedded RuntimeConfigPanel content scroll */
-.unified-settings-tab-panel[data-panel-id="api-keys"].active {
-  overflow-y: auto;
-  max-height: calc(100% - 8px);
+/* The active panel owns vertical scrolling, including embedded panel content.
+   Keep these overrides inside Settings so standalone panels are unaffected. */
+#unifiedSettingsModal .sources-toggle-grid,
+#unifiedSettingsModal .us-status-content,
+#unifiedSettingsModal .us-help-content,
+#unifiedSettingsModal .us-thresholds-content,
+#unifiedSettingsModal [data-panel-id="api-keys"] .panel-content {
+  max-height: none;
+  overflow: visible;
 }
 
 .unified-settings-tab-panel[data-panel-id="api-keys"] .runtime-config-summary {

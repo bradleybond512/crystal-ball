@@ -850,6 +850,7 @@ migration is included.
 Design: [UX-032 brief](plans/2026-09-15-ux032-settings-keyboard.md).
 Evidence: [validation and review](validation/UX-032-SETTINGS-KEYBOARD.md),
 [literal mutation proofs](validation/UX-032-MUTATION-PROOFS.md).
+October 14 bounded local Settings layering/scroll candidate: [validation](validation/SETTINGS-MODAL-LAYERING.md); UX-032 remains MONITOR pending packaged/native acceptance.
 
 ---
 
@@ -890,7 +891,7 @@ Exit condition: Complete the top-of-window rail inventory and verify remaining o
 Review after: 2026-09-23
 Source findings: PR1731 H2.
 
-Acceptance: Inventory each rail as measured content or an intentional overlay; verify no overlap with summary, controls or navigation. PR #1730 moves the posture banner into the measured stack, corrects summary/breaking offsets and styles the data-center strip. Chromium regression and mutation evidence: [PR-1730-SUMMARY-STACK-LAYOUT.md](validation/PR-1730-SUMMARY-STACK-LAYOUT.md). Full rail inventory, remaining overlap acceptance and native verification are unfinished. UX-033 stack-height capping remains separate; this PR does not complete it.
+Acceptance: Inventory each rail as measured content or an intentional overlay; verify no overlap with summary, controls or navigation. PR #1730 moves the posture banner into the measured stack, corrects summary/breaking offsets and styles the data-center strip. Chromium regression and mutation evidence: [PR-1730-SUMMARY-STACK-LAYOUT.md](validation/PR-1730-SUMMARY-STACK-LAYOUT.md). Full rail inventory, remaining overlap acceptance and native verification are unfinished. October 14 adds bounded local Settings/Places layering and scroll evidence: [validation](validation/SETTINGS-MODAL-LAYERING.md); UX-034 remains MONITOR. UX-033 stack-height capping remains separate; this PR does not complete it.
 
 ### UX-035 — Gate background panel work by actual need
 

@@ -11,6 +11,9 @@
     "test:key-compare",
     "test:api"
   ],
+  "src/styles/main.css": [
+    "test:ux032"
+  ],
   "scripts/targeted-tests-overrides.json": [
     "test:agentic-pipeline"
   ],

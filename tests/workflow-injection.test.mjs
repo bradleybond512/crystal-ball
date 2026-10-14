@@ -59,10 +59,10 @@ test('the PAT value never enters a script, only whether it exists', () => {
   assert.equal(wf.includes("Boolean('${{ secrets.AUTO_MERGE_PAT }}')"), false);
 });
 
-test('zizmor runs in CI, pinned by version and hash, failing on high findings', () => {
+test('zizmor runs in CI, pinned by version and hash, failing on medium and higher findings', () => {
   const wf = read('.github/workflows/actionlint.yml');
   assert.match(wf, /pip" install --require-hashes --only-binary=:all: -r \.github\/tools\/zizmor\/requirements\.txt/);
-  assert.match(wf, /zizmor" --offline --min-severity high --format github \.github\/workflows/);
+  assert.match(wf, /zizmor" --offline --min-severity medium --format github \.github\/workflows/);
   const req = read('.github/tools/zizmor/requirements.txt');
   assert.match(req, /^zizmor==\d+\.\d+\.\d+ \\$/m);
   assert.ok((req.match(/--hash=sha256:[0-9a-f]{64}/g) ?? []).length >= 4, 'hashes for every platform wheel');

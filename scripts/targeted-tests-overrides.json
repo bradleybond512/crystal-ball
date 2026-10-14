@@ -1,4 +1,19 @@
 {
+  "api/_api-key.js": [
+    "test:key-compare",
+    "test:api"
+  ],
+  "api/_auth.js": [
+    "test:key-compare",
+    "test:api"
+  ],
+  "api/_timing-safe.js": [
+    "test:key-compare",
+    "test:api"
+  ],
+  "scripts/targeted-tests-overrides.json": [
+    "test:agentic-pipeline"
+  ],
   "scripts/install-mcp-deps.mjs": [
     "test:mcp-deps",
     "test:install-scripts"

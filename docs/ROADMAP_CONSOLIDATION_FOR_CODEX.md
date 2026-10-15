@@ -195,11 +195,15 @@ Add a new dated table under "Current production baseline" and keep the
 - Per forecaster: resolved count (direct and proxy separate), Brier, the
   ACC-303 paired-baseline Brier, Brier skill, and the ACC-403
   champion/challenger state.
+- Include an aggregate required-cohort manifest (forecaster, domain, horizon,
+  model/evaluation version) and actual UTC measurement/manifest-recorded
+  timestamps for ACC-703. Identify unavailable metadata explicitly; an
+  incomplete manifest does not qualify a proof window.
 - Aggregates only: no forecast text, entities, places or locations.
 - If neither the installed app nor the report is reachable read-only, stop and
   hand off to Bradley. Never substitute dev or fixture data.
-- Done when the table and a decision-log row land, and the PR names the exact
-  command that reproduces the numbers. Its completion PR must also reassess
+- Done when the table, manifest and a decision-log row land, and the PR names
+  the exact command that reproduces the numbers and manifest. Its completion PR must also reassess
   ACC-601 to ACC-605, record the actual measurement/review UTC date, and set
   each exact review date no more than 30 days after that assessment, never an
   unknown future merge date.

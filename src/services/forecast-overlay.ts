@@ -2,8 +2,8 @@
  * Forecast Overlay — predictive threat regions for DeckGL map visualization
  *
  * Combines EMA forecast data (rolling 24-session risk scores) with active
- * situations from the situation engine to produce geographic risk regions
- * rendered as transparent colored circles on the map.
+ * situations from the situation engine to produce geographic map context.
+ * Reported points stay points; regional context retains its own geometry.
  *
  * Risk color gradient: green (0-25) → yellow (25-50) → orange (50-75) → red (75-100)
  */
@@ -14,6 +14,24 @@ import { situationReportedPoint, type SituationDomain } from './situation-types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+export type ForecastContribution =
+  | {
+    kind: 'ema';
+    id: string;
+    label: string;
+    riskScore: number;
+    center: [number, number]; // [lon, lat]
+    radius: number; // km
+  }
+  | {
+    kind: 'situation';
+    id: string; // Original situation identity, without a presentation prefix.
+    title: string;
+    confidence: number;
+    center: [number, number]; // Reported [lon, lat], even when merged into an EMA region.
+    radius: number; // km
+  };
+
 export interface ForecastRegion {
   id: string;
   center: [number, number]; // [lon, lat]
@@ -23,6 +41,9 @@ export interface ForecastRegion {
   domains: string[]; // which signal domains contribute
   label: string; // region name
   radius: number; // km
+  geometry: 'point' | 'radius';
+  radiusBasis: 'reported' | 'regional-context';
+  contributions: readonly ForecastContribution[];
 }
 
 // ── Region geo-center lookup ──────────────────────────────────────────────────
@@ -63,7 +84,7 @@ const REGION_CENTERS: Record<string, [number, number]> = {
   'indochina': [105, 16],
 };
 
-/** Default radius (km) for regions without situation geo data */
+/** Regional EMA context radius, never a fallback for a reported point. */
 const DEFAULT_RADIUS_KM = 500;
 
 // ── Domain mapping ────────────────────────────────────────────────────────────
@@ -164,9 +185,38 @@ function buildEMARegions(): ForecastRegion[] {
  domains: [DOMAIN_FROM_TREND[f.trending] ?? 'compound'],
  label: `${f.region}`,
  radius: DEFAULT_RADIUS_KM,
+ geometry: 'radius',
+ radiusBasis: 'regional-context',
+ contributions: [{
+ kind: 'ema',
+ id: `ema-${key}`,
+ label: f.region,
+ riskScore: f.risk24h,
+ center: [...center],
+ radius: DEFAULT_RADIUS_KM,
+ }],
  });
   }
   return regions;
+}
+
+function reportedRadius(radiusKm: number): number {
+  return Number.isFinite(radiusKm) && radiusKm > 0 ? radiusKm : 0;
+}
+
+function mergeSituationContribution(
+  region: ForecastRegion,
+  contribution: ForecastContribution,
+  domain: SituationDomain,
+  riskScore: number,
+): void {
+  region.riskScore = Math.min(100, Math.max(region.riskScore, riskScore));
+  if (!region.domains.includes(domain)) {
+ region.domains.push(domain);
+  }
+  if (!region.contributions.some(member => member.kind === contribution.kind && member.id === contribution.id)) {
+ region.contributions = [...region.contributions, contribution];
+  }
 }
 
 /**
@@ -187,18 +237,25 @@ export function buildForecastOverlay(): ForecastRegion[] {
  const riskScore = Math.round(sit.confidence * 100);
  if (riskScore < 20) continue;
 
+ const radius = reportedRadius(sit.geo.radiusKm);
+ const title = sit.title.trim() || 'Reported situation';
+ const contribution: ForecastContribution = {
+ kind: 'situation',
+ id: sit.id,
+ title,
+ confidence: sit.confidence,
+ center: [center.lon, center.lat],
+ radius,
+ };
  const key = sit.geo.label.toLowerCase();
  // If we already have an EMA region for this area, merge risk upward
  const existing = regions.find(r => r.id === `ema-${key}`);
  if (existing) {
- existing.riskScore = Math.min(100, Math.max(existing.riskScore, riskScore));
- if (!existing.domains.includes(sit.domain)) {
- existing.domains.push(sit.domain);
- }
+ mergeSituationContribution(existing, contribution, sit.domain, riskScore);
  continue;
  }
 
- // Avoid duplicates from multiple situations at same location
+ // Avoid repeated identities; distinct situations at the same point remain available.
  const sitKey = `sit-${sit.id}`;
  if (seen.has(sitKey)) continue;
  seen.add(sitKey);
@@ -212,8 +269,11 @@ export function buildForecastOverlay(): ForecastRegion[] {
  velocity: sit.domainDiversity * 0.5, // proxy for cross-domain escalation
  trend: scenarioTrend,
  domains: [sit.domain],
- label: sit.geo.label,
- radius: sit.geo.radiusKm || DEFAULT_RADIUS_KM,
+ label: sit.geo.label.trim() || title,
+ radius,
+ geometry: radius > 0 ? 'radius' : 'point',
+ radiusBasis: 'reported',
+ contributions: [contribution],
  });
   }
 
@@ -222,10 +282,24 @@ export function buildForecastOverlay(): ForecastRegion[] {
 }
 
 /**
- * Format a label string for map display: "⚠ Risk: 73 ↑"
+ * Name the source measure without presenting situation confidence as EMA risk.
  */
 export function formatRegionLabel(region: ForecastRegion): string {
-  return `\u26A0 ${region.label}: ${region.riskScore} ${trendArrow(region.trend)}`;
+  const ema = region.contributions.find(member => member.kind === 'ema');
+  const situations = region.contributions.filter(member => member.kind === 'situation');
+  const suffix = trendArrow(region.trend);
+  if (ema) {
+ let reports = '';
+ if (situations.length > 0) {
+ const noun = situations.length === 1 ? 'situation' : 'situations';
+ reports = ` + ${situations.length} reported ${noun}`;
+ }
+ return `${region.label} · EMA forecast ${ema.riskScore}/100${reports} ${suffix}`;
+  }
+  if (situations.length === 1) {
+ return `${region.label} · confidence ${Math.round(situations[0]!.confidence * 100)}% ${suffix}`;
+  }
+  return `${region.label} · ${situations.length} reported situations ${suffix}`;
 }
 
 // ── Singleton ─────────────────────────────────────────────────────────────────

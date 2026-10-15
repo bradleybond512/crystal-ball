@@ -66,7 +66,9 @@ import type {
   StrikePackage,
 } from '@/types';
 import { fetchMilitaryBases, type MilitaryBaseCluster as ServerBaseCluster } from '@/services/military-bases';
-import { forecastOverlay, riskToColor, formatRegionLabel, type ForecastRegion } from '@/services/forecast-overlay';
+import { forecastOverlay, type ForecastRegion } from '@/services/forecast-overlay';
+import { MapFeatureList } from './MapFeatureList';
+import { CameraPresentationIndex, forecastFeatures, groupForecastPresentation, layoutMapLabels, type CameraPresentation, type FeatureRef, type ForecastPresentation, type MapFeature, type MapLabelCandidate } from './map-clarity-model';
 import type { AirportDelayAlert } from '@/services/aviation';
 import type { ScoredFAACamera } from '@/services/faa-cameras';
 import type { DiseaseIntelData, CovidCountry, EpidemicEvent, WhoDonAlert } from '@/services/disease-intel';
@@ -495,6 +497,15 @@ const CRISP_LABEL_TEXT = {
   fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif',
 };
 
+interface MapContextLabel {
+  id: string;
+  center: [number, number];
+  text: string;
+  memberIds: readonly string[];
+  offset: [number, number];
+  rect?: { left: number; top: number; right: number; bottom: number };
+}
+
 export class DeckGLMap {
   private static readonly MAX_CLUSTER_LEAVES = 200;
 
@@ -554,6 +565,19 @@ export class DeckGLMap {
   private techEvents: TechEventMarker[] = [];
   private flightDelays: AirportDelayAlert[] = [];
   private faaCameras: ScoredFAACamera[] = [];
+  private cameraPresentationIndex = new CameraPresentationIndex();
+  private cameraPresentation: CameraPresentation[] = [];
+  private forecastPresentation: ForecastPresentation[] = [];
+  private forecastSource: readonly ForecastRegion[] | null = null;
+  private forecastMapFeatures: MapFeature[] = [];
+  private datacenterMapFeatures: MapFeature[] = [];
+  private mapFeatures: MapFeature[] = [];
+  private selectedMapFeatureId: string | null = null;
+  private mapFeatureList: MapFeatureList | null = null;
+  private mapFeatureListViewKey = '';
+  private mapLabelMeasure: CanvasRenderingContext2D | null = null;
+  private mapLabelWidths = new Map<string, number>();
+  private datacenterClusterMembers = new Map<number, string[]>();
   private diseaseIntelData: DiseaseIntelData | null = null;
   private diseaseIntelCountryCaseMap = new Map<string, number>();
   private diseaseIntelGeoJson: import('geojson').FeatureCollection | null = null;
@@ -694,6 +718,11 @@ export class DeckGLMap {
 
  this.setupDOM();
  this.popup = new MapPopup(container);
+ this.mapFeatureList = new MapFeatureList(container, {
+ onSelect: (ref) => this.selectMapFeature(ref),
+ onShowOnMap: (ref) => this.focusMapFeature(ref),
+ onOpenFeature: (ref) => this.openMapFeature(ref),
+ });
 
  this._themeChangedHandler = (e: Event) => {
  const theme = (e as CustomEvent).detail?.theme as 'dark' | 'light';
@@ -1204,6 +1233,22 @@ export class DeckGLMap {
   private rebuildDatacenterSupercluster(): void {
  const activeDCs = AI_DATA_CENTERS.filter(dc => dc.status !== 'decommissioned');
  this.datacenterSCSource = activeDCs;
+ this.datacenterClusterMembers.clear();
+ this.datacenterMapFeatures = activeDCs.map(dc => ({
+ id: `datacenter:${dc.id}`,
+ family: 'datacenter',
+ title: dc.name.trim() || 'Data center',
+ center: [dc.lon, dc.lat],
+ metrics: [
+ { label: 'Owner', value: dc.owner || 'Unknown' },
+ { label: 'Status', value: dc.status },
+ { label: 'Country', value: dc.country || 'Unknown' },
+ { label: 'Chips', value: dc.chipCount.toLocaleString() },
+ ],
+ memberIds: [`datacenter:${dc.id}`],
+ visible: false,
+ }));
+ this.mapFeatureListViewKey = '';
  const points = activeDCs.map((dc, i) => ({
  type: 'Feature' as const,
  geometry: { type: 'Point' as const, coordinates: [dc.lon, dc.lat] as [number, number] },
@@ -1436,6 +1481,7 @@ export class DeckGLMap {
  }
  const layers: (Layer | null | false)[] = [];
  const { layers: mapLayers } = this.state;
+ this.refreshMapPresentation();
  const filteredEarthquakes = mapLayers.natural ? this.filterByTime(this.earthquakes, (eq) => eq.occurredAt) : [];
  const filteredNaturalEvents = mapLayers.natural ? this.filterByTime(this.naturalEvents, (event) => event.date) : [];
  const filteredWeatherAlerts = mapLayers.weather ? this.filterByTime(this.weatherAlerts, (alert) => alert.onset) : [];
@@ -1656,7 +1702,7 @@ export class DeckGLMap {
 
  // FAA weather cameras layer
  if (mapLayers.faaWeatherCams && this.faaCameras.length > 0) {
- layers.push(this.createFAACamerasLayer(this.faaCameras));
+ layers.push(this.createFAACamerasLayer(this.cameraPresentation));
  }
 
  // Disease Intelligence layers (choropleth + variant dots + outbreak pins)
@@ -1845,12 +1891,8 @@ export class DeckGLMap {
  }
 
  // EMA forecast predictive threat overlay
- if (mapLayers.forecastOverlay) {
- const forecastRegions = forecastOverlay.getRegions();
- if (forecastRegions.length > 0) {
- layers.push(this.createForecastOverlayLayer(forecastRegions));
- layers.push(this.createForecastOverlayLabelLayer(forecastRegions));
- }
+ if (mapLayers.forecastOverlay && this.forecastPresentation.length > 0) {
+ layers.push(...this.createForecastOverlayLayers(this.forecastPresentation));
  }
 
  // Threat Heatmap — aggregate all geo-tagged events into a density heatmap
@@ -1887,7 +1929,25 @@ export class DeckGLMap {
  layers.push(...this.createLifelinesOverlayLayers(this.lifelinesOverlay.nodes));
  }
 
- const result = layers.filter(Boolean) as LayersList;
+ layers.push(this.createMapContextLabels(filteredWeatherAlerts));
+ // Context is painted below the original warning layers. Their data, geometry,
+ // styling and picking stay intact; a neutral marker cannot cover an alert.
+ const present = layers.filter(Boolean) as Layer[];
+ const contextOrder = new Map([
+ ['climate-heatmap-layer', 0], ['threat-heatmap-layer', 0],
+ ['forecast-overlay-layer', 1], ['convergence-rings-outer', 1],
+ ['datacenters-layer', 2], ['datacenter-clusters-layer', 2],
+ ['faa-cameras', 2], ['forecast-overlay-points', 2], ['convergence-rings-inner', 2],
+ ['map-context-labels', 3],
+ ]);
+ const backgroundIds = new Set(['day-night-layer', 'theater-polygons-fill']);
+ const context = present.filter(layer => contextOrder.has(layer.id));
+ context.sort((a, b) => contextOrder.get(a.id)! - contextOrder.get(b.id)!);
+ const result = [
+ ...present.filter(layer => backgroundIds.has(layer.id)),
+ ...context,
+ ...present.filter(layer => !backgroundIds.has(layer.id) && !contextOrder.has(layer.id)),
+ ] as LayersList;
  const elapsed = performance.now() - startTime;
  if (import.meta.env.DEV && elapsed > 16) {
  console.warn(`[DeckGLMap] buildLayers took ${elapsed.toFixed(2)}ms (>16ms budget), ${result.length} layers`);
@@ -2264,30 +2324,21 @@ export class DeckGLMap {
  });
   }
 
-  private createFAACamerasLayer(cameras: ScoredFAACamera[]): ScatterplotLayer<ScoredFAACamera> {
- return new ScatterplotLayer<ScoredFAACamera>({
+  private createFAACamerasLayer(cameras: CameraPresentation[]): ScatterplotLayer<CameraPresentation> {
+ return new ScatterplotLayer<CameraPresentation>({
  id: 'faa-cameras',
  data: cameras,
- getPosition: d => [d.lon, d.lat],
- // Bumped from 4/8 → 6/12 base radius so 3,000+ cameras stay
- // visible on satellite/terrain basemaps where small pale-blue
- // dots used to disappear.
- getRadius: d => (d.alertProximityMi !== null ? 12 : 6),
- getFillColor: d =>
- d.alertProximityMi !== null
- ? [255, 160, 60, 240]    // amber, near full alpha
- : [100, 180, 255, 160],  // pale blue, ~63% alpha (was 31%)
+ getPosition: d => d.center,
+ radiusUnits: 'pixels',
+ getRadius: d => d.count > 1 ? Math.min(12, 6 + Math.log2(d.count)) : (d.nearAlert ? 4 : 2.5),
+ getFillColor: d => d.nearAlert ? [171, 137, 85, 180] : [104, 135, 157, 160],
  stroked: true,
  lineWidthMinPixels: 1,
- getLineColor: d =>
- d.alertProximityMi !== null
- ? [80, 40, 0, 255]
- : [40, 90, 140, 200],
- // Min/max pixel radius keeps the dots visible at every zoom.
- radiusMinPixels: 5,
- radiusMaxPixels: 16,
+ getLineColor: d => d.memberIds.includes(this.selectedMapFeatureId ?? '')
+ ? [225, 236, 244, 255] : [159, 182, 198, 150],
  pickable: true,
  autoHighlight: true,
+ updateTriggers: { getLineColor: this.selectedMapFeatureId },
  });
   }
 
@@ -2388,20 +2439,21 @@ export class DeckGLMap {
  getIcon: () => 'square',
  iconAtlas: getIconAtlas(),
  iconMapping: getIconMapping(),
- getSize: (d) => highlightedDC.has(d.id) ? 14 : 10,
+ getSize: (d) => highlightedDC.has(d.id) || this.selectedMapFeatureId === `datacenter:${d.id}` ? 12 : 7,
  getColor: (d) => {
  if (highlightedDC.has(d.id)) {
  return [255, 100, 100, 200] as [number, number, number, number];
  }
  if (d.status === 'planned') {
- return [136, 68, 255, 100] as [number, number, number, number]; // Transparent for planned
+ return [130, 123, 157, 100] as [number, number, number, number]; // Planned context
  }
- return [136, 68, 255, 140] as [number, number, number, number]; // ~55% opacity
+ return [130, 123, 157, 160] as [number, number, number, number];
  },
  sizeScale: 1,
- sizeMinPixels: 6,
- sizeMaxPixels: 14,
+ sizeMinPixels: 5,
+ sizeMaxPixels: 12,
  pickable: true,
+ updateTriggers: { getSize: this.selectedMapFeatureId },
  });
   }
 
@@ -2803,49 +2855,240 @@ export class DeckGLMap {
  });
   }
 
-  private createForecastOverlayLayer(regions: ForecastRegion[]): ScatterplotLayer<ForecastRegion> {
- return new ScatterplotLayer<ForecastRegion>({
+  private createForecastOverlayLayers(groups: ForecastPresentation[]): Layer[] {
+ const selected = (d: ForecastPresentation) => d.memberIds.includes(this.selectedMapFeatureId ?? '');
+ return [new ScatterplotLayer<ForecastPresentation>({
  id: 'forecast-overlay-layer',
- data: regions,
- getPosition: (d) => d.center,
- // Radius in meters: convert km to meters, scale with risk
- getRadius: (d) => d.radius * 1000,
- getFillColor: (d) => riskToColor(d.riskScore),
- opacity: 1, // per-feature alpha is baked into getFillColor
- radiusMinPixels: 15,
- radiusMaxPixels: 120,
- pickable: true,
+ data: groups.filter(d => d.geometry === 'radius'),
+ getPosition: d => d.center,
+ getRadius: d => d.radius * 1000,
+ radiusUnits: 'meters',
+ // A reported footprint remains its true size; no pixel minimum invents area.
+ getFillColor: [132, 143, 160, 14],
+ getLineColor: d => selected(d) ? [211, 224, 238, 230] : [143, 163, 181, 115],
  stroked: true,
- getLineColor: (d) => {
- const [r, g, b] = riskToColor(d.riskScore);
- return [r, g, b, 200] as [number, number, number, number];
- },
  lineWidthMinPixels: 1,
  lineWidthMaxPixels: 2,
+ pickable: true,
+ updateTriggers: { getLineColor: this.selectedMapFeatureId },
+ }), new ScatterplotLayer<ForecastPresentation>({
+ id: 'forecast-overlay-points',
+ data: groups.filter(d => d.geometry === 'point'),
+ getPosition: d => d.center,
+ radiusUnits: 'pixels',
+ getRadius: d => selected(d) ? 6 : (d.memberIds.length > 1 ? 5 : 3.5),
+ getFillColor: [151, 161, 174, 195],
+ getLineColor: d => selected(d) ? [235, 241, 247, 255] : [203, 214, 226, 175],
+ stroked: true,
+ lineWidthMinPixels: 1,
+ pickable: true,
+ updateTriggers: { getRadius: this.selectedMapFeatureId, getLineColor: this.selectedMapFeatureId },
+ })];
+  }
+
+  /** Rebuild immutable source projections only when their source snapshot changes. */
+  private refreshMapPresentation(): void {
+ const regions = this.state.layers.forecastOverlay ? forecastOverlay.getRegions() : this.forecastSource;
+ if (regions && regions !== this.forecastSource) {
+ this.forecastSource = regions;
+ this.forecastPresentation = groupForecastPresentation(regions);
+ this.forecastMapFeatures = forecastFeatures(regions);
+ this.mapFeatureListViewKey = '';
+ }
+ const bounds = this.maplibreMap?.getBounds();
+ const bbox: [number, number, number, number] = bounds
+ ? [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()]
+ : [-180, -90, 180, 90];
+ const zoom = this.maplibreMap?.getZoom() ?? this.state.zoom;
+ this.cameraPresentation = this.state.layers.faaWeatherCams
+ ? this.cameraPresentationIndex.getClusters(bbox, zoom) : [];
+ const enabled = {
+ forecast: this.state.layers.forecastOverlay,
+ camera: this.state.layers.faaWeatherCams,
+ datacenter: this.state.layers.datacenters,
+ };
+ const viewKey = `${Object.values(enabled).join(':')}:${this.selectedMapFeatureId}`;
+ if (viewKey === this.mapFeatureListViewKey) return;
+ this.mapFeatureListViewKey = viewKey;
+ this.mapFeatures = [
+ ...this.forecastMapFeatures,
+ ...this.cameraPresentationIndex.getFeatures(),
+ ...this.datacenterMapFeatures,
+ ].map(feature => ({
+ ...feature,
+ // Visibility describes the chosen layer, not the viewport. Offscreen
+ // members stay available to the explicit Show on map action.
+ visible: Boolean(enabled[feature.family]),
+ }));
+ this.mapFeatureList?.update(this.mapFeatures, this.selectedMapFeatureId);
+  }
+
+  private selectMapFeature(ref: FeatureRef): void {
+ const feature = this.mapFeatures.find(item => item.id === ref.id && item.family === ref.family);
+ if (!feature) return;
+ this.selectedMapFeatureId = feature.id;
+ this.mapFeatureList?.update(this.mapFeatures, this.selectedMapFeatureId);
+ this.render();
+  }
+
+  private focusMapFeature(ref: FeatureRef): void {
+ const feature = this.mapFeatures.find(item => item.id === ref.id && item.family === ref.family);
+ if (!feature) return;
+ this.selectMapFeature(ref);
+ // Only the explicit Show on map action changes the camera.
+ this.maplibreMap?.flyTo({
+ center: feature.center,
+ zoom: Math.max(this.maplibreMap.getZoom(), feature.family === 'camera' ? 7 : 5),
+ duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 500,
+ });
+ this.render();
+  }
+
+  private openMapFeature(ref: FeatureRef): void {
+ // Resolve the current source again; an old row must not open a removed source.
+ if (!this.mapFeatures.some(feature => feature.id === ref.id && feature.family === ref.family)) return;
+ let data: ScoredFAACamera | AIDataCenter | undefined;
+ let type: 'faaCamera' | 'datacenter';
+ if (ref.family === 'camera') {
+ data = this.cameraPresentationIndex.getCamera(ref.id);
+ type = 'faaCamera';
+ } else if (ref.family === 'datacenter') {
+ data = this.datacenterSCSource.find(dc => `datacenter:${dc.id}` === ref.id);
+ type = 'datacenter';
+ } else {
+ return;
+ }
+ if (!data) return;
+ const projected = this.projectToScreen(data.lat, data.lon);
+ const bounds = this.container.getBoundingClientRect();
+ const { x, y } = projected && projected.x >= 0 && projected.x <= bounds.width
+ && projected.y >= 0 && projected.y <= bounds.height ? projected : this.getContainerCenter();
+ // This explicit viewer action is the only new path into the existing camera
+ // frame resolver. Merely listing/selecting sources never opens the popup.
+ this.popup.show({ type, data, x, y, fromFeatureList: true });
+  }
+
+  private openMapFeatureMembers(memberIds: readonly string[]): void {
+ if (memberIds.length === 0) return;
+ if (!this.selectedMapFeatureId || !memberIds.includes(this.selectedMapFeatureId)) {
+ this.selectedMapFeatureId = memberIds[0]!;
+ }
+ this.mapFeatureList?.update(this.mapFeatures, this.selectedMapFeatureId);
+ this.mapFeatureList?.open(this.selectedMapFeatureId, memberIds);
+ this.render();
+  }
+
+  /** One screen-space collision pass for forecast names and infrastructure counts. */
+  private createMapContextLabels(weatherAlerts: WeatherAlert[]): TextLayer<MapContextLabel> {
+ const labels: MapContextLabel[] = [];
+ const selected = this.selectedMapFeatureId;
+ const zoom = this.maplibreMap?.getZoom() ?? this.state.zoom;
+ if (this.state.layers.forecastOverlay) {
+ for (const group of this.forecastPresentation) {
+ const isSelected = group.memberIds.includes(selected ?? '');
+ if (zoom < 3 && !isSelected) continue;
+ const text = isSelected
+ ? (group.features.find(feature => feature.id === selected)?.title || group.label)
+ : (group.memberIds.length > 1 ? `${group.memberIds.length} reports` : group.label);
+ labels.push({ id: group.id, center: group.center, text: text.slice(0, 52), memberIds: group.memberIds, offset: [0, -16] });
+ }
+ }
+ if (this.state.layers.faaWeatherCams) {
+ for (const camera of this.cameraPresentation) {
+ const isSelected = camera.memberIds.includes(selected ?? '');
+ if (camera.count <= 1 && !isSelected) continue;
+ labels.push({
+ id: camera.id, center: camera.center, memberIds: camera.memberIds,
+ text: isSelected && camera.count === 1 ? (camera.camera?.name.trim() || 'FAA camera') : String(camera.count),
+ offset: [0, camera.count > 1 ? 0 : -15],
+ });
+ }
+ }
+ if (this.state.layers.datacenters) {
+ if (zoom < 5) {
+ this.updateClusterData();
+ for (const cluster of this.datacenterClusters) {
+ if (cluster.count <= 1) continue;
+ const memberIds = this.datacenterClusterMemberIds(cluster);
+ labels.push({ id: cluster.id, center: [cluster.lon, cluster.lat], text: String(cluster.count), memberIds, offset: [0, 0] });
+ }
+ } else {
+ const feature = this.datacenterMapFeatures.find(item => item.id === selected);
+ if (feature) labels.push({ id: feature.id, center: feature.center, text: feature.title.slice(0, 52), memberIds: feature.memberIds, offset: [0, -16] });
+ }
+ }
+ const candidates: MapLabelCandidate[] = [];
+ for (const label of labels) {
+ const pixel = this.latlonToPixel(label.center[1], label.center[0]);
+ if (!pixel) continue;
+ candidates.push({
+ id: label.id, x: pixel.x + label.offset[0], y: pixel.y + label.offset[1],
+ width: this.mapContextLabelWidth(label.text), height: 16,
+ selected: label.memberIds.includes(selected ?? ''), category: 'context',
+ });
+ }
+ // Reserve space for existing authoritative warning markers. Proximity,
+ // confidence and situation phase never become severity signals here.
+ for (const alert of weatherAlerts) {
+ if (!alert.centroid || !['Extreme', 'Severe'].includes(alert.severity)) continue;
+ const pixel = this.latlonToPixel(alert.centroid[1], alert.centroid[0]);
+ if (pixel) candidates.push({ id: `warning:${alert.id}`, x: pixel.x, y: pixel.y, width: 36, height: 36, sourceSeverity: alert.severity, category: 'warning' });
+ }
+ for (const alert of this.alertPulses) {
+ if (!['critical', 'high'].includes(alert.severity)) continue;
+ const pixel = this.latlonToPixel(alert.lat, alert.lon);
+ if (pixel) candidates.push({ id: `beacon:${alert.id}`, x: pixel.x, y: pixel.y, width: 48, height: 48, sourceSeverity: alert.severity, category: 'warning' });
+ }
+ const placed = layoutMapLabels(candidates, {
+ padding: 4,
+ maxLabels: Math.max(12, Math.min(60, Math.floor(this.container.clientWidth * this.container.clientHeight / 16000))),
+ viewport: { width: this.container.clientWidth, height: this.container.clientHeight },
+ });
+ const byId = new Map(labels.map(label => [label.id, label]));
+ const data = placed.flatMap(item => {
+ const label = byId.get(item.id);
+ return label ? [{ ...label, rect: item.rect }] : [];
+ });
+ return new TextLayer<MapContextLabel>({
+ id: 'map-context-labels', data,
+ getPosition: d => d.center, getText: d => d.text,
+ getPixelOffset: d => d.offset,
+ getSize: 11, sizeUnits: 'pixels',
+ getColor: getCurrentTheme() === 'light' ? [47, 57, 70, 230] : [224, 231, 239, 240],
+ getTextAnchor: 'middle', getAlignmentBaseline: 'center',
+ ...CRISP_LABEL_TEXT,
+ outlineWidth: 1.5,
+ outlineColor: getCurrentTheme() === 'light' ? [248, 250, 252, 220] : [25, 32, 42, 220],
+ fontWeight: 500, pickable: false,
  });
   }
 
-  private createForecastOverlayLabelLayer(regions: ForecastRegion[]): TextLayer<ForecastRegion> {
- return new TextLayer<ForecastRegion>({
- id: 'forecast-overlay-labels',
- data: regions,
- getPosition: (d) => d.center,
- getText: (d) => formatRegionLabel(d),
- getSize: 13,
- getColor: [255, 255, 255, 220],
- getAngle: 0,
- getTextAnchor: 'middle',
- getAlignmentBaseline: 'center',
- getPixelOffset: [0, -20],
- fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif',
- fontWeight: '600',
- outlineWidth: 3,
- outlineColor: [0, 0, 0, 180],
- pickable: false,
- billboard: true,
- sizeMinPixels: 10,
- sizeMaxPixels: 16,
+  private mapContextLabelWidth(text: string): number {
+ const cached = this.mapLabelWidths.get(text);
+ if (cached !== undefined) return cached;
+ this.mapLabelMeasure ??= document.createElement('canvas').getContext('2d');
+ if (this.mapLabelMeasure) this.mapLabelMeasure.font = `500 11px ${CRISP_LABEL_TEXT.fontFamily}`;
+ const width = Math.max(12, Math.ceil(this.mapLabelMeasure?.measureText(text).width ?? text.length * 11) + 4);
+ if (this.mapLabelWidths.size >= 2048) this.mapLabelWidths.clear();
+ this.mapLabelWidths.set(text, width);
+ return width;
+  }
+
+  private datacenterClusterMemberIds(cluster: MapDatacenterCluster): string[] {
+ if (cluster._clusterId != null && this.datacenterSC) {
+ const cached = this.datacenterClusterMembers.get(cluster._clusterId);
+ if (cached) return cached;
+ try {
+ const memberIds = this.datacenterSC.getLeaves(cluster._clusterId, Infinity)
+ .flatMap(leaf => {
+ const dc = this.datacenterSCSource[leaf.properties.index];
+ return dc ? [`datacenter:${dc.id}`] : [];
  });
+ this.datacenterClusterMembers.set(cluster._clusterId, memberIds);
+ return memberIds;
+ } catch { return []; }
+ }
+ return cluster.items.map(dc => `datacenter:${dc.id}`);
   }
 
   private createAisDensityLayer(): ScatterplotLayer {
@@ -3502,43 +3745,18 @@ export class DeckGLMap {
 
   private createDatacenterClusterLayers(): Layer[] {
  this.updateClusterData();
- const layers: Layer[] = [];
-
- layers.push(new ScatterplotLayer<MapDatacenterCluster>({
+ return [new ScatterplotLayer<MapDatacenterCluster>({
  id: 'datacenter-clusters-layer',
  data: this.datacenterClusters,
  getPosition: d => [d.lon, d.lat],
- getRadius: d => 15_000 + d.count * 2000,
- radiusMinPixels: 6,
- radiusMaxPixels: 20,
- getFillColor: d => {
- if (d.majorityExisting) return [160, 80, 255, 180] as [number, number, number, number];
- return [80, 160, 255, 180] as [number, number, number, number];
- },
+ radiusUnits: 'pixels',
+ getRadius: d => d.count > 1 ? Math.min(12, 6 + Math.log2(d.count)) : 3,
+ getFillColor: d => d.majorityExisting ? [134, 124, 158, 180] : [112, 137, 157, 160],
+ stroked: true,
+ getLineColor: [176, 171, 193, 140],
+ lineWidthMinPixels: 1,
  pickable: true,
- updateTriggers: { getRadius: this.lastSCZoom },
- }));
-
- const multiClusters = this.datacenterClusters.filter(c => c.count > 1);
- if (multiClusters.length > 0) {
- layers.push(new TextLayer<MapDatacenterCluster>({
- id: 'datacenter-clusters-badge',
- data: multiClusters,
- getText: d => String(d.count),
- getPosition: d => [d.lon, d.lat],
- background: true,
- getBackgroundColor: [0, 0, 0, 180],
- backgroundPadding: [4, 2, 4, 2],
- getColor: [255, 255, 255, 255],
- getSize: 12,
- getPixelOffset: [0, -14],
- pickable: false,
- fontFamily: 'system-ui, sans-serif',
- fontWeight: 700,
- }));
- }
-
- return layers;
+ })];
   }
 
   private createHotspotsLayers(): Layer[] {
@@ -4070,10 +4288,11 @@ export class DeckGLMap {
  case 'cyber-threats-layer': {
  return { html: `<div class="deckgl-tooltip"><strong>${t('popups.cyberThreat.title')}</strong><br/>${text(obj.severity || t('components.deckgl.tooltip.medium'))} · ${text(obj.country || t('popups.unknown'))}</div>` };
  }
- case 'forecast-overlay-layer': {
- const domains = (obj.domains || []).join(', ');
- const trendLabel = obj.trend === 'rising' ? '\u2191 Rising' : obj.trend === 'falling' ? '\u2193 Falling' : '\u2192 Stable';
- return { html: `<div class="deckgl-tooltip"><strong>\u26A0 ${text(obj.label || 'Forecast Region')}</strong><br/>Risk: ${obj.riskScore}/100 ${trendLabel}<br/>Domains: ${text(domains)}</div>` };
+ case 'forecast-overlay-layer':
+ case 'forecast-overlay-points': {
+ const group = obj as ForecastPresentation;
+ const metricText = group.features.flatMap(feature => feature.metrics.map(metric => `${metric.label}: ${metric.value}`)).slice(0, 4).join(' · ');
+ return { html: `<div class="deckgl-tooltip"><strong>${text(group.label)}</strong><br/>${text(metricText)}<br/>${group.memberIds.length} source${group.memberIds.length === 1 ? '' : 's'} · Select for details</div>` };
  }
  case 'iran-events-layer': {
  return { html: `<div class="deckgl-tooltip"><strong>${t('components.deckgl.layers.iranAttacks')}: ${text(obj.category || '')}</strong><br/>${text((obj.title || '').slice(0, 80))}</div>` };
@@ -4133,8 +4352,10 @@ export class DeckGLMap {
  return { html: `<div class="deckgl-tooltip">${nameStr}${typeStr}${descStr}${dateStr}<br/><span style="opacity:.5;font-size:0.8em">S2 Underground — ${text(obj.layerTitle)}</span></div>` };
  }
  case 'faa-cameras': {
- const alertStr = obj.alertLabel ? `<br/><span style="color:#ffa03c">${text(obj.alertLabel)}</span>` : '';
- return { html: `<div class="deckgl-tooltip">&#128247; <strong>${text(obj.name)}</strong><br/>${text(obj.state)} · ${text(obj.category)}${alertStr}</div>` };
+ const group = obj as CameraPresentation;
+ const camera = group.camera;
+ const proximity = group.nearAlert ? '<br/>Includes cameras near an alert (proximity only)' : '';
+ return { html: `<div class="deckgl-tooltip"><strong>${text(camera?.name || `${group.count} FAA cameras`)}</strong>${proximity}<br/>Select for all camera details</div>` };
  }
  case 'adsb-layer': {
  const altFt = obj.altitude != null ? `${Math.round(obj.altitude * 3.281).toLocaleString()} ft` : '—';
@@ -4234,6 +4455,15 @@ export class DeckGLMap {
 
  const rawClickLayerId = info.layer?.id || '';
  const layerId = rawClickLayerId.endsWith('-ghost') ? rawClickLayerId.slice(0, -6) : rawClickLayerId;
+
+ if (layerId === 'forecast-overlay-layer' || layerId === 'forecast-overlay-points' || layerId === 'faa-cameras') {
+ this.openMapFeatureMembers((info.object as ForecastPresentation | CameraPresentation).memberIds);
+ return;
+ }
+ if (layerId === 'datacenters-layer') {
+ this.openMapFeatureMembers([`datacenter:${(info.object as AIDataCenter).id}`]);
+ return;
+ }
 
  if (layerId === 'lifelines-overlay-markers') {
  this.popup.show({
@@ -4360,37 +4590,7 @@ export class DeckGLMap {
  return;
  }
  if (layerId === 'datacenter-clusters-layer') {
- const cluster = info.object as MapDatacenterCluster;
- if (cluster.items.length === 0 && cluster._clusterId != null && this.datacenterSC) {
- try {
- const leaves = this.datacenterSC.getLeaves(cluster._clusterId, DeckGLMap.MAX_CLUSTER_LEAVES);
- cluster.items = leaves.map(l => this.datacenterSCSource[l.properties.index]).filter((x): x is AIDataCenter => !!x);
- cluster.sampled = cluster.items.length < cluster.count;
- } catch (error) {
- console.warn('[DeckGLMap] stale datacenter cluster', cluster._clusterId, error);
- return;
- }
- }
- if (cluster.count === 1 && cluster.items[0]) {
- this.popup.show({ type: 'datacenter', data: cluster.items[0], x: info.x, y: info.y });
- } else {
- this.popup.show({
- type: 'datacenterCluster',
- data: {
- items: cluster.items,
- region: cluster.region || cluster.country,
- country: cluster.country,
- count: cluster.count,
- totalChips: cluster.totalChips,
- totalPowerMW: cluster.totalPowerMW,
- existingCount: cluster.existingCount,
- plannedCount: cluster.plannedCount,
- sampled: cluster.sampled,
- },
- x: info.x,
- y: info.y,
- });
- }
+ this.openMapFeatureMembers(this.datacenterClusterMemberIds(info.object as MapDatacenterCluster));
  return;
  }
 
@@ -4434,7 +4634,6 @@ export class DeckGLMap {
  'gps-jamming-layer': 'gpsJamming',
  'cable-advisories-layer': 'cable-advisory',
  'repair-ships-layer': 'repair-ship',
- 'faa-cameras': 'faaCamera',
  };
 
  const popupType = layerToPopupType[layerId];
@@ -5328,10 +5527,10 @@ export class DeckGLMap {
  data: this.climateAnomalies,
  getPosition: (d) => [d.lon, d.lat],
  getWeight: (d) => Math.abs(d.tempDelta) + Math.abs(d.precipDelta) * 0.1,
- radiusPixels: 40,
- intensity: 0.6,
+ radiusPixels: 28,
+ intensity: 0.45,
  threshold: 0.15,
- opacity: 0.45,
+ opacity: 0.22,
  colorRange: [
  [68, 136, 255],
  [100, 200, 255],
@@ -5538,6 +5737,8 @@ export class DeckGLMap {
 
   public setFAACameras(cameras: ScoredFAACamera[]): void {
  this.faaCameras = cameras;
+ this.cameraPresentationIndex.rebuild(cameras);
+ this.mapFeatureListViewKey = '';
  this.render();
   }
 
@@ -6416,6 +6617,21 @@ export class DeckGLMap {
 
   public destroy(): void {
  this.clearBaselineTimer();
+ this.popup?.hide();
+ this.mapFeatureList?.destroy();
+ this.mapFeatureList = null;
+ this.cameraPresentationIndex.rebuild([]);
+ this.cameraPresentation = [];
+ this.forecastPresentation = [];
+ this.forecastSource = null;
+ this.forecastMapFeatures = [];
+ this.datacenterMapFeatures = [];
+ this.mapFeatures = [];
+ this.selectedMapFeatureId = null;
+ this.mapFeatureListViewKey = '';
+ this.mapLabelMeasure = null;
+ this.mapLabelWidths.clear();
+ this.datacenterClusterMembers.clear();
  this.smokeOverlayUnsub?.();
  this.smokeOverlayUnsub = null;
  this.smokeScrubberEl?.remove();
@@ -6529,12 +6745,12 @@ export class DeckGLMap {
  getRadius: (d) => 80_000 + d.score * 1200,
  getFillColor: (d) => {
  const intensity = Math.round((d.score / 100) * 180);
- return [220, intensity > 100 ? 50 : 120, 40, 35];
+ return [220, intensity > 100 ? 50 : 120, 40, 10];
  },
  getLineColor: (d) => {
- if (d.score >= 80) return [255, 50, 50, 200];
- if (d.score >= 60) return [255, 140, 40, 180];
- return [220, 180, 40, 150];
+ if (d.score >= 80) return [255, 50, 50, 110];
+ if (d.score >= 60) return [255, 140, 40, 100];
+ return [220, 180, 40, 90];
  },
  stroked: true,
  filled: true,
@@ -6618,10 +6834,10 @@ export class DeckGLMap {
  data: points,
  getPosition: (d: { lat: number; lon: number }) => [d.lon, d.lat],
  getWeight: (d: { weight: number }) => d.weight,
- radiusPixels: 50,
- intensity: 0.8,
+ radiusPixels: 30,
+ intensity: 0.45,
  threshold: 0.1,
- opacity: 0.5,
+ opacity: 0.24,
  colorRange: [
  [30, 80, 200], // low — blue
  [60, 180, 120],  // med — green-teal

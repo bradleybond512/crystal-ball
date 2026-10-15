@@ -152,6 +152,8 @@ export interface PopupData {
   type: PopupType;
   data: ConflictZone | Hotspot | Earthquake | WeatherAlert | MilitaryBase | StrategicWaterway | APTGroup | CyberThreat | NuclearFacility | EconomicCenter | GammaIrradiator | Pipeline | UnderseaCable | CableAdvisory | RepairShip | InternetOutage | AIDataCenter | AisDisruptionEvent | SocialUnrestEvent | AirportDelayAlert | MilitaryFlight | MilitaryVessel | MilitaryFlightCluster | MilitaryVesselCluster | NaturalEvent | Port | Spaceport | CriticalMineralProject | StartupHub | CloudRegion | TechHQ | Accelerator | TechEventPopupData | TechHQClusterData | TechEventClusterData | ProtestClusterData | DatacenterClusterData | TechHubActivity | GeoHubActivity | StockExchangePopupData | FinancialCenterPopupData | CentralBankPopupData | CommodityHubPopupData | IranEventPopupData | GpsJammingPopupData | ScoredFAACamera | LogisticsNode;
   relatedNews?: NewsItem[];
+  /** Explicit access from the map feature drawer; default popup behavior is unchanged. */
+  fromFeatureList?: boolean;
   x: number;
   y: number;
 }
@@ -159,6 +161,7 @@ export interface PopupData {
 export class MapPopup {
   private container: HTMLElement;
   private popup: HTMLElement | null = null;
+  private featureListInvoker: HTMLElement | null = null;
   private onClose?: () => void;
   private cableAdvisories: CableAdvisory[] = [];
   private repairShips: RepairShip[] = [];
@@ -175,6 +178,9 @@ export class MapPopup {
 
   public show(data: PopupData): void {
  this.hide();
+ const invoker = document.activeElement;
+ this.featureListInvoker = data.fromFeatureList && invoker instanceof HTMLElement && invoker !== document.body
+ ? invoker : null;
 
  this.isMobileSheet = isMobileDevice();
  this.popup = document.createElement('div');
@@ -182,6 +188,7 @@ export class MapPopup {
  if (this.isMobileSheet) popupClasses.push('map-popup-sheet');
  if (data.type === 'faaCamera') popupClasses.push('map-popup-faa-camera');
  if (data.type === 'lifeline') popupClasses.push('map-popup-lifeline');
+ if (data.fromFeatureList) popupClasses.push('map-popup-from-features');
  this.popup.className = popupClasses.join(' ');
 
  const content = this.renderContent(data);
@@ -202,6 +209,9 @@ export class MapPopup {
 
  // Append to body to avoid container overflow clipping
  document.body.append(this.popup);
+ if (data.fromFeatureList) {
+ this.popup.querySelector<HTMLButtonElement>('.popup-close')?.focus({ preventScroll: true });
+ }
 
  if (data.type === 'faaCamera') {
  void this.loadFAACameraFrame(data.data as ScoredFAACamera);
@@ -355,6 +365,8 @@ export class MapPopup {
   };
 
   public hide(): void {
+ const restoreFocus = this.popup?.contains(document.activeElement) ? this.featureListInvoker : null;
+ this.featureListInvoker = null;
  this.frameResolveController?.abort();
  this.frameResolveController = null;
 
@@ -376,6 +388,7 @@ export class MapPopup {
  document.removeEventListener('click', this.handleOutsideClick);
  document.removeEventListener('touchstart', this.handleOutsideClick);
  document.removeEventListener('keydown', this.handleEscapeKey);
+ if (restoreFocus?.isConnected) restoreFocus.focus({ preventScroll: true });
  this.onClose?.();
  }
   }

@@ -6,6 +6,7 @@ import './styles/modes.css';
 import './styles/window-chrome.css';
 import './styles/home-shell.css';
 import './styles/library.css';
+import './styles/map-feature-list.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as Sentry from '@sentry/browser';
 import { inject } from '@vercel/analytics';

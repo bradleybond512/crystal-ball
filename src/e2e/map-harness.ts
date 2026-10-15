@@ -1,5 +1,19 @@
 import 'maplibre-gl/dist/maplibre-gl.css';
-import '../styles/main.css';
+// Preserve legacy screenshot styling; clarity fixtures reproduce main.ts's
+// layered base and unlayered theme/Home cascade rather than overriding it.
+const clarityMode = new URLSearchParams(location.search).has('map-clarity');
+if (clarityMode) {
+  await import('../styles/base-layer.css');
+  await import('../styles/happy-theme.css');
+  await import('../styles/gods-eye-4d.css');
+  await import('../styles/modes.css');
+  await import('../styles/window-chrome.css');
+  await import('../styles/home-shell.css');
+  await import('../styles/library.css');
+  await import('../styles/map-feature-list.css');
+} else {
+  await import('../styles/main.css');
+}
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { DeckGLMap } from '../components/DeckGLMap';
 import {
@@ -46,6 +60,11 @@ import type {
 import type { AirportDelayAlert } from '../services/aviation';
 import type { Earthquake } from '../services/earthquakes';
 import type { WeatherAlert } from '../services/weather';
+import type { ScoredFAACamera } from '../services/faa-cameras';
+import { forecastOverlay } from '../services/forecast-overlay';
+import { situationEngine } from '../services/situation-engine';
+import type { Situation } from '../services/situation-types';
+import { resetForecast, updateRegionCount } from '../services/ema-forecast';
 
 type Scenario = 'alpha' | 'beta';
 type HarnessVariant = 'full' | 'tech' | 'finance';
@@ -131,6 +150,45 @@ interface MapHarness {
   projectCoordinate: (lon: number, lat: number) => { x: number; y: number } | null;
   pickLayerAtCoordinate: (lon: number, lat: number) => string | null;
   destroy: () => void;
+  seedMapClarityScenario: () => void;
+  seedMapClarityDatacenters: () => void;
+  enableMapClarityHeatScenario: () => void;
+  refreshMapClarityScenario: (removeSelected?: boolean) => void;
+  getMapClaritySnapshot: () => MapClaritySnapshot;
+}
+
+interface ClarityLayerItem {
+  id?: string;
+  memberIds: string[];
+  center?: number[];
+  count?: number;
+  label?: string;
+}
+
+interface MapClaritySnapshot {
+  sourceCameraIds: string[];
+  sourceSituationIds: string[];
+  sourceInputsUnchanged: boolean;
+  layerIds: string[];
+  cameraItems: ClarityLayerItem[];
+  forecastRegions: { id: string; radius: number; label: string; geometry?: string }[];
+  forecastPoints: ClarityLayerItem[];
+  labels: unknown[];
+  features: { id: string; kind?: string; title?: string }[];
+  selectedId: string | null;
+  warning: { count: number; polygon: unknown; fill: unknown; stroke: unknown; pickable: boolean; index: number } | null;
+  camera: CameraState | null;
+  focusMoves: number;
+  preferenceSnapshot: string;
+  preferencesUnchanged: boolean;
+  pointerClicks: string[];
+  sourceDatacenterIds: string[];
+  datacenterItems: ClarityLayerItem[];
+  contextStyles: {
+    id: string; radiusUnits?: unknown; radii: unknown[]; fills: unknown[]; sizes: unknown[];
+    radiusPixels?: unknown; opacity?: unknown; intensity?: unknown;
+    points: { position: unknown; weight: unknown }[];
+  }[];
 }
 
 declare global {
@@ -147,9 +205,9 @@ if (!app) {
   throw new Error('Missing #app container for map harness');
 }
 
-app.style.width = localBaselineMode ? '100vw' : '1280px';
-app.style.height = localBaselineMode ? '100vh' : '720px';
-if (localBaselineMode) app.style.top = '0';
+app.style.width = localBaselineMode || clarityMode ? '100vw' : '1280px';
+app.style.height = localBaselineMode || clarityMode ? '100vh' : '720px';
+if (localBaselineMode || clarityMode) app.style.top = '0';
 app.style.position = 'relative';
 app.style.margin = '0 auto';
 
@@ -333,10 +391,23 @@ const map = new DeckGLMap(app, {
   zoom: 5,
   pan: { x: 0, y: 0 },
   view: 'global',
-  layers: localBaselineMode ? allLayersDisabled : allLayersEnabled,
+  layers: localBaselineMode || clarityMode ? allLayersDisabled : allLayersEnabled,
   // Keep harness deterministic regardless of wall-clock date.
   timeRange: 'all',
 });
+
+if (clarityMode && new URLSearchParams(location.search).has('home')) {
+  // Production creates the map/panel before Home mounts and adopts the map.
+  // Retain that sibling order and the real Home stacking context.
+  const home = document.createElement('div');
+  home.className = 'home-shell';
+  const slot = document.createElement('div');
+  slot.className = 'home-shell-map';
+  app.classList.add('map-container');
+  home.append(slot);
+  document.body.append(home);
+  slot.append(app);
+}
 
 if (localBaselineMode) map.setOnCountryClick((country) => countryClicks.push(country));
 
@@ -354,7 +425,22 @@ const internals = map as unknown as {
   serverBases?: typeof MILITARY_BASES;
   serverBasesLoaded?: boolean;
   _mapFpsAppRepaintCount?: number;
+  mapFeatures?: { id: string; family?: string; title?: string }[];
+  selectedMapFeatureId?: string | null;
+  state?: { layers: MapLayers };
+  handleClick?: (info: { object?: unknown; layer?: { id?: string } }) => void;
+  rebuildDatacenterSupercluster?: () => void;
+  datacenterClusterMemberIds?: (cluster: unknown) => string[];
 };
+
+const clarityPointerClicks: string[] = [];
+if (clarityMode && internals.handleClick) {
+  const handleClick = internals.handleClick.bind(map);
+  internals.handleClick = info => {
+    clarityPointerClicks.push(info.layer?.id ?? 'no-layer');
+    handleClick(info);
+  };
+}
 
 const buildLayerState = (enabledLayers: HarnessLayerKey[]): MapLayers => {
   const next: MapLayers = { ...allLayersDisabled };
@@ -1132,7 +1218,7 @@ const seedAllDynamicData = (): void => {
   internals.aptGroupsLoaded = true;
   internals.serverBases = [...MILITARY_BASES];
   internals.serverBasesLoaded = true;
-  map.setLayers(localBaselineMode ? allLayersDisabled : allLayersEnabled);
+  map.setLayers(localBaselineMode || clarityMode ? allLayersDisabled : allLayersEnabled);
   map.setZoom(5);
   map.setEarthquakes(earthquakes);
   map.setWeatherAlerts(weather);
@@ -1273,6 +1359,7 @@ const hideBasemapLayers = (): void => {
   try {
  for (const layer of maplibreMap.getStyle().layers ?? []) {
  if (layer.type === 'background') continue;
+ if (clarityMode && ['country-baseline-land', 'country-baseline-border'].includes(layer.id)) continue;
  maplibreMap.setLayoutProperty(layer.id, 'visibility', 'none');
  }
   } catch {
@@ -1287,6 +1374,190 @@ const enableDeterministicVisualMode = (): void => {
   makeNewsLocationsNonRecent();
   map.render();
   deterministicVisualModeEnabled = true;
+};
+
+// These are in-memory boundary fixtures, never provider calls or persisted engine
+// observations. They intentionally work with the accepted renderer too, so a
+// clean production reversion can capture the actual pre-fix presentation.
+let clarityCameras: ScoredFAACamera[] = [];
+let claritySituations: Situation[] = [];
+let clarityWeather: WeatherAlert[] = [];
+let clarityInputsBefore = '';
+let clarityPreferenceSnapshot = '';
+let clarityFocusMoves = 0;
+let clarityFocusWrapped = false;
+const clarityPreferences = (): string => JSON.stringify({
+  basemap: localStorage.getItem('wm-basemap'),
+  layers: internals.state?.layers,
+});
+const clarityInputSnapshot = (): string => JSON.stringify({
+  cameras: clarityCameras,
+  situations: claritySituations,
+  weather: clarityWeather,
+  datacenters: AI_DATA_CENTERS,
+});
+
+const claritySituation = (id: string, title: string, confidence: number, lon: number, lat: number, label = ''): Situation => ({
+  id, title, confidence, summary: 'Sanitized deterministic map fixture.',
+  phase: 'active', domain: 'infrastructure',
+  geo: { kind: 'point', basis: 'reported-event', lat, lon, label, countries: ['US'], radiusKm: 0 },
+  signalIds: [], signals: [], domainDiversity: 1, evidence: null,
+  scenarios: [], actions: [], causalChainId: null,
+  firstSeen: Date.parse('2026-10-15T00:00:00Z'), lastUpdated: Date.parse('2026-10-15T00:00:00Z'),
+  latestEventAt: Date.parse('2026-10-15T00:00:00Z'), reassessmentCount: 0,
+});
+
+const seedMapClarityScenario = (): void => {
+  const camera = (id: string, lon: number, lat: number, nearAlert = false): ScoredFAACamera => ({
+    id, name: `Fixture camera ${id}`, lon, lat, state: 'US', category: 'airport',
+    imageUrl: 'https://fixture.invalid/camera-image-never-requested.jpg', isOnline: true,
+    lastUpdated: '2026-10-15T00:00:00Z', alertProximityMi: nearAlert ? 3 : null,
+    alertLabel: nearAlert ? 'NWS Fixture urgent warning' : null,
+    relevanceScore: nearAlert ? 60 : 20, aiConditions: null,
+  });
+  clarityCameras = [
+    ...Array.from({ length: 305 }, (_, i) => camera(`grid-${String(i).padStart(3, '0')}`, -124 + (i % 25) * 2.2, 26 + Math.floor(i / 25) * 1.8)),
+    ...Array.from({ length: 205 }, (_, i) => camera(`coincident-${String(i).padStart(3, '0')}`, -87.63, 41.88)),
+    camera('zero-latitude', -80, 0), camera('zero-longitude', 0, 35),
+    camera('near-alert', -104.99, 39.74, true), camera('isolated', -155, 60),
+  ];
+  claritySituations = [
+    claritySituation('point-060', 'Harbor infrastructure report', 0.60, -118.25, 34.05),
+    claritySituation('point-035', 'Transport continuity report', 0.35, -118.25, 34.05),
+    claritySituation('point-039', 'Utility service report', 0.39, -118.25, 34.05, '   '),
+    claritySituation('point-east', 'East coast service report', 0.8, -74, 40.7, 'New York'),
+  ];
+  clarityWeather = [{
+    id: 'fixture-extreme-warning', event: 'Tornado Warning', severity: 'Extreme',
+    headline: 'Fixture urgent warning', description: 'Deterministic warning; no live alert.',
+    areaDesc: 'Fixture warning area', onset: new Date('2026-10-15T00:00:00Z'),
+    expires: new Date('2099-10-15T00:00:00Z'),
+    coordinates: [[-106, 38.7], [-104, 38.7], [-104, 40.7], [-106, 40.7], [-106, 38.7]],
+    centroid: [-104.99, 39.74], ugcZones: [],
+  }];
+  (situationEngine as unknown as { situations: Situation[] }).situations = claritySituations;
+  resetForecast();
+  for (let i = 0; i < 3; i++) updateRegionCount('North America', 10);
+  forecastOverlay.invalidate();
+  clarityInputsBefore = clarityInputSnapshot();
+  clarityFocusMoves = 0;
+  if (internals.maplibreMap && !clarityFocusWrapped) {
+    const nativeMap = internals.maplibreMap;
+    const flyTo = nativeMap.flyTo.bind(nativeMap);
+    nativeMap.flyTo = (...args: Parameters<MapLibreMap['flyTo']>): MapLibreMap => {
+      clarityFocusMoves++;
+      return flyTo(...args);
+    };
+    clarityFocusWrapped = true;
+  }
+  map.setFAACameras(clarityCameras);
+  map.setWeatherAlerts(clarityWeather);
+  setLayersForSnapshot(['forecastOverlay', 'faaWeatherCams', 'weather', 'datacenters']);
+  enableDeterministicVisualMode();
+  setCamera({ lon: -101, lat: 39, zoom: 3.3 });
+  clarityPreferenceSnapshot = clarityPreferences();
+};
+
+const refreshMapClarityScenario = (removeSelected = false): void => {
+  const selected = internals.selectedMapFeatureId;
+  const cameras = [...clarityCameras].reverse().filter(item => !removeSelected || `camera:${item.id}` !== selected);
+  const situations = [...claritySituations].reverse().filter(item => !removeSelected || `forecast:situation:${item.id}` !== selected);
+  (situationEngine as unknown as { situations: Situation[] }).situations = situations;
+  forecastOverlay.invalidate();
+  map.setFAACameras(cameras);
+  map.render();
+};
+
+const seedMapClarityDatacenters = (): void => {
+  if (!AI_DATA_CENTERS.some(item => item.id.startsWith('fixture-coincident-'))) {
+    AI_DATA_CENTERS.push(...Array.from({ length: 205 }, (_, i) => ({
+      ...AI_DATA_CENTERS[0]!, id: `fixture-coincident-${String(i).padStart(3, '0')}`,
+      name: `Fixture data center ${String(i).padStart(3, '0')}`, owner: 'Fixture owner',
+      country: 'Fixture region', lon: -30, lat: 0, status: 'existing' as const,
+      chipCount: 12345, chipType: 'Fixture GPU', powerMW: 42, sector: 'Fixture research',
+    })));
+  }
+  clarityInputsBefore = clarityInputSnapshot();
+  internals.rebuildDatacenterSupercluster?.();
+  setLayersForSnapshot(['datacenters']);
+  clarityPreferenceSnapshot = clarityPreferences();
+  map.render();
+};
+
+const enableMapClarityHeatScenario = (): void => {
+  map.setClimateAnomalies([
+    { zone: 'Fixture warm zone', lon: -112, lat: 36, tempDelta: 3, precipDelta: 10, severity: 'moderate', type: 'warm', period: 'fixture' },
+    { zone: 'Fixture wet zone', lon: -90, lat: 32, tempDelta: -2, precipDelta: 20, severity: 'moderate', type: 'wet', period: 'fixture' },
+  ]);
+  setLayersForSnapshot(['forecastOverlay', 'faaWeatherCams', 'weather', 'datacenters', 'climate', 'threatHeatmap']);
+  clarityPreferenceSnapshot = clarityPreferences();
+};
+
+const getMapClaritySnapshot = (): MapClaritySnapshot => {
+  interface InspectableLayer { id: string; props?: Record<string, unknown> }
+  const layers = (internals.buildLayers?.() ?? []) as InspectableLayer[];
+  const items = (id: string): Record<string, unknown>[] => {
+    const data = layers.find(layer => layer.id === id)?.props?.data;
+    return Array.isArray(data) ? data as Record<string, unknown>[] : [];
+  };
+  const summarize = (item: Record<string, unknown>): ClarityLayerItem => ({
+    id: typeof item.id === 'string' ? item.id : undefined,
+    memberIds: Array.isArray(item.memberIds) ? item.memberIds as string[] : [],
+    center: Array.isArray(item.center) ? item.center as number[] : undefined,
+    count: typeof item.count === 'number' ? item.count : undefined,
+    label: typeof item.label === 'string' ? item.label : undefined,
+  });
+  const warningIndex = layers.findIndex(layer => layer.id === 'weather-polygons-layer');
+  const warningLayer = layers[warningIndex];
+  const warningData = items('weather-polygons-layer');
+  const value = (name: string, item: unknown): unknown => {
+    const accessor = warningLayer?.props?.[name];
+    return typeof accessor === 'function' ? (accessor as (datum: unknown) => unknown)(item) : accessor;
+  };
+  const contextIds = new Set(['faa-cameras', 'datacenters-layer', 'datacenter-clusters-layer', 'forecast-overlay-layer', 'forecast-overlay-points', 'climate-heatmap-layer', 'threat-heatmap-layer']);
+  const nativeMap = internals.maplibreMap;
+  const center = nativeMap?.getCenter();
+  return {
+    sourceCameraIds: clarityCameras.map(item => `camera:${item.id}`).sort(),
+    sourceSituationIds: claritySituations.map(item => `forecast:situation:${item.id}`).sort(),
+    sourceDatacenterIds: AI_DATA_CENTERS.filter(item => item.status !== 'decommissioned').map(item => `datacenter:${item.id}`).sort(),
+    sourceInputsUnchanged: clarityInputsBefore === clarityInputSnapshot(),
+    layerIds: layers.map(layer => layer.id),
+    cameraItems: items('faa-cameras').map(summarize),
+    datacenterItems: items('datacenter-clusters-layer').map(item => ({
+      ...summarize(item), center: [Number(item.lon), Number(item.lat)],
+      memberIds: internals.datacenterClusterMemberIds?.(item) ?? [],
+    })),
+    forecastRegions: forecastOverlay.getRegions().map(region => ({ id: region.id, radius: region.radius, label: region.label, geometry: region.geometry })),
+    forecastPoints: items('forecast-overlay-points').map(summarize),
+    labels: items('map-context-labels'),
+    features: (internals.mapFeatures ?? []).map(item => ({ id: item.id, kind: item.family, title: item.title })),
+    selectedId: internals.selectedMapFeatureId ?? null,
+    warning: warningData.length > 0 ? {
+      count: warningData.length, polygon: value('getPolygon', warningData[0]),
+      fill: value('getFillColor', warningData[0]), stroke: value('getLineColor', warningData[0]),
+      pickable: warningLayer?.props?.pickable === true, index: warningIndex,
+    } : null,
+    camera: center && nativeMap ? { lon: center.lng, lat: center.lat, zoom: nativeMap.getZoom() } : null,
+    focusMoves: clarityFocusMoves,
+    preferenceSnapshot: clarityPreferences(),
+    preferencesUnchanged: clarityPreferenceSnapshot === clarityPreferences(),
+    pointerClicks: [...clarityPointerClicks],
+    contextStyles: layers.filter(layer => contextIds.has(layer.id)).map(layer => {
+      const data = items(layer.id);
+      const prop = (name: string, datum: unknown): unknown => {
+        const accessor = layer.props?.[name];
+        return typeof accessor === 'function' ? (accessor as (row: unknown) => unknown)(datum) : accessor;
+      };
+      return {
+        id: layer.id, radiusUnits: layer.props?.radiusUnits,
+        radii: data.map(datum => prop('getRadius', datum)), fills: data.map(datum => prop('getFillColor', datum)),
+        sizes: data.map(datum => prop('getSize', datum)), radiusPixels: layer.props?.radiusPixels,
+        opacity: layer.props?.opacity, intensity: layer.props?.intensity,
+        points: data.map(datum => ({ position: prop('getPosition', datum), weight: prop('getWeight', datum) })),
+      };
+    }),
+  };
 };
 
 const prepareVisualScenario = (scenarioId: string): boolean => {
@@ -1419,6 +1690,11 @@ window.__mapHarness = {
   getProtestClusterCount,
   getOverlaySnapshot,
   getCyberTooltipHtml,
+  seedMapClarityScenario,
+  seedMapClarityDatacenters,
+  enableMapClarityHeatScenario,
+  refreshMapClarityScenario,
+  getMapClaritySnapshot,
   getBaselineSnapshot: (): BaselineSnapshot | null => {
     const nativeMap = internals.maplibreMap;
     if (!nativeMap) return null;

@@ -1103,6 +1103,14 @@ Evidence: #1735 — [focus regression and mutation results](validation/UX-060-ON
 Acceptance: first-run Welcome retains keyboard focus against digest handlers and late results. Skip proactive digest on the onboarding boot; preserve explicit post-onboarding opening, focus restoration and cancellation. No automatic resume queue.
 Validation: focused 36/0, existing digest 115/0, final Home browser 6/0, twelve applied mutation runs, types and named gate. Earlier browser readiness failures remain documented; native acceptance is not claimed. Independent and substantive Claude review found no blocking findings; final integration verdict and required CI govern merge.
 
+### UX-061 — Truthful, restrained map presentation
+
+Status: IN PROGRESS — approved local candidate; publication claim deferred by explicit user instruction.
+
+Repair point locations rendered as invented 500 km areas, retain all source/member IDs through clustering and selection, and distinguish situation confidence from EMA forecast metrics. Add complete keyboard-accessible member details before reducing persistent labels, cluster routine FAA camera context with zoom, and preserve existing urgent-warning geometry, provider acquisition, user layer/basemap choices and alert behavior. Home/readiness layout and forecast/scoring changes remain outside this task.
+
+Evidence: [bounded map cleanup](validation/MAP-CLARITY-CLEANUP.md). Bradley approved the diagnosis/design, bounded Sonnet medium review, protected delivery and stable-signed installation on October 15. Actual review, merge and installation milestones are recorded only after execution.
+
 ## What was NOT verified
 
 State these as open questions rather than treating them as settled:
@@ -1179,3 +1187,4 @@ Update the row in the same PR that does the work.
 | UX-058 | Account for deferred and updated warnings | NOT STARTED — HIGH ASSURANCE | — |
 | UX-059 | Retain active alerts using authoritative lifecycle evidence | DONE | #1739; [evidence](validation/UX-059-RETENTION.md); ACC-509 integration hold |
 | UX-060 | Preserve onboarding keyboard ownership against proactive digest | DONE | #1735 |
+| UX-061 | Truthful, restrained map presentation | IN PROGRESS | Local only; [bounded evidence](validation/MAP-CLARITY-CLEANUP.md); no PR published |

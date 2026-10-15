@@ -278,7 +278,9 @@
     "test:datacenter-ownership": "tsx --test src/services/datacenter/__tests__/site-zones.test.mts tests/datacenter-site-ownership-runtime.test.mts && node --test tests/datacenter-zone-degrade-wiring.test.mjs",
     "test:untrusted-html": "tsx --import ./tests/panels/register-hook.mjs --test src/services/resource-inventory/__tests__/schema.test.mts src/utils/__tests__/finite-number.test.mts src/components/__tests__/resource-inventory-untrusted.test.mts src/components/__tests__/untrusted-numeric-fields.test.mts",
     "test:evidence-journal": "node --test src-tauri/sidecar/__tests__/evidence-store.test.mjs src-tauri/sidecar/__tests__/evidence-routes.test.mjs tests/evidence-journal-boundary.test.mjs && tsx --test src/services/intelligence/__tests__/evidence-journal.test.mts src/components/__tests__/evidence-journal-view.test.mts src/components/__tests__/evidence-journal-panel.test.mts",
-    "test:forecast-load": "tsx --test src/services/intelligence/__tests__/forecast-calibration-load.test.mts src/services/intelligence/__tests__/forecast-calibration-adapter.test.mts"
+    "test:forecast-load": "tsx --test src/services/intelligence/__tests__/forecast-calibration-load.test.mts src/services/intelligence/__tests__/forecast-calibration-adapter.test.mts",
+    "test:map-clarity": "tsx --test src/components/__tests__/map-clarity-model.test.mts src/components/__tests__/map-feature-list.test.mts && tsx --import ./tests/panels/register-hook.mjs --test --test-force-exit src/components/__tests__/map-popup-faa-camera.test.mts",
+    "test:map-clarity-browser": "playwright test e2e/map-clarity.spec.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",

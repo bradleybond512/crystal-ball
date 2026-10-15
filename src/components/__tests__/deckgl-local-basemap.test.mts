@@ -5,6 +5,8 @@ import '../../../tests/panels/register-hook.mjs';
 import { happyWindow } from '../../../tests/panels/setup-dom.mts';
 
 const { DeckGLMap } = await import('../DeckGLMap.ts');
+const { CameraPresentationIndex } = await import('../map-clarity-model.ts');
+const { forecastOverlay } = await import('../../services/forecast-overlay.ts');
 
 test('default dark and light style shells have only a local ocean background', async () => {
   for (const mode of ['dark', 'light']) {
@@ -27,6 +29,7 @@ function harness() {
   const map = Object.assign(Object.create(DeckGLMap.prototype), {
     container, activeBaseMap: 'dark', countryGeoJsonLoaded: false, countryHoverSetup: true,
     mapStyleGeneration: 0, styleReadyGeneration: -1, mapEventHandlers: [], highlightedCountryCode: null,
+    cameraPresentationIndex: new CameraPresentationIndex(), mapLabelWidths: new Map(), datacenterClusterMembers: new Map(),
     render: () => { renders.push('render'); },
     maplibreMap: {
       isStyleLoaded: () => true,
@@ -226,6 +229,7 @@ test('pending geometry cannot install layers or report ready after the map is de
 test('destroyed maps cannot be repopulated by pending geometry completion', async () => {
   const { map, container, layers, sources } = harness();
   const removals: string[] = [];
+  map.popup = { hide: () => { removals.push('popup'); } };
   map.layerCache = new Map();
   map.maplibreMap.remove = () => { removals.push('map'); };
   map.maplibreMap.off = () => {};
@@ -233,9 +237,67 @@ test('destroyed maps cannot be repopulated by pending geometry completion', asyn
   map.loadCountryBoundaries();
   map.destroy();
   await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.deepEqual(removals, ['map']);
+  assert.deepEqual(removals, ['popup', 'map']);
   assert.equal(container.children.length, 0);
   assert.equal(layers.size, 0);
   assert.equal(sources.size, 0);
   assert.equal(map.countryGeoJsonLoaded, false);
+});
+
+test('convergence context stays subdued while source geography and the existing urgent core remain intact', () => {
+  const map = Object.create(DeckGLMap.prototype);
+  const alerts = [
+    { id: 'urgent', lat: 0, lon: 0, score: 85 },
+    { id: 'elevated', lat: 40, lon: -105, score: 65 },
+    { id: 'routine', lat: 30, lon: 20, score: 35 },
+  ];
+  const snapshot = JSON.stringify(alerts);
+  const [outer, inner] = map.createConvergenceRingsLayers(alerts);
+  assert.equal(outer.props.data, alerts);
+  assert.equal(inner.props.data, alerts);
+  assert.equal(outer.props.radiusUnits, 'meters');
+  assert.deepEqual(outer.props.getPosition(alerts[0]), [0, 0]);
+  assert.equal(outer.props.getRadius(alerts[0]), 182_000);
+  for (const alert of alerts) {
+    assert.ok(outer.props.getFillColor(alert)[3] <= 12, 'context fill stays faint');
+    assert.ok(outer.props.getLineColor(alert)[3] <= 120, 'context outline stays subordinate to the core');
+  }
+  assert.deepEqual(inner.props.getFillColor(alerts[0]), [255, 60, 60, 220]);
+  assert.equal(inner.props.pickable, true);
+  assert.equal(JSON.stringify(alerts), snapshot);
+});
+
+test('hidden forecast layers retain cached details without adding seasonal observation calls and reconcile on re-enable', () => {
+  const { map } = harness();
+  const original = forecastOverlay.getRegions;
+  let calls = 0;
+  forecastOverlay.getRegions = () => { calls++; return []; };
+  Object.assign(map, {
+    state: { zoom: 3, layers: { forecastOverlay: false, faaWeatherCams: false, datacenters: false } },
+    maplibreMap: null, forecastSource: [], datacenterMapFeatures: [],
+    selectedMapFeatureId: 'forecast:situation:cached', mapFeatureListViewKey: '',
+    forecastMapFeatures: [{
+      id: 'forecast:situation:cached', family: 'forecast', title: 'Cached report',
+      center: [0, 0], metrics: [], memberIds: ['forecast:situation:cached'], visible: true,
+    }],
+  });
+  try {
+    for (let iteration = 0; iteration < 3; iteration++) map.refreshMapPresentation();
+    map.setFAACameras([]);
+    map.refreshMapPresentation();
+    assert.equal(calls, 0, 'hidden render, pan and camera refresh paths must not sample the forecast engine');
+    assert.deepEqual(map.mapFeatures.map((feature: { id: string }) => feature.id), ['forecast:situation:cached']);
+    assert.equal(map.mapFeatures[0].visible, false, 'cached forecast details remain readable with the layer hidden');
+    assert.equal(map.selectedMapFeatureId, 'forecast:situation:cached');
+    map.state.layers.forecastOverlay = true;
+    map.refreshMapPresentation();
+    assert.equal(calls, 1, 're-enabling reconciles from the existing getter exactly once per build');
+    assert.deepEqual(map.forecastMapFeatures, [], 'an enabled empty snapshot clears removed reports');
+    assert.equal(map.selectedMapFeatureId, 'forecast:situation:cached', 'removed selection remains explicit to details');
+    map.state.layers.forecastOverlay = false;
+    map.refreshMapPresentation();
+    assert.equal(calls, 1, 'hiding again must not add seasonal observations');
+  } finally {
+    forecastOverlay.getRegions = original;
+  }
 });

@@ -165,3 +165,70 @@ test('closing an FAA map popup aborts an in-flight frame resolve', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+
+function withoutNetwork(operation: () => void): void {
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  globalThis.fetch = (async () => {
+    requests++;
+    return new Response('{}', { status: 200 });
+  }) as typeof fetch;
+  try {
+    operation();
+    assert.equal(requests, 0, 'focus-only viewer tests must never request a camera frame');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+test('the explicit feature viewer is elevated, receives keyboard focus and restores its connected invoker', () => withoutNetwork(() => {
+  const popup = mountPopup();
+  const entry = document.createElement('button');
+  entry.className = 'map-feature-list-entry';
+  document.body.append(entry);
+  entry.focus();
+  popup.show({ type: 'faaCamera', data: { ...CAMERA, imageUrl: '' }, x: 100, y: 100, fromFeatureList: true });
+
+  const viewer = document.querySelector('.map-popup.map-popup-from-features');
+  const close = viewer?.querySelector<HTMLButtonElement>('.popup-close');
+  assert.ok(viewer, 'only the explicit feature route carries the elevated popup class');
+  assert.ok(close);
+  assert.ok(document.activeElement === close, 'keyboard focus enters the viewer');
+  close.click();
+  assert.equal(document.querySelector('.map-popup'), null);
+  assert.ok(document.activeElement === entry, 'closing returns to the connected feature entry');
+}));
+
+test('the default popup keeps its original focus and layer behavior', () => withoutNetwork(() => {
+  const popup = mountPopup();
+  const entry = document.createElement('button');
+  document.body.append(entry);
+  entry.focus();
+  popup.show({ type: 'faaCamera', data: { ...CAMERA, imageUrl: '' }, x: 100, y: 100 });
+  assert.equal(document.querySelector('.map-popup-from-features'), null);
+  assert.ok(document.activeElement === entry, 'ordinary popups do not take focus');
+  const close = document.querySelector<HTMLButtonElement>('.popup-close');
+  assert.ok(close);
+  close.focus();
+  popup.hide();
+  assert.ok(document.activeElement === document.body, 'ordinary popup close has no new focus restoration');
+}));
+
+test('feature viewer close does not take focus back from another control or restore a disconnected invoker', () => withoutNetwork(() => {
+  const popup = mountPopup();
+  const entry = document.createElement('button');
+  const other = document.createElement('input');
+  document.body.append(entry, other);
+  entry.focus();
+  popup.show({ type: 'faaCamera', data: { ...CAMERA, imageUrl: '' }, x: 100, y: 100, fromFeatureList: true });
+  other.focus();
+  popup.hide();
+  assert.ok(document.activeElement === other, 'focus moved outside the viewer remains untouched');
+
+  entry.focus();
+  popup.show({ type: 'faaCamera', data: { ...CAMERA, imageUrl: '' }, x: 100, y: 100, fromFeatureList: true });
+  entry.remove();
+  popup.hide();
+  assert.ok(document.activeElement === document.body, 'a disconnected entry is never focused');
+}));

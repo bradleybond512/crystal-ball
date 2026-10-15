@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import * as geography from '../../src/services/situation-types.ts';
 import type { Situation, SituationGeo } from '../../src/services/situation-types.ts';
+import type { ForecastResult } from '../../src/services/ema-forecast.ts';
 
 function loadService(name: string, dependencies: Record<string, unknown>, globals = {}) {
   const source = readFileSync(new URL(`../../src/services/${name}.ts`, import.meta.url), 'utf8');
@@ -210,24 +211,118 @@ test('personalizer keeps template urgency, scenario gates, ordering and deduplic
   assert.equal(watched[0].urgency, 'immediate');
 });
 
-function forecastOverlay(situations: Situation[]) {
+function forecastOverlay(situations: Situation[], forecasts: ForecastResult[] = []) {
   return loadService('forecast-overlay', {
-    './ema-forecast': { forecastRegions: () => [] },
+    './ema-forecast': { forecastRegions: () => forecasts },
     './situation-engine': { situationEngine: { getActionableSituations: () => situations } },
   });
 }
 
-test('forecast risk circles reject area/display centroids and unknown situation geography', () => {
-  for (const geo of [unknown, area, centroid, { ...context, kind: 'country' } as SituationGeo]) {
+test('forecast overlay rejects area/display centroids, unknown and malformed situation geography', () => {
+  for (const geo of [unknown, area, centroid, { ...context, kind: 'country' } as SituationGeo,
+    { ...point(), lat: Infinity }, { ...point(), lat: 91 }, { ...point(), lon: NaN }, { ...point(), lon: -181 }]) {
     assert.equal(forecastOverlay([situation('no-affected-point', geo)]).buildForecastOverlay().length, 0, geo.kind);
   }
 });
 
-test('forecast risk circles retain a reported point at zero coordinates', () => {
-  const regions = forecastOverlay([situation('zero', point())]).buildForecastOverlay();
+test('forecast overlay retains a zero-radius reported point at zero coordinates without inventing an area', () => {
+  const regions = forecastOverlay([situation('zero', { ...point(), radiusKm: 0 })]).buildForecastOverlay();
   assert.equal(regions.length, 1);
   assert.equal(regions[0].id, 'sit-zero');
   assert.deepEqual(plain(regions[0].center), [0, 0]);
   assert.equal(regions[0].riskScore, 80);
-  assert.equal(regions[0].radius, 500);
+  assert.equal(regions[0].radius, 0);
+  assert.equal(regions[0].geometry, 'point');
+  assert.equal(regions[0].radiusBasis, 'reported');
+  assert.deepEqual(plain(regions[0].contributions), [
+    { kind: 'situation', id: 'zero', title: 'zero', confidence: 0.8, center: [0, 0], radius: 0 },
+  ]);
+});
+
+test('forecast overlay preserves genuine reported radii and normalizes unusable radii to points', () => {
+  const region = forecastOverlay([situation('regional', { ...point(34, -118), radiusKm: 75 })]).buildForecastOverlay()[0];
+  assert.equal(region.radius, 75);
+  assert.equal(region.geometry, 'radius');
+  assert.equal(region.radiusBasis, 'reported');
+  assert.equal(region.contributions[0].radius, 75);
+  for (const radiusKm of [-50, NaN, Infinity]) {
+    const pointRegion = forecastOverlay([situation('unusable-radius', { ...point(), radiusKm })]).buildForecastOverlay()[0];
+    assert.equal(pointRegion.radius, 0);
+    assert.equal(pointRegion.geometry, 'point');
+    assert.equal(pointRegion.contributions[0].radius, 0);
+  }
+});
+
+test('forecast labels identify situation confidence and supply nonblank names', () => {
+  for (const [title, expected] of [['  Flood watch  ', 'Flood watch'], ['   ', 'Reported situation']]) {
+    const service = forecastOverlay([{ ...situation('unnamed', { ...point(), label: '  ', radiusKm: 0 }), title }]);
+    const region = service.buildForecastOverlay()[0];
+    assert.equal(region.label, expected);
+    assert.equal(region.contributions[0].title, expected);
+    assert.equal(service.formatRegionLabel(region), `${expected} · confidence 80% ↑`);
+  }
+});
+
+function ema(region = 'North America', risk24h = 40): ForecastResult {
+  return { region, risk24h, deviation: 1.25, trending: 'stable', currentCount: 10, ema: 8, seasonalAnomaly: false };
+}
+
+test('EMA forecast retains regional context geometry and its original score provenance', () => {
+  const service = forecastOverlay([], [ema()]);
+  const [region] = service.buildForecastOverlay();
+  assert.equal(region.id, 'ema-north america');
+  assert.deepEqual(plain(region.center), [-100, 45]);
+  assert.equal(region.radius, 500);
+  assert.equal(region.geometry, 'radius');
+  assert.equal(region.radiusBasis, 'regional-context');
+  assert.deepEqual(plain(region.contributions), [
+    { kind: 'ema', id: 'ema-north america', label: 'North America', riskScore: 40, center: [-100, 45], radius: 500 },
+  ]);
+  assert.equal(service.formatRegionLabel(region), 'North America · EMA forecast 40/100 →');
+});
+
+test('EMA merge preserves legacy calculations and every unique member at its original geometry', () => {
+  const first = situation('coastal', { ...point(34, -118), label: 'North America', radiusKm: 0 });
+  const second = { ...situation('inland', { ...point(39, -105), label: 'North America', radiusKm: 25 }, 'cyber'), confidence: 0.6 };
+  const service = forecastOverlay([first, second, first], [ema()]);
+  const regions = service.buildForecastOverlay();
+  assert.equal(regions.length, 1);
+  const [region] = regions;
+  assert.equal(region.id, 'ema-north america');
+  assert.deepEqual(plain(region.center), [-100, 45]);
+  assert.equal(region.riskScore, 80);
+  assert.equal(region.velocity, 1.25);
+  assert.equal(region.trend, 'stable');
+  assert.deepEqual(plain(region.domains), ['infrastructure', 'natural_hazard', 'cyber']);
+  assert.equal(region.radius, 500);
+  assert.equal(region.geometry, 'radius');
+  assert.equal(region.radiusBasis, 'regional-context');
+  assert.deepEqual(plain(region.contributions), [
+    { kind: 'ema', id: 'ema-north america', label: 'North America', riskScore: 40, center: [-100, 45], radius: 500 },
+    { kind: 'situation', id: 'coastal', title: 'coastal', confidence: 0.8, center: [-118, 34], radius: 0 },
+    { kind: 'situation', id: 'inland', title: 'inland', confidence: 0.6, center: [-105, 39], radius: 25 },
+  ]);
+  assert.equal(service.formatRegionLabel(region), 'North America · EMA forecast 40/100 + 2 reported situations →');
+});
+
+test('coincident distinct situations retain separate identities and original confidence values', () => {
+  const first = { ...situation('first', { ...point(34, -118), radiusKm: 0 }), confidence: 0.6 };
+  const second = { ...situation('second', { ...point(34, -118), radiusKm: 0 }), confidence: 0.35 };
+  const regions = forecastOverlay([second, first, first]).buildForecastOverlay();
+  assert.deepEqual(plain(regions.map((region: any) => [region.id, region.riskScore, region.velocity, region.trend])), [
+    ['sit-first', 60, 0.5, 'rising'], ['sit-second', 35, 0.5, 'rising'],
+  ]);
+  assert.deepEqual(plain(regions.flatMap((region: any) => region.contributions.map((member: any) => [member.id, member.confidence]))), [
+    ['first', 0.6], ['second', 0.35],
+  ]);
+});
+
+test('forecast projection retains existing thresholds and descending legacy score ordering', () => {
+  const belowThreshold = { ...situation('excluded', point()), confidence: 0.29 };
+  const threshold = { ...situation('threshold', point()), confidence: 0.3 };
+  const above = { ...situation('above', point()), confidence: 0.8 };
+  const regions = forecastOverlay([threshold, belowThreshold, above], [ema('North America', 19), ema('East Asia', 40)]).buildForecastOverlay();
+  assert.deepEqual(plain(regions.map((region: any) => [region.id, region.riskScore])), [
+    ['sit-above', 80], ['ema-east asia', 40], ['sit-threshold', 30],
+  ]);
 });

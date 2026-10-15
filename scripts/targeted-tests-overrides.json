@@ -240,7 +240,9 @@
     "test:imessage"
   ],
   "src/main.ts": [
-    "test:imessage"
+    "test:imessage",
+    "test:map-clarity",
+    "test:map-compatibility"
   ],
   "src-tauri/src/sidecar_supervisor.rs": [
     "test:sidecar-supervisor"
@@ -715,5 +717,24 @@
   ],
   "tests/workflow-expression-runtime.test.mjs": [
     "test:workflow-security"
+  ],
+  "src/components/map-clarity-model.ts": [
+    "test:map-clarity"
+  ],
+  "src/components/MapFeatureList.ts": [
+    "test:map-clarity"
+  ],
+  "src/styles/map-feature-list.css": [
+    "test:map-clarity"
+  ],
+  "src/components/DeckGLMap.ts": [
+    "test:map-clarity",
+    "test:local-basemap",
+    "test:map-compatibility"
+  ],
+  "src/components/MapPopup.ts": [
+    "test:lifelines-map",
+    "test:map-clarity",
+    "test:untrusted-html"
   ]
 }

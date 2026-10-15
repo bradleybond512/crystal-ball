@@ -1105,11 +1105,11 @@ Validation: focused 36/0, existing digest 115/0, final Home browser 6/0, twelve 
 
 ### UX-061 — Truthful, restrained map presentation
 
-Status: IN PROGRESS — approved local candidate; publication claim deferred by explicit user instruction.
+Status: DONE — focused implementation in #1802; final SHA-pinned review and required CI govern merge. Installed macOS acceptance is recorded separately after execution.
 
 Repair point locations rendered as invented 500 km areas, retain all source/member IDs through clustering and selection, and distinguish situation confidence from EMA forecast metrics. Add complete keyboard-accessible member details before reducing persistent labels, cluster routine FAA camera context with zoom, and preserve existing urgent-warning geometry, provider acquisition, user layer/basemap choices and alert behavior. Home/readiness layout and forecast/scoring changes remain outside this task.
 
-Evidence: [bounded map cleanup](validation/MAP-CLARITY-CLEANUP.md). Bradley approved the diagnosis/design, bounded Sonnet medium review, protected delivery and stable-signed installation on October 15. Actual review, merge and installation milestones are recorded only after execution.
+Evidence: #1802 — [bounded map cleanup](validation/MAP-CLARITY-CLEANUP.md). The affected gate passed with 27/0 model/widget, 7/0 popup, 124/0 geography/ACC-509, 17/0 local-map and six real-renderer browser cases; 45 clean applied mutation proofs restored exactly. Independent Sol medium and Sonnet medium review of the source/evidence candidate found no blocking findings. Final documentation, verdict, required CI and installed macOS acceptance remain separately SHA-pinned; no native WebKit or VoiceOver result is claimed here.
 
 ## What was NOT verified
 
@@ -1187,4 +1187,4 @@ Update the row in the same PR that does the work.
 | UX-058 | Account for deferred and updated warnings | NOT STARTED — HIGH ASSURANCE | — |
 | UX-059 | Retain active alerts using authoritative lifecycle evidence | DONE | #1739; [evidence](validation/UX-059-RETENTION.md); ACC-509 integration hold |
 | UX-060 | Preserve onboarding keyboard ownership against proactive digest | DONE | #1735 |
-| UX-061 | Truthful, restrained map presentation | IN PROGRESS | Local only; [bounded evidence](validation/MAP-CLARITY-CLEANUP.md); no PR published |
+| UX-061 | Truthful, restrained map presentation | DONE | #1802; [bounded evidence](validation/MAP-CLARITY-CLEANUP.md); native acceptance recorded separately |

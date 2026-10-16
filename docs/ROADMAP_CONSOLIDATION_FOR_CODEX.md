@@ -87,7 +87,7 @@ never restates a status or a count.
 
 | PR | Scope | Class | Depends on | Bradley gate | Status | PR # |
 |---|---|---|---|---|---|---|
-| RC-1 | Priority-aware next-task selection | Standard | — | D1 | TODO | |
+| RC-1 | Priority-aware next-task selection | Standard | — | D1 | IN_REVIEW | #1804 |
 | RC-2 | Board triage: priorities, overdue reviews, ACC-008, UX-062, ACC-703 | Standard | RC-1 | D1, D2, D3 | TODO | |
 | RC-3 | Public-repo hygiene | Standard | Consumer/backup review | D1, D5 before changes | TODO | |
 | RC-4 | Slim both boards | Standard | RC-2 | D1 | TODO | |

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -80,6 +80,70 @@ Dependencies: ACC-502
 Exit condition: ACC-502 is DONE.
 Review after: 2026-09-03
 `;
+
+const PRIORITY_UX = `
+# Usability
+
+- **Status:** ACTIVE
+
+### UX-004 — Fourth
+
+### UX-002 — Second
+
+### UX-003 — Third
+
+### UX-001 — First
+
+## Progress Tracker
+
+| ID | Task | Status | PR |
+|---|---|---|---|
+| UX-004 | Fourth | NOT STARTED | — |
+| UX-002 | Second | NOT STARTED | — |
+| UX-003 | Third | NOT STARTED | — |
+| UX-001 | First | NOT STARTED | — |
+`;
+
+const PRIORITY_ACC = `
+# Accuracy
+
+> Status: ACTIVE
+
+## Phase 0 — Spine
+
+| ID | Status | Work | Evidence |
+|---|---|---|---|
+| ACC-001 | DONE | Spine | PR #10 |
+
+## Phase 5 — Correlation
+
+| ID | Status | Work | Depends on |
+|---|---|---|---|
+| ACC-503 | TODO | Third | — |
+| ACC-502 | TODO | Second | — |
+| ACC-501 | TODO | First | — |
+
+### ACC-503 — Third
+
+Status: \`TODO\`
+
+### ACC-502 — Second
+
+Status: \`TODO\`
+
+### ACC-501 — First
+
+Status: \`TODO\`
+`;
+
+function withPriorities(markdown, priorities) {
+  for (const [id, priority] of Object.entries(priorities)) {
+    const heading = new RegExp(`^### ${id} — .+$`, 'm');
+    assert.match(markdown, heading);
+    markdown = markdown.replace(heading, (line) => `${line}\n\nPriority: ${priority}`);
+  }
+  return markdown;
+}
 
 function parse(ux = UX, acc = ACC) {
   return parseRoadmaps({
@@ -239,6 +303,113 @@ test('parses UX, Phase 0, and Phase 5 tasks into one normalized state', () => {
   assert.deepEqual(state.tasks.find(({ id }) => id === 'UX-000').evidencePrs, [1660]);
 });
 
+test('missing Priority defaults every task, including Phase 0, to C', () => {
+  const state = parse();
+  assert.deepEqual(state.errors, []);
+  assert.ok(state.tasks.every(({ priority }) => priority === 'C'));
+  assert.equal(state.tasks.find(({ id }) => id === 'ACC-001').priority, 'C');
+  const report = reconcileRoadmaps(state, null);
+  assert.deepEqual(report.blocking, []);
+  assert.equal(report.nextEligible.id, 'UX-001');
+  assert.equal(report.nextEligible.priority, 'C');
+});
+
+test('normalizes lowercase and padded Priority metadata and exposes the tier in every report format', () => {
+  const state = parse(
+    withPriorities(UX, { 'UX-000': ' c ', 'UX-001': ' \ts\t ' }),
+    withPriorities(ACC, { 'ACC-501': ' b ', 'ACC-502': ' a ' }),
+  );
+  assert.deepEqual(state.errors, []);
+  for (const [id, priority] of [['UX-000', 'C'], ['UX-001', 'S'], ['ACC-501', 'B'], ['ACC-502', 'A']]) {
+    assert.equal(state.tasks.find((task) => task.id === id).priority, priority);
+  }
+  const report = reconcileRoadmaps(state, null);
+  assert.deepEqual(report.blocking, []);
+  assert.equal(JSON.parse(JSON.stringify(report)).nextEligible.priority, 'S');
+  assert.ok(report.advisory.includes('Next eligible task is UX-001 [S]: Home shell'));
+  assert.ok(renderWatchdog(report).split('\n').includes('**Next eligible task:** UX-001 [S] — Home shell'));
+});
+
+test('invalid enumerants and present empty or whitespace Priority metadata block reconciliation', () => {
+  for (const id of ['UX-001', 'ACC-502']) {
+    for (const priority of ['D', 'P1', 'SS', 'S/A', '', ' \t ']) {
+      const state = id.startsWith('UX')
+        ? parse(withPriorities(UX, { [id]: priority }))
+        : parse(UX, withPriorities(ACC, { [id]: priority }));
+      const error = `${id} has unrecognized priority ${priority.trim().toUpperCase() || '(empty)'}`;
+      assert.ok(state.errors.includes(error), `${id} accepted invalid Priority ${JSON.stringify(priority)}`);
+      assert.ok(reconcileRoadmaps(state, null).blocking.includes(error));
+    }
+  }
+});
+
+test('selects S before A before B before C, ahead of an earlier numeric ID', () => {
+  let ux = withPriorities(PRIORITY_UX, {
+    'UX-001': 'C', 'UX-002': 'B', 'UX-003': 'A', 'UX-004': 'S',
+  });
+  for (const [id, priority, title] of [
+    ['UX-004', 'S', 'Fourth'],
+    ['UX-003', 'A', 'Third'],
+    ['UX-002', 'B', 'Second'],
+    ['UX-001', 'C', 'First'],
+  ]) {
+    const report = reconcileRoadmaps(parse(ux), null);
+    assert.deepEqual(report.blocking, []);
+    assert.equal(report.nextEligible.id, id);
+    assert.equal(report.nextEligible.priority, priority);
+    ux = ux.replace(
+      `| ${id} | ${title} | NOT STARTED |`,
+      `| ${id} | ${title} | IN PROGRESS |`,
+    );
+  }
+});
+
+test('an eligible ACC S outranks UX A, while UX wins within the same tier', () => {
+  for (const [uxPriority, expected] of [['A', 'ACC-502'], ['S', 'UX-001']]) {
+    const state = parse(
+      withPriorities(UX, { 'UX-001': uxPriority }),
+      withPriorities(ACC, { 'ACC-502': 'S' }),
+    );
+    const report = reconcileRoadmaps(state, null);
+    assert.deepEqual(report.blocking, []);
+    assert.equal(report.nextEligible.id, expected);
+    assert.equal(report.nextEligible.priority, 'S');
+  }
+});
+
+test('dependency-blocked and open-claimed S tasks are skipped before tier ranking', () => {
+  const ux = withPriorities(PRIORITY_UX, {
+    'UX-001': 'C', 'UX-002': 'A', 'UX-003': 'S', 'UX-004': 'S',
+  }).replace('### UX-004 — Fourth\n', '### UX-004 — Fourth\n\nDependencies: UX-001\n');
+  const state = parse(ux);
+  assert.deepEqual(state.errors, []);
+  assert.equal(reconcileRoadmaps(state, null).nextEligible.id, 'UX-003');
+  const report = reconcileRoadmaps(state, snapshot([
+    pr(10, 'MERGED', 'ACC-001'),
+    pr(20, 'MERGED', 'ACC-501'),
+    pr(30, 'OPEN', 'Roadmap task: UX-003'),
+  ]), { now: '2026-08-24T12:00:00.000Z', baseBranch: 'main' });
+  assert.deepEqual(report.blocking, []);
+  assert.equal(report.nextEligible.id, 'UX-002');
+  assert.equal(report.nextEligible.priority, 'A');
+});
+
+test('same-tier numeric ties use ascending IDs despite unordered headings, trackers, and mirrors', () => {
+  const ux = withPriorities(PRIORITY_UX, {
+    'UX-004': 'S', 'UX-002': 'S', 'UX-003': 'S', 'UX-001': 'S',
+  });
+  const uxReport = reconcileRoadmaps(parse(ux), null);
+  assert.deepEqual(uxReport.blocking, []);
+  assert.equal(uxReport.nextEligible.id, 'UX-001');
+
+  const acc = withPriorities(PRIORITY_ACC, {
+    'ACC-503': 'S', 'ACC-502': 'S', 'ACC-501': 'S',
+  });
+  const accReport = reconcileRoadmaps(parse(PRIORITY_UX, acc), null);
+  assert.deepEqual(accReport.blocking, []);
+  assert.equal(accReport.nextEligible.id, 'ACC-501');
+});
+
 test('rejects incomplete program structure and COMPLETE programs with unfinished tasks', () => {
   const duplicateUx = UX.replace(
     '### UX-001 — Home shell\n\n',
@@ -295,6 +466,15 @@ test('baseline comparison blocks task deletion and terminal-state mutation', () 
 
   const reopened = parse(UX, ACC.replace('| ACC-001 | DONE | Spine |', '| ACC-001 | TODO | Spine |'));
   assert.ok(compareRoadmaps(baseline, reopened).some((message) => /ACC-001.*terminal.*DONE.*TODO/.test(message)));
+});
+
+test('baseline comparison permits priority-only edits, including terminal tasks', () => {
+  const candidate = parse(
+    withPriorities(UX, { 'UX-000': 'A', 'UX-001': 'S' }),
+    withPriorities(ACC, { 'ACC-501': 'B', 'ACC-502': 'S' }),
+  );
+  assert.deepEqual(candidate.errors, []);
+  assert.deepEqual(compareRoadmaps(parse(), candidate), []);
 });
 
 test('the live posture sequence is machine-blocked behind UX-000 monitoring', () => {
@@ -637,6 +817,31 @@ test('CLI exits 0 offline, 1 for policy drift, and 2 for invalid snapshot input'
   });
   assert.equal(policy.status, 1);
   assert.match(`${policy.stdout}${policy.stderr}`, /Blocking/);
+});
+
+test('CLI accepts every valid priority tier and exits 1 for invalid or empty Priority metadata', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'roadmap-priority-'));
+  mkdirSync(join(dir, 'docs'));
+  writeFileSync(join(dir, 'docs/PREDICTION_ACCURACY_ROADMAP.md'), ACC);
+  for (const priority of ['S', 'A', 'B', 'C', 'D', '', ' \t ']) {
+    writeFileSync(
+      join(dir, 'docs/USABILITY_UPLIFT_FOR_CODEX.md'),
+      withPriorities(UX, { 'UX-001': priority }),
+    );
+    const result = spawnSync(process.execPath, [
+      join(root, 'scripts/roadmap-controller.mjs'), '--format', 'json',
+    ], { cwd: dir, encoding: 'utf8' });
+    const valid = ['S', 'A', 'B', 'C'].includes(priority);
+    assert.equal(result.status, valid ? 0 : 1, `${result.stdout}${result.stderr}`);
+    const report = JSON.parse(result.stdout);
+    if (valid) {
+      assert.deepEqual(report.blocking, []);
+      assert.equal(report.nextEligible.id, 'UX-001');
+      assert.equal(report.nextEligible.priority, priority);
+    } else {
+      assert.ok(report.blocking.some((message) => /UX-001.*priority/i.test(message)));
+    }
+  }
 });
 
 test('CLI exports every PR reference parsed from the real roadmaps for the workflow snapshot', () => {

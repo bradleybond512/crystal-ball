@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 const UX_PATH = 'docs/USABILITY_UPLIFT_FOR_CODEX.md';
 const ACC_PATH = 'docs/PREDICTION_ACCURACY_ROADMAP.md';
 const TASK_ID = /\b(?:UX|ACC)-\d{3}\b/g;
+const PRIORITY_RANK = new Map([['S', 0], ['A', 1], ['B', 2], ['C', 3]]);
 const WAIT_STATUSES = new Set(['WAITING', 'MONITOR', 'BLOCKED']);
 const TERMINAL_STATUSES = new Set(['DONE', 'REJECTED']);
 const EVIDENCE_STATUSES = new Set([...TERMINAL_STATUSES, 'MONITOR']);
@@ -112,6 +113,7 @@ function taskFrom({ id, title, statusText, body = '', evidence = '', source, mir
   return {
     id,
     title,
+    priority: (field(body, 'Priority') ?? 'C').trim().toUpperCase(),
     status: normalized.status,
     rawStatus: normalized.raw,
     highAssurance: normalized.highAssurance,
@@ -146,6 +148,7 @@ function addTask(task, tasks, errors) {
   }
   tasks.set(task.id, task);
   if (!task.status) errors.push(`${task.id} has unrecognized status ${task.rawStatus || '(empty)'}`);
+  if (!PRIORITY_RANK.has(task.priority)) errors.push(`${task.id} has unrecognized priority ${task.priority || '(empty)'}`);
 }
 
 function validateWaitMetadata(task, errors) {
@@ -381,7 +384,9 @@ function eligibleTask(tasks, openClaims) {
     && task.dependencies.every((id) => TERMINAL_STATUSES.has(byId.get(id)?.status))
     && (task.dependencyAnyOf.length === 0
       || task.dependencyAnyOf.some((id) => TERMINAL_STATUSES.has(byId.get(id)?.status))));
-  return eligible.find((task) => task.id.startsWith('UX-')) ?? eligible[0];
+  return eligible.sort((left, right) => PRIORITY_RANK.get(left.priority) - PRIORITY_RANK.get(right.priority)
+    || Number(right.id.startsWith('UX-')) - Number(left.id.startsWith('UX-'))
+    || left.id.localeCompare(right.id))[0];
 }
 
 // Reconciliation deliberately evaluates every task and claim before producing a deterministic report.
@@ -477,7 +482,7 @@ export function reconcileRoadmaps(state, snapshot = null, context = {}) {
 
   const openClaimIds = new Set(claims.keys());
   const nextEligible = eligibleTask(tasks, openClaimIds) ?? null;
-  if (nextEligible) advisory.push(`Next eligible task is ${nextEligible.id}: ${nextEligible.title}`);
+  if (nextEligible) advisory.push(`Next eligible task is ${nextEligible.id} [${nextEligible.priority}]: ${nextEligible.title}`);
   return {
     blocking: [...new Set(blocking)].sort(),
     advisory: [...new Set(advisory)].sort(),
@@ -498,7 +503,7 @@ export function renderWatchdog(report) {
   const counts = Object.entries(report.counts).sort(([left], [right]) => left.localeCompare(right))
     .map(([status, count]) => `${status}: ${count}`).join(' | ');
   const next = report.nextEligible
-    ? `**Next eligible task:** ${report.nextEligible.id} — ${report.nextEligible.title}`
+    ? `**Next eligible task:** ${report.nextEligible.id} [${report.nextEligible.priority}] — ${report.nextEligible.title}`
     : '**Next eligible task:** none';
   const body = [
     '<!-- crystal-ball-roadmap-controller:v1 -->',

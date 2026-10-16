@@ -1,6 +1,6 @@
 # Crystal Ball — Cognitive Enhancement Plan
 
-> Created: 2026-06-10 · Status: PLANNED · Audience: Claude Sonnet implementation sessions
+> Created: 2026-06-10 · Status: ACTIVE — see the Progress Tracker · Audience: Claude Sonnet implementation sessions
 > Planned by: Claude (Opus-class planning session) against the live codebase at v2.25.x
 
 This is both the **feature roadmap** (Part A) and the **technical design**

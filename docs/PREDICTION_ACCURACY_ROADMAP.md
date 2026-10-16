@@ -1,7 +1,7 @@
 # Prediction Accuracy Roadmap
 
 > Status: ACTIVE
-> Updated: 2026-08-04
+> Updated: 2026-10-16
 > Owners: Codex and Claude
 > Scope: Forecast accuracy, outcome resolution, calibration, model comparison,
 > correlation quality, safe promotion, and production monitoring.
@@ -170,7 +170,37 @@ historical versions cannot contaminate current health or tuning.
 | ACC-006 | DONE | Separate runtime from lifecycle and isolate algorithm versions | PR #1511, main `081d9db3` |
 | ACC-007 | DONE | Establish this shared execution roadmap and agent pointers | PR #1512 |
 
-Phase exit: ACC-001 through ACC-007 are on `main`.
+Phase exit: ACC-001 through ACC-007 are on main; ACC-008 refreshes the baseline.
+
+### ACC-008 — Refresh the production baseline
+
+Status: `TODO`
+
+Priority: S
+
+Dependencies: none
+
+Measure the installed app read-only, the way ACC-404 did
+(`scripts/acc404-first-decision.mts` and its decision record), or use the
+latest ACC-702 scheduled evaluation report if it covers every field below.
+Add a new dated table under "Current production baseline" and keep the
+2026-07-26 table unchanged.
+
+- Per forecaster: resolved count (direct and proxy separate), Brier, the
+  ACC-303 paired-baseline Brier, Brier skill, and the ACC-403
+  champion/challenger state.
+- Include an aggregate required-cohort manifest (forecaster, domain, horizon,
+  model/evaluation version) and actual UTC measurement/manifest-recorded
+  timestamps for ACC-703. Identify unavailable metadata explicitly; an
+  incomplete manifest does not qualify a proof window.
+- Aggregates only: no forecast text, entities, places or locations.
+- If neither the installed app nor the report is reachable read-only, stop and
+  hand off to Bradley. Never substitute dev or fixture data.
+- Done when the table, manifest and a decision-log row land, and the PR names
+  the exact command that reproduces the numbers and manifest. Its completion PR must also reassess
+  ACC-601 to ACC-605, record the actual measurement/review UTC date, and set
+  each exact review date no more than 30 days after that assessment, never an
+  unknown future merge date.
 
 ## Phase 1 — Expand authoritative ground truth
 
@@ -1764,6 +1794,8 @@ measuring the wrong boundary.
 
 Status: `TODO`
 
+Priority: A
+
 Dependencies: ACC-501 (DONE)
 
 `reliabilityForRule()` returns a single unconditional multiplier in `[0.5, 1.5]`
@@ -1789,12 +1821,18 @@ the reliability of predictions that resolved under different conditions.
 
 Status: `WAITING`
 
+Priority: A
+
 Dependencies: ACC-505
 
 Exit condition: ACC-505 is `DONE` with its regime-conditional reliability
 contract and fallback threshold verified.
 
-Review after: 2026-09-01
+Review after: 2026-11-15
+
+Reviewed 2026-10-16: ACC-505 remains `TODO`; the merged regime-conditional
+reliability contract and verified fallback threshold are still missing.
+This is a provisional progress reminder; the waiting condition is unchanged.
 
 The `edge-confidence.ts` kernel multiplies six factors —
 `base × temporal × spatial × entity × reliability × regime`, clamped to
@@ -1888,6 +1926,8 @@ Outcome — delivered:
 
 Status: `TODO`
 
+Priority: A
+
 Dependencies: ACC-503 (DONE), ACC-504 (DONE)
 
 ACC-502 through ACC-504 moved the miner's failure mode from false positives to
@@ -1958,6 +1998,8 @@ in UX-059 must coordinate with this store path. No accuracy-gate weakening.
 
 Status: `TODO`
 
+Priority: A
+
 Dependencies: ACC-509
 
 Source: PR1731 M13. High assurance; a keyword spike alone is insufficient to
@@ -1981,7 +2023,17 @@ Dependencies: ACC-204
 Exit condition: The current production cohort contains enough resolved and
 class-balanced evidence to issue a model-readiness verdict for every domain.
 
-Review after: 2026-09-07
+Review after: 2026-11-15
+
+Reviewed 2026-10-16: The ACC-008 production-baseline refresh is still pending;
+refreshed per-domain resolved counts, class balance and model-readiness
+evidence have not been established by this docs-only review. This is a
+provisional reminder, not a predicted completion date or readiness claim.
+
+In ACC-008's completion PR, reassess this task using its measured sample
+counts, record the actual UTC measurement/review date, and set the exact
+`Review after:` date no more than 30 days after that assessment. Refresh
+stale dates before merge; never use an unknown future merge date.
 
 For every domain, report:
 
@@ -2000,7 +2052,18 @@ Dependencies: ACC-601 and at least 200 resolved, class-balanced-enough outcomes
 Exit condition: ACC-601 is `DONE` and records at least 200 resolved outcomes
 with usable class balance for an eligible domain.
 
-Review after: 2026-09-07
+Review after: 2026-11-15
+
+Reviewed 2026-10-16: The ACC-008 production-baseline refresh is still pending
+and ACC-601 remains `WAITING`; this docs-only review does not establish
+200 resolved outcomes with usable class balance for an eligible domain.
+This is a provisional reminder, not a predicted completion date or
+readiness claim.
+
+In ACC-008's completion PR, reassess this task using its measured sample
+counts, record the actual UTC measurement/review date, and set the exact
+`Review after:` date no more than 30 days after that assessment. Refresh
+stale dates before merge; never use an unknown future merge date.
 
 Use regularized or hierarchical logistic prediction with domain/horizon priors.
 It must expose coefficients or feature contributions and run in shadow mode.
@@ -2014,7 +2077,17 @@ Dependencies: ACC-601 and at least 300 timestamped event/censoring records
 Exit condition: ACC-601 is `DONE` and records at least 300 usable timestamped
 event or censoring records.
 
-Review after: 2026-09-07
+Review after: 2026-11-15
+
+Reviewed 2026-10-16: The ACC-008 production-baseline refresh is still pending
+and ACC-601 remains `WAITING`; this docs-only review does not establish
+300 usable timestamped event or censoring records. This is a provisional
+reminder, not a predicted completion date or readiness claim.
+
+In ACC-008's completion PR, reassess this task using its measured sample
+counts, record the actual UTC measurement/review date, and set the exact
+`Review after:` date no more than 30 days after that assessment. Refresh
+stale dates before merge; never use an unknown future merge date.
 
 Use a time-to-event model for questions such as escalation within a horizon.
 Score both occurrence probability and timing. Keep censoring explicit.
@@ -2029,7 +2102,18 @@ positive and 100 negative outcomes in the training cohort
 Exit condition: ACC-601 is `DONE` and records at least 1,000 resolved outcomes,
 including at least 100 outcomes in each class, for an eligible cohort.
 
-Review after: 2026-09-07
+Review after: 2026-11-15
+
+Reviewed 2026-10-16: The ACC-008 production-baseline refresh is still pending
+and ACC-601 remains `WAITING`; this docs-only review does not establish
+1,000 resolved outcomes with at least 100 in each class for an eligible
+cohort. This is a provisional reminder, not a predicted completion date
+or readiness claim.
+
+In ACC-008's completion PR, reassess this task using its measured sample
+counts, record the actual UTC measurement/review date, and set the exact
+`Review after:` date no more than 30 days after that assessment. Refresh
+stale dates before merge; never use an unknown future merge date.
 
 Use only lagged, prediction-time-available features. Compare against the
 regularized model and base rate. Reject it if the added complexity does not
@@ -2044,7 +2128,17 @@ Dependencies: ACC-602 or ACC-604
 Exit condition: ACC-602 or ACC-604 is `DONE` with a frozen comparison cohort
 that can support the ablation.
 
-Review after: 2026-09-07
+Review after: 2026-11-15
+
+Reviewed 2026-10-16: The ACC-008 production-baseline refresh is still pending;
+ACC-602 and ACC-604 remain `WAITING`, so neither a completed eligible
+model nor its frozen comparison cohort is recorded. This is a provisional
+reminder, not a predicted completion date or readiness claim.
+
+In ACC-008's completion PR, reassess this task using its measured sample
+counts, record the actual UTC measurement/review date, and set the exact
+`Review after:` date no more than 30 days after that assessment. Refresh
+stale dates before merge; never use an unknown future merge date.
 
 Compare:
 
@@ -2150,10 +2244,19 @@ Status: `WAITING`
 
 Dependencies: all earlier phases required by the completion definition
 
-Exit condition: All earlier required phases are terminal and a complete 30-day
-production evidence window is available for the closure checks.
+Exit condition: All earlier required phases are terminal and a complete,
+fresh production evidence window spanning at least thirty consecutive days is
+available for every required cohort and the existing closure checks, using the
+post-merge UTC coverage policy below. Early collection alone does not complete
+ACC-703, any correlation task, or ACC-704.
 
-Review after: 2026-09-23
+Review after: 2026-11-15
+
+Reviewed 2026-10-16: Earlier required phases remain nonterminal; the ACC-008
+cohort/version manifest and a complete, fresh qualifying production
+evidence window are not established by this docs-only review. This is a
+provisional progress check, not the end of a future proof window or a
+readiness claim. D3 early collection remains PENDING.
 
 Record:
 
@@ -2162,6 +2265,48 @@ Record:
 - safety recall and lead-time results;
 - provider and outcome-resolution coverage;
 - every promoted and rejected model decision.
+
+Post-merge UTC coverage policy for the later, explicitly authorized evidence task:
+
+- Record the actual UTC RC-2 merge timestamp and the timestamp of the ACC-008
+  aggregate cohort/version manifest. A qualifying window starts at the first
+  UTC Monday 00:00 not earlier than either timestamp or the authorized
+  collection start. Reports generated after merge may contain pre-merge
+  observations; generation time alone never qualifies them. Earlier collection
+  may be retained as context but does not backfill this proof window.
+- ACC-702 emits weekly UTC reports, not daily reports. Use five consecutive
+  complete weekly intervals (35 days) to establish at least 30 days of
+  contiguous coverage. The latest interval must be the most recently ended
+  UTC week at assessment time. Do not count an unfinished boundary week,
+  duplicate interval, gap or missing report; do not create a new daily cadence.
+- Validate the actual reports from the production compiler. Each must have
+  `availability: complete`, fresh observations equal to total observations,
+  no stale/unavailable observations, and cadence coverage meeting the existing
+  ACC-702 compiler thresholds. A file's existence or `period.complete: true`
+  is insufficient: the compiler also persists partial/unavailable reports and
+  sets that period flag independently of observation completeness.
+- Cover every required forecaster/domain/horizon cohort and model version in
+  the ACC-008 manifest. Explain additions, removals and version transitions;
+  restart the affected cohort's qualifying window after a version or material
+  monitoring-policy change. Partial/unavailable weeks or gaps break continuity.
+  Preserve the completion definition's no-overdue-resolver requirement for
+  seven consecutive days and no unexplained prediction cohort loss, together
+  with all other closure evidence and promotion/rejection gates.
+- If the available aggregates cannot prove a cohort, freshness, resolver or
+  coverage condition, leave the proof incomplete and identify the missing
+  evidence. Do not infer health from missing fields, fabricate results or
+  change the collector, providers or reporting schema in this docs-only PR.
+  Any additional access, collection or implementation needs its own approval.
+
+D3 early collection remains PENDING. These RC-2 document edits do not collect
+anything, create schedules, call providers or authorize new access. Early
+collection can start only after Bradley separately authorizes it.
+
+In the later authorized ACC-703 evidence-update PR, record the actual
+qualifying start/end and assessment date, and refresh the exact review date
+to no more than 30 days after that assessment if proof is still incomplete.
+Refresh stale dates before merge. Never guess a merge date or mark the task
+done merely because time passed.
 
 ### ACC-704 — Close and archive the program
 
@@ -2172,7 +2317,11 @@ Dependencies: ACC-703 and all tasks `DONE` or `REJECTED`
 Exit condition: ACC-703 is `DONE` and every other roadmap task is `DONE` or
 evidence-backed `REJECTED`.
 
-Review after: 2026-09-24
+Review after: 2026-11-15
+
+Reviewed 2026-10-16: ACC-703 remains `WAITING` and other required roadmap
+tasks remain nonterminal; the closure exit condition is not met. This is
+a provisional progress reminder, not a completion or acceptance claim.
 
 Update this document to `COMPLETE`, move superseded implementation details to
 the archive, update `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md`, and leave the

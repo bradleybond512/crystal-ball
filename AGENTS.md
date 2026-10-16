@@ -2,6 +2,10 @@
 
 ## Active Roadmap
 
+- Pick work with `npm run roadmap:check`. It names the next eligible task by
+  `Priority:` (S, A, B, C). Do not start a lower tier while a higher-tier task is
+  eligible and unclaimed unless Bradley says so.
+
 - Prediction, calibration, correlation, or self-tuning work must start with
   `docs/PREDICTION_ACCURACY_ROADMAP.md`.
 - Claim one `ACC-NNN` task through a draft PR before implementation and update

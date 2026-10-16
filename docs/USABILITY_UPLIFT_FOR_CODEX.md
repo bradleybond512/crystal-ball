@@ -205,7 +205,8 @@ single stale number without reflowing the surrounding prose.
 Exit condition: Packaged desktop verification confirms the merged zero-key
 first-run contract on the installed app.
 
-Review after: 2026-08-31
+Reviewed 2026-10-16: Existing source repairs and the recorded isolated-account run do not establish useful zero-key packaged coverage; Bradley's packaged-app acceptance and missing timing/useful-card evidence remain pending. The date below is a provisional manual progress check, not an acceptance forecast; on actual completion evidence, record the UTC assessment date and refresh any outstanding reminder to at most 30 days later, before merge if stale.
+Review after: 2026-11-15
 
 The packaged zero-key runtime was tested on 2026-09-18; useful Home coverage
 was not demonstrated ([handoff #1725](https://github.com/bradleybond512/crystal-ball/issues/1725)).
@@ -265,6 +266,8 @@ are claimed in PR #1729. UX-001 remains blocked until packaged acceptance passes
 
 Dependencies: UX-000
 
+Priority: C
+
 Add survival posture to the default surface as a fourth briefing band.
 
 - **Read from:** `storm-posture-state` — already an entry point, already fed live
@@ -289,6 +292,8 @@ Add survival posture to the default surface as a fourth briefing band.
 ### UX-002 — "Best move now" + commit on the posture band
 
 Dependencies: UX-001
+
+Priority: C
 
 - **Read from:** `buildSurvivalOutlook(...).decision.recommendedMoveId`, whose
   ranking path is `projectPostureTrajectory` → `buildWorldBranches` →
@@ -340,7 +345,8 @@ consumes it).
 Exit condition: A producer-to-renderer stable-identity design is approved and
 merged with explicit timeline-opacity composition rules.
 
-Review after: 2026-09-01
+Reviewed 2026-10-16: The producer-to-renderer stable-identity design with explicit timeline-opacity composition is still missing from the cited task evidence; retain the design/merge hold and do not start the lens wiring. The date below is a provisional manual progress check, not an acceptance forecast; on actual completion evidence, record the UTC assessment date and refresh any outstanding reminder to at most 30 days later, before merge if stale.
+Review after: 2026-11-15
 
 Standardize stable identity at both incoming-event production and Cesium
 entity-creation boundaries, compose existing timeline opacity with lens styling,
@@ -446,6 +452,8 @@ ship only Call/Open in Maps/confirm-directly actions and retain `unknown` status
 
 ### UX-014 — Fuel operational evidence *(High Assurance provider task)*
 
+Priority: C
+
 Keep OSM fuel sites as directory-only. Add operational fuel evidence only behind
 the same license, live-probe, bounded-timeout, cache, allowlist, health, and
 expiry contract as UX-013. Never infer fuel inventory, power, access, or queue
@@ -454,6 +462,8 @@ separate PRs so one provider cannot broaden the other's truth boundary.
 
 ### UX-015 — New outage provider integration *(High Assurance provider task)*
 
+Priority: C
+
 Add at most one new outage origin per PR after a live response-body probe,
 coverage/overlap design, and usage-rights review. Normalize at the provider
 boundary, record accepted/dropped/contributed counts, and keep the source
@@ -461,6 +471,8 @@ independent from ODIN unless evidence proves otherwise. A valid HTTP response
 with zero accepted observations cannot cast a healthy corroboration vote.
 
 ### UX-016 — Consolidate timeline controller and cursor wiring *(High Assurance)*
+
+Priority: C
 
 `TimeScrubberHud` is already mounted. Select one timeline controller, connect it
 to map-cursor behavior, and remove redundant loop ownership without adding a
@@ -527,6 +539,8 @@ to refresh, not immutable acceptance thresholds.
 
 Dependencies: UX-017
 
+Priority: A
+
 - **Change surface:** `src/services/intelligence/prediction-resolver.ts`,
   `prediction-resolution-cadence.ts`, `outcome-resolvers.ts`, and the resolution
   quality audit and focused tests.
@@ -551,6 +565,8 @@ the holdout result supports it, refit `warning-verification`, `analyst-loop`, an
 
 Dependencies: UX-018
 
+Priority: A
+
 - **Change surface:** the relevant prediction bridges and algorithm ledger,
   calibration, replay, safe-adjustment, tuning-fixture, and diagnostics modules.
 - **Preserve:** current minimum evidence, safety recall, lead-time, calibration,
@@ -572,6 +588,8 @@ evaluations; episodic-analog had 117. These are evidence-collection signals,
 not permission to tune against a tiny or repeatedly reused cohort.
 
 Dependencies: UX-018
+
+Priority: A
 
 - **Change surface:** entity-trajectory, episodic-analog, and analyst-loop
   emitters plus their outcome identity, grading, and diagnostics seams.
@@ -624,7 +642,8 @@ Exit condition: A concrete provider-contract design preserves upstream HTTP-429
 evidence for ACLED and ThreatFox, a credentialed live probe confirms the actual
 response shape, and the user explicitly approves that High Assurance design.
 
-Review after: 2026-09-01
+Reviewed 2026-10-16: PR #1692 covers optional-key and degraded-feed classification; a concrete High Assurance provider-contract design, Bradley's explicit approval, and a credentialed ACLED/ThreatFox HTTP-429 response-body probe remain pending. The date below is a provisional manual progress check, not an acceptance forecast; on actual completion evidence, record the UTC assessment date and refresh any outstanding reminder to at most 30 days later, before merge if stale.
+Review after: 2026-11-15
 
 - **Change surface:** the affected provider adapters and the shared feed health,
   resilience, latency, diagnostics, and dashboard paths. Add provider code only
@@ -726,7 +745,8 @@ workflow without changing alert scores, thresholds, or acknowledgement state.
 Status: MONITOR
 Evidence: #1704 — reviewed source candidate; local and CI evidence in the PR.
 Exit condition: Complete packaged digest expiry, keyboard/focus, cached-camera and partial-source acceptance; resolve or explicitly retain the two conservative NWS data limitations documented by review.
-Review after: 2026-09-22
+Reviewed 2026-10-16: The cited source/integration evidence does not complete Bradley's packaged digest expiry, keyboard/focus, cached-camera or partial-source acceptance; the two conservative NWS data limitations still require resolution or explicit retention. The date below is a provisional manual progress check, not an acceptance forecast; on actual completion evidence, record the UTC assessment date and refresh any outstanding reminder to at most 30 days later, before merge if stale.
+Review after: 2026-11-15
 
 This is manual acceptance tracking, not a recurring task or monitoring automation.
 
@@ -809,7 +829,8 @@ on 2026-09-07.
 Status: MONITOR
 Evidence: #1720 — source merged with clean audit, tests and review.
 Exit condition: Verify system appearance switching in the packaged main window and its unified Settings dialog; retain initial-paint and full native visual acceptance as explicitly scoped follow-ups.
-Review after: 2026-09-22
+Reviewed 2026-10-16: PR #1720 and its automated/module evidence do not replace Bradley's packaged main-window and unified-Settings system-appearance check; initial-paint and full native visual acceptance remain separately open. The date below is a provisional manual progress check, not an acceptance forecast; on actual completion evidence, record the UTC assessment date and refresh any outstanding reminder to at most 30 days later, before merge if stale.
+Review after: 2026-11-15
 
 Source is delivered; packaged acceptance remains open. This status does not start
 an automation or claim native acceptance.
@@ -831,7 +852,8 @@ Design: [UX-031 appearance brief](plans/2026-09-15-ux031-system-appearance.md).
 Status: MONITOR
 Evidence: #1723 — reviewed source candidate and automated/mutation evidence.
 Exit condition: Verify Settings focus, Tab, Escape, Places Edit handoff and foreground command palette in the identified packaged main build; retain full VoiceOver and appearance acceptance separately.
-Review after: 2026-09-22
+Reviewed 2026-10-16: PR #1723 and the merged Settings layering/scroll prerequisite #1801 leave Bradley's identified-packaged-build focus, Tab/Shift-Tab, Escape, Places Edit and foreground-palette acceptance pending; full VoiceOver and appearance acceptance remain separate. The date below is a provisional manual progress check, not an acceptance forecast; on actual completion evidence, record the UTC assessment date and refresh any outstanding reminder to at most 30 days later, before merge if stale.
+Review after: 2026-11-15
 
 This is manual acceptance tracking, not a new scheduled automation.
 
@@ -879,6 +901,7 @@ source-fusion program, requiring domain evidence before tolerance changes.
 ### UX-033 — Keep content reachable during stacked warnings
 
 Status: NOT STARTED
+Priority: S
 Source findings: PR1731 H1.
 
 Acceptance: Cap the measured notification stack and its reserved space together. At small window sizes, stacked warnings remain scrollable while content and navigation remain reachable.
@@ -888,7 +911,8 @@ Acceptance: Cap the measured notification stack and its reserved space together.
 Status: MONITOR — partial layout prerequisite in #1730
 Evidence: #1730 — measured posture row, corrected offsets and data-center strip styling.
 Exit condition: Complete the top-of-window rail inventory and verify remaining overlap and native macOS/WebKit acceptance; keep UX-033 stack-height capping separate.
-Review after: 2026-09-23
+Reviewed 2026-10-16: PR #1730 and the merged Settings layering/scroll prerequisite #1801 leave the full top-of-window rail inventory, remaining overlap acceptance and Bradley's native macOS/WebKit verification open; UX-033 stack-height capping remains separate. The date below is a provisional manual progress check, not an acceptance forecast; on actual completion evidence, record the UTC assessment date and refresh any outstanding reminder to at most 30 days later, before merge if stale.
+Review after: 2026-11-15
 Source findings: PR1731 H2.
 
 Acceptance: Inventory each rail as measured content or an intentional overlay; verify no overlap with summary, controls or navigation. PR #1730 moves the posture banner into the measured stack, corrects summary/breaking offsets and styles the data-center strip. Chromium regression and mutation evidence: [PR-1730-SUMMARY-STACK-LAYOUT.md](validation/PR-1730-SUMMARY-STACK-LAYOUT.md). Full rail inventory, remaining overlap acceptance and native verification are unfinished. October 14 adds bounded local Settings/Places layering and scroll evidence: [validation](validation/SETTINGS-MODAL-LAYERING.md); UX-034 remains MONITOR. UX-033 stack-height capping remains separate; this PR does not complete it.
@@ -896,6 +920,7 @@ Acceptance: Inventory each rail as measured content or an intentional overlay; v
 ### UX-035 — Gate background panel work by actual need
 
 Status: NOT STARTED — HIGH ASSURANCE
+Priority: B
 Source findings: PR1731 H3.
 
 Acceptance: Profile foreground/background behavior before selecting panels. Reduce invisible presentation work while preserving safety monitoring and data dependencies; do not blanket-disable off-screen acquisition.
@@ -903,6 +928,7 @@ Acceptance: Profile foreground/background behavior before selecting panels. Redu
 ### UX-036 — Spread refresh work and honor battery policy
 
 Status: NOT STARTED — HIGH ASSURANCE
+Priority: B
 Source findings: PR1731 M1/M3.
 
 Acceptance: Measure synchronized refresh cost and introduce bounded staggering through existing scheduling conventions; preserve maximum warning-detection latency and foreground recovery.
@@ -910,6 +936,7 @@ Acceptance: Measure synchronized refresh cost and introduce bounded staggering t
 ### UX-037 — Prevent new unowned stacking levels
 
 Status: NOT STARTED
+Priority: C
 Source findings: PR1731 M2.
 
 Acceptance: Inventory intentional stacking contexts and introduce a reviewed ratchet without changing current modal, focus or critical-banner behavior.
@@ -917,6 +944,7 @@ Acceptance: Inventory intentional stacking contexts and introduce a reviewed rat
 ### UX-038 — Constrain video-channel link construction
 
 Status: NOT STARTED — HIGH ASSURANCE
+Priority: S
 Source findings: PR1731 L1.
 
 Acceptance: Verify configured and external handle paths, encode safe URL components and reject unsafe destinations with behavioral tests. Keep storage optimizations separate.
@@ -924,6 +952,7 @@ Acceptance: Verify configured and external handle paths, encode safe URL compone
 ### UX-040 — Expose unavailable and stale feed outcomes
 
 Status: NOT STARTED — HIGH ASSURANCE
+Priority: S
 Source findings: PR1731 M4/M8.
 
 Acceptance: Distinguish denied, malformed, unavailable and stale-cache outcomes from a verified empty result. Start with measured failures; never log credentials or treat every isolated catch as a defect.
@@ -933,7 +962,8 @@ Acceptance: Distinguish denied, malformed, unavailable and stale-cache outcomes 
 Status: MONITOR — HIGH ASSURANCE; partial prerequisite in #1714
 Evidence: #1714 — five diagnostic factories use asynchronous construction, with browser lifecycle and last-viewed regression evidence. No measured startup savings established; the diagnostic chunk remains reachable from the startup graph.
 Exit condition: Complete separately designed and approved construction profiling and any further lifecycle changes; verify service startup, Home contributors, restored layouts and on-demand navigation before declaring this task complete.
-Review after: 2026-09-23
+Reviewed 2026-10-16: PR #1714 establishes only the five-factory prerequisite; separately designed and approved construction profiling, measured startup impact and broader lifecycle/service/Home/restored-layout/navigation acceptance remain outstanding. The date below is a provisional manual progress check, not an acceptance forecast; on actual completion evidence, record the UTC assessment date and refresh any outstanding reminder to at most 30 days later, before merge if stale.
+Review after: 2026-11-15
 Source findings: PR1731 M6/H7.
 
 Acceptance: Measure construction time independently from parsing; defer selected presentation objects while preserving service startup, Home contributors, restored layouts and on-demand navigation.
@@ -945,6 +975,7 @@ and tracking update do not authorize it. Current bounded evidence and limits:
 ### UX-043 — Reduce repeated alert subscriber scans
 
 Status: NOT STARTED
+Priority: B
 Source findings: PR1731 M7.
 
 Acceptance: Measure fan-out cost and update subscriber contracts without losing updates, ack/pin changes or failure isolation. Demonstrate behavior and cost under a full store.
@@ -952,6 +983,7 @@ Acceptance: Measure fan-out cost and update subscriber contracts without losing 
 ### UX-044 — Announce critical UI changes accessibly
 
 Status: NOT STARTED
+Priority: A
 Source findings: PR1731 L3.
 
 Acceptance: Review PR1730 and add missing live-region semantics without repeated announcements or focus theft. Verify screen-reader and keyboard behavior on identified surfaces.
@@ -984,6 +1016,7 @@ Implementation, local gates and independent substantive review pass. Final integ
 ### UX-047 — Keep national weather warnings current
 
 Status: NOT STARTED — HIGH ASSURANCE
+Priority: S
 Source findings: PR1731 H12/H13/H14.
 
 Acceptance: Schedule authoritative NWS refresh and reconcile updates, cancellations and expiry across restart; display issued and future-onset times honestly. Preserve national coverage, distinguish partial/failed fetches from an authoritative empty result, and reuse only helpers whose semantics match.
@@ -1003,6 +1036,7 @@ Evidence: #1740 — [live contract, regression and mutation results](validation/
 ### UX-049 — Distinguish quiet sensors from missing observations
 
 Status: NOT STARTED — HIGH ASSURANCE
+Priority: S
 Source findings: PR1731 H21.
 
 Acceptance: Carry real observation/fetch age and coverage into threat summaries. A failed or stale domain cannot become a freshly checked quiet sensor because aggregation ran. Check all-domain reassurance and partial coverage.
@@ -1010,6 +1044,7 @@ Acceptance: Carry real observation/fetch age and coverage into threat summaries.
 ### UX-050 — Make Ghost Mode suppression unmistakable
 
 Status: NOT STARTED — HIGH ASSURANCE
+Priority: S
 Source findings: PR1731 H20.
 
 Acceptance: Approve explicit policy for critical alerts versus privacy/silence preferences; show persistent mode and suppression accounting. Do not silently bypass an existing user-selected privacy mode.
@@ -1017,6 +1052,7 @@ Acceptance: Approve explicit policy for critical alerts versus privacy/silence p
 ### UX-051 — Align RSS request budgets across boundaries
 
 Status: NOT STARTED — HIGH ASSURANCE
+Priority: B
 Source findings: PR1731 M12.
 
 Acceptance: Bound total sidecar redirect/request time below the renderer budget while preserving SSRF, authorization and cancellation checks. Test slow redirects and timely error delivery.
@@ -1024,6 +1060,7 @@ Acceptance: Bound total sidecar redirect/request time below the renderer budget 
 ### UX-052 — Restrain derived alert interruptions
 
 Status: NOT STARTED — HIGH ASSURANCE
+Priority: S
 Source findings: PR1731 H15 remainder.
 
 Acceptance: Separate derived-notification policy from authoritative warnings; define domain, cooldown, quiet-hour and burst accounting rules. Coordinate with ACC-509; do not change inference severity to mask delivery defects.
@@ -1031,6 +1068,7 @@ Acceptance: Separate derived-notification policy from authoritative warnings; de
 ### UX-053 — Finish boot without awaiting all data sources
 
 Status: NOT STARTED — HIGH ASSURANCE
+Priority: S
 Source findings: PR1731 P0.
 
 Acceptance: Define usable first-screen readiness separately from background acquisition; preserve initialization dependencies and failure visibility. Measure cold/warm boot and warning readiness, not only completion of one promise.
@@ -1038,6 +1076,7 @@ Acceptance: Define usable first-screen readiness separately from background acqu
 ### UX-054 — Cover subproject dependencies in security checks
 
 Status: NOT STARTED — HIGH ASSURANCE
+Priority: S
 Source findings: PR1731 M10.
 
 Acceptance: Inventory all maintained lockfiles and exposed tools; add appropriately scoped audit coverage and resolve confirmed reachable issues without weakening thresholds.
@@ -1045,6 +1084,7 @@ Acceptance: Inventory all maintained lockfiles and exposed tools; add appropriat
 ### UX-055 — Surface stale credential validation honestly
 
 Status: NOT STARTED — HIGH ASSURANCE
+Priority: S
 Source findings: PR1731 M11.
 
 Acceptance: Show validation age and distinguish unavailable validation from an invalid key. Re-check only with explicit bounded provider behavior; do not rotate credentials or expose values.
@@ -1052,6 +1092,7 @@ Acceptance: Show validation age and distinguish unavailable validation from an i
 ### UX-056 — Bound retained storage without losing user evidence
 
 Status: NOT STARTED — HIGH ASSURANCE
+Priority: B
 Source findings: PR1731 M9.
 
 Acceptance: Measure live storage and classify owned cache versus user evidence before proposing retention or cleanup. Backup, migration, deletion and installed profile changes require a separate approved design.
@@ -1059,6 +1100,7 @@ Acceptance: Measure live storage and classify owned cache versus user evidence b
 ### UX-057 — Persist panel state only when it changes
 
 Status: NOT STARTED
+Priority: B
 Source findings: PR1731 L2.
 
 Acceptance: Inspect the six reported timer writers; remove redundant writes while preserving state across reload, failed storage and teardown. Verify each actual writer before changing it. Any cognition or self-tuning writer requires high-assurance design approval before implementation.
@@ -1068,6 +1110,7 @@ Acceptance: Inspect the six reported timer writers; remove redundant writes whil
 ### UX-058 — Account for deferred and updated warnings
 
 Status: NOT STARTED — HIGH ASSURANCE
+Priority: S
 Source findings: PR1731 H19 follow-up and UX-045 scope limits.
 
 Acceptance: design bounded handling of distinct warnings suppressed during an
@@ -1110,6 +1153,33 @@ Status: DONE — focused implementation in #1802; final SHA-pinned review and re
 Repair point locations rendered as invented 500 km areas, retain all source/member IDs through clustering and selection, and distinguish situation confidence from EMA forecast metrics. Add complete keyboard-accessible member details before reducing persistent labels, cluster routine FAA camera context with zoom, and preserve existing urgent-warning geometry, provider acquisition, user layer/basemap choices and alert behavior. Home/readiness layout and forecast/scoring changes remain outside this task.
 
 Evidence: #1802 — [bounded map cleanup](validation/MAP-CLARITY-CLEANUP.md). The affected gate passed with 27/0 model/widget, 7/0 popup, 124/0 geography/ACC-509, 17/0 local-map and six real-renderer browser cases; 45 clean applied mutation proofs restored exactly. Independent Sol medium and Sonnet medium review of the source/evidence candidate found no blocking findings. Final documentation, verdict, required CI and installed macOS acceptance remain separately SHA-pinned; no native WebKit or VoiceOver result is claimed here.
+
+### UX-062 — Label forecasts that trail their own baseline *(High Assurance)*
+
+Priority: S
+
+Dependencies: ACC-008
+
+The 2026-07-26 baseline put the analyst loop at Brier 0.569 over 32 resolved
+forecasts. Answering 50% every time scores 0.25. Until UX-019 records a
+promote, retain or reject decision, people should not see those probabilities
+presented as calibrated.
+
+- Change surface: the surfaces that show forecaster probabilities to the user
+  (analyst HUD hypotheses, situation dossier, Command Center), reading the
+  existing ACC-303 pairings and ACC-403 status. No new scoring code.
+- Rule: where matched-cohort Brier skill is at or below 0 and the cohort meets
+  the existing minimum-evidence floor, show "Trails base rate" and the paired
+  baseline's probability next to the forecast. Below the floor, show
+  "Unverified".
+- Fail closed: unknown or stale skill shows "Unverified", never nothing. Never
+  hide, round or change a forecast, and never suppress a warning. This task
+  only adds labels.
+- If ACC-008 shows every user-visible forecaster beating its baseline, close
+  this task as `REJECTED` with that evidence.
+- Done when fixture tests cover beats, trails, unverified and stale on each
+  surface, and `npm run test:intelligence`, `npm run test:insights` and
+  `npm run typecheck:all` pass.
 
 ## What was NOT verified
 
@@ -1188,3 +1258,4 @@ Update the row in the same PR that does the work.
 | UX-059 | Retain active alerts using authoritative lifecycle evidence | DONE | #1739; [evidence](validation/UX-059-RETENTION.md); ACC-509 integration hold |
 | UX-060 | Preserve onboarding keyboard ownership against proactive digest | DONE | #1735 |
 | UX-061 | Truthful, restrained map presentation | DONE | #1802; [bounded evidence](validation/MAP-CLARITY-CLEANUP.md); native acceptance recorded separately |
+| UX-062 | Label forecasts that trail their baseline | NOT STARTED — HIGH ASSURANCE | |

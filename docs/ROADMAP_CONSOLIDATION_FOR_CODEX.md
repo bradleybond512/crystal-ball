@@ -87,12 +87,26 @@ never restates a status or a count.
 
 | PR | Scope | Class | Depends on | Bradley gate | Status | PR # |
 |---|---|---|---|---|---|---|
-| RC-1 | Priority-aware next-task selection | Standard | — | D1 | IN_REVIEW | #1804 |
-| RC-2 | Board triage: priorities, overdue reviews, ACC-008, UX-062, ACC-703 | Standard | RC-1 | D1, D2, D3 | TODO | |
+| RC-1 | Priority-aware next-task selection | Standard | — | D1 | DONE | #1804 |
+| RC-2 | Board triage: priorities, overdue reviews, ACC-008, UX-062, ACC-703 | Standard | RC-1 | D1, D2, D3 | IN PROGRESS | |
 | RC-3 | Public-repo hygiene | Standard | Consumer/backup review | D1, D5 before changes | TODO | |
 | RC-4 | Slim both boards | Standard | RC-2 | D1 | TODO | |
 | RC-5 | Archive superseded plans; `ROADMAP.md` becomes an index | Standard | RC-4, orphan reconciliation | D1, D4, D6; no open-file overlap | TODO | |
 | RC-6 | `CLAUDE.md` as rules plus pointers | High Assurance | RC-5 | D1, design stop, D7 | TODO | |
+
+RC-1 merged in [PR #1804](https://github.com/bradleybond512/crystal-ball/pull/1804)
+on 2026-10-16 at 04:03:41 UTC, main `f29059c`.
+
+**Scoped approval — 2026-10-16:** Bradley authorized RC-2's documentation-only
+implementation, validation, Sonnet medium review and protected PR delivery,
+including the listed D2 tiers and ACC-703 coverage policy. ACC-008 and UX-062
+are future task definitions, not authorization to measure production or
+implement labels. D3 early collection remains **PENDING**: no collection,
+schedule, provider access or additional production access starts here. For
+ACC-704, only an honest dated review note and reminder may change; its status,
+dependencies and completion criteria remain intact. This scoped approval does
+not authorize another RC, Appendix A's product rescopes or the remaining
+program decisions.
 
 After explicit authorization, merge one at a time through the normal protected
 path. RC-3 can proceed separately only after its consumer and backup gates.
@@ -479,8 +493,8 @@ waives the separate gates or turns D3–D5 into permission for live actions.
 | ID | Decision | Proposed recommendation, pending explicit selection |
 |---|---|---|
 | D1 | Approve the corrected program scope and RC-6 discovery/design, retaining every later gate | Pending; document review/correction alone is not approval |
-| D2 | Tier assignments in RC-2 | As listed |
-| D3 | Separately authorize early ACC-702 collection, independent of correlation work, with the corrected ACC-703 coverage/closure policy | Proposed; no new collection, schedule or provider access authorized here |
+| D2 | Tier assignments in RC-2 | Approved for RC-2 only, 2026-10-16: as listed |
+| D3 | Separately authorize early ACC-702 collection, independent of correlation work, with the corrected ACC-703 coverage/closure policy | ACC-703 documentation policy approved for RC-2, 2026-10-16; early collection remains PENDING. No collection, schedule or provider access authorized here |
 | D4 | Product/backlog rescopes in Appendix A, each recorded explicitly | Proposed ideas only; no product implementation authorized |
 | D5 | Approve the exact cleanup manifest, private backups/discard choices and runtime-consumer preservation before RC-3 changes | Pending for every affected file; no history rewrite |
 | D6 | Status of the separate Rust/Kalman/Valhalla build described in the overhaul docs | Appendix A says only that it is not part of this repository |

@@ -40,7 +40,7 @@ This is a source audit, not proof of installed-app performance, feed completenes
 - [x] Download links and SHA-256 manifest are verified against actual release assets.
 - [x] Signing status is explicitly unverified unless actual artifacts were inspected.
 - [x] Fine print appears at page bottom and in FAQ: “Crystal Ball is in early access. Information may be incomplete or delayed. Not for emergency, financial, or safety-critical decisions.”
-- [x] Each published screenshot depicts a real product capture; captions preserve its actual capture date.
+- [x] Each published screenshot depicts a real product capture; one footer note preserves the actual capture date.
 
 These boxes are review gates, not claims that visual or runtime verification has already passed.
 
@@ -68,3 +68,9 @@ All presentation boxes were checked against the final build on 2026-10-18. See `
 | Data categories | `src/config/panels.ts`, `src/config/feeds.ts`, `src/services/usgs-pager.ts` | Catalog categories do not guarantee live coverage. |
 
 Visible source and license links now follow main, as requested. This checklist retains the audited SHA for reproducible evidence. The generator independently parses current checkout catalogs, so counts cannot silently stay pinned to the old audit. Latest release discovery uses GitHub API and manifest metadata at build time; no runtime API request is needed.
+
+## Copy refinement
+
+The refinement removes duplicate prose without adding product capabilities. The eight feature sections link once to the same sources above. Four edition cards remain because the source declares four build variants, not a runtime switch. The assistant profile split appears only in its two tiles and the specification row. Visible platform status appears in hero fine print, specifications and FAQ; experimental labels remain on download links where they inform installation. Structured-data platform classification remains intact.
+
+Minimum OS values come from explicitly configured `bundle.macOS.minimumSystemVersion`; absent values render no row. The current source omits that setting. The specs release line shows only the build-resolved version, keeping release dates on the download documentation. Stats labels are derived from generated counts, platform IDs and price rather than new constants.

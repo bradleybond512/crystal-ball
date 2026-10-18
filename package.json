@@ -5,6 +5,7 @@
   "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
+    "test:marketing": "npm --prefix marketing-site run typecheck && npm --prefix marketing-site run lint && npm --prefix marketing-site test",
     "smoke": "tsx scripts/smoke.mts",
     "smoke:offline": "tsx scripts/smoke.mts --offline",
     "checkup": "node scripts/checkup.mjs",

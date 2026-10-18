@@ -14,7 +14,7 @@ for(const [name,width,height] of [['desktop',1440,1000],['mobile',390,844]]) {
  await page.locator('.skip-link').evaluate(e=>e.blur());
  await page.screenshot({path:`${output}/${name}-navigation.png`});
  await page.locator('.numbers-band').screenshot({path:`${output}/${name}-numbers.png`,style:".marketing-header, .skip-link { visibility: hidden; }"});
- for(const id of ['overview','features','intelligence','home-shell','survival','privacy','local-ai','variants','mcp','open-source','specs','faq']) {
+ for(const id of ['overview','features','intelligence','home-shell','your-day','survival','privacy','local-ai','variants','mcp','power-users','open-source','specs','faq']) {
   const section=page.locator('#'+id);await section.scrollIntoViewIfNeeded();
   await section.locator('img').evaluateAll(async images=>Promise.all(images.map(i=>i.decode())));
   await section.screenshot({path:`${output}/${name}-${id}.png`,style:".marketing-header, .skip-link { visibility: hidden; }"});

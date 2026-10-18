@@ -65,3 +65,29 @@ test('source references exist at the pinned revision and license agrees', async 
   const pkg = JSON.parse(await read('package.json'));
   assert.equal(pkg.license.replace(/-only$/, ''), data.license);
 });
+
+test('edition examples belong to each actual catalog and assistant examples name registered tools', async () => {
+ const {default:worker}=await import('../dist/server/index.js');
+ const html=await (await worker.fetch(new Request('https://crystalball.example/'),{},{})).text();
+ const parsed=ts.createSourceFile('panels.ts',await read('src/config/panels.ts'),ts.ScriptTarget.Latest,true);
+ const catalogs=new Map();
+ for(const statement of parsed.statements) if(ts.isVariableStatement(statement)) {
+  for(const declaration of statement.declarationList.declarations) {
+   if(!ts.isIdentifier(declaration.name)||!declaration.name.text.endsWith('_PANELS')||!declaration.initializer||!ts.isObjectLiteralExpression(declaration.initializer)) continue;
+   catalogs.set(declaration.name.text,new Set(declaration.initializer.properties.map(entry=>entry.initializer?.properties?.find(p=>p.name?.getText(parsed)==='name')?.initializer?.text).filter(Boolean)));
+  }
+ }
+ const section=html.match(/<section[^>]*id="variants"[\s\S]*?<\/section>/)[0];
+ for(const [,edition,body] of section.matchAll(/<article><h3>(\w+) edition\.<\/h3>([\s\S]*?)<\/article>/g)) {
+  const examples=[...body.matchAll(/<li>(.*?)<\/li>/g)].map(m=>m[1].replaceAll('&amp;','&'));
+  assert.ok(examples.length>=4&&examples.length<=5,edition);
+  for(const name of examples) assert.ok(catalogs.get(`${edition.toUpperCase()}_PANELS`).has(name),`${edition}: ${name}`);
+ }
+ const registry=await read('tools/mcp-server/tool-registry.mjs');
+ const categories=vm.runInNewContext(`(${registry.match(/const CATEGORY_TOOLS = (\{[\s\S]*?\n\});/)[1]})`,Object.create(null),{timeout:1000});
+ const names=Object.values(categories).flatMap(Object.keys);
+ const prompts=html.match(/<div class="prompt-examples">[\s\S]*?<\/div>/)[0];
+ const tools=[...prompts.matchAll(/<code>(.*?)<\/code>/g)].map(m=>m[1]);
+ assert.ok(tools.length>=3&&tools.length<=4);
+ for(const tool of tools) assert.ok(names.includes(tool),tool);
+});

@@ -3,20 +3,6 @@
   "description": "Live global signals, explained. Private by design. Free on Mac.",
   "reviewedAt": "2026-10-18",
   "sourceSha": "78e34040d738c82195162b28280e8ce865c3bb6d",
-  "counts": {
-    "panels": {
-      "full": 409,
-      "tech": 35,
-      "finance": 31,
-      "happy": 10
-    },
-    "mcp": {
-      "total": 61,
-      "read": 53,
-      "analyst": 8,
-      "categories": 9
-    }
-  },
   "urls": {
     "site": "https://crystal-ball-observatory.bradleybond512.chatgpt.site",
     "github": "https://github.com/bradleybond512/crystal-ball",
@@ -24,17 +10,6 @@
     "sponsor": "https://github.com/sponsors/bradleybond512",
     "contact": "https://github.com/bradleybond512/crystal-ball/issues",
     "appleSecurity": "https://support.apple.com/en-us/102445"
-  },
-  "release": {
-    "version": "2.25.147",
-    "publishedAt": "2026-07-20",
-    "base": "https://github.com/bradleybond512/crystal-ball/releases/download/v2.25.147/",
-    "appleSilicon": "Crystal.Ball_2.25.147_aarch64.dmg",
-    "intel": "Crystal.Ball_2.25.147_x64.dmg",
-    "windows": "Crystal.Ball_2.25.147_x64-setup.exe",
-    "linuxIntel": "Crystal.Ball_2.25.147_amd64.AppImage",
-    "linuxArm": "Crystal.Ball_2.25.147_aarch64.AppImage",
-    "manifest": "release-manifest.json"
   },
   "images": {
     "width": 1600,

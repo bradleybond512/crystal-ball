@@ -89,7 +89,7 @@ never restates a status or a count.
 |---|---|---|---|---|---|---|
 | RC-1 | Priority-aware next-task selection | Standard | — | D1 | DONE | #1804 |
 | RC-2 | Board triage: priorities, overdue reviews, ACC-008, UX-062, ACC-703 | Standard | RC-1 | D1, D2, D3 | IN PROGRESS | |
-| RC-3 | Public-repo hygiene | Standard | Consumer/backup review | D1, D5 before changes | PARTIAL (local preparation) | |
+| RC-3 | Public-repo hygiene | Standard | Consumer/backup review | D1, D5 before changes | PARTIAL | #1806 |
 | RC-4 | Slim both boards | Standard | RC-2 | D1 | TODO | |
 | RC-5 | Archive superseded plans; `ROADMAP.md` becomes an index | Standard | RC-4, orphan reconciliation | D1, D4, D6; no open-file overlap | TODO | |
 | RC-6 | `CLAUDE.md` as rules plus pointers | High Assurance | RC-5 | D1, design stop, D7 | TODO | |
@@ -335,9 +335,14 @@ all editing-checkout copies, plus only `/tmp/` and `/api-cache.json` ignore
 rules. The existing fourteen-file private backup was verified before
 preparation. `verbose-mode.json` remains tracked and byte-identical; its
 ignore rule and runtime-consumer preservation decision are deferred.
-RC-3 remains **partial**, not complete. This approval covers local
-preparation and scoped checks only; external review and publication are
-not authorized, and the unresolved validation restriction is not waived.
+RC-3 remains **partial**, not complete. Normal local validation and commit
+hooks passed. Bradley subsequently authorized Sonnet medium review and
+protected delivery of this same thirteen-file cleanup through [PR #1806]
+(https://github.com/bradleybond512/crystal-ball/pull/1806). That delivery
+does not authorize the deferred runtime file, another RC, a history rewrite
+or a version bump. The separate `quota-cache.json` ignore addition in
+[PR #1761](https://github.com/bradleybond512/crystal-ball/pull/1761) remains
+untouched; the two cleanup rules use separate hunks.
 
 - **Bradley first (D5):** review an exact manifest of the twelve tracked files
   under `tmp/` and the two root JSON files. Confirm a private backup outside
@@ -506,7 +511,7 @@ waives the separate gates or turns D3–D5 into permission for live actions.
 | D2 | Tier assignments in RC-2 | Approved for RC-2 only, 2026-10-16: as listed |
 | D3 | Separately authorize early ACC-702 collection, independent of correlation work, with the corrected ACC-703 coverage/closure policy | ACC-703 documentation policy approved for RC-2, 2026-10-16; early collection remains PENDING. No collection, schedule or provider access authorized here |
 | D4 | Product/backlog rescopes in Appendix A, each recorded explicitly | Proposed ideas only; no product implementation authorized |
-| D5 | Approve the exact cleanup manifest, private backups/discard choices and runtime-consumer preservation before RC-3 changes | Local preparation approved 2026-10-18 for the twelve `tmp/` files and `api-cache.json`; verified private backup retained. `verbose-mode.json` and its ignore rule remain deferred; RC-3 is partial. No history rewrite or publication authorized |
+| D5 | Approve the exact cleanup manifest, private backups/discard choices and runtime-consumer preservation before RC-3 changes | Partial cleanup delivery approved 2026-10-18 for the twelve `tmp/` files and `api-cache.json` through #1806; verified private backup retained. `verbose-mode.json` and its ignore rule remain deferred; RC-3 is partial. No history rewrite or broader cleanup authorized |
 | D6 | Status of the separate Rust/Kalman/Valhalla build described in the overhaul docs | Appendix A says only that it is not part of this repository |
 | D7 | Replace "Always commit with: Co-Authored-By: Claude Sonnet 4.6" with "Commit with the Co-Authored-By trailer for the model actually running this session" | Yes |
 

@@ -40,14 +40,16 @@
     "vite": "8.2.2",
     "wrangler": "4.151.1",
     "lightningcss": "1.31.1",
-    "terser": "5.47.1"
+    "terser": "5.47.1",
+    "braces": "file:vendor/braces"
   },
   "overrides": {
     "nanoid": "3.3.18",
     "next": {
       "postcss": "8.5.23",
       "sharp": "0.35.5"
-    }
+    },
+    "braces": "$braces"
   },
   "type": "module"
 }

@@ -1,0 +1,12 @@
+crystal-ball-site@0.1.0 /Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site
+├── braces@3.0.3 -> ./vendor/braces
+├─┬ eslint-config-next@16.4.2
+│ └─┬ @next/eslint-plugin-next@16.4.2
+│   └─┬ fast-glob@3.3.1
+│     └─┬ micromatch@4.0.8
+│       └── braces@3.0.3 deduped -> ./vendor/braces
+└─┬ vinext@1.0.0-beta.8
+  └─┬ vite-plugin-commonjs@0.10.4
+    └─┬ vite-plugin-dynamic-import@1.6.0
+      └─┬ fast-glob@3.3.3
+        └── micromatch@4.0.8 deduped

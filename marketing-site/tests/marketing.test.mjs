@@ -59,3 +59,35 @@ test('provides valid application structured data and dated source counts', async
   const data=JSON.parse(await readFile(new URL('../data/site.json',import.meta.url),'utf8'));
   assert.ok(JSON.stringify(data).includes('78e34040d738c82195162b28280e8ce865c3bb6d'));
 });
+
+test('prioritizes a single hero and keeps product shots responsive and unique',async()=>{
+ const html=await(await request('/')).text();
+ const images=[...html.matchAll(/<img\b[^>]*>/g)].map(m=>m[0]);
+ assert.ok(images.length>0);
+ assert.equal(images.filter(s=>s.includes('fetchpriority="high"')).length,1);
+ assert.match(images[0],/loading="eager"/);
+ const sources=images.map(s=>s.match(/src="([^"]+)"/)[1]);
+ assert.equal(new Set(sources).size,sources.length);
+ for(const [i,tag] of images.entries()) {
+  assert.match(tag,/srcset="[^"\n]+\.webp 800w, [^"\n]+\.webp 1600w"/);
+  assert.match(tag,/width="1600" height="1001"/);
+  assert.match(tag,/alt="[^"]+"/);
+  if(i) assert.match(tag,/loading="lazy"/);
+ }
+ const png=await readFile(new URL('../public/og.png',import.meta.url));
+ assert.equal(png.readUInt32BE(16),1200);
+ assert.equal(png.readUInt32BE(20),630);
+ assert.ok(png.length<300_000);
+});
+
+test('minifies embedded styles and scripts without removing motion and focus support',async()=>{
+ const html=await(await request('/')).text();
+ const css=html.match(/<style>([\s\S]*?)<\/style>/)[1];
+ assert.ok(css.length<14000);
+ assert.doesNotMatch(css,/\n/);
+ assert.match(css,/prefers-reduced-motion/);
+ assert.match(css,/:focus-visible/);
+ const script=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)][0][1];
+ assert.doesNotMatch(script,/\n/);
+ assert.ok(script.length<1000);
+});

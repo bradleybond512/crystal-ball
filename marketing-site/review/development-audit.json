@@ -1,0 +1,196 @@
+{
+  "auditReportVersion": 2,
+  "vulnerabilities": {
+    "@next/eslint-plugin-next": {
+      "name": "@next/eslint-plugin-next",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "fast-glob"
+      ],
+      "effects": [
+        "eslint-config-next"
+      ],
+      "range": ">=14.3.0-canary.0",
+      "nodes": [
+        "node_modules/@next/eslint-plugin-next"
+      ],
+      "fixAvailable": {
+        "name": "eslint-config-next",
+        "version": "14.2.35",
+        "isSemVerMajor": true
+      }
+    },
+    "braces": {
+      "name": "braces",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1240992,
+          "name": "braces",
+          "dependency": "braces",
+          "title": "braces vulnerable to stack-exhaustion denial of service through deeply nested patterns",
+          "url": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+          "severity": "high",
+          "cwe": [
+            "CWE-674"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": "<=3.0.3"
+        }
+      ],
+      "effects": [
+        "micromatch"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/braces"
+      ],
+      "fixAvailable": {
+        "name": "eslint-config-next",
+        "version": "14.2.35",
+        "isSemVerMajor": true
+      }
+    },
+    "eslint-config-next": {
+      "name": "eslint-config-next",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "@next/eslint-plugin-next"
+      ],
+      "effects": [],
+      "range": ">=14.3.0-canary.0",
+      "nodes": [
+        "node_modules/eslint-config-next"
+      ],
+      "fixAvailable": {
+        "name": "eslint-config-next",
+        "version": "14.2.35",
+        "isSemVerMajor": true
+      }
+    },
+    "fast-glob": {
+      "name": "fast-glob",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "micromatch"
+      ],
+      "effects": [
+        "@next/eslint-plugin-next",
+        "vite-plugin-dynamic-import"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/fast-glob",
+        "node_modules/vite-plugin-dynamic-import/node_modules/fast-glob"
+      ],
+      "fixAvailable": {
+        "name": "eslint-config-next",
+        "version": "14.2.35",
+        "isSemVerMajor": true
+      }
+    },
+    "micromatch": {
+      "name": "micromatch",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "braces"
+      ],
+      "effects": [
+        "fast-glob"
+      ],
+      "range": ">=0.2.0",
+      "nodes": [
+        "node_modules/micromatch"
+      ],
+      "fixAvailable": {
+        "name": "eslint-config-next",
+        "version": "14.2.35",
+        "isSemVerMajor": true
+      }
+    },
+    "vinext": {
+      "name": "vinext",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "vite-plugin-commonjs"
+      ],
+      "effects": [],
+      "range": ">=0.0.16",
+      "nodes": [
+        "node_modules/vinext"
+      ],
+      "fixAvailable": {
+        "name": "vinext",
+        "version": "0.0.15",
+        "isSemVerMajor": true
+      }
+    },
+    "vite-plugin-commonjs": {
+      "name": "vite-plugin-commonjs",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "vite-plugin-dynamic-import"
+      ],
+      "effects": [
+        "vinext"
+      ],
+      "range": "0.5.0 - 0.5.2 || >=0.7.0",
+      "nodes": [
+        "node_modules/vite-plugin-commonjs"
+      ],
+      "fixAvailable": {
+        "name": "vinext",
+        "version": "0.0.15",
+        "isSemVerMajor": true
+      }
+    },
+    "vite-plugin-dynamic-import": {
+      "name": "vite-plugin-dynamic-import",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "fast-glob"
+      ],
+      "effects": [
+        "vite-plugin-commonjs"
+      ],
+      "range": ">=0.2.0",
+      "nodes": [
+        "node_modules/vite-plugin-dynamic-import"
+      ],
+      "fixAvailable": {
+        "name": "vinext",
+        "version": "0.0.15",
+        "isSemVerMajor": true
+      }
+    }
+  },
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 8,
+      "critical": 0,
+      "total": 8
+    },
+    "dependencies": {
+      "prod": 20,
+      "dev": 571,
+      "optional": 145,
+      "peer": 42,
+      "peerOptional": 0,
+      "total": 625
+    }
+  }
+}

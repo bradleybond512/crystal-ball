@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 import { readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertReleaseIdentity, getDesktopIdentity, SUPPORTED_RELEASE_VARIANTS } from './release-metadata.mjs';
+import { verifyMacBundle } from './check-desktop-identity.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..');
@@ -35,6 +37,7 @@ function parseArgs(argv) {
  commitSha: '',
  platform: '',
  generatedAt: process.env.WM_BUILD_TIMESTAMP || new Date().toISOString(),
+ builtAfter: undefined,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -46,6 +49,10 @@ function parseArgs(argv) {
  }
  if (arg.startsWith('--mode=')) {
  options.mode = arg.slice('--mode='.length);
+ continue;
+ }
+ if (arg === '--built-after') {
+ options.builtAfter = Number(argv[++i]);
  continue;
  }
  if (arg === '--target-root') {
@@ -158,9 +165,40 @@ export function canonicalReleaseAssetName(fileName) {
   // both to the canonical space form so a downloaded `Crystal.Ball_…` matches
   // a manifest that lists `Crystal Ball_…`. Also collapse the legacy
   // "World Monitor" / "World.Monitor" branding to the current product name.
-  return fileName
- .replace(/^World[ .]Monitor(?=_)/, 'Crystal Ball')
- .replace(/^Crystal\.Ball(?=_)/, 'Crystal Ball');
+  const canonical = fileName.replace(/^World[ .]Monitor(?=_)/, 'Crystal Ball');
+  for (const variant of SUPPORTED_RELEASE_VARIANTS) {
+    const name = getDesktopIdentity(variant).productName;
+    const dotted = name.replaceAll(' ', '.');
+    if (canonical.startsWith(dotted + '_')) return name + canonical.slice(dotted.length);
+  }
+  return canonical;
+}
+
+export function assertManifestIdentity(manifest) {
+  if (!manifest.tag || !Array.isArray(manifest.assets) || manifest.assets.length === 0) throw new Error('Manifest requires a tag and release assets');
+  if (!SUPPORTED_RELEASE_VARIANTS.includes(manifest.variant)) throw new Error('Manifest identity requires a supported variant');
+  const identity = assertReleaseIdentity(manifest);
+  const prefixes = new Set([
+    identity.productName,
+    identity.productName.replaceAll(' ', '.'),
+    identity.productName.replaceAll(' ', '-'),
+    identity.productName.toLowerCase().replaceAll(' ', '-'),
+    ...(manifest.variant === 'full' ? ['crystalball'] : []),
+  ]);
+  for (const asset of manifest.assets) {
+    if (!isReleaseArtifactName(asset.name, manifest.version)
+      || ![...prefixes].some(prefix => asset.name.startsWith(prefix + '_' + manifest.version + '_')
+        || asset.name.startsWith(prefix + '_' + manifest.version + '.'))) {
+      throw new Error('Artifact does not match release identity: ' + asset.name);
+    }
+    if (asset.name.endsWith('.dmg') || asset.name.endsWith('.app.tar.gz')) {
+      const measured = asset.nativeIdentity;
+      if (!measured || measured.productName !== identity.productName || measured.identifier !== identity.identifier || measured.version !== manifest.version) {
+        throw new Error('Missing or mismatched measured native identity: ' + asset.name);
+      }
+    }
+  }
+  return identity;
 }
 
 async function listFilesRecursive(rootDir) {
@@ -185,7 +223,14 @@ async function sha256File(filePath) {
   return hash.digest('hex');
 }
 
-export async function collectReleaseArtifacts({ targetRoot, version, variant, tag, commitSha, platform, generatedAt }) {
+export async function collectReleaseArtifacts({ targetRoot, version, variant, tag, commitSha, platform, generatedAt, builtAfter, verifyNativeBundle = verifyMacBundle }) {
+  assertReleaseIdentity({ version, variant, tag });
+  const macTarget = { 'macOS-ARM64': 'aarch64-apple-darwin', 'macOS-x64': 'x86_64-apple-darwin' }[platform];
+  if (String(platform).startsWith('macOS') && !macTarget) throw new Error('Unknown macOS manifest architecture');
+  const measuredDmgs = macTarget ? verifyNativeBundle({
+    bundleRoot: path.join(targetRoot, macTarget, 'release', 'bundle'),
+    version, variant, tag, builtAfter, includeDmg: true,
+  }).dmgs : [];
   const allFiles = await listFilesRecursive(targetRoot);
   const matches = allFiles
  .filter((filePath) => isReleaseArtifactName(path.basename(filePath), version))
@@ -204,15 +249,20 @@ export async function collectReleaseArtifacts({ targetRoot, version, variant, ta
  }
  seenNames.add(name);
  const fileStat = await stat(filePath);
+ const measurement = measuredDmgs.find(dmg => path.resolve(dmg.path) === path.resolve(filePath));
+ if (macTarget && !measurement) throw new Error('Unverified macOS release artifact: ' + name);
+ const sha256 = await sha256File(filePath);
+ if (measurement && measurement.sha256 !== sha256) throw new Error('Artifact changed after native identity verification: ' + name);
  assets.push({
  name,
  path: filePath,
  size: fileStat.size,
- sha256: await sha256File(filePath),
+ sha256,
+ ...(measurement ? { nativeIdentity: measurement.nativeIdentity } : {}),
  });
   }
 
-  return {
+  const manifest = {
  version,
  variant,
  tag,
@@ -221,6 +271,8 @@ export async function collectReleaseArtifacts({ targetRoot, version, variant, ta
  generatedAt,
  assets,
   };
+  assertManifestIdentity(manifest);
+  return manifest;
 }
 
 export function combineReleaseManifests(manifests) {
@@ -246,6 +298,7 @@ export function combineReleaseManifests(manifests) {
   if (duplicateNames.length > 0) {
  throw new Error(`Duplicate asset names across manifests: ${[...new Set(duplicateNames)].join(', ')}`);
   }
+  for (const manifest of manifests) assertManifestIdentity(manifest);
 
   return {
  version: first.version,
@@ -310,6 +363,7 @@ async function combineMode(options) {
 
 async function verifyMode(options) {
   const manifest = JSON.parse(await readFile(options.output, 'utf8'));
+  assertManifestIdentity(manifest);
   const downloadedFiles = await listFilesRecursive(options.downloadDir);
   const errors = verifyDownloadedAssets(manifest, downloadedFiles);
   const downloadedByName = new Map(downloadedFiles.map((filePath) => [path.basename(filePath), filePath]));

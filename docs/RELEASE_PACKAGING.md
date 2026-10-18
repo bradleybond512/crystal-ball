@@ -4,8 +4,9 @@ This guide covers the desktop packaging helper as it exists today:
 
 - **full** -> `Crystal Ball`
 - **tech** -> `Tech Monitor`
+- **finance** -> `Finance Monitor`
 
-The repository also includes a finance desktop build config (`npm run desktop:build:finance`), but `scripts/desktop-package.mjs` currently accepts only `full` and `tech` for release packaging.
+The packaging CLI accepts `full`, `tech`, and `finance`. `VITE_VARIANT` selects the frontend; it does not select the native app identity by itself.
 
 Some public GitHub releases also contain Linux AppImage assets for the main `Crystal Ball` build, but this guide documents only the packaging paths currently maintained in-repo: macOS and Windows.
 
@@ -13,6 +14,9 @@ Variant identity is controlled by Tauri config:
 
 - full: `src-tauri/tauri.conf.json`
 - tech: `src-tauri/tauri.tech.conf.json`
+- finance: `src-tauri/tauri.finance.conf.json`
+
+Local packaging and release CI select the config through the shared allowlist in `scripts/release-metadata.mjs` and pass it explicitly with `--config`. Tech and finance configs override only name and identifier; the base version, executable name, permissions and signing policy are inherited.
 
 ## Prerequisites
 
@@ -63,6 +67,7 @@ npm run desktop:package -- --help
 ```bash
 npm run desktop:package:macos:full
 npm run desktop:package:macos:tech
+npm run desktop:package:macos:finance
 # or generic runner
 npm run desktop:package -- --os macos --variant full
 ```
@@ -186,15 +191,31 @@ npm run desktop:package:windows:full:sign
 
 ## Variant-aware outputs (names/icons)
 
-- Full variant: `Crystal Ball` / `crystal-ball`
-- Tech variant: `Tech Monitor` / `tech-monitor`
+| Variant | macOS app | Bundle identifier |
+| --- | --- | --- |
+| full | `Crystal Ball.app` | `com.bradleybond.crystalball` |
+| tech | `Tech Monitor.app` | `com.bradleybond.crystalball.tech` |
+| finance | `Finance Monitor.app` | `com.bradleybond.crystalball.finance` |
 
-Distinct names are configured in Tauri:
-
-- `src-tauri/tauri.conf.json` → `Crystal Ball` / `crystal-ball`
-- `src-tauri/tauri.tech.conf.json` → `Tech Monitor` / `tech-monitor`
+All variants retain the `crystalball` executable name. Windows/Linux coexistence requires separate packaged validation; distinct display names alone are not evidence of installer coexistence.
 
 If you want variant-specific icons, set `bundle.icon` separately in each config and point each variant to dedicated icon assets.
+
+### Identity verification and update channels
+
+`scripts/check-desktop-identity.mjs` checks the effective config before the build. After building, it measures the expected app's `CFBundleName`, `CFBundleIdentifier` and `CFBundleShortVersionString`; rejects mixed app outputs and stale build output; and mounts each selected DMG read-only to verify its actual app payload. The identity check runs before local manual signing and before CI signature verification, collection and upload. Tauri's existing internal signing still occurs during its build, before the completed app exists; this check does not change signing identities, credentials or signature requirements.
+
+Use a fresh output directory when changing variants. A leftover full app or another variant is an error, even when the newly requested app also exists. Renaming a full app or DMG is insufficient. The release manifest binds tag suffix, variant, filename, measured native identity and artifact checksum. Versioned tech/finance tags must not contain `Crystal Ball.app` or `CrystalBall.app`.
+
+The existing native updater serves the full app only. Tech/finance staging, manual apply and boot-time apply stop before network or staged-data access, and a manual check explains that automatic updates are unavailable for that variant. No variant update channel is introduced. Full updates and the full-only installer/main-sync target remain unchanged.
+
+### Profiles and existing data
+
+Tech and finance use new native identities and fresh profiles. No existing profile is copied, migrated, merged or deleted. Treat WebView preferences, saved places, alerts and IndexedDB as a new profile until packaged verification establishes their platform behavior. Full retains its existing identifier and profile.
+
+Credentials continue to use the shared `crystal-ball` Keychain service; a new native identity may request OS permission. Distinct identifiers do not mean complete data isolation: fixed watchdog/export/monitor paths and the full-default MCP lookup also remain shared. This change performs no credential or user-data migration.
+
+Focused validation is available through `npm run test:desktop-identity`. Its native policy contract compiles and runs a dependency-free Rust fixture; it does not launch the app or inspect installed profiles. Actual packaged app/DMG, permission-prompt and Windows/Linux coexistence checks remain separate acceptance evidence.
 
 ## Output locations
 
@@ -206,10 +227,12 @@ src-tauri/target/release/bundle/
 
 Common subfolders:
 
-- `app/` → macOS `.app`
+- `macos/` → macOS `.app`
 - `dmg/` → macOS `.dmg`
 - `nsis/` → Windows `.exe` installer
 - `msi/` → Windows `.msi` installer
+
+Explicit cross targets add their triple before `release`, for example `src-tauri/target/aarch64-apple-darwin/release/bundle/`. CI verifies that exact architecture output rather than selecting the first app found under `target`.
 
 ## Release checklist (clean machine)
 

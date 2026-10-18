@@ -102,6 +102,7 @@
     "test:gdacs-map"
   ],
   "src-tauri/src/main.rs": [
+    "test:desktop-identity",
     "test:desktop-updater",
     "test:imessage",
     "test:imessage-native",
@@ -115,7 +116,34 @@
     "test:native-lows"
   ],
   "src-tauri/src/updater_policy.rs": [
-    "test:desktop-updater"
+    "test:desktop-updater",
+    "test:desktop-identity"
+  ],
+  "src-tauri/src/updater_identity.rs": [
+    "test:desktop-identity"
+  ],
+  "src-tauri/tests/updater_identity_contract.rs": [
+    "test:desktop-identity"
+  ],
+  "scripts/check-desktop-identity.mjs": [
+    "test:desktop-identity"
+  ],
+  "scripts/release-metadata.mjs": [
+    "test:desktop-identity"
+  ],
+  "scripts/release-context.mjs": [
+    "test:desktop-identity"
+  ],
+  "scripts/release-manifest.mjs": [
+    "test:desktop-identity"
+  ],
+  "src-tauri/tauri.tech.conf.json": [
+    "test:desktop-identity",
+    "test:secret-boundary"
+  ],
+  "src-tauri/tauri.finance.conf.json": [
+    "test:desktop-identity",
+    "test:secret-boundary"
   ],
   "src-tauri/src/imessage.rs": [
     "test:imessage",
@@ -177,6 +205,7 @@
     "test:workflow-security"
   ],
   "package.json": [
+    "test:desktop-identity",
     "test:install-scripts",
     "test:workflow-security"
   ],
@@ -218,7 +247,9 @@
     "test:native-notify"
   ],
   "src/app/desktop-updater.ts": [
-    "test:native-notify"
+    "test:native-notify",
+    "test:desktop-updater",
+    "test:desktop-identity"
   ],
   "src/components/CommsHealthPanel.ts": [
     "test:native-notify"
@@ -347,6 +378,7 @@
     "test:secret-boundary"
   ],
   "src-tauri/tauri.conf.json": [
+    "test:desktop-identity",
     "test:secret-boundary"
   ],
   "src-tauri/src/vault_coordinator.rs": [
@@ -359,6 +391,7 @@
     "test:signing-phase-a"
   ],
   "scripts/desktop-package.mjs": [
+    "test:desktop-identity",
     "test:signing-phase-a",
     "test:native-lows"
   ],
@@ -614,6 +647,7 @@
     "test:workflow-security"
   ],
   ".github/workflows/build-desktop.yml": [
+    "test:desktop-identity",
     "test:workflow-security"
   ],
   ".github/workflows/lint.yml": [

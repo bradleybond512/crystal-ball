@@ -7,6 +7,17 @@ pub const MAX_JSON_BYTES: u64 = 1024 * 1024;
 pub const MAX_ARTIFACT_BYTES: u64 = 512 * 1024 * 1024;
 const RELEASE_BASE: &str = "https://github.com/bradleybond512/crystal-ball/releases";
 
+pub fn require_full_channel(identifier: &str, product_name: Option<&str>) -> Result<(), UpdateError> {
+    if crate::updater_identity::full_channel_allowed(identifier, product_name) {
+        Ok(())
+    } else {
+        Err(UpdateError {
+            code: "variant_updates_unavailable",
+            message: "Automatic updates are not available for this variant yet.",
+        })
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(
     tag = "status",
@@ -403,6 +414,19 @@ pub fn check_body_length(
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn variant_channel_rejection_is_explicit_and_full_policy_is_preserved() {
+        assert!(require_full_channel(BUNDLE_ID, Some("Crystal Ball")).is_ok());
+        for (id, name) in [
+            ("com.bradleybond.crystalball.tech", "Tech Monitor"),
+            ("com.bradleybond.crystalball.finance", "Finance Monitor"),
+        ] {
+            let error = require_full_channel(id, Some(name)).unwrap_err();
+            assert_eq!(error.code, "variant_updates_unavailable");
+            assert_eq!(error.message, "Automatic updates are not available for this variant yet.");
+        }
+    }
 
     fn release() -> Release {
         serde_json::from_value(json!({"tag_name":"v2.25.148","draft":false,"prerelease":false,"assets":[

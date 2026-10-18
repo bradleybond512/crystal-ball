@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-10-18T21:34:09.466Z",
+  "checkedAt": "2026-10-18T21:40:24.083Z",
   "sourceSha": "78e34040d738c82195162b28280e8ce865c3bb6d",
   "routes": [
     "/",
@@ -10,8 +10,8 @@
   ],
   "method": "Built worker plus static assets; external HEAD follows redirects, GET Range fallback for 403/405/501 cancels body immediately. Four concurrent requests, 20-second timeout. Remote fragments are not validated.",
   "summary": {
-    "total": 49,
-    "passed": 49,
+    "total": 54,
+    "passed": 54,
     "failed": 0,
     "notFound": 0
   },
@@ -106,7 +106,27 @@
       "ok": true
     },
     {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-agent-intelligence-800.webp",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
       "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-analysis-library-1600.webp",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-analysis-library-800.webp",
       "from": [
         "/"
       ],
@@ -126,6 +146,16 @@
       "ok": true
     },
     {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-home-800.webp",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
       "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-library-1600.webp",
       "from": [
         "/"
@@ -136,7 +166,27 @@
       "ok": true
     },
     {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-library-800.webp",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
       "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-risk-calibration-1600.webp",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-risk-calibration-800.webp",
       "from": [
         "/"
       ],
@@ -345,7 +395,7 @@
       ]
     },
     {
-      "url": "https://github.com/bradleybond512/crystal-ball/blob/78e34040d738c82195162b28280e8ce865c3bb6d/CHANGELOG.md",
+      "url": "https://github.com/bradleybond512/crystal-ball/blob/main/CHANGELOG.md",
       "from": [
         "/docs"
       ],
@@ -357,12 +407,12 @@
         {
           "method": "HEAD",
           "status": 200,
-          "finalUrl": "https://github.com/bradleybond512/crystal-ball/blob/78e34040d738c82195162b28280e8ce865c3bb6d/CHANGELOG.md"
+          "finalUrl": "https://github.com/bradleybond512/crystal-ball/blob/main/CHANGELOG.md"
         }
       ]
     },
     {
-      "url": "https://github.com/bradleybond512/crystal-ball/blob/78e34040d738c82195162b28280e8ce865c3bb6d/docs/AGENT_ACCESS.md",
+      "url": "https://github.com/bradleybond512/crystal-ball/blob/main/docs/AGENT_ACCESS.md",
       "from": [
         "/",
         "/docs"
@@ -375,12 +425,12 @@
         {
           "method": "HEAD",
           "status": 200,
-          "finalUrl": "https://github.com/bradleybond512/crystal-ball/blob/78e34040d738c82195162b28280e8ce865c3bb6d/docs/AGENT_ACCESS.md"
+          "finalUrl": "https://github.com/bradleybond512/crystal-ball/blob/main/docs/AGENT_ACCESS.md"
         }
       ]
     },
     {
-      "url": "https://github.com/bradleybond512/crystal-ball/blob/78e34040d738c82195162b28280e8ce865c3bb6d/docs/USER_MANUAL.md",
+      "url": "https://github.com/bradleybond512/crystal-ball/blob/main/docs/USER_MANUAL.md",
       "from": [
         "/docs",
         "/privacy"
@@ -393,12 +443,12 @@
         {
           "method": "HEAD",
           "status": 200,
-          "finalUrl": "https://github.com/bradleybond512/crystal-ball/blob/78e34040d738c82195162b28280e8ce865c3bb6d/docs/USER_MANUAL.md"
+          "finalUrl": "https://github.com/bradleybond512/crystal-ball/blob/main/docs/USER_MANUAL.md"
         }
       ]
     },
     {
-      "url": "https://github.com/bradleybond512/crystal-ball/blob/78e34040d738c82195162b28280e8ce865c3bb6d/LICENSE",
+      "url": "https://github.com/bradleybond512/crystal-ball/blob/main/LICENSE",
       "from": [
         "/",
         "/download",
@@ -414,12 +464,12 @@
         {
           "method": "HEAD",
           "status": 200,
-          "finalUrl": "https://github.com/bradleybond512/crystal-ball/blob/78e34040d738c82195162b28280e8ce865c3bb6d/LICENSE"
+          "finalUrl": "https://github.com/bradleybond512/crystal-ball/blob/main/LICENSE"
         }
       ]
     },
     {
-      "url": "https://github.com/bradleybond512/crystal-ball/blob/78e34040d738c82195162b28280e8ce865c3bb6d/src/components/BeliefCalibrationPanel.ts",
+      "url": "https://github.com/bradleybond512/crystal-ball/blob/main/src/components/BeliefCalibrationPanel.ts",
       "from": [
         "/"
       ],
@@ -431,12 +481,12 @@
         {
           "method": "HEAD",
           "status": 200,
-          "finalUrl": "https://github.com/bradleybond512/crystal-ball/blob/78e34040d738c82195162b28280e8ce865c3bb6d/src/components/BeliefCalibrationPanel.ts"
+          "finalUrl": "https://github.com/bradleybond512/crystal-ball/blob/main/src/components/BeliefCalibrationPanel.ts"
         }
       ]
     },
     {
-      "url": "https://github.com/bradleybond512/crystal-ball/blob/78e34040d738c82195162b28280e8ce865c3bb6d/src/components/HomeShellOverlay.ts",
+      "url": "https://github.com/bradleybond512/crystal-ball/blob/main/src/components/HomeShellOverlay.ts",
       "from": [
         "/"
       ],
@@ -448,12 +498,12 @@
         {
           "method": "HEAD",
           "status": 200,
-          "finalUrl": "https://github.com/bradleybond512/crystal-ball/blob/78e34040d738c82195162b28280e8ce865c3bb6d/src/components/HomeShellOverlay.ts"
+          "finalUrl": "https://github.com/bradleybond512/crystal-ball/blob/main/src/components/HomeShellOverlay.ts"
         }
       ]
     },
     {
-      "url": "https://github.com/bradleybond512/crystal-ball/blob/78e34040d738c82195162b28280e8ce865c3bb6d/src/components/MapContainer.ts",
+      "url": "https://github.com/bradleybond512/crystal-ball/blob/main/src/components/MapContainer.ts",
       "from": [
         "/"
       ],
@@ -465,12 +515,12 @@
         {
           "method": "HEAD",
           "status": 200,
-          "finalUrl": "https://github.com/bradleybond512/crystal-ball/blob/78e34040d738c82195162b28280e8ce865c3bb6d/src/components/MapContainer.ts"
+          "finalUrl": "https://github.com/bradleybond512/crystal-ball/blob/main/src/components/MapContainer.ts"
         }
       ]
     },
     {
-      "url": "https://github.com/bradleybond512/crystal-ball/blob/78e34040d738c82195162b28280e8ce865c3bb6d/src/config/panels.ts",
+      "url": "https://github.com/bradleybond512/crystal-ball/blob/main/src/config/panels.ts",
       "from": [
         "/"
       ],
@@ -482,7 +532,7 @@
         {
           "method": "HEAD",
           "status": 200,
-          "finalUrl": "https://github.com/bradleybond512/crystal-ball/blob/78e34040d738c82195162b28280e8ce865c3bb6d/src/config/panels.ts"
+          "finalUrl": "https://github.com/bradleybond512/crystal-ball/blob/main/src/config/panels.ts"
         }
       ]
     },
@@ -520,7 +570,7 @@
         {
           "method": "HEAD",
           "status": 200,
-          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/a07e0f6e-8a56-45dd-91a2-f67c5f1776f2?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-18T22%3A27%3A57Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_aarch64.AppImage&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T21%3A27%3A34Z&ske=2026-10-18T22%3A27%3A57Z&sks=b&skv=2018-11-09&sig=IERSlvXTkADOelDr1lUXmSVPizsGGMQVXODZlk5rnHU%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2Mjg0OCwibmJmIjoxNzkyMzU5MjQ4LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.3TCZYKGccatmNNjgvEuIUOdRfBjMNN8gP-5hBjFBd6E&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_aarch64.AppImage&response-content-type=application%2Foctet-stream"
+          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/a07e0f6e-8a56-45dd-91a2-f67c5f1776f2?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-18T22%3A26%3A36Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_aarch64.AppImage&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T21%3A26%3A31Z&ske=2026-10-18T22%3A26%3A36Z&sks=b&skv=2018-11-09&sig=OVRknWuCdHLvIQ%2FVLfzsTSPGnVFfcxhBlqJ383HiVgo%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2MzIyMywibmJmIjoxNzkyMzU5NjIzLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.eTtMEtM1gDeReduRImCvgqrvSNcpktaz6v3RQKCPGqo&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_aarch64.AppImage&response-content-type=application%2Foctet-stream"
         }
       ]
     },
@@ -537,7 +587,7 @@
         {
           "method": "HEAD",
           "status": 200,
-          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/e7c06bf0-fa05-49a3-bb8a-0117bf969db8?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-18T22%3A28%3A36Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_aarch64.dmg&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T21%3A28%3A22Z&ske=2026-10-18T22%3A28%3A36Z&sks=b&skv=2018-11-09&sig=PcrjySbCoZO4LzTQK2TxfrelsFo8lDdymiW%2B0G4iYFY%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2MTA0NywibmJmIjoxNzkyMzU5MjQ3LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.9o04mBVPyq3dSm1lt-Kr6U6OMLQ2HsAwi78HczPPmDw&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_aarch64.dmg&response-content-type=application%2Foctet-stream"
+          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/e7c06bf0-fa05-49a3-bb8a-0117bf969db8?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-18T22%3A27%3A59Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_aarch64.dmg&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T21%3A27%3A54Z&ske=2026-10-18T22%3A27%3A59Z&sks=b&skv=2018-11-09&sig=R7JJ5PzgqneBCeO6mZ%2B53Ynz1oOoAPx11b%2B5uxMeSHs%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2MTQyMiwibmJmIjoxNzkyMzU5NjIyLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.hAFXsczqmPDNwBrwO3_rstqQTIMdptlP2d9N6iqcgXA&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_aarch64.dmg&response-content-type=application%2Foctet-stream"
         }
       ]
     },
@@ -554,7 +604,7 @@
         {
           "method": "HEAD",
           "status": 200,
-          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/495a9911-35e9-47eb-abf4-dc7d57284fb6?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-18T22%3A27%3A01Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_amd64.AppImage&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T21%3A26%3A51Z&ske=2026-10-18T22%3A27%3A01Z&sks=b&skv=2018-11-09&sig=jefJWg9g2Z8K%2FsX1GB6jsUW0sBvfz28QR2DvXDfGq8A%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2Mjg0OCwibmJmIjoxNzkyMzU5MjQ4LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.3TCZYKGccatmNNjgvEuIUOdRfBjMNN8gP-5hBjFBd6E&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_amd64.AppImage&response-content-type=application%2Foctet-stream"
+          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/495a9911-35e9-47eb-abf4-dc7d57284fb6?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-18T22%3A29%3A03Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_amd64.AppImage&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T21%3A28%3A57Z&ske=2026-10-18T22%3A29%3A03Z&sks=b&skv=2018-11-09&sig=5tmnyA%2BQVv2xHKmojy9plrSCSK8a2oExxvNIYd6hL9w%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2MzIyMywibmJmIjoxNzkyMzU5NjIzLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.eTtMEtM1gDeReduRImCvgqrvSNcpktaz6v3RQKCPGqo&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_amd64.AppImage&response-content-type=application%2Foctet-stream"
         }
       ]
     },
@@ -571,7 +621,7 @@
         {
           "method": "HEAD",
           "status": 200,
-          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/2bdf0daa-839a-441a-b1f3-8c83d436c8f5?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-18T22%3A28%3A57Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_x64-setup.exe&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T21%3A28%3A05Z&ske=2026-10-18T22%3A28%3A57Z&sks=b&skv=2018-11-09&sig=izhGPrKM4xs4PH%2BviValAZa%2FybuHSsFKRkYu0kPuJY0%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2MTA0OCwibmJmIjoxNzkyMzU5MjQ4LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.37kPvPBHuKTa4zNVXHTJabvQ4exRzCFYBIZpPDeoww4&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_x64-setup.exe&response-content-type=application%2Foctet-stream"
+          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/2bdf0daa-839a-441a-b1f3-8c83d436c8f5?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-18T22%3A29%3A25Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_x64-setup.exe&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T21%3A28%3A39Z&ske=2026-10-18T22%3A29%3A25Z&sks=b&skv=2018-11-09&sig=3pvhYIMnMQzrmMGcClcjJe8zE96VPOZttWarsAOpZIQ%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2MTQyMywibmJmIjoxNzkyMzU5NjIzLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.oJJXyGA_Ls3klMvkLAL4kXAf00TXKsa70rH4phdBWzY&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_x64-setup.exe&response-content-type=application%2Foctet-stream"
         }
       ]
     },
@@ -588,7 +638,7 @@
         {
           "method": "HEAD",
           "status": 200,
-          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/409c11d3-bd5c-4fe7-a02b-f07f36c94a10?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-18T22%3A32%3A24Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_x64.dmg&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T21%3A31%3A40Z&ske=2026-10-18T22%3A32%3A24Z&sks=b&skv=2018-11-09&sig=OWL04gW9Jo2bqChCuXzxtQL3tHfQsOTOZLvaSetRmms%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2MTA0NywibmJmIjoxNzkyMzU5MjQ3LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.9o04mBVPyq3dSm1lt-Kr6U6OMLQ2HsAwi78HczPPmDw&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_x64.dmg&response-content-type=application%2Foctet-stream"
+          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/409c11d3-bd5c-4fe7-a02b-f07f36c94a10?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-18T22%3A28%3A45Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_x64.dmg&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T21%3A28%3A20Z&ske=2026-10-18T22%3A28%3A45Z&sks=b&skv=2018-11-09&sig=GUxKxFnilJ3sEpNTYw4dieagyYFdx9QzfF4ExKgLYQA%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2MTQyMiwibmJmIjoxNzkyMzU5NjIyLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.hAFXsczqmPDNwBrwO3_rstqQTIMdptlP2d9N6iqcgXA&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_x64.dmg&response-content-type=application%2Foctet-stream"
         }
       ]
     },
@@ -606,7 +656,7 @@
         {
           "method": "HEAD",
           "status": 200,
-          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/dc751aca-3e95-48bf-9e88-743f3b49072f?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-18T22%3A29%3A19Z&rscd=attachment%3B+filename%3Drelease-manifest.json&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T21%3A28%3A47Z&ske=2026-10-18T22%3A29%3A19Z&sks=b&skv=2018-11-09&sig=NZoWwVu7%2Fh7Opyg5N0FH7PsaRBbC3XC%2Fj5ok7lwtT04%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM1OTU0NywibmJmIjoxNzkyMzU5MjQ3LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.oOvdiyOYsi1ic2qAxR1L-oDsvNzrvrPeS5Y-s70O8tY&response-content-disposition=attachment%3B%20filename%3Drelease-manifest.json&response-content-type=application%2Foctet-stream"
+          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/dc751aca-3e95-48bf-9e88-743f3b49072f?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-18T22%3A27%3A08Z&rscd=attachment%3B+filename%3Drelease-manifest.json&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T21%3A26%3A48Z&ske=2026-10-18T22%3A27%3A08Z&sks=b&skv=2018-11-09&sig=eNu%2Bgt9GbCmISGdohFoXyG7AMykh3vlw2suAYYm1pDo%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM1OTkyMiwibmJmIjoxNzkyMzU5NjIyLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.Xj3aQXsyYGc81yj-YYfmLfhmLklEzAiEJdlDaZTAkzg&response-content-disposition=attachment%3B%20filename%3Drelease-manifest.json&response-content-type=application%2Foctet-stream"
         }
       ]
     },
@@ -646,7 +696,7 @@
       ]
     },
     {
-      "url": "https://github.com/bradleybond512/crystal-ball/tree/78e34040d738c82195162b28280e8ce865c3bb6d",
+      "url": "https://github.com/bradleybond512/crystal-ball/tree/main",
       "from": [
         "/docs"
       ],
@@ -658,7 +708,7 @@
         {
           "method": "HEAD",
           "status": 200,
-          "finalUrl": "https://github.com/bradleybond512/crystal-ball/tree/78e34040d738c82195162b28280e8ce865c3bb6d"
+          "finalUrl": "https://github.com/bradleybond512/crystal-ball/tree/main"
         }
       ]
     },

@@ -7,7 +7,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 
 const root = new URL('../../', import.meta.url);
-const data = JSON.parse(await readFile(new URL('../data/site.json', import.meta.url), 'utf8'));
+const data = JSON.parse(await readFile(new URL('../data/generated.json', import.meta.url), 'utf8'));
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
 test('shared panel counts are derived from actual variant catalogs', async () => {

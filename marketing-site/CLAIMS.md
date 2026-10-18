@@ -1,6 +1,6 @@
 # Marketing claim checklist
 
-Evidence is pinned to [78e34040d738c82195162b28280e8ce865c3bb6d](https://github.com/bradleybond512/crystal-ball/tree/78e34040d738c82195162b28280e8ce865c3bb6d). File and line references below refer to that revision, not a future moving branch. Counts belong in the marketing site's shared data file; templates must read them rather than repeat literals.
+Evidence is pinned to [78e34040d738c82195162b28280e8ce865c3bb6d](https://github.com/bradleybond512/crystal-ball/tree/78e34040d738c82195162b28280e8ce865c3bb6d). File and line references below refer to that revision, not a future moving branch. Counts are derived at build time from the checkout into data/generated.json; templates read that generated file. data/site.json contains human-reviewed copy and canonical URLs only.
 
 This is a source audit, not proof of installed-app performance, feed completeness, forecast accuracy, notification delivery, or released-binary behavior. The latest reviewed public release is v2.25.147, published July 20, 2026. The reviewed source contains later development; a source feature must not be represented as verified in that July download. Release metadata and artifact URLs require separate live verification.
 
@@ -45,3 +45,26 @@ This is a source audit, not proof of installed-app performance, feed completenes
 These boxes are review gates, not claims that visual or runtime verification has already passed.
 
 All presentation boxes were checked against the final build on 2026-10-18. See `review/QA.md`, link results and browser evidence. Signing/notarization remains explicitly unverified.
+
+## Added product detail
+
+| Detail | Implementation evidence | Limit |
+| --- | --- | --- |
+| Map modes and layers | `src/components/MapContainer.ts`, `src/components/GodsVisionView.ts` | Coverage depends on sources and build. |
+| Place search | `src/components/gods-vision/GlobeSearch.ts` | Search availability depends on its provider. |
+| Source health and disagreements | `src/components/SourceConfidencePanel.ts` | Health is not proof of accurate reporting. |
+| Situation evidence | `src/components/EvidenceGraphPanel.ts` | Interpretation remains uncertain. |
+| Forecast review | `src/components/BeliefCalibrationPanel.ts` | Evaluation caveats remain in view. |
+| Briefing context, recent changes, critical events | `src/services/home-shell/briefing-view.ts` | No scheduled-delivery promise. |
+| Deck and readiness | `src/components/HomeShellOverlay.ts` | Readiness gaps may remain. |
+| Saved places | `src/components/SavedPlacesPanel.ts` | Available local context only. |
+| Offline basemap downloads | `src/components/OfflineMapPanel.ts` | Not complete offline operation. |
+| Route estimates | `src/components/EvacuationPanel.ts` | Current road conditions are unverified; no safe-route guarantee. |
+| Build editions | `src/config/variant.ts`, `src/config/panels.ts` | Catalog choice is a build setting; appearance choices may differ. |
+| Local generation and cloud fallback | `src/services/llm-adapter.ts`, `src/services/summarization.ts` | Local-only applies to the generation adapter, not live feeds. |
+| Read-only and analyst profiles | `tools/mcp-server/profile.mjs`, `tool-registry.mjs`, `index.mjs` | Analyst tools can change state; some actions require confirmation. |
+| Platform architectures | `.github/workflows/build-desktop.yml` node_target matrix | OS minimums are not declared; runner versions are not support guarantees. |
+| Download sizes and checksums | GitHub latest release API plus matching `release-manifest.json` | Build-time snapshot; failures fall back to latest release page. |
+| Data categories | `src/config/panels.ts`, `src/config/feeds.ts`, `src/services/usgs-pager.ts` | Catalog categories do not guarantee live coverage. |
+
+Visible source and license links now follow main, as requested. This checklist retains the audited SHA for reproducible evidence. The generator independently parses current checkout catalogs, so counts cannot silently stay pinned to the old audit. Latest release discovery uses GitHub API and manifest metadata at build time; no runtime API request is needed.

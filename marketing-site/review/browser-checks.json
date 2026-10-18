@@ -5,6 +5,10 @@
   },
   {
     "name": "desktop",
+    "specsKeyboardOpen": true
+  },
+  {
+    "name": "desktop",
     "route": "/",
     "overflow": false,
     "h1": 1,
@@ -56,6 +60,10 @@
   {
     "name": "mobile",
     "skipFocused": true
+  },
+  {
+    "name": "mobile",
+    "specsKeyboardOpen": true
   },
   {
     "name": "mobile",

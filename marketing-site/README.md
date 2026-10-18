@@ -30,7 +30,7 @@ node --test tests/marketing.test.mjs
 
 Imported from confirmed Sites project `appgprj_6a67d6f7f5fc8191ace93399c51b354c`, source commit `8fee5e7919ea51918c9585c0cceaddc481c7b70e`. The original lives in the task workspace at `work/crystal-ball`.
 
-Update `data/site.json` after checking the panel catalog, MCP registry and latest GitHub release. Release asset links are pinned to the latest verified tag so a later release cannot silently break versioned filenames. Review `CLAIMS.md` when refreshing facts. Do not deploy or merge without Bradley’s review.
+`npm run generate` reads panel catalogs, the MCP registry, build targets and the latest GitHub release into ignored `data/generated.json`. It generates a static sitemap. Release discovery failures discard stale asset links and use `/releases/latest`. Update only human-reviewed copy and URLs in `data/site.json`. Review `CLAIMS.md` when refreshing facts. Do not deploy or merge without Bradley’s review.
 
 ## Visual and link review
 

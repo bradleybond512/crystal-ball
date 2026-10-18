@@ -60,6 +60,24 @@ img { display: block; max-width: 100%; height: auto; }
 .variant-grid p { font-size: 16px; color: var(--muted); }
 .variant-grid p + p { margin-top: 28px; }
 .variant-grid strong { display: block; color: var(--foreground); font-size: 44px; line-height: 1.2; font-weight: 600; letter-spacing: -.045em; }
+.feature-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; margin-top: 52px; text-align: left; }
+.feature-tile { min-width: 0; padding-top: 24px; border-top: 1px solid var(--line); }
+.feature-tile h3 { font-size: 24px; line-height: 1.2; letter-spacing: -.025em; margin-bottom: 14px; }
+.feature-tile p { color: var(--muted); font-size: 16px; line-height: 1.6; }
+.numbers-band { padding-block: 16px 80px; background: var(--background); color: var(--foreground); text-align: center; }
+.numbers-band h2 { font-size: 24px; line-height: 1.2; margin-bottom: 32px; }
+.numbers-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 24px; margin: 0; }
+.numbers-grid > * { min-width: 0; padding-block: 20px; border-top: 1px solid var(--line); }
+.numbers-grid strong, .numbers-grid dt { display: block; margin-bottom: 12px; font-size: clamp(36px, 4vw, 52px); font-weight: 600; line-height: 1.1; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.numbers-grid p, .numbers-grid dd { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.numbers-band .fine-print { margin-inline: auto; }
+.tech-specs { max-width: 900px; margin: 48px auto 0; text-align: left; border-block: 1px solid var(--line); }
+.tech-specs summary { padding-block: 24px; cursor: pointer; font-size: 21px; font-weight: 600; line-height: 1.4; }
+.tech-specs > p { color: var(--muted); margin-bottom: 24px; }
+.spec-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 48px; margin: 0; padding-block: 12px 32px; }
+.spec-grid > div { min-width: 0; border-top: 1px solid var(--line); padding-top: 20px; }
+.spec-grid dt { margin-bottom: 10px; font-weight: 600; font-size: 16px; }
+.spec-grid dd { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.6; overflow-wrap: anywhere; }
 #faq h2 { margin-bottom: 48px; }
 .page-intro { padding: 90px 0 50px; max-width: 900px; margin-inline: auto; text-align: center; }
 .page-intro h1 { font-size: clamp(48px, 7vw, 88px); }
@@ -85,6 +103,8 @@ img { display: block; max-width: 100%; height: auto; }
   .product-section { padding-block: 88px; }
   .variant-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
   .product-shot { margin-top: 44px; }
+  .feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
+  .numbers-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 600px) {
   html { scroll-padding-top: 124px; }
@@ -106,11 +126,17 @@ img { display: block; max-width: 100%; height: auto; }
   .footer-columns { gap: 28px 16px; }
   .page-intro { padding-top: 60px; }
   .page-body { padding-bottom: 72px; }
+  .feature-grid { grid-template-columns: 1fr; gap: 28px 20px; margin-top: 36px; }
+  .feature-tile h3 { font-size: 21px; }
+  .numbers-band { padding-bottom: 56px; }
+  .numbers-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .spec-grid { grid-template-columns: 1fr; gap: 24px; }
+  .tech-specs summary { font-size: 19px; }
 }
 @media (max-width: 360px) {
   .shell { width: calc(100% - 32px); }
   .marketing-nav nav { flex-wrap: wrap; justify-content: center; column-gap: 16px; }
-  .variant-grid { grid-template-columns: 1fr; }
+  .variant-grid, .feature-grid, .numbers-grid { grid-template-columns: 1fr; }
   .footer-columns { grid-template-columns: 1fr; }
   .product-section h2 { font-size: 48px; }
 }

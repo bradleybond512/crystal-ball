@@ -1,6 +1,6 @@
 # Marketing review evidence
 
-Review date: 2026-10-18. No website deployment, app install, merge or auto-merge is authorized by this work. Two draft PRs: copy/source import, then dependent layout/media.
+Review date: 2026-10-18. No website deployment, app install, merge or auto-merge is authorized by this work. The latest user request consolidates the work into one draft PR, including the initial source import and the expanded Apple-style page.
 
 ## Results
 
@@ -12,9 +12,9 @@ Review date: 2026-10-18. No website deployment, app install, merge or auto-merge
 
 Same Lighthouse mobile defaults and headless Chrome. Local and hosted network conditions differ; these are individual lab runs, not field measurements. Repeat on the deployed site after review. Raw JSON and HTML reports are in this directory.
 
-- Marketing typecheck, lint and production build pass. Behavioral tests: 9 pass / 0 fail.
+- Marketing typecheck, lint and production build pass. Behavioral tests: 18 pass / 0 fail.
 - Root `bash scripts/agentic-validate.sh --tests test:marketing` passed, including lint, both app typechecks, secret scan, docs, cross-agent readiness and app build. Captured log precedes the final syntax-aware count correction and extra media assertions; affected marketing checks were rerun.
-- Link audit: 49 pass / 0 fail / 0 HTTP 404. Download bodies were not downloaded. Remote fragments are not checked. `links.json` records methods, URLs and statuses.
+- Link audit: 54 pass / 0 fail / 0 HTTP 404, including every srcset candidate. Download bodies were not downloaded. Remote fragments are not checked. `links.json` records methods, URLs and statuses.
 - Schema.org Markup Validator: one SoftwareApplication, zero errors, zero warnings. `schema-validator.json` contains actual browser output. No ratings or awards were invented to meet rich-result requirements.
 - All five routes checked at 1440×1000 and 390×844: no horizontal overflow or broken images; exactly one h1. Keyboard skip link focuses; reduced-motion disables reveal animation. Separate section captures hide fixed header/skip chrome to show the whole section. Navigation captures preserve actual UI.
 - Product images: five unique real captures, responsive 800/1600 WebP; hero eager/high priority, others lazy. OG PNG is 1200×630 and under 300 KB. Original captures remain in the copy commit history.
@@ -27,8 +27,16 @@ Same Lighthouse mobile defaults and headless Chrome. Local and hosted network co
 - DMG signing/notarization, native runtime behavior of every panel/tool, Windows/Linux parity and cloud-provider contracts were not verified. Copy states these limits.
 - Released binaries are from July 20; reviewed source and installed-app screenshots are newer. Release and source dates remain distinct.
 - Repository description and release-header wording are in `REPOSITORY_COPY.md` for review; remote metadata is not published ahead of the user’s review.
-- Claims, source SHA, release version/date and asset filenames are frozen in `data/site.json`; future releases require an explicit data refresh. Direct downloads pin the latest verified release so later releases do not break old filenames.
+- Human-reviewed claims and canonical URLs remain in `data/site.json`. Each build derives panel/tool/edition/platform counts and resolves latest release URLs/sizes/checksums into ignored `data/generated.json`. Release discovery failure discards stale assets and uses `/releases/latest`. Source links follow main; the checklist retains the reviewed SHA.
 
 ## Manual review and rollback
 
-Open the home, download, docs, privacy and security pages; use Tab/Enter through navigation and disclosure controls. Check desktop/mobile section images and CLAIMS.md. Review copy first, then the dependent layout diff. Both PRs target main; the layout PR includes the copy commit until the first PR merges. Never auto-merge. Roll back a future deployment by redeploying the previous Sites version; these PRs themselves do not deploy.
+Open the home, download, docs, privacy and security pages; use Tab/Enter through navigation and disclosure controls. Check desktop/mobile section images and CLAIMS.md. Review the single PR against main. Never auto-merge. Roll back a future deployment by redeploying the previous Sites version; this PR does not deploy.
+
+## Expanded page verification
+
+The latest request adds sourced feature tiles, a generated numbers band, keyboard-operated specifications, plain section labels, unique disclosure names, a single capture note and build-time static sitemap. Before screenshots are in `before/`; expanded screenshots are in `screenshots/`. The expanded-page Lighthouse run initially scored 84/100/100/100 during concurrent screenshot work and reported a cache-clear timeout; raw evidence is retained. The quiet final run scored 99 Performance / 100 Accessibility / 100 Best Practices / 100 SEO, no warnings and CLS 0. The local pre-expansion run scored 98 / 100 / 100 / 100 (with a cache-clear timeout warning). Both four-category raw reports are retained.
+
+The deterministic generator tests exercise adjacent panel declarations, duplicate rejection, actual registry annotations, build-target discovery, explicit-only OS minimums, latest release/manifest agreement, network errors/timeouts, missing architectures and missing checksums. No binaries are downloaded during generation.
+
+Mutation proof for the original route/media safeguards: starting from clean `f1c534f`, changed 409→408, hero high→low priority and disabled gzip. Confirmed applied diff is `mutation-applied.diff`; tests changed from 9 pass / 0 fail to 6 pass / 3 fail (`mutation-red.txt`). Restored all three files with matching SHA-256 and an empty git status before feature expansion. Pre-rewrite worker also produced 0 pass / 4 fail (`baseline-red.txt`).

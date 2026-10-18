@@ -30,6 +30,9 @@ for (const route of routes) {
   pages.set(route, html);
   results.push({ url: `${origin}${route}`, kind: 'route', status: response.status, ok: response.ok });
   for (const match of html.matchAll(/\b(?:href|src)="([^"]+)"/g)) collect(match[1], route);
+  for (const match of html.matchAll(/\bsrcset="([^"]+)"/g)) {
+    for (const candidate of match[1].split(',')) collect(candidate.trim().split(/\s+/)[0], route);
+  }
   for (const tag of html.matchAll(/<meta\b[^>]*>/g)) {
     if (/(?:property|name)="(?:og:image|twitter:image)"/.test(tag[0])) {
       const content = tag[0].match(/content="([^"]+)"/);

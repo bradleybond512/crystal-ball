@@ -122,3 +122,11 @@ test('serves the exact build-generated sitemap without a rendering route',async(
  assert.equal(await(await request('/sitemap.xml')).text(),xml);
  await assert.rejects(readFile(new URL('../app/sitemap.xml/route.ts',import.meta.url)));
 });
+
+ test('serves the static sitemap without a Cloudflare asset binding', async()=>{
+ const {default:worker}=await import('../dist/server/index.js');
+ const response=await worker.fetch(new Request('http://localhost/sitemap.xml'), {}, {});
+ assert.equal(response.status,200);
+ assert.match(response.headers.get('content-type'),/application\/xml/);
+ assert.equal(await response.text(),await readFile(new URL('../dist/client/sitemap.xml',import.meta.url),'utf8'));
+});

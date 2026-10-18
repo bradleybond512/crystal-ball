@@ -1187,6 +1187,8 @@ A read-only review of `main` @ `7e3bfed` on 2026-10-18 found problems in the
 delivery pipeline rather than the product: reviews, status reporting, CI
 signals, security follow-through and repository hygiene. Each one slows or
 hides the Tier S work above, so they are tracked here as ordinary tasks.
+A second, code-level pass the same day added UX-070 to UX-074: test and Rust
+coverage in CI, local data backup, module size and release SBOMs.
 
 Owner actions that need no agent work (one click each):
 
@@ -1360,6 +1362,124 @@ is off. Agents already open their own PRs.
 - Done when an agent push produces no warning and the docs match the
   behavior.
 
+### UX-070 — Run every test suite on dependency changes and nightly on `main` *(High Assurance)*
+
+Priority: S
+
+Dependencies: none
+
+`scripts/targeted-tests.mjs` selects suites by changed path. At `7e3bfed`,
+`selectScripts()` returns zero suites for `package-lock.json` and
+`src-tauri/Cargo.lock`, and the gate passes. No scheduled workflow runs the
+full sweep: 169 indexed `node --test` suites and roughly 25,000 test cases,
+plus e2e. Every Dependabot PR (UX-066) therefore merges without unit tests,
+and regressions in untouched areas are never caught.
+
+- Change surface: `scripts/targeted-tests.mjs` (main-owned) and a new
+  scheduled workflow. Both are gate and workflow changes and need Bradley's
+  label.
+- Fix: map lockfiles, manifests and `.npmrc` (root, `tools/mcp-server/`,
+  `src-tauri/`) to every indexed suite. Add a nightly and on-demand `main`
+  workflow that runs every indexed suite, the Rust job from UX-071 and e2e,
+  uploads a coverage report (`node --test --experimental-test-coverage`) as
+  an artifact without gating on it, and updates exactly one tracking issue
+  on failure (see UX-064).
+- Done when a lockfile-only PR selects every indexed suite, the nightly run
+  either passes or updates one issue, and the first full-run result is
+  recorded here.
+
+### UX-071 — Run Rust tests and Clippy in CI
+
+Priority: S
+
+Dependencies: none
+
+No workflow runs `cargo test` or `cargo clippy`; only `cargo-deny` and
+`cargo-audit` run. `src-tauri/src` holds 116 `#[test]` functions and 61
+`unsafe` occurrences, and `src-tauri/tests` holds contract tests for current
+location, iMessage and notification policy. The Rust layer owns the Keychain
+vault, Tauri IPC and native notifications.
+
+- Fix: a path-filtered job (`src-tauri/**`, also called by UX-070's nightly
+  run) on the runner the crates need, running `cargo test --locked` and
+  `cargo clippy --locked`. Record existing Clippy warnings as a baseline and
+  fail only on new ones until the baseline is cleared.
+- Keychain rule: no test that touches the macOS Keychain may run in CI.
+  Confirm such tests are `#[ignore]` or cfg-gated before enabling the job,
+  and never add Keychain access to make a test pass.
+- This is a workflow change and needs Bradley's label. He decides whether
+  to make the job a required check.
+- Done when the job passes on `main`, a deliberately failing test on a
+  scratch branch turns it red, and the Clippy baseline is committed.
+
+### UX-072 — Back up and restore local user data *(High Assurance)*
+
+Priority: A
+
+Dependencies: none
+
+API keys have `npm run backup-keys`, but user-owned state has no backup or
+restore. Saved places, watchlists, the forecast and outcome ledgers, the
+operator journal, deck pins and consent live in WKWebView storage (seven
+modules open `crystalball_db`, plus about 21 `localStorage` keys) and in the
+sidecar's `evidence.db`. `src/utils/export.ts` exports only briefs and
+tables. Losing WebView data would erase the forecast history that
+calibration and the ACC-703 proof depend on.
+
+- Fix: an encrypted, versioned export and import of user-owned state,
+  reusing the `backup-keys` engines (age preferred) and its restore rules:
+  verify before writing, merge by default, a separate replace option, and
+  never silently overwrite newer records.
+- Guardrails: never include API keys or touch the Keychain; never write
+  plaintext to disk; never upload anywhere. This complements UX-056
+  (retention bounds) and must not weaken it.
+- Done when round-trip fixture tests cover every included store, a verify
+  mode lists contents without writing, and Bradley confirms a packaged-app
+  round trip.
+
+### UX-073 — Split the largest modules before more feature work
+
+Priority: C
+
+Dependencies: none
+
+Five source files exceed 3,300 lines: `src/components/DeckGLMap.ts` (7,242),
+`src/app/data-loader.ts` (5,020), `src/app/panel-layout.ts` (3,927),
+`src/components/Map.ts` (3,811) and `src/components/GlobeDataManager.ts`
+(3,308). Static data files such as `src/config/inspiration-quotes.ts` (6,683)
+and `src/config/ai-datacenters.ts` (3,981) are also bundled as code. Each
+edit makes agents read tens of thousands of tokens and raises merge-conflict
+risk. `data-loader.ts` also holds the refresh logic that UX-036 and UX-053
+change.
+
+- Fix: one file per PR, behavior-preserving. Add characterization tests
+  first, then extract cohesive units (layer builders, fetch schedulers,
+  panel registries). Move static tables to lazily loaded JSON. Confirm
+  whether both `DeckGLMap.ts` and `Map.ts` are still needed before splitting
+  either.
+- Done when each target file is under about 1,500 lines, its tests pass
+  unchanged, `targeted-tests` still selects suites for it, and
+  `npm run pwa:budget` is no worse.
+
+### UX-074 — Attach an SBOM to each desktop release *(High Assurance)*
+
+Priority: C
+
+Dependencies: none
+
+`.github/workflows/build-desktop.yml` writes a build-provenance attestation
+but no software bill of materials, so a release cannot show which npm and
+Rust dependency versions it shipped.
+
+- Fix: generate CycloneDX SBOMs with the built-in `npm sbom` for both npm
+  trees, and with a reviewed Rust generator for `src-tauri`, then attest
+  them alongside the existing provenance (`actions/attest-sbom`).
+- This is release logic and a workflow change, so it is High Assurance and
+  needs Bradley's label. Any new tool goes through the dependency-age and
+  install-script gates.
+- Done when a `workflow_dispatch` build produces SBOMs that
+  `gh attestation verify` accepts and that list the shipped versions.
+
 ## What was NOT verified
 
 State these as open questions rather than treating them as settled:
@@ -1445,3 +1565,8 @@ Update the row in the same PR that does the work.
 | UX-067 | Green release-integrity signal on main | WAITING | |
 | UX-068 | Prune merged branches and stale worktrees | NOT STARTED — HIGH ASSURANCE | |
 | UX-069 | Auto-PR workflow warning | NOT STARTED | |
+| UX-070 | Full test sweep on dependency changes and nightly | NOT STARTED — HIGH ASSURANCE | |
+| UX-071 | Rust tests and Clippy in CI | NOT STARTED | |
+| UX-072 | Local user-data backup and restore | NOT STARTED — HIGH ASSURANCE | |
+| UX-073 | Split the largest modules | NOT STARTED | |
+| UX-074 | Release SBOMs | NOT STARTED — HIGH ASSURANCE | |

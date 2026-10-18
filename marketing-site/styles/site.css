@@ -66,6 +66,27 @@ img { display: block; max-width: 100%; height: auto; }
 .feature-tile { min-width: 0; padding-top: 24px; border-top: 1px solid var(--line); }
 .feature-tile h3 { font-size: 24px; line-height: 1.2; letter-spacing: -.025em; margin-bottom: 14px; }
 .feature-tile p { color: var(--muted); font-size: 16px; line-height: 1.6; }
+.example-block, .prompt-examples { max-width: 900px; margin: 48px auto 0; padding: 32px; border: 1px solid var(--line); border-radius: 18px; text-align: left; }
+.example-label { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.example-block h3, .prompt-examples h3 { font-size: 28px; line-height: 1.2; margin-block: 12px 24px; }
+.example-block dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin: 0; }
+.example-block dt { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+.example-block dd { color: var(--muted); font-size: 15px; margin: 0; }
+.prompt-examples ul { list-style: none; padding: 0; margin: 24px 0 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.prompt-examples li { border-top: 1px solid var(--line); padding-top: 20px; }
+.prompt-examples q { display: block; font-size: 19px; margin-bottom: 12px; }
+code, kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85em; overflow-wrap: anywhere; }
+.prompt-examples code { color: var(--muted); }
+.variant-grid ul { margin: 24px 0 0; padding-left: 18px; color: var(--muted); font-size: 14px; }
+.variant-grid li + li { margin-top: 10px; }
+.best-for { display: block; color: var(--foreground); font-weight: 600; margin-bottom: 8px; }
+.day-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 32px; list-style: none; text-align: left; margin: 56px 0 0; padding: 0; }
+.day-grid li { border-top: 1px solid var(--line); padding-top: 24px; }
+.day-marker { display: block; color: var(--link); font-size: 36px; line-height: 1; margin-bottom: 24px; }
+.day-grid .section-label { font-size: 14px; margin-bottom: 14px; }
+.day-grid h3 { font-size: 26px; line-height: 1.2; margin-bottom: 16px; }
+.day-grid li > p:last-child { color: var(--muted); font-size: 16px; }
+.day-section .fine-print { margin-inline: auto; }
 .numbers-band { padding-block: 16px 80px; background: var(--background); color: var(--foreground); text-align: center; }
 .numbers-band h2 { font-size: 24px; line-height: 1.2; margin-bottom: 32px; }
 .numbers-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 24px; margin: 0; }
@@ -108,6 +129,7 @@ img { display: block; max-width: 100%; height: auto; }
   .product-shot { margin-top: 44px; }
   .feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
   .numbers-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .day-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 600px) {
   html { scroll-padding-top: 124px; }
@@ -131,6 +153,8 @@ img { display: block; max-width: 100%; height: auto; }
   .page-body { padding-bottom: 72px; }
   .feature-grid { grid-template-columns: 1fr; gap: 28px 20px; margin-top: 36px; }
   .feature-tile h3 { font-size: 21px; }
+  .example-block, .prompt-examples { padding: 24px; }
+  .example-block dl, .prompt-examples ul, .day-grid { grid-template-columns: 1fr; }
   .numbers-band { padding-bottom: 56px; }
   .numbers-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
   .spec-grid { grid-template-columns: 1fr; gap: 24px; }

@@ -158,3 +158,19 @@ test('keeps feature depth without duplicate disclosures or platform caveats', as
  assert.doesNotMatch(numbers,/experimental|primary/);
  assert.doesNotMatch(html.match(/<footer[\s\S]*?<\/footer>/)[0],/experimental|primary/);
 });
+
+test('distinguishes illustrative examples from live data and keeps the example day in sequence',async()=>{
+ const html=await(await request('/')).text();
+ for(const id of ['features','intelligence']) {
+  const section=html.match(new RegExp(`<section[^>]*id="${id}"[\\s\\S]*?</section>`))[0];
+  assert.equal((section.match(/class="example-block"/g)||[]).length,1);
+  assert.match(section,/Example · Illustrative, not live data/);
+ }
+ const day=html.match(/<section[^>]*id="your-day"[\s\S]*?<\/section>/)[0];
+ assert.equal((day.match(/<time datetime="\d{2}:\d{2}">/g)||[]).length,4);
+ assert.match(day,/not scheduled automation/);
+ assert.ok(html.indexOf('id="home-shell"')<html.indexOf('id="your-day"'));
+ assert.ok(html.indexOf('id="your-day"')<html.indexOf('id="survival"'));
+ for(const id of ['privacy','local-ai']) assert.match(html.match(new RegExp(`<section[^>]*id="${id}"[\\s\\S]*?</section>`))[0],/<img[^>]+loading="lazy"/);
+ assert.match(html,/crystalball doctor --json/);
+});

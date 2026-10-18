@@ -1,52 +1,51 @@
 # Marketing review evidence
 
-Review date: 2026-10-18. No website deployment, app install, merge or auto-merge is authorized by this work. The latest user request consolidates the work into one draft PR, including the initial source import and the expanded Apple-style page.
+Reviewed 2026-10-18. Risk: medium, bounded marketing copy and build tooling. One draft PR (#1810); no merge, deployment, app installation, or approval-label changes.
 
-## Results
+## Current checks
 
-| Mobile Lighthouse 12.8.2 | Performance | Accessibility | SEO |
-| --- | ---: | ---: | ---: |
-| Before: published site | 54 | 100 | 100 |
-| Copy baseline: local production build | 65 | 100 | 100 |
-| Layout: local production build | 99 | 100 | 100 |
+| Mobile Lighthouse 12.8.2 | Performance | Accessibility | Best Practices | SEO |
+| --- | ---: | ---: | ---: | ---: |
+| Before refinement | 99 | 100 | 100 | 100 |
+| After refinement | 100 | 100 | 100 | 100 |
 
-Same Lighthouse mobile defaults and headless Chrome. Local and hosted network conditions differ; these are individual lab runs, not field measurements. Repeat on the deployed site after review. Raw JSON and HTML reports are in this directory.
+Mobile defaults, headless Chrome, local production preview. CLS: 0. Run warnings: []. These are individual lab runs, not hosted field guarantees. Raw reports are retained. Earlier published-site performance was 54; historical runs, including the noisy 84-point run, remain available rather than being discarded.
 
-- Marketing typecheck, lint and production build pass. Behavioral tests: 19 pass / 0 fail.
-- Root `bash scripts/agentic-validate.sh --tests test:marketing` passed, including lint, both app typechecks, secret scan, docs, cross-agent readiness and app build. Final rerun includes the expanded page and fresh-server sitemap regression; `root-gate-final.txt` records the result.
-- Link audit: 54 pass / 0 fail / 0 HTTP 404, including every srcset candidate. Download bodies were not downloaded. Remote fragments are not checked. `links.json` records methods, URLs and statuses.
-- Schema.org Markup Validator: one SoftwareApplication, zero errors, zero warnings. `schema-validator.json` contains actual browser output. No ratings or awards were invented to meet rich-result requirements.
-- All five routes checked at 1440×1000 and 390×844: no horizontal overflow or broken images; exactly one h1. Keyboard skip link focuses; reduced-motion disables reveal animation. Separate section captures hide fixed header/skip chrome to show the whole section. Navigation captures preserve actual UI.
-- Product images: five unique real captures, responsive 800/1600 WebP; hero eager/high priority, others lazy. OG PNG is 1200×630 and under 300 KB. Original captures remain in the copy commit history.
-- Inline CSS and JS minified during build; HTML inter-tag whitespace removed; gzip negotiation and decompression round trip tested. Existing CSP retained.
-- Full panel count is 409, correcting the requested 408. AST parsing catches two entries sharing source line 81. Other variants: shared data and source tests. Sonnet’s initial 409 observation was correct; the earlier line-based audit was not.
+- Marketing typecheck, lint, production build and tests passed: `24 pass / 0 fail` (`refinement-tests.txt`).
+- `bash scripts/agentic-validate.sh --tests test:marketing` passed, including both app typechecks, repository lint, secrets, docs and app build (`refinement-root-gate.txt`).
+- Link audit: `54 passed / 0 failed / 0 HTTP 404`, including responsive image candidates. External HEAD follows redirects; GET Range fallback cancels the body. Binary contents and remote anchors are not verified.
+- All five routes checked at desktop 1440×1000 and mobile 390×844: no overflow, broken images or duplicate h1. Skip focus, keyboard specs disclosure and reduced motion pass (`refinement-after-checks.json`).
+- Fresh production-server sitemap response matches the build-generated XML. HTML gzip negotiation, minification, hero priority, unique WebP images and dimensions pass behavioral tests.
+- SoftwareApplication JSON-LD is unchanged by refinement. Prior official Schema.org validation: one application, zero errors/warnings (`schema-validator.json`); current tests verify the rendered markup. No awards or ratings are invented.
 
-## Limitations and blockers
+## Product claims and presentation
 
-- This is a review draft, not security/release sign-off. Production dependency audit has zero advisories. The imported development toolchain still has eight high advisories through unpatched `braces <=3.0.3` (GHSA-vfj7-8cjw-p6xm). npm’s proposed fix downgrades the framework tooling; no broad force-fix is applied. Resolve or explicitly accept this toolchain risk before release approval.
-- DMG signing/notarization, native runtime behavior of every panel/tool, Windows/Linux parity and cloud-provider contracts were not verified. Copy states these limits.
-- Released binaries are from July 20; reviewed source and installed-app screenshots are newer. Release and source dates remain distinct.
-- Repository description and release-header wording are in `REPOSITORY_COPY.md` for review; remote metadata is not published ahead of the user’s review.
-- Human-reviewed claims and canonical URLs remain in `data/site.json`. Each build derives panel/tool/edition/platform counts and resolves latest release URLs/sizes/checksums into ignored `data/generated.json`. Release discovery failure discards stale assets and uses `/releases/latest`. Source links follow main; the checklist retains the reviewed SHA.
+`CLAIMS.md` maps claims to the checkout. Counts remain build-derived: 409 Full panels, 35 Tech, 31 Finance, 10 Happy; 61 tools (53 read-only, 8 analyst); four editions. The full catalog contains two entries on source line 81, which the earlier line-based count missed. The AST count is authoritative.
 
-## Manual review and rollback
+Each main feature section now has three tiles, one direct link and one short caveat. The edition comparison retains four cards. Profile counts appear in assistants and specs; visible platform status is in hero/specs/FAQ. Experimental labels remain beside downloads and in JSON-LD. Unset minimum OS values render no row. The specs release line shows version only, and the source-versus-release note remains.
 
-Open the home, download, docs, privacy and security pages; use Tab/Enter through navigation and disclosure controls. Check desktop/mobile section images and CLAIMS.md. Review the single PR against main. Never auto-merge. Roll back a future deployment by redeploying the previous Sites version; this PR does not deploy.
+Existing imagery is preserved: five unique real product captures; no fabricated or repeated screenshots are added to text-led sections. `refinement-before/` and `refinement-after/` contain desktop/mobile page-section captures, including stats and expanded specs. Section capture hides sticky navigation only; navigation captures preserve it.
 
-## Expanded page verification
+## Dependency remediation
 
-The latest request adds sourced feature tiles, a generated numbers band, keyboard-operated specifications, plain section labels, unique disclosure names, a single capture note and build-time static sitemap. Before screenshots are in `before/`; expanded screenshots are in `screenshots/`. The expanded-page Lighthouse run initially scored 84/100/100/100 during concurrent screenshot work and reported a cache-clear timeout; raw evidence is retained. The quiet final run scored 99 Performance / 100 Accessibility / 100 Best Practices / 100 SEO, no warnings and CLS 0. The local pre-expansion run scored 98 / 100 / 100 / 100 (with a cache-clear timeout warning). Both four-category raw reports are retained.
+The former eight high marketing toolchain advisories all came through braces 3.0.3. The reported structural recursion issue is locally mitigated by a vendored security-only patch from upstream PR #87. No upstream fixed release exists. This is explicitly a maintained local fork, not an upstream advisory closure.
 
-The deterministic generator tests exercise adjacent panel declarations, duplicate rejection, actual registry annotations, build-target discovery, explicit-only OS minimums, latest release/manifest agreement, network errors/timeouts, missing architectures and missing checksums. No binaries are downloaded during generation.
+Fresh `npm ci --ignore-scripts` passes. Full and production audits report zero, but npm may omit local file dependencies; audit zero alone is not the evidence. Four bounded security tests pass, all actual micromatch callers resolve the local source, and the exact patched upstream suite reports `778 passing`. License, base/security commit IDs, production diff and hashes are tracked. Independent read-only review found no blocking code issues. See `dependency/marketing-dependency-report.md` and `../vendor/braces/PROVENANCE.md`.
 
-Mutation proof for the original route/media safeguards: starting from clean `f1c534f`, changed 409→408, hero high→low priority and disabled gzip. Confirmed applied diff is `mutation-applied.diff`; tests changed from 9 pass / 0 fail to 6 pass / 3 fail (`mutation-red.txt`). Restored all three files with matching SHA-256 and an empty git status before feature expansion. Pre-rewrite worker also produced 0 pass / 4 fail (`baseline-red.txt`).
+Patterns above 100 nesting levels now fail explicitly. This patch addresses structural recursion, not arbitrary regex execution or Cartesian expansion exhaustion. Replace it with an official fix only after the same regressions, upstream suite and site checks pass. The historical Sonnet review in `sonnet-review.txt` predates this remediation; it correctly withheld approval of the then-unpatched dependency.
 
-Generator mutation proof: clean `37dfd64`, reduced derived panel counts by one and removed malformed URL filtering. Confirmed diff: `generator-mutation.diff`. Generation tests changed from 7 pass / 0 fail to 5 pass / 2 fail (`generator-mutation-red.txt`); restoring the file matched SHA-256 a2c63d61d2f976470eaccb95d5e5458bab5607fdf046b14de4542c71ffead909 and returned a clean working tree and 7 pass / 0 fail.
+## Regression evidence
 
-## Fresh-server sitemap correction
+From clean `cff3888`, restored duplicate feature links, forced the absent OS-minimum row to render, and raised the braces depth cap from 100 to 10000. Confirmed diff: `refinement-mutation.diff`. Tests changed from `24 pass / 0 fail` to `19 pass / 5 fail`. Restored file hashes match `refinement-checksums.json`, the tree returned clean, and tests returned to `24 pass / 0 fail`.
 
-A restarted `vinext start` exposed a missing ASSETS binding (HTTP 500) that the original worker test fixture supplied. The worker now imports the build-generated static XML, serving the same artifact without a host binding. The new no-binding test fails before the fix and passes afterward. From clean commit `5340dd5`, reverting only this response to ASSETS.fetch produced 8 pass / 1 fail; confirmed diff and red evidence are retained. Restoration matched SHA-256 `5f8e2aff52d0376e2a7b2cac06b8d9d5033b3e3d4682d040757857bf01619dcb` and returned a clean tree. Marketing typecheck, lint, build and all 19 tests passed before the mutation.
+A separate clean-artifact build with npm hooks disabled failed before the explicit-generation correction (`no-hooks-red.txt`). After correction, the same `npm --prefix marketing-site --ignore-scripts=true run build` recreated generated data and sitemap and passed (`no-hooks-green.txt`). Build/typecheck/dev invoke generation directly; they no longer rely on lifecycle hooks.
 
-The independent Sonnet review of `7b238b8` found zero new blocking implementation findings, but explicitly did not waive the inherited braces release blocker; its complete conclusion is retained in `sonnet-review.txt`. This is not a zero-blocker release approval.
+Earlier mutation evidence is retained: original route/media guards 9/0→6/3; generator guards 7/0→5/2→7/0; missing asset-binding sitemap regression 8/1→9/0. No validation rule was weakened to obtain a pass. Vendored third-party files are excluded from first-party ESLint rules and covered by their upstream suite plus security regressions.
 
-CI integration: the root ESLint job now installs the nested marketing package before discovering its config. Marketing ESLint ignores generated dist and Wrangler output. The dependency-change gate remains subject to Bradley’s approval; no approval label is applied by the agent.
+## Review limits and rollback
+
+DMG signing/notarization, every native feature, Windows/Linux parity, cloud-provider contracts and deployed-host performance remain unverified. The page retains those qualifications. Latest release discovery still identifies v2.25.147; newer source may differ. Repository description/release opening are proposed in `REPOSITORY_COPY.md`, not remotely published.
+
+Open the preview’s home, download, docs, privacy and security pages; navigate with Tab/Enter and compare the captures. Dependency-policy approval remains Bradley’s decision; do not apply an approval label automatically. Final Sonnet verdict and CI state are recorded in the PR after this evidence commit. No auto-merge is enabled.
+
+Rollback: revert the refinement commits for copy; reverting the dependency patch reintroduces the known recursion flaw and must not be treated as a secure release. A future deployment can restore the prior Sites version; this PR itself does not deploy.

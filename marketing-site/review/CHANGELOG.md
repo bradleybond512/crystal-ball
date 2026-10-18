@@ -1,11 +1,10 @@
 # Marketing changelog
 
-- Added source-backed feature tiles, generated numbers, and expandable technical specifications.
-- Preserved the hero, Apple-style layout, accessibility, privacy qualifications and early-access disclaimer.
-- Derived panel and MCP counts from code; latest-release URLs, sizes and checksums now refresh at build time.
-- Replaced the sitemap rendering route with a static build artifact; removed generic disclosure names and repeated capture dates.
-- Kept source/license links on main and documented unknown OS minimums and unverified signing.
+- Keep feature depth while removing duplicate explanations and disclosure links.
+- Use one direct link and short caveat per feature; retain the four-card edition comparison.
+- De-duplicate profile/platform copy, omit unset OS minimums, use clear stats labels, and show version only in specs.
+- Preserve hero, real screenshots, design, accessibility, SEO and honesty notes.
+- Generate catalog counts, release metadata and static sitemap explicitly on every build, even with npm hooks disabled.
+- Mitigate the braces recursion advisory with a documented, security-only local patch; preserve upstream license and provenance.
 
-Verification: 19 tests pass. Final mobile Lighthouse: 99 Performance, 100 Accessibility, 100 Best Practices, 100 SEO; CLS 0. Links: 54 pass, zero 404s. Before/after screenshots and the claim checklist accompany this single draft PR. Existing high development-toolchain advisories remain a release blocker; no merge or deployment is performed.
-
-- Serve the generated sitemap without relying on a Cloudflare binding, including after a local production-server restart.
+24 site/security tests and 778 upstream dependency tests pass. Full and production marketing audits report zero; the local patch still requires maintenance until an upstream fix ships. Fresh desktop/mobile captures and detailed QA evidence accompany the single draft PR. Nothing is merged or deployed.

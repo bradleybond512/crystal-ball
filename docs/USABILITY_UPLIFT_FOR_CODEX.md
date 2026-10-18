@@ -1181,6 +1181,185 @@ presented as calibrated.
   surface, and `npm run test:intelligence`, `npm run test:insights` and
   `npm run typecheck:all` pass.
 
+## October 18 delivery-pipeline intake
+
+A read-only review of `main` @ `7e3bfed` on 2026-10-18 found problems in the
+delivery pipeline rather than the product: reviews, status reporting, CI
+signals, security follow-through and repository hygiene. Each one slows or
+hides the Tier S work above, so they are tracked here as ordinary tasks.
+
+Owner actions that need no agent work (one click each):
+
+- Close #1680, the older duplicate watchdog issue (see UX-064).
+- Consider closing #675 (provenance question answered on 2026-06-07) and
+  #1727 (unsolicited outreach).
+- Review the open Dependabot and code-scanning alerts; the review session
+  could not read them (see UX-066).
+
+### UX-063 — Run the Sonnet cross-agent review of `codex/*` branches in CI *(High Assurance)*
+
+Priority: S
+
+Dependencies: none
+
+Codex's `auto_review` sandbox rejected sending the RC-2 review packet to
+Anthropic three times on 2026-10-16, even with Bradley's typed approval.
+Every `codex/*` PR needs a recorded Sonnet verdict, so delivery stalls or
+depends on a manual relay through a Claude session, which also tripped that
+session's safety checks. This blocks every Codex-implemented Tier S task, so
+Bradley may direct it first.
+
+- Change surface: `.github/workflows/cross-agent-review.yml`, a new
+  `scripts/ci-claude-review.mjs` modeled on `scripts/ci-codex-review.mjs`,
+  `scripts/verify-review-verdict.mjs` only if the CI path needs recognition,
+  and the Review Verdict Protocol in `AGENTS.md`.
+- Fix: mirror the existing `CI_CODEX_REVIEW` path. When a repository variable
+  (for example `CI_CLAUDE_REVIEW=on`) and an `ANTHROPIC_API_KEY` Actions
+  secret exist, CI reviews same-repository `codex/*` PRs with a Sonnet model
+  at medium effort (never Opus, no tools), running the reviewer script from
+  `origin/main`, never from the PR head.
+- Guardrails: never run for fork PRs and never check out PR code under
+  `pull_request_target`; minimal `permissions:`; never echo the secret; pin
+  the model and validate it with the existing Sonnet pattern; send only the
+  diff and bounded context after the existing secret scan; cap spend per run.
+- Bradley gates: design approval before implementation; only he adds the
+  secret, sets the variable and applies `dependency-change-approved`.
+- Done when a `codex/*` test PR passes `cross-agent-review` through the CI
+  path with no manual relay, a fork-PR simulation shows the secret is
+  unavailable, and the verdict-commit path still works with the variable off.
+- Verify: `actionlint`, `zizmor`, and `node --test` coverage for the new
+  script.
+
+### UX-064 — Keep the roadmap watchdog running when duplicate status issues exist
+
+Priority: S
+
+Dependencies: none
+
+The watchdog in `.github/workflows/roadmap-controller.yml` throws
+`multiple roadmap watchdog issues found` because #1680 and #1719 both carry
+its marker. The daily run has failed since about 2026-09-15, and the
+"[Roadmap Controller] Program status" issue has not updated since, so the
+status report Bradley reads is a month stale.
+
+- Immediate fix (Bradley): close #1680; the next scheduled run updates #1719.
+- Change surface: the watchdog step in `.github/workflows/roadmap-controller.yml`.
+  This is a workflow change and needs Bradley's label.
+- Fix: when more than one open marker issue exists, update the most recently
+  updated one and list the others in the job summary as a warning instead of
+  failing. Never close issues automatically.
+- Done when a dry run with two marker issues updates exactly one and exits 0
+  with a visible warning, a run with none creates one, and single-issue
+  behavior is unchanged.
+
+### UX-065 — Refresh the Round 4 checkpoint and decide the stale security drafts
+
+Priority: S
+
+Dependencies: none
+
+`docs/SECURITY_SCAN_ROUND_4_FOR_CODEX.md` (last edited 2026-10-12) still says
+13 of 28 scopes are delivered and lists #1760, #1771, #1777 and #1784 as
+frozen. Those merged on 2026-10-11 and #1776 merged on 2026-10-13. Seven Claude
+drafts opened between 2026-09-30 and 2026-10-10 remain open: PRs #1761,
+PR #1765, PR #1769, PR #1770, PR #1778, PR #1781 and PR #1783. PR #1781 has
+merge conflicts and touches `CLAUDE.md`, which RC-5 and RC-6 also change.
+
+- Fix: add a dated checkpoint with verified merge evidence and the true
+  delivered count. For each draft, record rebase-and-finish, supersede or
+  close, with Bradley's decision for any close.
+- Guardrails: never mark a scope delivered without merged evidence; never
+  copy private review-ledger content into the public document.
+- Done when the checkpoint matches GitHub, every draft has a recorded
+  decision, and #1781's `CLAUDE.md` overlap is resolved or explicitly
+  sequenced ahead of RC-5.
+
+### UX-066 — Clear the Dependabot backlog in reviewed batches
+
+Priority: S
+
+Dependencies: none
+
+Twelve Dependabot PRs have been open since as early as 2026-09-28, including
+the Tauri runtime (2.11.6), `tauri-build` (2.7.1), the Tauri CLI (2.12.1),
+Vite (8.3.3), luma.gl, GitHub Actions and an MCP-server npm group. Each needs
+Bradley's `dependency-change-approved` label, and some may need
+`install-scripts-reviewed` or `dependency-age-reviewed`, so updates wait.
+
+- Fix (agent): build a per-PR risk table covering changelog and security
+  notes, release age against the 7-day gate, install-script or `bin` changes
+  reported by `integrity-checks`, CI status and conflicts. Group the PRs into
+  safe batches. Also read the open Dependabot and code-scanning alerts and
+  link each to its fixing PR.
+- Bradley applies the labels per batch. Agents never apply them.
+- Optional follow-up in its own gated PR: Dependabot `groups` to cut PR volume.
+- Done when every open Dependabot PR is merged, closed as superseded, or has
+  a recorded hold reason, and the alerts have been reviewed.
+
+### UX-067 — Restore a green release-integrity signal on `main`
+
+Priority: S
+
+Dependencies: none
+
+`release-doctor` fails on every push to `main` (at least since `0672b39`)
+because tag `v2.25.147` already exists and `package.json` was never bumped.
+`main` is therefore never fully green, and a real regression would look like
+the usual red.
+
+- Do not weaken `release-doctor` or treat the failure as a pass. The fix is
+  the supported release path, and agents do not release.
+
+Exit condition: Bradley runs `npm run release:prepare -- --bump patch --push`
+or records a decision to defer, and `release-doctor` passes on the next `main`
+push.
+
+Reviewed 2026-10-18: no release decision is recorded yet. The date below is a
+provisional reminder, not a release forecast.
+
+Review after: 2026-11-15
+
+### UX-068 — Prune merged and recovered branches and stale worktrees *(High Assurance)*
+
+Priority: C
+
+Dependencies: none
+
+The public repository has 164 branches, including 121 `recovered/*`, 4
+`salvage/*` and 2 `rescue/*`. The canonical checkout lists about 100
+worktrees, most already marked prunable, under `.worktrees/`,
+`.claude/worktrees/`, `~/.codex/worktrees`, `~/Documents/Codex` and
+`/private/tmp`. Public WIP branches expose unreviewed code, and every
+controller run fetches them.
+
+- Fix: produce a manifest classifying each branch as merged into `main`,
+  content already on `main` by patch ID, or unique unmerged commits. Bradley
+  approves deletion of the first two classes. Unique work is preserved
+  privately (tag or bundle) or kept.
+- Local cleanup: `git worktree prune` removes only metadata for directories
+  that no longer exist; deleting any existing worktree directory needs
+  Bradley's approval.
+- Done when the manifest is approved, approved branches are deleted, unique
+  work is preserved, and no open PR loses its head branch.
+
+### UX-069 — Stop the auto-PR workflow warning on every agent push
+
+Priority: C
+
+Dependencies: none
+
+"Create or update PR" logs "GitHub Actions is not permitted to create or
+approve pull requests" on every agent push, because that repository setting
+is off. Agents already open their own PRs.
+
+- Keep the setting off: enabling it would also let Actions approve PRs.
+- Fix: remove the auto-create step or replace it with a notice stating that
+  the agent opens the PR, and make `scripts/pr-closeout.sh` and `AGENTS.md`
+  say "open it" rather than implying the workflow does.
+- This is a workflow change and needs Bradley's label.
+- Done when an agent push produces no warning and the docs match the
+  behavior.
+
 ## What was NOT verified
 
 State these as open questions rather than treating them as settled:
@@ -1259,3 +1438,10 @@ Update the row in the same PR that does the work.
 | UX-060 | Preserve onboarding keyboard ownership against proactive digest | DONE | #1735 |
 | UX-061 | Truthful, restrained map presentation | DONE | #1802; [bounded evidence](validation/MAP-CLARITY-CLEANUP.md); native acceptance recorded separately |
 | UX-062 | Label forecasts that trail their baseline | NOT STARTED — HIGH ASSURANCE | |
+| UX-063 | CI Sonnet review for Codex branches | NOT STARTED — HIGH ASSURANCE | |
+| UX-064 | Watchdog survives duplicate status issues | NOT STARTED | |
+| UX-065 | Round 4 checkpoint and stale security drafts | NOT STARTED | |
+| UX-066 | Dependabot backlog in reviewed batches | NOT STARTED | |
+| UX-067 | Green release-integrity signal on main | WAITING | |
+| UX-068 | Prune merged branches and stale worktrees | NOT STARTED — HIGH ASSURANCE | |
+| UX-069 | Auto-PR workflow warning | NOT STARTED | |

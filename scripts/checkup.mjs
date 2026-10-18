@@ -14,6 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 import { summarizeSidecarHealth } from './sidecar-health-contract.mjs';
+import { SidecarRuntimeFiles } from '../tools/mcp-server/sidecar-client.mjs';
 import {
   latestSessionLines,
   parseInjectedKeyCount,
@@ -24,7 +25,6 @@ const { resolve, dirname } = path;
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const LOG_FILE = `${process.env.HOME}/Library/Logs/com.bradleybond.crystalball/desktop.log`;
-const SIDECAR_URL = 'http://127.0.0.1:46123/api/health';
 
 // ── Colour helpers ────────────────────────────────────────────────────────
 const GREEN  = '\u001B[32m';
@@ -161,19 +161,32 @@ if (existsSync(LOG_FILE)) {
 // ── 4. Sidecar probe ──────────────────────────────────────────────────────
 process.stdout.write(dim('  sidecar... '));
 await new Promise((resolve_) => {
-  const req = http.get(SIDECAR_URL, { timeout: 2000 }, (res) => {
+  const target = SidecarRuntimeFiles.healthRequest();
+  if (!target) {
+    addWarn('sidecar', 'No valid published sidecar port — start the app first');
+    process.stdout.write(`${YELLOW}–${RESET}\n`);
+    resolve_();
+    return;
+  }
+  const req = http.get(target.url, { timeout: 2000, headers: target.headers }, (res) => {
     let body = '';
     res.on('data', (chunk) => { body += chunk; });
     res.on('end', () => {
       try {
         const data = JSON.parse(body);
-        const summary = summarizeSidecarHealth(data);
-        if (summary) {
+        const summary = res.statusCode === 200 ? summarizeSidecarHealth(data) : null;
+        if (summary?.authenticated && summary.failedFeedCount === 0 && summary.keysMissing === 0) {
           addOk(
             'sidecar',
             `responding — ${summary.feedCount} feed(s) tracked, ${summary.keysConfigured}/${summary.keysTotal} API keys configured`,
           );
           process.stdout.write(`${GREEN}✓${RESET}\n`);
+        } else if (summary?.authenticated) {
+          addWarn('sidecar', `Process live — ${summary.failedFeedCount}/${summary.feedCount} tracked feed(s) erroring, ${summary.keysMissing}/${summary.keysTotal} API keys missing`);
+          process.stdout.write(`${YELLOW}–${RESET}\n`);
+        } else if (summary) {
+          addWarn('sidecar', 'Process live — authenticated diagnostics pending');
+          process.stdout.write(`${YELLOW}–${RESET}\n`);
         } else {
           addWarn('sidecar', 'Responded with an unexpected health schema');
           process.stdout.write(`${YELLOW}–${RESET}\n`);

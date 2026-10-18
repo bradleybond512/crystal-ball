@@ -1,0 +1,161 @@
+
+> crystal-ball-site@0.1.0 test
+> npm run build && node --test tests/*.test.mjs
+
+
+> crystal-ball-site@0.1.0 build
+> npm run generate && WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build
+
+
+> crystal-ball-site@0.1.0 generate
+> node scripts/generate-site-data.mjs && node scripts/generate-discovery.mjs
+
+{"counts":{"panels":{"full":409,"tech":35,"finance":31,"happy":10},"mcp":{"total":61,"read":53,"analyst":8,"categories":9},"editions":4,"platforms":3},"releaseAvailable":true,"releaseError":null}
+
+  vinext build  (Vite 8.2.2)
+
+(node:93437) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[1/5] analyze client references...
+transforming...
+✓ 249 modules transformed.
+rendering chunks...
+[plugin rsc:virtual:vite-rsc/assets-manifest] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (rsc:virtual:vite-rsc/assets-manifest) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+[plugin vinext:action-owner-manifest] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (vinext:action-owner-manifest) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+✓ built in 1.26s
+[2/5] analyze server references...
+transforming...
+✓ 85 modules transformed.
+rendering chunks...
+[plugin rsc:virtual:vite-rsc/assets-manifest] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (rsc:virtual:vite-rsc/assets-manifest) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+✓ built in 291ms
+[3/5] build rsc environment...
+transforming...
+✓ 241 modules transformed.
+rendering chunks...
+computing gzip size...
+[plugin rsc:inject-async-local-storage] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (rsc:inject-async-local-storage) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+[plugin rsc:inject-async-local-storage] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (rsc:inject-async-local-storage) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+[plugin vinext:action-owner-manifest] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (vinext:action-owner-manifest) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+✓ built in 1.33s
+[4/5] build client environment...
+transforming...
+✓ 129 modules transformed.
+rendering chunks...
+computing gzip size...
+✓ built in 8.71s
+[33m[PLUGIN_TIMINGS] [0mYour build spent 79% of 8.6s inside plugin hooks (6.8s).
+Measured inside the callback, so queue time is excluded and time the callback itself awaited is not:
+  - vinext:ignore-dynamic-requests transform (29%, 2.5s, 30 calls)
+Those rows are 29% of the build; the rest of the 79% is below.
+Not measurable — 2 hooks whose calls overlap, so elapsed time covers work other calls were doing. Profile with `node --cpu-prof`:
+  - vinext:og-inline-fetch-assets resolveId (308 calls)
+  - alias resolveId (342 calls)
+See https://rolldown.rs/reference/InputOptions.checks#plugintimings for more details.
+
+[5/5] build ssr environment...
+transforming...
+✓ 91 modules transformed.
+rendering chunks...
+computing gzip size...
+[plugin rsc:inject-async-local-storage] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (rsc:inject-async-local-storage) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+[plugin rsc:inject-async-local-storage] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (rsc:inject-async-local-storage) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+[plugin rsc:virtual:vite-rsc/assets-manifest] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (rsc:virtual:vite-rsc/assets-manifest) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+✓ built in 5.82s
+[33m[PLUGIN_TIMINGS] [0mYour build spent 78% of 5.7s inside plugin hooks (4.4s).
+Measured inside the callback, so queue time is excluded and time the callback itself awaited is not:
+  - vinext:ignore-dynamic-requests transform (28%, 1.6s, 24 calls)
+Those rows are 28% of the build; the rest of the 78% is below.
+Not measurable — 1 hook whose calls overlap, so elapsed time covers work other calls were doing. Profile with `node --cpu-prof`:
+  - vinext:og-inline-fetch-assets resolveId (167 calls)
+See https://rolldown.rs/reference/InputOptions.checks#plugintimings for more details.
+
+[0m
+  Route (app)
+  ┌ λ /
+  ├ λ /docs
+  ├ λ /download
+  ├ λ /privacy
+  ├ λ /robots.txt
+  └ λ /security
+
+  λ API
+
+  Build complete. Run `vinext start` to start the production server.
+
+✔ braces rejects excessive parsed nesting before stack exhaustion (232.146792ms)
+✔ braces bounds supplied ASTs and cyclic expansion parents (251.417917ms)
+✔ braces preserves ordinary globs and permits only lower depth limits (2.614291ms)
+✔ micromatch uses the reviewed local braces source (67.18075ms)
+✔ shared panel counts are derived from actual variant catalogs (78.307125ms)
+✔ shared MCP counts match actual registry and read-only annotations (29.412959ms)
+✔ source references exist at the pinned revision and license agrees (521.03ms)
+✖ edition examples belong to each actual catalog and assistant examples name registered tools (94.068375ms)
+✔ catalog parsing counts adjacent properties and rejects duplicates or spread (10.83625ms)
+✔ specs use explicit minimums and build targets, not runner OS versions (0.273709ms)
+✔ latest release assets and checksums come from API and matching manifest (41.193541ms)
+✔ API errors and timeout discard stale version-specific assets (2.609125ms)
+✔ manifest fetch failure or wrong version fails closed without stale downloads (0.734ms)
+✔ missing manifest and absent architectures are disclosed rather than invented (0.344917ms)
+✔ malformed asset URLs cannot become download links (0.398833ms)
+✔ serves separate accessible product, download, docs and trust pages (360.0605ms)
+✔ serves machine-readable discovery (6.961292ms)
+✔ offers compressed HTML only when accepted (14.888125ms)
+✔ provides valid application structured data and dated source counts (15.992375ms)
+✔ prioritizes a single hero and keeps product shots responsive and unique (30.90775ms)
+✔ minifies embedded styles and scripts without removing motion and focus support (1.401292ms)
+✔ reveals sourced detail with specific controls and one capture note (2.178875ms)
+✔ serves the exact build-generated sitemap without a rendering route (28.122584ms)
+✔ serves the static sitemap without a Cloudflare asset binding (0.756542ms)
+✔ keeps feature depth without duplicate disclosures or platform caveats (3.678125ms)
+✖ distinguishes illustrative examples from live data and keeps the example day in sequence (25.3175ms)
+ℹ tests 26
+ℹ suites 0
+ℹ pass 24
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1359.09125
+
+✖ failing tests:
+
+test at tests/facts.test.mjs:69:1
+✖ edition examples belong to each actual catalog and assistant examples name registered tools (94.068375ms)
+  AssertionError [ERR_ASSERTION]: invented_tool
+      at TestContext.<anonymous> (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/tests/facts.test.mjs:92:34)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests/marketing.test.mjs:162:1
+✖ distinguishes illustrative examples from live data and keeps the example day in sequence (25.3175ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /Example · Illustrative, not live data/. Input:
+
+  `<section class="product-section" id="features" aria-labelledby="features-title" data-reveal><div class="shell"><p class="section-label">Map</p><h2 id="features-title">Your world. In view.</h2><p class="subhead">Explore global signals on a map you can make your own.</p><div class="feature-grid"><article class="feature-tile"><h3>Globe or flat.</h3><p>Explore a globe or a flat map, with a view suited to the place you follow.</p></article><article class="feature-tile"><h3>Layers with context.</h3><p>Choose weather, internet outages, cyber threats, military activity, waterways, and economic layers.</p></article><article class="feature-tile"><h3>Find a place.</h3><p>Search a location by name and fly to its position on the globe.</p></article></div><aside class="example-block"><p class="example-label">Live intelligence</p><h3>A place, with context.</h3><dl><div><dt>View</dt><dd>Flat map</dd></div><div><dt>Layers</dt><dd>Weather · Internet outages · Cyber threats</dd></div><div><dt>Place search</dt><dd>Tokyo, Japan</dd></div></dl></aside><div class="feature-followup"><a href="https://github.com/bradleybond512/crystal-ball/blob/main/src/components/MapContainer.ts" target="_blank" rel="noopener noreferrer">See the map</a><p class="fine-print">God's Eye coverage depends on sources, credentials, and your build.</p></div></div></section>`
+
+      at TestContext.<anonymous> (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/tests/marketing.test.mjs:167:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: `<section class="product-section" id="features" aria-labelledby="features-title" data-reveal><div class="shell"><p class="section-label">Map</p><h2 id="features-title">Your world. In view.</h2><p class="subhead">Explore global signals on a map you can make your own.</p><div class="feature-grid"><article class="feature-tile"><h3>Globe or flat.</h3><p>Explore a globe or a flat map, with a view suited to the place you follow.</p></article><article class="feature-tile"><h3>Layers with context.</h3><p>Choose weather, internet outages, cyber threats, military activity, waterways, and economic layers.</p></article><article class="feature-tile"><h3>Find a place.</h3><p>Search a location by name and fly to its position on the globe.</p></article></div><aside class="example-block"><p class="example-label">Live intelligence</p><h3>A place, with context.</h3><dl><div><dt>View</dt><dd>Flat map</dd></div><div><dt>Layers</dt><dd>Weather · Internet outages · Cyber threats</dd></div><div><dt>Place search</dt><dd>Tokyo, Japan</dd></div></dl></aside><div class="feature-followup"><a href="https://github.com/bradleybond512/crystal-ball/blob/main/src/components/MapContainer.ts" target="_blank" rel="noopener noreferrer">See the map</a><p class="fine-print">God's Eye coverage depends on sources, credentials, and your build.</p></div></div></section>`,
+    expected: /Example · Illustrative, not live data/,
+    operator: 'match',
+    diff: 'simple'
+  }

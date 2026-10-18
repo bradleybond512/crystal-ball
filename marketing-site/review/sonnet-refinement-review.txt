@@ -1,0 +1,99 @@
+The plan file is complete and accurate. Here is the full review result:
+
+---
+
+## Independent Code Review — PR #1810
+
+**Reviewed SHA:** `7a7b0957a5b13eb49aba020a6bc2f05a353a0177` — confirmed as HEAD
+**Reviewer model:** `claude-sonnet-4-6`
+**Base:** `78e3404` (main)
+**New diff inspected:** `bb37ef9..7a7b095` (4 commits)
+
+---
+
+### Commit map
+
+| SHA | Subject |
+|-----|---------|
+| f4492d0 | Copy/link refinement |
+| cff3888 | Vendored braces security patch |
+| fdcd7e2 | Explicit generation (no-hooks build) |
+| 7a7b095 | Evidence commit |
+
+---
+
+### 1. Reduced repetitive copy / links — No blocking issues
+
+`learn()` helper removed with all its call sites in the same commit. Each feature section now has three tiles, one direct source link, one fine-print caveat. Survival road-conditions caveat moved from tile body to fine-print — factually accurate. MCP tiles now show actual build-derived counts from `data.counts.mcp.read` and `data.counts.mcp.analyst`. Numbers band, specs fine-print, footer, docs, and downloads pages all have redundant platform-caveat sentences trimmed without information loss.
+
+**Five unique real product images preserved:** app-live-home, app-live-risk-calibration, app-live-analysis-library, app-live-library, app-live-agent-intelligence — same images, same alt text, no fabrications.
+
+**Four edition comparison cards preserved:** Full, Tech, Finance, Happy.
+
+---
+
+### 2. Conditional minimum OS row — No blocking issues
+
+Old code always rendered the row, producing "not specified" for unset values. New code filters with `data.specs.platforms.filter(platform => platform.minimumOS)` and spreads the row only when the filtered array is non-empty. `escape()` is now applied to `minimumOS` (the old code did not escape it). Non-null assertion is safe by construction. Mutation verified: `refinement-mutation.diff` forces the condition to `true` → "reveals sourced detail" test fails → 19/5 → restored 24/0.
+
+---
+
+### 3. Explicit generation / no-hooks build — No blocking issues
+
+Old `prebuild`/`pretypecheck`/`predev` lifecycle hooks were skipped by `--ignore-scripts`. New scripts call `npm run generate &&` explicitly before each build/dev/typecheck command. `no-hooks-red.txt` shows the failure before the fix (`Could not resolve '../public/sitemap.xml?raw'`). `no-hooks-green.txt` shows the complete 5-stage build succeeding after `fdcd7e2`.
+
+---
+
+### 4. Security patch — GHSA-vfj7-8cjw-p6xm — Guard correctness verified
+
+**Source:** upstream tag 3.0.3 + only security-commit `d44b9b1` from PR 87. No unrelated upstream changes.
+
+**Guard correctness:**
+- `parse.js`: `nesting` counter increments before opening `{` and `(`, decrements after closing. Guard: `nesting + 1 > maxDepth`. `maxDepth = Number.isFinite(x) ? Math.min(100, x) : 100` — NaN/Infinity both clamp to 100; callers cannot raise the cap.
+- `compile.js`, `expand.js`, `stringify.js`: depth threaded recursively, incremented only for nodes with children (`child.nodes ? depth + 1 : depth`). Guard before descending: `if (node.nodes && depth > maxDepth)`.
+- `expand.js — queueOwner()`: `Set`-based cycle detection replaces two previously unbounded `while` traversals. Throws `RangeError('AST parent chain contains a cycle')`.
+- **No unrelated grammar changes:** only lib/*.js touched. Tokenization, expansion algorithm, Cartesian product logic, fill-range integration unchanged.
+
+**4 bounded regression tests** (all pass; `braces-regression-green.txt`):
+1. Rejects 3000-deep `{`/`(` nesting across all four methods
+2. Rejects 3000-deep supplied AST; root self-cycle; cyclic parent chain
+3. Normal globs expand correctly; maxDepth can be lowered, not raised above 100
+4. micromatch at runtime resolves to `realpathSync` of `vendor/braces/index.js`
+
+**Transitive resolution verified** (`braces-resolution.txt`): both fast-glob@3.3.1 and fast-glob@3.3.3 paths deduplicate to `./vendor/braces`. npm `overrides: {"braces": "$braces"}` with `"braces": "file:vendor/braces"` devDependency forces all callers.
+
+**778 upstream tests** passing on exact patched source. Earlier 908-test run excluded because its base included unreleased upstream changes; PROVENANCE.md correctly explains this distinction.
+
+**PROVENANCE** accurately states: base commit `483836c`, security commit `d44b9b1`, version 3.0.3 retained (honest), production diff tracked in `security.patch`, hashes in `SHA256SUMS.json`. No upstream patched release as of 2026-10-18.
+
+**SHA256SUMS independent hash verification:** computation was blocked by tooling restrictions during this review. The `security.patch` diff was read directly and matches the shipped source exactly — no divergence between patch and files.
+
+**Residual maintained-fork risk (must remain stated):** Advisory: "Patched versions: None." No official upstream fix exists. Must be reviewed on upstream changes; must be replaced by official fix when one ships; cannot receive upstream security notifications automatically. Risk is fully and correctly disclosed in PROVENANCE.md, QA.md, and marketing-dependency-report.md.
+
+---
+
+### 5. QA / mutation summary
+
+| Check | Result |
+|-------|--------|
+| Full test suite | 24 pass / 0 fail |
+| Root gate | Pass |
+| Link audit | 54 passed / 0 failed / 0 404 |
+| Mobile Lighthouse P/A/BP/SEO | 100/100/100/100 (before: 99/100/100/100) |
+| Mutation 24/0 → 19/5 → 24/0 | Verified |
+| No-hooks: before fail / after pass | Verified |
+| Braces regression (4 tests) | 4 pass / 0 fail |
+| Upstream braces suite | 778 passing / 0 failing |
+| npm audit (full + prod) | 0 vulnerabilities |
+| Schema.org JSON-LD | Valid, 0 errors/warnings |
+
+---
+
+### Conclusion
+
+**Reviewed SHA:** `7a7b0957a5b13eb49aba020a6bc2f05a353a0177`
+**Reviewer model:** `claude-sonnet-4-6`
+
+**New blocking findings: Zero.** All four areas are correctly implemented, tested, and evidenced.
+
+**Persistent open condition — not waived:** GHSA-vfj7-8cjw-p6xm. Status: locally mitigated with a correct implementation. Advisory remains open — "Patched versions: None" — because no official upstream fix exists. The deployment decision on the maintained-fork residual risk belongs to the maintainer. Do not merge, deploy, or apply an approval label automatically.

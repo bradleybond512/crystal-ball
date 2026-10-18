@@ -15,7 +15,8 @@
     "test:ux032"
   ],
   "scripts/targeted-tests-overrides.json": [
-    "test:agentic-pipeline"
+    "test:agentic-pipeline",
+    "test:sidecar-ci"
   ],
   "scripts/install-mcp-deps.mjs": [
     "test:mcp-deps",
@@ -323,7 +324,8 @@
     "test:sidecar-lows",
     "test:sms-panel",
     "test:sms",
-    "test:sidecar"
+    "test:sidecar",
+    "test:sidecar-ci"
   ],
   "src/services/keychain.ts": [
     "test:secret-boundary",
@@ -403,7 +405,8 @@
     "test:mcp-companion"
   ],
   "src-tauri/sidecar/__tests__/analyst-diagnostics-mirror.test.mjs": [
-    "test:mcp-companion"
+    "test:mcp-companion",
+    "test:sidecar-ci"
   ],
   "src/services/agent-suggestions.ts": [
     "test:mcp-untrusted"
@@ -436,18 +439,21 @@
     "test:mcp-untrusted",
     "test:mcp-companion",
     "test:mcp-install-smoke",
-    "test:install-scripts"
+    "test:install-scripts",
+    "test:sidecar-ci"
   ],
   "tests/helpers/run-isolated-mcp.mjs": [
     "test:mcp-untrusted",
     "test:mcp-companion",
-    "test:mcp-install-smoke"
+    "test:mcp-install-smoke",
+    "test:sidecar-ci"
   ],
   "tests/helpers/loopback-only.mjs": [
     "test:mcp-untrusted",
     "test:mcp-companion",
     "test:mcp-install-smoke",
-    "test:install-scripts"
+    "test:install-scripts",
+    "test:sidecar-ci"
   ],
   "tools/mcp-server/__tests__/runtime-isolation.test.mjs": [
     "test:mcp-companion",
@@ -478,12 +484,14 @@
     "test:mcp-install-smoke"
   ],
   "tests/mcp-suite-entry.test.mjs": [
-    "test:mcp-companion"
+    "test:mcp-companion",
+    "test:sidecar-ci"
   ],
   "tests/helpers/mcp-suite-entry.mjs": [
     "test:mcp-untrusted",
     "test:mcp-companion",
-    "test:mcp-install-smoke"
+    "test:mcp-install-smoke",
+    "test:sidecar-ci"
   ],
   "tools/mcp-server/__tests__/framing.test.mjs": [
     "test:mcp-companion",
@@ -543,7 +551,8 @@
     "test:untrusted-html"
   ],
   "src-tauri/sidecar/evidence-store.mjs": [
-    "test:evidence-journal"
+    "test:evidence-journal",
+    "test:sidecar-ci"
   ],
   "src/components/__tests__/evidence-journal-panel.test.mts": [
     "test:evidence-journal"
@@ -585,7 +594,8 @@
   "src-tauri/sidecar/sms-security.mjs": [
     "test:sidecar-lows",
     "test:sms-panel",
-    "test:sms"
+    "test:sms",
+    "test:sidecar-ci"
   ],
   "src/components/SmsSettingsPanel.ts": [
     "test:sidecar-lows",
@@ -665,7 +675,8 @@
     "test:workflow-security"
   ],
   ".github/workflows/smoke.yml": [
-    "test:workflow-security"
+    "test:workflow-security",
+    "test:sidecar-ci"
   ],
   ".github/workflows/targeted-tests.yml": [
     "test:workflow-security"
@@ -736,5 +747,140 @@
     "test:lifelines-map",
     "test:map-clarity",
     "test:untrusted-html"
+  ],
+  "tests/helpers/sidecar-ci-inventory.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/biosurveillance-wastewater.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/ofac-cache.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/sidecar-logger.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/event-store.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/watchboard-engine.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/hrrr-smoke.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/ipaws-aggregate.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/gdacs-rss.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/faa-tfrs.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src/services/notifications/notification-producer-registry.ts": [
+    "test:sidecar-ci"
+  ],
+  "src/services/spaceweather/solar-imagery.ts": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/agent-monitor-projection.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/biosurveillance-wastewater.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/bounded-provider-responses.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/dark-vessel-gaps-parity.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/event-store-wiring.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/event-store.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/evidence-routes.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/evidence-store.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/feed-tracker.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/freight-stress-parity.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/hrrr-smoke.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/key-health.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/local-logistics-route.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/maritime-vessels-parity.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/notification-integration.test.mts": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/ofac-cache.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/openaq-v3-route.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/osrm-route.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/q20-sidecar-lows.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/rules.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/s2-routes.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/security-cve-parity.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/self-test-classify.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/severe-weather-parity.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/shakealert-parity.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/shortage-overview.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/sidecar-logger.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/situations.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/sms-auth.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/spaceweather-imagery-parity.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/ucdp-local-routes.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/volcano-monitor-parity.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/watchboard-engine.test.mjs": [
+    "test:sidecar-ci"
   ]
 }

@@ -6,16 +6,13 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev",
-    "build": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build",
+    "dev": "npm run generate && WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev",
+    "build": "npm run generate && WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "test": "npm run build && node --test tests/*.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "typecheck": "tsc --noEmit",
-    "generate": "node scripts/generate-site-data.mjs && node scripts/generate-discovery.mjs",
-    "prebuild": "npm run generate",
-    "pretypecheck": "npm run generate",
-    "predev": "npm run generate"
+    "typecheck": "npm run generate && tsc --noEmit",
+    "generate": "node scripts/generate-site-data.mjs && node scripts/generate-discovery.mjs"
   },
   "dependencies": {
     "next": "16.4.2",

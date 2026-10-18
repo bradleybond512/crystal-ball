@@ -148,7 +148,8 @@ test('keeps feature depth without duplicate disclosures or platform caveats', as
  assert.doesNotMatch(specs,/not specified|published \d{4}-|\d{4}-\d{2}-\d{2}/);
  for(const id of ['mcp','specs']) {
   const content=section(id);
-  for(const count of [data.counts.mcp.read,data.counts.mcp.analyst]) assert.equal((content.match(new RegExp(`\\b${count}\\b`,'g'))||[]).length,1,`${id}: profile count ${count}`);
+  assert.equal((content.match(new RegExp(`${data.counts.mcp.read} read-only tools`,'g'))||[]).length,1,`${id}: read-only profile`);
+  assert.equal((content.match(new RegExp(`${data.counts.mcp.analyst} (?:additional )?tools`,'g'))||[]).length,1,`${id}: analyst profile`);
  }
  const numbers=html.match(/<aside class="numbers-band"[\s\S]*?<\/aside>/)[0];
  const text=numbers.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ');

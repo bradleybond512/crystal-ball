@@ -22,5 +22,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm ci --prefix marketing-site --ignore-scripts
       - run: npm run test:eslint-runner
       - run: npm run lint:ci

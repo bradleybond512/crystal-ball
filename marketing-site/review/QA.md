@@ -12,8 +12,8 @@ Review date: 2026-10-18. No website deployment, app install, merge or auto-merge
 
 Same Lighthouse mobile defaults and headless Chrome. Local and hosted network conditions differ; these are individual lab runs, not field measurements. Repeat on the deployed site after review. Raw JSON and HTML reports are in this directory.
 
-- Marketing typecheck, lint and production build pass. Behavioral tests: 18 pass / 0 fail.
-- Root `bash scripts/agentic-validate.sh --tests test:marketing` passed, including lint, both app typechecks, secret scan, docs, cross-agent readiness and app build. Captured log precedes the final syntax-aware count correction and extra media assertions; affected marketing checks were rerun.
+- Marketing typecheck, lint and production build pass. Behavioral tests: 19 pass / 0 fail.
+- Root `bash scripts/agentic-validate.sh --tests test:marketing` passed, including lint, both app typechecks, secret scan, docs, cross-agent readiness and app build. Final rerun includes the expanded page and fresh-server sitemap regression; `root-gate-final.txt` records the result.
 - Link audit: 54 pass / 0 fail / 0 HTTP 404, including every srcset candidate. Download bodies were not downloaded. Remote fragments are not checked. `links.json` records methods, URLs and statuses.
 - Schema.org Markup Validator: one SoftwareApplication, zero errors, zero warnings. `schema-validator.json` contains actual browser output. No ratings or awards were invented to meet rich-result requirements.
 - All five routes checked at 1440×1000 and 390×844: no horizontal overflow or broken images; exactly one h1. Keyboard skip link focuses; reduced-motion disables reveal animation. Separate section captures hide fixed header/skip chrome to show the whole section. Navigation captures preserve actual UI.
@@ -42,3 +42,11 @@ The deterministic generator tests exercise adjacent panel declarations, duplicat
 Mutation proof for the original route/media safeguards: starting from clean `f1c534f`, changed 409→408, hero high→low priority and disabled gzip. Confirmed applied diff is `mutation-applied.diff`; tests changed from 9 pass / 0 fail to 6 pass / 3 fail (`mutation-red.txt`). Restored all three files with matching SHA-256 and an empty git status before feature expansion. Pre-rewrite worker also produced 0 pass / 4 fail (`baseline-red.txt`).
 
 Generator mutation proof: clean `37dfd64`, reduced derived panel counts by one and removed malformed URL filtering. Confirmed diff: `generator-mutation.diff`. Generation tests changed from 7 pass / 0 fail to 5 pass / 2 fail (`generator-mutation-red.txt`); restoring the file matched SHA-256 a2c63d61d2f976470eaccb95d5e5458bab5607fdf046b14de4542c71ffead909 and returned a clean working tree and 7 pass / 0 fail.
+
+## Fresh-server sitemap correction
+
+A restarted `vinext start` exposed a missing ASSETS binding (HTTP 500) that the original worker test fixture supplied. The worker now imports the build-generated static XML, serving the same artifact without a host binding. The new no-binding test fails before the fix and passes afterward. From clean commit `5340dd5`, reverting only this response to ASSETS.fetch produced 8 pass / 1 fail; confirmed diff and red evidence are retained. Restoration matched SHA-256 `5f8e2aff52d0376e2a7b2cac06b8d9d5033b3e3d4682d040757857bf01619dcb` and returned a clean tree. Marketing typecheck, lint, build and all 19 tests passed before the mutation.
+
+The independent Sonnet review of `7b238b8` found zero new blocking implementation findings, but explicitly did not waive the inherited braces release blocker; its complete conclusion is retained in `sonnet-review.txt`. This is not a zero-blocker release approval.
+
+CI integration: the root ESLint job now installs the nested marketing package before discovering its config. Marketing ESLint ignores generated dist and Wrangler output. The dependency-change gate remains subject to Bradley’s approval; no approval label is applied by the agent.

@@ -114,7 +114,8 @@ test('reveals sourced detail with specific controls and one capture note', async
  assert.doesNotMatch(html, /Installed macOS app · Captured|\/blob\/[a-f0-9]{40}/);
  assert.match(html,/id="numbers-title">By the numbers\./);
  assert.match(html,/Explore technical specifications/);
- assert.match(html,/Minimum OS versions/);
+ const data=JSON.parse(await readFile(new URL('../data/generated.json',import.meta.url),'utf8'));
+ assert.equal(html.includes('Minimum OS versions'),data.specs.platforms.some(platform=>platform.minimumOS));
 });
 
 test('serves the exact build-generated sitemap without a rendering route',async()=>{
@@ -129,4 +130,30 @@ test('serves the exact build-generated sitemap without a rendering route',async(
  assert.equal(response.status,200);
  assert.match(response.headers.get('content-type'),/application\/xml/);
  assert.equal(await response.text(),await readFile(new URL('../dist/client/sitemap.xml',import.meta.url),'utf8'));
+});
+
+test('keeps feature depth without duplicate disclosures or platform caveats', async()=>{
+ const html=await(await request('/')).text();
+ const data=JSON.parse(await readFile(new URL('../data/generated.json',import.meta.url),'utf8'));
+ const section=id=>html.match(new RegExp(`<section[^>]*id="${id}"[\\s\\S]*?</section>`))[0];
+ for(const id of ['features','intelligence','home-shell','survival','privacy','local-ai','mcp','variants']) {
+  const content=section(id);
+  assert.equal((content.match(/<a\b/g)||[]).length,1,`${id}: one link`);
+  assert.doesNotMatch(content,/<details/);
+  assert.equal((content.match(/<article\b/g)||[]).length,id==='variants'?4:3,`${id}: tiles`);
+  assert.ok((content.match(/class="fine-print"/g)||[]).length<=1,`${id}: single caveat`);
+ }
+ assert.match(section('variants'),/Four editions\. Pick yours\./);
+ const specs=section('specs');
+ assert.doesNotMatch(specs,/not specified|published \d{4}-|\d{4}-\d{2}-\d{2}/);
+ for(const id of ['mcp','specs']) {
+  const content=section(id);
+  for(const count of [data.counts.mcp.read,data.counts.mcp.analyst]) assert.equal((content.match(new RegExp(`\\b${count}\\b`,'g'))||[]).length,1,`${id}: profile count ${count}`);
+ }
+ const numbers=html.match(/<aside class="numbers-band"[\s\S]*?<\/aside>/)[0];
+ const text=numbers.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ');
+ for(const label of [`${data.counts.panels.full} panels`,`${data.counts.mcp.total} tools for your AI assistant`,`${data.counts.editions} editions`,'Mac, Windows, Linux','Free']) assert.ok(text.includes(label),label);
+ assert.match(numbers,/source at build time/);
+ assert.doesNotMatch(numbers,/experimental|primary/);
+ assert.doesNotMatch(html.match(/<footer[\s\S]*?<\/footer>/)[0],/experimental|primary/);
 });

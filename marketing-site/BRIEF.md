@@ -11,3 +11,11 @@ Tasks: repository_analyst verifies claims (read-only); architect designs a minim
 The user's explicit marketing task takes priority over unrelated desktop UX roadmap tasks. No UX/ACC task is claimed or marked complete.
 
 Baseline: live site mobile Lighthouse 12.8.2: Performance 54, Accessibility 100, SEO 100. Reports and detailed conditions are attached with the completed review evidence.
+
+## Refinement — same depth, less repetition
+
+Standard / medium risk. Keep the hero, design tokens, existing unique real screenshots, accessibility, SEO, build-derived facts, and essential safety/privacy qualifications. Replace each feature disclosure/restatement with its existing three tiles, one specific link, and at most one short caveat; keep the four-card edition comparison. Show profile counts only in AI assistants and specs, platform status only in hero/specs/FAQ, omit unset OS minimums, show version without a publish date in specs, and use the requested benefit-oriented stats labels.
+
+Owners: copy_architecture verifies source claims and designs the minimal template change; root updates tests and coordinates visual/CI verification; dependency_repair investigates and repairs the marketing dependency tree within package/lock files. Independent Sonnet review follows final commits. Changes remain in draft PR #1810; no merge, deployment, installation, gate bypass, or approval labels.
+
+Evidence: fresh before/after desktop/mobile captures, targeted test red/green and mutation proof, typecheck/lint/build, full repository gate, dependency audits and CI results. Unknowns: whether the inherited advisory has a supported upstream remediation.

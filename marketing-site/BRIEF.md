@@ -21,3 +21,11 @@ Owners: copy_architecture verifies source claims and designs the minimal templat
 Evidence: fresh before/after desktop/mobile captures, targeted test red/green and mutation proof, typecheck/lint/build, full repository gate, dependency audits and CI results. Unknowns: whether the inherited advisory has a supported upstream remediation.
 
 Dependency decision: retain the current framework and vendor only the bounded braces recursion patch from upstream PR #87 onto version 3.0.3. Preserve MIT provenance, source hashes and the production diff; reject nesting above 100, verify actual transitive resolution, and run upstream compatibility/security tests. No audit suppression or upstream-fixed claim. A clean build must generate facts and sitemap even when npm lifecycle hooks are disabled.
+
+## Enrichment — specifics without clutter
+
+Standard / medium risk. Preserve the hero, numbers band, generated facts, section order, design tokens, SEO/CSP, and caveats. Replace generic tile descriptions with named implemented panels, layers, fields, providers, and commands. Add labeled examples, registry-backed assistant prompts, catalog-backed edition lists, a self-directed example day after Briefing, and a small power-user section. Keep one link/caveat per main feature and short tile sentences. Source lines belong in the PR evidence.
+
+Read-only analysts own product/catalog/CLI discovery; copy_architecture owns design then render/CSS implementation; root owns actual installed-app captures, tests, visual checks and PR evidence. dependency_repair independently reviews the enrichment because it did not implement it. No app functionality, services, secrets, preferences, builds, or installations change. No new dependencies.
+
+Native screenshots are feasible only for installed, reachable screens. Capture real settings without changing preferences or exposing credentials. Do not manufacture edition screenshots from the Full build. Omit unconfigured OS minimums and unverified source counts. Validate source catalogs/tools, illustrative labels, responsive layout and accessibility; run the full repository gate and mobile Lighthouse. Keep PR #1810 draft; never merge, deploy or bypass dependency approval.

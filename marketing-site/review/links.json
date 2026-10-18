@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-10-18T22:49:47.657Z",
+  "checkedAt": "2026-10-18T23:24:23.525Z",
   "sourceSha": "78e34040d738c82195162b28280e8ce865c3bb6d",
   "routes": [
     "/",
@@ -10,8 +10,8 @@
   ],
   "method": "Built worker plus static assets; external HEAD follows redirects, GET Range fallback for 403/405/501 cancels body immediately. Four concurrent requests, 20-second timeout. Remote fragments are not validated.",
   "summary": {
-    "total": 54,
-    "passed": 54,
+    "total": 58,
+    "passed": 58,
     "failed": 0,
     "notFound": 0
   },
@@ -167,6 +167,46 @@
     },
     {
       "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-library-800.webp",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-local-ai-settings-1600.webp",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-local-ai-settings-800.webp",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-privacy-settings-1600.webp",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-privacy-settings-800.webp",
       "from": [
         "/"
       ],
@@ -570,7 +610,7 @@
         {
           "method": "HEAD",
           "status": 200,
-          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/a07e0f6e-8a56-45dd-91a2-f67c5f1776f2?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-18T23%3A25%3A39Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_aarch64.AppImage&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T22%3A25%3A12Z&ske=2026-10-18T23%3A25%3A39Z&sks=b&skv=2018-11-09&sig=mi7M7itq6VayAXemcbGh1whoH4CDSLmp5EYfLZyAnzo%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2NzM4NiwibmJmIjoxNzkyMzYzNzg2LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.Wa-vBeGtRUOar_P6lLJUDEQ64nu2UDWtEpfM6It0wzw&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_aarch64.AppImage&response-content-type=application%2Foctet-stream"
+          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/a07e0f6e-8a56-45dd-91a2-f67c5f1776f2?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-19T00%3A06%3A24Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_aarch64.AppImage&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T23%3A05%3A29Z&ske=2026-10-19T00%3A06%3A24Z&sks=b&skv=2018-11-09&sig=4C1PJ7y%2BQVOKvLUtC0XtmgNpQyFmokNCTO7RJQcn%2FxU%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2OTQ2MiwibmJmIjoxNzkyMzY1ODYyLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.5JrU8YP3DG_QJ-GbTwqyvyptuAVviA0PI_dqsVSokMA&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_aarch64.AppImage&response-content-type=application%2Foctet-stream"
         }
       ]
     },
@@ -587,7 +627,7 @@
         {
           "method": "HEAD",
           "status": 200,
-          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/e7c06bf0-fa05-49a3-bb8a-0117bf969db8?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-18T23%3A37%3A25Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_aarch64.dmg&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T22%3A37%3A01Z&ske=2026-10-18T23%3A37%3A25Z&sks=b&skv=2018-11-09&sig=R%2FwqOmwMkjI1n4ixBxzr8iKLgG6Jc6V5XrYLceyb4v0%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2NTU4NSwibmJmIjoxNzkyMzYzNzg1LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.9pR-9ds7G5kL1ypoLR8WSl03J0O9_x4mWPL2LFd4zew&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_aarch64.dmg&response-content-type=application%2Foctet-stream"
+          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/e7c06bf0-fa05-49a3-bb8a-0117bf969db8?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-19T00%3A06%3A19Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_aarch64.dmg&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T23%3A06%3A03Z&ske=2026-10-19T00%3A06%3A19Z&sks=b&skv=2018-11-09&sig=Z2lFqDzOk5dDUB0Qx3oXtMgoc0iZkrMBz3ziL7npIbs%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2NzY2MSwibmJmIjoxNzkyMzY1ODYxLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.PcXuDsNcU0HSK_2iqAA53lgNXM7opKK5D3xGI4Ga7C0&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_aarch64.dmg&response-content-type=application%2Foctet-stream"
         }
       ]
     },
@@ -604,7 +644,7 @@
         {
           "method": "HEAD",
           "status": 200,
-          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/495a9911-35e9-47eb-abf4-dc7d57284fb6?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-18T23%3A30%3A35Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_amd64.AppImage&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T22%3A30%3A05Z&ske=2026-10-18T23%3A30%3A35Z&sks=b&skv=2018-11-09&sig=19in17ACNvZH%2FRh7ydOjylEFftj67djjzAjFeADQPvo%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2NzM4NSwibmJmIjoxNzkyMzYzNzg1LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.HjA3Ikmioeal_aSqaK1iVYbd6j0Mkv5NBpeeaZLJ-fo&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_amd64.AppImage&response-content-type=application%2Foctet-stream"
+          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/495a9911-35e9-47eb-abf4-dc7d57284fb6?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-19T00%3A24%3A39Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_amd64.AppImage&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T23%3A24%3A07Z&ske=2026-10-19T00%3A24%3A39Z&sks=b&skv=2018-11-09&sig=ksxbaPwg5fBD9u9sUbHnbtkeMTIxnr0KS16yUrB5R3Y%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2OTQ2MiwibmJmIjoxNzkyMzY1ODYyLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.5JrU8YP3DG_QJ-GbTwqyvyptuAVviA0PI_dqsVSokMA&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_amd64.AppImage&response-content-type=application%2Foctet-stream"
         }
       ]
     },
@@ -621,7 +661,7 @@
         {
           "method": "HEAD",
           "status": 200,
-          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/2bdf0daa-839a-441a-b1f3-8c83d436c8f5?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-18T23%3A35%3A45Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_x64-setup.exe&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T22%3A35%3A40Z&ske=2026-10-18T23%3A35%3A45Z&sks=b&skv=2018-11-09&sig=X8KA30LuY76%2BawCYJzcP8RybMw3A7dCfv3J0cPcmTMM%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2NTU4NSwibmJmIjoxNzkyMzYzNzg1LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.9pR-9ds7G5kL1ypoLR8WSl03J0O9_x4mWPL2LFd4zew&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_x64-setup.exe&response-content-type=application%2Foctet-stream"
+          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/2bdf0daa-839a-441a-b1f3-8c83d436c8f5?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-19T00%3A22%3A07Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_x64-setup.exe&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T23%3A21%3A58Z&ske=2026-10-19T00%3A22%3A07Z&sks=b&skv=2018-11-09&sig=HFDyT6cf4pQ63YlQFkBhpoDyQEIO6DEJMrGqQT4FC5I%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2NzY2MiwibmJmIjoxNzkyMzY1ODYyLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.ihl03ocdH9_rRoU6K1unuw2Go5FLJ6tfOfJmiL2Qsdk&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_x64-setup.exe&response-content-type=application%2Foctet-stream"
         }
       ]
     },
@@ -638,7 +678,7 @@
         {
           "method": "HEAD",
           "status": 200,
-          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/409c11d3-bd5c-4fe7-a02b-f07f36c94a10?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-18T23%3A38%3A59Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_x64.dmg&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T22%3A38%3A22Z&ske=2026-10-18T23%3A38%3A59Z&sks=b&skv=2018-11-09&sig=i3uKY7uC7rnrH2XGcYGHMk6FDgJaPUEz%2Fk2IkQKVmr0%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2NTU4NSwibmJmIjoxNzkyMzYzNzg1LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.9pR-9ds7G5kL1ypoLR8WSl03J0O9_x4mWPL2LFd4zew&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_x64.dmg&response-content-type=application%2Foctet-stream"
+          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/409c11d3-bd5c-4fe7-a02b-f07f36c94a10?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-19T00%3A21%3A25Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_x64.dmg&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T23%3A20%3A50Z&ske=2026-10-19T00%3A21%3A25Z&sks=b&skv=2018-11-09&sig=tAzrBlGlB01sTa8m3z5%2BGdT0yjcsumCQvDN9RSKAbb0%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2NzY2MSwibmJmIjoxNzkyMzY1ODYxLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.PcXuDsNcU0HSK_2iqAA53lgNXM7opKK5D3xGI4Ga7C0&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_x64.dmg&response-content-type=application%2Foctet-stream"
         }
       ]
     },
@@ -656,7 +696,7 @@
         {
           "method": "HEAD",
           "status": 200,
-          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/dc751aca-3e95-48bf-9e88-743f3b49072f?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-18T23%3A27%3A04Z&rscd=attachment%3B+filename%3Drelease-manifest.json&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T22%3A26%3A25Z&ske=2026-10-18T23%3A27%3A04Z&sks=b&skv=2018-11-09&sig=8dNqdAN0vegU4DUNZjaRmj4f3nGKDLwIF0AY7YfKgvo%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2NDA4NSwibmJmIjoxNzkyMzYzNzg1LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.h1qAZPvrIf0g6Wvkuvlg5FO4NiYtDIKBvdmKquHuW44&response-content-disposition=attachment%3B%20filename%3Drelease-manifest.json&response-content-type=application%2Foctet-stream"
+          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/dc751aca-3e95-48bf-9e88-743f3b49072f?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-18T23%3A58%3A09Z&rscd=attachment%3B+filename%3Drelease-manifest.json&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T22%3A57%3A17Z&ske=2026-10-18T23%3A58%3A09Z&sks=b&skv=2018-11-09&sig=ufa8PzK1IX%2FDpK6F4FrUBo%2FgDto1b1U%2FYlvDR%2BRLXjw%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2NjE2MSwibmJmIjoxNzkyMzY1ODYxLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.fFrpqYmNSr7MG2SyiIW4qekS6D7cybwxx-I-vPYHodM&response-content-disposition=attachment%3B%20filename%3Drelease-manifest.json&response-content-type=application%2Foctet-stream"
         }
       ]
     },

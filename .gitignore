@@ -82,3 +82,7 @@ evidence.db-shm
 
 # ESLint cache (fingerprinted by config + version — see scripts/run-eslint.mjs)
 .eslintcache-*
+
+# Private local prototypes, host scripts, demo media and cache.
+/tmp/
+/api-cache.json

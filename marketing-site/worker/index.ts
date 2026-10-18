@@ -1,6 +1,7 @@
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
+import sitemap from "../public/sitemap.xml?raw";
 
 interface Env {
   ASSETS: Fetcher;
@@ -28,7 +29,7 @@ const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
-    if (url.pathname === "/sitemap.xml") return env.ASSETS.fetch(request);
+    if (url.pathname === "/sitemap.xml") return new Response(sitemap, { headers: { "content-type": "application/xml; charset=utf-8" } });
 
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];

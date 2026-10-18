@@ -1,9 +1,10 @@
 (() => {
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) return;
+  const motion = matchMedia('(prefers-reduced-motion: reduce)');
+  if (motion.matches || !('IntersectionObserver' in window)) return;
   const observer = new IntersectionObserver(entries => {
     for (const entry of entries) {
       if (entry.isIntersecting) {
-        entry.target.classList.add('is-visible');
+        if (!motion.matches) entry.target.classList.add('is-visible');
         observer.unobserve(entry.target);
       }
     }

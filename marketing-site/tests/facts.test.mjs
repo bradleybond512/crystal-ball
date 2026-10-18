@@ -1,0 +1,67 @@
+import assert from 'node:assert/strict';
+import { readFile, access } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import test from 'node:test';
+import vm from 'node:vm';
+import ts from 'typescript';
+
+const root = new URL('../../', import.meta.url);
+const data = JSON.parse(await readFile(new URL('../data/site.json', import.meta.url), 'utf8'));
+const read = (path) => readFile(new URL(path, root), 'utf8');
+
+test('shared panel counts are derived from actual variant catalogs', async () => {
+  const source = await read('src/config/panels.ts');
+  const parsed = ts.createSourceFile('panels.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  assert.equal(parsed.parseDiagnostics.length, 0, 'panel source parses without errors');
+  const catalogs = new Map();
+  for (const statement of parsed.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (ts.isIdentifier(declaration.name)) catalogs.set(declaration.name.text, declaration.initializer);
+    }
+  }
+  const actual = {};
+  for (const variant of Object.keys(data.counts.panels)) {
+    const catalog = catalogs.get(`${variant.toUpperCase()}_PANELS`);
+    assert.ok(catalog && ts.isObjectLiteralExpression(catalog), `${variant} catalog is an object literal`);
+    const names = catalog.properties.map((property) => {
+      assert.ok(ts.isPropertyAssignment(property), `${variant} entries must be explicit properties`);
+      assert.ok(ts.isIdentifier(property.name) || ts.isStringLiteral(property.name), `${variant} entry has a static name`);
+      return property.name.text;
+    });
+    assert.equal(new Set(names).size, names.length, `${variant} panel names are unique`);
+    actual[variant] = names.length;
+  }
+  assert.deepEqual(data.counts.panels, actual);
+});
+
+test('shared MCP counts match actual registry and read-only annotations', async () => {
+  const source = await read('tools/mcp-server/tool-registry.mjs');
+  const literal = source.match(/const CATEGORY_TOOLS = (\{[\s\S]*?\n\});/);
+  assert.ok(literal);
+  const categories = vm.runInNewContext(`(${literal[1]})`, Object.create(null), { timeout: 1000 });
+  const names = Object.values(categories).flatMap(Object.keys);
+  assert.equal(new Set(names).size, names.length, 'registry tool names are unique');
+  const overrides = source.match(/const ANNOTATION_OVERRIDES = \{([\s\S]*?)\n\};/)[1];
+  const mutating = [...overrides.matchAll(/^  (\w+):[^\n]*(?:MUTATING_LOCAL|MUTATING_REMOTE|DESTRUCTIVE_LOCAL)/gm)].map((m) => m[1]);
+  assert.ok(mutating.every((name) => names.includes(name)));
+  assert.deepEqual(data.counts.mcp, {
+    total: names.length,
+    read: names.length - mutating.length,
+    analyst: mutating.length,
+    categories: Object.keys(categories).length,
+  });
+});
+
+test('source references exist at the pinned revision and license agrees', async () => {
+  assert.match(data.sourceSha, /^[a-f0-9]{40}$/);
+  const template = await readFile(new URL('../lib/render.ts', import.meta.url), 'utf8');
+  const paths = new Set(['src/config/panels.ts', 'tools/mcp-server/tool-registry.mjs', ...[...template.matchAll(/source\('([^']+)'/g)].map((m) => m[1])]);
+  for (const path of paths) {
+    await access(new URL(path, root));
+    execFileSync('git', ['cat-file', '-e', `${data.sourceSha}:${path}`], { cwd: fileURLToPath(root), stdio: 'pipe' });
+  }
+  const pkg = JSON.parse(await read('package.json'));
+  assert.equal(pkg.license.replace(/-only$/, ''), data.license);
+});

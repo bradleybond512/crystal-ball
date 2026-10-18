@@ -1,4 +1,7 @@
 import vinext from "vinext";
+import { readFile } from "node:fs/promises";
+import { transform } from "lightningcss";
+import { minify } from "terser";
 import { defineConfig } from "vite";
 import hostingConfig from "./.openai/hosting.json" with { type: "json" };
 import { sites } from "./build/sites-vite-plugin.ts";
@@ -48,6 +51,20 @@ export default defineConfig(async () => {
       ? { watch: { useFsEvents: false, usePolling: true } }
       : undefined,
     plugins: [
+      {
+        name: "minify-inline-assets",
+        enforce: "pre",
+        async load(id: string) {
+          if (id.endsWith("/styles/site.css?raw")) {
+            const code = transform({ filename: "site.css", code: await readFile(id.slice(0, -4)), minify: true }).code.toString();
+            return `export default ${JSON.stringify(code)}`;
+          }
+          if (id.endsWith("/scripts/reveal.js?raw")) {
+            const result = await minify(await readFile(id.slice(0, -4), "utf8"));
+            return `export default ${JSON.stringify(result.code)}`;
+          }
+        },
+      },
       vinext(),
       sites(),
       cloudflare({

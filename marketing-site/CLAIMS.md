@@ -7,7 +7,7 @@ This is a source audit, not proof of installed-app performance, feed completenes
 | Section / claim | Source evidence | Qualification |
 | --- | --- | --- |
 | Hero: intelligence desk for Mac; live global signals | `README.md:8,22`; `src/main.ts:343–347`; `src/config/panels.ts:9` | “Live” describes connected feeds, not guaranteed freshness. No completeness, uptime or accuracy promise. |
-| God's Eye: globe with selectable geographic layers | `src/components/GodsVisionView.ts:76–78,140,170`; `src/config/panels.ts` `FULL_MAP_LAYERS` | God's Eye is the requested marketing name; internal class names retain God's Vision. “See everything” is thematic copy, not literal universal coverage; supporting copy must say available signals. |
+| God's Eye: globe with selectable geographic layers | `src/components/GodsVisionView.ts:76–78,140,170`; `src/config/panels.ts` `FULL_MAP_LAYERS` | God's Eye is the requested marketing name; internal class names retain God's Vision. The supplied “See everything” headline is adjusted to “Your world. In view.” to avoid a universal-coverage claim. |
 | Intelligence: hypotheses, evidence, alternative views and forecasts | `src/components/AnalystHUD.ts:2–6,20–40,116` | Generated analysis can be wrong. No guaranteed understanding or predictive performance. |
 | Home Shell: personal context, changes, worldwide items in a briefing | `src/services/home-shell/briefing-view.ts:1–8,24–32,63–76`; `src/components/HomeShellOverlay.ts` | “Your morning, briefed.” describes a view, not a guaranteed scheduled delivery. Coverage and evidence age can be unverified. |
 | Survival posture: organize threats and explain posture | `src/services/survival/survival-posture.ts:13–31,63–93` | No emergency readiness, safe-route or safety guarantee. Retain safety fine print and FAQ. |
@@ -17,7 +17,7 @@ This is a source audit, not proof of installed-app performance, feed completenes
 | Local AI: local Ollama inference | `src/services/summarization.ts:54–58`; `src/services/llm-adapter.ts:81,221–245`; `src-tauri/sidecar/local-api-server.mjs:6867,6913–6923` | Local inference stays on your Mac when Ollama is configured locally. A remotely configured endpoint is not on-device. Local inference does not make live feeds offline. |
 | Cloud AI: Groq, Claude and OpenRouter receive submitted content | `src/services/summarization.ts:54–58,242–255`; `api/claude-agent.js:28`; `src/services/llm-adapter.ts:221–252`; `src-tauri/sidecar/local-api-server.mjs:6913–6923` | Some paths fall back to cloud. Avoid a universal “nothing leaves your device” promise. Provider policies apply. |
 | Variants: full, tech, finance, happy | `src/config/variant.ts:1–8`; `src/config/panels.ts:1199` | Configured variants are not proof of four published desktop downloads. Desktop workflow input currently offers full, tech and finance. |
-| Variants: full 408 panels | `src/config/panels.ts:9` `FULL_PANELS`, counted named entries | Catalog entries, not concurrently active or verified working panels. |
+| Variants: full 409 panels | `src/config/panels.ts:9` `FULL_PANELS`, counted named entries | Catalog entries, not concurrently active or verified working panels. |
 | Variants: tech 35 panels | `src/config/panels.ts:601–637` | Same catalog qualification. |
 | Variants: finance 31 panels | `src/config/panels.ts:810–842` | Same catalog qualification. |
 | Variants: happy 10 panels | `src/config/panels.ts:1015–1026` | Same catalog qualification. |
@@ -32,14 +32,16 @@ This is a source audit, not proof of installed-app performance, feed completenes
 
 ## Required presentation checks
 
-- [ ] Visible counts are read from one shared data file and match the audited catalog.
-- [ ] Source features are distinguished from the July release where relevant.
-- [ ] Hero and FAQ state macOS primary and experimental Windows/Linux support.
-- [ ] Privacy copy distinguishes local inference, live network feeds, and cloud AI.
-- [ ] No claim of comprehensive coverage, validated predictive accuracy, emergency suitability, or awards.
-- [ ] Download links and SHA-256 manifest are verified against actual release assets.
-- [ ] Signing status is explicitly unverified unless actual artifacts were inspected.
-- [ ] Fine print appears at page bottom and in FAQ: “Crystal Ball is in early access. Information may be incomplete or delayed. Not for emergency, financial, or safety-critical decisions.”
-- [ ] Each published screenshot depicts a real product capture; captions preserve its actual capture date.
+- [x] Visible counts are read from one shared data file and match the audited catalog.
+- [x] Source features are distinguished from the July release where relevant.
+- [x] Hero and FAQ state macOS primary and experimental Windows/Linux support.
+- [x] Privacy copy distinguishes local inference, live network feeds, and cloud AI.
+- [x] No claim of comprehensive coverage, validated predictive accuracy, emergency suitability, or awards.
+- [x] Download links and SHA-256 manifest are verified against actual release assets.
+- [x] Signing status is explicitly unverified unless actual artifacts were inspected.
+- [x] Fine print appears at page bottom and in FAQ: “Crystal Ball is in early access. Information may be incomplete or delayed. Not for emergency, financial, or safety-critical decisions.”
+- [x] Each published screenshot depicts a real product capture; captions preserve its actual capture date.
 
 These boxes are review gates, not claims that visual or runtime verification has already passed.
+
+All presentation boxes were checked against the final build on 2026-10-18. See `review/QA.md`, link results and browser evidence. Signing/notarization remains explicitly unverified.

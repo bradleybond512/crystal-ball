@@ -31,3 +31,9 @@ node --test tests/marketing.test.mjs
 Imported from confirmed Sites project `appgprj_6a67d6f7f5fc8191ace93399c51b354c`, source commit `8fee5e7919ea51918c9585c0cceaddc481c7b70e`. The original lives in the task workspace at `work/crystal-ball`.
 
 Update `data/site.json` after checking the panel catalog, MCP registry and latest GitHub release. Release asset links are pinned to the latest verified tag so a later release cannot silently break versioned filenames. Review `CLAIMS.md` when refreshing facts. Do not deploy or merge without Bradley’s review.
+
+## Visual and link review
+
+After `npm ci` at the repository root and in this directory, run `npm test`, start the production build on port 4173, then run `node scripts/capture-review.mjs`. It uses the repository’s Playwright and installed Chrome. `node scripts/check-links.mjs` audits the built worker and external links. Section screenshots temporarily hide the sticky header to show the whole section; separate navigation captures preserve the actual header.
+
+Build-only minifiers `lightningcss` (MPL-2.0) and `terser` (BSD-2-Clause) were already transitive dependencies; pinning them makes direct use reproducible. They minify inline CSS/JS at build time and add no browser runtime dependency. HTML removes inter-tag whitespace and `respond` negotiates gzip.

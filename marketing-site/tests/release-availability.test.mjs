@@ -43,9 +43,9 @@ test('Home Shell is Full-only and capabilities cannot claim it for Tech', () => 
  m.capabilities.components.desktop.features=m.capabilities.components.desktop.features.filter(f=>!f.variants||f.variants.includes('tech'));
  const result=resolve(m);assert.equal(result.verified,true);assert.equal(result.features['home-shell-source-readiness'].available,false);
 });
-test('render source qualifies companion installation and preserves capture provenance', async () => {
+test('render source qualifies separate installation and preserves capture provenance', async () => {
  const source=await readFile(new URL('../lib/render.ts',import.meta.url),'utf8');
- assert.match(source,/separately installed companion/i);
+ assert.match(source,/Installs separately from the app/);
  assert.doesNotMatch(source,/const upcomingTiles|const upcoming =/);
  assert.match(source,/Map layers include weather, internet outages, cyber threats, military activity, waterways, and economic signals\./);
  const base=JSON.parse(await readFile(new URL('../data/site.json',import.meta.url),'utf8'));
@@ -59,7 +59,7 @@ test('incomplete capability subsets retain all warnings and future valid proof i
  const future=structuredClone(manifest());future.tag='v2.25.149';future.version='2.25.149';future.capabilities.components.desktop.version=future.version;
  assert.equal(resolve(future,{...release,tag:future.tag,version:future.version}).features['explicit-analytics-consent'].available,true);
 });
-test('rendered warning and catalog note depend on verified capabilities, never version alone', async () => {
+test('rendered update timing and upgrade note depend on verified capabilities, never version alone', async () => {
  const ts=(await import('typescript')).default;
  const base=JSON.parse(await readFile(new URL('../data/generated.json',import.meta.url),'utf8'));
  const template=await readFile(new URL('../lib/render.ts',import.meta.url),'utf8');
@@ -70,30 +70,22 @@ test('rendered warning and catalog note depend on verified capabilities, never v
   return (await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`)).render;
  };
  const verified=await renderFixture(resolve(),release);
- assert.doesNotMatch(verified('/privacy'),/upgrades automatically enabled/);
- assert.match(verified('/privacy'),/Analytics stay off until you explicitly opt in/);
- assert.doesNotMatch(verified('/'),/Audited release catalog/);
- assert.match(verified('/'),/Full edition only|full edition only/);
- assert.match(verified('/security'),/separately installed companion from the release source.*not bundled in the DMG/);
+ assert.doesNotMatch(verified('/privacy'),/Upgraded from|Next update/);
+ assert.match(verified('/privacy'),/Analytics stay off until you opt in/);
+ assert.match(verified('/'),/class="edition-label">Full edition/);
+ assert.match(verified('/security'),/Agent tools install separately from the app/);
  const changedCounts=structuredClone(manifest());changedCounts.capabilities.components.companion.toolCounts={total:62,read:54,analystAdditional:8};
  const changed=await renderFixture(resolve(changedCounts),release);
  const mcp=changed('/').match(/<section[^>]*id="mcp"[\s\S]*?<\/section>/)[0];
- assert.match(mcp,/source checkout[^<]*53 read-only/i);
- assert.match(mcp,/source checkout[^<]*8 tools/i);
- const specs=changed('/').match(/<section[^>]*id="specs"[\s\S]*?<\/section>/)[0];
- assert.match(specs,/Source checkout: 53 read-only tools/);
- assert.match(changed('/'),/Audited release catalog/);
+ assert.match(mcp,/54 read-only/);
+ assert.match(mcp,/8 tools/);
+ assert.match(mcp,/v2\.25\.148 includes 62/);
  assert.match(verified('/'),/captured 2026-10-18/);
  for(const latest of [{...release,version:'2.25.147',tag:'v2.25.147'},release,{...release,version:'9.0.0',tag:'v9.0.0'}]) {
   const unverified=await renderFixture(resolve(null,latest),latest);
-  assert.match(unverified('/privacy'),/upgrades automatically enabled/);
-  assert.doesNotMatch(unverified('/security'),/companion from the release source defaults/);
-  assert.match(unverified('/security'),/companion from the current source checkout defaults/);
-  assert.doesNotMatch(unverified('/'),/companion from the release source/);
-  assert.match(unverified('/privacy'),/prepared fix/);
-  assert.match(unverified('/privacy'),/pull\/1819/);
-  assert.doesNotMatch(unverified('/privacy'),/The current source requires explicit consent/);
-  assert.match(unverified('/'),/Audited release catalog/);
-  assert.match(unverified('/'),/release availability unverified/);
+  assert.match(unverified('/privacy'),/Upgraded from v2\.25\.147/);
+  assert.match(unverified('/privacy'),/Next update/);
+  assert.match(unverified('/security'),/Next update/);
+  assert.doesNotMatch(unverified('/'),/source-build|source checkout|audited|companion from/);
  }
 });

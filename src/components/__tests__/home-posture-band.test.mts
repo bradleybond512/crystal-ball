@@ -347,7 +347,7 @@ test('hide and destroy invalidate a late presentation import and retain first-sc
   h.shell.hide();
   loading.resolve(HomePostureBand);
   await flush();
-  assert.equal(h.parent.querySelector('.hs-posture-band')?.querySelector('[role=status]'), null);
+  assert.equal(h.parent.querySelector('.hs-posture-band')?.querySelector('[role=status]') === null, true, 'hidden lazy import must not mount a status node');
   h.shell.show(); await flush();
   assert.ok(h.parent.querySelector('.hs-posture-band [role=status]'));
   h.shell.destroy();

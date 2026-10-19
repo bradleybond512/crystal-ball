@@ -65,6 +65,7 @@ export interface CommandPalettePanelOptions {
 }
 
 export class CommandPalettePanel {
+  private focusTimer: ReturnType<typeof setTimeout> | null = null;
   private overlay: HTMLElement;
   private input: HTMLInputElement;
   private list: HTMLElement;
@@ -115,6 +116,7 @@ export class CommandPalettePanel {
 
   /** Remove the overlay from the DOM. */
   unmount(): void {
+    this.hide();
     this.overlay.remove();
   }
 
@@ -129,16 +131,22 @@ export class CommandPalettePanel {
   toggle(): void { if (this.visible) this.hide(); else this.show(); }
 
   show(): void {
+    if (this.focusTimer !== null) clearTimeout(this.focusTimer);
     this.visible = true;
     this.overlay.hidden = false;
     this.input.value = '';
     this.cursor = 0;
     this.refilter();
     // Focus on next tick so a key-up that fired ⌘K doesn't immediately cancel.
-    setTimeout(() => this.input.focus(), 0);
+    this.focusTimer = setTimeout(() => {
+      this.focusTimer = null;
+      if (this.visible && this.overlay.isConnected) this.input.focus();
+    }, 0);
   }
 
   hide(): void {
+    if (this.focusTimer !== null) clearTimeout(this.focusTimer);
+    this.focusTimer = null;
     this.visible = false;
     this.overlay.hidden = true;
   }
@@ -227,12 +235,12 @@ export class CommandPalettePanel {
   private runAt(idx: number): void {
     const result = this.flatResultsInRenderOrder()[idx];
     if (!result) return;
+    this.hide();
     try {
       result.command.action();
     } catch {
       // Swallow — a faulty action must not strand the palette open.
     }
-    this.hide();
   }
 
   /**

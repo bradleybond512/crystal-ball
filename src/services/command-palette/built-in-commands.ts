@@ -22,12 +22,14 @@ export interface BuiltinDeps {
 
 const NAVIGATION_TARGETS: { id: string; title: string; keywords: string[]; icon?: string }[] = [
   { id: 'command-center', title: 'Go to Command Center', keywords: ['home', 'overview', 'dashboard'], icon: '◎' },
-  { id: 'gods-vision',    title: 'Go to Globe',          keywords: ['globe', 'world', '3d', "god's eye"], icon: '◯' },
+  { id: 'gods-vision',    title: "Go to God's Vision",  keywords: ['globe', 'world', '3d', "god's vision", "god's eye"], icon: '◯' },
   { id: 'map',            title: 'Go to Map',            keywords: ['map', '2d', 'deck'], icon: '▦' },
   { id: 'intelligence-feed', title: 'Go to Intelligence Feed', keywords: ['intel', 'feed', 'news'], icon: '☰' },
 ];
 
 const ACTION_COMMANDS: { id: string; title: string; event: string; keywords: string[]; icon?: string; subtitle?: string }[] = [
+  { id: 'toggle-analyst-hud', title: 'Toggle Analyst HUD', event: 'cb:toggle-analyst-hud', keywords: ['analyst', 'hud', 'hypotheses'], icon: '◈' },
+  { id: 'toggle-ghost-mode', title: 'Toggle Ghost Mode', event: 'wm:toggle-ghost-mode', keywords: ['ghost', 'mode'], icon: '◐' },
   { id: 'run-self-test', title: 'Run Self-Test', event: 'cb:run-self-test', keywords: ['diagnostic', 'health', 'check', 'probe'], icon: '✓', subtitle: 'Run the full system probe' },
   { id: 'export-diagnostic-bundle', title: 'Export Diagnostic Bundle', event: 'cb:export-diagnostic-bundle', keywords: ['diagnostic', 'bundle', 'download', 'support'], icon: '⤓' },
   { id: 'toggle-operator-mode', title: 'Toggle Operator Mode', event: 'cb:toggle-operator-mode', keywords: ['operator', 'shift', 'handoff'], icon: '◐' },
@@ -51,11 +53,20 @@ export function buildBuiltinCommands(deps: BuiltinDeps): PaletteCommand[] {
       keywords: [...nav.keywords, 'go', 'navigate', 'open'],
       category: 'navigation',
       icon: nav.icon,
-      action: () => deps.dispatch('cb:navigate-panel', { panelKey: nav.id }),
+      action: () => nav.id === 'gods-vision'
+        ? deps.dispatch('cb:toggle-gods-vision')
+        : deps.dispatch('cb:navigate-panel', { panelKey: nav.id }),
     });
   }
 
   out.push({
+    id: 'navigation:diagnostics',
+    title: 'Open Diagnostics',
+    keywords: ['diagnostics', 'system', 'health', 'overview'],
+    category: 'navigation',
+    icon: '✓',
+    action: () => deps.dispatch('cb:open-diagnostics'),
+  }, {
     id: 'navigation:library',
     title: 'Open Library',
     keywords: ['library', 'catalog', 'browse', 'panels', 'domains'],

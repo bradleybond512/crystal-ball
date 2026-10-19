@@ -4,12 +4,13 @@
  */
 
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { after } from 'node:test';
 
 import { Window } from 'happy-dom';
 
 // Install happy-dom onto globalThis BEFORE importing the panel module.
 const happyWindow = new Window({ url: 'http://127.0.0.1/' });
+after(() => happyWindow.happyDOM.abort());
 const G = globalThis as unknown as Record<string, unknown>;
 G.window = happyWindow;
 G.document = happyWindow.document;
@@ -24,6 +25,7 @@ G.KeyboardEvent = happyWindow.KeyboardEvent;
 
 const { CommandPalettePanel } = await import('../../../components/CommandPalettePanel.ts');
 const { createCommandRegistry } = await import('../command-registry.ts');
+const { buildBuiltinCommands } = await import('../built-in-commands.ts');
 
 function buildPanel() {
   const registry = createCommandRegistry();
@@ -138,4 +140,40 @@ test('unmount() removes the overlay from the DOM', () => {
   panel.unmount();
   // Overlay should no longer be in the body.
   assert.equal(panel.element().isConnected, false);
+});
+
+test('selection hides palette before action and its pending focus cannot steal the destination', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const registry = createCommandRegistry();
+  const destination = document.createElement('button'); document.body.append(destination);
+  let calls = 0;
+  const panel = new CommandPalettePanel({ registry });
+  registry.register({ id: 'diagnostics', title: 'Open Diagnostics', keywords: [], category: 'navigation', action: () => {
+    calls++; assert.equal(panel.isVisible(), false); destination.focus();
+  } });
+  panel.mount(document.body); panel.show();
+  const nested = panel.element().querySelector('.cmdk-v2-row span') as HTMLElement;
+  nested.click();
+  t.mock.timers.tick(5);
+  assert.equal(calls, 1);
+  assert.equal(document.activeElement, destination);
+  panel.unmount(); destination.remove();
+});
+
+test('live built-in commands dispatch exactly once through nested palette clicks after it closes', () => {
+  for (const [id, event] of [
+    ['navigation:diagnostics', 'cb:open-diagnostics'], ['nav:gods-vision', 'cb:toggle-gods-vision'],
+    ['action:toggle-analyst-hud', 'cb:toggle-analyst-hud'], ['action:toggle-ghost-mode', 'wm:toggle-ghost-mode'],
+  ]) {
+    const registry = createCommandRegistry();
+    const panel = new CommandPalettePanel({ registry });
+    const calls = [];
+    const command = buildBuiltinCommands({ panels: {}, dispatch: (name) => {
+      calls.push([name, panel.isVisible()]);
+    } }).find((entry) => entry.id === id);
+    assert.ok(command); registry.register(command);
+    panel.mount(document.body); panel.show();
+    (panel.element().querySelector('.cmdk-v2-row span') as HTMLElement).click();
+    assert.deepEqual(calls, [[event, false]]); panel.unmount();
+  }
 });

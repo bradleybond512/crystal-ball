@@ -95,7 +95,7 @@ import { registerBuiltinCommands } from '@/services/command-palette/built-in-com
 import { installPlaceCommands } from '@/services/command-palette/place-commands';
 import { installGuideCommands } from '@/services/command-palette/guide-commands';
 import { HelpOverlay } from '@/components/HelpOverlay';
-import { installShortcuts } from '@/services/keyboard/shortcut-bootstrap';
+import { installShortcuts, type BootstrapHandles } from '@/services/keyboard/shortcut-bootstrap';
 import { startDockBadge } from '@/services/native/dock-badge';
 import { startMenubarStatus } from '@/services/native/menubar-status';
 import { startSituationAlertBridge } from '@/services/situation-alert-bridge';
@@ -557,7 +557,7 @@ import {
 } from '@/config';
 import { t } from '@/services/i18n';
 import { trackCriticalBannerAction } from '@/services/analytics';
-import { alertFamily, getMode, toggleGhostMode, type AppMode } from '@/services/mode-manager';
+import { alertFamily, getMode, setMode, toggleGhostMode, type AppMode } from '@/services/mode-manager';
 import {
   initSituationalMode, setMode as setSituationalMode,
   setAutoMode, getAutoMode, isAutoMode, clearManualMode,
@@ -783,7 +783,10 @@ export class PanelLayoutManager implements AppModule {
   private _openDisasterLifelines: ((target: WeatherSavedPlaceActionTarget) => void) | null = null;
   private cmdkPanel: CommandPalettePanel | null = null;
   private _onCmdkToggle: (() => void) | null = null;
-  private _onAnalystHudKey: ((e: KeyboardEvent) => void) | null = null;
+  private _onOpenDiagnostics: (() => void) | null = null;
+  private shortcuts: BootstrapHandles | null = null;
+  private helpOverlay: HelpOverlay | null = null;
+  private _onHelpToggle: (() => void) | null = null;
   private _onBriefExportKey: ((e: KeyboardEvent) => void) | null = null;
   private _onStatusOverlayKey: ((e: KeyboardEvent) => void) | null = null;
   private digestOverlay: DigestOverlay | null = null;
@@ -923,8 +926,9 @@ export class PanelLayoutManager implements AppModule {
  if (this._onClearLifelinesOverlay) { document.removeEventListener('wm:clear-lifelines-overlay', this._onClearLifelinesOverlay); this._onClearLifelinesOverlay = null; }
  if (this._onShowEvacRoute) { document.removeEventListener('wm:show-evac-route', this._onShowEvacRoute); this._onShowEvacRoute = null; }
  if (this._onCmdkToggle) { document.removeEventListener('cb:toggle-cmdk', this._onCmdkToggle); this._onCmdkToggle = null; }
+ this.cmdkPanel?.unmount();
  this.cmdkPanel = null;
- if (this._onAnalystHudKey) { document.removeEventListener('keydown', this._onAnalystHudKey); this._onAnalystHudKey = null; }
+ this.destroyNavigationShortcuts();
  if (this._onBriefExportKey) { document.removeEventListener('keydown', this._onBriefExportKey); this._onBriefExportKey = null; }
  if (this._onStatusOverlayKey) { document.removeEventListener('keydown', this._onStatusOverlayKey); this._onStatusOverlayKey = null; }
  this.cancelScheduledDigest?.();
@@ -1428,13 +1432,6 @@ export class PanelLayoutManager implements AppModule {
  ensureReasoningDebugCss();
  const debugOverlay = new ReasoningDebugOverlay();
  debugOverlay.mount(document.body);
- this._onAnalystHudKey = (e: KeyboardEvent) => {
-   if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
-     e.preventDefault();
-     this.analystHud?.toggle();
-   }
- };
- document.addEventListener('keydown', this._onAnalystHudKey);
  this._onBriefExportKey = (e: KeyboardEvent) => {
    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'H') {
      e.preventDefault();
@@ -1635,8 +1632,10 @@ export class PanelLayoutManager implements AppModule {
    }
  };
  document.addEventListener('cb:map-focus', this._onMapFocus);
+ this.cmdkPanel?.unmount();
  this.cmdkPanel = new CommandPalettePanel();
  this.cmdkPanel.mount(document.body);
+ if (this._onCmdkToggle) document.removeEventListener('cb:toggle-cmdk', this._onCmdkToggle);
  this._onCmdkToggle = () => this.cmdkPanel?.toggle();
  document.addEventListener('cb:toggle-cmdk', this._onCmdkToggle);
 
@@ -1679,10 +1678,7 @@ export class PanelLayoutManager implements AppModule {
 
  // Install the centralized shortcut registry (⌘K, ⌘/, ⌘1–9 + sidebar badges)
  // and mount the keyboard help overlay backed by the same registry.
- const shortcuts = installShortcuts();
- const helpOverlay = new HelpOverlay(shortcuts.registry);
- helpOverlay.mount(document.body);
- document.addEventListener('cb:toggle-help', () => helpOverlay.toggle());
+ this.installNavigationShortcuts();
 
  // Bridge a couple of palette actions to existing handlers/events.
  document.addEventListener('cb:toggle-sidebar', () => {
@@ -3121,14 +3117,39 @@ export class PanelLayoutManager implements AppModule {
  }).catch((error) => { console.error('[boot] WelcomeFlow failed to mount:', error); });
   }
 
-  /** Mount a panel (if lazy/unbuilt) WITHOUT scrolling or flashing the
-   *  classic grid — the Home Shell focus host's entry point. Returns
-   *  null when the key is unknown, the factory fails, or the panel is
-   *  disabled and not already mounted. (Already-mounted disabled panels
-   *  are returned as-is — hosts may still show them.) */
-  /** Lazily construct + mount the Home Shell overlay (once). Lets the toggle
-   *  bring it back even from a classic-opted-out boot without paying the mount
-   *  cost up front. */
+  private installNavigationShortcuts(): void {
+ this.destroyNavigationShortcuts();
+ this._onOpenDiagnostics = () => this.openDiagnostics();
+ document.addEventListener('cb:open-diagnostics', this._onOpenDiagnostics);
+ this.shortcuts = installShortcuts({
+   isDesktopApp: this.ctx.isDesktopApp,
+   toggleLegacyGhost: () => setMode(getMode() === 'ghost' ? null : 'ghost'),
+ });
+ this.helpOverlay = new HelpOverlay(this.shortcuts.registry);
+ this.helpOverlay.mount(document.body);
+ this._onHelpToggle = () => this.helpOverlay?.toggle();
+ document.addEventListener('cb:toggle-help', this._onHelpToggle);
+  }
+
+  private destroyNavigationShortcuts(): void {
+ if (this._onOpenDiagnostics) { document.removeEventListener('cb:open-diagnostics', this._onOpenDiagnostics); this._onOpenDiagnostics = null; }
+ if (this._onHelpToggle) { document.removeEventListener('cb:toggle-help', this._onHelpToggle); this._onHelpToggle = null; }
+ this.shortcuts?.destroy();
+ this.shortcuts = null;
+ this.helpOverlay?.destroy();
+ this.helpOverlay = null;
+  }
+
+  /** One Diagnostics navigation intent, including before Home has mounted. */
+  private openDiagnostics(): void {
+ if (this.homeShell?.isVisible()) {
+ document.dispatchEvent(new CustomEvent('cb:open-panel', { detail: { panelKey: 'system-diagnostic' } }));
+ } else {
+ void this.navigateToPanel('system-diagnostic');
+ }
+  }
+
+  /** Lazily mount Home so classic-first boots can return without paying up front. */
   private ensureHomeShell(): HomeShellOverlay {
  if (!this.homeShell) {
  this.homeShell = new HomeShellOverlay({
@@ -3140,6 +3161,7 @@ export class PanelLayoutManager implements AppModule {
  return this.homeShell;
   }
 
+  /** Mount for the focus host without scrolling; preserve existing disabled-panel gates. */
   public async ensurePanelMounted(key: string): Promise<Panel | null> {
  const existing = this.ctx.panels[key];
  if (existing) return existing;

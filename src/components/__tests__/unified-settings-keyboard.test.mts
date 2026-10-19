@@ -92,6 +92,25 @@ test('opening identifies a modal and focuses a named close button', () => {
   assert.equal(document.activeElement === close, true);
 });
 
+test('nested Debug Diagnostics entry closes Settings before handing navigation focus off', () => {
+  const { settings, trigger, overlay } = mount();
+  settings.open('debug');
+  const destination = document.createElement('button'); document.body.append(destination);
+  let calls = 0;
+  const listener = () => {
+    calls++;
+    assert.equal(overlay.classList.contains('active'), false);
+    assert.equal(document.activeElement, trigger, 'Settings completes its existing restoration first');
+    destination.focus();
+  };
+  document.addEventListener('cb:open-diagnostics', listener);
+  try {
+    const button = overlay.querySelector<HTMLElement>('#us-open-diagnostics'); assert.ok(button);
+    const nested = document.createElement('span'); button.append(nested); nested.click();
+    assert.equal(calls, 1); assert.equal(document.activeElement, destination);
+  } finally { document.removeEventListener('cb:open-diagnostics', listener); }
+});
+
 test('Escape beats earlier document capture handlers and restores the original invoker across repeated opens', () => {
   let escaped = 0;
   const listener = (event: Event) => { if ((event as KeyboardEvent).key === 'Escape') escaped++; };

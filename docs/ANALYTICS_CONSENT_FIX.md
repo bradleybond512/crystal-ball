@@ -32,3 +32,14 @@ Independent review reproduced the installed PostHog SDK retry queue sending afte
 Use the documented [capture HTTP endpoint](https://posthog.com/docs/api/capture) for this app's existing manual events instead of the SDK. Preserve the event allowlists, public project token, configured host/web proxy, random installation ID, and explicit opt-in. Each request checks consent and generation, omits credentials, uses an abort controller with a bounded timeout, and has no automatic retry. Revocation aborts active requests and discards buffered events. An already transmitted request cannot be recalled. Page-exit events become best effort rather than using a non-cancellable beacon. Vercel stays independently consent-gated.
 
 This is a bounded correction to the requested no-send-without-consent invariant. Do not introduce private SDK patches, global network interception, new dependencies, or a new server. Test the actual fetch boundary with held responses and revocation, including a positive opted-in control. The original configured-SDK negative control remains evidence of the prior defect, not evidence that the replacement transport passes.
+
+## Verification evidence
+
+- `npm run test:analytics-consent`: `ℹ pass 40`, `ℹ fail 0`.
+- `npm run test:analytics-lifecycle`: `ℹ pass 19`, `ℹ fail 0`.
+- `bash scripts/agentic-validate.sh --tests 'test:analytics-consent test:analytics-lifecycle'`: `Agentic validation gate passed.` This includes lockfile validation, strict lint, app/API typechecks, secret scanning, cross-agent configuration checks, documentation checks, roadmap reporting, and production build.
+- Before replacing the SDK transport, the HTTP-boundary regression suite reported `ℹ pass 12`, `ℹ fail 5`; the missing abort signal and SDK import assertions failed on the old implementation.
+- Clean-tree mutation at `a7367fbc316c9742d6e4c4706517503131083e05`: removed the version-proof check, active-request abort, legacy-data purge, and reset-notice branch. Inspected the applied diff. Aggregate result changed from `40 pass / 0 fail` to `26 pass / 14 fail`; restoration returned `40 pass / 0 fail` and a clean tree.
+- Restored SHA-256: `src/services/analytics.ts` = `cb8295b55993a9084f53cebd893aa66a3393efbd15b4196e3c495cd98a2fb806`; `src/components/AnalyticsConsentBanner.ts` = `ec6fec35e6f97c7d02a0170ebfb36e9fd2b8e567cbac6114033a2d3fcb41e3af`.
+
+Tests use a synthetic public project token and intercepted fetch requests, including positive opted-in delivery, delayed failure after withdrawal, timeout, ghost mode, cross-window revocation, unavailable storage, and Vercel initialization races. No production telemetry or native installation was performed. Native VoiceOver and live PostHog ingestion remain unverified; the notice's nonmodal focus and fresh-install dialog contracts are automated.

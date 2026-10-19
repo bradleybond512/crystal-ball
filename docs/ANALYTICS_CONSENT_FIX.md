@@ -24,3 +24,11 @@ Storage is untrusted input, not consent proof by truthiness. Storage exceptions 
 Run the analytics consent suite with a configured public test key, mocked SDK requests, and deterministic deferred imports; preserve explicit positive controls. Run banner accessibility cases, app/API typechecks, and `bash scripts/agentic-validate.sh --tests test:analytics-consent`. Prove regressions red before implementation and with mutations from a clean commit. Record actual outputs and independent Sonnet review before final push.
 
 Rollback must never restore legacy implied consent or deleted buffered telemetry. Keep the default-off repair if reverting unrelated release work.
+
+## Review-driven transport repair
+
+Independent review reproduced the installed PostHog SDK retry queue sending after opt-out. This is not cancellation of an already transmitted request: a failed consented request can start another transmission after withdrawal. PostHog documents this as intentional behavior in [issue 5020](https://github.com/PostHog/posthog-js/issues/5020); batching and `before_send` do not close that boundary.
+
+Use the documented [capture HTTP endpoint](https://posthog.com/docs/api/capture) for this app's existing manual events instead of the SDK. Preserve the event allowlists, public project token, configured host/web proxy, random installation ID, and explicit opt-in. Each request checks consent and generation, omits credentials, uses an abort controller with a bounded timeout, and has no automatic retry. Revocation aborts active requests and discards buffered events. An already transmitted request cannot be recalled. Page-exit events become best effort rather than using a non-cancellable beacon. Vercel stays independently consent-gated.
+
+This is a bounded correction to the requested no-send-without-consent invariant. Do not introduce private SDK patches, global network interception, new dependencies, or a new server. Test the actual fetch boundary with held responses and revocation, including a positive opted-in control. The original configured-SDK negative control remains evidence of the prior defect, not evidence that the replacement transport passes.

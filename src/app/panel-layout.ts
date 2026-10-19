@@ -1256,6 +1256,7 @@ export class PanelLayoutManager implements AppModule {
  }
  this.mountAlertShelf();
  this.bindSidebarNavigation();
+ this.installNavigationShortcuts();
  return;
  }
 

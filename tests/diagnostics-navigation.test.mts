@@ -9,6 +9,7 @@ import { PANEL_METADATA, LIBRARY_DOMAIN_LABELS } from '../src/config/panel-metad
 import { DEFAULT_PANELS } from '../src/config/panels.ts';
 import { buildLibraryView } from '../src/services/home-shell/library-view.ts';
 import { parseDeckPins } from '../src/services/home-shell/deck-view.ts';
+import { bindGodsVisionControls } from '../src/app/gods-vision-events.ts';
 
 const browser = new Window({ url: 'http://127.0.0.1/' });
 Object.assign(globalThis, {
@@ -110,6 +111,51 @@ test('actual navigation owner reinstall/destroy leaves one Diagnostics listener 
     assert.equal(navigations, 2);
     assert.equal(document.querySelector('.help-overlay'), null);
   } finally { subject.destroyNavigationShortcuts(); }
+});
+
+test('isolated panel boot installs the real globe shortcut and releases its owned listener', () => {
+  class IsolatedPanel {
+    private readonly element = document.createElement('section');
+    getElement(): HTMLElement { return this.element; }
+  }
+  const prototype = methods('src/app/panel-layout.ts', 'PanelLayoutManager', [
+    'createPanels', 'installNavigationShortcuts', 'destroyNavigationShortcuts',
+  ], {
+    LiveWebcamsPanel: IsolatedPanel, UnifiedWebcamPanel: IsolatedPanel, PinnedWebcamsPanel: IsolatedPanel,
+    installShortcuts, HelpOverlay, getMode: () => null,
+    setMode: () => assert.fail('globe shortcut changed Ghost mode'),
+  });
+  document.body.innerHTML = '<div id="panelsGrid"></div>';
+  const leaves: string[] = [];
+  const subject = Object.assign(Object.create(prototype), {
+    isolatedPanelKeys: ['live-webcams', 'unified-webcams', 'pinned-webcams'],
+    ctx: { isDesktopApp: false, panels: {} },
+    mountAlertShelf: () => leaves.push('alerts'),
+    bindSidebarNavigation: () => leaves.push('sidebar'),
+    openDiagnostics: () => assert.fail('globe shortcut opened Diagnostics'),
+  });
+  let globeActions = 0;
+  const releaseControls = bindGodsVisionControls(document, () => { globeActions++; });
+  try {
+    subject.createPanels();
+    const key = new browser.KeyboardEvent('keydown', { key: 'g', bubbles: true, cancelable: true });
+    document.body.dispatchEvent(key);
+    assert.equal(globeActions, 1, 'isolated boot must route G through the actual globe action owner once');
+    assert.equal(key.defaultPrevented, true);
+    assert.deepEqual(leaves, ['alerts', 'sidebar']);
+    assert.deepEqual(Object.keys(subject.ctx.panels), ['live-webcams', 'unified-webcams', 'pinned-webcams']);
+    assert.equal(document.querySelectorAll('#panelsGrid > section').length, 3);
+    assert.equal(document.querySelectorAll('.help-overlay').length, 1);
+    subject.destroyNavigationShortcuts();
+    const afterDestroy = new browser.KeyboardEvent('keydown', { key: 'g', bubbles: true, cancelable: true });
+    document.body.dispatchEvent(afterDestroy);
+    assert.equal(globeActions, 1, 'owned teardown must remove the isolated boot shortcut');
+    assert.equal(afterDestroy.defaultPrevented, false);
+    assert.equal(document.querySelector('.help-overlay'), null);
+  } finally {
+    subject.destroyNavigationShortcuts();
+    releaseControls();
+  }
 });
 
 test('registry primary Ghost restores the prior mode while the actual desktop alias retains legacy clearing', () => {

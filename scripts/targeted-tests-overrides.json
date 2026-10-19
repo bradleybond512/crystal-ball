@@ -17,6 +17,33 @@
   "scripts/targeted-tests-overrides.json": [
     "test:agentic-pipeline"
   ],
+  "tests/e2e-ci-coverage.test.mjs": [
+    "test:e2e:ci-wiring"
+  ],
+  "playwright.config.ts": [
+    "test:e2e:ci-wiring"
+  ],
+  "e2e/home-shell-boot.spec.ts": [
+    "test:e2e:ci-wiring"
+  ],
+  "e2e/map-harness.spec.ts": [
+    "test:e2e:ci-wiring"
+  ],
+  "e2e/local-basemap.spec.ts": [
+    "test:e2e:ci-wiring"
+  ],
+  "e2e/gods-vision-mode.spec.ts": [
+    "test:e2e:ci-wiring"
+  ],
+  "e2e/settings-keyboard.spec.ts": [
+    "test:e2e:ci-wiring"
+  ],
+  "e2e/map-clarity.spec.ts": [
+    "test:e2e:ci-wiring"
+  ],
+  "e2e/emergency-readiness-offline.spec.ts": [
+    "test:e2e:ci-wiring"
+  ],
   "scripts/install-mcp-deps.mjs": [
     "test:mcp-deps",
     "test:install-scripts"
@@ -178,7 +205,8 @@
   ],
   "package.json": [
     "test:install-scripts",
-    "test:workflow-security"
+    "test:workflow-security",
+    "test:e2e:ci-wiring"
   ],
   "scripts/desktop-build-full.mjs": [
     "test:install-scripts"
@@ -638,7 +666,8 @@
     "test:workflow-security"
   ],
   ".github/workflows/accessibility.yml": [
-    "test:workflow-security"
+    "test:workflow-security",
+    "test:e2e:ci-wiring"
   ],
   ".github/workflows/auto-tag.yml": [
     "test:workflow-security"
@@ -665,7 +694,8 @@
     "test:workflow-security"
   ],
   ".github/workflows/smoke.yml": [
-    "test:workflow-security"
+    "test:workflow-security",
+    "test:e2e:ci-wiring"
   ],
   ".github/workflows/targeted-tests.yml": [
     "test:workflow-security"
@@ -677,7 +707,8 @@
     "test:workflow-security"
   ],
   ".github/workflows/variant-e2e.yml": [
-    "test:workflow-security"
+    "test:workflow-security",
+    "test:e2e:ci-wiring"
   ],
   "scripts/push-auto-tag.mjs": [
     "test:workflow-security"

@@ -383,7 +383,8 @@
   ],
   "tools/mcp-server/tool-registry.mjs": [
     "test:mcp-untrusted",
-    "test:mcp-companion"
+    "test:mcp-companion",
+    "test:release-capabilities"
   ],
   "src/components/AnalystHUD.ts": [
     "test:mcp-untrusted"
@@ -737,5 +738,22 @@
     "test:lifelines-map",
     "test:map-clarity",
     "test:untrusted-html"
+  ],
+  "scripts/release-capabilities.mjs": [
+    "test:release-capabilities"
+  ],
+  "scripts/release-manifest.mjs": [
+    "test:release-capabilities"
+  ],
+  "config/release-features.json": [
+    "test:release-capabilities"
+  ],
+  "src/config/panels.ts": [
+    "test:release-capabilities"
+  ],
+  "tools/mcp-server/tool-catalog.mjs": [
+    "test:mcp-untrusted",
+    "test:mcp-companion",
+    "test:release-capabilities"
   ]
 }

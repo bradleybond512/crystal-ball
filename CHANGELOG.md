@@ -4,6 +4,10 @@ All notable changes to Crystal Ball are documented here.
 
 ## [Unreleased]
 
+### Planned 2.25.148
+
+Analytics stay off until you opt in. Ambiguous upgrade consent resets to off with a one-time notice. See the [draft release notes and readiness checklist](docs/releases/2.25.148-readiness.md); publication and native artifact validation are pending.
+
 ### Added
 
 - **Hierarchical forecast base rate**: every eligible production forecast now

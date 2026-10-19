@@ -1,7 +1,7 @@
 {
   "name": "crystal-ball",
   "private": true,
-  "version": "2.25.147",
+  "version": "2.25.148",
   "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
@@ -281,7 +281,8 @@
     "test:evidence-journal": "node --test src-tauri/sidecar/__tests__/evidence-store.test.mjs src-tauri/sidecar/__tests__/evidence-routes.test.mjs tests/evidence-journal-boundary.test.mjs && tsx --test src/services/intelligence/__tests__/evidence-journal.test.mts src/components/__tests__/evidence-journal-view.test.mts src/components/__tests__/evidence-journal-panel.test.mts",
     "test:forecast-load": "tsx --test src/services/intelligence/__tests__/forecast-calibration-load.test.mts src/services/intelligence/__tests__/forecast-calibration-adapter.test.mts",
     "test:map-clarity": "tsx --test src/components/__tests__/map-clarity-model.test.mts src/components/__tests__/map-feature-list.test.mts && tsx --import ./tests/panels/register-hook.mjs --test --test-force-exit src/components/__tests__/map-popup-faa-camera.test.mts",
-    "test:map-clarity-browser": "playwright test e2e/map-clarity.spec.ts"
+    "test:map-clarity-browser": "playwright test e2e/map-clarity.spec.ts",
+    "test:release-capabilities": "node --test tests/release-manifest.test.mjs tests/release-capabilities.test.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",
@@ -368,6 +369,9 @@
     "ws": "^8.21.0",
     "@loaders.gl/compression": {
       "fflate": "0.7.5"
+    },
+    "micromark-extension-math": {
+      "katex": "^0.18.2"
     }
   },
   "engines": {

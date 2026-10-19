@@ -368,6 +368,9 @@
     "ws": "^8.21.0",
     "@loaders.gl/compression": {
       "fflate": "0.7.5"
+    },
+    "micromark-extension-math": {
+      "katex": "^0.18.2"
     }
   },
   "engines": {

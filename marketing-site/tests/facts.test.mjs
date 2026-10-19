@@ -3,7 +3,7 @@ import { readFile, access } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import vm from 'node:vm';
+import { TOOL_CATALOG } from '../../tools/mcp-server/tool-catalog.mjs';
 import ts from 'typescript';
 
 const root = new URL('../../', import.meta.url);
@@ -37,20 +37,13 @@ test('shared panel counts are derived from actual variant catalogs', async () =>
 });
 
 test('shared MCP counts match actual registry and read-only annotations', async () => {
-  const source = await read('tools/mcp-server/tool-registry.mjs');
-  const literal = source.match(/const CATEGORY_TOOLS = (\{[\s\S]*?\n\});/);
-  assert.ok(literal);
-  const categories = vm.runInNewContext(`(${literal[1]})`, Object.create(null), { timeout: 1000 });
-  const names = Object.values(categories).flatMap(Object.keys);
-  assert.equal(new Set(names).size, names.length, 'registry tool names are unique');
-  const overrides = source.match(/const ANNOTATION_OVERRIDES = \{([\s\S]*?)\n\};/)[1];
-  const mutating = [...overrides.matchAll(/^  (\w+):[^\n]*(?:MUTATING_LOCAL|MUTATING_REMOTE|DESTRUCTIVE_LOCAL)/gm)].map((m) => m[1]);
-  assert.ok(mutating.every((name) => names.includes(name)));
+  const tools = Object.values(TOOL_CATALOG);
+  const mutating = tools.filter(tool => !tool.annotations.readOnlyHint);
   assert.deepEqual(data.counts.mcp, {
-    total: names.length,
-    read: names.length - mutating.length,
+    total: tools.length,
+    read: tools.length - mutating.length,
     analyst: mutating.length,
-    categories: Object.keys(categories).length,
+    categories: new Set(tools.map(tool => tool.category)).size,
   });
 });
 
@@ -83,9 +76,7 @@ test('edition examples belong to each actual catalog and assistant examples name
   assert.ok(examples.length>=4&&examples.length<=5,edition);
   for(const name of examples) assert.ok(catalogs.get(`${edition.toUpperCase()}_PANELS`).has(name),`${edition}: ${name}`);
  }
- const registry=await read('tools/mcp-server/tool-registry.mjs');
- const categories=vm.runInNewContext(`(${registry.match(/const CATEGORY_TOOLS = (\{[\s\S]*?\n\});/)[1]})`,Object.create(null),{timeout:1000});
- const names=Object.values(categories).flatMap(Object.keys);
+ const names=Object.keys(TOOL_CATALOG);
  const prompts=html.match(/<div class="prompt-examples">[\s\S]*?<\/div>/)[0];
  const tools=[...prompts.matchAll(/<code>(.*?)<\/code>/g)].map(m=>m[1]);
  assert.ok(tools.length>=3&&tools.length<=4);

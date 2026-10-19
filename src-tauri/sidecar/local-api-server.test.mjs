@@ -4573,6 +4573,14 @@ test('theater posture computes locally without a default cloud request', async (
   const localApi = await setupApiDir({});
   const originalFetch = globalThis.fetch;
   const outbound = [];
+  const restoreHttps = mockHttpsRequestOnce({
+    statusCode: 200,
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ theaters: [] }),
+    onRequest(options) {
+      outbound.push(`https://${options.hostname}${options.path}`);
+    },
+  });
   globalThis.fetch = async (input, init) => {
     const url = String(input);
     if (!url.startsWith('http://127.0.0.1:')) {
@@ -4594,8 +4602,9 @@ test('theater posture computes locally without a default cloud request', async (
     assert.ok(Array.isArray(body.theaters));
     assert.deepEqual(outbound, []);
   } finally {
-    await app.close();
+    restoreHttps();
     globalThis.fetch = originalFetch;
+    await app.close();
     await localApi.cleanup();
   }
 });

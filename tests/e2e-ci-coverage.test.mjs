@@ -4,6 +4,9 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import vm from 'node:vm';
+import { Window } from 'happy-dom';
+import ts from 'typescript';
 import { parse } from 'yaml';
 import { deriveScriptIndex, selectScripts } from '../scripts/targeted-tests.mjs';
 
@@ -147,11 +150,109 @@ test('identity, accessibility and Home Shell browser-harness coverage remain exp
   assert.equal(new Set(['e2e/variant-identity.spec.ts', 'e2e/a11y-baseline.spec.ts', 'e2e/home-shell-boot.spec.ts', ...mapSpecs, ...interactionSpecs]).size, 9);
 });
 
-test('the real startup wait and Playwright evidence configuration remain intact', () => {
+test('Home startup waits for every reported card and source within the existing budget', async (t) => {
   const home = read('e2e/home-shell-boot.spec.ts');
-  assert.match(home, /test\('browser harness only:/);
-  assert.match(home, /await page\.waitForTimeout\(31_000\);/);
-  assert.match(home, /Exercise the real 30-second startup budget and the next shell refresh/);
+  const parsed = ts.createSourceFile('home-shell-boot.spec.ts', home, ts.ScriptTarget.Latest, true);
+  const cases = [];
+  const pending = [parsed];
+  while (pending.length > 0) {
+    const node = pending.pop();
+    if (ts.isCallExpression(node) && node.expression.getText(parsed) === 'test'
+      && ts.isStringLiteral(node.arguments[0]) && node.arguments[0].text.startsWith('browser harness only:')) {
+      cases.push(node);
+    }
+    ts.forEachChild(node, (child) => { pending.push(child); });
+  }
+  assert.equal(cases.length, 1, 'inspect the actual empty-storage Home browser case');
+  const body = cases[0].arguments[1];
+  assert.ok(ts.isArrowFunction(body));
+  const calls = [];
+  pending.push(body);
+  while (pending.length > 0) {
+    const node = pending.pop();
+    if (ts.isCallExpression(node)) calls.push(node);
+    ts.forEachChild(node, (child) => { pending.push(child); });
+  }
+  assert.equal(calls.some((call) => ts.isPropertyAccessExpression(call.expression)
+    && call.expression.name.text === 'waitForTimeout'), false, 'Home startup must not use a fixed sleep');
+  const waits = calls.filter((call) => call.expression.getText(parsed) === 'page.waitForFunction');
+  assert.equal(waits.length, 1, 'the Home browser case must wait for actual readiness outcomes');
+  const wait = waits[0];
+  assert.ok(ts.isAwaitExpression(wait.parent), 'readiness must settle before the honesty assertions');
+  assert.equal(wait.arguments.length, 3);
+  assert.equal(wait.arguments[1].getText(parsed), 'undefined');
+  assert.ok(ts.isArrowFunction(wait.arguments[0]), 'execute the real browser wait callback');
+  const options = wait.arguments[2];
+  assert.ok(ts.isObjectLiteralExpression(options));
+  assert.equal(options.properties.length, 1);
+  const timeout = options.properties[0];
+  assert.ok(ts.isPropertyAssignment(timeout) && timeout.name.getText(parsed) === 'timeout');
+  assert.ok(ts.isBinaryExpression(timeout.initializer));
+  assert.equal(timeout.initializer.operatorToken.kind, ts.SyntaxKind.PlusToken);
+  assert.ok(ts.isNumericLiteral(timeout.initializer.left) && ts.isNumericLiteral(timeout.initializer.right));
+  assert.deepEqual([Number(timeout.initializer.left.text), Number(timeout.initializer.right.text)], [31_000, 15_000],
+    'combine only the existing sleep and card-poll allowances');
+  const polls = calls.filter((call) => call.expression.getText(parsed) === 'expect.poll');
+  assert.equal(polls.length, 1, 'retain the following source check');
+  assert.equal(polls[0].arguments[1].getText(parsed).replaceAll(/\s/g, ''), '{timeout:15_000}');
+
+  const condition = ts.transpileModule(`(${wait.arguments[0].getText(parsed)})();`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
+  }).outputText;
+  const cards = Array.from({ length: 12 }, (_, index) => [index === 0 ? 'useful' : 'attention']);
+  const sources = [
+    { id: 'usgs', state: 'working' },
+    { id: 'gdacs', state: 'degraded' },
+    { id: 'open-meteo', state: 'unknown' },
+    { id: 'gdelt-news', state: 'working' },
+  ];
+  const fixtures = [
+    { name: 'empty DOM is not ready', cards: [], sources: [], mountShell: false, ready: false },
+    { name: 'the shell alone is not ready', cards: [], sources: [], ready: false },
+    { name: 'a missing Deck card is not ready', cards: cards.slice(1), sources, ready: false },
+    { name: 'an extra Deck card is not ready', cards: [...cards, ['attention']], sources, ready: false },
+    { name: 'a loading Deck card is not ready', cards: [['loading'], ...cards.slice(1)], sources, ready: false },
+    { name: 'an unrecognized Deck state is not ready', cards: [['unexpected'], ...cards.slice(1)], sources, ready: false },
+    { name: 'loading with attention is not ready', cards: [['loading', 'attention'], ...cards.slice(1)], sources, ready: false },
+    { name: 'a missing source is not ready', cards, sources: sources.slice(0, -1), ready: false },
+    { name: 'an extra source is not ready', cards, sources: [...sources, sources[0]], ready: false },
+    { name: 'a different source identity is not ready', cards, sources: [{ id: 'unexpected', state: 'working' }, ...sources.slice(1)], ready: false },
+    { name: 'a duplicated source identity is not ready', cards, sources: [sources[1], ...sources.slice(1)], ready: false },
+    { name: 'reordered source identities are not ready', cards, sources: [...sources].reverse(), ready: false },
+    { name: 'a loading source is not ready', cards, sources: [{ ...sources[0], state: 'loading' }, ...sources.slice(1)], ready: false },
+    { name: 'an unrecognized source state is not ready', cards, sources: [{ ...sources[0], state: 'unexpected' }, ...sources.slice(1)], ready: false },
+    { name: 'complete useful and attention outcomes are ready', cards, sources, ready: true },
+    { name: 'complete successful outcomes can be ready early', cards: cards.map(() => ['useful']), sources: sources.map((source) => ({ ...source, state: 'working' })), ready: true },
+  ];
+  for (const fixture of fixtures) {
+    await t.test(fixture.name, (caseTest) => {
+      const window = new Window({ url: 'http://127.0.0.1/' });
+      caseTest.after(() => window.happyDOM.abort());
+      const { document } = window;
+      if (fixture.mountShell !== false) {
+        const shell = document.createElement('div');
+        shell.className = 'home-shell';
+        const grid = document.createElement('div');
+        grid.className = 'hs-deck-grid';
+        for (const states of fixture.cards) {
+          const card = document.createElement('article');
+          card.className = `hs-card ${states.map((state) => `hs-card-readiness-${state}`).join(' ')}`;
+          grid.append(card);
+        }
+        shell.append(grid);
+        for (const source of fixture.sources) {
+          const row = document.createElement('li');
+          row.className = 'hs-readiness-source';
+          row.dataset.sourceId = source.id;
+          row.dataset.sourceState = source.state;
+          shell.append(row);
+        }
+        document.body.append(shell);
+      }
+      assert.equal(vm.runInNewContext(condition, { document }, { timeout: 1000 }), fixture.ready, fixture.name);
+    });
+  }
+
   const config = read('playwright.config.ts');
   for (const setting of ["trace: 'retain-on-failure'", "screenshot: 'only-on-failure'", "video: 'retain-on-failure'"]) {
     assert.ok(config.includes(setting), setting);

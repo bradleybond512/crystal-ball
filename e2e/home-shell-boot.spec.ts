@@ -66,12 +66,24 @@ test.describe('home shell default boot', () => {
     expect(await sources.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-source-id'))))
       .toEqual(['usgs', 'gdacs', 'open-meteo', 'gdelt-news']);
 
-    // Exercise the real 30-second startup budget and the next shell refresh.
-    await page.waitForTimeout(31_000);
-    await expect.poll(async () => cards.evaluateAll((nodes) => nodes.every((node) => (
-      node.classList.contains('hs-card-readiness-useful')
-        || node.classList.contains('hs-card-readiness-attention')
-    ))), { timeout: 15_000 }).toBe(true);
+    // Wait for reported startup outcomes within the original 31s + 15s allowance.
+    // The following 15s source check keeps this stage's total cap at 61s.
+    await page.waitForFunction(() => {
+      const cards = Array.from(document.querySelectorAll('.home-shell .hs-deck-grid .hs-card'));
+      const sources = Array.from(document.querySelectorAll('.home-shell .hs-readiness-source'));
+      const sourceIds = ['usgs', 'gdacs', 'open-meteo', 'gdelt-news'];
+      return cards.length === 12
+        && cards.every((node) => (
+          !node.classList.contains('hs-card-readiness-loading')
+            && (node.classList.contains('hs-card-readiness-useful')
+              || node.classList.contains('hs-card-readiness-attention'))
+        ))
+        && sources.length === sourceIds.length
+        && sources.every((node, index) => (
+          node.getAttribute('data-source-id') === sourceIds[index]
+            && ['working', 'degraded', 'unknown'].includes(node.getAttribute('data-source-state') ?? '')
+        ));
+    }, undefined, { timeout: 31_000 + 15_000 });
     await expect.poll(async () => sources.evaluateAll((nodes) => nodes.every((node) => {
       const state = node.getAttribute('data-source-state');
       return state === 'working' || state === 'degraded' || state === 'unknown';

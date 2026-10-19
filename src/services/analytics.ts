@@ -122,6 +122,14 @@ export function markAnalyticsResetNoticeSeen(): void {
   try { safeSetItem(RESET_NOTICE_SEEN_KEY, 'true'); } catch { /* Best effort across restarts. */ }
 }
 
+function preserveDeclinedConsent(source: string | null, explicit: boolean): void {
+  if (source !== 'user' && source !== 'default') {
+    safeSetItem(CONSENT_SOURCE_KEY, explicit ? 'user' : 'default');
+    safeSetItem(CONSENT_REASON_KEY, explicit ? 'user-choice' : 'default');
+  }
+  markConsentPromptSeen();
+}
+
 export function migrateAnalyticsConsent(): void {
   try {
     const recorded = localStorage.getItem(CONSENT_KEY);
@@ -146,20 +154,16 @@ export function migrateAnalyticsConsent(): void {
       localStorage.removeItem(CONSENT_VERSION_KEY);
       markConsentPromptSeen();
     } else if (recorded === 'false') {
-      if (source !== 'user' && source !== 'default') {
-        safeSetItem(CONSENT_SOURCE_KEY, explicit ? 'user' : 'default');
-        safeSetItem(CONSENT_REASON_KEY, explicit ? 'user-choice' : 'default');
-      }
-      markConsentPromptSeen();
-    } else if (recorded !== null) {
+      preserveDeclinedConsent(source, explicit);
+    } else if (recorded === null) {
+      safeSetItem(CONSENT_SOURCE_KEY, 'default');
+      safeSetItem(CONSENT_REASON_KEY, 'default');
+    } else {
       consentBlocked = true;
       safeSetItem(CONSENT_KEY, 'false');
       safeSetItem(CONSENT_SOURCE_KEY, 'default');
       safeSetItem(CONSENT_REASON_KEY, 'invalid');
       localStorage.removeItem(CONSENT_VERSION_KEY);
-    } else {
-      safeSetItem(CONSENT_SOURCE_KEY, 'default');
-      safeSetItem(CONSENT_REASON_KEY, 'default');
     }
   } catch {
     consentBlocked = true;
@@ -358,17 +362,18 @@ const POSTHOG_HOST = isDesktopRuntime()
 
 // ── Public API ──
 
+function refreshAnalyticsConsent(): void {
+  if (isAnalyticsAllowed()) void initAnalytics();
+  else stopAnalytics();
+}
+
 function attachConsentListeners(): void {
   if (consentListenersAdded) return;
   consentListenersAdded = true;
-  const refresh = () => {
-    if (!isAnalyticsAllowed()) stopAnalytics();
-    else void initAnalytics();
-  };
   window.addEventListener('storage', (event) => {
-    if (event.key === null || [CONSENT_KEY, CONSENT_VERSION_KEY, CONSENT_SOURCE_KEY].includes(event.key)) refresh();
+    if (event.key === null || [CONSENT_KEY, CONSENT_VERSION_KEY, CONSENT_SOURCE_KEY].includes(event.key)) refreshAnalyticsConsent();
   });
-  if (typeof document !== 'undefined') document.addEventListener('wm:mode-changed', refresh);
+  if (typeof document !== 'undefined') document.addEventListener('wm:mode-changed', refreshAnalyticsConsent);
 }
 
 export async function initAnalytics(): Promise<void> {

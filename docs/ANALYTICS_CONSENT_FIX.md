@@ -43,3 +43,7 @@ This is a bounded correction to the requested no-send-without-consent invariant.
 - Restored SHA-256: `src/services/analytics.ts` = `cb8295b55993a9084f53cebd893aa66a3393efbd15b4196e3c495cd98a2fb806`; `src/components/AnalyticsConsentBanner.ts` = `ec6fec35e6f97c7d02a0170ebfb36e9fd2b8e567cbac6114033a2d3fcb41e3af`.
 
 Tests use a synthetic public project token and intercepted fetch requests, including positive opted-in delivery, delayed failure after withdrawal, timeout, ghost mode, cross-window revocation, unavailable storage, and Vercel initialization races. No production telemetry or native installation was performed. Native VoiceOver and live PostHog ingestion remain unverified; the notice's nonmodal focus and fresh-install dialog contracts are automated.
+
+## CI lint follow-up
+
+GitHub CI exposed four ESLint violations that the local strict-lint gate does not run. Extracted declined-consent bookkeeping and the consent-change callback, and reordered equivalent branches without changing consent behavior. Focused ESLint exits zero; the consent suite remains `40 pass / 0 fail`; `typecheck:all` passes. No lint rule or baseline was changed. A fresh exact-tip review is required after this repair.

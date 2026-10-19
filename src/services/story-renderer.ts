@@ -3,6 +3,10 @@ import { getLocale, t } from './i18n';
 
 const W = 1080;
 const H = 1920;
+const PAD = 72;
+const RIGHT = W - PAD;
+const FOOTER_Y = H - 110;
+const BAR_W = W - PAD * 2;
 
 function humanizeSignalType(type: string): string {
   const map: Record<string, string> = {
@@ -26,7 +30,8 @@ function humanizeSignalType(type: string): string {
  ais_gap: 'AIS Gaps',
  satellite_fire: 'Satellite Fires',
   };
-  return map[type] || type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  if (map[type]) return map[type];
+  return type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
 const LEVEL_COLORS: Record<string, string> = {
@@ -42,7 +47,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
  const img = new Image();
  img.addEventListener('load', () => resolve(img));
- img.onerror = reject;
+ img.addEventListener('error', reject);
  img.src = src;
   });
 }
@@ -56,17 +61,32 @@ export async function renderStoryToCanvas(data: StoryData): Promise<HTMLCanvasEl
   let logoImg: HTMLImageElement | null = null;
   try { logoImg = await loadImage(LOGO_URL); } catch { /* proceed without logo */ }
 
+  return StoryCanvasSections.draw(canvas, ctx, data, logoImg);
+}
+
+class StoryCanvasSections {
+  static draw(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, data: StoryData, logoImg: HTMLImageElement | null): HTMLCanvasElement {
   // Background — slightly lighter for better contrast
   ctx.fillStyle = '#0c0c14';
   ctx.fillRect(0, 0, W, H);
+    let y = StoryCanvasSections.header(ctx, logoImg);
+    y = StoryCanvasSections.country(ctx, data, y);
+    y = StoryCanvasSections.cii(ctx, data, y);
+    y = StoryCanvasSections.components(ctx, data, y);
+    y = StoryCanvasSections.signals(ctx, data, y);
+    y = StoryCanvasSections.convergence(ctx, data, y);
+    y = StoryCanvasSections.headlines(ctx, data, y);
+    y = StoryCanvasSections.theater(ctx, data, y);
+    y = StoryCanvasSections.markets(ctx, data, y);
+    StoryCanvasSections.threats(ctx, data, y);
+    StoryCanvasSections.footer(ctx, logoImg);
+    return canvas;
+  }
 
-  let y = 0;
-  const PAD = 72;
-  const RIGHT = W - PAD;
-  const LOGO_SIZE = 48;
-
+  private static header(ctx: CanvasRenderingContext2D, logoImg: HTMLImageElement | null): number {
   // ── HEADER ──
-  y = 60;
+  const LOGO_SIZE = 48;
+  let y = 60;
   if (logoImg) {
  ctx.drawImage(logoImg, PAD, y - 4, LOGO_SIZE, LOGO_SIZE);
   }
@@ -84,7 +104,10 @@ export async function renderStoryToCanvas(data: StoryData): Promise<HTMLCanvasEl
 
   y += 56;
   drawSeparator(ctx, y, PAD);
+    return y;
+  }
 
+  private static country(ctx: CanvasRenderingContext2D, data: StoryData, y: number): number {
   // ── COUNTRY NAME ──
   y += 74;
   ctx.fillStyle = '#ffffff';
@@ -100,9 +123,12 @@ export async function renderStoryToCanvas(data: StoryData): Promise<HTMLCanvasEl
   ctx.fill();
   ctx.fillStyle = '#888';
   ctx.fillText(codeLabel, RIGHT - codeLabelW + 12, y - 2);
+    return y;
+  }
 
+  private static cii(ctx: CanvasRenderingContext2D, data: StoryData, y: number): number {
   // ── CII SCORE ──
-  const levelColor = LEVEL_COLORS[data.cii?.level || 'normal'] || '#888';
+  const levelColor = StoryCanvasSections.textOr(LEVEL_COLORS[StoryCanvasSections.textOr(data.cii?.level, 'normal')], '#888');
   const score = data.cii?.score ?? 0;
 
   y += 62;
@@ -117,15 +143,15 @@ export async function renderStoryToCanvas(data: StoryData): Promise<HTMLCanvasEl
   if (data.cii?.change24h) {
  const ch = data.cii.change24h;
  const chSign = ch > 0 ? '+' : '';
- ctx.fillStyle = ch > 0 ? '#ef4444' : (ch < 0 ? '#22c55e' : '#888');
+ ctx.fillStyle = StoryCanvasSections.changeColor(ch);
  ctx.font = '600 28px Inter, system-ui, sans-serif';
  ctx.fillText(`${chSign}${ch} 24h`, PAD + scoreNumW + 4 + slashW + 16, y);
   }
 
   // Trend + level badges
-  const trendIcon = data.cii?.trend === 'rising' ? '▲' : (data.cii?.trend === 'falling' ? '▼' : '●');
-  const trendLabel = (data.cii?.trend || 'stable').toUpperCase();
-  const levelLabel = (data.cii?.level || 'normal').toUpperCase();
+  const trendIcon = StoryCanvasSections.trendIcon(data.cii?.trend);
+  const trendLabel = (StoryCanvasSections.textOr(data.cii?.trend, 'stable')).toUpperCase();
+  const levelLabel = (StoryCanvasSections.textOr(data.cii?.level, 'normal')).toUpperCase();
 
   ctx.font = '700 26px Inter, system-ui, sans-serif';
   ctx.fillStyle = levelColor;
@@ -147,16 +173,18 @@ export async function renderStoryToCanvas(data: StoryData): Promise<HTMLCanvasEl
 
   // Score bar
   y += 32;
-  const barW = W - PAD * 2;
   ctx.fillStyle = '#1a1a2e';
-  roundRect(ctx, PAD, y, barW, 18, 9);
+  roundRect(ctx, PAD, y, BAR_W, 18, 9);
   ctx.fill();
   if (score > 0) {
  ctx.fillStyle = levelColor;
- roundRect(ctx, PAD, y, barW * score / 100, 18, 9);
+ roundRect(ctx, PAD, y, BAR_W * score / 100, 18, 9);
  ctx.fill();
   }
+    return y;
+  }
 
+  private static components(ctx: CanvasRenderingContext2D, data: StoryData, y: number): number {
   // Component scores
   if (data.cii?.components) {
  y += 44;
@@ -166,7 +194,7 @@ export async function renderStoryToCanvas(data: StoryData): Promise<HTMLCanvasEl
  { label: t('common.security').toUpperCase(), val: data.cii.components.security, color: '#ef4444' },
  { label: t('common.information').toUpperCase(), val: data.cii.components.information, color: '#8b5cf6' },
  ];
- const compBarW = (barW - 24) / 3;
+ const compBarW = (BAR_W - 24) / 3;
  for (const comp of comps) {
  const cx = PAD + comps.indexOf(comp) * (compBarW + 12);
  ctx.fillStyle = '#777';
@@ -186,7 +214,10 @@ export async function renderStoryToCanvas(data: StoryData): Promise<HTMLCanvasEl
  }
  y += 24;
   }
+    return y;
+  }
 
+  private static signals(ctx: CanvasRenderingContext2D, data: StoryData, y: number): number {
   // ── ACTIVE SIGNALS ──
   const hasSignals = data.signals.protests + data.signals.militaryFlights + data.signals.militaryVessels + data.signals.outages > 0;
   if (hasSignals) {
@@ -215,7 +246,10 @@ export async function renderStoryToCanvas(data: StoryData): Promise<HTMLCanvasEl
  }
  y += 28;
   }
+    return y;
+  }
 
+  private static convergence(ctx: CanvasRenderingContext2D, data: StoryData, y: number): number {
   // ── CONVERGENCE ──
   if (data.convergence && data.convergence.score > 0) {
  y += 40;
@@ -225,7 +259,7 @@ export async function renderStoryToCanvas(data: StoryData): Promise<HTMLCanvasEl
 
  y += 46;
  const convScore = Math.round(data.convergence.score);
- const convColor = convScore >= 70 ? '#ef4444' : (convScore >= 40 ? '#eab308' : '#22c55e');
+ const convColor = StoryCanvasSections.riskColor(convScore);
  ctx.fillStyle = convColor;
  ctx.font = '800 48px Inter, system-ui, sans-serif';
  ctx.fillText(`${convScore}`, PAD, y);
@@ -238,7 +272,7 @@ export async function renderStoryToCanvas(data: StoryData): Promise<HTMLCanvasEl
  y += 36;
  ctx.fillStyle = '#999';
  ctx.font = '400 22px Inter, system-ui, sans-serif';
- ctx.fillText(data.convergence.signalTypes.map(humanizeSignalType).join('  ·  '), PAD, y);
+ ctx.fillText(data.convergence.signalTypes.map(type => humanizeSignalType(type)).join('  ·  '), PAD, y);
  }
 
  for (const desc of data.convergence.regionalDescriptions.slice(0, 2)) {
@@ -248,9 +282,10 @@ export async function renderStoryToCanvas(data: StoryData): Promise<HTMLCanvasEl
  ctx.fillText(truncateText(ctx, desc, RIGHT - PAD), PAD, y);
  }
   }
+    return y;
+  }
 
-  const FOOTER_Y = H - 110;
-
+  private static headlines(ctx: CanvasRenderingContext2D, data: StoryData, y: number): number {
   // ── TOP HEADLINES ──
   if (data.news.length > 0 && y < FOOTER_Y - 200) {
  y += 40;
@@ -261,7 +296,7 @@ export async function renderStoryToCanvas(data: StoryData): Promise<HTMLCanvasEl
  for (const item of data.news.slice(0, 5)) {
  if (y > FOOTER_Y - 80) break;
  y += 54;
- const tc = THREAT_COLORS[item.threatLevel] || '#3b82f6';
+ const tc = StoryCanvasSections.textOr(THREAT_COLORS[item.threatLevel], '#3b82f6');
 
  // Threat badge
  const label = item.threatLevel.toUpperCase();
@@ -293,7 +328,7 @@ export async function renderStoryToCanvas(data: StoryData): Promise<HTMLCanvasEl
  }
 
  y += 36;
- const totalSources = data.news.reduce((s, n) => s + (n.sourceCount || 1), 0);
+ const totalSources = data.news.reduce((s, n) => s + (StoryCanvasSections.sourceCountOrOne(n.sourceCount)), 0);
  const alertCount = data.news.filter(n => n.threatLevel === 'critical' || n.threatLevel === 'high').length;
  ctx.fillStyle = '#555';
  ctx.font = '400 22px Inter, system-ui, sans-serif';
@@ -301,7 +336,10 @@ export async function renderStoryToCanvas(data: StoryData): Promise<HTMLCanvasEl
  if (alertCount > 0) statsText += `  ·  ${alertCount} high-priority alerts`;
  ctx.fillText(statsText, PAD, y);
   }
+    return y;
+  }
 
+  private static theater(ctx: CanvasRenderingContext2D, data: StoryData, y: number): number {
   // ── MILITARY POSTURE ──
   if (data.theater && y < FOOTER_Y - 200) {
  y += 40;
@@ -309,8 +347,7 @@ export async function renderStoryToCanvas(data: StoryData): Promise<HTMLCanvasEl
  y += 46;
  drawSectionHeader(ctx, 'MILITARY POSTURE', PAD, y);
 
- const postureColor = data.theater.postureLevel === 'critical' ? '#ef4444'
- : (data.theater.postureLevel === 'elevated' ? '#f97316' : '#22c55e');
+ const postureColor = StoryCanvasSections.postureColor(data.theater.postureLevel);
 
  y += 52;
  ctx.fillStyle = '#e0e0e0';
@@ -352,7 +389,10 @@ export async function renderStoryToCanvas(data: StoryData): Promise<HTMLCanvasEl
  ctx.fillText('⚠ STRIKE CAPABLE', PAD, y);
  }
   }
+    return y;
+  }
 
+  private static markets(ctx: CanvasRenderingContext2D, data: StoryData, y: number): number {
   // ── PREDICTION MARKETS ──
   if (data.markets.length > 0 && y < FOOTER_Y - 150) {
  y += 40;
@@ -368,14 +408,17 @@ export async function renderStoryToCanvas(data: StoryData): Promise<HTMLCanvasEl
 
  const pct = Math.round(m.yesPrice);
  const pctStr = `${pct}%`;
- const pctColor = pct >= 70 ? '#ef4444' : (pct >= 40 ? '#eab308' : '#22c55e');
+ const pctColor = StoryCanvasSections.riskColor(pct);
  ctx.fillStyle = pctColor;
  ctx.font = '700 28px Inter, system-ui, sans-serif';
  const pctW = ctx.measureText(pctStr).width;
  ctx.fillText(pctStr, RIGHT - pctW, y);
  }
   }
+    return y;
+  }
 
+  private static threats(ctx: CanvasRenderingContext2D, data: StoryData, y: number): void {
   // ── THREAT BREAKDOWN ──
   const hasThreats = data.threats.critical + data.threats.high + data.threats.medium > 0;
   if (hasThreats && y < FOOTER_Y - 150) {
@@ -419,7 +462,9 @@ export async function renderStoryToCanvas(data: StoryData): Promise<HTMLCanvasEl
  ctx.fillText(data.threats.categories.map(c => c.charAt(0).toUpperCase() + c.slice(1)).join('  ·  '), PAD, y);
  }
   }
+  }
 
+  private static footer(ctx: CanvasRenderingContext2D, logoImg: HTMLImageElement | null): void {
   // ── FOOTER ──
   const timeStr = new Date().toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
   ctx.strokeStyle = '#222';
@@ -437,7 +482,7 @@ export async function renderStoryToCanvas(data: StoryData): Promise<HTMLCanvasEl
   ctx.fillStyle = '#444';
   ctx.font = '600 24px Inter, system-ui, sans-serif';
   ctx.letterSpacing = '2px';
-  ctx.fillText('CRYSTALBALL.APP', footerTextX, H - 55);
+  ctx.fillText('CRYSTAL BALL', footerTextX, H - 55);
   ctx.letterSpacing = '0px';
   ctx.font = '400 20px Inter, system-ui, sans-serif';
   ctx.fillText('Real-time global intelligence monitoring', footerTextX, H - 30);
@@ -446,8 +491,41 @@ export async function renderStoryToCanvas(data: StoryData): Promise<HTMLCanvasEl
   ctx.fillStyle = '#555';
   const tw = ctx.measureText(timeStr).width;
   ctx.fillText(timeStr, RIGHT - tw, H - 55);
+  }
 
-  return canvas;
+  private static textOr(value: string | undefined, fallback: string): string {
+    if (value) return value;
+    return fallback;
+  }
+
+  private static sourceCountOrOne(value: number): number {
+    if (value) return value;
+    return 1;
+  }
+
+  private static changeColor(change: number): string {
+    if (change > 0) return '#ef4444';
+    if (change < 0) return '#22c55e';
+    return '#888';
+  }
+
+  private static trendIcon(trend: string | undefined): string {
+    if (trend === 'rising') return '▲';
+    if (trend === 'falling') return '▼';
+    return '●';
+  }
+
+  private static riskColor(score: number): string {
+    if (score >= 70) return '#ef4444';
+    if (score >= 40) return '#eab308';
+    return '#22c55e';
+  }
+
+  private static postureColor(level: string): string {
+    if (level === 'critical') return '#ef4444';
+    if (level === 'elevated') return '#f97316';
+    return '#22c55e';
+  }
 }
 
 function drawSeparator(ctx: CanvasRenderingContext2D, y: number, pad: number): void {

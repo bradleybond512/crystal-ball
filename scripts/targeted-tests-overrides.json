@@ -1,7 +1,8 @@
 {
   "api/_api-key.js": [
     "test:key-compare",
-    "test:api"
+    "test:api",
+    "test:domain-retirement"
   ],
   "api/_auth.js": [
     "test:key-compare",
@@ -15,7 +16,8 @@
     "test:ux032"
   ],
   "scripts/targeted-tests-overrides.json": [
-    "test:agentic-pipeline"
+    "test:agentic-pipeline",
+    "test:domain-retirement"
   ],
   "scripts/install-mcp-deps.mjs": [
     "test:mcp-deps",
@@ -178,7 +180,8 @@
   ],
   "package.json": [
     "test:install-scripts",
-    "test:workflow-security"
+    "test:workflow-security",
+    "test:domain-retirement"
   ],
   "scripts/desktop-build-full.mjs": [
     "test:install-scripts"
@@ -242,7 +245,8 @@
   "src/main.ts": [
     "test:imessage",
     "test:map-clarity",
-    "test:map-compatibility"
+    "test:map-compatibility",
+    "test:domain-retirement"
   ],
   "src-tauri/src/sidecar_supervisor.rs": [
     "test:sidecar-supervisor"
@@ -261,12 +265,14 @@
     "test:analytics-consent"
   ],
   "src/services/runtime.ts": [
-    "test:sidecar-routing"
+    "test:sidecar-routing",
+    "test:domain-retirement"
   ],
   "src/services/runtime-config.ts": [
     "test:sidecar-routing",
     "test:secret-boundary",
-    "test:vault-writer"
+    "test:vault-writer",
+    "test:domain-retirement"
   ],
   "src/services/cloud-fallback-policy.ts": [
     "test:sidecar-routing"
@@ -323,7 +329,8 @@
     "test:sidecar-lows",
     "test:sms-panel",
     "test:sms",
-    "test:sidecar"
+    "test:sidecar",
+    "test:domain-retirement"
   ],
   "src/services/keychain.ts": [
     "test:secret-boundary",
@@ -347,7 +354,8 @@
     "test:secret-boundary"
   ],
   "src-tauri/tauri.conf.json": [
-    "test:secret-boundary"
+    "test:secret-boundary",
+    "test:domain-retirement"
   ],
   "src-tauri/src/vault_coordinator.rs": [
     "test:vault-writer"
@@ -478,12 +486,14 @@
     "test:mcp-install-smoke"
   ],
   "tests/mcp-suite-entry.test.mjs": [
-    "test:mcp-companion"
+    "test:mcp-companion",
+    "test:domain-retirement"
   ],
   "tests/helpers/mcp-suite-entry.mjs": [
     "test:mcp-untrusted",
     "test:mcp-companion",
-    "test:mcp-install-smoke"
+    "test:mcp-install-smoke",
+    "test:domain-retirement"
   ],
   "tools/mcp-server/__tests__/framing.test.mjs": [
     "test:mcp-companion",
@@ -736,5 +746,128 @@
     "test:lifelines-map",
     "test:map-clarity",
     "test:untrusted-html"
+  ],
+  "api/_api-key.test.mjs": [
+    "test:domain-retirement"
+  ],
+  "api/_cors.js": [
+    "test:domain-retirement"
+  ],
+  "api/_cors.test.mjs": [
+    "test:domain-retirement"
+  ],
+  "api/fwdstart.js": [
+    "test:domain-retirement"
+  ],
+  "api/grid-outages.test.mjs": [
+    "test:domain-retirement"
+  ],
+  "api/local-logistics.test.mjs": [
+    "test:domain-retirement"
+  ],
+  "api/og-story.js": [
+    "test:domain-retirement"
+  ],
+  "api/og-story.test.mjs": [
+    "test:domain-retirement"
+  ],
+  "api/story-retirement.test.mjs": [
+    "test:domain-retirement"
+  ],
+  "api/story.js": [
+    "test:domain-retirement"
+  ],
+  "api/usgs-water-proxy.test.mjs": [
+    "test:domain-retirement"
+  ],
+  "api/youtube/embed.js": [
+    "test:domain-retirement"
+  ],
+  "api/youtube/embed.test.mjs": [
+    "test:domain-retirement"
+  ],
+  "index.html": [
+    "test:domain-retirement"
+  ],
+  "middleware.ts": [
+    "test:domain-retirement"
+  ],
+  "scripts/ais-relay-cors.test.cjs": [
+    "test:domain-retirement"
+  ],
+  "scripts/ais-relay.cjs": [
+    "test:domain-retirement"
+  ],
+  "server/cors.ts": [
+    "test:domain-retirement"
+  ],
+  "server/crystalball/news/v1/_shared.ts": [
+    "test:domain-retirement"
+  ],
+  "src-tauri/sidecar/__tests__/intel-expansion-cluster3.test.mjs": [
+    "test:domain-retirement"
+  ],
+  "src-tauri/sidecar/local-api-server.test.mjs": [
+    "test:domain-retirement"
+  ],
+  "src-tauri/sidecar/sidecar-cors.test.mjs": [
+    "test:domain-retirement"
+  ],
+  "src/components/LiveNewsPanel.ts": [
+    "test:domain-retirement"
+  ],
+  "src/components/ServiceStatusPanel.ts": [
+    "test:domain-retirement"
+  ],
+  "src/components/StoryModal.ts": [
+    "test:domain-retirement"
+  ],
+  "src/components/__tests__/retired-domain-panels.test.mts": [
+    "test:domain-retirement"
+  ],
+  "src/components/__tests__/story-modal-sharing.test.mts": [
+    "test:domain-retirement"
+  ],
+  "src/services/__tests__/fetch-attribution.test.mts": [
+    "test:domain-retirement"
+  ],
+  "src/services/__tests__/runtime-fetch-fallback.test.mts": [
+    "test:domain-retirement"
+  ],
+  "src/services/__tests__/story-share.test.mts": [
+    "test:domain-retirement"
+  ],
+  "src/services/happy-share-renderer.ts": [
+    "test:domain-retirement"
+  ],
+  "src/services/settings-constants.ts": [
+    "test:domain-retirement"
+  ],
+  "src/services/story-renderer.ts": [
+    "test:domain-retirement"
+  ],
+  "src/services/story-share.ts": [
+    "test:domain-retirement"
+  ],
+  "tests/csp-allowlist.test.mjs": [
+    "test:domain-retirement"
+  ],
+  "tests/key-compare-hardening.test.mjs": [
+    "test:domain-retirement"
+  ],
+  "tests/panels/stubs/i18n-stub.mjs": [
+    "test:domain-retirement"
+  ],
+  "tests/server-cors-retirement.test.mts": [
+    "test:domain-retirement"
+  ],
+  "tools/littlesnitch/crystal-ball.lsrules": [
+    "test:domain-retirement"
+  ],
+  "vite.config.ts": [
+    "test:domain-retirement"
+  ],
+  "tests/retired-domain-suite.test.mjs": [
+    "test:domain-retirement"
   ]
 }

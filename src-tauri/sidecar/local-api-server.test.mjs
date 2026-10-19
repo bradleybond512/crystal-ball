@@ -4532,3 +4532,70 @@ test('/api/spaceweather-kp-gfz — zero valid samples on HTTP 200 is degraded an
     await app.cleanup();
   }
 });
+
+test('retired cloud configuration never receives requests, even with fallback enabled', async () => {
+  const localApi = await setupApiDir({});
+  const originalFetch = globalThis.fetch;
+  const outbound = [];
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (!url.startsWith('http://127.0.0.1:')) {
+      outbound.push(url);
+      throw new Error('external requests are forbidden in this fixture');
+    }
+    return originalFetch(input, init);
+  };
+  try {
+    for (const remoteBase of ['https://crystalball.app', 'https://API.CRYSTALBALL.APP.', '//tech.crystalball.app']) {
+      const app = await createLocalApiServer({
+        port: 0, apiDir: localApi.apiDir, dataDir: localApi.apiDir,
+        resourceDir: localApi.apiDir, remoteBase, cloudFallback: 'true',
+        logger: { log() {}, warn() {}, error() {} },
+      });
+      try {
+        const { port } = await app.start();
+        await authFetch(`http://127.0.0.1:${port}/api/missing-retirement-fixture`);
+        const status = await authFetch(`http://127.0.0.1:${port}/api/service-status`);
+        const body = await status.json();
+        assert.equal(body.local?.remoteBase, '');
+      } finally {
+        await app.close();
+      }
+    }
+    assert.deepEqual(outbound, []);
+  } finally {
+    globalThis.fetch = originalFetch;
+    await localApi.cleanup();
+  }
+});
+
+test('theater posture computes locally without a default cloud request', async () => {
+  const localApi = await setupApiDir({});
+  const originalFetch = globalThis.fetch;
+  const outbound = [];
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (!url.startsWith('http://127.0.0.1:')) {
+      outbound.push(url);
+      throw new Error('external requests are forbidden in this fixture');
+    }
+    return originalFetch(input, init);
+  };
+  const app = await createLocalApiServer({
+    port: 0, apiDir: localApi.apiDir, dataDir: localApi.apiDir, resourceDir: localApi.apiDir,
+    logger: { log() {}, warn() {}, error() {} },
+  });
+  try {
+    _resetSidecarCacheForTests();
+    const { port } = await app.start();
+    const response = await authFetch(`http://127.0.0.1:${port}/api/military/v1/get-theater-posture`);
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.ok(Array.isArray(body.theaters));
+    assert.deepEqual(outbound, []);
+  } finally {
+    await app.close();
+    globalThis.fetch = originalFetch;
+    await localApi.cleanup();
+  }
+});

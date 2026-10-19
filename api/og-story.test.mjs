@@ -2,9 +2,9 @@ import { strict as assert } from 'node:assert';
 import test from 'node:test';
 import handler from './og-story.js';
 
-function renderOgStory(query = '') {
+function renderOgStory(query = '', requestPath = 'https://crystalball.app/api/og-story') {
   const req = {
- url: `https://crystalball.app/api/og-story${query ? `?${query}` : ''}`,
+ url: `${requestPath}${query ? `?${query}` : ''}`,
  headers: { host: 'crystalball.app' },
   };
 
@@ -46,3 +46,30 @@ test('uses a known level when it is allowlisted', () => {
   assert.match(response.body, /#ef4444/);
 });
 
+test('relative request URLs render scored and overview SVGs without the retired watermark', () => {
+  const cases = [
+    { query: 'c=US&s=88&l=critical', hasArc: true, hasScore: true },
+    { query: 'c=US&s=0&l=low', hasArc: false, hasScore: true },
+    { query: 'c=US', hasArc: false, hasScore: false },
+  ];
+
+  for (const { query, hasArc, hasScore } of cases) {
+    const response = renderOgStory(query, '/api/og-story');
+    assert.equal(response.statusCode, 200, query);
+    assert.equal(response.headers['content-type'], 'image/svg+xml', query);
+    assert.match(response.body, /^<svg\s/, query);
+    assert.match(response.body, />UNITED STATES<\/text>/, query);
+    assert.match(response.body, />Crystal Ball · \d{4}-\d{2}-\d{2} · Free &amp; open source<\/text>/, query);
+    assert.doesNotMatch(response.body, /crystalball[.]app/i, query);
+    if (hasArc) {
+      assert.match(response.body, /<!-- Arc fill -->\s*<path\b/, query);
+    } else {
+      assert.doesNotMatch(response.body, /<!-- Arc fill -->\s*<path\b/, query);
+    }
+    if (hasScore) {
+      assert.match(response.body, />INSTABILITY INDEX<\/text>/, query);
+    } else {
+      assert.match(response.body, />Real-time intelligence analysis<\/text>/, query);
+    }
+  }
+});

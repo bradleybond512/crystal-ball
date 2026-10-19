@@ -23,6 +23,12 @@ export const SUITE_STAGES = Object.freeze({
   'install-smoke': Object.freeze([
     Object.freeze(['--test', 'tools/mcp-server/__tests__/install-smoke.test.mjs']),
   ]),
+  'domain-retirement': Object.freeze([
+    Object.freeze(['--test', 'api/_cors.test.mjs', 'api/_api-key.test.mjs', 'api/youtube/embed.test.mjs', 'api/og-story.test.mjs', 'api/story-retirement.test.mjs', 'scripts/ais-relay-cors.test.cjs', 'tests/csp-allowlist.test.mjs', 'tests/key-compare-hardening.test.mjs', 'api/grid-outages.test.mjs', 'api/local-logistics.test.mjs', 'api/usgs-water-proxy.test.mjs']),
+    Object.freeze(['--import', 'tsx', '--test', 'src/services/__tests__/runtime-fetch-fallback.test.mts', 'src/services/__tests__/fetch-attribution.test.mts', 'src/services/__tests__/story-share.test.mts', 'tests/server-cors-retirement.test.mts']),
+    Object.freeze(['--import', 'tsx', '--import', './tests/panels/register-hook.mjs', '--test', 'src/components/__tests__/story-modal-sharing.test.mts', 'src/components/__tests__/retired-domain-panels.test.mts']),
+    Object.freeze(['--test', 'src-tauri/sidecar/local-api-server.test.mjs', 'src-tauri/sidecar/sidecar-cors.test.mjs', 'src-tauri/sidecar/__tests__/intel-expansion-cluster3.test.mjs']),
+  ]),
 });
 
 export function parseFinalTap(stdout) {

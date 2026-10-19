@@ -86,7 +86,7 @@ const VARIANT_META: Record<BuildVariant, {
  title: 'Tech Monitor - Technology Intelligence Dashboard',
  description: 'Real-time technology intelligence for AI, startups, cloud services, developer ecosystems, and emerging technology.',
  keywords: 'technology intelligence, AI monitoring, startup intelligence, cloud status, developer ecosystem, cybersecurity, tech news, artificial intelligence',
- url: 'https://tech.crystalball.app/',
+ url: '',
  siteName: 'Tech Monitor',
  shortName: 'TechMonitor',
  subject: 'Real-Time Technology Intelligence',
@@ -104,7 +104,7 @@ const VARIANT_META: Record<BuildVariant, {
  title: 'Finance Monitor - Global Markets Dashboard',
  description: 'Real-time financial intelligence for markets, forex, bonds, commodities, crypto, and central banks.',
  keywords: 'financial intelligence, markets dashboard, forex, bonds, commodities, crypto, central banks, economic indicators',
- url: 'https://finance.crystalball.app/',
+ url: '',
  siteName: 'Finance Monitor',
  shortName: 'FinanceMonitor',
  subject: 'Real-Time Financial and Market Intelligence',
@@ -122,7 +122,7 @@ const VARIANT_META: Record<BuildVariant, {
  title: 'Happy Monitor - Positive News Dashboard',
  description: 'A calm dashboard for positive news, human progress, science, conservation, and renewable energy.',
  keywords: 'positive news, human progress, conservation, renewable energy, science breakthroughs, good news dashboard',
- url: 'https://happy.crystalball.app/',
+ url: '',
  siteName: 'Happy Monitor',
  shortName: 'HappyMonitor',
  subject: 'Positive News and Human Progress',
@@ -187,7 +187,6 @@ function htmlVariantPlugin(): Plugin {
  .replace(/<meta name="twitter:description" content=".*?" \/>/, `<meta name="twitter:description" content="${activeMeta.description}" />`)
  .replace(/"name": "Crystal Ball"/, `"name": "${activeMeta.siteName}"`)
  .replace(/"alternateName": "CrystalBall"/, `"alternateName": "${activeMeta.siteName.replace(' ', '')}"`)
- .replace(/"url": "https:\/\/crystalball\.app\/"/, `"url": "${activeMeta.url}"`)
  .replace(/"description": "[^"]*"/, `"description": "${activeMeta.description}"`)
  .replace(/"featureList": \[[\s\S]*?\]/, `"featureList": ${JSON.stringify(activeMeta.features, null, 8).replace(/\n/g, '\n ')}`);
 

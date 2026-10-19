@@ -32,6 +32,7 @@
     "server-meta.mjs",
     "sidecar-client.mjs",
     "storage.mjs",
+    "tool-catalog.mjs",
     "tool-registry.mjs",
     "weekly-evaluation-report.mjs"
   ],

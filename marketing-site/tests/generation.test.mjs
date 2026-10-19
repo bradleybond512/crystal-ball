@@ -4,10 +4,10 @@ import { derivePanels, deriveMcp, deriveSpecs, generateSiteData, resolveRelease 
 
 const github = 'https://github.com/bradleybond512/crystal-ball';
 const panelsSource = `const FULL_PANELS = { a: {name:'A'}, 'b': {name:'B'} };\nconst TECH_PANELS = { c: {name:'C'} };\nexport const DEFAULT_PANELS = active ? TECH_PANELS : FULL_PANELS;`;
-const registrySource = `const TOOL_CATALOG = { query: { category: 'Read', annotations: {readOnlyHint: true} }, change: { category: 'Write', annotations: {readOnlyHint: false} } };\nexport const TOOL_INDEX = {};`;
+const toolCatalog = { query: { category: 'Read', annotations: {readOnlyHint: true} }, change: { category: 'Write', annotations: {readOnlyHint: false} } };
 const workflowSource = `node_target: 'aarch64-apple-darwin'\nnode_target: 'x86_64-apple-darwin'\nnode_target: 'x86_64-pc-windows-msvc'`;
 const base = { urls: { github }, release: { version: 'old', appleSilicon: 'stale.dmg' }, counts: { panels: { full: -1 } } };
-const input = { base, panelsSource, registrySource, tauriConfig: { bundle: { macOS: {} } }, workflowSource };
+const input = { base, panelsSource, toolCatalog, tauriConfig: { bundle: { macOS: {} } }, workflowSource };
 const asset = { name: 'Crystal.Ball_3.0_arm64.dmg', size: 12345, browser_download_url: `${github}/releases/download/v3.0/Crystal.Ball_3.0_arm64.dmg` };
 const manifestAsset = { name: 'release-manifest.json', size: 200, browser_download_url: `${github}/releases/download/v3.0/release-manifest.json` };
 const latest = { tag_name: 'v3.0', published_at: '2026-10-18T00:00:00Z', assets: [asset, manifestAsset] };
@@ -17,7 +17,7 @@ test('catalog parsing counts adjacent properties and rejects duplicates or sprea
   assert.deepEqual(derivePanels(panelsSource), { full: 2, tech: 1 });
   assert.throws(() => derivePanels(`const FULL_PANELS = { a: {}, a: {} };`), /unique/);
   assert.throws(() => derivePanels(`const FULL_PANELS = { ...other };`), /explicit/);
-  assert.deepEqual(deriveMcp(registrySource), { total: 2, read: 1, analyst: 1, categories: 2 });
+  assert.deepEqual(deriveMcp(toolCatalog), { total: 2, read: 1, analyst: 1, categories: 2 });
 });
 
 test('specs use explicit minimums and build targets, not runner OS versions', () => {

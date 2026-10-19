@@ -38,7 +38,8 @@ img { display: block; max-width: 100%; height: auto; }
 .hero-lead { max-width: 700px; margin: 30px auto; color: var(--muted); font-size: clamp(20px, 2.2vw, 25px); line-height: 1.45; }
 .hero-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; margin-top: 32px; }
 .marketing-hero .fine-print { margin-inline: auto; margin-top: 22px; }
-.product-section { padding-block: 120px; text-align: center; }
+.product-section { padding-block: 120px; text-align: center; contain: layout style paint; }
+.product-section :is(.feature-grid, .feature-tile, .variant-grid, .example-block, .prompt-examples, .day-grid) { contain: layout style; }
 .product-section:nth-of-type(even) { --background: #f5f5f7; --foreground: #1d1d1f; --muted: #616166; --link: #0068c7; --line: #d2d2d7; color-scheme: light; background: var(--background); color: var(--foreground); }
 .product-section h2 { max-width: 1000px; margin: 18px auto 26px; font-size: clamp(48px, 6.5vw, 88px); }
 .section-label { color: var(--muted); font-weight: 600; font-size: 19px; }

@@ -191,24 +191,30 @@ test('qualifies source-only features beside their claims and identifies the audi
  const html=await(await request('/')).text();
  const data=JSON.parse(await readFile(new URL('../data/generated.json',import.meta.url),'utf8'));
  const section=id=>html.match(new RegExp(`<section[^>]*id="${id}"[\\s\\S]*?</section>`))[0];
- const label=data.release.version===data.releaseAudit.version ? 'Coming in the next release' : 'Source-build feature · release availability unverified';
- for(const [id,indexes] of [['home-shell',[0,1]],['privacy',[0]],['mcp',[1,2]],['power-users',[0]]]) {
+ for(const [id,entries] of [['home-shell',[[0,'home-shell-evidence-notes'],[1,'home-shell-source-readiness']]],['privacy',[[0,'explicit-analytics-consent']]],['mcp',[[1,'mcp-profiles'],[2,'mcp-profiles']]],['power-users',[[0,'cli-doctor']]]]) {
   const tiles=[...section(id).matchAll(/<article[^>]*>([\s\S]*?)<\/article>/g)].map(match=>match[1]);
-  for(const index of indexes) assert.ok(tiles[index].includes(label),`${id} tile ${index} must qualify release availability`);
+  for(const [index,featureId] of entries) {
+   const feature=data.availability.features[featureId];
+   if(feature.component==='companion') assert.match(tiles[index],/Separately installed companion/);
+   else if(!feature.available) assert.match(tiles[index],/release availability unverified/);
+  }
  }
  const specs=section('specs');
- assert.ok(specs.includes(`v${data.releaseAudit.version}`));
- assert.ok(specs.includes(`${data.releaseAudit.panels} Full panels`));
- assert.ok(specs.includes(`${data.releaseAudit.mcpTools} MCP tools`));
- assert.match(specs,/without read\/analyst profile separation/);
- for(const path of ['/privacy','/security']) {
-  const page=await(await request(path)).text();
-  assert.ok(page.includes(label),`${path} qualifies newer behavior`);
+ if(!data.availability.catalogMatches) {
+  assert.ok(specs.includes(`v${data.releaseAudit.version}`));
+  assert.ok(specs.includes(`${data.releaseAudit.panels} Full panels`));
+  assert.ok(specs.includes(`${data.releaseAudit.mcpTools} MCP tools`));
+  assert.match(specs,/without read\/analyst profile separation/);
  }
+ const security=await(await request('/security')).text();
+ assert.match(security,/separately installed companion/);
+ assert.match(security,/not bundled in the DMG/);
  const privacy=await(await request('/privacy')).text();
- assert.ok(privacy.includes(`v${data.releaseAudit.version}`));
- assert.match(privacy,/upgrades[^<]*automatically enable analytics/);
- assert.match(privacy,/New installs start with analytics off/);
+ if(!data.availability.features['explicit-analytics-consent'].available) {
+  assert.ok(privacy.includes(`v${data.releaseAudit.version}`));
+  assert.match(privacy,/upgrades[^<]*automatically enabled/);
+  assert.match(privacy,/New installs start with analytics off/);
+ } else assert.match(privacy,/Analytics stay off until you explicitly opt in/);
 });
 
 test('uses a briefing capture and keeps decorative timeline markers out of the accessibility tree',async()=>{

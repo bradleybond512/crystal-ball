@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import vm from 'node:vm';
+import { TOOL_CATALOG } from '../../tools/mcp-server/tool-catalog.mjs';
+import featureCatalog from '../../config/release-features.json' with { type: 'json' };
+import { resolveAvailability } from '../lib/release-availability.mjs';
 import ts from 'typescript';
 
 export function derivePanels(source) {
@@ -28,11 +30,7 @@ export function derivePanels(source) {
   return counts;
 }
 
-export function deriveMcp(source) {
-  const end = source.indexOf('\nexport const TOOL_INDEX');
-  assert.ok(end > 0, 'Registry catalog boundary exists');
-  const declarations = source.slice(0, end).replace(/^import[^\n]*\n/gm, '').replace(/^export /gm, '');
-  const catalog = vm.runInNewContext(`${declarations}\n;TOOL_CATALOG;`, Object.create(null), { timeout: 1000 });
+export function deriveMcp(catalog = TOOL_CATALOG) {
   const tools = Object.values(catalog);
   assert.ok(tools.length, 'Registry must contain tools');
   assert.ok(tools.every((tool) => typeof tool.annotations?.readOnlyHint === 'boolean' && typeof tool.category === 'string'));
@@ -109,27 +107,31 @@ export async function resolveRelease({ github, fetchImpl = fetch, timeoutMs = 12
       const checksum = manifest?.assets.find((entry) => typeof entry.name === 'string' && entry.name.replaceAll(' ', '.') === asset.name && entry.size === asset.size && /^[a-f0-9]{64}$/i.test(entry.sha256));
       selected[id] = { name: asset.name, url: asset.browser_download_url, sizeBytes: asset.size, sha256: checksum?.sha256 ?? null };
     }
-    return { available: true, latestUrl, version: release.tag_name.replace(/^v/, ''), tag: release.tag_name, publishedAt: release.published_at, assets: selected, manifestUrl: manifestAsset?.browser_download_url ?? null, manifestAvailable: Boolean(manifest), signingStatus: 'unverified' };
+    return { available: true, latestUrl, version: release.tag_name.replace(/^v/, ''), tag: release.tag_name, publishedAt: release.published_at, assets: selected, manifestUrl: manifestAsset?.browser_download_url ?? null, manifestAvailable: Boolean(manifest), manifest, signingStatus: 'unverified' };
   } catch (error) {
     return { ...unavailable, error: error instanceof Error ? error.message : String(error) };
   }
 }
 
-export async function generateSiteData({ base, panelsSource, registrySource, tauriConfig, workflowSource, fetchImpl = fetch, timeoutMs }) {
+export async function generateSiteData({ base, panelsSource, toolCatalog = TOOL_CATALOG, tauriConfig, workflowSource, fetchImpl = fetch, timeoutMs }) {
   const panels = derivePanels(panelsSource);
   const editions = Object.entries(panels).map(([id, panelCount]) => ({ id, panelCount }));
   const specs = deriveSpecs(tauriConfig, workflowSource);
   const release = await resolveRelease({ github: base.urls.github, fetchImpl, timeoutMs });
-  return { ...base, counts: { panels, mcp: deriveMcp(registrySource), editions: editions.length, platforms: specs.platforms.length }, editions, specs, release };
+  const counts = { panels, mcp: deriveMcp(toolCatalog), editions: editions.length, platforms: specs.platforms.length };
+  const availability = resolveAvailability({ release, manifest: release.manifest, catalog: featureCatalog, counts });
+  const publicRelease = { ...release };
+  delete publicRelease.manifest;
+  return { ...base, counts, editions, specs, release: publicRelease, availability };
 }
 
 export async function generateFromFiles(siteRoot = fileURLToPath(new URL('../', import.meta.url)), options = {}) {
   const repoRoot = path.resolve(siteRoot, '..');
   const read = (file) => readFile(path.join(repoRoot, file), 'utf8');
-  const [base, panelsSource, registrySource, tauriConfig, workflowSource] = await Promise.all([
-    readFile(path.join(siteRoot, 'data/site.json'), 'utf8'), read('src/config/panels.ts'), read('tools/mcp-server/tool-registry.mjs'), read('src-tauri/tauri.conf.json'), read('.github/workflows/build-desktop.yml'),
+  const [base, panelsSource, tauriConfig, workflowSource] = await Promise.all([
+    readFile(path.join(siteRoot, 'data/site.json'), 'utf8'), read('src/config/panels.ts'), read('src-tauri/tauri.conf.json'), read('.github/workflows/build-desktop.yml'),
   ]);
-  const generated = await generateSiteData({ base: JSON.parse(base), panelsSource, registrySource, tauriConfig: JSON.parse(tauriConfig), workflowSource, ...options });
+  const generated = await generateSiteData({ base: JSON.parse(base), panelsSource, tauriConfig: JSON.parse(tauriConfig), workflowSource, ...options });
   await writeFile(path.join(siteRoot, 'data/generated.json'), JSON.stringify(generated, null, 2) + '\n');
   return generated;
 }

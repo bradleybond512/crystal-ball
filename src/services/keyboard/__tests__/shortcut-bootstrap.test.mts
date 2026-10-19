@@ -86,7 +86,7 @@ test('web leaves Cmd+M to the browser and Help describes exactly the installed r
   assert.ok(labels.includes("Toggle God's Vision"));
   assert.ok(!handles.registry.list().some((binding) => binding.id === 'ghost-mode-legacy'));
   help.destroy();
-  assert.equal(document.querySelector('.help-overlay'), null);
+  assert.equal(document.querySelector('.help-overlay') === null, true);
 });
 
 test('feature bindings ignore consumed, repeated, composing and editable key events', () => {

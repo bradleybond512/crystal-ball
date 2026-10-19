@@ -100,14 +100,14 @@ test('nested Debug Diagnostics entry closes Settings before handing navigation f
   const listener = () => {
     calls++;
     assert.equal(overlay.classList.contains('active'), false);
-    assert.equal(document.activeElement, trigger, 'Settings completes its existing restoration first');
+    assert.equal(document.activeElement === trigger, true, 'Settings completes its existing restoration first');
     destination.focus();
   };
   document.addEventListener('cb:open-diagnostics', listener);
   try {
     const button = overlay.querySelector<HTMLElement>('#us-open-diagnostics'); assert.ok(button);
     const nested = document.createElement('span'); button.append(nested); nested.click();
-    assert.equal(calls, 1); assert.equal(document.activeElement, destination);
+    assert.equal(calls, 1); assert.equal(document.activeElement === destination, true);
   } finally { document.removeEventListener('cb:open-diagnostics', listener); }
 });
 

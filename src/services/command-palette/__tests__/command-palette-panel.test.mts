@@ -156,7 +156,7 @@ test('selection hides palette before action and its pending focus cannot steal t
   nested.click();
   t.mock.timers.tick(5);
   assert.equal(calls, 1);
-  assert.equal(document.activeElement, destination);
+  assert.equal(document.activeElement === destination, true);
   panel.unmount(); destination.remove();
 });
 

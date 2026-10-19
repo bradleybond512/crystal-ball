@@ -109,7 +109,7 @@ test('actual navigation owner reinstall/destroy leaves one Diagnostics listener 
     document.dispatchEvent(new CustomEvent('cb:open-diagnostics'));
     document.dispatchEvent(new CustomEvent('cb:toggle-help'));
     assert.equal(navigations, 2);
-    assert.equal(document.querySelector('.help-overlay'), null);
+    assert.equal(document.querySelector('.help-overlay') === null, true);
   } finally { subject.destroyNavigationShortcuts(); }
 });
 
@@ -151,7 +151,7 @@ test('isolated panel boot installs the real globe shortcut and releases its owne
     document.body.dispatchEvent(afterDestroy);
     assert.equal(globeActions, 1, 'owned teardown must remove the isolated boot shortcut');
     assert.equal(afterDestroy.defaultPrevented, false);
-    assert.equal(document.querySelector('.help-overlay'), null);
+    assert.equal(document.querySelector('.help-overlay') === null, true);
   } finally {
     subject.destroyNavigationShortcuts();
     releaseControls();

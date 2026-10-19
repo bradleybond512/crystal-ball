@@ -1,4 +1,6 @@
-import type { FeatureCollection, Geometry, GeoJsonProperties, Position } from 'geojson';
+import type { Feature, FeatureCollection, Geometry, GeoJsonProperties, Position } from 'geojson';
+import { deploymentAssetUrl } from '../utils/deployment-base';
+import { getDefaultDiagnosticBus } from './diagnostics/diagnostic-events';
 
 interface IndexedCountryGeometry {
   code: string;
@@ -12,7 +14,7 @@ interface CountryHit {
   name: string;
 }
 
-const COUNTRY_GEOJSON_URL = '/data/countries.geojson';
+const COUNTRY_GEOJSON_URL = deploymentAssetUrl('data/countries.geojson');
 
 const POLITICAL_OVERRIDES: Record<string, string> = { 'CN-TW': 'TW' };
 
@@ -36,7 +38,7 @@ let sortedCountryNames: { name: string; code: string; regex: RegExp }[] = [];
 
 function normalizeCode(properties: GeoJsonProperties | null | undefined): string | null {
   if (!properties) return null;
-  const rawCode = properties['ISO3166-1-Alpha-2'] ?? properties.ISO_A2 ?? properties.iso_a2;
+  const rawCode: unknown = properties['ISO3166-1-Alpha-2'] ?? properties.ISO_A2 ?? properties.iso_a2;
   if (typeof rawCode !== 'string') return null;
   const trimmed = rawCode.trim().toUpperCase();
   const overridden = POLITICAL_OVERRIDES[trimmed] ?? trimmed;
@@ -45,7 +47,7 @@ function normalizeCode(properties: GeoJsonProperties | null | undefined): string
 
 function normalizeName(properties: GeoJsonProperties | null | undefined): string | null {
   if (!properties) return null;
-  const rawName = properties.name ?? properties.NAME ?? properties.admin;
+  const rawName: unknown = properties.name ?? properties.NAME ?? properties.admin;
   if (typeof rawName !== 'string') return null;
   const name = rawName.trim();
   return name.length > 0 ? name : null;
@@ -61,7 +63,7 @@ function toCoord(point: Position): [number, number] | null {
 
 function normalizePolygonRings(rings: Position[][]): [number, number][][] {
   return rings
- .map((ring) => ring.map(toCoord).filter((p): p is [number, number] => p !== null))
+ .map((ring) => ring.map((point) => toCoord(point)).filter((p): p is [number, number] => p !== null))
  .filter((ring) => ring.length >= 3);
 }
 
@@ -166,6 +168,27 @@ function buildCountryNameMatchers(): void {
  }));
 }
 
+function indexCountryFeature(feature: Feature<Geometry>): void {
+  const code = normalizeCode(feature.properties);
+  const name = normalizeName(feature.properties);
+  if (!code || !name) return;
+
+  const iso3: unknown = feature.properties?.['ISO3166-1-Alpha-3'];
+  if (typeof iso3 === 'string' && /^[A-Z]{3}$/i.test(iso3.trim())) {
+    iso3ToIso2.set(iso3.trim().toUpperCase(), code);
+  }
+  nameToIso2.set(name.toLowerCase(), code);
+  if (!codeToName.has(code)) codeToName.set(code, name);
+
+  const polygons = normalizeGeometry(feature.geometry);
+  const bbox = computeBbox(polygons);
+  if (!bbox || polygons.length === 0) return;
+
+  const indexed: IndexedCountryGeometry = { code, name, polygons, bbox };
+  countryIndex.set(code, indexed);
+  countryList.push(indexed);
+}
+
 async function ensureLoaded(): Promise<void> {
   if (loadedGeoJson || loadPromise) {
  await loadPromise;
@@ -194,24 +217,7 @@ async function ensureLoaded(): Promise<void> {
  codeToName.clear();
 
  for (const feature of data.features) {
- const code = normalizeCode(feature.properties);
- const name = normalizeName(feature.properties);
- if (!code || !name) continue;
-
- const iso3 = feature.properties?.['ISO3166-1-Alpha-3'];
- if (typeof iso3 === 'string' && /^[A-Z]{3}$/i.test(iso3.trim())) {
- iso3ToIso2.set(iso3.trim().toUpperCase(), code);
- }
- nameToIso2.set(name.toLowerCase(), code);
- if (!codeToName.has(code)) codeToName.set(code, name);
-
- const polygons = normalizeGeometry(feature.geometry);
- const bbox = computeBbox(polygons);
- if (!bbox || polygons.length === 0) continue;
-
- const indexed: IndexedCountryGeometry = { code, name, polygons, bbox };
- countryIndex.set(code, indexed);
- countryList.push(indexed);
+ indexCountryFeature(feature);
  }
 
  for (const [alias, code] of Object.entries(NAME_ALIASES)) {
@@ -221,8 +227,13 @@ async function ensureLoaded(): Promise<void> {
  }
 
  buildCountryNameMatchers();
- } catch (error) {
- console.warn('[country-geometry] Failed to load countries.geojson:', error);
+ } catch {
+ getDefaultDiagnosticBus().emit({
+   severity: 'warning',
+   kind: 'service_failure',
+   serviceId: 'country-geometry',
+   message: 'Failed to load countries.geojson.',
+ });
  }
   })();
 

@@ -53,6 +53,7 @@ import type { GodsVisionView } from '@/components/GodsVisionView';
 import { getRuntimeConfigSnapshot } from '@/services/runtime-config';
 import { startNotificationRouter } from '@/services/notification-router';
 import { bindGodsVisionControls } from '@/app/gods-vision-events';
+import { deploymentAssetUrl } from '@/utils/deployment-base';
 
 export let cyberReactorUnsubscribe: (() => void) | null = null;
 
@@ -595,7 +596,7 @@ export class App {
  return;
  }
  // Cesium reads CESIUM_BASE_URL at module init — must be set before dynamic import
- (window as unknown as Record<string, unknown>).CESIUM_BASE_URL = '/cesium';
+ (window as unknown as Record<string, unknown>).CESIUM_BASE_URL = deploymentAssetUrl('cesium/');
  try {
  const { GodsVisionView } = await import('@/components/GodsVisionView');
  const ionToken = getRuntimeConfigSnapshot().secrets.CESIUM_ION_TOKEN?.value;

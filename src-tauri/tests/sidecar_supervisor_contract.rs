@@ -179,8 +179,6 @@ use std::cell::Cell;
 use std::sync::{mpsc, Arc, Mutex, TryLockError};
 use std::time::Duration;
 
-const DEFAULT: u16 = 46_123;
-
 struct FakeChild {
     exited: Arc<AtomicBool>,
     code: i32,
@@ -278,7 +276,7 @@ fn a_starter_parked_after_reading_its_port_cannot_publish_it_once_the_next_child
             let waited = Some(40_001);
             read_tx.send(()).unwrap();
             let _ = resume_rx.recv_timeout(Duration::from_secs(5));
-            shared.cell().publish_start(a, waited, DEFAULT)
+            shared.cell().publish_start(a, waited)
         })
     };
     read_rx.recv_timeout(Duration::from_secs(5)).expect("A's starter read its port");
@@ -287,7 +285,7 @@ fn a_starter_parked_after_reading_its_port_cannot_publish_it_once_the_next_child
     assert_eq!(seen(shared.cell().tick(a, || None)), Seen::Exited(1), "A's monitor reaps A");
     assert_eq!(shared.published(), (None, false), "A's exit revokes its port");
     let (b, _) = shared.start(0);
-    assert_eq!(shared.cell().publish_start(b, Some(40_002), DEFAULT), Publication::Confirmed(40_002));
+    assert_eq!(shared.cell().publish_start(b, Some(40_002)), Publication::Confirmed(40_002));
 
     drop(resume);
     assert_eq!(starter.join().unwrap(), Publication::Stale, "A's starter is no longer live");
@@ -295,15 +293,15 @@ fn a_starter_parked_after_reading_its_port_cannot_publish_it_once_the_next_child
 }
 
 #[test]
-fn a_stale_timeout_fallback_cannot_clear_the_next_childs_confirmation() {
+fn a_stale_timeout_cannot_clear_the_next_childs_confirmation() {
     let shared = Shared::default();
     let (a, a_exited) = shared.start(1);
     a_exited.store(true, Ordering::SeqCst);
     assert_eq!(seen(shared.cell().tick(a, || None)), Seen::Exited(1));
     let (b, _) = shared.start(0);
-    assert_eq!(shared.cell().publish_start(b, Some(40_002), DEFAULT), Publication::Confirmed(40_002));
+    assert_eq!(shared.cell().publish_start(b, Some(40_002)), Publication::Confirmed(40_002));
 
-    assert_eq!(shared.cell().publish_start(a, None, DEFAULT), Publication::Stale);
+    assert_eq!(shared.cell().publish_start(a, None), Publication::Stale);
     assert_eq!(shared.published(), (Some(40_002), true));
 }
 
@@ -332,8 +330,8 @@ fn an_exited_child_is_never_published_even_before_its_monitor_reaps_it() {
     let shared = Shared::default();
     let (a, a_exited) = shared.start(1);
     a_exited.store(true, Ordering::SeqCst);
-    assert_eq!(shared.cell().publish_start(a, Some(40_001), DEFAULT), Publication::Stale);
-    assert_eq!(shared.cell().publish_start(a, None, DEFAULT), Publication::Stale);
+    assert_eq!(shared.cell().publish_start(a, Some(40_001)), Publication::Stale);
+    assert_eq!(shared.cell().publish_start(a, None), Publication::Stale);
     assert_eq!(shared.published(), (None, false));
 }
 
@@ -342,7 +340,7 @@ fn nothing_is_published_or_confirmed_late_once_shutdown_begins() {
     let shared = Shared::default();
     let (a, _) = shared.start(0);
     shared.shutting_down.store(true, Ordering::SeqCst);
-    assert_eq!(shared.cell().publish_start(a, Some(40_001), DEFAULT), Publication::Stale);
+    assert_eq!(shared.cell().publish_start(a, Some(40_001)), Publication::Stale);
     assert_eq!(seen(shared.cell().tick(a, || Some(40_001))), Seen::Running(None));
     assert_eq!(shared.published(), (None, false));
 }
@@ -351,7 +349,7 @@ fn nothing_is_published_or_confirmed_late_once_shutdown_begins() {
 fn shutdown_takes_the_child_and_revokes_its_confirmed_port() {
     let shared = Shared::default();
     let (a, _) = shared.start(0);
-    assert_eq!(shared.cell().publish_start(a, Some(40_001), DEFAULT), Publication::Confirmed(40_001));
+    assert_eq!(shared.cell().publish_start(a, Some(40_001)), Publication::Confirmed(40_001));
     shared.shutting_down.store(true, Ordering::SeqCst);
     assert!(shared.cell().take_for_shutdown().is_some());
     assert_eq!(shared.published(), (None, false));
@@ -360,13 +358,13 @@ fn shutdown_takes_the_child_and_revokes_its_confirmed_port() {
 }
 
 #[test]
-fn the_timeout_fallback_records_the_default_unconfirmed_and_never_undoes_a_confirmation() {
+fn a_timeout_publishes_nothing_and_never_undoes_a_late_confirmation() {
     let shared = Shared::default();
     let (a, _) = shared.start(0);
-    assert_eq!(shared.cell().publish_start(a, None, DEFAULT), Publication::Unconfirmed(DEFAULT));
-    assert_eq!(shared.published(), (Some(DEFAULT), false));
+    assert_eq!(shared.cell().publish_start(a, None), Publication::AwaitingConfirmation);
+    assert_eq!(shared.published(), (None, false));
     assert_eq!(seen(shared.cell().tick(a, || Some(40_001))), Seen::Running(Some(40_001)));
-    assert_eq!(shared.cell().publish_start(a, None, DEFAULT), Publication::Confirmed(40_001));
+    assert_eq!(shared.cell().publish_start(a, None), Publication::Confirmed(40_001));
     assert_eq!(shared.published(), (Some(40_001), true));
 }
 
@@ -380,7 +378,7 @@ fn publication_waits_for_the_child_lock_before_it_touches_the_port() {
         let shared = Arc::clone(&shared);
         std::thread::spawn(move || {
             started_tx.send(()).unwrap();
-            shared.cell().publish_start(a, Some(40_001), DEFAULT)
+            shared.cell().publish_start(a, Some(40_001))
         })
     };
     started_rx.recv_timeout(Duration::from_secs(5)).expect("publisher started");
@@ -421,9 +419,9 @@ fn secret_injection_gets_only_a_confirmed_port_of_the_live_child_and_never_a_def
     let shared = Shared::default();
     let (a, a_exited) = shared.start(0);
     assert_eq!(shared.cell().confirmed_live_port(), None, "nothing confirmed yet");
-    assert_eq!(shared.cell().publish_start(a, None, DEFAULT), Publication::Unconfirmed(DEFAULT));
-    assert_eq!(shared.cell().confirmed_live_port(), None, "the unconfirmed default");
-    assert_eq!(shared.cell().publish_start(a, Some(40_001), DEFAULT), Publication::Confirmed(40_001));
+    assert_eq!(shared.cell().publish_start(a, None), Publication::AwaitingConfirmation);
+    assert_eq!(shared.cell().confirmed_live_port(), None, "an unconfirmed listener");
+    assert_eq!(shared.cell().publish_start(a, Some(40_001)), Publication::Confirmed(40_001));
     assert_eq!(shared.cell().confirmed_live_port(), Some(40_001));
 
     // Mid-revocation as an unlocked reader could observe it: still confirmed,
@@ -443,10 +441,32 @@ fn secret_injection_gets_only_a_confirmed_port_of_the_live_child_and_never_a_def
 fn a_failed_exit_poll_neither_reaps_nor_changes_the_publication() {
     let shared = Shared::default();
     let (a, _) = shared.start(0);
-    assert_eq!(shared.cell().publish_start(a, Some(40_001), DEFAULT), Publication::Confirmed(40_001));
+    assert_eq!(shared.cell().publish_start(a, Some(40_001)), Publication::Confirmed(40_001));
     shared.child.lock().unwrap().as_mut().unwrap().failing = true;
     assert_eq!(seen(shared.cell().tick(a, || Some(40_002))), Seen::Failed(std::io::ErrorKind::Other));
     assert_eq!(shared.published(), (Some(40_001), true), "a poll error changes nothing");
     assert!(shared.child.lock().unwrap().is_some(), "a poll error does not reap the child");
     assert_eq!(shared.cell().confirmed_live_port(), None, "a child that cannot be polled is not known to be live");
+}
+
+#[test]
+fn stale_port_cleanup_accepts_absence_and_surfaces_other_failures() {
+    use std::io::{Error, ErrorKind};
+    assert_eq!(sidecar_publication::stale_port_cleanup(Ok(())), Ok(()));
+    assert_eq!(sidecar_publication::stale_port_cleanup(Err(Error::from(ErrorKind::NotFound))), Ok(()));
+    for kind in [ErrorKind::PermissionDenied, ErrorKind::Other] {
+        assert_eq!(
+            sidecar_publication::stale_port_cleanup(Err(Error::from(kind))),
+            Err("Local engine cannot publish its port: the previous port file could not be removed.")
+        );
+    }
+}
+
+#[test]
+fn a_timeout_also_discards_any_unconfirmed_old_port() {
+    let shared = Shared::default();
+    let (generation, _) = shared.start(0);
+    *shared.port.lock().unwrap() = Some(46_123);
+    assert_eq!(shared.cell().publish_start(generation, None), Publication::AwaitingConfirmation);
+    assert_eq!(shared.published(), (None, false));
 }

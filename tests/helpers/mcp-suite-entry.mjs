@@ -23,6 +23,10 @@ export const SUITE_STAGES = Object.freeze({
   'install-smoke': Object.freeze([
     Object.freeze(['--test', 'tools/mcp-server/__tests__/install-smoke.test.mjs']),
   ]),
+  'port-publication': Object.freeze([
+    Object.freeze(['--test', 'tests/sidecar-port-publication.test.mjs', 'tests/sidecar-supervisor-boundary.test.mjs']),
+    Object.freeze(['--import', 'tsx', '--test', 'src/services/diagnostics/__tests__/local-engine-status.test.mts']),
+  ]),
 });
 
 export function parseFinalTap(stdout) {

@@ -74,7 +74,7 @@ test('the renderer is only ever handed a confirmed port', () => {
   // (contract-tested in sidecar_supervisor_contract.rs).
   assert.match(monitor, /local_api_cell\(&state\)\.install\(&mut slot, child\)/, 'start installs through the cell');
   assert.match(monitor, /local_api_cell\(&state\)\.tick\(generation, /, 'the monitor ticks only its own generation');
-  assert.match(monitor, /local_api_cell\(&state\)\.publish_start\(generation, waited, DEFAULT_LOCAL_API_PORT\)/, 'the starter publishes only for its own generation');
+  assert.match(monitor, /local_api_cell\(&state\)\.publish_start\(generation, waited\)/, 'the starter publishes only for its own generation');
   // Trace every caller edge: loaded snapshots select keys, and the actual
   // controller resolves the live target again inside each retry. These are
   // source wiring assertions, not execution of a real AppHandle or native IPC.
@@ -102,6 +102,34 @@ test('the renderer is only ever handed a confirmed port', () => {
   assert.doesNotMatch(MAIN, /port_confirmed\.store\(true|generation\.fetch_add|fn confirm_port_late/, 'no publication outside the cell');
   const status = fnBody('local_api_status');
   order(status, 'let port = if port_confirmed', 'state.port.lock()', 'status port gate');
+});
+
+test('a timeout leaves the listener unpublished while the existing monitor continues', () => {
+  const publication = fnBody('publish_start', PUB);
+  assert.doesNotMatch(publication, /default_port|DEFAULT_LOCAL_API_PORT/);
+  assert.match(publication, /\(None, Some\(current\)\) if self\.confirmed\.load\(Ordering::SeqCst\) => Publication::Confirmed\(current\)/);
+  assert.match(publication, /\(None, _\) => \{\s*\*port = None;\s*self\.confirmed\.store\(false, Ordering::SeqCst\);\s*Publication::AwaitingConfirmation/);
+  const start = fnBody('start_local_api');
+  assert.match(start, /Publication::AwaitingConfirmation => \{[\s\S]*?no listener published/);
+  assert.match(start, /\n Ok\(\(\)\)\n\}/, 'an unconfirmed live child retains its existing monitor');
+  assert.doesNotMatch(start, /using default/);
+});
+
+test('stale publication cleanup refuses startup before token publication or spawn', () => {
+  const start = fnBody('start_local_api');
+  const cleanup = start.slice(start.indexOf('let port_file ='), start.indexOf('let token_file_cleanup ='));
+  assert.match(cleanup, /if let Err\(error\) = sidecar_publication::stale_port_cleanup\(fs::remove_file\(&port_file\)\)/);
+  assert.match(cleanup, /state\.start_error\.lock\(\)/);
+  assert.match(cleanup, /return Err\(error\.to_string\(\)\);/);
+  order(start, 'sidecar_publication::stale_port_cleanup(', 'cmd\n .spawn()', 'port cleanup before child spawn');
+});
+
+test('copy diagnostics resolves a confirmed live target before constructing any HTTP request', () => {
+  const body = fnBody('copy_diagnostics');
+  order(body, 'match confirmed_sidecar_target(&app)', 'reqwest::Client::builder()', 'diagnostic target gate');
+  assert.match(body, /Err\(reason\) => \{\s*out\.push_str\([\s\S]*?return Ok\(out\);\s*\}/);
+  assert.doesNotMatch(body, /DEFAULT_LOCAL_API_PORT|\.port\.lock\(|local_state\.token/);
+  assert.match(body, /client\.get\(format!\("http:\/\/127\.0\.0\.1:\{port\}\/api\/diag"\)\)/);
 });
 
 test('port publication and revocation take the child lock before the port lock', () => {

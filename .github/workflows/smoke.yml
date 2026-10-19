@@ -44,6 +44,7 @@ jobs:
       # separate Node suites; renderer globs cannot discover either tree.
       - run: npm run test:api
       - run: npm run test:sidecar
+      - run: npm run test:port-publication
       - run: npm run build
       - run: npm run pwa:budget
       # PR 16 cognition CI gate: replays the frozen golden-window corpus

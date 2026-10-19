@@ -112,7 +112,8 @@
     "test:vault-writer",
     "test:signing-phase-a",
     "test:node-pinning",
-    "test:native-lows"
+    "test:native-lows",
+    "test:port-publication"
   ],
   "src-tauri/src/updater_policy.rs": [
     "test:desktop-updater"
@@ -248,10 +249,12 @@
     "test:sidecar-supervisor"
   ],
   "src-tauri/src/sidecar_publication.rs": [
-    "test:sidecar-supervisor"
+    "test:sidecar-supervisor",
+    "test:port-publication"
   ],
   "src-tauri/tests/sidecar_supervisor_contract.rs": [
-    "test:sidecar-supervisor"
+    "test:sidecar-supervisor",
+    "test:port-publication"
   ],
   "src/services/analytics.ts": [
     "test:analytics-consent",
@@ -273,7 +276,8 @@
   ],
   "src/services/diagnostics/local-engine-status.ts": [
     "test:sidecar-routing",
-    "test:node-pinning"
+    "test:node-pinning",
+    "test:port-publication"
   ],
   "src/services/diagnostics/sidecar-probe.ts": [
     "test:sidecar-routing"
@@ -323,7 +327,8 @@
     "test:sidecar-lows",
     "test:sms-panel",
     "test:sms",
-    "test:sidecar"
+    "test:sidecar",
+    "test:port-publication"
   ],
   "src/services/keychain.ts": [
     "test:secret-boundary",
@@ -478,12 +483,14 @@
     "test:mcp-install-smoke"
   ],
   "tests/mcp-suite-entry.test.mjs": [
-    "test:mcp-companion"
+    "test:mcp-companion",
+    "test:port-publication"
   ],
   "tests/helpers/mcp-suite-entry.mjs": [
     "test:mcp-untrusted",
     "test:mcp-companion",
-    "test:mcp-install-smoke"
+    "test:mcp-install-smoke",
+    "test:port-publication"
   ],
   "tools/mcp-server/__tests__/framing.test.mjs": [
     "test:mcp-companion",
@@ -736,5 +743,17 @@
     "test:lifelines-map",
     "test:map-clarity",
     "test:untrusted-html"
+  ],
+  "src/services/diagnostics/__tests__/local-engine-status.test.mts": [
+    "test:port-publication"
+  ],
+  "tests/sidecar-supervisor-boundary.test.mjs": [
+    "test:port-publication"
+  ],
+  "tests/sidecar-port-publication.test.mjs": [
+    "test:port-publication"
+  ],
+  "tests/sidecar-port-publication-suite.test.mjs": [
+    "test:port-publication"
   ]
 }

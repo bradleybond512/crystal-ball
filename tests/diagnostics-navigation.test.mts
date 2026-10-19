@@ -251,3 +251,62 @@ test('navigation listener, shortcut handles and Help have explicit teardown owne
   assert.doesNotMatch(handlers, /toggleGhostMode|e\.key === 'g'.*!e\.ctrlKey|e\.key === 'G'.*!e\.altKey/);
   assert.match(layout, /toggleLegacyGhost:\s*\(\) => setMode\(getMode\(\) === 'ghost' \? null : 'ghost'\)/);
 });
+
+test('the actual layout opts into deferred builtins while its live pending or failed palette blocks background feature keys', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const { CommandPalettePanel } = await import('../src/components/CommandPalettePanel.ts');
+  const catalog = await import('../src/services/command-palette/built-in-commands.ts');
+  let reject!: (error: Error) => void;
+  let loads = 0;
+  const pending = new Promise<typeof catalog>((_resolve, onReject) => { reject = onReject; });
+  class OwnedPalette extends CommandPalettePanel {
+    protected override loadBuiltinCatalog(): Promise<typeof catalog> { loads++; return pending; }
+  }
+  const file = 'src/app/panel-layout.ts';
+  const parsed = ts.createSourceFile(file, source(file), ts.ScriptTarget.Latest, true);
+  const owner = parsed.statements.find((entry) => ts.isClassDeclaration(entry) && entry.name?.text === 'PanelLayoutManager') as ts.ClassDeclaration | undefined;
+  assert.ok(owner);
+  const create = owner.members.find((entry) => entry.name?.getText(parsed) === 'createPanels') as ts.MethodDeclaration;
+  const assignments = create.body!.statements.filter((entry) => ts.isExpressionStatement(entry)
+    && ts.isBinaryExpression(entry.expression) && ts.isNewExpression(entry.expression.right)
+    && entry.expression.right.expression.getText(parsed) === 'CommandPalettePanel');
+  assert.equal(assignments.length, 1, 'test executes the actual single palette constructor site');
+  const subject: { cmdkPanel?: InstanceType<typeof OwnedPalette> } = {};
+  vm.runInNewContext(ts.transpileModule(`function install() { ${assignments[0]!.getText(parsed)} }; install.call(subject);`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText, { subject, CommandPalettePanel: OwnedPalette });
+  const panel = subject.cmdkPanel!;
+  t.after(() => panel.unmount());
+  panel.mount(document.body);
+  assert.equal(loads, 0);
+  panel.show();
+  assert.equal(loads, 1, 'the actual owner opts into first-show catalog loading');
+  assert.equal(panel.element().hidden, false);
+  assert.equal(panel.element().getAttribute('aria-busy'), 'true');
+  assert.equal(create.body!.statements.some((entry) => ts.isExpressionStatement(entry)
+    && ts.isCallExpression(entry.expression) && entry.expression.expression.getText(parsed) === 'registerBuiltinCommands'), false,
+  'the owner does not seed the builtin factory at boot');
+  const calls: string[] = [];
+  const listeners = ['cb:toggle-analyst-hud', 'wm:toggle-ghost-mode', 'cb:toggle-gods-vision'].map((name) => {
+    const listener = () => calls.push(name);
+    document.addEventListener(name, listener);
+    return () => document.removeEventListener(name, listener);
+  });
+  const handles = installShortcuts();
+  try {
+    for (const phase of ['pending', 'failed']) {
+      for (const init of [{ key: 'g' }, { key: 'G', metaKey: true, shiftKey: true }, { key: 'A', metaKey: true, shiftKey: true }]) {
+        document.body.dispatchEvent(new browser.KeyboardEvent('keydown', { ...init, bubbles: true, cancelable: true }));
+      }
+      assert.deepEqual(calls, [], `${phase}: the real visible palette claims foreground before and after input focus`);
+      if (phase === 'pending') {
+        reject(new Error('Synthetic catalog rejection'));
+        await assert.rejects(pending, /Synthetic catalog rejection/);
+        await Promise.resolve();
+      }
+    }
+    const status = panel.element().querySelector('[role="status"]');
+    assert.equal(status !== null, true, 'failed catalog keeps its foreground status visible');
+    assert.match(status!.textContent!, /Commands unavailable/);
+  } finally { handles.destroy(); listeners.forEach((remove) => remove()); }
+});

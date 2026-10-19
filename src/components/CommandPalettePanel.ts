@@ -16,11 +16,13 @@ import {
   type PaletteCategory,
   type PaletteCommand,
 } from '@/services/command-palette/command-registry';
+import { slog } from '@/services/structured-log';
 import { debounce } from '@/utils';
 
 const MAX_VISIBLE = 8;
 const PANEL_WIDTH_PX = 400;
 const STYLE_ELEMENT_ID = 'cmdk-v2-style';
+type BuiltinCatalogModule = typeof import('@/services/command-palette/built-in-commands');
 
 const STYLE = `
 .cmdk-v2-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 10005; display: flex; align-items: flex-start; justify-content: center; padding-top: 14vh; }
@@ -62,6 +64,8 @@ export interface CommandPalettePanelOptions {
   registry?: CommandRegistry;
   /** Override the result cap. Defaults to 8. */
   maxVisible?: number;
+  /** Load the standard catalog on first show; custom registries stay ready by default. */
+  lazyBuiltins?: boolean;
 }
 
 export class CommandPalettePanel {
@@ -74,11 +78,16 @@ export class CommandPalettePanel {
   private cursor = 0;
   private visible = false;
   private readonly maxVisible: number;
+  private mounted = false;
+  private mountGeneration = 0;
+  private catalogState: 'idle' | 'loading' | 'ready' | 'failed';
+  private catalogLoad: Promise<BuiltinCatalogModule> | null = null;
 
   constructor(opts: CommandPalettePanelOptions = {}) {
     ensureStyles();
     this.registry = opts.registry ?? getCommandRegistry();
     this.maxVisible = opts.maxVisible ?? MAX_VISIBLE;
+    this.catalogState = opts.lazyBuiltins ? 'idle' : 'ready';
 
     this.overlay = document.createElement('div');
     this.overlay.className = 'cmdk-v2-overlay';
@@ -95,7 +104,13 @@ export class CommandPalettePanel {
     this.input.setAttribute('aria-label', 'Command palette search');
     // Debounce: 420+ commands × 5 keyword fields = ~189 k char comparisons per
     // keystroke. 50 ms coalesces fast typing without perceptible lag.
-    this.input.addEventListener('input', debounce(() => { this.cursor = 0; this.refilter(); }, 50));
+    const refilterInput = debounce((...args: unknown[]) => {
+      const [generation] = args;
+      if (!this.mounted || generation !== this.mountGeneration) return;
+      this.cursor = 0;
+      this.refilter();
+    }, 50);
+    this.input.addEventListener('input', () => refilterInput(this.mountGeneration));
     this.input.addEventListener('keydown', e => this.onKeyDown(e));
 
     this.list = document.createElement('div');
@@ -111,12 +126,18 @@ export class CommandPalettePanel {
 
   /** Append the overlay to a parent (typically `document.body`). */
   mount(parent: HTMLElement): void {
+    if (!this.mounted) this.mountGeneration++;
+    this.mounted = true;
     parent.append(this.overlay);
   }
 
   /** Remove the overlay from the DOM. */
   unmount(): void {
     this.hide();
+    this.mounted = false;
+    this.mountGeneration++;
+    this.catalogLoad = null;
+    if (this.catalogState === 'loading') this.catalogState = 'idle';
     this.overlay.remove();
   }
 
@@ -131,11 +152,13 @@ export class CommandPalettePanel {
   toggle(): void { if (this.visible) this.hide(); else this.show(); }
 
   show(): void {
+    if (!this.mounted || !this.overlay.isConnected) return;
     if (this.focusTimer !== null) clearTimeout(this.focusTimer);
     this.visible = true;
     this.overlay.hidden = false;
     this.input.value = '';
     this.cursor = 0;
+    this.beginBuiltinCatalogLoad();
     this.refilter();
     // Focus on next tick so a key-up that fired ⌘K doesn't immediately cancel.
     this.focusTimer = setTimeout(() => {
@@ -162,6 +185,7 @@ export class CommandPalettePanel {
   }
 
   private refilter(): void {
+    if (!this.mounted || !this.overlay.isConnected) return;
     this.results = this.registry.search(this.input.value, this.maxVisible);
     if (this.cursor >= this.results.length) {
       this.cursor = Math.max(0, this.results.length - 1);
@@ -170,7 +194,13 @@ export class CommandPalettePanel {
   }
 
   private render(): void {
+    if (!this.mounted || !this.overlay.isConnected) return;
+    this.overlay.setAttribute('aria-busy', this.catalogState === 'loading' ? 'true' : 'false');
     this.list.replaceChildren();
+    if (this.catalogState !== 'ready') {
+      this.renderCatalogStatus();
+      return;
+    }
     if (this.results.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'cmdk-v2-empty';
@@ -233,6 +263,7 @@ export class CommandPalettePanel {
   }
 
   private runAt(idx: number): void {
+    if (!this.mounted || !this.visible || !this.overlay.isConnected || this.catalogState !== 'ready') return;
     const result = this.flatResultsInRenderOrder()[idx];
     if (!result) return;
     this.hide();
@@ -241,6 +272,70 @@ export class CommandPalettePanel {
     } catch {
       // Swallow — a faulty action must not strand the palette open.
     }
+  }
+
+  protected loadBuiltinCatalog(): Promise<BuiltinCatalogModule> {
+    return import('@/services/command-palette/built-in-commands');
+  }
+
+  private beginBuiltinCatalogLoad(): void {
+    if (!this.mounted || !this.visible || !this.overlay.isConnected
+      || this.catalogState === 'loading' || this.catalogState === 'ready') return;
+    const generation = this.mountGeneration;
+    this.catalogState = 'loading';
+    const pending = this.loadBuiltinCatalog();
+    this.catalogLoad = pending;
+    void pending.then((catalog) => {
+      if (!this.isCurrentCatalogLoad(generation, pending)) return;
+      try {
+        catalog.registerBuiltinCommands(this.registry);
+      } catch (error) {
+        this.failCatalogLoad(generation, pending, error);
+        return;
+      }
+      this.catalogLoad = null;
+      this.catalogState = 'ready';
+      this.overlay.setAttribute('aria-busy', 'false');
+      if (this.visible) this.refilter();
+    }, (error: unknown) => this.failCatalogLoad(generation, pending, error));
+  }
+
+  private isCurrentCatalogLoad(generation: number, pending: Promise<BuiltinCatalogModule>): boolean {
+    return this.mounted && this.overlay.isConnected
+      && generation === this.mountGeneration && pending === this.catalogLoad;
+  }
+
+  private failCatalogLoad(generation: number, pending: Promise<BuiltinCatalogModule>, error: unknown): void {
+    if (!this.isCurrentCatalogLoad(generation, pending)) return;
+    this.catalogLoad = null;
+    this.catalogState = 'failed';
+    this.overlay.setAttribute('aria-busy', 'false');
+    slog('error', 'palette', 'Builtin catalog failed to load', { fields: { error: String(error).slice(0, 200) } });
+    if (this.visible) this.refilter();
+  }
+
+  private renderCatalogStatus(): void {
+    const status = document.createElement('div');
+    status.className = 'cmdk-v2-empty';
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite');
+    status.textContent = this.catalogState === 'failed'
+      ? 'Commands unavailable. Retry to load the full catalog.'
+      : 'Loading commands…';
+    this.list.append(status);
+    if (this.catalogState !== 'failed') return;
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'cmdk-v2-row';
+    retry.dataset.action = 'retry-builtin-catalog';
+    retry.textContent = 'Retry';
+    retry.addEventListener('click', () => {
+      if (!this.mounted || !this.visible || !this.overlay.isConnected) return;
+      this.beginBuiltinCatalogLoad();
+      this.refilter();
+      this.input.focus();
+    });
+    this.list.append(retry);
   }
 
   /**

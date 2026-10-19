@@ -91,7 +91,6 @@ import { HomeShellOverlay } from '@/components/HomeShellOverlay';
 import { LibraryOverlay } from '@/components/LibraryOverlay';
 import { isHomeShellDefaultOn, isHomeShellAvailable, CLASSIC_VIEW_KEY } from '@/services/home-shell/shell-gate';
 import { getCommandRegistry } from '@/services/command-palette/command-registry';
-import { registerBuiltinCommands } from '@/services/command-palette/built-in-commands';
 import { installPlaceCommands } from '@/services/command-palette/place-commands';
 import { installGuideCommands } from '@/services/command-palette/guide-commands';
 import { HelpOverlay } from '@/components/HelpOverlay';
@@ -1601,11 +1600,6 @@ export class PanelLayoutManager implements AppModule {
  document.addEventListener('cb:toggle-watchlist', () => watchlistEditor.toggle());
 
  // Mount Cmd+K command palette — Phase 2 keyboard-first navigation.
- registerBuiltinCommands(getCommandRegistry(), {
-   dispatch: (name, detail) => {
-     document.dispatchEvent(new CustomEvent(name, detail === undefined ? undefined : { detail }));
-   },
- });
  this._uninstallPlaceCommands = installPlaceCommands(getCommandRegistry(), {
    getPlaces: () => getSavedPlaces().map((p) => ({ id: p.id, name: p.name, lat: p.lat, lon: p.lon, primary: p.primary })),
    subscribe: (listener) => subscribeSavedPlaces(() => listener()),
@@ -1634,7 +1628,7 @@ export class PanelLayoutManager implements AppModule {
  };
  document.addEventListener('cb:map-focus', this._onMapFocus);
  this.cmdkPanel?.unmount();
- this.cmdkPanel = new CommandPalettePanel();
+ this.cmdkPanel = new CommandPalettePanel({ lazyBuiltins: true });
  this.cmdkPanel.mount(document.body);
  if (this._onCmdkToggle) document.removeEventListener('cb:toggle-cmdk', this._onCmdkToggle);
  this._onCmdkToggle = () => this.cmdkPanel?.toggle();

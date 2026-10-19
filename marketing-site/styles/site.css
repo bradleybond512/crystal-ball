@@ -66,7 +66,7 @@ img { display: block; max-width: 100%; height: auto; }
 .feature-followup .fine-print { margin: 20px auto 0; }
 .feature-tile { min-width: 0; padding-top: 24px; border-top: 1px solid var(--line); }
 .feature-tile h3 { font-size: 24px; line-height: 1.2; letter-spacing: -.025em; margin-bottom: 14px; }
-.release-label { display: block; color: var(--muted); font-size: 12px; font-weight: 600; line-height: 1.4; margin-bottom: 12px; }
+.release-label, .edition-label { display: inline-block; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 5px 10px; font-size: 12px; font-weight: 600; line-height: 1.4; margin-bottom: 12px; }
 .feature-tile p { color: var(--muted); font-size: 16px; line-height: 1.6; }
 .example-block, .prompt-examples { max-width: 900px; margin: 48px auto 0; padding: 32px; border: 1px solid var(--line); border-radius: 18px; text-align: left; }
 .example-label { color: var(--muted); font-size: 13px; line-height: 1.5; }

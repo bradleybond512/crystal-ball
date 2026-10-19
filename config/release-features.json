@@ -75,5 +75,19 @@
         "tools/mcp-server/tool-catalog.mjs"
       ]
     }
-  ]
+  ],
+  "marketingLabels": {
+    "mcp-profiles": {
+      "minimumReleaseVersion": "2.25.148",
+      "label": "Next update"
+    },
+    "cli-doctor": {
+      "minimumReleaseVersion": "2.25.148",
+      "label": "Next update"
+    },
+    "explicit-analytics-consent": {
+      "minimumReleaseVersion": "2.25.148",
+      "label": "Next update"
+    }
+  }
 }

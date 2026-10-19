@@ -14,7 +14,8 @@ export function resolveAvailability({ release, manifest, catalog, counts }) {
   const features = Object.fromEntries(definitions.map(feature => [feature.id, {
     available: false, component: feature.component, separateInstallation: feature.component === 'companion', variants: feature.variants ?? [],
   }]));
-  const unavailable = { verified: false, catalogMatches: false, sourceCommit: null, features };
+  const labels = Object.fromEntries(Object.entries(catalog.marketingLabels).map(([id, definition]) => [id, definition.label]));
+  const unavailable = { verified: false, catalogMatches: false, sourceCommit: null, features, labels, companionToolCounts: null };
   if (!release?.available || !version(release.version) || release.tag !== `v${release.version}`
     || typeof release.publishedAt !== 'string' || !Number.isFinite(Date.parse(release.publishedAt))
     || !object(manifest) || manifest.tag !== release.tag || manifest.version !== release.version || !sha(manifest.commitSha)) return unavailable;
@@ -51,5 +52,7 @@ export function resolveAvailability({ release, manifest, catalog, counts }) {
       && Object.entries(counts.panels).every(([key, count]) => panels[key] === count)
       && toolCounts.total === counts.mcp.total && toolCounts.read === counts.mcp.read && toolCounts.analystAdditional === counts.mcp.analyst,
     sourceCommit: manifest.commitSha, features,
+    labels: Object.fromEntries(Object.entries(catalog.marketingLabels).map(([id, definition]) => [id, features[id]?.available && version(definition.minimumReleaseVersion) && meets(release.version, definition.minimumReleaseVersion) ? null : definition.label])),
+    companionToolCounts: toolCounts,
   };
 }

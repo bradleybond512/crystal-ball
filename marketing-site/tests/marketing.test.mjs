@@ -172,7 +172,7 @@ test('distinguishes illustrative examples from live data and keeps the example d
  assert.ok(html.indexOf('id="home-shell"')<html.indexOf('id="your-day"'));
  assert.ok(html.indexOf('id="your-day"')<html.indexOf('id="survival"'));
  for(const id of ['privacy','local-ai']) assert.match(html.match(new RegExp(`<section[^>]*id="${id}"[\\s\\S]*?</section>`))[0],/<img[^>]+loading="lazy"/);
- assert.match(html,/crystalball doctor --json/);
+ assert.match(html,/crystalball doctor<\/code> to check your setup/);
 });
 
 
@@ -187,34 +187,25 @@ test('keeps map categories consistent across the overview and specifications', a
  }
 });
 
-test('qualifies source-only features beside their claims and identifies the audited release', async()=>{
+test('uses public update labels without marking shipped features as upcoming', async()=>{
  const html=await(await request('/')).text();
  const data=JSON.parse(await readFile(new URL('../data/generated.json',import.meta.url),'utf8'));
  const section=id=>html.match(new RegExp(`<section[^>]*id="${id}"[\\s\\S]*?</section>`))[0];
- for(const [id,entries] of [['home-shell',[[0,'home-shell-evidence-notes'],[1,'home-shell-source-readiness']]],['privacy',[[0,'explicit-analytics-consent']]],['mcp',[[1,'mcp-profiles'],[2,'mcp-profiles']]],['power-users',[[0,'cli-doctor']]]]) {
-  const tiles=[...section(id).matchAll(/<article[^>]*>([\s\S]*?)<\/article>/g)].map(match=>match[1]);
-  for(const [index,featureId] of entries) {
-   const feature=data.availability.features[featureId];
-   if(feature.component==='companion') assert.match(tiles[index],/Separately installed companion/);
-   else if(!feature.available) assert.match(tiles[index],/release availability unverified/);
-  }
- }
- const specs=section('specs');
- if(!data.availability.catalogMatches) {
-  assert.ok(specs.includes(`v${data.releaseAudit.version}`));
-  assert.ok(specs.includes(`${data.releaseAudit.panels} Full panels`));
-  assert.ok(specs.includes(`${data.releaseAudit.mcpTools} MCP tools`));
-  assert.match(specs,/without read\/analyst profile separation/);
+ for(const id of ['home-shell','variants','intelligence','survival','features']) assert.doesNotMatch(section(id),/class="release-label"/);
+ assert.match(section('home-shell'),/class="edition-label">Full edition/);
+ const mapped=new Set(['explicit-analytics-consent','mcp-profiles','cli-doctor']);
+ for(const [,id,label] of html.matchAll(/class="release-label" data-feature="([^"]+)">([^<]+)</g)) {
+  assert.ok(mapped.has(id));assert.equal(label,data.availability.labels[id]);
  }
  const security=await(await request('/security')).text();
- assert.match(security,/separately installed companion/);
- assert.match(security,/not bundled in the DMG/);
+ assert.match(security,/Agent tools install separately from the app/);
  const privacy=await(await request('/privacy')).text();
- if(!data.availability.features['explicit-analytics-consent'].available) {
-  assert.ok(privacy.includes(`v${data.releaseAudit.version}`));
-  assert.match(privacy,/upgrades[^<]*automatically enabled/);
-  assert.match(privacy,/New installs start with analytics off/);
- } else assert.match(privacy,/Analytics stay off until you explicitly opt in/);
+ if(data.availability.labels['explicit-analytics-consent']) {
+  assert.ok(privacy.includes(`Upgraded from v${data.releaseAudit.version}?`));
+  assert.match(privacy,/analytics may have been turned on/);
+  assert.match(privacy,/The next update turns it off automatically/);
+ } else assert.doesNotMatch(privacy,/Upgraded from|Next update/);
+ assert.match(privacy,/Analytics stay off until you opt in/);
 });
 
 test('uses a briefing capture and keeps decorative timeline markers out of the accessibility tree',async()=>{
@@ -228,4 +219,13 @@ test('uses a briefing capture and keeps decorative timeline markers out of the a
  for(const [marker] of markers) assert.match(marker,/aria-hidden="true"/);
  const privacy=html.match(/<section[^>]*id="privacy"[\s\S]*?<\/section>/)[0];
  assert.doesNotMatch(privacy.match(/<figcaption>[\s\S]*?<\/figcaption>/)[0],/opt-in enabled/);
+});
+
+
+test('all rendered routes keep internal verification vocabulary out of public copy',async()=>{
+ for(const route of ['/','/download','/docs','/privacy','/security']) {
+  const html=await(await request(route)).text();
+  const visible=html.replace(/<script\b[^>]*>[\s\S]*?<\/script>|<style>[\s\S]*?<\/style>/g,'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ');
+  assert.doesNotMatch(visible,/source-build|source build|source checkout|companion|audited|unverified|DMG/i,route);
+ }
 });

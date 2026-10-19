@@ -79,7 +79,7 @@ test('edition examples belong to each actual catalog and assistant examples name
  }
  const section=html.match(/<section[^>]*id="variants"[\s\S]*?<\/section>/)[0];
  for(const [,edition,body] of section.matchAll(/<article><h3>(\w+) edition\.<\/h3>([\s\S]*?)<\/article>/g)) {
-  const examples=[...body.matchAll(/<li>(.*?)<\/li>/g)].map(m=>m[1].replaceAll('&amp;','&'));
+  const examples=[...body.matchAll(/<li>(.*?)<\/li>/g)].map(m=>m[1].replace(/<span class="release-label">[^<]*<\/span>/g,'').replaceAll('&amp;','&'));
   assert.ok(examples.length>=4&&examples.length<=5,edition);
   for(const name of examples) assert.ok(catalogs.get(`${edition.toUpperCase()}_PANELS`).has(name),`${edition}: ${name}`);
  }

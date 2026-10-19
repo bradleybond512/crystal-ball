@@ -174,3 +174,52 @@ test('distinguishes illustrative examples from live data and keeps the example d
  for(const id of ['privacy','local-ai']) assert.match(html.match(new RegExp(`<section[^>]*id="${id}"[\\s\\S]*?</section>`))[0],/<img[^>]+loading="lazy"/);
  assert.match(html,/crystalball doctor --json/);
 });
+
+
+test('keeps map categories consistent across the overview and specifications', async()=>{
+ const html=await(await request('/')).text();
+ const data=JSON.parse(await readFile(new URL('../data/generated.json',import.meta.url),'utf8'));
+ const map=html.match(/<section[^>]*id="features"[\s\S]*?<\/section>/)[0];
+ const specs=html.match(/<section[^>]*id="specs"[\s\S]*?<\/section>/)[0];
+ for(const category of data.mapCategories) {
+  assert.ok(map.includes(category),`Map includes ${category}`);
+  assert.ok(specs.includes(category),`Specifications include ${category}`);
+ }
+});
+
+test('qualifies source-only features beside their claims and identifies the audited release', async()=>{
+ const html=await(await request('/')).text();
+ const data=JSON.parse(await readFile(new URL('../data/generated.json',import.meta.url),'utf8'));
+ const section=id=>html.match(new RegExp(`<section[^>]*id="${id}"[\\s\\S]*?</section>`))[0];
+ const label=data.release.version===data.releaseAudit.version ? 'Coming in the next release' : 'Source-build feature · release availability unverified';
+ for(const [id,indexes] of [['home-shell',[0,1]],['privacy',[0]],['mcp',[1,2]],['power-users',[0]]]) {
+  const tiles=[...section(id).matchAll(/<article[^>]*>([\s\S]*?)<\/article>/g)].map(match=>match[1]);
+  for(const index of indexes) assert.ok(tiles[index].includes(label),`${id} tile ${index} must qualify release availability`);
+ }
+ const specs=section('specs');
+ assert.ok(specs.includes(`v${data.releaseAudit.version}`));
+ assert.ok(specs.includes(`${data.releaseAudit.panels} Full panels`));
+ assert.ok(specs.includes(`${data.releaseAudit.mcpTools} MCP tools`));
+ assert.match(specs,/without read\/analyst profile separation/);
+ for(const path of ['/privacy','/security']) {
+  const page=await(await request(path)).text();
+  assert.ok(page.includes(label),`${path} qualifies newer behavior`);
+ }
+ const privacy=await(await request('/privacy')).text();
+ assert.ok(privacy.includes(`v${data.releaseAudit.version}`));
+ assert.match(privacy,/upgrades[^<]*automatically enable analytics/);
+ assert.match(privacy,/New installs start with analytics off/);
+});
+
+test('uses a briefing capture and keeps decorative timeline markers out of the accessibility tree',async()=>{
+ const html=await(await request('/')).text();
+ const briefing=html.match(/<section[^>]*id="home-shell"[\s\S]*?<\/section>/)[0];
+ assert.match(briefing,/<img[^>]+src="\/app-live-home-briefing-1600\.webp"/);
+ assert.doesNotMatch(briefing,/app-live-analysis-library/);
+ const day=html.match(/<section[^>]*id="your-day"[\s\S]*?<\/section>/)[0];
+ const markers=[...day.matchAll(/<span\b[^>]*class="day-marker"[^>]*>/g)];
+ assert.equal(markers.length,4);
+ for(const [marker] of markers) assert.match(marker,/aria-hidden="true"/);
+ const privacy=html.match(/<section[^>]*id="privacy"[\s\S]*?<\/section>/)[0];
+ assert.doesNotMatch(privacy.match(/<figcaption>[\s\S]*?<\/figcaption>/)[0],/opt-in enabled/);
+});

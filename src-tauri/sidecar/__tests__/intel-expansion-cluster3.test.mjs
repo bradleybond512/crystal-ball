@@ -712,7 +712,7 @@ test('BGP HTTP route retrieves two complete pages once, caches only normalized s
   const originalToken = process.env.LOCAL_API_TOKEN;
   const originalCloudflare = process.env.CLOUDFLARE_API_TOKEN;
   process.env.LOCAL_API_TOKEN = 'test-token-bgp-route-success';
-  process.env.CLOUDFLARE_API_TOKEN = 'test-cloudflare-secret';
+  process.env.CLOUDFLARE_API_TOKEN = 'test-cloudflare-secret'; // secret-scan: allow -- synthetic credential for mocked Cloudflare BGP pages
   _resetSidecarCacheForTests();
   _resetFeedTracker();
   const first = Array.from({ length: 100 }, (_, index) => cloudflareBgpEvent(index + 1));
@@ -765,7 +765,7 @@ test('BGP HTTP route coalesces concurrent cold requests into one bounded page fa
   const originalToken = process.env.LOCAL_API_TOKEN;
   const originalCloudflare = process.env.CLOUDFLARE_API_TOKEN;
   process.env.LOCAL_API_TOKEN = 'test-token-bgp-coalescing';
-  process.env.CLOUDFLARE_API_TOKEN = 'test-cloudflare-coalescing-secret';
+  process.env.CLOUDFLARE_API_TOKEN = 'test-cloudflare-coalescing-secret'; // secret-scan: allow -- synthetic credential for mocked concurrent BGP requests
   _resetSidecarCacheForTests();
   _resetFeedTracker();
   const mock = mockCloudflareBgpHttpsHandler(async ({ page }) => {
@@ -804,7 +804,7 @@ test('BGP HTTP route invalidates and aborts an old credential generation on rota
   const originalToken = process.env.LOCAL_API_TOKEN;
   const originalCloudflare = process.env.CLOUDFLARE_API_TOKEN;
   process.env.LOCAL_API_TOKEN = 'test-token-bgp-generation';
-  process.env.CLOUDFLARE_API_TOKEN = 'old-cloudflare-generation-secret';
+  process.env.CLOUDFLARE_API_TOKEN = 'old-cloudflare-generation-secret'; // secret-scan: allow -- synthetic credential for mocked BGP credential rotation
   _resetSidecarCacheForTests();
   _resetFeedTracker();
   let releaseOld;
@@ -880,7 +880,7 @@ test('BGP HTTP route attempts an oversized upstream body once and returns result
   const originalToken = process.env.LOCAL_API_TOKEN;
   const originalCloudflare = process.env.CLOUDFLARE_API_TOKEN;
   process.env.LOCAL_API_TOKEN = 'test-token-bgp-size';
-  process.env.CLOUDFLARE_API_TOKEN = 'test-cloudflare-size-secret';
+  process.env.CLOUDFLARE_API_TOKEN = 'test-cloudflare-size-secret'; // secret-scan: allow -- synthetic credential for mocked oversized BGP response
   _resetSidecarCacheForTests();
   _resetFeedTracker();
   const mock = mockCloudflareBgpHttpsHandler(async () => ({

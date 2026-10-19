@@ -26,7 +26,7 @@ test('actual child isolation ignores poisoned inherited executable, monitor, tok
     S2U_XMPP_JID: 'poison@invalid.test', S2U_XMPP_SECRET: 'poison-provider',
     NODE_OPTIONS: `--import=${executable}`, HTTPS_PROXY: 'http://127.0.0.1:1',
   };
-  writeFileSync(join(poison.repo, '.env.local'), 'AISSTREAM_API_KEY=ignored-fixture-poison\n');
+  writeFileSync(join(poison.repo, '.env.local'), 'AISSTREAM_API_KEY=ignored-fixture-poison\n'); // secret-scan: allow -- synthetic poisoned env-file fixture for runtime isolation
   const { sourceFixture: copyPoisonedSource } = await import(pathToFileURL(join(poison.repo, 'tests/helpers/mcp-runtime-fixture.mjs')).href);
   const saved = Object.fromEntries(Object.keys(poisoned).map((key) => [key, process.env[key]]));
   let fixture;

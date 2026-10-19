@@ -17,6 +17,15 @@
   "scripts/targeted-tests-overrides.json": [
     "test:agentic-pipeline"
   ],
+  "scripts/secret-scan.mjs": [
+    "test:secret-scan"
+  ],
+  "tests/secret-scan.test.mjs": [
+    "test:secret-scan"
+  ],
+  "tests/secret-scan-automation.test.mjs": [
+    "test:secret-scan"
+  ],
   "scripts/install-mcp-deps.mjs": [
     "test:mcp-deps",
     "test:install-scripts"

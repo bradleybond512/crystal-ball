@@ -65,6 +65,7 @@ img { display: block; max-width: 100%; height: auto; }
 .feature-followup .fine-print { margin: 20px auto 0; }
 .feature-tile { min-width: 0; padding-top: 24px; border-top: 1px solid var(--line); }
 .feature-tile h3 { font-size: 24px; line-height: 1.2; letter-spacing: -.025em; margin-bottom: 14px; }
+.release-label { display: block; color: var(--muted); font-size: 12px; font-weight: 600; line-height: 1.4; margin-bottom: 12px; }
 .feature-tile p { color: var(--muted); font-size: 16px; line-height: 1.6; }
 .example-block, .prompt-examples { max-width: 900px; margin: 48px auto 0; padding: 32px; border: 1px solid var(--line); border-radius: 18px; text-align: left; }
 .example-label { color: var(--muted); font-size: 13px; line-height: 1.5; }
@@ -79,7 +80,7 @@ code, kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-si
 .prompt-examples code { color: var(--muted); }
 .variant-grid ul { margin: 24px 0 0; padding-left: 18px; color: var(--muted); font-size: 14px; }
 .variant-grid li + li { margin-top: 10px; }
-.best-for { display: block; color: var(--foreground); font-weight: 600; margin-bottom: 8px; }
+.best-for { display: block; color: var(--foreground); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 8px; }
 .day-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 32px; list-style: none; text-align: left; margin: 56px 0 0; padding: 0; }
 .day-grid li { border-top: 1px solid var(--line); padding-top: 24px; }
 .day-marker { display: block; color: var(--link); font-size: 36px; line-height: 1; margin-bottom: 24px; }

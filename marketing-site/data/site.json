@@ -18,5 +18,19 @@
   },
   "alpha": "Crystal Ball is in early access. Information may be incomplete or delayed. Not for emergency, financial, or safety-critical decisions.",
   "price": 0,
-  "license": "AGPL-3.0"
+  "license": "AGPL-3.0",
+  "mapCategories": [
+    "weather",
+    "internet outages",
+    "cyber threats",
+    "military activity",
+    "waterways",
+    "economic"
+  ],
+  "releaseAudit": {
+    "version": "2.25.147",
+    "sourceSha": "bebf98915c1409b37397c2791bb90244129957c7",
+    "panels": 408,
+    "mcpTools": 53
+  }
 }

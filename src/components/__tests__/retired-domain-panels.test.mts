@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { registerHooks } from 'node:module';
 import { Window } from 'happy-dom';
+import '../../../tests/panels/register-hook.mjs';
 
 test('service status labels the destination actually probed on the page despite a different configured remote', async () => {
   const browser = new Window({ url: 'http://localhost:3000/' });

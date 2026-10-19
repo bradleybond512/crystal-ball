@@ -44,8 +44,9 @@ Crystal Ball is a client-side intelligence dashboard that aggregates publicly av
 
 ### API Keys & Secrets
 
-- **Web deployment**: API keys are stored server-side in Vercel Edge Functions
-- **Desktop runtime**: API keys are stored in the OS keychain (macOS Keychain / Windows Credential Manager) via a consolidated vault entry, never on disk in plaintext
+- **Web deployment**: hosted handlers use server-side credentials; user-entered web keys can also use a passphrase-encrypted IndexedDB vault and are available in memory while unlocked.
+- **Desktop runtime**: native credential storage uses consolidated service `crystal-ball`. An explicit 17-entry allowlist exposes renderer-required values; other supported secrets expose presence to the renderer and are supplied natively to the sidecar.
+- **macOS recovery copy**: an encrypted machine-bound shadow vault supports Keychain-timeout recovery. Its derivable key is not protection against code execution on the same host. See [Privacy](PRIVACY.md).
 - No API keys should ever be committed to the repository
 - Environment variables (`.env.local`) are gitignored
 - The RSS proxy uses domain allowlisting to prevent SSRF
@@ -59,25 +60,37 @@ Crystal Ball is a client-side intelligence dashboard that aggregates publicly av
 
 ### Client-Side Security
 
-- No sensitive data is stored in localStorage or sessionStorage
+- Saved-place names, coordinates and notes, preferences and other state use localStorage. The credential vault does not encrypt all application storage.
 - External content (RSS feeds, news) is sanitized before rendering
-- Map data layers use trusted, vetted data sources
-- Content Security Policy restricts script-src to `'self'` (no unsafe-inline/eval)
+- Provider data remains external input and must be validated at its boundary; a known source is not proof that every payload is safe or accurate.
+- The desktop CSP includes `'self'`, `'unsafe-eval'` and `'wasm-unsafe-eval'` in script-src for runtime requirements; it is not a self-only/no-eval policy. See `src-tauri/tauri.conf.json` for the actual directives.
 
 ### Desktop Runtime Security (Tauri)
 
 - **IPC origin validation**: Sensitive Tauri commands (secrets, cache, token) are gated to trusted windows only; external-origin windows (e.g., YouTube login) are blocked
 - **DevTools**: Disabled in production builds; gated behind an opt-in Cargo feature for development
-- **Sidecar authentication**: A per-session CSPRNG token (`LOCAL_API_TOKEN`) authenticates all renderer-to-sidecar requests, preventing other local processes from accessing the API
+- **Sidecar authentication**: a per-session CSPRNG bearer token (`LOCAL_API_TOKEN`) protects authenticated routes. Explicit public callbacks/health routes have separate policy. Owner-only runtime files constrain access but do not exclude a same-user process that can read the token or a compromised renderer.
 - **Capability isolation**: The YouTube login window runs under a restricted capability with no access to secret or cache IPC commands
 - **Fetch patch trust boundary**: The global fetch interceptor injects the sidecar token with a 5-minute TTL; the renderer is the intended client — if renderer integrity is compromised, Tauri IPC provides strictly more access than the fetch patch
+
+### Telemetry and external services
+
+PostHog initialization requires explicit opt-in; Ghost gates app-managed analytics
+paths, but an initialized SDK keeps automatic page-leave capture enabled. Ghost does
+not invoke SDK opt-out; consent revocation does. DSN-configured web Sentry reporting
+uses a separate gate; `sendDefaultPii: false` is not universal
+redaction. Provider requests, optional hosted AI, cloud fallbacks, messaging, exports
+and connected MCP agents can carry data beyond the device. See [Privacy](PRIVACY.md)
+for storage and consent limits; no blanket no-egress or retention guarantee applies.
 
 ### Data Sources
 
 - Crystal Ball aggregates publicly available OSINT data
 - No classified or restricted data sources are used
 - State-affiliated sources are flagged with propaganda risk ratings
-- All data is consumed read-only — the platform does not modify upstream sources
+- Feed ingestion is generally read-oriented. Optional integrations, explicit messaging,
+  stateful MCP tools and user actions have their own effects and permissions; do not
+  assume every operation is read-only.
 
 ## Scope
 

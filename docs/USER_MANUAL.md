@@ -40,11 +40,14 @@ for a technical operator who is comfortable with a terminal, API keys, and Claud
 
 **Desktop vs. web — the operative differences:**
 
-- **Desktop** stores API keys in the macOS Keychain, runs a local Node.js sidecar
-  (port `46123`) that proxies all feeds, and exposes the **MCP server** to Claude Code.
+- **Desktop** uses native credential storage and a Node.js sidecar on a published
+  loopback port; some features also use direct or cloud provider paths. A separately
+  configured **MCP server** connects compatible agents to that sidecar. macOS is the
+  primary platform; Windows and Linux builds are experimental, without a parity claim.
 - **Web** has no keychain and no sidecar, so it cannot host the MCP server. Keys you
   enter live in a passphrase-encrypted in-browser vault (see [§10](#10-settings--api-keys)).
-  Most panels still work; some that need a server-side proxy degrade gracefully.
+  Feature availability depends on source configuration, network access and proxy
+  support; a keyless source is not proof of useful current data.
 
 ### Run from source
 
@@ -54,18 +57,20 @@ npm run dev                 # web, full variant (default)
 npm run dev:tech            # tech variant
 npm run dev:finance         # finance variant
 npm run desktop:dev         # Tauri desktop shell, with devtools
-npm run desktop:build:full  # production desktop build
+npm run desktop:build:app:full # macOS app-only packaging, without install
 ```
 
-Install a desktop build you just made:
+`npm run desktop:build:full` is the full local workflow: it downloads build inputs,
+packages, and outside CI installs and relaunches the app. Use it only when intended.
+For a deliberately separate install after app-only packaging:
 
 ```bash
 node scripts/install-built-app.mjs --relaunch
 ```
 
-This copies `src-tauri/target/release/bundle/macos/Crystal Ball.app` to
-`~/Applications/Crystal Ball.app`. Always install from that path — never from a
-secondary clone.
+This verifies and copies `src-tauri/target/release/bundle/macos/Crystal Ball.app` to
+`~/Applications/Crystal Ball.app`. Use the intended reviewed build; a signature or
+bundle-ID check alone is not notarization evidence. See [release packaging](RELEASE_PACKAGING.md).
 
 ### Variants
 
@@ -77,7 +82,14 @@ Crystal Ball ships four product variants from one codebase. The variant is chose
 | `full` | Geopolitics, conflict, cyber, infrastructure, disasters, markets | `npm run desktop:build:full` |
 | `tech` | AI, startups, cloud, service health, dev ecosystems | `npm run desktop:build:tech` |
 | `finance` | Markets, forex, bonds, commodities, crypto, central banks | `npm run desktop:build:finance` |
-| `happy` | Positive news, progress, science, conservation | `SITE_VARIANT=happy npm run dev` |
+| `happy` | Positive news, progress, science, conservation | `VITE_VARIANT=happy npm run dev` |
+
+The source catalogs contain 409 unique full entries (408 default-enabled and one
+disabled), 35 tech, 31 finance and 10 happy entries. These are catalog sizes, not
+counts of working feeds. `SITE_VARIANT` is the internal constant; the environment
+variable is `VITE_VARIANT`. See the [release guide](RELEASE_PACKAGING.md) for the
+Draft #1811 integration dependency, native identity safeguards and packaged
+acceptance requirements before distributing tech/finance builds.
 
 ### Your first 60 seconds
 
@@ -175,7 +187,8 @@ Press **`G`** (or use the sidebar) to enter the full-viewport Cesium 3D globe. `
 
 ### Layers
 
-**75 geospatial layers** — military bases, nuclear facilities, earthquakes, active
+**Configurable geospatial layers** — the full map catalog has 78 flags; Cesium also
+has its own layer registry. These include military bases, nuclear facilities, earthquakes, active
 conflicts, airstrikes, cyclones, fires, vessels, flights, cyber threats, submarine
 cables, ports, satellites, ISS, weather radar, lightning, GPS jamming, trade routes, the
 day/night terminator, and more. 31 are on by default; toggle the rest from the layer bar.
@@ -243,7 +256,9 @@ toggle it (also available from the sidebar). When active:
 
 - **Polling intervals multiply by 5×** — far less network chatter. Note this *reduces*
   traffic, it does not stop it; the app is not offline. To go truly quiet, also quit it.
-- **Analytics are suppressed** — PostHog goes silent.
+- **App-managed analytics paths are gated.** An already initialized PostHog SDK
+  keeps automatic page-leave capture enabled; Ghost does not invoke SDK opt-out.
+  Revoking analytics consent does. Ghost is not a full analytics/offline switch.
 - **Notifications go silent.**
 - **The sidebar switches to dark crimson chrome** so the mode is unmistakable.
 
@@ -310,7 +325,8 @@ and gives a per-stage verdict plus a remediation hint.
 
 Native desktop notifications, voice alerts, iMessage/SMS command workflows, a digest
 view, and notification history. Operator controls include mute and shift-handoff.
-History persists in IndexedDB for 30 days — searchable, filterable, exportable.
+History uses IndexedDB persistence and component-specific retention; it is searchable,
+filterable and exportable, without a universal retention guarantee.
 
 ---
 
@@ -415,14 +431,24 @@ API Keys · Thresholds · Places · Status · Help** (plus a Debug tab).
 
 ### Where keys live
 
-- **Desktop:** keys are stored in the macOS **Keychain** (service `crystal-ball`). The
-  renderer never sees them — they're injected into the Node.js sidecar at startup and
-  proxied over a bearer-authenticated localhost port. The first launch after a rebuild may
-  re-prompt for Keychain access; grant **Always Allow** or feeds that need keys stay dark.
+- **Desktop:** the consolidated native vault uses Keychain service `crystal-ball`,
+  shared by variants using that service. The sidecar receives provider credentials;
+  an explicit 17-entry allowlist also exposes renderer-required values, including
+  map tokens and connection settings. macOS has an AES-GCM encrypted machine-bound
+  shadow copy for Keychain-timeout recovery; it does not protect against code running
+  as the same user. Rebuilds can cause Keychain prompts depending on signing identity.
 - **Web:** there is no keychain, so keys go into a passphrase-encrypted IndexedDB vault
   (AES-GCM-256 over PBKDF2-SHA-256, 600k iterations). If the tab has been hidden for 15+
   minutes, the vault **locks itself when you return to it** — unlock again with your
   passphrase. **There is no recovery** — a lost passphrase means Destroy and re-enter.
+
+That lock occurs on return, not a timer-guaranteed wipe while hidden. The key vault
+does not encrypt all application data: saved-place names, coordinates and notes are
+stored in localStorage. PostHog initialization requires explicit opt-in. Ghost gates
+app-managed analytics paths but leaves an initialized SDK's automatic page-leave
+capture enabled; consent revocation invokes SDK opt-out separately. DSN-configured
+web error reporting uses a separate gate. Features, providers,
+AI, exports and connected MCP agents can send data beyond this device. See [Privacy](../PRIVACY.md).
 
 ### Add a key
 
@@ -432,12 +458,14 @@ API Keys · Thresholds · Places · Status · Help** (plus a Debug tab).
 3. For supported providers (Anthropic, Groq, OpenRouter, Cesium Ion, Mapbox, MapTiler),
    the app runs a live verification probe and shows the result; others show "Saved."
 
-**Keys are optional.** Most panels degrade gracefully without them. Add keys to unlock
-the feeds and AI tiers you want. The full list with signup links and free/paid notes is
+**Keys are feature-specific.** Some sources are keyless; others remain unavailable
+until configured, and provider/network failures can still affect either group.
+The full list with signup links and free/paid notes is
 in [`docs/API_KEYS.md`](API_KEYS.md).
 
-> **Never** have the app touch the Keychain outside this flow. The sanctioned backup
-> tooling is `npm run backup-keys` / `npm run restore-keys`, run by you, on purpose.
+The app also reads its native vault at startup and during explicit recovery. Backup
+and restore tooling (`npm run backup-keys` / `npm run restore-keys`) is a separate,
+deliberate user operation; this guide does not authorize running it.
 
 ### Other tabs at a glance
 
@@ -452,7 +480,8 @@ in [`docs/API_KEYS.md`](API_KEYS.md).
 ## 11. Claude Code & the MCP Server
 
 The desktop app ships an **MCP server** that gives Claude Code direct access to every
-feed and the in-app reasoning state. 41 tools register automatically when you open a
+feed and the in-app reasoning state. The canonical registry has 61 tools across 9
+categories; configured tools register when you open a
 Claude Code session in this repo.
 
 **Prerequisites:** Crystal Ball (desktop) must be running — the MCP server discovers the
@@ -558,7 +587,7 @@ Built on top of the MCP tools:
 | **Panels are blank after a desktop rebuild** | The Keychain re-prompted and access was denied. Reopen the app and grant **Always Allow**, or re-add keys in Settings → API Keys. |
 | **A feed shows no data** | That feed needs an API key. Check Settings → API Keys (and the live verification result), and Settings → Status for feed health. Most panels degrade gracefully without keys. |
 | **God's Vision is a blank canvas** | Cesium failed to initialize (it needs `'unsafe-eval'` for shader compilation, which the app's CSP allows by default). Confirm WebGL is available and check the console for a Cesium/GLSL error. |
-| **The web vault keeps locking** | Expected — it auto-locks after 15 minutes of the tab being hidden. Re-enter your passphrase. A lost passphrase is unrecoverable; Destroy and re-enter keys. |
+| **The web vault keeps locking** | On return after at least 15 minutes hidden, the visibility handler locks it. This is not a guaranteed wipe while hidden. Re-enter your passphrase; a lost passphrase requires destroying and recreating the vault. |
 | **MCP tools aren't available in Claude Code** | The desktop app must be running (the MCP server reads the sidecar port/token from disk). The web build has no MCP server. Verify with `check_feed_health`. |
 | **A basemap won't load** | A stale `wm-basemap` value, or blocked tile fetches. The map validates and falls back automatically; check the console for the MapLibre `error` log (it includes the failing `sourceId`). |
 | **Map tiles fail only in the desktop app** | Local resources must use `http://127.0.0.1:{port}`, never `localhost` — the CSP only allows `127.0.0.1`. |

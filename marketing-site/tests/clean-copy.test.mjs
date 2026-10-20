@@ -21,9 +21,9 @@ async function renderFixture(release, metadata) {
  return (await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`)).render;
 }
 const visible = html => html.replace(/<script\b[^>]*>[\s\S]*?<\/script>|<style>[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-const labelIds = ['cli-doctor', 'explicit-analytics-consent', 'mcp-profiles'];
+const labelIds = ['cli-doctor', 'explicit-analytics-consent', 'home-shell-source-readiness', 'mcp-profiles'];
 
-test('marketing label map contains only the three planned features', () => {
+test('marketing label map contains only the planned features', () => {
  assert.deepEqual(Object.keys(catalog.marketingLabels).sort(), labelIds);
  for (const [id, entry] of Object.entries(catalog.marketingLabels)) {
   assert.ok(catalog.features.some(feature => feature.id === id));
@@ -43,7 +43,7 @@ test('only published matching capability proof and minimum release remove update
   for(const id of labelIds) assert.equal(result.labels[id],null,id);
  }
 });
-test('legacy page keeps exact public copy and limits timing labels to three feature IDs', async () => {
+test('legacy page keeps exact public copy and limits timing labels to planned feature IDs', async () => {
  const render=await renderFixture({...next,tag:'v2.25.147',version:'2.25.147'},null);
  const html=render('/');
  const chips=[...html.matchAll(/class="release-label" data-feature="([^"]+)"[^>]*>([^<]+)</g)];
@@ -51,8 +51,10 @@ test('legacy page keeps exact public copy and limits timing labels to three feat
  assert.ok(chips.every(m=>m[2]==='Next update'));
  assert.match(html,/class="edition-label">Full edition</);
  assert.match(html,/<h3>Start read-only\.<\/h3><span class="release-label" data-feature="mcp-profiles">Next update<\/span>/);
- assert.match(html,/See personal context, what changed, and critical worldwide items in one view\./);
- assert.match(html,/Review provider health, disagreement, and single-source coverage in Source Confidence\./);
+ assert.match(html,/Read headlines and details across Personal, What Changed, and Critical Worldwide\./);
+ assert.match(html,/See whether USGS, GDACS, Open-Meteo, and GDELT are working, stale, or failed\./);
+ assert.match(html,/<h3>Your situation cards\.<\/h3><p>Read headlines and details/);
+ assert.match(html,/<h3>Know source readiness\.<\/h3><span class="release-label" data-feature="home-shell-source-readiness">Next update<\/span>/);
  assert.match(html,/Run <code>crystalball doctor<\/code> to check your setup\./);
  assert.match(html,/Installs separately from the app\./);
  assert.match(visible(html),new RegExp(`${data.counts.mcp.total} tools for your AI assistant`));

@@ -237,6 +237,8 @@ test('links section caveats to readable notes and keeps the map-based hero', asy
  assert.doesNotMatch(hero,/app-live-analysis-library/);
  const refs=[...html.matchAll(/class="note-reference" href="#(note-\d+)"/g)];
  assert.equal(refs.length,5);
+ assert.match(html,/aria-label="Return to Editions section"/);
+ assert.doesNotMatch(html,/aria-label="Return to variants section"/);
  for(const [,id] of refs) assert.equal((html.match(new RegExp(`id="${id}"`,'g'))||[]).length,1);
  assert.match(html,/Use official guidance in emergencies/);
  assert.match(html,/Read-only and analyst profiles arrive in the next update/);

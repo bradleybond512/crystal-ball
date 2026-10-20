@@ -35,15 +35,16 @@ test('serves machine-readable discovery', async () => {
   for(const route of ['download','docs','privacy','security']) assert.ok(xml.includes(`/${route}</loc>`));
 });
 
-test('offers compressed HTML only when accepted', async () => {
-  const plain=await request('/');
-  const text=await plain.text();
-  const compressed=await request('/',{'Accept-Encoding':'gzip'});
-  assert.equal(compressed.headers.get('content-encoding'),'gzip');
-  assert.match(compressed.headers.get('vary'),/Accept-Encoding/);
-  assert.equal(await new Response(compressed.body.pipeThrough(new DecompressionStream('gzip'))).text(),text);
-  const declined=await request('/',{'Accept-Encoding':'gzip;q=0, br'});
-  assert.equal(declined.headers.get('content-encoding'),null);
+test('leaves transfer compression to the hosting edge without changing HTML bytes', async () => {
+  for (const path of ['/', '/download', '/docs', '/privacy', '/security']) {
+    const expected=await (await request(path)).text();
+    for (const encoding of ['gzip', 'br, gzip', 'identity', 'gzip;q=0, br']) {
+      const response=await request(path, {'Accept-Encoding':encoding});
+      assert.equal(response.headers.get('content-encoding'),null,`${path}: ${encoding}`);
+      assert.equal(await response.text(),expected,`${path}: ${encoding}`);
+      assert.match(expected,/^<!doctype html>/);
+    }
+  }
 });
 
 test('provides valid application structured data and dated source counts', async () => {

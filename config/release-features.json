@@ -88,6 +88,10 @@
     "explicit-analytics-consent": {
       "minimumReleaseVersion": "2.25.148",
       "label": "Next update"
+    },
+    "home-shell-source-readiness": {
+      "minimumReleaseVersion": "2.25.148",
+      "label": "Next update"
     }
   }
 }

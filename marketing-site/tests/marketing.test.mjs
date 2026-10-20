@@ -138,7 +138,7 @@ test('keeps feature depth without duplicate disclosures or platform caveats', as
  const section=id=>html.match(new RegExp(`<section[^>]*id="${id}"[\\s\\S]*?</section>`))[0];
  for(const id of ['features','intelligence','home-shell','survival','privacy','local-ai','mcp','variants']) {
   const content=section(id);
-  assert.equal((content.match(/<a\b/g)||[]).length,1,`${id}: one link`);
+  assert.equal((content.match(/<a\b/g)||[]).length,['features','intelligence','home-shell','local-ai','variants'].includes(id)?2:1,`${id}: action link and optional footnote`);
   assert.doesNotMatch(content,/<details/);
   assert.equal((content.match(/<article\b/g)||[]).length,id==='variants'?4:3,`${id}: tiles`);
   assert.ok((content.match(/class="fine-print"/g)||[]).length<=1,`${id}: single caveat`);
@@ -191,9 +191,9 @@ test('uses public update labels without marking shipped features as upcoming', a
  const html=await(await request('/')).text();
  const data=JSON.parse(await readFile(new URL('../data/generated.json',import.meta.url),'utf8'));
  const section=id=>html.match(new RegExp(`<section[^>]*id="${id}"[\\s\\S]*?</section>`))[0];
- for(const id of ['home-shell','variants','intelligence','survival','features']) assert.doesNotMatch(section(id),/class="release-label"/);
+ for(const id of ['variants','intelligence','survival','features']) assert.doesNotMatch(section(id),/class="release-label"/);
  assert.match(section('home-shell'),/class="edition-label">Full edition/);
- const mapped=new Set(['explicit-analytics-consent','mcp-profiles','cli-doctor']);
+ const mapped=new Set(['explicit-analytics-consent','mcp-profiles','cli-doctor','home-shell-source-readiness']);
  for(const [,id,label] of html.matchAll(/class="release-label" data-feature="([^"]+)">([^<]+)</g)) {
   assert.ok(mapped.has(id));assert.equal(label,data.availability.labels[id]);
  }
@@ -228,4 +228,16 @@ test('all rendered routes keep internal verification vocabulary out of public co
   const visible=html.replace(/<script\b[^>]*>[\s\S]*?<\/script>|<style>[\s\S]*?<\/style>/g,'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ');
   assert.doesNotMatch(visible,/source-build|source build|source checkout|companion|audited|unverified|DMG/i,route);
  }
+});
+
+test('links section caveats to readable notes and keeps the map-based hero', async()=>{
+ const html=await(await request('/')).text();
+ const hero=html.match(/<section[^>]*id="overview"[\s\S]*?<\/section>/)[0];
+ assert.match(hero,/app-live-home-1600\.webp/);
+ assert.doesNotMatch(hero,/app-live-analysis-library/);
+ const refs=[...html.matchAll(/class="note-reference" href="#(note-\d+)"/g)];
+ assert.equal(refs.length,5);
+ for(const [,id] of refs) assert.equal((html.match(new RegExp(`id="${id}"`,'g'))||[]).length,1);
+ assert.match(html,/Use official guidance in emergencies/);
+ assert.match(html,/Read-only and analyst profiles arrive in the next update/);
 });

@@ -45,7 +45,7 @@ const sectionNotes: Record<string, [number, string]> = {
  variants: [4, 'These are build variants; catalog entries do not guarantee active feeds.'],
 };
 const noteFor = (id: string) => sectionNotes[id === 'home-shell' ? 'features' : id];
-const footnotes = () => `<aside class="product-notes shell" aria-labelledby="notes-title"><h2 id="notes-title">A few things to know.</h2><ol>${Object.entries(sectionNotes).map(([id, [number, text]]) => `<li id="note-${number}" tabindex="-1">${text} <a href="#${id}-title" aria-label="Return to ${id === 'features' ? 'Map' : id === 'local-ai' ? 'Local AI' : id} section">Back to section</a></li>`).join('')}</ol></aside>`;
+const footnotes = () => `<aside class="product-notes shell" aria-labelledby="notes-title"><h2 id="notes-title">A few things to know.</h2><ol>${Object.entries(sectionNotes).map(([id, [number, text]]) => `<li id="note-${number}" tabindex="-1">${text} <a href="#${id}-title" aria-label="Return to ${id === 'features' ? 'Map' : id === 'local-ai' ? 'Local AI' : id === 'variants' ? 'Editions' : 'Intelligence'} section">Back to section</a></li>`).join('')}</ol></aside>`;
 const section = (id: string, label: string, title: string, subhead: string, content: string) => {
  const note = noteFor(id);
  if (note) content = content.replace(/<p class="fine-print">[\s\S]*?<\/p>/, '');

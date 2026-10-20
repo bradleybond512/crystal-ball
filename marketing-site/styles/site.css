@@ -179,4 +179,4 @@ code, kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-si
 .product-notes { padding-block: 40px; font-size: 14px; color: var(--muted); }
 .product-notes h2 { font-size: 24px; color: var(--foreground); }
 .product-notes li { padding-block: 12px; scroll-margin-top: 140px; }
-.product-notes a { display: inline-block; padding-block: 10px; }
+.product-notes a { display: inline-block; min-height: 44px; padding-block: 10px; }

@@ -155,7 +155,7 @@ for (const [relativePath, content] of [
   ],
   [
  'tests/adjacent.test.ts',
- `const waived = "OPENAI_API_KEY=${syntheticValue}"; // secret-scan: allow -- intentional synthetic fixture\nconst adjacent = "ANTHROPIC_API_KEY=${syntheticValue}";\n`,
+ `let ANTHROPIC_API_KEY; const waived = "OPENAI_API_KEY=${syntheticValue}"; // secret-scan: allow -- intentional synthetic fixture\nANTHROPIC_API_KEY="${syntheticValue}";\n`,
   ],
 ]) {
   test(`secret scan applies waivers only to the assignment line in ${relativePath}`, () => {

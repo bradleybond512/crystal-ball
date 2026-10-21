@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "features": [
+    {
+      "id": "command-palette",
+      "component": "desktop",
+      "minimumVersion": "2.25.147",
+      "sourcePaths": [
+        "src/services/keyboard/shortcut-bootstrap.ts",
+        "src/components/CommandPalette.ts"
+      ]
+    },
+    {
+      "id": "home-shell-source-readiness",
+      "component": "desktop",
+      "minimumVersion": "2.25.148",
+      "sourcePaths": [
+        "src/services/home-shell/startup-readiness-view.ts",
+        "src/components/HomeShellOverlay.ts",
+        "src/services/home-shell/shell-gate.ts"
+      ],
+      "variants": [
+        "full"
+      ]
+    },
+    {
+      "id": "home-shell-evidence-notes",
+      "component": "desktop",
+      "minimumVersion": "2.25.148",
+      "sourcePaths": [
+        "src/services/home-shell/briefing-view.ts",
+        "src/components/HomeShellOverlay.ts",
+        "src/services/home-shell/shell-gate.ts"
+      ],
+      "variants": [
+        "full"
+      ]
+    },
+    {
+      "id": "disaster-lifelines-name",
+      "component": "desktop",
+      "minimumVersion": "2.25.148",
+      "sourcePaths": [
+        "src/config/panels.ts"
+      ],
+      "variants": [
+        "full"
+      ]
+    },
+    {
+      "id": "explicit-analytics-consent",
+      "component": "desktop",
+      "minimumVersion": "2.25.148",
+      "sourcePaths": [
+        "src/services/analytics.ts",
+        "src/components/AnalyticsConsentBanner.ts"
+      ]
+    },
+    {
+      "id": "cli-doctor",
+      "component": "companion",
+      "minimumVersion": null,
+      "sourcePaths": [
+        "tools/mcp-server/cli.mjs",
+        "tools/mcp-server/doctor.mjs"
+      ]
+    },
+    {
+      "id": "mcp-profiles",
+      "component": "companion",
+      "minimumVersion": null,
+      "sourcePaths": [
+        "tools/mcp-server/profile.mjs",
+        "tools/mcp-server/tool-registry.mjs",
+        "tools/mcp-server/tool-catalog.mjs"
+      ]
+    }
+  ],
+  "marketingLabels": {
+    "mcp-profiles": {
+      "minimumReleaseVersion": "2.25.148",
+      "label": "Next update"
+    },
+    "cli-doctor": {
+      "minimumReleaseVersion": "2.25.148",
+      "label": "Next update"
+    },
+    "explicit-analytics-consent": {
+      "minimumReleaseVersion": "2.25.148",
+      "label": "Next update"
+    },
+    "home-shell-source-readiness": {
+      "minimumReleaseVersion": "2.25.148",
+      "label": "Next update"
+    }
+  }
+}

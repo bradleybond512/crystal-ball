@@ -1,0 +1,71 @@
+{
+  "method": "Isolated clean Git snapshot; copied files verified byte-identical to working files before committed baseline. Shared working tree untouched.",
+  "featuresDefinitionDigestBefore": "ba242af168953704405efe00f061d03efac5bf498f9cdc848fd131d4db4393c8",
+  "featuresDefinitionDigestAfter": "ba242af168953704405efe00f061d03efac5bf498f9cdc848fd131d4db4393c8",
+  "baselineCounts": [
+    "\u2139 pass 4",
+    "\u2139 fail 0"
+  ],
+  "mutations": [
+    {
+      "file": "marketing-site/lib/release-availability.mjs",
+      "sha256": "a2c00720af6429b36c366d17cea946a0ccab671971913b57a6612be696a3c7df",
+      "confirmedDiff": "diff --git a/marketing-site/lib/release-availability.mjs b/marketing-site/lib/release-availability.mjs\nindex 09a776b..4b91419 100644\n--- a/marketing-site/lib/release-availability.mjs\n+++ b/marketing-site/lib/release-availability.mjs\n@@ -52,7 +52,7 @@ export function resolveAvailability({ release, manifest, catalog, counts }) {\n       && Object.entries(counts.panels).every(([key, count]) => panels[key] === count)\n       && toolCounts.total === counts.mcp.total && toolCounts.read === counts.mcp.read && toolCounts.analystAdditional === counts.mcp.analyst,\n     sourceCommit: manifest.commitSha, features,\n-    labels: Object.fromEntries(Object.entries(catalog.marketingLabels).map(([id, definition]) => [id, features[id]?.available && version(definition.minimumReleaseVersion) && meets(release.version, definition.minimumReleaseVersion) ? null : definition.label])),\n+    labels: Object.fromEntries(Object.entries(catalog.marketingLabels).map(([id, definition]) => [id, features[id]?.available && version(definition.minimumReleaseVersion) ? null : definition.label])),\n     companionToolCounts: toolCounts,\n   };\n }\n",
+      "exitCode": 1,
+      "counts": [
+        "\u2139 pass 3",
+        "\u2139 fail 1"
+      ],
+      "restoredSha256": "a2c00720af6429b36c366d17cea946a0ccab671971913b57a6612be696a3c7df",
+      "cleanAfterRestore": true
+    },
+    {
+      "file": "marketing-site/lib/release-availability.mjs",
+      "sha256": "a2c00720af6429b36c366d17cea946a0ccab671971913b57a6612be696a3c7df",
+      "confirmedDiff": "diff --git a/marketing-site/lib/release-availability.mjs b/marketing-site/lib/release-availability.mjs\nindex 09a776b..0c336e7 100644\n--- a/marketing-site/lib/release-availability.mjs\n+++ b/marketing-site/lib/release-availability.mjs\n@@ -16,7 +16,7 @@ export function resolveAvailability({ release, manifest, catalog, counts }) {\n   }]));\n   const labels = Object.fromEntries(Object.entries(catalog.marketingLabels).map(([id, definition]) => [id, definition.label]));\n   const unavailable = { verified: false, catalogMatches: false, sourceCommit: null, features, labels, companionToolCounts: null };\n-  if (!release?.available || !version(release.version) || release.tag !== `v${release.version}`\n+  if (!version(release.version) || release.tag !== `v${release.version}`\n     || typeof release.publishedAt !== 'string' || !Number.isFinite(Date.parse(release.publishedAt))\n     || !object(manifest) || manifest.tag !== release.tag || manifest.version !== release.version || !sha(manifest.commitSha)) return unavailable;\n   const capabilities = manifest.capabilities;\n",
+      "exitCode": 1,
+      "counts": [
+        "\u2139 pass 3",
+        "\u2139 fail 1"
+      ],
+      "restoredSha256": "a2c00720af6429b36c366d17cea946a0ccab671971913b57a6612be696a3c7df",
+      "cleanAfterRestore": true
+    },
+    {
+      "file": "marketing-site/lib/render.ts",
+      "sha256": "1d51ea295a13c908dfc575323266e20d59536762f060697a6ff0084977b82c03",
+      "confirmedDiff": "diff --git a/marketing-site/lib/render.ts b/marketing-site/lib/render.ts\nindex 4a76993..9738439 100644\n--- a/marketing-site/lib/render.ts\n+++ b/marketing-site/lib/render.ts\n@@ -20,7 +20,7 @@ const analyticsFixed = labels['explicit-analytics-consent'] === null;\n const profilesReady = labels['mcp-profiles'] === null;\n const releasedToolCounts = availability.companionToolCounts as { total: number; read: number; analystAdditional: number } | null;\n const profileCounts = profilesReady && releasedToolCounts ? releasedToolCounts : { read: data.counts.mcp.read, analystAdditional: data.counts.mcp.analyst };\n-const analyticsNote = () => analyticsFixed ? '' : `Upgraded from v${data.releaseAudit.version}? Check Privacy settings \u2014 analytics may have been turned on. The next update turns it off automatically.`;\n+const analyticsNote = () => true ? '' : `Upgraded from v${data.releaseAudit.version}? Check Privacy settings \u2014 analytics may have been turned on. The next update turns it off automatically.`;\n const mcpReleaseNote = () => {\n  if (!profilesReady) return `${release.version === data.releaseAudit.version ? `v${data.releaseAudit.version} includes ${data.releaseAudit.mcpTools}. ` : ''}Read-only and analyst profiles arrive in the next update.`;\n  return `${releasedToolCounts && releasedToolCounts.total !== data.counts.mcp.total ? `v${escape(release.version || '')} includes ${releasedToolCounts.total}. ` : ''}Review requested actions before continuing.`;\n",
+      "exitCode": 1,
+      "counts": [
+        "\u2139 pass 3",
+        "\u2139 fail 1"
+      ],
+      "restoredSha256": "1d51ea295a13c908dfc575323266e20d59536762f060697a6ff0084977b82c03",
+      "cleanAfterRestore": true
+    },
+    {
+      "file": "marketing-site/lib/render.ts",
+      "sha256": "1d51ea295a13c908dfc575323266e20d59536762f060697a6ff0084977b82c03",
+      "confirmedDiff": "diff --git a/marketing-site/lib/render.ts b/marketing-site/lib/render.ts\nindex 4a76993..c43de95 100644\n--- a/marketing-site/lib/render.ts\n+++ b/marketing-site/lib/render.ts\n@@ -19,7 +19,7 @@ const featureLabel = (id: string) => labels[id] ? `<span class=\"release-label\" d\n const analyticsFixed = labels['explicit-analytics-consent'] === null;\n const profilesReady = labels['mcp-profiles'] === null;\n const releasedToolCounts = availability.companionToolCounts as { total: number; read: number; analystAdditional: number } | null;\n-const profileCounts = profilesReady && releasedToolCounts ? releasedToolCounts : { read: data.counts.mcp.read, analystAdditional: data.counts.mcp.analyst };\n+const profileCounts = false ? releasedToolCounts : { read: data.counts.mcp.read, analystAdditional: data.counts.mcp.analyst };\n const analyticsNote = () => analyticsFixed ? '' : `Upgraded from v${data.releaseAudit.version}? Check Privacy settings \u2014 analytics may have been turned on. The next update turns it off automatically.`;\n const mcpReleaseNote = () => {\n  if (!profilesReady) return `${release.version === data.releaseAudit.version ? `v${data.releaseAudit.version} includes ${data.releaseAudit.mcpTools}. ` : ''}Read-only and analyst profiles arrive in the next update.`;\n",
+      "exitCode": 1,
+      "counts": [
+        "\u2139 pass 3",
+        "\u2139 fail 1"
+      ],
+      "restoredSha256": "1d51ea295a13c908dfc575323266e20d59536762f060697a6ff0084977b82c03",
+      "cleanAfterRestore": true
+    },
+    {
+      "file": "marketing-site/lib/render.ts",
+      "sha256": "1d51ea295a13c908dfc575323266e20d59536762f060697a6ff0084977b82c03",
+      "confirmedDiff": "diff --git a/marketing-site/lib/render.ts b/marketing-site/lib/render.ts\nindex 4a76993..5018eda 100644\n--- a/marketing-site/lib/render.ts\n+++ b/marketing-site/lib/render.ts\n@@ -82,7 +82,7 @@ ${section('variants', 'Editions', 'Four editions. Pick yours.', 'Choose a build\n  ['Happy',p.happy,'Progress, conservation, and brighter stories.',['Good News Feed','Human Progress','Breakthroughs','Conservation Wins','Renewable Energy']],\n  ].map(([name,count,copy,panels])=>`<article><h3>${name} edition.</h3><p><span class=\"best-for\">Best for:</span>${copy}</p><p><strong>${count}</strong> catalog panels.</p><ul>${(panels as string[]).map(panel=>`<li>${escape(panel)}</li>`).join('')}</ul></article>`).join('')}</div><div class=\"feature-followup\">${source('src/config/panels.ts','Compare edition catalogs')}<p class=\"fine-print\">These are build variants; catalog entries do not guarantee active feeds.</p></div>`)}\n ${section('mcp', 'AI assistants', 'Works with your AI.', `${data.counts.mcp.total} tools for your AI assistant.`, `${shot('app-live-agent-intelligence', 'Crystal Ball Agent Intelligence panel', 'Agent Intelligence in the installed app')}${assistantPrompts()}<div class=\"feature-followup\">${source('docs/AGENT_ACCESS.md','Read the agent guide')}<p class=\"fine-print\">${mcpReleaseNote()}</p></div>`)}\n-${section('power-users', 'Power users', 'Go a level deeper.', 'Use the keyboard, inspect your setup, and connect tools on your terms.', `<div class=\"feature-grid\"><article class=\"feature-tile\"><h3>Check your setup.</h3>${featureLabel('cli-doctor')}<p>Run <code>crystalball doctor</code> to check your setup.</p></article><article class=\"feature-tile\"><h3>Find a command.</h3><p>Open the command palette with <kbd>Cmd</kbd> + <kbd>K</kbd> to find panels, places, and guide commands.</p></article><article class=\"feature-tile\"><h3>Choose your workspace.</h3><p>Open the browser version, or connect compatible assistants to desktop data through the open MCP server.</p></article></div><div class=\"feature-followup\">${source('docs/AGENT_ACCESS.md','Set up agent access')}<p class=\"fine-print\">Installs separately from the app.</p></div>`)}\n+${section('power-users', 'Power users', 'Go a level deeper.', 'Use the keyboard, inspect your setup, and connect tools on your terms.', `<div class=\"feature-grid\"><article class=\"feature-tile\"><h3>Check your setup.</h3>${featureLabel('cli-doctor')}<p>Run <code>crystalball doctor</code> to check your setup.</p></article><article class=\"feature-tile\"><h3>Find a command.</h3><p>Open the command palette with <kbd>Cmd</kbd> + <kbd>K</kbd> to find panels, places, and guide commands.</p></article><article class=\"feature-tile\"><h3>Choose your workspace.</h3><p>Open the browser version, or connect compatible assistants to desktop data through the open MCP server.</p></article></div><div class=\"feature-followup\">${source('docs/AGENT_ACCESS.md','Set up agent access')}<p class=\"fine-print\">Installs separately from the companion.</p></div>`)}\n ${section('open-source', 'Open source', 'Free. Open. Yours.', 'Read the code. Follow the work. Help shape what comes next.', `<div class=\"detail-copy\"><p>Free and open source, ${data.license}.</p><p>${link(data.urls.github,'Explore on GitHub')} \u00b7 ${link(data.urls.sponsor,'Sponsor the project')} \u00b7 ${link(data.urls.contact,'Contact through GitHub Issues')}</p><p>Download features vary by version. <a href=\"/docs\">Find your guide.</a></p></div>`)}\n ${specs()}\n <section class=\"product-section\" id=\"faq\"><div class=\"shell detail-copy\"><h2>Good to know.</h2><details><summary>Is Crystal Ball ready for critical decisions?</summary><p>${data.alpha}</p></details><details><summary>Which platforms can I use?</summary><p>macOS is the primary platform. Windows and Linux builds are experimental. The browser version offers a separate way to explore; desktop-only features require the app.</p></details><details><summary>Does everything stay on my Mac?</summary><p>No. Live feeds contact external sources. Local Ollama inference can stay on your Mac; selected cloud AI services receive prompts and relevant content. <a href=\"/privacy\">See the privacy details.</a></p></details><details><summary>Which Mac download should I choose?</summary><p>Choose Apple Silicon for a Mac with an Apple chip, or Intel for a Mac with an Intel processor. <a href=\"/download\">Find installation and security details.</a></p></details></div></section>`;\n",
+      "exitCode": 1,
+      "counts": [
+        "\u2139 pass 3",
+        "\u2139 fail 1"
+      ],
+      "restoredSha256": "1d51ea295a13c908dfc575323266e20d59536762f060697a6ff0084977b82c03",
+      "cleanAfterRestore": true
+    }
+  ]
+}

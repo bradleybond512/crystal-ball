@@ -1,0 +1,122 @@
+[
+  {
+    "name": "desktop",
+    "skipFocused": true
+  },
+  {
+    "name": "desktop",
+    "specsKeyboardOpen": true
+  },
+  {
+    "name": "desktop",
+    "route": "/",
+    "overflow": false,
+    "h1": 1,
+    "brokenImages": 0,
+    "animations": [
+      "none",
+      "none",
+      "none",
+      "none",
+      "none",
+      "none",
+      "none",
+      "none",
+      "none",
+      "none",
+      "none"
+    ]
+  },
+  {
+    "name": "desktop",
+    "route": "/download",
+    "overflow": false,
+    "h1": 1,
+    "brokenImages": 0,
+    "animations": []
+  },
+  {
+    "name": "desktop",
+    "route": "/privacy",
+    "overflow": false,
+    "h1": 1,
+    "brokenImages": 0,
+    "animations": []
+  },
+  {
+    "name": "desktop",
+    "route": "/security",
+    "overflow": false,
+    "h1": 1,
+    "brokenImages": 0,
+    "animations": []
+  },
+  {
+    "name": "desktop",
+    "route": "/docs",
+    "overflow": false,
+    "h1": 1,
+    "brokenImages": 0,
+    "animations": []
+  },
+  {
+    "name": "mobile",
+    "skipFocused": true
+  },
+  {
+    "name": "mobile",
+    "specsKeyboardOpen": true
+  },
+  {
+    "name": "mobile",
+    "route": "/",
+    "overflow": false,
+    "h1": 1,
+    "brokenImages": 0,
+    "animations": [
+      "none",
+      "none",
+      "none",
+      "none",
+      "none",
+      "none",
+      "none",
+      "none",
+      "none",
+      "none",
+      "none"
+    ]
+  },
+  {
+    "name": "mobile",
+    "route": "/download",
+    "overflow": false,
+    "h1": 1,
+    "brokenImages": 0,
+    "animations": []
+  },
+  {
+    "name": "mobile",
+    "route": "/privacy",
+    "overflow": false,
+    "h1": 1,
+    "brokenImages": 0,
+    "animations": []
+  },
+  {
+    "name": "mobile",
+    "route": "/security",
+    "overflow": false,
+    "h1": 1,
+    "brokenImages": 0,
+    "animations": []
+  },
+  {
+    "name": "mobile",
+    "route": "/docs",
+    "overflow": false,
+    "h1": 1,
+    "brokenImages": 0,
+    "animations": []
+  }
+]

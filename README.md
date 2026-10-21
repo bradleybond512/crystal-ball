@@ -1,6 +1,14 @@
-# Crystal Ball
+# Crystal Ball.
 
-Real-time global intelligence platform. Desktop app and web dashboard that aggregates 50+ live data feeds into a catalog of interactive panels, a 3D Cesium globe with configurable geospatial layers, an explainable algorithm intelligence layer (truth scoring + evidence graph + situation clustering + compound risk + forecast calibration + watchlist relevance), domain-aware shortage / weather / seismic / aviation / space / cyber engines, AI-powered analysis, SMS and desktop notification workflows, and an MCP server that lets Claude Code query it all from the terminal.
+**The world, in focus.**
+
+A private intelligence desk for your Mac. Live signals from around the globe, explained in plain language.
+
+Live global signals, explained. Private by design. Free on Mac.
+
+Crystal Ball is in early access. Information may be incomplete or delayed. Not for emergency, financial, or safety-critical decisions.
+
+macOS is the primary desktop platform. Windows and Linux builds are experimental. Local Ollama inference can run on your Mac; optional cloud AI sends submitted content to its provider.
 
 [![Version](https://img.shields.io/github/v/release/bradleybond512/crystal-ball?label=version)](https://github.com/bradleybond512/crystal-ball/releases/latest)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
@@ -32,7 +40,7 @@ Four product variants share one codebase:
 
 ---
 
-## God's Vision
+## God's Eye
 
 Full-viewport Cesium.js 3D globe. Press `G` or click the sidebar to enter.
 
@@ -203,7 +211,7 @@ For terminal triage, run `npm run doctor`. It discovers the live sidecar port, c
 
 ## MCP Server -- Agent Integration
 
-Crystal Ball ships an MCP server that gives MCP-compatible agents access to intelligence feeds and the in-app reasoning state. The canonical registry contains 59 tools across 9 categories. Call `help()` for generated tool documentation, or install the `crystalball` command for doctor, capabilities, monitor, safeguard-demo, and Evidence Packet workflows. See [Agent Access](docs/AGENT_ACCESS.md).
+Crystal Ball ships an MCP server that gives MCP-compatible agents access to intelligence feeds and the in-app reasoning state. The canonical registry contains 61 tools across 9 categories. Call `help()` for generated tool documentation, or install the `crystalball` command for doctor, capabilities, monitor, safeguard-demo, and Evidence Packet workflows. See [Agent Access](docs/AGENT_ACCESS.md).
 
 **Aggregate tools** (broad awareness):
 
@@ -283,7 +291,7 @@ Works in air-gapped environments with just Ollama. Each hop is an explicit bound
 
 | Shortcut | Action |
 |----------|--------|
-| `G` | Toggle God's Vision 3D globe |
+| `G` | Toggle God's Eye 3D globe |
 | `Cmd+K` | Command palette |
 | `Cmd+Shift+A` | Toggle Analyst HUD |
 | `Cmd+Shift+D` | Toggle Reasoning Diagnostics overlay |
@@ -295,9 +303,9 @@ Works in air-gapped environments with just Ollama. Each hop is an explicit bound
 | `Cmd+S` | Copy shareable URL to clipboard |
 | `Cmd+,` | Open Settings (or Analyst HUD settings if HUD is open) |
 | `Cmd+\` | Toggle sidebar |
-| `F` | Enter Fly Mode (in God's Vision) |
-| `N` | Toggle Navigation (in God's Vision) |
-| `Space` | Play/pause Time Machine (in God's Vision) |
+| `F` | Enter Fly Mode (in God's Eye) |
+| `N` | Toggle Navigation (in God's Eye) |
+| `Space` | Play/pause Time Machine (in God's Eye) |
 | `L` | Toggle day/night terminator |
 | `1`-`6` | Fly to theater presets |
 | `Cmd+1`-`5` | Save/recall camera bookmarks |
@@ -324,7 +332,7 @@ All sounds are synthesized with Web Audio API -- no audio files in the repo:
 
 **Web key vault** -- the browser build has no keychain access, so user-entered keys are persisted in a passphrase-encrypted IndexedDB vault. AES-GCM-256 over PBKDF2-SHA-256 (600,000 iterations, OWASP 2023), per-save random 12-byte IV, AAD-bound ciphertext. The derived key and plaintext map live only in module closure -- never written to localStorage, sessionStorage, or globalThis -- and the vault auto-locks after 15 minutes of the tab being hidden. Lost passphrase = destroy and re-enter; there is no recovery.
 
-**CSP under real constraints** -- `script-src` requires `'unsafe-eval'` because Cesium compiles GLSL shaders dynamically. Removing it silently breaks God's Vision. Compensating controls: trusted-window IPC gating, sidecar bearer auth, no `'unsafe-inline'` on script-src, devtools disabled in production.
+**CSP under real constraints** -- `script-src` requires `'unsafe-eval'` because Cesium compiles GLSL shaders dynamically. Removing it silently breaks God's Eye. Compensating controls: trusted-window IPC gating, sidecar bearer auth, no `'unsafe-inline'` on script-src, devtools disabled in production.
 
 **Variant architecture without forking** -- four product variants share one shell. Panel inventory, map layer defaults, and feed configuration swap through `src/config/panels.ts` and `src/config/variant.ts` at build time.
 
@@ -345,7 +353,7 @@ All sounds are synthesized with Web Audio API -- no audio files in the repo:
 | Algorithm intelligence | Pure-deterministic scoring foundation — `intelligence/` (evidence graph, truth scoring, situation clustering, negative evidence, baseline deviation, compound risk, forecast calibration, watchlist relevance) |
 | Domain engines | `weather/` (NWS polygon matching, urgency ladder, Storm Mode, miss diagnostics), `shortage/` (8 commodity forecast models with seasonal multipliers), `insights/` (Big Event Detector, Confidence × Urgency Matrix, What Changed Digest, Action Briefs, Presentation Export) |
 | Reasoning  | Analyst HUD, hypothesis-threads / accuracy / dedupe / entities / skeptic / projection / ensemble, IDB reasoning_memory, local-first LLM adapter with daily budget |
-| MCP server | @modelcontextprotocol/sdk, 59 tools across 9 canonical categories, sidecar port/token discovery, permission and compatibility contracts |
+| MCP server | @modelcontextprotocol/sdk, 61 tools across 9 canonical categories, sidecar port/token discovery, permission and compatibility contracts |
 | Correlation | Unified event schema, directional rules, temporal chains, situation clustering |
 | Alerts | Unified inbox, composite relevance scoring, IndexedDB persistence, custom rules |
 | Audio | Procedural Web Audio synthesis, per-layer spatial mixing |
@@ -359,10 +367,10 @@ All sounds are synthesized with Web Audio API -- no audio files in the repo:
 | Metric | Value | Source |
 |--------|-------|--------|
 | Panel inventory | Generated from the active variant catalog | `src/config/panels.ts` |
-| God's Vision map layers | Generated from the full map-layer catalog | `src/config/panels.ts` FULL_MAP_LAYERS |
+| God's Eye map layers | Generated from the full map-layer catalog | `src/config/panels.ts` FULL_MAP_LAYERS |
 | Panel categories | Generated from the panel category map | `src/config/panels.ts` PANEL_CATEGORY_MAP |
 | Product variants | 4 | `src/config/variant.ts` |
-| MCP tools | 59 | `tools/mcp-server/tool-registry.mjs` |
+| MCP tools | 61 | `tools/mcp-server/tool-registry.mjs` |
 | Supported secret keys | 77 | `src-tauri/src/main.rs` |
 | Foundation intelligence modules | 24 | `src/services/{intelligence,weather,insights,shortage}/` |
 | Foundation deterministic tests | 600+ | `npm run test:intelligence` + `test:weather` + `test:insights*` + `test:shortage` |

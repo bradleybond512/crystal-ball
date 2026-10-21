@@ -4,7 +4,7 @@
 
 Privacy P0, high-assurance review. Only an explicit user choice can authorize analytics. Missing, malformed, unknown, or unreadable consent stays off. Preserve distinguishable explicit choices; reset ambiguous legacy upgrades off, discard their analytics identity and queue, and show the requested one-time non-blocking notice. No SDK initialization, telemetry queue, or transmission before consent; revoke during asynchronous loading must prevent initialization.
 
-Release v2.25.147 (`bebf98915c1409b37397c2791bb90244129957c7`) inferred consent from an installation ID in `src/services/analytics.ts:97–100`. Current main partially resets ambiguous consent, but its send gate still accepts bare true, migration retains buffered data, and SDK import can outlive revocation. Rust and sidecar searches found no separate analytics consent migration or PostHog sender; native changes are unnecessary.
+Release v2.25.147 (`bebf98915c1409b37397c2791bb90244129957c7`) inferred consent from an installation ID in `src/services/analytics.ts:97–100`. The pre-repair main inspected during discovery partially reset ambiguous consent, but its send gate still accepted bare true, migration retained buffered data, and SDK import could outlive revocation. Rust and sidecar searches found no separate analytics consent migration or PostHog sender; native changes are unnecessary.
 
 ## Design and owners
 
@@ -13,7 +13,7 @@ Release v2.25.147 (`bebf98915c1409b37397c2791bb90244129957c7`) inferred consent 
 - Test engineer: failing tests first, configured-key mocked SDK/network paths, migration fixtures, async revoke/regrant cases, existing accessibility contracts and CI wiring.
 - Primary: changelog, build/type/lint/security checks, mutation evidence, independent review, and draft PR.
 
-The user's requested migration policy authorizes resetting ambiguous consent, while preserving version-2 explicit user choices. Do not change unrelated settings, data sources, dependencies, native permissions, or marketing claims in this PR. No merge, tag, publish, deployment, or installation. Release preparation follows in a separate draft PR; marketing changes stay conditional on a published fixed release.
+The user's requested migration policy authorizes resetting ambiguous consent, while preserving version-2 explicit user choices. Do not change unrelated settings, data sources, dependencies, native permissions, or marketing claims in this PR. Draft PR #1820 contains and supersedes closed, unmerged #1819, including the stronger transport correction below; no separate dependency merge is needed. The renewed request authorizes protected source delivery, subject to final gates and review. Desktop version remains 2.25.147; preparing 2.25.148 and all tagging, signing, publication, deployment and installation are deferred to a separately authorized release task. Minimum-2.25.148 feature and marketing gates remain unchanged. Source delivery does not assert that published 2.25.147 installers contain this repair.
 
 ## Security and reliability invariants
 
@@ -33,7 +33,7 @@ Use the documented [capture HTTP endpoint](https://posthog.com/docs/api/capture)
 
 This is a bounded correction to the requested no-send-without-consent invariant. Do not introduce private SDK patches, global network interception, new dependencies, or a new server. Test the actual fetch boundary with held responses and revocation, including a positive opted-in control. The original configured-SDK negative control remains evidence of the prior defect, not evidence that the replacement transport passes.
 
-## Verification evidence
+## Historical verification evidence (before source-only reconciliation)
 
 - `npm run test:analytics-consent`: `ℹ pass 40`, `ℹ fail 0`.
 - `npm run test:analytics-lifecycle`: `ℹ pass 19`, `ℹ fail 0`.
@@ -43,3 +43,7 @@ This is a bounded correction to the requested no-send-without-consent invariant.
 - Restored SHA-256: `src/services/analytics.ts` = `cb8295b55993a9084f53cebd893aa66a3393efbd15b4196e3c495cd98a2fb806`; `src/components/AnalyticsConsentBanner.ts` = `ec6fec35e6f97c7d02a0170ebfb36e9fd2b8e567cbac6114033a2d3fcb41e3af`.
 
 Tests use a synthetic public project token and intercepted fetch requests, including positive opted-in delivery, delayed failure after withdrawal, timeout, ghost mode, cross-window revocation, unavailable storage, and Vercel initialization races. No production telemetry or native installation was performed. Native VoiceOver and live PostHog ingestion remain unverified; the notice's nonmodal focus and fresh-install dialog contracts are automated.
+
+## Source-only delivery validation boundary
+
+The results above document earlier privacy preparation and transport repair; they are not fresh final-tree validation for the source-only 147 metadata reconciliation. Consent production bytes remain unchanged by that reconciliation. Current consent/lifecycle checks, 147 capability exclusions, future 148 fixture positives, package-version mismatch rejection, mandatory gate and independent review must be recorded against the final tree. Existing published-147 tag/release state must be reverified immediately before protected merge because package-script changes still trigger the existing auto-tag check. No release workflow changes, native artifacts or live-ingestion results are claimed.

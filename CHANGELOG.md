@@ -6,7 +6,7 @@ All notable changes to Crystal Ball are documented here.
 
 ### Planned 2.25.148
 
-Analytics stay off until you opt in. Ambiguous upgrade consent resets to off with a one-time notice. See the [draft release notes and readiness checklist](docs/releases/2.25.148-readiness.md); publication and native artifact validation are pending.
+Source-only privacy repair: analytics stay off until you opt in, and ambiguous upgrade consent resets to off with a one-time notice. Desktop version remains 2.25.147; this does not claim the published 147 installers contain the repair. Version preparation for 2.25.148, tagging, signing, publication and installation are deferred. See the [future release notes and readiness checklist](docs/releases/2.25.148-readiness.md); minimum-148 capability and marketing claims remain gated.
 
 ### Added
 

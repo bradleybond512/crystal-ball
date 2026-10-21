@@ -1,0 +1,136 @@
+{
+  "name": "Crystal Ball",
+  "description": "Live global signals, explained. Private by design. Free on Mac.",
+  "reviewedAt": "2026-10-18",
+  "sourceSha": "78e34040d738c82195162b28280e8ce865c3bb6d",
+  "urls": {
+    "site": "https://crystal-ball-observatory.bradleybond512.chatgpt.site",
+    "github": "https://github.com/bradleybond512/crystal-ball",
+    "web": "https://bradleybond512.github.io/crystal-ball/",
+    "sponsor": "https://github.com/sponsors/bradleybond512",
+    "contact": "https://github.com/bradleybond512/crystal-ball/issues",
+    "appleSecurity": "https://support.apple.com/en-us/102445"
+  },
+  "images": {
+    "width": 1600,
+    "height": 1001,
+    "capturedAt": "2026-10-18"
+  },
+  "alpha": "Crystal Ball is in early access. Information may be incomplete or delayed. Not for emergency, financial, or safety-critical decisions.",
+  "price": 0,
+  "license": "AGPL-3.0",
+  "counts": {
+    "panels": {
+      "full": 409,
+      "tech": 35,
+      "finance": 31,
+      "happy": 10
+    },
+    "mcp": {
+      "total": 61,
+      "read": 53,
+      "analyst": 8,
+      "categories": 9
+    },
+    "editions": 4,
+    "platforms": 3
+  },
+  "editions": [
+    {
+      "id": "full",
+      "panelCount": 409
+    },
+    {
+      "id": "tech",
+      "panelCount": 35
+    },
+    {
+      "id": "finance",
+      "panelCount": 31
+    },
+    {
+      "id": "happy",
+      "panelCount": 10
+    }
+  ],
+  "specs": {
+    "platforms": [
+      {
+        "id": "macOS",
+        "primary": true,
+        "experimental": false,
+        "architectures": [
+          "aarch64",
+          "x86_64"
+        ],
+        "minimumOS": null
+      },
+      {
+        "id": "Windows",
+        "primary": false,
+        "experimental": true,
+        "architectures": [
+          "x86_64"
+        ],
+        "minimumOS": null
+      },
+      {
+        "id": "Linux",
+        "primary": false,
+        "experimental": true,
+        "architectures": [
+          "x86_64",
+          "aarch64"
+        ],
+        "minimumOS": null
+      }
+    ],
+    "minimumOSStatus": "Only explicitly configured minimums are shown; build-runner OS versions are not supported-system minimums.",
+    "evidence": [
+      "src-tauri/tauri.conf.json",
+      ".github/workflows/build-desktop.yml"
+    ]
+  },
+  "release": {
+    "available": true,
+    "latestUrl": "https://github.com/bradleybond512/crystal-ball/releases/latest",
+    "version": "2.25.147",
+    "tag": "v2.25.147",
+    "publishedAt": "2026-07-20T06:02:27Z",
+    "assets": {
+      "appleSilicon": {
+        "name": "Crystal.Ball_2.25.147_aarch64.dmg",
+        "url": "https://github.com/bradleybond512/crystal-ball/releases/download/v2.25.147/Crystal.Ball_2.25.147_aarch64.dmg",
+        "sizeBytes": 57484274,
+        "sha256": "ffea08660457293a9d38ce1bbf406b6b9b5758992657057015173777101ae233"
+      },
+      "intel": {
+        "name": "Crystal.Ball_2.25.147_x64.dmg",
+        "url": "https://github.com/bradleybond512/crystal-ball/releases/download/v2.25.147/Crystal.Ball_2.25.147_x64.dmg",
+        "sizeBytes": 59332581,
+        "sha256": "de1fb2a6ff5907337dd678fe17f44825bad296d070447eff7172f48d042281e6"
+      },
+      "windows": {
+        "name": "Crystal.Ball_2.25.147_x64-setup.exe",
+        "url": "https://github.com/bradleybond512/crystal-ball/releases/download/v2.25.147/Crystal.Ball_2.25.147_x64-setup.exe",
+        "sizeBytes": 41053149,
+        "sha256": "7a6334251bcb63b64589005a6db190981d7746a5bd03cb4f690bf8eebee60c4e"
+      },
+      "linuxIntel": {
+        "name": "Crystal.Ball_2.25.147_amd64.AppImage",
+        "url": "https://github.com/bradleybond512/crystal-ball/releases/download/v2.25.147/Crystal.Ball_2.25.147_amd64.AppImage",
+        "sizeBytes": 220137976,
+        "sha256": "2de0cda485e02faed24032b840081cfd615f9b4636dbf881002465541a12407c"
+      },
+      "linuxArm": {
+        "name": "Crystal.Ball_2.25.147_aarch64.AppImage",
+        "url": "https://github.com/bradleybond512/crystal-ball/releases/download/v2.25.147/Crystal.Ball_2.25.147_aarch64.AppImage",
+        "sizeBytes": 211139080,
+        "sha256": "911dd2508bafc5e27dfa4922bb0dd894372ce3317a2943a89a19580e95e2ef65"
+      }
+    },
+    "manifestUrl": "https://github.com/bradleybond512/crystal-ball/releases/download/v2.25.147/release-manifest.json",
+    "manifestAvailable": true,
+    "signingStatus": "unverified"
+  }
+}

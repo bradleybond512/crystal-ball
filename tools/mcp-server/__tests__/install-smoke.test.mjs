@@ -47,7 +47,7 @@ test('genuine offline temporary-prefix installer exposes aliases, doctor and def
     writeFileSync(hiddenFile, JSON.stringify(tampered));
     assert.throws(() => validateInstalledGraph(installedRoot, manifest, lock), /Installed lock mismatch/, 'exact locked graph rejects a changed override tuple');
   } finally { writeFileSync(hiddenFile, hiddenBefore); }
-  for (const [name, version] of Object.entries({ '@hono/node-server': '2.0.12', 'body-parser': '2.3.0', 'fast-uri': '3.1.7', hono: '4.13.1' })) {
+  for (const [name, version] of Object.entries({ '@hono/node-server': '2.0.12', 'body-parser': '2.3.0', 'fast-uri': '3.1.8', hono: '4.13.13' })) {
     assert.equal(JSON.parse(readFileSync(join(installedRoot, 'node_modules', name, 'package.json'), 'utf8')).version, version, `actual installed override: ${name}`);
   }
   assert.deepEqual(readFileSync(join(fixture.serverRoot, 'package.json')), manifestBefore);

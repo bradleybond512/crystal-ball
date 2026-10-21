@@ -1,0 +1,36 @@
+{
+  "name": "Crystal Ball",
+  "description": "Live global signals, explained. Private by design. Free on Mac.",
+  "reviewedAt": "2026-10-18",
+  "sourceSha": "78e34040d738c82195162b28280e8ce865c3bb6d",
+  "urls": {
+    "site": "https://crystal-ball-observatory.bradleybond512.chatgpt.site",
+    "github": "https://github.com/bradleybond512/crystal-ball",
+    "web": "https://bradleybond512.github.io/crystal-ball/",
+    "sponsor": "https://github.com/sponsors/bradleybond512",
+    "contact": "https://github.com/bradleybond512/crystal-ball/issues",
+    "appleSecurity": "https://support.apple.com/en-us/102445"
+  },
+  "images": {
+    "width": 1600,
+    "height": 1001,
+    "capturedAt": "2026-10-18"
+  },
+  "alpha": "Crystal Ball is in early access. Information may be incomplete or delayed. Not for emergency, financial, or safety-critical decisions.",
+  "price": 0,
+  "license": "AGPL-3.0",
+  "mapCategories": [
+    "weather",
+    "internet outages",
+    "cyber threats",
+    "military activity",
+    "waterways",
+    "economic"
+  ],
+  "releaseAudit": {
+    "version": "2.25.147",
+    "sourceSha": "bebf98915c1409b37397c2791bb90244129957c7",
+    "panels": 408,
+    "mcpTools": 53
+  }
+}

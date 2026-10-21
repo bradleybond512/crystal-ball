@@ -1,0 +1,34 @@
+diff --git a/marketing-site/lib/render.ts b/marketing-site/lib/render.ts
+index 3a1923f..1714f3c 100644
+--- a/marketing-site/lib/render.ts
++++ b/marketing-site/lib/render.ts
+@@ -25,14 +25,14 @@ const features: Record<string, [string, string][]> = {
+ const tiles = (id: string) => features[id] ? `<div class="feature-grid">${features[id].map(([title,copy])=>`<article class="feature-tile"><h3>${title}</h3><p>${copy}</p></article>`).join('')}</div>` : '';
+ const section = (id: string, label: string, title: string, subhead: string, content: string) => {
+  const visual = content.match(/<figure[\s\S]*?<\/figure>/)?.[0] || '';
+- return `<section class="product-section" id="${id}" aria-labelledby="${id}-title" data-reveal><div class="shell"><p class="section-label">${label}</p><h2 id="${id}-title">${title}</h2><p class="subhead">${subhead}</p>${visual}${tiles(id)}${content.replace(visual,'')}</div></section>`;
++ return `<section class="product-section" id="${id}" aria-labelledby="${id}-title" data-reveal><div class="shell"><p class="section-label">${label}</p><h2 id="${id}-title">${title}</h2><p class="subhead">${subhead}</p>${visual}${tiles(id)}${content.replace(visual,'')}<a href="/docs">More</a></div></section>`;
+ };
+ const numbers = () => `<aside class="numbers-band" aria-labelledby="numbers-title"><div class="shell"><h2 id="numbers-title">By the numbers.</h2><div class="numbers-grid">${[[data.counts.panels.full,'panels'],[data.counts.mcp.total,'tools for your AI assistant'],[data.counts.editions,'editions']].map(([value,label])=>`<div><strong>${value}</strong><p>${label}</p></div>`).join('')}<div><strong class="platform-names">${data.specs.platforms.map(platform => platform.id === 'macOS' ? 'Mac' : escape(platform.id)).join(', ')}</strong></div><div><strong>${data.price === 0 ? 'Free' : `$${data.price}`}</strong></div></div><p class="fine-print">Counts come from the source at build time. Catalog entries do not guarantee active feeds.</p></div></aside>`;
+ function specs() {
+  const minimums = data.specs.platforms.filter(platform => platform.minimumOS);
+  const rows = [
+   ['Platforms and architectures', data.specs.platforms.map(platform => `${platform.id}: ${platform.architectures.join(', ')}${platform.experimental ? ' (experimental)' : ' (primary)'}`).join('; ') + '.'],
+-  ...(minimums.length ? [['Minimum OS versions', minimums.map(platform => `${platform.id}: ${escape(platform.minimumOS!)}`).join('; ') + '.']] : []),
++  ...(true ? [['Minimum OS versions', minimums.map(platform => `${platform.id}: ${escape(platform.minimumOS!)}`).join('; ') + '.']] : []),
+   ['Mac download sizes', `Apple Silicon: ${size('appleSilicon')}. Intel: ${size('intel')}. Sizes describe downloaded disk images, not installed storage.`],
+   ['Data and categories', 'Maps, news, markets, weather, earthquakes, cyber threats, and infrastructure. Sources, credentials, and coverage vary by setup.'],
+   ['AI providers', 'Local Ollama; optional Groq, Claude, and OpenRouter. Cloud services receive prompts and relevant content; provider charges may apply.'],
+diff --git a/marketing-site/vendor/braces/lib/constants.js b/marketing-site/vendor/braces/lib/constants.js
+index c237099..fb516e4 100644
+--- a/marketing-site/vendor/braces/lib/constants.js
++++ b/marketing-site/vendor/braces/lib/constants.js
+@@ -1,7 +1,7 @@
+ 'use strict';
+ 
+ module.exports = {
+-  MAX_DEPTH: 100,
++  MAX_DEPTH: 10000,
+   MAX_LENGTH: 10000,
+ 
+   // Digits

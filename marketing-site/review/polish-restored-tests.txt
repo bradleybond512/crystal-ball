@@ -1,0 +1,37 @@
+✔ braces rejects excessive parsed nesting before stack exhaustion (377.3465ms)
+✔ braces bounds supplied ASTs and cyclic expansion parents (264.687916ms)
+✔ braces preserves ordinary globs and permits only lower depth limits (9.132042ms)
+✔ micromatch uses the reviewed local braces source (62.31025ms)
+✔ shared panel counts are derived from actual variant catalogs (104.844042ms)
+✔ shared MCP counts match actual registry and read-only annotations (6.045375ms)
+✔ source references exist at the pinned revision and license agrees (215.147709ms)
+✔ edition examples belong to each actual catalog and assistant examples name registered tools (258.613875ms)
+✔ catalog parsing counts adjacent properties and rejects duplicates or spread (16.186417ms)
+✔ specs use explicit minimums and build targets, not runner OS versions (0.7565ms)
+✔ latest release assets and checksums come from API and matching manifest (227.50875ms)
+✔ API errors and timeout discard stale version-specific assets (25.144708ms)
+✔ manifest fetch failure or wrong version fails closed without stale downloads (1.995125ms)
+✔ missing manifest and absent architectures are disclosed rather than invented (0.330125ms)
+✔ malformed asset URLs cannot become download links (0.365292ms)
+✔ serves separate accessible product, download, docs and trust pages (378.683125ms)
+✔ serves machine-readable discovery (2.182834ms)
+✔ offers compressed HTML only when accepted (25.118458ms)
+✔ provides valid application structured data and dated source counts (3.4915ms)
+✔ prioritizes a single hero and keeps product shots responsive and unique (3.912458ms)
+✔ minifies embedded styles and scripts without removing motion and focus support (1.092708ms)
+✔ reveals sourced detail with specific controls and one capture note (2.828875ms)
+✔ serves the exact build-generated sitemap without a rendering route (2.3575ms)
+✔ serves the static sitemap without a Cloudflare asset binding (1.240583ms)
+✔ keeps feature depth without duplicate disclosures or platform caveats (4.793458ms)
+✔ distinguishes illustrative examples from live data and keeps the example day in sequence (2.043167ms)
+✔ keeps map categories consistent across the overview and specifications (2.145ms)
+✔ qualifies source-only features beside their claims and identifies the audited release (5.311167ms)
+✔ uses a briefing capture and keeps decorative timeline markers out of the accessibility tree (1.714042ms)
+ℹ tests 29
+ℹ suites 0
+ℹ pass 29
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1594.886166

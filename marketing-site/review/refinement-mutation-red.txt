@@ -1,0 +1,185 @@
+✖ braces rejects excessive parsed nesting before stack exhaustion (634.25975ms)
+✖ braces bounds supplied ASTs and cyclic expansion parents (902.76025ms)
+✖ braces preserves ordinary globs and permits only lower depth limits (19.80875ms)
+✔ micromatch uses the reviewed local braces source (57.689625ms)
+✔ shared panel counts are derived from actual variant catalogs (131.147625ms)
+✔ shared MCP counts match actual registry and read-only annotations (37.624625ms)
+✔ source references exist at the pinned revision and license agrees (1380.152791ms)
+✔ catalog parsing counts adjacent properties and rejects duplicates or spread (92.566167ms)
+✔ specs use explicit minimums and build targets, not runner OS versions (0.45175ms)
+✔ latest release assets and checksums come from API and matching manifest (348.729375ms)
+✔ API errors and timeout discard stale version-specific assets (9.80075ms)
+✔ manifest fetch failure or wrong version fails closed without stale downloads (0.891917ms)
+✔ missing manifest and absent architectures are disclosed rather than invented (1.06075ms)
+✔ malformed asset URLs cannot become download links (0.601334ms)
+✔ serves separate accessible product, download, docs and trust pages (740.939ms)
+✔ serves machine-readable discovery (7.845875ms)
+✔ offers compressed HTML only when accepted (81.731541ms)
+✔ provides valid application structured data and dated source counts (175.984667ms)
+✔ prioritizes a single hero and keeps product shots responsive and unique (9.98175ms)
+✔ minifies embedded styles and scripts without removing motion and focus support (6.352833ms)
+✖ reveals sourced detail with specific controls and one capture note (438.574875ms)
+✔ serves the exact build-generated sitemap without a rendering route (64.104375ms)
+✔ serves the static sitemap without a Cloudflare asset binding (3.218667ms)
+✖ keeps feature depth without duplicate disclosures or platform caveats (11.388833ms)
+ℹ tests 24
+ℹ suites 0
+ℹ pass 19
+ℹ fail 5
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4625.671958
+
+✖ failing tests:
+
+test at marketing-site/tests/braces-security.test.mjs:17:1
+✖ braces rejects excessive parsed nesting before stack exhaustion (634.25975ms)
+  AssertionError [ERR_ASSERTION]: node:internal/assert/utils:146
+    throw error;
+    ^
+
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+      at [eval]:3:14
+      at runScriptInThisContext (node:internal/vm:219:10)
+      at node:internal/process/execution:483:12
+      at [eval]-wrapper:6:24
+      at runScriptInContext (node:internal/process/execution:481:60)
+      at evalFunction (node:internal/process/execution:315:30)
+      at evalTypeScript (node:internal/process/execution:327:3)
+      at node:internal/main/eval_string:71:3 {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /exceeds max depth/,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+  Node.js v26.3.0
+
+
+  1 !== 0
+
+      at bounded (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/tests/braces-security.test.mjs:14:10)
+      at TestContext.<anonymous> (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/tests/braces-security.test.mjs:18:3)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.start (node:internal/test_runner/test:1242:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at marketing-site/tests/braces-security.test.mjs:25:1
+✖ braces bounds supplied ASTs and cyclic expansion parents (902.76025ms)
+  AssertionError [ERR_ASSERTION]: node:assert:573
+      throw err;
+      ^
+
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /exceeds max depth/. Input:
+
+  'RangeError: Maximum call stack size exceeded'
+
+      at [eval]:4:12
+      at runScriptInThisContext (node:internal/vm:219:10)
+      at node:internal/process/execution:483:12
+      at [eval]-wrapper:6:24
+      at runScriptInContext (node:internal/process/execution:481:60)
+      at evalFunction (node:internal/process/execution:315:30)
+      at evalTypeScript (node:internal/process/execution:327:3)
+      at node:internal/main/eval_string:71:3 {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: RangeError: Maximum call stack size exceeded
+        at exports.isInvalidBrace (/Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/vendor/braces/lib/utils.js:62:26)
+        at walk (/Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/vendor/braces/lib/compile.js:14:32)
+        at walk (/Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/vendor/braces/lib/compile.js:56:19)
+        at walk (/Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/vendor/braces/lib/compile.js:56:19)
+        at walk (/Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/vendor/braces/lib/compile.js:56:19)
+        at walk (/Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/vendor/braces/lib/compile.js:56:19)
+        at walk (/Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/vendor/braces/lib/compile.js:56:19)
+        at walk (/Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/vendor/braces/lib/compile.js:56:19)
+        at walk (/Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/vendor/braces/lib/compile.js:56:19)
+        at walk (/Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/vendor/braces/lib/compile.js:56:19),
+    expected: /exceeds max depth/,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+  Node.js v26.3.0
+
+
+  1 !== 0
+
+      at bounded (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/tests/braces-security.test.mjs:14:10)
+      at TestContext.<anonymous> (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/tests/braces-security.test.mjs:26:3)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at marketing-site/tests/braces-security.test.mjs:37:1
+✖ braces preserves ordinary globs and permits only lower depth limits (19.80875ms)
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+      at TestContext.<anonymous> (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/tests/braces-security.test.mjs:43:12)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /exceeds max depth/,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+test at marketing-site/tests/marketing.test.mjs:95:1
+✖ reveals sourced detail with specific controls and one capture note (438.574875ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  true !== false
+
+      at TestContext.<anonymous> (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/tests/marketing.test.mjs:118:9)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at marketing-site/tests/marketing.test.mjs:135:1
+✖ keeps feature depth without duplicate disclosures or platform caveats (11.388833ms)
+  AssertionError [ERR_ASSERTION]: features: one link
+
+  2 !== 1
+
+      at TestContext.<anonymous> (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/tests/marketing.test.mjs:141:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 2,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

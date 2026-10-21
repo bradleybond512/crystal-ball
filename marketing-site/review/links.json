@@ -1,0 +1,794 @@
+{
+  "checkedAt": "2026-10-18T23:24:23.525Z",
+  "sourceSha": "78e34040d738c82195162b28280e8ce865c3bb6d",
+  "routes": [
+    "/",
+    "/download",
+    "/docs",
+    "/privacy",
+    "/security"
+  ],
+  "method": "Built worker plus static assets; external HEAD follows redirects, GET Range fallback for 403/405/501 cancels body immediately. Four concurrent requests, 20-second timeout. Remote fragments are not validated.",
+  "summary": {
+    "total": 58,
+    "passed": 58,
+    "failed": 0,
+    "notFound": 0
+  },
+  "results": [
+    {
+      "url": "https://bradleybond512.github.io/crystal-ball/",
+      "from": [
+        "/",
+        "/download",
+        "/docs",
+        "/privacy",
+        "/security"
+      ],
+      "kind": "external",
+      "status": 200,
+      "ok": true,
+      "fragmentChecked": true,
+      "attempts": [
+        {
+          "method": "HEAD",
+          "status": 200,
+          "finalUrl": "https://bradleybond512.github.io/crystal-ball/"
+        }
+      ]
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/",
+      "kind": "route",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/",
+      "from": [
+        "/",
+        "/download",
+        "/docs",
+        "/privacy",
+        "/security"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/#features",
+      "from": [
+        "/",
+        "/download",
+        "/docs",
+        "/privacy",
+        "/security"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/#main",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/#overview",
+      "from": [
+        "/",
+        "/download",
+        "/docs",
+        "/privacy",
+        "/security"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-agent-intelligence-1600.webp",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-agent-intelligence-800.webp",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-analysis-library-1600.webp",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-analysis-library-800.webp",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-home-1600.webp",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-home-800.webp",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-library-1600.webp",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-library-800.webp",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-local-ai-settings-1600.webp",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-local-ai-settings-800.webp",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-privacy-settings-1600.webp",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-privacy-settings-800.webp",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-risk-calibration-1600.webp",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/app-live-risk-calibration-800.webp",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/docs",
+      "kind": "route",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/docs",
+      "from": [
+        "/",
+        "/download",
+        "/docs",
+        "/privacy",
+        "/security"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/docs#main",
+      "from": [
+        "/docs"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/download",
+      "kind": "route",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/download",
+      "from": [
+        "/",
+        "/download",
+        "/docs",
+        "/privacy",
+        "/security"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/download#main",
+      "from": [
+        "/download"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/icon.png",
+      "from": [
+        "/",
+        "/download",
+        "/docs",
+        "/privacy",
+        "/security"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/og.png",
+      "from": [
+        "/",
+        "/download",
+        "/docs",
+        "/privacy",
+        "/security"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/privacy",
+      "kind": "route",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/privacy",
+      "from": [
+        "/",
+        "/download",
+        "/docs",
+        "/privacy",
+        "/security"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/privacy#ai",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/privacy#main",
+      "from": [
+        "/privacy"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/robots.txt",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/security",
+      "kind": "route",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/security",
+      "from": [
+        "/",
+        "/download",
+        "/docs",
+        "/privacy",
+        "/security"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/security#main",
+      "from": [
+        "/security"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://crystal-ball-observatory.bradleybond512.chatgpt.site/sitemap.xml",
+      "from": [
+        "/"
+      ],
+      "kind": "local",
+      "status": 200,
+      "fragmentFound": true,
+      "ok": true
+    },
+    {
+      "url": "https://github.com/bradleybond512/crystal-ball",
+      "from": [
+        "/",
+        "/download",
+        "/docs",
+        "/privacy",
+        "/security"
+      ],
+      "kind": "external",
+      "status": 200,
+      "ok": true,
+      "fragmentChecked": true,
+      "attempts": [
+        {
+          "method": "HEAD",
+          "status": 200,
+          "finalUrl": "https://github.com/bradleybond512/crystal-ball"
+        }
+      ]
+    },
+    {
+      "url": "https://github.com/bradleybond512/crystal-ball/blob/main/CHANGELOG.md",
+      "from": [
+        "/docs"
+      ],
+      "kind": "external",
+      "status": 200,
+      "ok": true,
+      "fragmentChecked": true,
+      "attempts": [
+        {
+          "method": "HEAD",
+          "status": 200,
+          "finalUrl": "https://github.com/bradleybond512/crystal-ball/blob/main/CHANGELOG.md"
+        }
+      ]
+    },
+    {
+      "url": "https://github.com/bradleybond512/crystal-ball/blob/main/docs/AGENT_ACCESS.md",
+      "from": [
+        "/",
+        "/docs"
+      ],
+      "kind": "external",
+      "status": 200,
+      "ok": true,
+      "fragmentChecked": true,
+      "attempts": [
+        {
+          "method": "HEAD",
+          "status": 200,
+          "finalUrl": "https://github.com/bradleybond512/crystal-ball/blob/main/docs/AGENT_ACCESS.md"
+        }
+      ]
+    },
+    {
+      "url": "https://github.com/bradleybond512/crystal-ball/blob/main/docs/USER_MANUAL.md",
+      "from": [
+        "/docs",
+        "/privacy"
+      ],
+      "kind": "external",
+      "status": 200,
+      "ok": true,
+      "fragmentChecked": true,
+      "attempts": [
+        {
+          "method": "HEAD",
+          "status": 200,
+          "finalUrl": "https://github.com/bradleybond512/crystal-ball/blob/main/docs/USER_MANUAL.md"
+        }
+      ]
+    },
+    {
+      "url": "https://github.com/bradleybond512/crystal-ball/blob/main/LICENSE",
+      "from": [
+        "/",
+        "/download",
+        "/docs",
+        "/privacy",
+        "/security"
+      ],
+      "kind": "external",
+      "status": 200,
+      "ok": true,
+      "fragmentChecked": true,
+      "attempts": [
+        {
+          "method": "HEAD",
+          "status": 200,
+          "finalUrl": "https://github.com/bradleybond512/crystal-ball/blob/main/LICENSE"
+        }
+      ]
+    },
+    {
+      "url": "https://github.com/bradleybond512/crystal-ball/blob/main/src/components/BeliefCalibrationPanel.ts",
+      "from": [
+        "/"
+      ],
+      "kind": "external",
+      "status": 200,
+      "ok": true,
+      "fragmentChecked": true,
+      "attempts": [
+        {
+          "method": "HEAD",
+          "status": 200,
+          "finalUrl": "https://github.com/bradleybond512/crystal-ball/blob/main/src/components/BeliefCalibrationPanel.ts"
+        }
+      ]
+    },
+    {
+      "url": "https://github.com/bradleybond512/crystal-ball/blob/main/src/components/HomeShellOverlay.ts",
+      "from": [
+        "/"
+      ],
+      "kind": "external",
+      "status": 200,
+      "ok": true,
+      "fragmentChecked": true,
+      "attempts": [
+        {
+          "method": "HEAD",
+          "status": 200,
+          "finalUrl": "https://github.com/bradleybond512/crystal-ball/blob/main/src/components/HomeShellOverlay.ts"
+        }
+      ]
+    },
+    {
+      "url": "https://github.com/bradleybond512/crystal-ball/blob/main/src/components/MapContainer.ts",
+      "from": [
+        "/"
+      ],
+      "kind": "external",
+      "status": 200,
+      "ok": true,
+      "fragmentChecked": true,
+      "attempts": [
+        {
+          "method": "HEAD",
+          "status": 200,
+          "finalUrl": "https://github.com/bradleybond512/crystal-ball/blob/main/src/components/MapContainer.ts"
+        }
+      ]
+    },
+    {
+      "url": "https://github.com/bradleybond512/crystal-ball/blob/main/src/config/panels.ts",
+      "from": [
+        "/"
+      ],
+      "kind": "external",
+      "status": 200,
+      "ok": true,
+      "fragmentChecked": true,
+      "attempts": [
+        {
+          "method": "HEAD",
+          "status": 200,
+          "finalUrl": "https://github.com/bradleybond512/crystal-ball/blob/main/src/config/panels.ts"
+        }
+      ]
+    },
+    {
+      "url": "https://github.com/bradleybond512/crystal-ball/issues",
+      "from": [
+        "/",
+        "/download",
+        "/docs",
+        "/privacy",
+        "/security"
+      ],
+      "kind": "external",
+      "status": 200,
+      "ok": true,
+      "fragmentChecked": true,
+      "attempts": [
+        {
+          "method": "HEAD",
+          "status": 200,
+          "finalUrl": "https://github.com/bradleybond512/crystal-ball/issues"
+        }
+      ]
+    },
+    {
+      "url": "https://github.com/bradleybond512/crystal-ball/releases/download/v2.25.147/Crystal.Ball_2.25.147_aarch64.AppImage",
+      "from": [
+        "/download"
+      ],
+      "kind": "external",
+      "status": 200,
+      "ok": true,
+      "fragmentChecked": true,
+      "attempts": [
+        {
+          "method": "HEAD",
+          "status": 200,
+          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/a07e0f6e-8a56-45dd-91a2-f67c5f1776f2?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-19T00%3A06%3A24Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_aarch64.AppImage&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T23%3A05%3A29Z&ske=2026-10-19T00%3A06%3A24Z&sks=b&skv=2018-11-09&sig=4C1PJ7y%2BQVOKvLUtC0XtmgNpQyFmokNCTO7RJQcn%2FxU%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2OTQ2MiwibmJmIjoxNzkyMzY1ODYyLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.5JrU8YP3DG_QJ-GbTwqyvyptuAVviA0PI_dqsVSokMA&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_aarch64.AppImage&response-content-type=application%2Foctet-stream"
+        }
+      ]
+    },
+    {
+      "url": "https://github.com/bradleybond512/crystal-ball/releases/download/v2.25.147/Crystal.Ball_2.25.147_aarch64.dmg",
+      "from": [
+        "/download"
+      ],
+      "kind": "external",
+      "status": 200,
+      "ok": true,
+      "fragmentChecked": true,
+      "attempts": [
+        {
+          "method": "HEAD",
+          "status": 200,
+          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/e7c06bf0-fa05-49a3-bb8a-0117bf969db8?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-19T00%3A06%3A19Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_aarch64.dmg&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T23%3A06%3A03Z&ske=2026-10-19T00%3A06%3A19Z&sks=b&skv=2018-11-09&sig=Z2lFqDzOk5dDUB0Qx3oXtMgoc0iZkrMBz3ziL7npIbs%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2NzY2MSwibmJmIjoxNzkyMzY1ODYxLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.PcXuDsNcU0HSK_2iqAA53lgNXM7opKK5D3xGI4Ga7C0&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_aarch64.dmg&response-content-type=application%2Foctet-stream"
+        }
+      ]
+    },
+    {
+      "url": "https://github.com/bradleybond512/crystal-ball/releases/download/v2.25.147/Crystal.Ball_2.25.147_amd64.AppImage",
+      "from": [
+        "/download"
+      ],
+      "kind": "external",
+      "status": 200,
+      "ok": true,
+      "fragmentChecked": true,
+      "attempts": [
+        {
+          "method": "HEAD",
+          "status": 200,
+          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/495a9911-35e9-47eb-abf4-dc7d57284fb6?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-19T00%3A24%3A39Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_amd64.AppImage&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T23%3A24%3A07Z&ske=2026-10-19T00%3A24%3A39Z&sks=b&skv=2018-11-09&sig=ksxbaPwg5fBD9u9sUbHnbtkeMTIxnr0KS16yUrB5R3Y%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2OTQ2MiwibmJmIjoxNzkyMzY1ODYyLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.5JrU8YP3DG_QJ-GbTwqyvyptuAVviA0PI_dqsVSokMA&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_amd64.AppImage&response-content-type=application%2Foctet-stream"
+        }
+      ]
+    },
+    {
+      "url": "https://github.com/bradleybond512/crystal-ball/releases/download/v2.25.147/Crystal.Ball_2.25.147_x64-setup.exe",
+      "from": [
+        "/download"
+      ],
+      "kind": "external",
+      "status": 200,
+      "ok": true,
+      "fragmentChecked": true,
+      "attempts": [
+        {
+          "method": "HEAD",
+          "status": 200,
+          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/2bdf0daa-839a-441a-b1f3-8c83d436c8f5?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-19T00%3A22%3A07Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_x64-setup.exe&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T23%3A21%3A58Z&ske=2026-10-19T00%3A22%3A07Z&sks=b&skv=2018-11-09&sig=HFDyT6cf4pQ63YlQFkBhpoDyQEIO6DEJMrGqQT4FC5I%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2NzY2MiwibmJmIjoxNzkyMzY1ODYyLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.ihl03ocdH9_rRoU6K1unuw2Go5FLJ6tfOfJmiL2Qsdk&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_x64-setup.exe&response-content-type=application%2Foctet-stream"
+        }
+      ]
+    },
+    {
+      "url": "https://github.com/bradleybond512/crystal-ball/releases/download/v2.25.147/Crystal.Ball_2.25.147_x64.dmg",
+      "from": [
+        "/download"
+      ],
+      "kind": "external",
+      "status": 200,
+      "ok": true,
+      "fragmentChecked": true,
+      "attempts": [
+        {
+          "method": "HEAD",
+          "status": 200,
+          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/409c11d3-bd5c-4fe7-a02b-f07f36c94a10?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-19T00%3A21%3A25Z&rscd=attachment%3B+filename%3DCrystal.Ball_2.25.147_x64.dmg&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T23%3A20%3A50Z&ske=2026-10-19T00%3A21%3A25Z&sks=b&skv=2018-11-09&sig=tAzrBlGlB01sTa8m3z5%2BGdT0yjcsumCQvDN9RSKAbb0%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2NzY2MSwibmJmIjoxNzkyMzY1ODYxLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.PcXuDsNcU0HSK_2iqAA53lgNXM7opKK5D3xGI4Ga7C0&response-content-disposition=attachment%3B%20filename%3DCrystal.Ball_2.25.147_x64.dmg&response-content-type=application%2Foctet-stream"
+        }
+      ]
+    },
+    {
+      "url": "https://github.com/bradleybond512/crystal-ball/releases/download/v2.25.147/release-manifest.json",
+      "from": [
+        "/download",
+        "/security"
+      ],
+      "kind": "external",
+      "status": 200,
+      "ok": true,
+      "fragmentChecked": true,
+      "attempts": [
+        {
+          "method": "HEAD",
+          "status": 200,
+          "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1171076424/dc751aca-3e95-48bf-9e88-743f3b49072f?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-10-18T23%3A58%3A09Z&rscd=attachment%3B+filename%3Drelease-manifest.json&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-10-18T22%3A57%3A17Z&ske=2026-10-18T23%3A58%3A09Z&sks=b&skv=2018-11-09&sig=ufa8PzK1IX%2FDpK6F4FrUBo%2FgDto1b1U%2FYlvDR%2BRLXjw%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5MjM2NjE2MSwibmJmIjoxNzkyMzY1ODYxLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.fFrpqYmNSr7MG2SyiIW4qekS6D7cybwxx-I-vPYHodM&response-content-disposition=attachment%3B%20filename%3Drelease-manifest.json&response-content-type=application%2Foctet-stream"
+        }
+      ]
+    },
+    {
+      "url": "https://github.com/bradleybond512/crystal-ball/releases/latest",
+      "from": [
+        "/download",
+        "/security"
+      ],
+      "kind": "external",
+      "status": 200,
+      "ok": true,
+      "fragmentChecked": true,
+      "attempts": [
+        {
+          "method": "HEAD",
+          "status": 200,
+          "finalUrl": "https://github.com/bradleybond512/crystal-ball/releases/tag/v2.25.147"
+        }
+      ]
+    },
+    {
+      "url": "https://github.com/bradleybond512/crystal-ball/security",
+      "from": [
+        "/security"
+      ],
+      "kind": "external",
+      "status": 200,
+      "ok": true,
+      "fragmentChecked": true,
+      "attempts": [
+        {
+          "method": "HEAD",
+          "status": 200,
+          "finalUrl": "https://github.com/bradleybond512/crystal-ball/security"
+        }
+      ]
+    },
+    {
+      "url": "https://github.com/bradleybond512/crystal-ball/tree/main",
+      "from": [
+        "/docs"
+      ],
+      "kind": "external",
+      "status": 200,
+      "ok": true,
+      "fragmentChecked": true,
+      "attempts": [
+        {
+          "method": "HEAD",
+          "status": 200,
+          "finalUrl": "https://github.com/bradleybond512/crystal-ball/tree/main"
+        }
+      ]
+    },
+    {
+      "url": "https://github.com/sponsors/bradleybond512",
+      "from": [
+        "/",
+        "/download",
+        "/docs",
+        "/privacy",
+        "/security"
+      ],
+      "kind": "external",
+      "status": 200,
+      "ok": true,
+      "fragmentChecked": true,
+      "attempts": [
+        {
+          "method": "HEAD",
+          "status": 200,
+          "finalUrl": "https://github.com/sponsors/bradleybond512"
+        }
+      ]
+    },
+    {
+      "url": "https://support.apple.com/en-us/102445",
+      "from": [
+        "/download"
+      ],
+      "kind": "external",
+      "status": 200,
+      "ok": true,
+      "fragmentChecked": true,
+      "attempts": [
+        {
+          "method": "HEAD",
+          "status": 200,
+          "finalUrl": "https://support.apple.com/en-us/102445"
+        }
+      ]
+    }
+  ]
+}

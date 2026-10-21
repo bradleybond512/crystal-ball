@@ -1,0 +1,111 @@
+
+> crystal-ball-site@0.1.0 test
+> npm run build && node --test tests/*.test.mjs
+
+
+> crystal-ball-site@0.1.0 build
+> npm run generate && WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build
+
+
+> crystal-ball-site@0.1.0 generate
+> node scripts/generate-site-data.mjs && node scripts/generate-discovery.mjs
+
+{"counts":{"panels":{"full":409,"tech":35,"finance":31,"happy":10},"mcp":{"total":61,"read":53,"analyst":8,"categories":9},"editions":4,"platforms":3},"releaseAvailable":true,"releaseError":null}
+
+  vinext build  (Vite 8.2.2)
+
+(node:93955) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[1/5] analyze client references...
+transforming...
+✓ 249 modules transformed.
+rendering chunks...
+[plugin rsc:virtual:vite-rsc/assets-manifest] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (rsc:virtual:vite-rsc/assets-manifest) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+[plugin vinext:action-owner-manifest] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (vinext:action-owner-manifest) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+✓ built in 3.23s
+[2/5] analyze server references...
+transforming...
+✓ 85 modules transformed.
+rendering chunks...
+[plugin rsc:virtual:vite-rsc/assets-manifest] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (rsc:virtual:vite-rsc/assets-manifest) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+✓ built in 240ms
+[3/5] build rsc environment...
+transforming...
+✓ 241 modules transformed.
+rendering chunks...
+computing gzip size...
+[plugin rsc:inject-async-local-storage] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (rsc:inject-async-local-storage) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+[plugin rsc:inject-async-local-storage] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (rsc:inject-async-local-storage) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+[plugin vinext:action-owner-manifest] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (vinext:action-owner-manifest) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+✓ built in 785ms
+[4/5] build client environment...
+transforming...
+✓ 129 modules transformed.
+rendering chunks...
+computing gzip size...
+✓ built in 644ms
+[5/5] build ssr environment...
+transforming...
+✓ 91 modules transformed.
+rendering chunks...
+computing gzip size...
+[plugin rsc:inject-async-local-storage] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (rsc:inject-async-local-storage) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+[plugin rsc:inject-async-local-storage] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (rsc:inject-async-local-storage) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+[plugin rsc:virtual:vite-rsc/assets-manifest] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (rsc:virtual:vite-rsc/assets-manifest) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+✓ built in 740ms
+[0m
+  Route (app)
+  ┌ λ /
+  ├ λ /docs
+  ├ λ /download
+  ├ λ /privacy
+  ├ λ /robots.txt
+  └ λ /security
+
+  λ API
+
+  Build complete. Run `vinext start` to start the production server.
+
+✔ braces rejects excessive parsed nesting before stack exhaustion (348.447042ms)
+✔ braces bounds supplied ASTs and cyclic expansion parents (509.428583ms)
+✔ braces preserves ordinary globs and permits only lower depth limits (3.566916ms)
+✔ micromatch uses the reviewed local braces source (20.73ms)
+✔ shared panel counts are derived from actual variant catalogs (330.325125ms)
+✔ shared MCP counts match actual registry and read-only annotations (18.213042ms)
+✔ source references exist at the pinned revision and license agrees (461.513334ms)
+✔ edition examples belong to each actual catalog and assistant examples name registered tools (352.843666ms)
+✔ catalog parsing counts adjacent properties and rejects duplicates or spread (184.413208ms)
+✔ specs use explicit minimums and build targets, not runner OS versions (1.0505ms)
+✔ latest release assets and checksums come from API and matching manifest (143.284584ms)
+✔ API errors and timeout discard stale version-specific assets (3.7045ms)
+✔ manifest fetch failure or wrong version fails closed without stale downloads (2.307625ms)
+✔ missing manifest and absent architectures are disclosed rather than invented (0.375125ms)
+✔ malformed asset URLs cannot become download links (0.429709ms)
+✔ serves separate accessible product, download, docs and trust pages (320.162834ms)
+✔ serves machine-readable discovery (7.354625ms)
+✔ offers compressed HTML only when accepted (41.781084ms)
+✔ provides valid application structured data and dated source counts (8.38675ms)
+✔ prioritizes a single hero and keeps product shots responsive and unique (6.212625ms)
+✔ minifies embedded styles and scripts without removing motion and focus support (2.576667ms)
+✔ reveals sourced detail with specific controls and one capture note (5.374833ms)
+✔ serves the exact build-generated sitemap without a rendering route (5.116375ms)
+✔ serves the static sitemap without a Cloudflare asset binding (0.755375ms)
+✔ keeps feature depth without duplicate disclosures or platform caveats (5.87325ms)
+✔ distinguishes illustrative examples from live data and keeps the example day in sequence (3.2865ms)
+ℹ tests 26
+ℹ suites 0
+ℹ pass 26
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2100.021125

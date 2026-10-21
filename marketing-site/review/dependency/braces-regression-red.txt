@@ -1,0 +1,130 @@
+✖ braces rejects excessive parsed nesting before stack exhaustion (107.297875ms)
+✖ braces bounds supplied ASTs and cyclic expansion parents (137.600833ms)
+✖ braces preserves ordinary globs and permits only lower depth limits (3.48175ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 0
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 384.003042
+
+✖ failing tests:
+
+test at marketing-site/tests/braces-security.test.mjs:15:1
+✖ braces rejects excessive parsed nesting before stack exhaustion (107.297875ms)
+  AssertionError [ERR_ASSERTION]: node:internal/assert/utils:146
+    throw error;
+    ^
+
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+      at [eval]:3:14
+      at runScriptInThisContext (node:internal/vm:219:10)
+      at node:internal/process/execution:483:12
+      at [eval]-wrapper:6:24
+      at runScriptInContext (node:internal/process/execution:481:60)
+      at evalFunction (node:internal/process/execution:315:30)
+      at evalTypeScript (node:internal/process/execution:327:3)
+      at node:internal/main/eval_string:71:3 {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /exceeds max depth/,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+  Node.js v26.3.0
+
+
+  1 !== 0
+
+      at bounded (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/tests/braces-security.test.mjs:12:10)
+      at TestContext.<anonymous> (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/tests/braces-security.test.mjs:16:3)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.start (node:internal/test_runner/test:1242:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at marketing-site/tests/braces-security.test.mjs:23:1
+✖ braces bounds supplied ASTs and cyclic expansion parents (137.600833ms)
+  AssertionError [ERR_ASSERTION]: node:assert:573
+      throw err;
+      ^
+
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /exceeds max depth/. Input:
+
+  'RangeError: Maximum call stack size exceeded'
+
+      at [eval]:4:12
+      at runScriptInThisContext (node:internal/vm:219:10)
+      at node:internal/process/execution:483:12
+      at [eval]-wrapper:6:24
+      at runScriptInContext (node:internal/process/execution:481:60)
+      at evalFunction (node:internal/process/execution:315:30)
+      at evalTypeScript (node:internal/process/execution:327:3)
+      at node:internal/main/eval_string:71:3 {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: RangeError: Maximum call stack size exceeded
+        at exports.isInvalidBrace (/Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/crystal-ball/node_modules/braces/lib/utils.js:62:26)
+        at walk (/Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/crystal-ball/node_modules/braces/lib/compile.js:8:32)
+        at walk (/Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/crystal-ball/node_modules/braces/lib/compile.js:50:19)
+        at walk (/Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/crystal-ball/node_modules/braces/lib/compile.js:50:19)
+        at walk (/Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/crystal-ball/node_modules/braces/lib/compile.js:50:19)
+        at walk (/Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/crystal-ball/node_modules/braces/lib/compile.js:50:19)
+        at walk (/Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/crystal-ball/node_modules/braces/lib/compile.js:50:19)
+        at walk (/Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/crystal-ball/node_modules/braces/lib/compile.js:50:19)
+        at walk (/Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/crystal-ball/node_modules/braces/lib/compile.js:50:19)
+        at walk (/Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/crystal-ball/node_modules/braces/lib/compile.js:50:19),
+    expected: /exceeds max depth/,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+  Node.js v26.3.0
+
+
+  1 !== 0
+
+      at bounded (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/tests/braces-security.test.mjs:12:10)
+      at TestContext.<anonymous> (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/tests/braces-security.test.mjs:24:3)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at marketing-site/tests/braces-security.test.mjs:35:1
+✖ braces preserves ordinary globs and permits only lower depth limits (3.48175ms)
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+      at TestContext.<anonymous> (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/tests/braces-security.test.mjs:38:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /exceeds max depth/,
+    operator: 'throws',
+    diff: 'simple'
+  }

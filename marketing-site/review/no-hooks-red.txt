@@ -1,0 +1,39 @@
+
+> crystal-ball-site@0.1.0 build
+> WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build
+
+
+  vinext build  (Vite 8.2.2)
+
+(node:77910) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[1/5] analyze client references...
+transforming...
+✓ 4 modules transformed.
+✗ Build failed in 177ms
+Build failed with 1 error:
+
+[31m[UNRESOLVED_IMPORT] [0mCould not resolve '../public/sitemap.xml?raw' in worker/index.ts
+   [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m worker/index.ts:3:8 [38;5;246m][0m
+   [38;5;246m│[0m
+ [38;5;246m3 │[0m [38;5;249mi[0m[38;5;249mm[0m[38;5;249mp[0m[38;5;249mo[0m[38;5;249mr[0m[38;5;249mt[0m[38;5;249m [0m"../public/sitemap.xml?raw"[38;5;249m;[0m
+ [38;5;240m  │[0m        ─────────────┬─────────────
+ [38;5;240m  │[0m                     ╰─────────────── Module not found.
+ [38;5;240m  │[0m
+ [38;5;240m  │[0m [38;5;115mHelp[0m: 'worker/index.ts' is imported by the following path:
+ [38;5;240m  │[0m         - worker/index.ts
+ [38;5;240m  │[0m         - \0virtual:cloudflare/worker-entry
+[38;5;246m───╯[0m
+
+    at aggregateBindingErrorsIntoJsError (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/node_modules/rolldown/dist/shared/error-NcRuXAVN.mjs:48:18)
+    at unwrapBindingResult (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/node_modules/rolldown/dist/shared/error-NcRuXAVN.mjs:18:128)
+    at #build (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/node_modules/rolldown/dist/shared/rolldown-vcii7mEa.mjs:132:34)
+    at async buildEnvironment (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/node_modules/vite/dist/node/chunks/node.js:33821:66)
+    at async Object.build (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/node_modules/vite/dist/node/chunks/node.js:34242:19)
+    at async buildApp (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/node_modules/@vitejs/plugin-rsc/dist/plugin-Cbs9j6lP.js:726:3)
+    at async BasicMinimalPluginContext.handler (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/node_modules/@vitejs/plugin-rsc/dist/plugin-Cbs9j6lP.js:855:43)
+    at async Object.buildApp (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/node_modules/vite/dist/node/chunks/node.js:34236:5)
+    at async file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/node_modules/vinext/dist/cli.js:330:4
+    at async buildApp (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/node_modules/vinext/dist/cli.js:327:2) {
+  errors: [Getter/Setter]
+}

@@ -389,6 +389,10 @@
   "tools/mcp-server/result.mjs": [
     "test:mcp-untrusted"
   ],
+  "tools/mcp-server/tool-catalog.mjs": [
+    "test:mcp-untrusted",
+    "test:mcp-companion"
+  ],
   "tools/mcp-server/tool-registry.mjs": [
     "test:mcp-untrusted",
     "test:mcp-companion"

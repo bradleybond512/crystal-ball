@@ -1,0 +1,84 @@
+✔ braces rejects excessive parsed nesting before stack exhaustion (275.123458ms)
+✔ braces bounds supplied ASTs and cyclic expansion parents (654.324833ms)
+✔ braces preserves ordinary globs and permits only lower depth limits (5.460458ms)
+✔ micromatch uses the reviewed local braces source (26.681875ms)
+✔ shared panel counts are derived from actual variant catalogs (211.082958ms)
+✔ shared MCP counts match actual registry and read-only annotations (8.239333ms)
+✔ source references exist at the pinned revision and license agrees (206.054416ms)
+✔ edition examples belong to each actual catalog and assistant examples name registered tools (122.676ms)
+✔ catalog parsing counts adjacent properties and rejects duplicates or spread (48.740709ms)
+✔ specs use explicit minimums and build targets, not runner OS versions (4.005042ms)
+✔ latest release assets and checksums come from API and matching manifest (69.98075ms)
+✔ API errors and timeout discard stale version-specific assets (3.6265ms)
+✔ manifest fetch failure or wrong version fails closed without stale downloads (1.267625ms)
+✔ missing manifest and absent architectures are disclosed rather than invented (0.891834ms)
+✔ malformed asset URLs cannot become download links (1.055667ms)
+✔ serves separate accessible product, download, docs and trust pages (338.969416ms)
+✔ serves machine-readable discovery (38.263333ms)
+✔ offers compressed HTML only when accepted (68.7595ms)
+✔ provides valid application structured data and dated source counts (11.501375ms)
+✔ prioritizes a single hero and keeps product shots responsive and unique (44.360625ms)
+✔ minifies embedded styles and scripts without removing motion and focus support (39.593083ms)
+✔ reveals sourced detail with specific controls and one capture note (87.484792ms)
+✔ serves the exact build-generated sitemap without a rendering route (37.649667ms)
+✔ serves the static sitemap without a Cloudflare asset binding (43.868666ms)
+✔ keeps feature depth without duplicate disclosures or platform caveats (7.023209ms)
+✔ distinguishes illustrative examples from live data and keeps the example day in sequence (3.032209ms)
+✖ keeps map categories consistent across the overview and specifications (9.572834ms)
+✖ qualifies source-only features beside their claims and identifies the audited release (22.1325ms)
+✖ uses a briefing capture and keeps decorative timeline markers out of the accessibility tree (7.149292ms)
+ℹ tests 29
+ℹ suites 0
+ℹ pass 26
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1638.802458
+
+✖ failing tests:
+
+test at marketing-site/tests/marketing.test.mjs:179:1
+✖ keeps map categories consistent across the overview and specifications (9.572834ms)
+  AssertionError [ERR_ASSERTION]: Specifications include waterways
+      at TestContext.<anonymous> (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/tests/marketing.test.mjs:186:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at marketing-site/tests/marketing.test.mjs:190:1
+✖ qualifies source-only features beside their claims and identifies the audited release (22.1325ms)
+  AssertionError [ERR_ASSERTION]: mcp tile 1 must qualify release availability
+      at TestContext.<anonymous> (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/tests/marketing.test.mjs:197:38)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at marketing-site/tests/marketing.test.mjs:214:1
+✖ uses a briefing capture and keeps decorative timeline markers out of the accessibility tree (7.149292ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /<img[^>]+src="\/app-live-home-briefing-1600\.webp"/. Input:
+  
+  '<section class="product-section" id="home-shell" aria-labelledby="home-shell-title" data-reveal><div class="shell"><p class="section-label">Briefing</p><h2 id="home-shell-title">Your morning, briefed.</h2><p class="subhead">Start with a clearer view of the situations you follow.</p><figure class="product-shot"><img src="/app-live-analysis-library-1600.webp" srcset="/app-live-analysis-library-800.webp 800w, /app-live-analysis-library-1600.webp 1600w" sizes="(max-width: 800px) 100vw, 1200px" width="1600" height="1001" loading="lazy" decoding="async" alt="Crystal Ball Home Shell situation cards and source readiness"><figcaption>Home Shell situation cards and source readiness.</figcaption></figure><div class="feature-grid"><article class="feature-tile"><h3>Your situation cards.</h3><span class="release-label">Coming in the next release</span><p>Read headlines, entries, and evidence notes across Personal, What Changed, and Critical Worldwide bands.</p></article><article class="feature-tile"><h3>Know source readiness.</h3><span class="release-label">Coming in the next release</span><p>Check USGS, GDACS, Open-Meteo, and GDELT for working, stale, or failed refresh states.</p></article><article class="feature-tile"><h3>Your own desk.</h3><p>Open selected panels from Your Deck, or browse the Library for a different view.</p></article></div><div class="feature-followup"><a href="https://github.com/bradleybond512/crystal-ball/blob/main/src/components/HomeShellOverlay.ts" target="_blank" rel="noopener noreferrer">See your briefing</a><p class="fine-print">Coverage depends on source readiness.</p></div></div></section>'
+  
+      at TestContext.<anonymous> (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/tests/marketing.test.mjs:217:9)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '<section class="product-section" id="home-shell" aria-labelledby="home-shell-title" data-reveal><div class="shell"><p class="section-label">Briefing</p><h2 id="home-shell-title">Your morning, briefed.</h2><p class="subhead">Start with a clearer view of the situations you follow.</p><figure class="product-shot"><img src="/app-live-analysis-library-1600.webp" srcset="/app-live-analysis-library-800.webp 800w, /app-live-analysis-library-1600.webp 1600w" sizes="(max-width: 800px) 100vw, 1200px" width="1600" height="1001" loading="lazy" decoding="async" alt="Crystal Ball Home Shell situation cards and source readiness"><figcaption>Home Shell situation cards and source readiness.</figcaption></figure><div class="feature-grid"><article class="feature-tile"><h3>Your situation cards.</h3><span class="release-label">Coming in the next release</span><p>Read headlines, entries, and evidence notes across Personal, What Changed, and Critical Worldwide bands.</p></article><article class="feature-tile"><h3>Know source readiness.</h3><span class="release-label">Coming in the next release</span><p>Check USGS, GDACS, Open-Meteo, and GDELT for working, stale, or failed refresh states.</p></article><article class="feature-tile"><h3>Your own desk.</h3><p>Open selected panels from Your Deck, or browse the Library for a different view.</p></article></div><div class="feature-followup"><a href="https://github.com/bradleybond512/crystal-ball/blob/main/src/components/HomeShellOverlay.ts" target="_blank" rel="noopener noreferrer">See your briefing</a><p class="fine-print">Coverage depends on source readiness.</p></div></div></section>',
+    expected: /<img[^>]+src="\/app-live-home-briefing-1600\.webp"/,
+    operator: 'match',
+    diff: 'simple'
+  }

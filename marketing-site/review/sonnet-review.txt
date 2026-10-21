@@ -1,0 +1,22 @@
+The plan file is written. Here is a summary of the review findings:
+
+---
+
+## Independent Review: 7b238b8 vs 78e3404
+
+**Reviewer model: claude-sonnet-4-6**
+
+### Pre-existing documented blocker (not new)
+`braces <=3.0.3` (GHSA-vfj7-8cjw-p6xm) — 8 high advisories in the dev toolchain, documented in `marketing-site/review/QA.md` as a release blocker. Not waived by this review.
+
+### Security implementation
+- **URL injection (the previously flagged issue):** Correctly fixed. `generate-site-data.mjs:91` filters `!/[<>"'\s].test(url)` before any release asset enters the data model. `lib/render.ts` wraps all `releaseUrl()` call sites in `escape()` or passes through `link()` which calls `escape(url)`. A dedicated test at `generation.test.mjs:83-88` confirms malformed URLs are rejected. Generator mutation proof (7/0→5/2) verifies both the count guard and the URL filter are load-bearing.
+- **Static site.json URLs** interpolated without `escape()` in a few template strings — these are controlled, repository-managed constants, not external API data. Not a blocking finding.
+- CSP, framing headers, content-length cap, vm sandbox, static sitemap routing, and schema JSON-LD escaping are all correct.
+
+### Test evidence
+`review/tests.txt` records **18 pass / 0 fail**. Both mutation proofs are committed with diffs and red-run evidence. Source-commit pinning is verified by test at build time.
+
+### Conclusion
+
+**Zero new blocking implementation findings.** The only blocker is the pre-existing, documented braces dev advisory, which must be resolved before deployment. This review does not waive it.

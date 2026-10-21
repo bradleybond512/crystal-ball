@@ -1,0 +1,32 @@
+✔ braces rejects excessive parsed nesting before stack exhaustion (856.842459ms)
+✔ braces bounds supplied ASTs and cyclic expansion parents (739.765292ms)
+✔ braces preserves ordinary globs and permits only lower depth limits (6.90475ms)
+✔ micromatch uses the reviewed local braces source (35.919333ms)
+✔ shared panel counts are derived from actual variant catalogs (88.748792ms)
+✔ shared MCP counts match actual registry and read-only annotations (16.358458ms)
+✔ source references exist at the pinned revision and license agrees (709.466708ms)
+✔ catalog parsing counts adjacent properties and rejects duplicates or spread (44.027583ms)
+✔ specs use explicit minimums and build targets, not runner OS versions (1.587333ms)
+✔ latest release assets and checksums come from API and matching manifest (68.177875ms)
+✔ API errors and timeout discard stale version-specific assets (8.771083ms)
+✔ manifest fetch failure or wrong version fails closed without stale downloads (1.502917ms)
+✔ missing manifest and absent architectures are disclosed rather than invented (0.303084ms)
+✔ malformed asset URLs cannot become download links (0.255084ms)
+✔ serves separate accessible product, download, docs and trust pages (709.627917ms)
+✔ serves machine-readable discovery (5.993208ms)
+✔ offers compressed HTML only when accepted (380.456625ms)
+✔ provides valid application structured data and dated source counts (20.51575ms)
+✔ prioritizes a single hero and keeps product shots responsive and unique (29.555959ms)
+✔ minifies embedded styles and scripts without removing motion and focus support (4.936083ms)
+✔ reveals sourced detail with specific controls and one capture note (14.583584ms)
+✔ serves the exact build-generated sitemap without a rendering route (4.217416ms)
+✔ serves the static sitemap without a Cloudflare asset binding (1.34ms)
+✔ keeps feature depth without duplicate disclosures or platform caveats (17.608958ms)
+ℹ tests 24
+ℹ suites 0
+ℹ pass 24
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2994.373042

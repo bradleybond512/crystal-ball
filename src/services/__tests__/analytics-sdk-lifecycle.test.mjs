@@ -41,7 +41,7 @@ async function harness(t, seed = {}, deferred = false, options = {}) {
   };
   globalThis.window = { addEventListener: (name, handler) => state.listeners.push({ name, handler }) };
   globalThis.document = { addEventListener: (name, handler) => state.listeners.push({ name, handler }) };
-  state.inject = config => { state.vercel.push(config); }; 
+  state.inject = config => { state.vercel.push(config); };
   globalThis.fetch = async (...args) => { state.sends.push(args); if (state.hold) return new Promise(resolve => state.pending.push(resolve)); return new Response('', { status: 200 }); };
   t.after(async () => {
     release();

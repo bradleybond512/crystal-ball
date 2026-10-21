@@ -1,0 +1,27 @@
+✔ serves separate accessible product, download, docs and trust pages (68.936916ms)
+✔ serves machine-readable discovery (3.614125ms)
+✔ offers compressed HTML only when accepted (7.532458ms)
+✔ provides valid application structured data and dated source counts (3.189458ms)
+✔ prioritizes a single hero and keeps product shots responsive and unique (1.421541ms)
+✔ minifies embedded styles and scripts without removing motion and focus support (1.106417ms)
+✔ reveals sourced detail with specific controls and one capture note (1.82825ms)
+✔ serves the exact build-generated sitemap without a rendering route (1.296833ms)
+✖ serves the static sitemap without a Cloudflare asset binding (0.375625ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 8
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 192.085166
+
+✖ failing tests:
+
+test at marketing-site/tests/marketing.test.mjs:126:2
+✖ serves the static sitemap without a Cloudflare asset binding (0.375625ms)
+  TypeError: Cannot read properties of undefined (reading 'fetch')
+      at Object.fetch (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/dist/server/index.js:14:146887)
+      at TestContext.<anonymous> (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/tests/marketing.test.mjs:128:30)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)

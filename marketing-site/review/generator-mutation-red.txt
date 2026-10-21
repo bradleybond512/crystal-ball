@@ -1,0 +1,66 @@
+✖ catalog parsing counts adjacent properties and rejects duplicates or spread (12.659209ms)
+✔ specs use explicit minimums and build targets, not runner OS versions (1.267917ms)
+✔ latest release assets and checksums come from API and matching manifest (34.495542ms)
+✔ API errors and timeout discard stale version-specific assets (2.900584ms)
+✔ manifest fetch failure or wrong version fails closed without stale downloads (1.031792ms)
+✔ missing manifest and absent architectures are disclosed rather than invented (0.270833ms)
+✖ malformed asset URLs cannot become download links (0.973375ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 5
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 442.133458
+
+✖ failing tests:
+
+test at marketing-site/tests/generation.test.mjs:16:1
+✖ catalog parsing counts adjacent properties and rejects duplicates or spread (12.659209ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   full: 1,
+  +   tech: 0
+  -   full: 2,
+  -   tech: 1
+    }
+
+      at TestContext.<anonymous> (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/tests/generation.test.mjs:17:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.start (node:internal/test_runner/test:1242:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { full: 1, tech: 0 },
+    expected: { full: 2, tech: 1 },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at marketing-site/tests/generation.test.mjs:83:1
+✖ malformed asset URLs cannot become download links (0.973375ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + {
+  +   name: 'Crystal.Ball_3.0_arm64.dmg',
+  +   sha256: null,
+  +   sizeBytes: 12345,
+  +   url: 'https://github.com/bradleybond512/crystal-ball/releases/download/v3.0/Crystal.Ball_3.0_arm64.dmg" onclick="alert(1)'
+  + }
+  - undefined
+
+      at TestContext.<anonymous> (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/tests/generation.test.mjs:86:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { name: 'Crystal.Ball_3.0_arm64.dmg', url: 'https://github.com/bradleybond512/crystal-ball/releases/download/v3.0/Crystal.Ball_3.0_arm64.dmg" onclick="alert(1)', sizeBytes: 12345, sha256: null },
+    expected: undefined,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

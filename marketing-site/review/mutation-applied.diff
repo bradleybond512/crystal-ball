@@ -1,0 +1,39 @@
+diff --git a/marketing-site/data/site.json b/marketing-site/data/site.json
+index 521ef40..bf83a97 100644
+--- a/marketing-site/data/site.json
++++ b/marketing-site/data/site.json
+@@ -5,7 +5,7 @@
+   "sourceSha": "78e34040d738c82195162b28280e8ce865c3bb6d",
+   "counts": {
+     "panels": {
+-      "full": 409,
++      "full": 408,
+       "tech": 35,
+       "finance": 31,
+       "happy": 10
+diff --git a/marketing-site/lib/render.ts b/marketing-site/lib/render.ts
+index 35b2eda..17aa0e3 100644
+--- a/marketing-site/lib/render.ts
++++ b/marketing-site/lib/render.ts
+@@ -6,7 +6,7 @@ const escape = (value: string) => value.replaceAll('&', '&amp;').replaceAll('"',
+ const link = (url: string, text: string) => `<a href="${escape(url)}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+ const source = (path: string, text = 'Read the source') => link(`${data.urls.github}/blob/${data.sourceSha}/${path}`, text);
+ const releaseUrl = (file: string) => data.release.base + file;
+-const shot = (name: string, alt: string, caption: string, hero = false) => `<figure class="product-shot"><img src="/${name}-1600.webp" srcset="/${name}-800.webp 800w, /${name}-1600.webp 1600w" sizes="(max-width: 800px) 100vw, 1200px" width="${data.images.width}" height="${data.images.height}" ${hero ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"'} decoding="async" alt="${escape(alt)}"><figcaption>${caption} · Installed macOS app · Captured ${data.images.capturedAt}.</figcaption></figure>`;
++const shot = (name: string, alt: string, caption: string, hero = false) => `<figure class="product-shot"><img src="/${name}-1600.webp" srcset="/${name}-800.webp 800w, /${name}-1600.webp 1600w" sizes="(max-width: 800px) 100vw, 1200px" width="${data.images.width}" height="${data.images.height}" ${hero ? 'loading="eager" fetchpriority="low"' : 'loading="lazy"'} decoding="async" alt="${escape(alt)}"><figcaption>${caption} · Installed macOS app · Captured ${data.images.capturedAt}.</figcaption></figure>`;
+ const learn = (content: string) => `<details><summary>Learn more.</summary>${content}</details>`;
+ const section = (id: string, label: string, title: string, subhead: string, content: string) => `<section class="product-section" id="${id}" aria-labelledby="${id}-title" data-reveal><div class="shell"><p class="section-label">${label}</p><h2 id="${id}-title">${title}</h2><p class="subhead">${subhead}</p>${content}</div></section>`;
+ const cta = `<div class="hero-actions"><a class="button button-primary" href="/download">Download for Mac</a><a class="button" href="${data.urls.web}" target="_blank" rel="noopener noreferrer">Try it in your browser</a></div>`;
+diff --git a/marketing-site/lib/response.ts b/marketing-site/lib/response.ts
+index cd1a42c..e5d2b2a 100644
+--- a/marketing-site/lib/response.ts
++++ b/marketing-site/lib/response.ts
+@@ -13,7 +13,7 @@ export async function respond(request: Request, content: string, contentType = "
+     const quality = parameters.find((p) => p.trim().startsWith("q="));
+     return encoding === "gzip" && (!quality || Number(quality.trim().slice(2)) > 0);
+   });
+-  if (acceptsGzip) {
++  if (false && acceptsGzip) {
+     headers.set("Content-Encoding", "gzip");
+     return new Response(new Response(content).body!.pipeThrough(new CompressionStream("gzip")), { headers });
+   }

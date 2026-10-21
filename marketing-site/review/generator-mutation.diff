@@ -1,0 +1,22 @@
+diff --git a/marketing-site/scripts/generate-site-data.mjs b/marketing-site/scripts/generate-site-data.mjs
+index ea24283..c74b81f 100644
+--- a/marketing-site/scripts/generate-site-data.mjs
++++ b/marketing-site/scripts/generate-site-data.mjs
+@@ -21,7 +21,7 @@ export function derivePanels(source) {
+         return property.name.text;
+       });
+       assert.equal(new Set(names).size, names.length, 'Panel names must be unique');
+-      counts[declaration.name.text.replace('_PANELS', '').toLowerCase()] = names.length;
++      counts[declaration.name.text.replace('_PANELS', '').toLowerCase()] = names.length - 1;
+     }
+   }
+   assert.ok(Object.keys(counts).length, 'No panel catalogs found');
+@@ -88,7 +88,7 @@ export async function resolveRelease({ github, fetchImpl = fetch, timeoutMs = 12
+     assert.ok(typeof release.tag_name === 'string' && typeof release.published_at === 'string' && Number.isFinite(Date.parse(release.published_at)) && Array.isArray(release.assets), 'Invalid release metadata');
+     assert.ok(!release.draft && !release.prerelease, 'Latest release must be published and stable');
+     const prefix = `${github}/releases/download/`;
+-    const assets = release.assets.filter((asset) => typeof asset.name === 'string' && typeof asset.browser_download_url === 'string' && asset.browser_download_url.startsWith(prefix) && !/[<>\"'\s]/.test(asset.browser_download_url) && Number.isSafeInteger(asset.size) && asset.size >= 0);
++    const assets = release.assets.filter((asset) => typeof asset.name === 'string' && typeof asset.browser_download_url === 'string' && asset.browser_download_url.startsWith(prefix) && Number.isSafeInteger(asset.size) && asset.size >= 0);
+     const manifestAsset = assets.find((asset) => asset.name === 'release-manifest.json');
+     let manifest = null;
+     if (manifestAsset) {

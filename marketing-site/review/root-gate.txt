@@ -1,0 +1,740 @@
+
+==> npm run test:marketing
+
+> crystal-ball@2.25.147 test:marketing
+> npm --prefix marketing-site run typecheck && npm --prefix marketing-site run lint && npm --prefix marketing-site test
+
+
+> crystal-ball-site@0.1.0 typecheck
+> tsc --noEmit
+
+
+> crystal-ball-site@0.1.0 lint
+> eslint . --ignore-pattern dist --ignore-pattern .next
+
+
+> crystal-ball-site@0.1.0 test
+> npm run build && node --test tests/*.test.mjs
+
+
+> crystal-ball-site@0.1.0 build
+> WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build
+
+
+  vinext build  (Vite 8.2.2)
+
+(node:25374) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[1/5] analyze client references...
+transforming...
+✓ 248 modules transformed.
+rendering chunks...
+[plugin rsc:virtual:vite-rsc/assets-manifest] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (rsc:virtual:vite-rsc/assets-manifest) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+[plugin vinext:action-owner-manifest] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (vinext:action-owner-manifest) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+✓ built in 606ms
+[2/5] analyze server references...
+transforming...
+✓ 85 modules transformed.
+rendering chunks...
+[plugin rsc:virtual:vite-rsc/assets-manifest] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (rsc:virtual:vite-rsc/assets-manifest) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+✓ built in 113ms
+[3/5] build rsc environment...
+transforming...
+✓ 240 modules transformed.
+rendering chunks...
+computing gzip size...
+[plugin rsc:inject-async-local-storage] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (rsc:inject-async-local-storage) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+[plugin rsc:inject-async-local-storage] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (rsc:inject-async-local-storage) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+[plugin vinext:action-owner-manifest] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (vinext:action-owner-manifest) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+✓ built in 631ms
+[4/5] build client environment...
+transforming...
+✓ 129 modules transformed.
+rendering chunks...
+computing gzip size...
+✓ built in 683ms
+[5/5] build ssr environment...
+transforming...
+✓ 91 modules transformed.
+rendering chunks...
+computing gzip size...
+[plugin rsc:inject-async-local-storage] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (rsc:inject-async-local-storage) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+[plugin rsc:inject-async-local-storage] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (rsc:inject-async-local-storage) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+[plugin rsc:virtual:vite-rsc/assets-manifest] [33m[SOURCEMAP_BROKEN] [0mSourcemap is likely to be incorrect: a plugin (rsc:virtual:vite-rsc/assets-manifest) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help: https://rolldown.rs/guide/troubleshooting#warning-sourcemap-is-likely-to-be-incorrect
+
+✓ built in 829ms
+[0m
+  Route (app)
+  ┌ λ /
+  ├ λ /docs
+  ├ λ /download
+  ├ λ /privacy
+  ├ λ /robots.txt
+  ├ λ /security
+  └ λ /sitemap.xml
+
+  λ API
+
+  Build complete. Run `vinext start` to start the production server.
+
+✔ shared panel counts are derived from actual variant catalogs (13.419959ms)
+✔ shared MCP counts match actual registry and read-only annotations (11.799209ms)
+✔ source references exist at the pinned revision and license agrees (361.725334ms)
+✔ serves separate accessible product, download, docs and trust pages (161.588583ms)
+✔ serves machine-readable discovery (5.954125ms)
+✔ offers compressed HTML only when accepted (29.306834ms)
+✔ provides valid application structured data and dated source counts (5.042375ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 622.723541
+
+==> npm run lockfile:check
+
+> crystal-ball@2.25.147 lockfile:check
+> node scripts/check-package-lock.mjs
+
+[lockfile:check] package-lock.json version fields look valid.
+
+==> npm run lint:strict
+
+> crystal-ball@2.25.147 lint:strict
+> npm run lint:conflicts && npm run lint:json && npm run lint:yaml && npm run lint:shell && npm run lint:md && npm run lint:colors
+
+
+> crystal-ball@2.25.147 lint:conflicts
+> node scripts/lint-conflicts.mjs
+
+[lint:conflicts] No merge conflict markers found.
+
+> crystal-ball@2.25.147 lint:json
+> node scripts/lint-json.mjs
+
+[lint:json] Parsed 153 tracked JSON file(s).
+
+> crystal-ball@2.25.147 lint:yaml
+> node scripts/lint-yaml.mjs
+
+[lint:yaml] Parsed 23 tracked YAML file(s).
+
+> crystal-ball@2.25.147 lint:shell
+> node scripts/lint-shell.mjs
+
+[lint:shell] Checked 14 tracked shell file(s).
+
+> crystal-ball@2.25.147 lint:md
+> node scripts/lint-markdown.mjs
+
+[lint:md] Checked 255 Markdown file(s).
+
+> crystal-ball@2.25.147 lint:colors
+> node scripts/lint-colors.mjs
+
+[lint:colors] OK — 453 files with 7733 baselined literals, none exceeded. 6 file(s) improved — consider --update to ratchet the baseline down.
+
+==> npm run typecheck:all
+
+> crystal-ball@2.25.147 typecheck:all
+> tsc --noEmit && tsc --noEmit -p tsconfig.api.json
+
+
+==> npm run secrets:scan
+
+> crystal-ball@2.25.147 secrets:scan
+> node scripts/secret-scan.mjs
+
+Secret scan passed for 5179 file(s).
+
+==> npm run cross-agent:check
+
+> crystal-ball@2.25.147 cross-agent:check
+> node scripts/cross-agent-check.mjs
+
+Crystal Ball cross-agent check
+Branch: codex/marketing-layout
+Changed files: 64
+Changed areas: docs, tests
+Required reviewer: Claude
+
+Available local review tools:
+- Claude CLI: available
+- Codex CLI: available
+- GitHub CLI: available
+- Qodo CLI: missing (optional)
+- CodeRabbit CLI: available
+
+Second-agent review prompt:
+```
+Review the current Crystal Ball branch codex/marketing-layout as an independent reviewer.
+Focus on changed files since main. Prioritize bugs, regressions, security risks, missing tests, and CI/release hazards.
+Changed areas: docs, tests.
+Return findings first with file/line references, then test gaps and residual risk.
+```
+
+After the second review, record the verdict as a SHA-pinned commit (a PR-body
+marker no longer satisfies the gate — see .github/workflows/cross-agent-review.yml):
+```
+node scripts/verify-review-verdict.mjs --record --reviewer claude --model <sonnet-model-id> --evidence-file <review-output>
+```
+Reviewer models: Codex must be a GPT Sol model, gpt-6.1-sol or newer; Claude must be a Claude Sonnet model (for example claude-sonnet-4-6 or sonnet).
+That flag both writes .agentic/reviews/<sha>.json and commits it — do not commit again.
+It pins the reviewed SHA, so record it LAST: any later code commit invalidates the
+verdict and the gate stays red until a fresh review is recorded.
+
+==> npm run docs:check -- --changelog-advisory
+
+> crystal-ball@2.25.147 docs:check
+> node scripts/check-docs-freshness.mjs --changelog-advisory
+
+[docs:check] Documentation appears fresh.
+
+==> npm run roadmap:check
+
+> crystal-ball@2.25.147 roadmap:check
+> node scripts/roadmap-controller.mjs
+
+<!-- crystal-ball-roadmap-controller:v1 -->
+# Roadmap controller
+
+Accuracy program: ACTIVE | Usability program: ACTIVE
+
+BLOCKED: 1 | DONE: 52 | MONITOR: 6 | TODO: 32 | WAITING: 9
+
+**Next eligible task:** UX-033 [S] — Keep content reachable during stacked warnings
+
+## Blocking
+
+- None.
+
+## Advisory
+
+- Next eligible task is UX-033 [S]: Keep content reachable during stacked warnings
+
+<!-- roadmap-body-sha256:4a888c45cc3bedd2dfd420a16af8970ca12b1b105768f5cdc7333d482e2e2d3c -->
+
+==> npm run build
+
+> crystal-ball@2.25.147 build
+> tsc && vite build
+
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vite.config.ts:769:29). Use `import.meta.dirname` instead
+  - JSON import "./package.json" without import attributes (vite.config.ts:9:17). Add `with { type: 'json' }`
+  - import "./src/utils/sw-safety-feeds" without a file extension (vite.config.ts:10:34). Add the file extension
+  - import "./src/config/csp-policy" without a file extension (vite.config.ts:11:45). Add the file extension
+  - import "./server/router" without a file extension (vite.config.ts:309:9). Add the file extension
+  - import "./server/cors" without a file extension (vite.config.ts:310:9). Add the file extension
+  - import "./server/error-mapper" without a file extension (vite.config.ts:311:9). Add the file extension
+  - import "./src/generated/server/crystalball/seismology/v1/service_server" without a file extension (vite.config.ts:312:9). Add the file extension
+  - import "./server/crystalball/seismology/v1/handler" without a file extension (vite.config.ts:313:9). Add the file extension
+  - import "./src/generated/server/crystalball/wildfire/v1/service_server" without a file extension (vite.config.ts:314:9). Add the file extension
+  - import "./server/crystalball/wildfire/v1/handler" without a file extension (vite.config.ts:315:9). Add the file extension
+  - import "./src/generated/server/crystalball/climate/v1/service_server" without a file extension (vite.config.ts:316:9). Add the file extension
+  - import "./server/crystalball/climate/v1/handler" without a file extension (vite.config.ts:317:9). Add the file extension
+  - import "./src/generated/server/crystalball/prediction/v1/service_server" without a file extension (vite.config.ts:318:9). Add the file extension
+  - import "./server/crystalball/prediction/v1/handler" without a file extension (vite.config.ts:319:9). Add the file extension
+  - import "./src/generated/server/crystalball/displacement/v1/service_server" without a file extension (vite.config.ts:320:9). Add the file extension
+  - import "./server/crystalball/displacement/v1/handler" without a file extension (vite.config.ts:321:9). Add the file extension
+  - import "./src/generated/server/crystalball/aviation/v1/service_server" without a file extension (vite.config.ts:322:9). Add the file extension
+  - import "./server/crystalball/aviation/v1/handler" without a file extension (vite.config.ts:323:9). Add the file extension
+  - import "./src/generated/server/crystalball/research/v1/service_server" without a file extension (vite.config.ts:324:9). Add the file extension
+  - import "./server/crystalball/research/v1/handler" without a file extension (vite.config.ts:325:9). Add the file extension
+  - import "./src/generated/server/crystalball/unrest/v1/service_server" without a file extension (vite.config.ts:326:9). Add the file extension
+  - import "./server/crystalball/unrest/v1/handler" without a file extension (vite.config.ts:327:9). Add the file extension
+  - import "./src/generated/server/crystalball/conflict/v1/service_server" without a file extension (vite.config.ts:328:9). Add the file extension
+  - import "./server/crystalball/conflict/v1/handler" without a file extension (vite.config.ts:329:9). Add the file extension
+  - import "./src/generated/server/crystalball/maritime/v1/service_server" without a file extension (vite.config.ts:330:9). Add the file extension
+  - import "./server/crystalball/maritime/v1/handler" without a file extension (vite.config.ts:331:9). Add the file extension
+  - import "./src/generated/server/crystalball/cyber/v1/service_server" without a file extension (vite.config.ts:332:9). Add the file extension
+  - import "./server/crystalball/cyber/v1/handler" without a file extension (vite.config.ts:333:9). Add the file extension
+  - import "./src/generated/server/crystalball/economic/v1/service_server" without a file extension (vite.config.ts:334:9). Add the file extension
+  - import "./server/crystalball/economic/v1/handler" without a file extension (vite.config.ts:335:9). Add the file extension
+  - import "./src/generated/server/crystalball/infrastructure/v1/service_server" without a file extension (vite.config.ts:336:9). Add the file extension
+  - import "./server/crystalball/infrastructure/v1/handler" without a file extension (vite.config.ts:337:9). Add the file extension
+  - import "./src/generated/server/crystalball/market/v1/service_server" without a file extension (vite.config.ts:338:9). Add the file extension
+  - import "./server/crystalball/market/v1/handler" without a file extension (vite.config.ts:339:9). Add the file extension
+  - import "./src/generated/server/crystalball/news/v1/service_server" without a file extension (vite.config.ts:340:9). Add the file extension
+  - import "./server/crystalball/news/v1/handler" without a file extension (vite.config.ts:341:9). Add the file extension
+  - import "./src/generated/server/crystalball/intelligence/v1/service_server" without a file extension (vite.config.ts:342:9). Add the file extension
+  - import "./server/crystalball/intelligence/v1/handler" without a file extension (vite.config.ts:343:9). Add the file extension
+  - import "./src/generated/server/crystalball/military/v1/service_server" without a file extension (vite.config.ts:344:9). Add the file extension
+  - import "./server/crystalball/military/v1/handler" without a file extension (vite.config.ts:345:9). Add the file extension
+  - import "./src/generated/server/crystalball/positive_events/v1/service_server" without a file extension (vite.config.ts:346:9). Add the file extension
+  - import "./server/crystalball/positive-events/v1/handler" without a file extension (vite.config.ts:347:9). Add the file extension
+  - import "./src/generated/server/crystalball/giving/v1/service_server" without a file extension (vite.config.ts:348:9). Add the file extension
+  - import "./server/crystalball/giving/v1/handler" without a file extension (vite.config.ts:349:9). Add the file extension
+  - import "./src/generated/server/crystalball/trade/v1/service_server" without a file extension (vite.config.ts:350:9). Add the file extension
+  - import "./server/crystalball/trade/v1/handler" without a file extension (vite.config.ts:351:9). Add the file extension
+  - import "../../../../src/generated/server/crystalball/intelligence/v1/service_server" without a file extension (server/crystalball/intelligence/v1/handler.ts:1:49). Add the file extension
+  - import "../../../../src/generated/server/crystalball/economic/v1/service_server" without a file extension (server/crystalball/economic/v1/handler.ts:1:45). Add the file extension
+  - import "../../../../src/generated/server/crystalball/conflict/v1/service_server" without a file extension (server/crystalball/conflict/v1/handler.ts:18:45). Add the file extension
+  - import "../../../../src/generated/server/crystalball/maritime/v1/service_server" without a file extension (server/crystalball/maritime/v1/handler.ts:1:45). Add the file extension
+  - import "../../../../src/generated/server/crystalball/cyber/v1/service_server" without a file extension (server/crystalball/cyber/v1/handler.ts:1:42). Add the file extension
+  - import "../../../../src/generated/server/crystalball/infrastructure/v1/service_server" without a file extension (server/crystalball/infrastructure/v1/handler.ts:1:51). Add the file extension
+  - import "../../../../src/generated/server/crystalball/giving/v1/service_server" without a file extension (server/crystalball/giving/v1/handler.ts:1:43). Add the file extension
+  - import "../../../../src/generated/server/crystalball/unrest/v1/service_server" without a file extension (server/crystalball/unrest/v1/handler.ts:1:43). Add the file extension
+  - import "../../../../src/generated/server/crystalball/seismology/v1/service_server" without a file extension (server/crystalball/seismology/v1/handler.ts:1:47). Add the file extension
+  - import "../../../../src/generated/server/crystalball/wildfire/v1/service_server" without a file extension (server/crystalball/wildfire/v1/handler.ts:1:45). Add the file extension
+  - import "../../../../src/generated/server/crystalball/displacement/v1/service_server" without a file extension (server/crystalball/displacement/v1/handler.ts:1:49). Add the file extension
+  - import "../../../../src/generated/server/crystalball/aviation/v1/service_server" without a file extension (server/crystalball/aviation/v1/handler.ts:1:45). Add the file extension
+  - import "../../../../src/generated/server/crystalball/positive_events/v1/service_server" without a file extension (server/crystalball/positive-events/v1/handler.ts:1:51). Add the file extension
+  - import "../../../../src/generated/server/crystalball/research/v1/service_server" without a file extension (server/crystalball/research/v1/handler.ts:11:45). Add the file extension
+  - import "../../../../src/generated/server/crystalball/market/v1/service_server" without a file extension (server/crystalball/market/v1/handler.ts:14:43). Add the file extension
+  - import "../../../../src/generated/server/crystalball/climate/v1/service_server" without a file extension (server/crystalball/climate/v1/handler.ts:1:44). Add the file extension
+  - import "../../../../src/generated/server/crystalball/news/v1/service_server" without a file extension (server/crystalball/news/v1/handler.ts:1:41). Add the file extension
+  - import "../../../../src/generated/server/crystalball/trade/v1/service_server" without a file extension (server/crystalball/trade/v1/handler.ts:1:42). Add the file extension
+  - import "../../../../src/generated/server/crystalball/prediction/v1/service_server" without a file extension (server/crystalball/prediction/v1/handler.ts:1:47). Add the file extension
+  - import "../../../../src/generated/server/crystalball/military/v1/service_server" without a file extension (server/crystalball/military/v1/handler.ts:1:45). Add the file extension
+  - import "./get-risk-scores" without a file extension (server/crystalball/intelligence/v1/handler.ts:3:31). Add the file extension
+  - import "./get-fred-series" without a file extension (server/crystalball/economic/v1/handler.ts:3:31). Add the file extension
+  - import "./list-acled-events" without a file extension (server/crystalball/conflict/v1/handler.ts:20:33). Add the file extension
+  - import "./get-vessel-snapshot" without a file extension (server/crystalball/maritime/v1/handler.ts:3:35). Add the file extension
+  - import "./list-cyber-threats" without a file extension (server/crystalball/cyber/v1/handler.ts:3:34). Add the file extension
+  - import "./get-cable-health" without a file extension (server/crystalball/infrastructure/v1/handler.ts:3:32). Add the file extension
+  - import "./get-giving-summary" without a file extension (server/crystalball/giving/v1/handler.ts:3:34). Add the file extension
+  - import "./list-unrest-events" without a file extension (server/crystalball/unrest/v1/handler.ts:3:34). Add the file extension
+  - import "./list-earthquakes" without a file extension (server/crystalball/seismology/v1/handler.ts:3:33). Add the file extension
+  - import "./list-fire-detections" without a file extension (server/crystalball/wildfire/v1/handler.ts:3:36). Add the file extension
+  - import "./get-displacement-summary" without a file extension (server/crystalball/displacement/v1/handler.ts:3:40). Add the file extension
+  - import "./list-positive-geo-events" without a file extension (server/crystalball/positive-events/v1/handler.ts:2:39). Add the file extension
+  - import "./list-market-quotes" without a file extension (server/crystalball/market/v1/handler.ts:15:34). Add the file extension
+  - import "./list-climate-anomalies" without a file extension (server/crystalball/climate/v1/handler.ts:3:38). Add the file extension
+  - import "./summarize-article" without a file extension (server/crystalball/news/v1/handler.ts:3:34). Add the file extension
+  - import "./get-trade-restrictions" without a file extension (server/crystalball/trade/v1/handler.ts:3:38). Add the file extension
+  - import "./list-prediction-markets" without a file extension (server/crystalball/prediction/v1/handler.ts:3:39). Add the file extension
+  - import "./list-military-flights" without a file extension (server/crystalball/military/v1/handler.ts:3:37). Add the file extension
+  - import "./get-pizzint-status" without a file extension (server/crystalball/intelligence/v1/handler.ts:4:34). Add the file extension
+  - import "./list-world-bank-indicators" without a file extension (server/crystalball/economic/v1/handler.ts:4:41). Add the file extension
+  - import "./list-ucdp-events" without a file extension (server/crystalball/conflict/v1/handler.ts:21:32). Add the file extension
+  - import "./list-navigational-warnings" without a file extension (server/crystalball/maritime/v1/handler.ts:4:42). Add the file extension
+  - import "./list-internet-outages" without a file extension (server/crystalball/infrastructure/v1/handler.ts:4:37). Add the file extension
+  - import "./get-population-exposure" without a file extension (server/crystalball/displacement/v1/handler.ts:4:39). Add the file extension
+  - import "./list-arxiv-papers" without a file extension (server/crystalball/research/v1/handler.ts:12:33). Add the file extension
+  - import "./list-crypto-quotes" without a file extension (server/crystalball/market/v1/handler.ts:16:34). Add the file extension
+  - import "./list-feed-digest" without a file extension (server/crystalball/news/v1/handler.ts:4:32). Add the file extension
+  - import "./get-tariff-trends" without a file extension (server/crystalball/trade/v1/handler.ts:4:33). Add the file extension
+  - import "./get-theater-posture" without a file extension (server/crystalball/military/v1/handler.ts:4:35). Add the file extension
+  - import "./classify-event" without a file extension (server/crystalball/intelligence/v1/handler.ts:5:31). Add the file extension
+  - import "./get-energy-prices" without a file extension (server/crystalball/economic/v1/handler.ts:5:33). Add the file extension
+  - import "./get-humanitarian-summary" without a file extension (server/crystalball/conflict/v1/handler.ts:22:40). Add the file extension
+  - import "./list-service-statuses" without a file extension (server/crystalball/infrastructure/v1/handler.ts:5:37). Add the file extension
+  - import "./list-trending-repos" without a file extension (server/crystalball/research/v1/handler.ts:13:35). Add the file extension
+  - import "./list-commodity-quotes" without a file extension (server/crystalball/market/v1/handler.ts:17:37). Add the file extension
+  - import "./get-trade-flows" without a file extension (server/crystalball/trade/v1/handler.ts:5:31). Add the file extension
+  - import "./get-aircraft-details" without a file extension (server/crystalball/military/v1/handler.ts:5:36). Add the file extension
+  - import "./get-country-intel-brief" without a file extension (server/crystalball/intelligence/v1/handler.ts:6:38). Add the file extension
+  - import "./get-macro-signals" without a file extension (server/crystalball/economic/v1/handler.ts:6:33). Add the file extension
+  - import "./list-iran-events" without a file extension (server/crystalball/conflict/v1/handler.ts:23:32). Add the file extension
+  - import "./get-temporal-baseline" without a file extension (server/crystalball/infrastructure/v1/handler.ts:6:37). Add the file extension
+  - import "./list-hackernews-items" without a file extension (server/crystalball/research/v1/handler.ts:14:37). Add the file extension
+  - import "./get-trade-barriers" without a file extension (server/crystalball/trade/v1/handler.ts:6:34). Add the file extension
+  - import "./get-aircraft-details-batch" without a file extension (server/crystalball/military/v1/handler.ts:6:41). Add the file extension
+  - import "./search-gdelt-documents" without a file extension (server/crystalball/intelligence/v1/handler.ts:7:38). Add the file extension
+  - import "./get-energy-capacity" without a file extension (server/crystalball/economic/v1/handler.ts:7:35). Add the file extension
+  - import "./get-sector-summary" without a file extension (server/crystalball/market/v1/handler.ts:18:34). Add the file extension
+  - import "./get-bis-policy-rates" without a file extension (server/crystalball/economic/v1/handler.ts:8:35). Add the file extension
+  - import "./record-baseline-snapshot" without a file extension (server/crystalball/infrastructure/v1/handler.ts:7:40). Add the file extension
+  - import "./list-airport-delays" without a file extension (server/crystalball/aviation/v1/handler.ts:3:35). Add the file extension
+  - import "./list-tech-events" without a file extension (server/crystalball/research/v1/handler.ts:15:32). Add the file extension
+  - import "./list-stablecoin-markets" without a file extension (server/crystalball/market/v1/handler.ts:19:39). Add the file extension
+  - import "./get-wingbits-status" without a file extension (server/crystalball/military/v1/handler.ts:7:35). Add the file extension
+  - import "../../../../src/generated/server/crystalball/positive_events/v1/service_server" without a file extension (server/crystalball/positive-events/v1/list-positive-geo-events.ts:11:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/seismology/v1/service_server" without a file extension (server/crystalball/seismology/v1/list-earthquakes.ts:13:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/cyber/v1/service_server" without a file extension (server/crystalball/cyber/v1/list-cyber-threats.ts:7:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/giving/v1/service_server" without a file extension (server/crystalball/giving/v1/get-giving-summary.ts:22:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/climate/v1/service_server" without a file extension (server/crystalball/climate/v1/list-climate-anomalies.ts:18:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/wildfire/v1/service_server" without a file extension (server/crystalball/wildfire/v1/list-fire-detections.ts:18:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/unrest/v1/service_server" without a file extension (server/crystalball/unrest/v1/list-unrest-events.ts:13:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/maritime/v1/service_server" without a file extension (server/crystalball/maritime/v1/get-vessel-snapshot.ts:12:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/news/v1/service_server" without a file extension (server/crystalball/news/v1/list-feed-digest.ts:8:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/prediction/v1/service_server" without a file extension (server/crystalball/prediction/v1/list-prediction-markets.ts:16:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/maritime/v1/service_server" without a file extension (server/crystalball/maritime/v1/list-navigational-warnings.ts:6:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/trade/v1/service_server" without a file extension (server/crystalball/trade/v1/get-trade-barriers.ts:18:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/displacement/v1/service_server" without a file extension (server/crystalball/displacement/v1/get-population-exposure.ts:12:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/news/v1/service_server" without a file extension (server/crystalball/news/v1/summarize-article.ts:5:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/displacement/v1/service_server" without a file extension (server/crystalball/displacement/v1/get-displacement-summary.ts:13:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/trade/v1/service_server" without a file extension (server/crystalball/trade/v1/get-trade-restrictions.ts:18:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/trade/v1/service_server" without a file extension (server/crystalball/trade/v1/get-tariff-trends.ts:16:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/intelligence/v1/service_server" without a file extension (server/crystalball/intelligence/v1/get-risk-scores.ts:9:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/trade/v1/service_server" without a file extension (server/crystalball/trade/v1/get-trade-flows.ts:16:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/intelligence/v1/service_server" without a file extension (server/crystalball/intelligence/v1/search-gdelt-documents.ts:6:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/intelligence/v1/service_server" without a file extension (server/crystalball/intelligence/v1/classify-event.ts:8:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/intelligence/v1/service_server" without a file extension (server/crystalball/intelligence/v1/get-country-intel-brief.ts:7:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/intelligence/v1/service_server" without a file extension (server/crystalball/intelligence/v1/get-pizzint-status.ts:10:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/conflict/v1/service_server" without a file extension (server/crystalball/conflict/v1/list-iran-events.ts:5:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/conflict/v1/service_server" without a file extension (server/crystalball/conflict/v1/list-acled-events.ts:14:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/conflict/v1/service_server" without a file extension (server/crystalball/conflict/v1/get-humanitarian-summary.ts:14:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/conflict/v1/service_server" without a file extension (server/crystalball/conflict/v1/list-ucdp-events.ts:7:8). Add the file extension
+  - import "./get-bis-exchange-rates" without a file extension (server/crystalball/economic/v1/handler.ts:9:37). Add the file extension
+  - import "./list-etf-flows" without a file extension (server/crystalball/market/v1/handler.ts:20:30). Add the file extension
+  - import "./get-usni-fleet-report" without a file extension (server/crystalball/military/v1/handler.ts:8:36). Add the file extension
+  - import "../../../../src/services/positive-classifier" without a file extension (server/crystalball/positive-events/v1/list-positive-geo-events.ts:13:34). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/seismology/v1/list-earthquakes.ts:15:33). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/cyber/v1/list-cyber-threats.ts:9:33). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/giving/v1/get-giving-summary.ts:24:33). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/climate/v1/list-climate-anomalies.ts:20:27). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/wildfire/v1/list-fire-detections.ts:20:27). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/unrest/v1/list-unrest-events.ts:23:8). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/maritime/v1/get-vessel-snapshot.ts:14:27). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/news/v1/list-feed-digest.ts:9:33). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/prediction/v1/list-prediction-markets.ts:18:27). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/maritime/v1/list-navigational-warnings.ts:8:27). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/trade/v1/get-trade-barriers.ts:20:33). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/news/v1/summarize-article.ts:7:41). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/displacement/v1/get-displacement-summary.ts:15:27). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/trade/v1/get-trade-restrictions.ts:20:33). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/trade/v1/get-tariff-trends.ts:18:33). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/intelligence/v1/get-risk-scores.ts:11:63). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/trade/v1/get-trade-flows.ts:18:33). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/intelligence/v1/search-gdelt-documents.ts:8:37). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/intelligence/v1/classify-event.ts:10:33). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/intelligence/v1/get-country-intel-brief.ts:9:33). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/intelligence/v1/get-pizzint-status.ts:12:37). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/conflict/v1/list-iran-events.ts:7:31). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/conflict/v1/get-humanitarian-summary.ts:16:27). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/conflict/v1/list-ucdp-events.ts:8:27). Add the file extension
+  - import "./get-bis-credit" without a file extension (server/crystalball/economic/v1/handler.ts:10:30). Add the file extension
+  - import "./get-country-stock-index" without a file extension (server/crystalball/market/v1/handler.ts:21:38). Add the file extension
+  - import "./list-military-bases" without a file extension (server/crystalball/military/v1/handler.ts:9:35). Add the file extension
+  - import "../../../_shared/response-headers" without a file extension (server/crystalball/positive-events/v1/list-positive-geo-events.ts:14:37). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/cyber/v1/list-cyber-threats.ts:29:8). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/seismology/v1/list-earthquakes.ts:16:27). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/climate/v1/list-climate-anomalies.ts:21:33). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/wildfire/v1/list-fire-detections.ts:21:33). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/unrest/v1/list-unrest-events.ts:24:27). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/news/v1/list-feed-digest.ts:10:27). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/prediction/v1/list-prediction-markets.ts:19:33). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/maritime/v1/list-navigational-warnings.ts:9:33). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/trade/v1/get-trade-barriers.ts:21:44). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/news/v1/summarize-article.ts:14:8). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/displacement/v1/get-displacement-summary.ts:16:33). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/trade/v1/get-trade-restrictions.ts:21:44). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/trade/v1/get-tariff-trends.ts:19:55). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/intelligence/v1/get-risk-scores.ts:12:33). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/trade/v1/get-trade-flows.ts:19:68). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/intelligence/v1/search-gdelt-documents.ts:9:27). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/intelligence/v1/classify-event.ts:11:75). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/intelligence/v1/get-country-intel-brief.ts:10:92). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/intelligence/v1/get-pizzint-status.ts:13:27). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/conflict/v1/list-acled-events.ts:16:33). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/conflict/v1/get-humanitarian-summary.ts:17:33). Add the file extension
+  - import "../../../../src/generated/server/crystalball/aviation/v1/service_server" without a file extension (server/crystalball/aviation/v1/list-airport-delays.ts:6:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/infrastructure/v1/service_server" without a file extension (server/crystalball/infrastructure/v1/list-internet-outages.ts:9:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/infrastructure/v1/service_server" without a file extension (server/crystalball/infrastructure/v1/get-cable-health.ts:8:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/infrastructure/v1/service_server" without a file extension (server/crystalball/infrastructure/v1/list-service-statuses.ts:7:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/infrastructure/v1/service_server" without a file extension (server/crystalball/infrastructure/v1/get-temporal-baseline.ts:5:8). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/research/v1/list-arxiv-papers.ts:9:27). Add the file extension
+  - import "../../../../src/generated/server/crystalball/research/v1/service_server" without a file extension (server/crystalball/research/v1/list-tech-events.ts:20:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/infrastructure/v1/service_server" without a file extension (server/crystalball/infrastructure/v1/record-baseline-snapshot.ts:5:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/research/v1/service_server" without a file extension (server/crystalball/research/v1/list-hackernews-items.ts:13:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/research/v1/service_server" without a file extension (server/crystalball/research/v1/list-trending-repos.ts:13:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/economic/v1/service_server" without a file extension (server/crystalball/economic/v1/get-fred-series.ts:14:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/economic/v1/service_server" without a file extension (server/crystalball/economic/v1/list-world-bank-indicators.ts:11:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/economic/v1/service_server" without a file extension (server/crystalball/economic/v1/get-energy-prices.ts:13:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/economic/v1/service_server" without a file extension (server/crystalball/economic/v1/get-bis-policy-rates.ts:11:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/economic/v1/service_server" without a file extension (server/crystalball/economic/v1/get-macro-signals.ts:13:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/economic/v1/service_server" without a file extension (server/crystalball/economic/v1/get-energy-capacity.ts:14:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/economic/v1/service_server" without a file extension (server/crystalball/economic/v1/get-bis-exchange-rates.ts:11:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/market/v1/service_server" without a file extension (server/crystalball/market/v1/list-market-quotes.ts:13:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/economic/v1/service_server" without a file extension (server/crystalball/economic/v1/get-bis-credit.ts:11:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/market/v1/service_server" without a file extension (server/crystalball/market/v1/get-country-stock-index.ts:10:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/market/v1/service_server" without a file extension (server/crystalball/market/v1/list-crypto-quotes.ts:11:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/market/v1/service_server" without a file extension (server/crystalball/market/v1/list-commodity-quotes.ts:13:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/market/v1/service_server" without a file extension (server/crystalball/market/v1/get-sector-summary.ts:13:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/market/v1/service_server" without a file extension (server/crystalball/market/v1/list-stablecoin-markets.ts:11:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/market/v1/service_server" without a file extension (server/crystalball/market/v1/list-etf-flows.ts:11:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/military/v1/service_server" without a file extension (server/crystalball/military/v1/list-military-flights.ts:8:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/military/v1/service_server" without a file extension (server/crystalball/military/v1/list-military-bases.ts:9:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/military/v1/service_server" without a file extension (server/crystalball/military/v1/get-theater-posture.ts:8:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/military/v1/service_server" without a file extension (server/crystalball/military/v1/get-aircraft-details-batch.ts:8:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/military/v1/service_server" without a file extension (server/crystalball/military/v1/get-aircraft-details.ts:8:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/military/v1/service_server" without a file extension (server/crystalball/military/v1/get-wingbits-status.ts:7:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/military/v1/service_server" without a file extension (server/crystalball/military/v1/get-usni-fleet-report.ts:9:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/cyber/v1/service_server" without a file extension (server/crystalball/cyber/v1/_shared.ts:25:8). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/unrest/v1/list-unrest-events.ts:25:33). Add the file extension
+  - import "./_feeds" without a file extension (server/crystalball/news/v1/list-feed-digest.ts:11:63). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/news/v1/summarize-article.ts:15:27). Add the file extension
+  - import "../../../_shared/acled" without a file extension (server/crystalball/intelligence/v1/get-risk-scores.ts:13:34). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/intelligence/v1/search-gdelt-documents.ts:10:33). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/intelligence/v1/classify-event.ts:12:27). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/intelligence/v1/get-country-intel-brief.ts:11:27). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/intelligence/v1/get-pizzint-status.ts:14:33). Add the file extension
+  - import "../../../_shared/acled" without a file extension (server/crystalball/conflict/v1/list-acled-events.ts:17:34). Add the file extension
+  - import "../../../../src/config/airports" without a file extension (server/crystalball/aviation/v1/list-airport-delays.ts:10:8). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/infrastructure/v1/list-internet-outages.ts:11:37). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/infrastructure/v1/get-cable-health.ts:10:33). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/infrastructure/v1/list-service-statuses.ts:9:37). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/infrastructure/v1/get-temporal-baseline.ts:7:31). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/research/v1/list-arxiv-papers.ts:10:33). Add the file extension
+  - import "../../../../api/data/city-coords" without a file extension (server/crystalball/research/v1/list-tech-events.ts:21:29). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/infrastructure/v1/record-baseline-snapshot.ts:7:31). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/research/v1/list-hackernews-items.ts:15:27). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/research/v1/list-trending-repos.ts:15:27). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/economic/v1/get-fred-series.ts:16:33). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/economic/v1/list-world-bank-indicators.ts:13:27). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/economic/v1/get-energy-prices.ts:15:27). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/economic/v1/get-bis-policy-rates.ts:13:33). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/economic/v1/get-macro-signals.ts:21:8). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/economic/v1/get-energy-capacity.ts:16:27). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/economic/v1/get-bis-exchange-rates.ts:13:33). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/market/v1/list-market-quotes.ts:14:78). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/economic/v1/get-bis-credit.ts:13:33). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/market/v1/get-country-stock-index.ts:11:62). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/market/v1/list-crypto-quotes.ts:12:52). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/market/v1/list-commodity-quotes.ts:14:39). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/market/v1/get-sector-summary.ts:14:58). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/market/v1/list-stablecoin-markets.ts:12:37). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/market/v1/list-etf-flows.ts:12:62). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/military/v1/list-military-flights.ts:10:92). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/military/v1/list-military-bases.ts:11:84). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/military/v1/get-theater-posture.ts:10:63). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/military/v1/get-aircraft-details-batch.ts:10:36). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/military/v1/get-aircraft-details.ts:10:36). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/military/v1/get-usni-fleet-report.ts:11:71). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/cyber/v1/_shared.ts:27:27). Add the file extension
+  - import "../../../_shared/acled" without a file extension (server/crystalball/unrest/v1/list-unrest-events.ts:26:34). Add the file extension
+  - import "./_classifier" without a file extension (server/crystalball/news/v1/list-feed-digest.ts:12:53). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/trade/v1/_shared.ts:8:27). Add the file extension
+  - import "../../../_shared/hash" without a file extension (server/crystalball/news/v1/_shared.ts:14:28). Add the file extension
+  - import "../../../_shared/hash" without a file extension (server/crystalball/intelligence/v1/_shared.ts:28:28). Add the file extension
+  - import "./constants" without a file extension (server/_shared/acled.ts:11:27). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/aviation/v1/list-airport-delays.ts:23:8). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/infrastructure/v1/list-internet-outages.ts:12:27). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/infrastructure/v1/get-cable-health.ts:11:37). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/infrastructure/v1/list-service-statuses.ts:10:33). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/infrastructure/v1/get-temporal-baseline.ts:15:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/research/v1/service_server" without a file extension (server/crystalball/research/v1/list-arxiv-papers.ts:19:8). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/research/v1/list-tech-events.ts:22:27). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/infrastructure/v1/record-baseline-snapshot.ts:14:8). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/research/v1/list-hackernews-items.ts:16:33). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/research/v1/list-trending-repos.ts:16:33). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/economic/v1/list-world-bank-indicators.ts:14:33). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/economic/v1/get-energy-prices.ts:16:33). Add the file extension
+  - import "./_bis-shared" without a file extension (server/crystalball/economic/v1/get-bis-policy-rates.ts:14:91). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/economic/v1/get-macro-signals.ts:22:33). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/economic/v1/get-energy-capacity.ts:17:33). Add the file extension
+  - import "./_bis-shared" without a file extension (server/crystalball/economic/v1/get-bis-exchange-rates.ts:14:91). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/market/v1/list-market-quotes.ts:15:33). Add the file extension
+  - import "./_bis-shared" without a file extension (server/crystalball/economic/v1/get-bis-credit.ts:14:91). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/market/v1/get-country-stock-index.ts:12:27). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/market/v1/list-crypto-quotes.ts:13:33). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/market/v1/list-commodity-quotes.ts:15:33). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/market/v1/get-sector-summary.ts:15:33). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/market/v1/list-stablecoin-markets.ts:13:27). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/market/v1/list-etf-flows.ts:13:38). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/military/v1/list-military-flights.ts:11:27). Add the file extension
+  - import "../../../_shared/response-headers" without a file extension (server/crystalball/military/v1/list-military-bases.ts:12:56). Add the file extension
+  - import "./_shared" without a file extension (server/crystalball/military/v1/get-theater-posture.ts:18:8). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/military/v1/get-aircraft-details-batch.ts:11:27). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/military/v1/get-aircraft-details.ts:11:27). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/military/v1/get-usni-fleet-report.ts:12:27). Add the file extension
+  - import "./redis" without a file extension (server/_shared/acled.ts:12:33). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/aviation/v1/list-airport-delays.ts:24:27). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/infrastructure/v1/list-internet-outages.ts:13:33). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/infrastructure/v1/get-cable-health.ts:12:27). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/infrastructure/v1/list-service-statuses.ts:11:27). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/research/v1/list-tech-events.ts:23:33). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/market/v1/get-country-stock-index.ts:13:33). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/market/v1/list-stablecoin-markets.ts:14:33). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/market/v1/list-etf-flows.ts:14:33). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/military/v1/list-military-flights.ts:12:33). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/military/v1/get-theater-posture.ts:19:27). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/military/v1/get-aircraft-details-batch.ts:12:53). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/military/v1/get-aircraft-details.ts:12:33). Add the file extension
+  - import "../../../../src/generated/server/crystalball/unrest/v1/service_server" without a file extension (server/crystalball/unrest/v1/_shared.ts:7:8). Add the file extension
+  - import "../../../_shared/redis" without a file extension (server/crystalball/aviation/v1/list-airport-delays.ts:25:33). Add the file extension
+  - import "../../../_shared/response-headers" without a file extension (server/crystalball/military/v1/list-military-flights.ts:13:37). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/economic/v1/_bis-shared.ts:6:27). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/economic/v1/_shared.ts:5:38). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/market/v1/_shared.ts:7:38). Add the file extension
+  - import "../../../../src/generated/server/crystalball/military/v1/service_server" without a file extension (server/crystalball/military/v1/_shared.ts:5:8). Add the file extension
+  - import "../../../../src/generated/server/crystalball/aviation/v1/service_server" without a file extension (server/crystalball/aviation/v1/_shared.ts:8:8). Add the file extension
+  - import "../../../../src/types" resolves to a directory index (server/crystalball/aviation/v1/_shared.ts:9:39). Import the index file directly
+  - import "../../../../src/config/airports" without a file extension (server/crystalball/aviation/v1/_shared.ts:14:8). Add the file extension
+  - import "../../../_shared/constants" without a file extension (server/crystalball/aviation/v1/_shared.ts:15:27). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+vite v8.3.0 building client environment for production...
+transforming...
+✓ 5750 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/manifest.webmanifest                                 0.67 kB
+dist/live-channels.html                                   1.90 kB │ gzip:     0.75 kB
+dist/settings.html                                        3.13 kB │ gzip:     1.30 kB
+dist/index.html                                          19.17 kB │ gzip:     4.82 kB
+dist/assets/satellite-propagator.worker-DUXKZt5w.js      23.06 kB
+dist/.vite/manifest.json                                 27.13 kB │ gzip:     3.77 kB
+dist/assets/analysis.worker-fguP_nXm.js                  38.35 kB
+dist/assets/maplibre-gl-worker-C9R8Li1F.js              507.45 kB
+dist/assets/ml.worker-CBk_cfBW.js                       813.73 kB
+dist/assets/settings-CB_ETP6Q.css                        18.18 kB │ gzip:     3.87 kB
+dist/assets/cesium-B9DDZdqH.css                          24.01 kB │ gzip:     5.37 kB
+dist/assets/maplibre-CKRTiAqP.css                        82.86 kB │ gzip:    10.71 kB
+dist/assets/main-DiEyWU1F.css                           503.09 kB │ gzip:    85.09 kB
+dist/assets/main-DCgk6rev.css                           559.95 kB │ gzip:    95.18 kB
+dist/assets/ml.worker-DJWpF4yb.js                         0.10 kB │ gzip:     0.11 kB
+dist/assets/liveChannels-DT_um3wB.js                      0.22 kB │ gzip:     0.18 kB
+dist/assets/osm-power-source-d_g4MtRt.js                  0.35 kB │ gzip:     0.24 kB
+dist/assets/onboarding-interests-C8wtLTYL.js              0.48 kB │ gzip:     0.32 kB
+dist/assets/modulepreload-polyfill-P2Xu9kJm.js            0.67 kB │ gzip:     0.38 kB
+dist/assets/overlay-helpers-Bt14gVQo.js                   0.67 kB │ gzip:     0.38 kB
+dist/assets/forecast-field-BZtN5WoL.js                    0.69 kB │ gzip:     0.43 kB
+dist/assets/celestrak-tle-CO5DErIC.js                     0.89 kB │ gzip:     0.56 kB
+dist/assets/wastewater-globe-helpers-BVBQoOfd.js          0.93 kB │ gzip:     0.57 kB
+dist/assets/vessel-globe-helpers-8EkU4d_y.js              0.95 kB │ gzip:     0.55 kB
+dist/assets/sidecar-probe-8u2m9fMY.js                     1.08 kB │ gzip:     0.64 kB
+dist/assets/rolldown-runtime-Dd_uD5pT.js                  1.10 kB │ gzip:     0.62 kB
+dist/assets/virtual_pwa-register-B7hu1odt.js              1.13 kB │ gzip:     0.60 kB
+dist/assets/degradation-alerts-B4M0KDvf.js                1.27 kB │ gzip:     0.57 kB
+dist/assets/SpaceWeatherGlobeOverlay-WCBX9aFZ.js          1.40 kB │ gzip:     0.77 kB
+dist/assets/world-happiness-B6TjK2iW.js                   1.42 kB │ gzip:     0.81 kB
+dist/assets/settings-window-B79lKYov.js                   1.55 kB │ gzip:     0.75 kB
+dist/assets/topojson-CX0luDEU.js                          1.55 kB │ gzip:     0.69 kB
+dist/assets/weather-mission-bridge-6pfPi5to.js            1.97 kB │ gzip:     0.97 kB
+dist/assets/device-identity-B7hc26qX.js                   2.01 kB │ gzip:     0.94 kB
+dist/assets/threat-reactor-5DMy9pUx.js                    2.01 kB │ gzip:     1.06 kB
+dist/assets/weather-hazard-globe-helpers-B1MMmHMP.js      2.30 kB │ gzip:     1.13 kB
+dist/assets/AnalyticsConsentBanner-wfL3tslF.js            2.33 kB │ gzip:     1.10 kB
+dist/assets/brief-pdf-CKYNHHyB.js                         2.53 kB │ gzip:     1.18 kB
+dist/assets/aviation-globe-helpers-ToN3CmHr.js            2.85 kB │ gzip:     1.27 kB
+dist/assets/notification-ladder-DckeWU6d.js               3.03 kB │ gzip:     1.27 kB
+dist/assets/drought-monitor-C8E_9A0U.js                   3.13 kB │ gzip:     1.67 kB
+dist/assets/OfflineStalenessBanner-BvyX5-GC.js            3.51 kB │ gzip:     1.18 kB
+dist/assets/wildfires-DYvKSjh2.js                         3.72 kB │ gzip:     1.67 kB
+dist/assets/data-bridge-BXDCQ6Y8.js                       3.79 kB │ gzip:     1.84 kB
+dist/assets/infrastructure-overlay-C2mMtmps.js            3.97 kB │ gzip:     1.98 kB
+dist/assets/satellite-weather-BfGBmxE2.js                 5.13 kB │ gzip:     2.32 kB
+dist/assets/contextual-deck-view-B9_I8kne.js              5.24 kB │ gzip:     2.13 kB
+dist/assets/workbox-window.prod.es5-Bd17z0YL.js           5.65 kB │ gzip:     2.20 kB
+dist/assets/enhanced-brief-snapshot-CBfZFeXm.js           6.18 kB │ gzip:     2.28 kB
+dist/assets/frontend-export-composer-CEpk-02V.js          8.22 kB │ gzip:     3.34 kB
+dist/assets/AiBriefModal-Bxx_mOJN.js                      8.28 kB │ gzip:     3.27 kB
+dist/assets/export-bundle-DKc1G7xX.js                     8.33 kB │ gzip:     2.96 kB
+dist/assets/conservation-wins-BoBOThBU.js                 8.46 kB │ gzip:     2.77 kB
+dist/assets/live-channels-window-dxQr9VnF.js             10.13 kB │ gzip:     3.22 kB
+dist/assets/story-renderer-C4xjjiB5.js                   10.35 kB │ gzip:     3.50 kB
+dist/assets/WelcomeFlow-Bh6B1ooU.js                      10.47 kB │ gzip:     3.12 kB
+dist/assets/sidebar-heat-DwfMoj4G.js                     11.04 kB │ gzip:     3.75 kB
+dist/assets/enhanced-brief-generator-Ba6aA2H5.js         13.43 kB │ gzip:     4.54 kB
+dist/assets/renewable-installations-CLnpAJJl.js          15.05 kB │ gzip:     3.14 kB
+dist/assets/settings-DSGfs9IG.js                         23.46 kB │ gzip:     7.66 kB
+dist/assets/vault-intro-Q4iU2zsL.js                      24.05 kB │ gzip:     7.12 kB
+dist/assets/d3-BQ-yQpaT.js                               36.82 kB │ gzip:    12.50 kB
+dist/assets/oref-locations-B93U0lmo.js                   46.71 kB │ gzip:    16.98 kB
+dist/assets/i18n-CfjeGMVH.js                             49.04 kB │ gzip:    15.44 kB
+dist/assets/panels-military-B6BTuuXf.js                  51.02 kB │ gzip:    17.24 kB
+dist/assets/panels-webcams-CVLRyPJE.js                   55.94 kB │ gzip:    16.21 kB
+dist/assets/locale-zh-CLXnfJAM.js                        61.79 kB │ gzip:    25.15 kB
+dist/assets/locale-sv-Cv1GlvQu.js                        66.30 kB │ gzip:    26.02 kB
+dist/assets/locale-tr-CR6PoqKL.js                        66.59 kB │ gzip:    25.35 kB
+dist/assets/locale-nl-D3Z68nEr.js                        68.15 kB │ gzip:    26.05 kB
+dist/assets/locale-de-FPejASPL.js                        69.14 kB │ gzip:    25.90 kB
+dist/assets/locale-it-l4E1kuwK.js                        69.79 kB │ gzip:    25.54 kB
+dist/assets/locale-pt-B8zl40KV.js                        70.56 kB │ gzip:    26.63 kB
+dist/assets/locale-pl-qr5yKIM5.js                        70.78 kB │ gzip:    27.35 kB
+dist/assets/locale-ja-4S9QQqz-.js                        70.92 kB │ gzip:    26.33 kB
+dist/assets/locale-es-BcyRRhPT.js                        71.14 kB │ gzip:    25.89 kB
+dist/assets/locale-fr-Dlg5XQki.js                        71.75 kB │ gzip:    26.31 kB
+dist/assets/locale-ko-BVsdp0EE.js                        73.71 kB │ gzip:    26.96 kB
+dist/assets/sentry-DeBC0Ew1.js                           76.88 kB │ gzip:    26.41 kB
+dist/assets/locale-vi-CO-f3ybH.js                        76.92 kB │ gzip:    25.88 kB
+dist/assets/locale-cs-PLmOM9WF.js                        78.12 kB │ gzip:    29.70 kB
+dist/assets/apt-groups-Cj-VzU6S.js                       78.82 kB │ gzip:    18.06 kB
+dist/assets/locale-ar-zNhr8B2M.js                        84.40 kB │ gzip:    26.54 kB
+dist/assets/panel-config-CnRvaRa4.js                     86.96 kB │ gzip:    18.07 kB
+dist/assets/panels-transit-t0Y5EdUa.js                   97.32 kB │ gzip:    27.90 kB
+dist/assets/locale-ru-qXXKmZxK.js                        99.97 kB │ gzip:    31.05 kB
+dist/assets/locale-el-DLsZ_Z6D.js                       104.87 kB │ gzip:    31.83 kB
+dist/assets/locale-th-DrKaYoya.js                       122.18 kB │ gzip:    28.52 kB
+dist/assets/panels-markets-DQVRuDNb.js                  147.02 kB │ gzip:    38.79 kB
+dist/assets/index.es-9tqB90s-.js                        151.29 kB │ gzip:    48.87 kB
+dist/assets/panels-hazards-xMCXNP3m.js                  152.64 kB │ gzip:    45.77 kB
+dist/assets/panels-feeds-QFFECinG.js                    165.64 kB │ gzip:    48.02 kB
+dist/assets/panels-diagnostic-CPhbFtk9.js               184.55 kB │ gzip:    51.53 kB
+dist/assets/DeckGLMap-LY40384Y.js                       184.63 kB │ gzip:    51.83 kB
+dist/assets/panels-wisdom-bVLDk4K3.js                   184.78 kB │ gzip:    42.36 kB
+dist/assets/html2canvas-CJ4rRp4d.js                     199.49 kB │ gzip:    46.78 kB
+dist/assets/module-dF7svTin.js                          205.38 kB │ gzip:    68.74 kB
+dist/assets/panels-security-BadKmYMR.js                 255.25 kB │ gzip:    70.64 kB
+dist/assets/panels-alerts-CAeBuzyh.js                   382.95 kB │ gzip:   101.30 kB
+dist/assets/jspdf.es.min-C9k3vIdS.js                    399.23 kB │ gzip:   129.65 kB
+dist/assets/panels-analysis-DZeVEqbF.js                 795.49 kB │ gzip:   214.32 kB
+dist/assets/maplibre-B8vpd6nr.js                      1,032.18 kB │ gzip:   278.18 kB
+dist/assets/deck-stack-BYLmSgvb.js                    1,199.29 kB │ gzip:   335.09 kB
+dist/assets/main-Bc6qRvbZ.js                          1,607.89 kB │ gzip:   462.37 kB
+dist/assets/panels-48Hg2jPP.js                        4,119.14 kB │ gzip: 1,153.54 kB
+dist/assets/GodsVisionView-BNKGmOQo.js                4,291.89 kB │ gzip: 1,151.23 kB
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0msrc/services/military-flights.ts is dynamically imported by src/app/data-loader.ts, src/components/GlobeDataManager.ts but also statically imported by src/services/index.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 1200 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0msrc/services/spc-outlook.ts is dynamically imported by src/app/panel-layout.ts but also statically imported by src/services/index.ts, src/services/intel-channels-bridge.ts, src/services/sidecar-pusher.ts, dynamic import will not move module into another chunk.
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0msrc/services/always-on.ts is dynamically imported by src/main.ts but also statically imported by src/app/refresh-scheduler.ts, src/components/UnifiedSettings.ts, dynamic import will not move module into another chunk.
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0msrc/components/NotificationStack.ts is dynamically imported by src/main.ts but also statically imported by src/app/panel-layout.ts, dynamic import will not move module into another chunk.
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0msrc/components/ImessagePausedNotice.ts is dynamically imported by src/main.ts but also statically imported by src/components/HomeShellOverlay.ts, dynamic import will not move module into another chunk.
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0msrc/services/insights/big-event-detector.ts is dynamically imported by src/app/data-loader.ts, src/app/panel-layout.ts but also statically imported by src/services/algorithms/tuning-safety-fixtures.ts, dynamic import will not move module into another chunk.
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0msrc/services/intelligence/assumption-producers.ts is dynamically imported by src/app/data-loader.ts but also statically imported by src/app/panel-layout.ts, dynamic import will not move module into another chunk.
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0msrc/services/weather/personal-weather-status.ts is dynamically imported by src/app/data-loader.ts but also statically imported by src/app/panel-layout.ts, dynamic import will not move module into another chunk.
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0msrc/services/weather/saved-place-adapter.ts is dynamically imported by src/app/data-loader.ts but also statically imported by src/app/panel-layout.ts, dynamic import will not move module into another chunk.
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0msrc/services/weather/weather-exposure.ts is dynamically imported by src/app/data-loader.ts but also statically imported by src/app/data-loader.ts, dynamic import will not move module into another chunk.
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0msrc/services/persistent-cache.ts is dynamically imported by src/services/algorithms/algorithm-ledger-persistence.ts, src/services/ops/mission-ledger-persistence.ts, src/utils/circuit-breaker.ts but also statically imported by src/app/data-loader.ts, src/components/InsightsPanel.ts, src/services/cached-risk-scores.ts, src/services/rss.ts, src/services/security-advisories.ts, ..., dynamic import will not move module into another chunk.
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0msrc/services/reasoning-memory.ts is dynamically imported by src/services/reasoning-metrics.ts but also statically imported by src/services/action-memory.ts, src/services/analyst-command-listener.ts, src/services/briefing-archive.ts, src/services/cognition/consolidation.ts, src/services/cognition/embedding-cache.ts, ..., dynamic import will not move module into another chunk.
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0msrc/services/runtime-config.ts is dynamically imported by src/services/runtime.ts but also statically imported by src/App.ts, src/app/data-loader.ts, src/components/AirstrikesPanel.ts, src/components/EconomicPanel.ts, src/components/GeoIntelPanel.ts, ..., dynamic import will not move module into another chunk.
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0msrc/services/data-freshness.ts is dynamically imported by src/services/shortage/shortage-input-bridge.ts but also statically imported by src/App.ts, src/app/country-intel.ts, src/app/data-loader.ts, src/app/event-handlers.ts, src/components/DiagnosticSelfTestPanel.ts, ..., dynamic import will not move module into another chunk.
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0msrc/services/power-grid-alerts.ts is dynamically imported by src/services/shortage/shortage-input-bridge.ts but also statically imported by src/app/data-loader.ts, src/services/index.ts, src/services/infrastructure-alert-bridge.ts, src/services/survival/storm-posture-state.ts, dynamic import will not move module into another chunk.
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0msrc/services/cognition/shadow-rollout.ts is dynamically imported by src/services/intelligence/forecast-calibration-adapter.ts but also statically imported by src/services/cognition/champion-status-runtime.ts, src/services/cognition/superforecast-state.ts, src/services/intelligence/hypothesis-forecast.ts, dynamic import will not move module into another chunk.
+
+✓ built in 25.72s
+
+PWA v1.3.0
+mode      generateSW
+precache  441 entries (22433.96 KiB)
+files generated
+  dist/sw.js
+  dist/workbox-ad7c0807.js
+[33m[PLUGIN_TIMINGS] [0mPlugin hooks ran for 27.0s. The build took 25.7s. Hooks such as `closeBundle` run after the build ends, so hook time can be more than build time.
+The slowest hooks, timed inside each callback (the wait before a callback starts is excluded, the time it awaits is included):
+  - brotli-precompress writeBundle (76%, 19.5s, 1 call)
+  - vite-plugin-pwa:build closeBundle (15%, 3.9s, 1 call)
+  - cesium-assets writeBundle (5%, 1.2s, 1 call)
+Additional hook time came from the hooks below and from hooks under 1s.
+3 hooks are listed without a time. Their calls overlapped, so the time inside one call includes work from other calls. To find their cost, profile the build with `node --cpu-prof`:
+  - vite:css transform (14 calls)
+  - vite:worker load (3 calls)
+  - vite:build-html transform (3 calls)
+See https://rolldown.rs/reference/InputOptions.checks#plugintimings for more details.
+
+
+Agentic validation gate passed.
+Tests run: test:marketing
+This gate does NOT prove a new test fails without its fix — attach a mutation proof (AGENTS.md).

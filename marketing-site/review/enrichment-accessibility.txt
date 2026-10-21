@@ -1,0 +1,353 @@
+Rendered text characters: collapsed 7926; disclosures expanded 10138.
+Accessibility tree (not a VoiceOver session):
+- main:
+  - heading "Crystal Ball." [level=1]
+  - paragraph: The world, in focus.
+  - paragraph: A private intelligence desk for your Mac. Live signals from around the globe, explained in plain language.
+  - link "Download for Mac":
+    - /url: /download
+  - link "Try it in your browser":
+    - /url: https://bradleybond512.github.io/crystal-ball/
+  - paragraph: macOS is primary. Windows and Linux builds are experimental.
+  - figure "Your intelligence desk.":
+    - img "Crystal Ball Home Shell showing the map, source readiness, and worldwide situation cards"
+    - text: Your intelligence desk.
+  - complementary "By the numbers.":
+    - heading "By the numbers." [level=2]
+    - strong: "409"
+    - paragraph: panels
+    - strong: "61"
+    - paragraph: tools for your AI assistant
+    - strong: "4"
+    - paragraph: editions
+    - strong: Mac, Windows, Linux
+    - strong: Free
+    - paragraph: Counts come from the source at build time. Catalog entries do not guarantee active feeds.
+  - region "Your world. In view.":
+    - paragraph: Map
+    - heading "Your world. In view." [level=2]
+    - paragraph: Explore global signals on a map you can make your own.
+    - article:
+      - heading "Globe or flat." [level=3]
+      - paragraph: Explore a globe or a flat map, with a view suited to the place you follow.
+    - article:
+      - heading "Layers with context." [level=3]
+      - paragraph: Choose weather, internet outages, cyber threats, military activity, waterways, and economic layers.
+    - article:
+      - heading "Find a place." [level=3]
+      - paragraph: Search a location by name and fly to its position on the globe.
+    - complementary:
+      - paragraph: Example · Illustrative, not live data
+      - heading "A place, with context." [level=3]
+      - term: View
+      - definition: Flat map
+      - term: Layers
+      - definition: Weather · Internet outages · Cyber threats
+      - term: Place search
+      - definition: Tokyo, Japan
+    - link "See the map":
+      - /url: https://github.com/bradleybond512/crystal-ball/blob/main/src/components/MapContainer.ts
+    - paragraph: God's Eye coverage depends on sources, credentials, and your build.
+  - region "Not just data. Meaning.":
+    - paragraph: Intelligence
+    - heading "Not just data. Meaning." [level=2]
+    - paragraph: Follow the evidence behind a signal before you decide what it means.
+    - figure "Forecast calibration in the installed app.":
+      - img "Crystal Ball risk and belief calibration interface"
+      - text: Forecast calibration in the installed app.
+    - article:
+      - heading "Check source health." [level=3]
+      - paragraph: Source Confidence shows disagreement, single-source coverage, and offline providers.
+    - article:
+      - heading "Follow the evidence." [level=3]
+      - paragraph: Evidence Graph shows confirming, contradicting, missing, and stale evidence for a selected situation.
+    - article:
+      - heading "Review forecast results." [level=3]
+      - paragraph: Belief Calibration compares resolved forecasts using Brier scores and calibration error.
+    - complementary:
+      - paragraph: Example · Illustrative, not live data
+      - heading "Look behind a signal." [level=3]
+      - term: Source status
+      - definition: Single-source · Disagreeing · Down
+      - term: Domain detail
+      - definition: Provider health · Corroboration · Confidence
+      - term: Forecast review
+      - definition: Resolved labels · Brier score · Calibration error
+    - link "How calibration works":
+      - /url: https://github.com/bradleybond512/crystal-ball/blob/main/src/components/BeliefCalibrationPanel.ts
+    - paragraph: Estimates are uncertain. Model outputs are not verified facts.
+  - region "Your morning, briefed.":
+    - paragraph: Briefing
+    - heading "Your morning, briefed." [level=2]
+    - paragraph: Start with a clearer view of the situations you follow.
+    - figure "Analysis and Situations Library.":
+      - img "Crystal Ball Analysis and Situations Library listing available panels"
+      - text: Analysis and Situations Library.
+    - article:
+      - heading "Your situation cards." [level=3]
+      - paragraph: Read headlines, entries, and evidence notes across Personal, What Changed, and Critical Worldwide bands.
+    - article:
+      - heading "Know source readiness." [level=3]
+      - paragraph: Check USGS, GDACS, Open-Meteo, and GDELT for working, stale, or failed refresh states.
+    - article:
+      - heading "Your own desk." [level=3]
+      - paragraph: Open selected panels from Your Deck, or browse the Library for a different view.
+    - link "See your briefing":
+      - /url: https://github.com/bradleybond512/crystal-ball/blob/main/src/components/HomeShellOverlay.ts
+    - paragraph: Coverage depends on source readiness.
+  - region "A day, in focus.":
+    - paragraph: An example day
+    - heading "A day, in focus." [level=2]
+    - paragraph: Return to the view that helps with your next question.
+    - list:
+      - listitem:
+        - paragraph:
+          - time: 07:00 · Morning
+        - heading "Start with your briefing." [level=3]
+        - paragraph: Read personal situations, recorded changes, and critical worldwide events before opening a panel.
+      - listitem:
+        - paragraph:
+          - time: 12:00 · Midday
+        - heading "Check a situation." [level=3]
+        - paragraph: Follow a signal into linked evidence and review the health of its sources.
+      - listitem:
+        - paragraph:
+          - time: 16:00 · Afternoon
+        - heading "Ask your assistant." [level=3]
+        - paragraph: Use a connected assistant to request a region brief or check which feeds need attention.
+      - listitem:
+        - paragraph:
+          - time: 21:00 · Evening
+        - heading "Review a saved place." [level=3]
+        - paragraph: Revisit a place’s notes and cached basemap before planning your next step.
+    - paragraph: An example workflow you perform yourself, not scheduled automation.
+  - region "Ready for what's next.":
+    - paragraph: Preparedness
+    - heading "Ready for what's next." [level=2]
+    - paragraph: Keep preparedness information close, with its limits in view.
+    - figure "Personal Safety Library.":
+      - img "Crystal Ball Personal Safety Library listing preparedness panels"
+      - text: Personal Safety Library.
+    - article:
+      - heading "Places and people." [level=3]
+      - paragraph: Saved Places stores tags and notes; Tactical Comms copies check-ins; Family Tracker imports location codes.
+    - article:
+      - heading "Maps for later." [level=3]
+      - paragraph: Offline Maps caches basemap tiles around saved places for offline viewing.
+    - article:
+      - heading "Plan a route." [level=3]
+      - paragraph: Evacuation Routes compares driving-route estimates between saved places and keeps cached directions.
+    - link "View preparedness tools":
+      - /url: https://github.com/bradleybond512/crystal-ball/blob/main/src/config/panels.ts
+    - paragraph: Road conditions are unverified. Use official guidance in emergencies.
+  - region "Private by design.":
+    - paragraph: Privacy
+    - heading "Private by design." [level=2]
+    - paragraph: You choose which services you connect.
+    - figure "Analytics control, shown with this installation’s opt-in enabled.":
+      - img "Crystal Ball privacy settings with the analytics opt-in control enabled for this installation"
+      - text: Analytics control, shown with this installation’s opt-in enabled.
+    - article:
+      - heading "Your choice." [level=3]
+      - paragraph: PostHog analytics stay off until you explicitly opt in.
+    - article:
+      - heading "Keys on your Mac." [level=3]
+      - paragraph: macOS credentials use Keychain-backed storage, with an encrypted recovery cache.
+    - article:
+      - heading "Connections you choose." [level=3]
+      - paragraph: Live feeds receive data requests; selected Groq, Claude, or OpenRouter services receive prompts and relevant content.
+    - link "Read about privacy":
+      - /url: /privacy
+    - paragraph: No Crystal Ball account is needed; optional providers may require their own.
+  - region "Your intelligence stays yours.":
+    - paragraph: Local AI
+    - heading "Your intelligence stays yours." [level=2]
+    - paragraph: Keep inference on your Mac with a local Ollama setup.
+    - figure "Ollama endpoint in API Keys settings.":
+      - img "Crystal Ball API Keys settings showing the configurable Ollama endpoint"
+      - text: Ollama endpoint in API Keys settings.
+    - article:
+      - heading "Run it locally." [level=3]
+      - paragraph: Connect Ollama on your Mac for local inference.
+    - article:
+      - heading "Keep fallback local." [level=3]
+      - paragraph: Enable local-only mode to prevent cloud fallback in the generation adapter.
+    - article:
+      - heading "Choose cloud services." [level=3]
+      - paragraph: Choose Groq, Claude, or OpenRouter when you want cloud AI to receive prompts and relevant content.
+    - link "Choose where AI runs":
+      - /url: /privacy#ai
+    - paragraph: Local inference does not make live feeds offline.
+  - region "Four editions. Pick yours.":
+    - paragraph: Editions
+    - heading "Four editions. Pick yours." [level=2]
+    - paragraph: Choose a build shaped around what you follow.
+    - article:
+      - heading "Full edition." [level=3]
+      - paragraph: Best for A broad view across global events.
+      - paragraph:
+        - strong: "409"
+        - text: catalog panels.
+      - list:
+        - listitem: Threat Dashboard
+        - listitem: Global Map
+        - listitem: Saved Places
+        - listitem: Disaster Lifelines
+        - listitem: Alert Inbox
+    - article:
+      - heading "Tech edition." [level=3]
+      - paragraph: Best for Technology, industry, and emerging companies.
+      - paragraph:
+        - strong: "35"
+        - text: catalog panels.
+      - list:
+        - listitem: Global Tech Map
+        - listitem: AI Regulation Dashboard
+        - listitem: AI/ML News
+        - listitem: Startups & VC
+        - listitem: Cybersecurity
+    - article:
+      - heading "Finance edition." [level=3]
+      - paragraph: Best for Markets, currencies, and economic context.
+      - paragraph:
+        - strong: "31"
+        - text: catalog panels.
+      - list:
+        - listitem: Live Markets
+        - listitem: Forex & Currencies
+        - listitem: Fixed Income
+        - listitem: Commodities & Futures
+        - listitem: Central Bank Watch
+    - article:
+      - heading "Happy edition." [level=3]
+      - paragraph: Best for Progress, conservation, and brighter stories.
+      - paragraph:
+        - strong: "10"
+        - text: catalog panels.
+      - list:
+        - listitem: Good News Feed
+        - listitem: Human Progress
+        - listitem: Breakthroughs
+        - listitem: Conservation Wins
+        - listitem: Renewable Energy
+    - link "Compare edition catalogs":
+      - /url: https://github.com/bradleybond512/crystal-ball/blob/main/src/config/panels.ts
+    - paragraph: These are build variants; catalog entries do not guarantee active feeds.
+  - region "Works with your AI.":
+    - paragraph: AI assistants
+    - heading "Works with your AI." [level=2]
+    - paragraph: Let a compatible assistant explore your connected intelligence.
+    - figure "Agent Intelligence in the installed app.":
+      - img "Crystal Ball Agent Intelligence panel"
+      - text: Agent Intelligence in the installed app.
+    - article:
+      - heading "Bring your assistant." [level=3]
+      - paragraph: Connect a compatible assistant to the local MCP server over stdio.
+    - article:
+      - heading "Start read-only." [level=3]
+      - paragraph: The read profile provides 53 read-only tools, including get_sitrep and check_feed_health.
+    - article:
+      - heading "Choose analyst access." [level=3]
+      - paragraph: The analyst profile adds 8 tools for state changes, including submit_hypothesis_feedback.
+    - heading "A question to start." [level=3]
+    - paragraph: Example requests for a connected assistant
+    - list:
+      - listitem:
+        - text: Give me a global situation brief.
+        - code: get_sitrep
+      - listitem:
+        - text: Brief me on Japan.
+        - code: get_region_brief
+      - listitem:
+        - text: Which feeds need attention?
+        - code: check_feed_health
+      - listitem:
+        - text: Summarize market signals.
+        - code: get_market_overview
+    - link "Read the agent guide":
+      - /url: https://github.com/bradleybond512/crystal-ball/blob/main/docs/AGENT_ACCESS.md
+    - paragraph: Your assistant chooses tools; feeds affect results, and some analyst actions require in-app confirmation.
+  - region "Go a level deeper.":
+    - paragraph: Power users
+    - heading "Go a level deeper." [level=2]
+    - paragraph: Use the keyboard, inspect your setup, and connect tools on your terms.
+    - article:
+      - heading "Check your setup." [level=3]
+      - paragraph:
+        - text: Run
+        - code: crystalball doctor --json
+        - text: to inspect installation, runtime, clients, and compatibility.
+    - article:
+      - heading "Find a command." [level=3]
+      - paragraph: Open the command palette with Cmd + K to find panels, places, and situations.
+    - article:
+      - heading "Choose your workspace." [level=3]
+      - paragraph: Open the browser version, or connect compatible assistants to desktop data through the open MCP server.
+    - link "Set up agent access":
+      - /url: https://github.com/bradleybond512/crystal-ball/blob/main/docs/AGENT_ACCESS.md
+    - paragraph: CLI commands require installation; desktop agent access needs the local runtime.
+  - region "Free. Open. Yours.":
+    - paragraph: Open source
+    - heading "Free. Open. Yours." [level=2]
+    - paragraph: Read the code. Follow the work. Help shape what comes next.
+    - paragraph: Free and open source, AGPL-3.0.
+    - paragraph:
+      - link "Explore on GitHub":
+        - /url: https://github.com/bradleybond512/crystal-ball
+      - text: ·
+      - link "Sponsor the project":
+        - /url: https://github.com/sponsors/bradleybond512
+      - text: ·
+      - link "Contact through GitHub Issues":
+        - /url: https://github.com/bradleybond512/crystal-ball/issues
+    - paragraph:
+      - text: The reviewed source may include features newer than the downloadable release.
+      - link "See build and source details.":
+        - /url: /docs
+  - heading "What's inside." [level=2]
+  - paragraph: The details behind your setup.
+  - group:
+    - text: Explore technical specifications
+    - term: Platforms and architectures
+    - definition: "macOS: aarch64, x86_64 (primary); Windows: x86_64 (experimental); Linux: x86_64, aarch64 (experimental)."
+    - term: Mac download sizes
+    - definition: "Apple Silicon: 57.5 MB. Intel: 59.3 MB. Sizes describe downloaded disk images, not installed storage."
+    - term: Data and categories
+    - definition: Maps, news, markets, weather, earthquakes, cyber threats, and infrastructure. Sources, credentials, and coverage vary by setup.
+    - term: Updates
+    - definition: Check for updates in the desktop app. Some installs open the release page for a manual download.
+    - term: Interface languages
+    - definition: English, French, German, Greek, Spanish, Italian, Polish, Portuguese, Dutch, Swedish, Russian, Arabic, Chinese, Japanese, Korean, Turkish, Thai, and Vietnamese, with English fallback. This describes the interface, not translation of every feed.
+    - term: Offline use
+    - definition: Pre-cache basemap tiles around saved places or manual coordinates, and keep cached route directions. Live feeds still need a connection.
+    - term: AI providers
+    - definition: Local Ollama; optional Groq, Claude, and OpenRouter. Cloud services receive prompts and relevant content; provider charges may apply.
+    - term: Storage and encryption
+    - definition: macOS credentials use Keychain-backed storage plus an encrypted recovery cache. Local inference does not make live feeds offline.
+    - term: Assistant profiles
+    - definition: 53 read-only tools by default; 8 additional tools in the analyst profile. Desktop access uses the local MCP server.
+    - term: License and price
+    - definition: Free and open source, AGPL-3.0. The app price is $0; optional third-party services may charge separately.
+    - paragraph:
+      - text: "Latest release: v2.25.147. Source features may be newer than the release."
+      - link "Review downloads and installation.":
+        - /url: /download
+  - heading "Good to know." [level=2]
+  - group:
+    - text: Is Crystal Ball ready for critical decisions?
+    - paragraph: Crystal Ball is in early access. Information may be incomplete or delayed. Not for emergency, financial, or safety-critical decisions.
+  - group:
+    - text: Which platforms can I use?
+    - paragraph: macOS is the primary platform. Windows and Linux builds are experimental. The browser version offers a separate way to explore; desktop-only features require the app.
+  - group:
+    - text: Does everything stay on my Mac?
+    - paragraph:
+      - text: No. Live feeds contact external sources. Local Ollama inference can stay on your Mac; selected cloud AI services receive prompts and relevant content.
+      - link "See the privacy details.":
+        - /url: /privacy
+  - group:
+    - text: Which Mac download should I choose?
+    - paragraph:
+      - text: Choose Apple Silicon for a Mac with an Apple chip, or Intel for a Mac with an Intel processor.
+      - link "Find installation and security details.":
+        - /url: /download

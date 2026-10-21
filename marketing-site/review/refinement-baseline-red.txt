@@ -1,0 +1,54 @@
+✔ serves separate accessible product, download, docs and trust pages (494.0415ms)
+✔ serves machine-readable discovery (8.344916ms)
+✔ offers compressed HTML only when accepted (195.496292ms)
+✔ provides valid application structured data and dated source counts (14.704833ms)
+✔ prioritizes a single hero and keeps product shots responsive and unique (5.162334ms)
+✔ minifies embedded styles and scripts without removing motion and focus support (2.428583ms)
+✖ reveals sourced detail with specific controls and one capture note (12.558125ms)
+✔ serves the exact build-generated sitemap without a rendering route (25.279625ms)
+✔ serves the static sitemap without a Cloudflare asset binding (3.647833ms)
+✖ keeps feature depth without duplicate disclosures or platform caveats (14.961417ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 8
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1307.642291
+
+✖ failing tests:
+
+test at marketing-site/tests/marketing.test.mjs:95:1
+✖ reveals sourced detail with specific controls and one capture note (12.558125ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  true !== false
+
+      at TestContext.<anonymous> (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/tests/marketing.test.mjs:118:9)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at marketing-site/tests/marketing.test.mjs:135:1
+✖ keeps feature depth without duplicate disclosures or platform caveats (14.961417ms)
+  AssertionError [ERR_ASSERTION]: The input was expected to not match the regular expression /<details/. Input:
+
+  '<section class="product-section" id="features" aria-labelledby="features-title" data-reveal><div class="shell"><p class="section-label">Map</p><h2 id="features-title">Your world. In view.</h2><p class="subhead">Explore global signals on a map you can make your own.</p><div class="feature-grid"><article class="feature-tile"><h3>A wider view.</h3><p>Explore the globe or focus on a flat map.</p></article><article class="feature-tile"><h3>Your layers.</h3><p>Choose which signals appear on your map.</p></article><article class="feature-tile"><h3>Find your place.</h3><p>Search for a place and move directly to it.</p></article></div><div class="detail-copy"><details><summary>Explore the map</summary><p>God’s Eye offers globe and flat-map views. Coverage depends on available sources, credentials, and your build.</p><a href="https://github.com/bradleybond512/crystal-ball/blob/main/src/components/MapContainer.ts" target="_blank" rel="noopener noreferrer">Explore the map implementation</a></details></div></div></section>'
+
+      at TestContext.<anonymous> (file:///Users/bradleybond/Documents/Codex/2026-10-17/make-these-changes-to-crystal-ball/work/review-repo/marketing-site/tests/marketing.test.mjs:142:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '<section class="product-section" id="features" aria-labelledby="features-title" data-reveal><div class="shell"><p class="section-label">Map</p><h2 id="features-title">Your world. In view.</h2><p class="subhead">Explore global signals on a map you can make your own.</p><div class="feature-grid"><article class="feature-tile"><h3>A wider view.</h3><p>Explore the globe or focus on a flat map.</p></article><article class="feature-tile"><h3>Your layers.</h3><p>Choose which signals appear on your map.</p></article><article class="feature-tile"><h3>Find your place.</h3><p>Search for a place and move directly to it.</p></article></div><div class="detail-copy"><details><summary>Explore the map</summary><p>God’s Eye offers globe and flat-map views. Coverage depends on available sources, credentials, and your build.</p><a href="https://github.com/bradleybond512/crystal-ball/blob/main/src/components/MapContainer.ts" target="_blank" rel="noopener noreferrer">Explore the map implementation</a></details></div></div></section>',
+    expected: /<details/,
+    operator: 'doesNotMatch',
+    diff: 'simple'
+  }

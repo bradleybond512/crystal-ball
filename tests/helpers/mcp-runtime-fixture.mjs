@@ -44,7 +44,7 @@ export function isolatedEnv(root, extra = {}) {
   };
 }
 export function sourceFixture({ packageOnly = false, prepareTarballs = false } = {}) {
-  const root = mkdtempSync(join(tmpdir(), 'cb-isolated-runtime-'));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'cb-isolated-runtime-')));
   try {
   const repo = join(root, 'repo');
   mkdirSync(repo);

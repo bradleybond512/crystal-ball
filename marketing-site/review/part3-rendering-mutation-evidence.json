@@ -1,0 +1,96 @@
+{
+  "method": "Byte-identical isolated clean Git snapshot. A browser-only style override removes section containment; the production source and preview remain unchanged. Restore exact baseline then rerun full browser regression.",
+  "sourceSha256": {
+    "marketing-site/scripts/check-rendering.mjs": "9da78357c36fc7191bcff035c17f519db744480ef0f1a263571c142bb75d7834",
+    "marketing-site/styles/site.css": "89d4820e0cceb9be22262e5cbfb768231a72f7e1ef4499a487e359597daf9822"
+  },
+  "confirmedMutationDiff": "diff --git a/marketing-site/scripts/check-rendering.mjs b/marketing-site/scripts/check-rendering.mjs\nindex 999057a..7d65bfd 100644\n--- a/marketing-site/scripts/check-rendering.mjs\n+++ b/marketing-site/scripts/check-rendering.mjs\n@@ -16,6 +16,7 @@ try {\n       }).observe({ type: 'layout-shift', buffered: true });\n     });\n     await page.goto('http://localhost:4173/', { waitUntil: 'networkidle' });\n+    await page.addStyleTag({ content: '.product-section { contain: none !important; }' });\n     assert.equal(await page.locator('#overview').evaluate(e => getComputedStyle(e).contentVisibility), 'visible');\n     assert.equal(await page.locator('#faq').evaluate(e => getComputedStyle(e).contentVisibility), 'visible');\n     assert.equal(await page.locator('#faq').evaluate(e => getComputedStyle(e).contain), 'content');\n",
+  "negativeExit": 1,
+  "negativeStderr": "node:internal/modules/run_main:107\n    triggerUncaughtException(\n    ^\n\nAssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n'none' !== 'content'\n\n    at file:///private/var/folders/qt/hq7cydbd06d6g0yksx3mxm3c0000gn/T/crystal-rendering-mutation-6hh636jy/marketing-site/scripts/check-rendering.mjs:22:12 {\n  generatedMessage: true,\n  code: 'ERR_ASSERTION',\n  actual: 'none',\n  expected: 'content',\n  operator: 'strictEqual',\n  diff: 'simple'\n}\n\nNode.js v26.3.0\n",
+  "restoredExit": 0,
+  "restoredChecks": [
+    {
+      "width": 1440,
+      "sections": 13,
+      "geometryAndTypographyParity": true,
+      "keyboard": true,
+      "find": true,
+      "productionShifts": [],
+      "anchorShifts": [],
+      "findResults": [
+        {
+          "id": "intelligence",
+          "shifts": []
+        },
+        {
+          "id": "survival",
+          "shifts": []
+        },
+        {
+          "id": "open-source",
+          "shifts": []
+        }
+      ],
+      "comparisonShifts": {
+        "shifts": [],
+        "sources": []
+      }
+    },
+    {
+      "width": 390,
+      "sections": 13,
+      "geometryAndTypographyParity": true,
+      "keyboard": true,
+      "find": true,
+      "productionShifts": [],
+      "anchorShifts": [],
+      "findResults": [
+        {
+          "id": "intelligence",
+          "shifts": []
+        },
+        {
+          "id": "survival",
+          "shifts": []
+        },
+        {
+          "id": "open-source",
+          "shifts": []
+        }
+      ],
+      "comparisonShifts": {
+        "shifts": [],
+        "sources": []
+      }
+    },
+    {
+      "width": 320,
+      "sections": 13,
+      "geometryAndTypographyParity": true,
+      "keyboard": true,
+      "find": true,
+      "productionShifts": [],
+      "anchorShifts": [],
+      "findResults": [
+        {
+          "id": "intelligence",
+          "shifts": []
+        },
+        {
+          "id": "survival",
+          "shifts": []
+        },
+        {
+          "id": "open-source",
+          "shifts": []
+        }
+      ],
+      "comparisonShifts": {
+        "shifts": [],
+        "sources": []
+      }
+    }
+  ],
+  "sourceAndSnapshotHashesUnchanged": true,
+  "cleanAfterRestore": true
+}

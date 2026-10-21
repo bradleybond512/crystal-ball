@@ -1,0 +1,852 @@
+
+> braces@3.0.3 test
+> mocha
+
+
+
+  bash ranges - braces.compile()
+    ✓ should compile: a{b,c{1..100}/{foo,bar}/,h}x/z
+    ✓ should compile: 0{1..9} {10..20}
+    ✓ should compile: {1.1..2.1}
+    ✓ should compile: {1.1..~2.1}
+    ✓ should compile: {1..0f}
+    ✓ should compile: {1..10..ff}
+    ✓ should compile: {1..10.f}
+    ✓ should compile: {1..10f}
+    ✓ should compile: {1..20..2f}
+    ✓ should compile: {1..20..f2}
+    ✓ should compile: {1..2f..2}
+    ✓ should compile: {1..ff..2}
+    ✓ should compile: {1..ff}
+    ✓ should compile: {1.20..2}
+    ✓ should compile: a-{b{d,e}}-c
+    ✓ should compile: a-{bdef-{g,i}-c
+    ✓ should compile: {"klklkl"}{1,2,3}
+    ✓ should compile: {"x,x"}
+    ✓ should compile: {a-{b,c,d}}
+    ✓ should compile: {a,{a-{b,c,d}}}
+    ✓ should compile: abc{
+    ✓ should compile: {abc{
+    ✓ should compile: {abc
+    ✓ should compile: }abc
+    ✓ should compile: ab{c
+    ✓ should compile: {{a,b}
+    ✓ should compile: {a,b}}
+    ✓ should compile: abcd{efgh
+    ✓ should compile: a{b{c{d,e}f}gh
+    ✓ should compile: a{b{c{d,e}f}g}h
+    ✓ should compile: f{x,y{{g,z}}h}
+    ✓ should compile: z{a,b},c}d
+    ✓ should compile: a{b{c{d,e}f{x,y{{g}h
+    ✓ should compile: f{x,y{{g}h
+    ✓ should compile: f{x,y{{g}}h
+    ✓ should compile: a{b{c{d,e}f{x,y{}g}h
+    ✓ should compile: f{x,y{}g}h
+    ✓ should compile: z{a,b{,c}d
+    ✓ should compile: a{0..3}d
+    ✓ should compile: x{10..1}y
+    ✓ should compile: x{3..3}y
+    ✓ should compile: {1..10}
+    ✓ should compile: {1..3}
+    ✓ should compile: {1..9}
+    ✓ should compile: {10..1}
+    ✓ should compile: {10..1}y
+    ✓ should compile: {3..3}
+    ✓ should compile: {5..8}
+    ✓ should compile: {-10..-1}
+    ✓ should compile: {-20..0}
+    ✓ should compile: {0..-5}
+    ✓ should compile: {9..-4}
+    ✓ should compile: 0{1..9}/{10..20}
+    ✓ should compile: 0{a..d}0
+    ✓ should compile: a/{b..d}/e
+    ✓ should compile: {1..f}
+    ✓ should compile: {a..A}
+    ✓ should compile: {A..a}
+    ✓ should compile: {a..e}
+    ✓ should compile: {A..E}
+    ✓ should compile: {a..f}
+    ✓ should compile: {a..z}
+    ✓ should compile: {E..A}
+    ✓ should compile: {f..1}
+    ✓ should compile: {f..a}
+    ✓ should compile: {f..f}
+    ✓ should compile: a/{b..d}/e/{f..h}
+    ✓ should compile: {-10..10}
+    ✓ should compile: {2147483645..2147483649}
+    ✓ should compile: {214748364..2147483649}
+    ✓ should compile: {1..10..1}
+    ✓ should compile: {1..10..2}
+    ✓ should compile: {1..20..20}
+    ✓ should compile: {1..20..2}
+    ✓ should compile: {10..1..2}
+    ✓ should compile: {100..0..5}
+    ✓ should compile: {2..10..1}
+    ✓ should compile: {2..10..2}
+    ✓ should compile: {2..10..3}
+    ✓ should compile: {-1..-10..-2}
+    ✓ should compile: {-1..-10..2}
+    ✓ should compile: {-10..-2..2}
+    ✓ should compile: {-2..-10..1}
+    ✓ should compile: {-2..-10..2}
+    ✓ should compile: {-2..-10..3}
+    ✓ should compile: {-9..9..3}
+    ✓ should compile: {10..1..-2}
+    ✓ should compile: {100..0..-5}
+    ✓ should compile: {a..e..2}
+    ✓ should compile: {E..A..2}
+    ✓ should compile: {a..z..2}
+    ✓ should compile: {z..a..-2}
+    ✓ should compile: {10..0..2}
+    ✓ should compile: {10..0..-2}
+    ✓ should compile: {-50..-0..5}
+    ✓ should compile: ../{1..3}/../foo
+    ✓ should compile: ../{2..10..2}/../foo
+    ✓ should compile: ../{1..3}/../{a,b,c}/foo
+    ✓ should compile: ./{a..z..3}/
+    ✓ should compile: ./{"x,y"}/{a..z..3}/
+    ✓ should compile: a/{x,y}/{1..5}c{d,e}f.{md,txt}
+    ✓ should compile: a/{x,{1..5},y}/c{d}e
+    ✓ should compile: **/{1..5}/a.js
+    ✓ should compile: x{{0..10},braces}y
+    ✓ should compile: {0..10,braces}
+    ✓ should compile: {1..10,braces}
+    ✓ should compile: ./\{x,y}/{a..z..3}/
+    ✓ should compile: {braces,{0..10}}
+    ✓ should compile: {{0..10},braces}
+    ✓ should compile: {{1..10..2},braces}
+    ✓ should compile: {{1..10..2},braces}
+
+  bash sets - braces.compile()
+    ✓ should compile: {a,b,c,d,e}
+    ✓ should compile: a/\{b,c,d,{x,y}}{e,f\}/g
+    ✓ should compile: a/\{b,c,d\}\{e,f\}/g
+    ✓ should compile: a/\{b,c,d\}\{e,f}/g
+    ✓ should compile: a/\{b,c,d\}{e,f}/g
+    ✓ should compile: a/\{b,c,d{x,y}}{e,f\}/g
+    ✓ should compile: a/\{b,c,d}{e,f\}/g
+    ✓ should compile: a/\{b,c,d}{e,f}/g
+    ✓ should compile: a/\{{b,c}{e,f}/g
+    ✓ should compile: a/\{{b,c}{e,f}\}/g
+    ✓ should compile: a/\{{b,c}{e,f}}/g
+    ✓ should compile: a/b/{b,c,{d,e{f,g},{w,x}/{y,z}}}/h/i
+    ✓ should compile: a/{b,c}}{e,f}/g
+    ✓ should compile: a/{b,c\,d}{e,f}/g
+    ✓ should compile: a/{b,c\}}{e,f}/g
+    ✓ should compile: a/{b,c}
+    ✓ should compile: a/{b,c}d{e,f}/g
+    ✓ should compile: a/{b,c}{e,f}/g
+    ✓ should compile: a/{b,c}{e,f}{g,h,i}/k
+    ✓ should compile: a/{b,{c,d},e}/f
+    ✓ should compile: a/{b,{c,d}/{e,f},g}/h
+    ✓ should compile: a/{b{c,d},e{f,g}h{i,j}}/k
+    ✓ should compile: a/{b{c,d},e}/f
+    ✓ should compile: a/{b{c,d}e{f,g}h{i,j}}/k
+    ✓ should compile: a/{b{c,d}e{f,g},h{i,j}}/k
+    ✓ should compile: a/{x,z}{b,{c,d}/{e,f},g}/h
+    ✓ should compile: a/{{a,b}/{c,d}}/z
+    ✓ should compile: a/{{b,c}/{d,e}}
+    ✓ should compile: a/{{b,c}/{d,e}}/f
+    ✓ should compile: a{b{c{d,e}f{x,y{{g}h
+    ✓ should compile: {a,b,{c,d},e}
+    ✓ should compile: {a,b,{c,d}e}
+    ✓ should compile: {a,b,{c,d}}
+    ✓ should compile: {a,b{c,d}}
+    ✓ should compile: {a,b}/{c,d}
+    ✓ should compile: {a,b}{c,d}
+    ✓ should compile: {{a,b},{c,d}}
+    ✓ should compile: {{a,b}/{c,d}}
+    ✓ should compile: {{a,b}/{c,d}}/z
+    ✓ should compile: {generate,{assemble,update,verb}{file,-generate-*},generator}.js
+    ✓ should compile: **/{foo,bar}.js
+    ✓ should compile: **/{a,b,c}/*.js
+    ✓ should compile: **/{a,b,*}/*.js
+    ✓ should compile: **/{**,b,*}/*.js
+    ✓ should compile: \{a,b,c,d,e}
+    ✓ should compile: a/b/c/{x,y\}
+    ✓ should compile: a/\{x,y}/cde
+    ✓ should compile: abcd{efgh
+    ✓ should compile: \{abc\}
+    ✓ should compile: {x,y,\{a,b,c\}}
+    ✓ should compile: {x,y,{a,b,c\}}
+    ✓ should compile: {x,y,{abc},trie}
+    ✓ should compile: x,y,{abc},trie
+    ✓ should compile: {b{c,d},e}
+    ✓ should compile: {b{c,d},e}/f
+    ✓ should compile: {abc}
+    ✓ should compile: { }
+    ✓ should compile: {
+    ✓ should compile: {}
+    ✓ should compile: }
+    ✓ should compile: a{b}c
+    ✓ should compile: a/b/c{d}e
+    ✓ should compile: {a,b}c,d}
+    ✓ should compile: a,b,c,d}
+    ✓ should compile: abc/${ddd}/xyz
+    ✓ should compile: a${b}c
+    ✓ should compile: a${b{a,b}}c
+    ✓ should compile: a/{${b},c}/d
+    ✓ should compile: a${b,d}/{foo,bar}c
+    ✓ should compile: a{b\,c\,d}e
+    ✓ should compile: a{b\,c}d
+    ✓ should compile: {abc\,def}
+    ✓ should compile: {abc\,def,ghi}
+    ✓ should compile: a/{b,c}/{x\,y}/d/e
+    ✓ should compile: {a,b\}c,d}
+    ✓ should compile: a/{z,\{a,b,c,d,e}/d
+    ✓ should compile: a/\{b,c}/{d,e}/f
+    ✓ should compile: {x\,y,\{abc\},trie}
+    ✓ should compile: ff{c,b,a}
+    ✓ should compile: f{d,e,f}g
+    ✓ should compile: {a,b,c}
+    ✓ should compile: {l,n,m}xyz
+    ✓ should compile: a/{a,b}/{c,d}/e
+    ✓ should compile: a{b,c}d{e,f}g
+    ✓ should compile: a/{x,y}/c{d,e}f.{md,txt}
+    ✓ should compile: {a,b}{{a,b},a,b}
+    ✓ should compile: /usr/{ucb/{ex,edit},lib/{ex,how_ex}}
+    ✓ should compile: a{b,c{d,e}f}g
+    ✓ should compile: a{{x,y},z}b
+    ✓ should compile: f{x,y{g,z}}h
+    ✓ should compile: a{b,c{d,e},h}x/z
+    ✓ should compile: a{b,c{d,e},h}x{y,z}
+    ✓ should compile: a{b,c{d,e},{f,g}h}x{y,z}
+    ✓ should compile: a-{b{d,e}}-c
+    ✓ should compile: a/b/{d,e}/*.js
+    ✓ should compile: a/**/c/{d,e}/f*.js
+    ✓ should compile: a/**/c/{d,e}/f*.{md,txt}
+    ✓ should compile: a{b,}c
+    ✓ should compile: a{,b}c
+    ✓ should compile: foo {1,2} bar
+    ✓ should compile: a{ ,c{d, },h}x
+    ✓ should compile: a{ ,c{d, },h}
+    ✓ should compile: /Users/tobiasreich/Sites/aaa/bbb/ccc 2016/src/**/[^_]*.{html,ejs}
+
+  bash - expanded brace ranges
+    large numbers
+      ✓ should expand large numbers
+      ✓ should throw an error when range exceeds rangeLimit
+    escaping / invalid ranges
+      ✓ should not try to expand ranges with decimals
+      ✓ should escape invalid ranges:
+      ✓ weirdly-formed brace expansions -- fixed in post-bash-3.1
+      ✓ should not expand quoted strings.
+      ✓ should escaped outer braces in nested non-sets
+      ✓ should escape imbalanced braces
+    positive numeric ranges
+      ✓ should expand numeric ranges
+    negative ranges
+      ✓ should expand ranges with negative numbers
+    alphabetical ranges
+      ✓ should expand alphabetical ranges
+      ✓ should expand multiple ranges:
+    combo
+      ✓ should expand numerical ranges - positive and negative
+    steps > positive ranges
+      ✓ should expand ranges using steps:
+      ✓ should expand positive ranges with negative steps:
+    steps > negative ranges
+      ✓ should expand negative ranges using steps:
+    steps > alphabetical ranges
+      ✓ should expand alpha ranges with steps
+      ✓ should expand alpha ranges with negative steps
+    padding
+      ✓ unwanted zero-padding -- fixed post-bash-4.0
+    ranges
+      ✓ should compile: a{b,c{1..50}/{d,e,f}/,g}h/i
+      ✓ should compile: 0{1..9} {10..20}
+      ✓ should compile: a{0..3}d
+      ✓ should compile: x{10..1}y
+      ✓ should compile: x{3..3}y
+      ✓ should compile: {0..10,braces}
+      ✓ should compile: {3..3}
+      ✓ should compile: {5..8}
+      ✓ should compile: **/{1..5}/a.js
+      ✓ should compile: {braces,{0..10}}
+      ✓ should compile: ./\{x,y}/{a..z..3}/
+      ✓ should compile: x{{0..10},braces}y
+      ✓ should compile: {braces,{0..10}}
+      ✓ should compile: {{0..10},braces}
+      ✓ should compile: {{1..10..2},braces}
+      ✓ should compile: {{1..10},braces}
+      ✓ should compile: {1.1..2.1}
+      ✓ should compile: {1.1..~2.1}
+      ✓ should compile: {1..0f}
+      ✓ should compile: {1..10..ff}
+      ✓ should compile: {1..10.f}
+      ✓ should compile: {1..10f}
+      ✓ should compile: {1..20..2f}
+      ✓ should compile: {1..20..f2}
+      ✓ should compile: {1..2f..2}
+      ✓ should compile: {1..ff..2}
+      ✓ should compile: {1..ff}
+      ✓ should compile: {1.20..2}
+      ✓ should compile: a{0..3}d
+      ✓ should compile: x{10..1}y
+      ✓ should compile: x{3..3}y
+      ✓ should compile: {1..10}
+      ✓ should compile: {1..3}
+      ✓ should compile: {1..9}
+      ✓ should compile: {10..1}y
+      ✓ should compile: {3..3}
+      ✓ should compile: {5..8}
+      ✓ should compile: {-10..-1}
+      ✓ should compile: {-20..0}
+      ✓ should compile: {0..-5}
+      ✓ should compile: {9..-4}
+      ✓ should compile: 0{1..9}/{10..20}
+      ✓ should compile: 0{a..d}0
+      ✓ should compile: a/{b..d}/e
+      ✓ should compile: {1..f}
+      ✓ should compile: {a..A}
+      ✓ should compile: {A..a}
+      ✓ should compile: {a..e}
+      ✓ should compile: {A..E}
+      ✓ should compile: {a..f}
+      ✓ should compile: {a..z}
+      ✓ should compile: {E..A}
+      ✓ should compile: {f..1}
+      ✓ should compile: {f..a}
+      ✓ should compile: {f..f}
+      ✓ should compile: a/{b..d}/e/{f..h}
+      ✓ should compile: {-10..10}
+      ✓ should compile: {1..10..1}
+      ✓ should compile: {1..10..2}
+      ✓ should compile: {1..20..20}
+      ✓ should compile: {1..20..2}
+      ✓ should compile: {10..0..2}
+      ✓ should compile: {10..1..2}
+      ✓ should compile: {100..0..5}
+      ✓ should compile: {2..10..1}
+      ✓ should compile: {2..10..2}
+      ✓ should compile: {2..10..3}
+      ✓ should compile: {a..z..2}
+      ✓ should compile: {10..0..-2}
+      ✓ should compile: {-1..-10..-2}
+      ✓ should compile: {-1..-10..2}
+      ✓ should compile: {-10..-2..2}
+      ✓ should compile: {-2..-10..1}
+      ✓ should compile: {-2..-10..2}
+      ✓ should compile: {-2..-10..3}
+      ✓ should compile: {-50..-0..5}
+      ✓ should compile: {-9..9..3}
+      ✓ should compile: {10..1..-2}
+      ✓ should compile: {100..0..-5}
+      ✓ should compile: {a..e..2}
+      ✓ should compile: {E..A..2}
+      ✓ should compile: {a..z..2}
+      ✓ should compile: {z..a..-2}
+      ✓ should compile: {z..a..-2}
+      ✓ should compile: {10..0..2}
+      ✓ should compile: {10..0..-2}
+      ✓ should compile: {-50..-0..5}
+      ✓ should compile: ../{1..3}/../foo
+      ✓ should compile: ../{2..10..2}/../foo
+      ✓ should compile: ../{1..3}/../{a,b,c}/foo
+      ✓ should compile: ./{a..z..3}/
+      ✓ should compile: ./{"x,y"}/{a..z..3}/
+      ✓ should compile: a/{x,y}/{1..5}c{d,e}f.{md,txt}
+      ✓ should compile: a/{x,{1..5},y}/c{d}e
+
+  bash - expanded brace sets
+    ✓ should compile: a/\{b,c,d,{x,y}}{e,f\}/g
+    ✓ should compile: a/\{b,c,d\}\{e,f\}/g
+    ✓ should compile: a/\{b,c,d\}\{e,f}/g
+    ✓ should compile: a/\{b,c,d\}{e,f}/g
+    ✓ should compile: a/\{b,c,d{x,y}}{e,f\}/g
+    ✓ should compile: a/\{b,c,d}{e,f\}/g
+    ✓ should compile: a/\{b,c,d}{e,f}/g
+    ✓ should compile: a/\{x,y}/cde
+    ✓ should compile: a/\{{b,c}{e,f}/g
+    ✓ should compile: a/\{{b,c}{e,f}\}/g
+    ✓ should compile: a/\{{b,c}{e,f}}/g
+    ✓ should compile: a/b/{b,c,{d,e{f,g},{w,x}/{y,z}}}/h/i
+    ✓ should compile: a/{b,c,d}{e,f}/g
+    ✓ should compile: a/{b,c\,d}{e,f}/g
+    ✓ should compile: a/{b,c\}}{e,f}/g
+    ✓ should compile: a/{b,c}
+    ✓ should compile: a/{b,c}d{e,f}/g
+    ✓ should compile: a/{b,c}{e,f}/g
+    ✓ should compile: a/{b,c}{e,f}{g,h,i}/k
+    ✓ should compile: a/{b,{c,d},e}/f
+    ✓ should compile: a/{b,{c,d}/{e,f},g}/h
+    ✓ should compile: a/{b{c,d},e{f,g}h{i,j}}/k
+    ✓ should compile: a/{b{c,d},e}/f
+    ✓ should compile: a/{b{c,d}e{f,g}h{i,j}}/k
+    ✓ should compile: a/{b{c,d}e{f,g},h{i,j}}/k
+    ✓ should compile: a/{x,z}{b,{c,d}/{e,f},g}/h
+    ✓ should compile: a/{{a,b}/{c,d}}/z
+    ✓ should compile: a/{{b,c}/{d,e}}
+    ✓ should compile: a/{{b,c}/{d,e}}/f
+    ✓ should compile: a{b}c
+    ✓ should compile: foo {1,2} bar
+    ✓ should compile: { }
+    ✓ should compile: {
+    ✓ should compile: {a,b,{c,d},e}
+    ✓ should compile: {a,b,{c,d}e}
+    ✓ should compile: {a,b,{c,d}}
+    ✓ should compile: {a,b{c,d}}
+    ✓ should compile: {a,b}/{c,d}
+    ✓ should compile: {a,b}c,d\}
+    ✓ should compile: {a,b\}c,d}
+    ✓ should compile: {a,b}{c,d}
+    ✓ should compile: {abc}
+    ✓ should compile: {b{c,d},e}
+    ✓ should compile: {b{c,d},e}/f
+    ✓ should compile: x,y,{abc},trie
+    ✓ should compile: {{a,b},{c,d}}
+    ✓ should compile: {{a,b}/{c,d}}
+    ✓ should compile: {{a,b}/{c,d}}/z
+    ✓ should compile: {}
+    ✓ should compile: }
+    ✓ should compile: {generate,{assemble,update,verb}{file,-generate-*},generator}.js
+    ✓ should compile: **/{foo,bar}.js
+    ✓ should compile: **/{a,b,c}/*.js
+    ✓ should compile: **/{a,b,*}/*.js
+    ✓ should compile: **/{**,b,*}/*.js
+    ✓ should compile: /usr/{ucb/{ex,edit},lib/{ex,how_ex}}
+    ✓ should compile: ff{c,b,a}
+    ✓ should compile: f{d,e,f}g
+    ✓ should compile: {a,b,c}
+    ✓ should compile: {l,m,n}xyz
+    ✓ should compile: a/{a,b}/{c,d}/e
+    ✓ should compile: a{b,c}d{e,f}g
+    ✓ should compile: a/{x,y}/c{d,e}f.{md,txt}
+    ✓ should compile: {a,b}{{a,b},a,b}
+    ✓ should compile: a{b,c{d,e}f}g
+    ✓ should compile: a{{x,y},z}b
+    ✓ should compile: f{x,y{g,z}}h
+    ✓ should compile: a{b,c{d,e},h}x/z
+    ✓ should compile: a{b,c{d,e},h}x{y,z}
+    ✓ should compile: a{b,c{d,e},{f,g}h}x{y,z}
+    ✓ should compile: \{a,b,c,d,e}
+    ✓ should compile: a/\{b,c}/{d,e}/f
+    ✓ should compile: a/\{x,y}/cde
+    ✓ should compile: a/b/c/{x,y\}
+    ✓ should compile: a/{z,\{a,b,c,d,e}/d
+    ✓ should compile: abcd{efgh
+    ✓ should compile: {a,b\}c,d}
+    ✓ should compile: {abc}
+    ✓ should compile: {x,y,\{a,b,c\}}
+    ✓ should compile: {x,y,{abc},trie}
+    ✓ should compile: {x,y,{a,b,c\}}
+    ✓ should compile: {x\,y,\{abc\},trie}
+    ✓ should compile: a{b\,c\,d}e
+    ✓ should compile: a{b\,c}d
+    ✓ should compile: {abc\,def}
+    ✓ should compile: {abc\,def,ghi}
+    ✓ should compile: a/{b,c}/{x\,y}/d/e
+    ✓ should compile: { }
+    ✓ should compile: {
+    ✓ should compile: {}
+    ✓ should compile: }
+    ✓ should compile: a{b}c
+    ✓ should compile: a/b/c{d}e
+    ✓ should compile: {a,b}c,d}
+    ✓ should compile: abc/${ddd}/xyz
+    ✓ should compile: a${b}c
+    ✓ should compile: a/{${b},c}/d
+    ✓ should compile: a${b,d}/{foo,bar}c
+    ✓ should compile: ff{a,b,c}
+    ✓ should compile: f{d,e,f}g
+    ✓ should compile: {a,b,c}
+    ✓ should compile: {l,m,n}xyz
+    ✓ should compile: a/{a,b}/{c,d}/e
+    ✓ should compile: a{b,c}d{e,f}g
+    ✓ should compile: a/{x,y}/c{d,e}f.{md,txt}
+    ✓ should compile: a{b,c{d,e}f}g
+    ✓ should compile: a{{x,y},z}b
+    ✓ should compile: f{x,y{g,z}}h
+    ✓ should compile: a{b,c{d,e},h}x/z
+    ✓ should compile: a{b,c{d,e},h}x{y,z}
+    ✓ should compile: a{b,c{d,e},{f,g}h}x{y,z}
+    ✓ should compile: a-{b{d,e}}-c
+    ✓ should compile: a/b/{d,e}/*.js
+    ✓ should compile: a/**/c/{d,e}/f*.js
+    ✓ should compile: a/**/c/{d,e}/f*.{md,txt}
+    ✓ should compile: a/b/{d,e,[1-5]}/*.js
+    ✓ should compile: a{b,}c
+    ✓ should compile: a{,b}c
+    ✓ should compile: a{ ,c{d, },h}x
+    ✓ should compile: a{ ,c{d, },h}
+    ✓ should compile: /Users/tobiasreich/Sites/aaa/bbb/ccc 2016/src/**/[^_]*.{html,ejs}
+    ✓ should compile: a-{b{d,e}}-c
+    ✓ should compile: a-{bdef-{g,i}-c
+    ✓ should compile: {"foo"}{1,2,3}
+    ✓ should compile: {"foo"}{1,2,3}
+    ✓ should compile: {"x,x"}
+    ✓ should compile: {'x,x'}
+    ✓ should compile: {a-{b,c,d}}
+    ✓ should compile: {a,{a-{b,c,d}}}
+    ✓ should compile: abc{
+    ✓ should compile: {abc{
+    ✓ should compile: {abc
+    ✓ should compile: }abc
+    ✓ should compile: ab{c
+    ✓ should compile: ab{c
+    ✓ should compile: {{a,b}
+    ✓ should compile: {a,b}}
+    ✓ should compile: a{b{c{d,e}f}gh
+    ✓ should compile: a{b{c{d,e}f}g}h
+    ✓ should compile: f{x,y{{g,z}}h}
+    ✓ should compile: z{a,b},c}d
+    ✓ should compile: a{b{c{d,e}f{x,y{{g}h
+    ✓ should compile: f{x,y{{g}h
+    ✓ should compile: f{x,y{{g}}h
+    ✓ should compile: a{b{c{d,e}f{x,y{}g}h
+    ✓ should compile: f{x,y{}g}h
+    ✓ should compile: z{a,b{,c}d
+
+  bash
+    ✓ should compile: {1\.2}
+    ✓ should compile: {1\.2}
+    ✓ should compile: {"x,x"}
+    ✓ should compile: {x","x}
+    ✓ should compile: '{x,x}'
+    ✓ should compile: {x`,`x}
+    ✓ should compile: {x`,`x}
+    ✓ should compile: '{a,b}{{a,b},a,b}'
+    ✓ should compile: A{b,{d,e},{f,g}}Z
+    ✓ should compile: PRE-{a,b}{{a,b},a,b}-POST
+    ✓ should compile: \{a,b}{{a,b},a,b}
+    ✓ should compile: {{a,b}
+    ✓ should compile: {a,b}}
+    ✓ should compile: {,}
+    ✓ should compile: a{,}
+    ✓ should compile: {,}b
+    ✓ should compile: a{,}b
+    ✓ should compile: a{b}c
+    ✓ should compile: a{1..5}b
+    ✓ should compile: a{01..5}b
+    ✓ should compile: a{-01..5}b
+    ✓ should compile: a{-01..5..3}b
+    ✓ should compile: a{001..9}b
+    ✓ should compile: a{b,c{d,e},{f,g}h}x{y,z
+    ✓ should compile: a{b,c{d,e},{f,g}h}x{y,z\}
+    ✓ should compile: a{b,c{d,e},{f,g}h}x{y,z}
+    ✓ should compile: a{b{c{d,e}f{x,y{{g}h
+    ✓ should compile: a{b{c{d,e}f{x,y{}g}h
+    ✓ should compile: a{b{c{d,e}f{x,y}}g}h
+    ✓ should compile: a{b{c{d,e}f}g}h
+    ✓ should compile: a{{x,y},z}b
+    ✓ should compile: f{x,y{g,z}}h
+    ✓ should compile: f{x,y{{g,z}}h
+    ✓ should compile: f{x,y{{g,z}}h}
+    ✓ should compile: f{x,y{{g}h
+    ✓ should compile: f{x,y{{g}}h
+    ✓ should compile: f{x,y{}g}h
+    ✓ should compile: z{a,b{,c}d
+    ✓ should compile: z{a,b},c}d
+    ✓ should compile: {-01..5}
+    ✓ should compile: {-05..100..5}
+    ✓ should compile: {-05..100}
+    ✓ should compile: {0..5..2}
+    ✓ should compile: {0001..05..2}
+    ✓ should compile: {0001..-5..2}
+    ✓ should compile: {0001..-5..-2}
+    ✓ should compile: {0001..5..-2}
+    ✓ should compile: {01..5}
+    ✓ should compile: {1..05}
+    ✓ should compile: {1..05..3}
+    ✓ should compile: {05..100}
+    ✓ should compile: {0a..0z}
+    ✓ should compile: {a,b\}c,d}
+    ✓ should compile: {a,b{c,d}
+    ✓ should compile: {a,b}c,d}
+    ✓ should compile: {a..F}
+    ✓ should compile: {A..f}
+    ✓ should compile: {a..Z}
+    ✓ should compile: {A..z}
+    ✓ should compile: {z..A}
+    ✓ should compile: {Z..a}
+    ✓ should compile: {a..F..2}
+    ✓ should compile: {A..f..02}
+    ✓ should compile: {a..Z..5}
+    ✓ should compile: d{a..Z..5}b
+    ✓ should compile: {A..z..10}
+    ✓ should compile: {z..A..-2}
+    ✓ should compile: {Z..a..20}
+    ✓ should compile: {a{,b}
+    ✓ should compile: {a\},b}
+    ✓ should compile: {x,y{,}g}
+    ✓ should compile: {x,y{}g}
+    ✓ should compile: {{a,b}
+    ✓ should compile: {{a,b},c}
+    ✓ should compile: {{a,b}c}
+    ✓ should compile: {{a,b},}
+    ✓ should compile: X{{a,b},}X
+    ✓ should compile: {{a,b},}c
+    ✓ should compile: {{a,b}.}
+    ✓ should compile: {{a,b}}
+    ✓ should compile: X{a..#}X
+    ✓ should compile: {-10..00}
+    ✓ should compile: {a,\\{a,b}c}
+    ✓ should compile: {a,\{a,b}c}
+    ✓ should compile: a,\{b,c}
+    ✓ should compile: {-10.\.00}
+    ✓ should compile: ff{c,b,a}
+    ✓ should compile: f{d,e,f}g
+    ✓ should compile: {l,n,m}xyz
+    ✓ should compile: {abc\,def}
+    ✓ should compile: {abc}
+    ✓ should compile: {x\,y,\{abc\},trie}
+    ✓ should compile: {}
+    ✓ should compile: { }
+    ✓ should compile: }
+    ✓ should compile: {
+    ✓ should compile: abcd{efgh
+    ✓ should compile: foo {1,2} bar
+    ✓ should compile: "${var}"{x,y}
+    ✓ should compile: {1..10}
+    ✓ should compile: {0..10,braces}
+    ✓ should compile: {{0..10},braces}
+    ✓ should compile: x{{0..10},braces}y
+    ✓ should compile: {3..3}
+    ✓ should compile: x{3..3}y
+    ✓ should compile: {10..1}
+    ✓ should compile: {10..1}y
+    ✓ should compile: x{10..1}y
+    ✓ should compile: {a..f}
+    ✓ should compile: {f..a}
+    ✓ should compile: {a..A}
+    ✓ should compile: {A..a}
+    ✓ should compile: {f..f}
+    ✓ should compile: 0{1..9} {10..20}
+    ✓ should compile: {-1..-10}
+    ✓ should compile: {-20..0}
+    ✓ should compile: a-{b{d,e}}-c
+    ✓ should compile: a-{bdef-{g,i}-c
+    ✓ should compile: {"klklkl"}{1,2,3}
+    ✓ should compile: {"x,x"}
+    ✓ should compile: {klklkl}{1,2,3}
+    ✓ should compile: {1..10..2}
+    ✓ should compile: {-1..-10..2}
+    ✓ should compile: {-1..-10..-2}
+    ✓ should compile: {10..1..-2}
+    ✓ should compile: {10..1..2}
+    ✓ should compile: {1..20..2}
+    ✓ should compile: {1..20..20}
+    ✓ should compile: {100..0..5}
+    ✓ should compile: {100..0..-5}
+    ✓ should compile: {a..z}
+    ✓ should compile: {a..z..2}
+    ✓ should compile: {z..a..-2}
+    ✓ should compile: {2147483645..2147483649}
+    ✓ should compile: {10..0..2}
+    ✓ should compile: {10..0..-2}
+    ✓ should compile: {-50..-0..5}
+    ✓ should compile: {1..10.f}
+    ✓ should compile: {1..ff}
+    ✓ should compile: {1..10..ff}
+    ✓ should compile: {1.20..2}
+    ✓ should compile: {1..20..f2}
+    ✓ should compile: {1..20..2f}
+    ✓ should compile: {1..2f..2}
+    ✓ should compile: {1..ff..2}
+    ✓ should compile: {1..ff}
+    ✓ should compile: {1..0f}
+    ✓ should compile: {1..10f}
+    ✓ should compile: {1..10.f}
+    ✓ should compile: {},b}.h
+    ✓ should compile: y{\},a}x
+    ✓ should compile: {}a,b}c
+
+  braces.compile()
+    errors
+      ✓ should throw an error when invalid args are passed
+      ✓ should reject deeply nested ASTs
+      ✓ should compile patterns at the maximum nesting depth
+    invalid characters
+      ✓ should escape invalid bracket characters
+    sets
+      ✓ should support empty sets
+    ranges
+      ✓ should escape braces with invalid ranges
+      ✓ should expand brace patterns with both sets and ranges
+      ✓ should escape braces with too many range expressions
+      ✓ should compile very simple numeric ranges
+      ✓ should compile numeric ranges with increments
+      ✓ should compile zero-padded numeric ranges
+      ✓ should compile zero-padded numeric ranges with increments
+    invalid
+      ✓ should escape incomplete brace patterns
+      ✓ should escape non-brace patterns (no sets or ranges)
+
+  unit tests from brace-expand
+    errors
+      ✓ should reject deeply nested ASTs
+      ✓ should expand patterns at the maximum nesting depth
+      ✓ should reject a self-referencing AST parent
+      ✓ should reject a cycle involving multiple AST parents
+      ✓ should expand parsed parentheses with ordinary parent links
+    extglobs
+      ✓ should split on commas when braces are inside extglobs
+      ✓ should not split on commas in extglobs when inside braces
+    expand
+      ✓ should expand an AST
+      ✓ should support expanded nested empty sets
+    brace expansion unit tests from brace-expand
+      sequences
+        ✓ numeric sequences
+        ✓ numeric sequences with step count
+        ✓ numeric sequence with negative x / y
+        ✓ alphabetic sequences
+        ✓ alphabetic sequences with step count
+      dollar
+        ✓ ignores ${
+      empty option
+        ✓ should support empty sets
+      negative increments
+        ✓ should support negative steps
+      nested
+        ✓ should support nested sets
+      order
+        ✓ should expand in given order
+      pad
+        ✓ should support padding
+    additional brace expansion test
+      sequences
+        ✓ zero-padded numeric sequences
+        ✓ zero-padded numeric sequences with increments
+
+  braces.parse()
+    errors
+      ✓ should throw an error when string exceeds max safe length
+      ✓ should throw an error when nesting exceeds the maximum depth
+      ✓ should accept patterns at the maximum nesting depth
+      ✓ should support a lower maximum depth
+      ✓ should enforce fractional maximum depth values
+    valid
+      ✓ should return an AST
+      ✓ should ignore braces inside brackets
+      ✓ should parse braces with brackets inside
+    invalid
+      ✓ should escape standalone closing braces
+
+  braces.stringify()
+    ✓ should reject deeply nested ASTs
+    ✓ should stringify patterns at the maximum nesting depth
+    ✓ should not escape valid nested braces when escapeInvalid is set
+
+  brace expansion
+    ✓ should expand: a{b,c{d,e},{f,g}h}x{y,z}
+    ✓ should expand: a{1..5}b
+    ✓ should expand: a{b}c
+    ✓ should expand: a{00..05}b
+    ✓ should expand: z{a,b},c}d
+    ✓ should expand: z{a,b{,c}d
+    ✓ should expand: a{b{c{d,e}f}g}h
+    ✓ should expand: a{b{c{d,e}f{x,y}}g}h
+    ✓ should expand: a{b{c{d,e}f{x,y{}g}h
+
+  multiples
+    ✓ should expand: -v{,,,,}
+    ✓ should expand: -v{,,,,}{,}
+    ✓ should expand: a/b{,}
+    ✓ should expand: a/{,}/b
+    ✓ should expand: a/{,}{c,d}/e
+    ✓ should expand: a/{a,b,{,}{,}{,},c}/b
+    ✓ should expand: a/{a,b,{,},c}/b
+    ✓ should expand: a/{a,b,{,}{,}{,}}/b
+    ✓ should expand: a/{b,cz{,}}/{d{,},ef}{,}
+    ✓ should expand: a/{b,cz}{,}/{d{,},ef}{,}
+    ✓ should expand: a/{b,c{,}}
+    ✓ should expand: a/{b,c{,}}/{,}
+    ✓ should expand: a/{b,c}/{,}
+    ✓ should expand: a/{b,c}{,}/d{,}
+    ✓ should expand: a/{b,c}{,}/{d,e{,}}
+    ✓ should expand: a/{b,c}{,}/{d,e}{,}
+    ✓ should expand: a/{b,c}{,}/{d{,},e}{,}
+    ✓ should expand: a/{c,d}/{x,y{,}}/e
+    ✓ should expand: a/{c,d}{,}/e
+    ✓ should expand: a{,,,,,}
+    ✓ should expand: a{,,,,,}{,}
+    ✓ should expand: a{,,,,,}{,,}
+    ✓ should expand: a{,,,,,}{,,}{,}
+    ✓ should expand: a{,,,,}
+    ✓ should expand: a{,,,}
+    ✓ should expand: a{,,}
+    ✓ should expand: a{,,}{,,}{,,}{,}/b
+    ✓ should expand: a{,,}{,}
+    ✓ should expand: a{,}
+    ✓ should expand: a{,}/{c,d}/e
+    ✓ should expand: a{,}b
+    ✓ should expand: a{,}{,}
+    ✓ should expand: a{,}{,}{,}
+    ✓ should expand: a{,}{,}{,}{,}
+    ✓ should expand: one/{a{,}{,}}/{b/c{,,}{,}{,,}{,}}/two
+    ✓ should expand: {,}
+    ✓ should expand: {,}a/{,}
+    ✓ should expand: {,}{,}
+    ✓ should expand: {a,b{,}{,}{,},c}d
+    ✓ should expand: {a,b{,}{,}{,}}
+    ✓ should expand: {a{,,}b{,}}
+
+  Examples from README.md
+    Brace Expansion vs. Compilation
+      ✓ Compiled
+      ✓ Expanded
+    Sequences
+      ✓ first set of examples
+      ✓ zero-padding examples
+
+  braces tests from 1.8.5
+    ✓ braces
+    ✓ new sequence brace operators
+    ✓ ranges
+    ✓ mixes are incorrectly-formed brace expansions
+    ✓ do negative numbers work?
+    ✓ weirdly-formed brace expansions -- fixed in post-bash-3.1
+    ✓ numerical ranges with steps
+    ✓ alpha ranges with steps
+    ✓ make sure brace expansion handles ints > 2**31 - 1 using intmax_t
+    ✓ unwanted zero-padding -- fixed post-bash-4.0
+    ✓ bad
+
+  bash tests
+    brace expansion
+      ✓ should return an empty array when no braces are found
+      ✓ should expand emty sets
+      ✓ should eliminate dupes in repeated strings
+      ✓ should work with no braces
+      ✓ should work with no commas
+      ✓ should work with no commas in `bash` mode
+      ✓ should handle spaces
+      ✓ should handle empty braces
+      ✓ should handle imbalanced braces
+      ✓ should handle invalid braces in `bash mode`:
+      ✓ should return invalid braces:
+      ✓ should not expand quoted strings.
+      ✓ should work with one value
+      ✓ should work with one value in `bash` mode
+      ✓ should work with nested non-sets
+      ✓ should work with nested non-sets in `bash` mode
+      ✓ should not expand dots with leading slashes (escaped or paths).
+      ✓ should work with commas.
+      ✓ should expand sets
+      ✓ should expand multiple sets
+      ✓ should expand nested sets
+      ✓ should expand with globs.
+      ✓ should expand with brackets.
+    escaping:
+      ✓ should not expand strings with es6/bash-like variables.
+      ✓ should not expand escaped commas.
+      ✓ should return sets with escaped commas in `bash` mode.
+      ✓ should not expand escaped braces.
+      ✓ should not expand escaped braces or commas.
+
+  range expansion
+    ✓ should expand numerical ranges
+    ✓ should expand alphabetical ranges
+    ✓ should use steps with alphabetical ranges
+    ✓ should not try to expand ranges with decimals
+    ✓ should expand negative ranges
+    ✓ should expand multiple ranges:
+    ✓ should work with dots in file paths
+    ✓ should expand ranges using steps:
+    ✓ should expand negative ranges using steps:
+    ✓ should expand mixed ranges and sets:
+    ✓ should return invalid ranges:
+
+
+  778 passing (155ms)

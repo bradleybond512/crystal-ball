@@ -1,9 +1,12 @@
 import { spawnSync } from 'node:child_process';
 import { sourceFixture, npmCli } from './mcp-runtime-fixture.mjs';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { TestFilePreflight } from './test-file-preflight.mjs';
+const requested = process.argv.slice(2);
+TestFilePreflight.assertExplicitTestFiles(requested, resolve(dirname(fileURLToPath(import.meta.url)), '../..'));
 const fixture = sourceFixture();
 try {
-  const requested = process.argv.slice(2);
   const args = requested[0] === '--npm-mcp-test'
     ? [npmCli(), '--prefix', fixture.serverRoot, 'test', '--', '--import', join(fixture.repo, 'tests/helpers/loopback-only.mjs')]
     : requested[0] === '--npm-script' && /^test:/.test(requested[1] ?? '')

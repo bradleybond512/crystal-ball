@@ -19,6 +19,8 @@ The project uses TypeScript, Vite, MapLibre GL JS, deck.gl, Cesium, D3.js and Ta
 The former public product/API domains are retired. No replacement public API
 origin is verified here. A static web build does not provide its own API backend;
 API-backed features require a separately verified deployment/configuration.
+Removal from this revision's runtime/API allowlists remains pending #1813; the
+retirement recommendation alone does not remove those trust entries.
 
 ## Documentation
 

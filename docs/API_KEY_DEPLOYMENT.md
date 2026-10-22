@@ -9,7 +9,9 @@ Crystal Ball desktop is local-first, but the cloud API remains an explicit trust
 The former `crystalball.app` product/API domains are retired and must not be used
 as deployment or trust recommendations. No replacement public API origin has been
 verified. These rules describe the auth helpers; a deployment's origin allowlist
-must also reflect the domain-retirement repair. A custom `VITE_WS_API_URL` should
+must also reflect the domain-retirement repair. Removal from this revision's runtime/API
+allowlists remains pending [#1813](https://github.com/bradleybond512/crystal-ball/pull/1813);
+the retirement recommendation alone does not remove those trust entries. A custom `VITE_WS_API_URL` should
 name only an operator-controlled or independently verified endpoint. Leaving it
 empty preserves same-origin requests and does not provision a backend for a static
 web deployment.

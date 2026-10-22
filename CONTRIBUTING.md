@@ -57,7 +57,7 @@ npm run test:e2e:runtime
 
 After the [protected-Git scanner repair (#1815)](https://github.com/bradleybond512/crystal-ball/pull/1815) is integrated, `npm run secrets:scan` supports only the canonical `/usr/bin/git` installation on macOS/Linux. It checks the executable and its ancestors for trusted ownership and permissions before launching Git. Native Windows, custom or symlinked Git installations, and missing or untrusted system Git fail closed. Changing `PATH` or supplying another Git executable does not provide a fallback. Mac checks and synthetic Linux policy cases do not establish native Windows or Linux acceptance.
 
-Run Cargo-backed native test wrappers one at a time per checkout, with other writers quiescent. The [native bundle cleanup repair (#1814)](https://github.com/bradleybond512/crystal-ball/pull/1814) preserves a prior regular XMPP bundle and guards its own generated output, while retaining the real build and Cargo assertions. Its separate filesystem checks and renames are not transactional and do not coordinate other native wrappers through an interprocess lock. A passing wrapper does not establish installed-app acceptance.
+Run Cargo-backed native test wrappers one at a time per checkout, with other writers quiescent. After the [native bundle cleanup repair (#1814)](https://github.com/bradleybond512/crystal-ball/pull/1814) is integrated, it preserves a prior regular XMPP bundle and guards its own generated output, while retaining the real build and Cargo assertions. Its separate filesystem checks and renames are not transactional and do not coordinate other native wrappers through an interprocess lock. A passing wrapper does not establish installed-app acceptance.
 
 ### Desktop
 

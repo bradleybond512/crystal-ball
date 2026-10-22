@@ -46,7 +46,7 @@ import { detectPlatform, allButtons, buttonsForPlatform } from '@/components/Dow
 import type { Platform } from '@/components/DownloadBanner';
 import { invokeTauri } from '@/services/tauri-bridge';
 import { openExternalSafe } from '@/utils/safe-open';
-import { toggleGhostMode, getMode, setMode } from '@/services/mode-manager';
+import { getMode, setMode } from '@/services/mode-manager';
 import { isAppActive, onActivityChange } from '@/services/app-activity';
 import { playUiClick } from '@/services/sound-manager';
 import { dataFreshness } from '@/services/data-freshness';
@@ -384,13 +384,6 @@ export class EventHandlerManager implements AppModule {
  this.showShareToast('Copy failed');
  }
  }
- // Cmd+Shift+G — toggle Ghost Mode
- if (e.metaKey && e.shiftKey && e.key === 'G' && !e.altKey) {
- const active = document.activeElement;
- if (active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA') return;
- e.preventDefault();
- toggleGhostMode();
- }
  // Cmd+Shift+T — toggle Today view
  if (e.metaKey && e.shiftKey && e.key === 'T' && !e.altKey) {
  const active = document.activeElement;
@@ -409,14 +402,6 @@ export class EventHandlerManager implements AppModule {
  e.preventDefault();
  document.dispatchEvent(new CustomEvent('cb:toggle-watchlist'));
  }
- // G key (no modifiers) — toggle God's Eye mode
- if (e.key === 'g' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
- const target = e.target as HTMLElement;
- const tag = target.tagName;
- if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return;
- e.preventDefault();
- document.dispatchEvent(new CustomEvent('cb:toggle-gods-vision'));
- }
  // Cmd+\ — toggle sidebar
  if (e.metaKey && e.key === '\\' && !e.shiftKey && !e.altKey) {
  const active = document.activeElement;
@@ -430,15 +415,6 @@ export class EventHandlerManager implements AppModule {
  if (active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA') return;
  e.preventDefault();
  (document.querySelector('#unifiedSettingsMount .mac-sidebar-footer-btn') as HTMLElement)?.click();
- }
- // Cmd+M — toggle Ghost Mode (only non-default mode left besides God's Vision).
- // The OS intercepts Cmd+M in Mac browsers for "minimize window" so web gets
- // Cmd+Shift+G as its only way in.
- if (this.ctx.isDesktopApp && e.metaKey && e.key === 'm' && !e.shiftKey && !e.altKey) {
- const active = document.activeElement;
- if (active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA') return;
- e.preventDefault();
- setMode(getMode() === 'ghost' ? null : 'ghost');
  }
  };
  document.addEventListener('keydown', this.boundKeydownHandler);

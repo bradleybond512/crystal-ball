@@ -749,6 +749,37 @@
     "test:local-basemap",
     "test:map-compatibility"
   ],
+  "src/services/keyboard/shortcut-bootstrap.ts": [
+    "test:repair12"
+  ],
+  "src/services/keyboard/shortcut-registry.ts": [
+    "test:repair12"
+  ],
+  "src/services/command-palette/built-in-commands.ts": [
+    "test:repair12"
+  ],
+  "src/app/event-handlers.ts": [
+    "test:repair12"
+  ],
+  "src/app/panel-layout.ts": [
+    "test:repair12"
+  ],
+  "src/components/HelpOverlay.ts": [
+    "test:repair12"
+  ],
+  "src/components/CommandPalettePanel.ts": [
+    "test:repair12"
+  ],
+  "src/components/HomeShellOverlay.ts": [
+    "test:repair12"
+  ],
+  "src/components/UnifiedSettings.ts": [
+    "test:repair12",
+    "test:ux032"
+  ],
+  "src/config/panel-metadata.ts": [
+    "test:repair12"
+  ],
   "src/components/MapPopup.ts": [
     "test:lifelines-map",
     "test:map-clarity",

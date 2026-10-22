@@ -426,6 +426,11 @@ export class UnifiedSettings {
  }
 
  // Debug tab buttons
+ if (target.closest('#us-open-diagnostics')) {
+ this.close();
+ document.dispatchEvent(new CustomEvent('cb:open-diagnostics'));
+ return;
+ }
  if (target.id === 'us-open-reasoning-overlay') {
  document.dispatchEvent(new KeyboardEvent('keydown', {
  key: 'D', code: 'KeyD', shiftKey: true, metaKey: true, bubbles: true,
@@ -1680,6 +1685,7 @@ export class UnifiedSettings {
  <dt>Service worker</dt><dd><span data-web-debug="sw">checking…</span></dd>
  </dl>
  <div class="us-debug-section-label">Diagnostics</div>
+ <button id="us-open-diagnostics" class="us-debug-btn">Open Diagnostics</button>
  <div class="us-debug-toggles">
  <label class="us-debug-toggle-row"><input type="checkbox" id="us-fetch-debug" ${fetchDebug ? 'checked' : ''}> Frontend Fetch Debug</label>
  </div>
@@ -1702,6 +1708,7 @@ export class UnifiedSettings {
  <button id="us-open-api-log" class="us-debug-btn">Open API Log</button>
  </div>
  <div class="us-debug-section-label">Diagnostics</div>
+ <button id="us-open-diagnostics" class="us-debug-btn">Open Diagnostics</button>
  <div class="us-debug-toggles">
  <label class="us-debug-toggle-row"><input type="checkbox" id="us-verbose-log"> Verbose Sidecar Log</label>
  <label class="us-debug-toggle-row"><input type="checkbox" id="us-fetch-debug" ${fetchDebug ? 'checked' : ''}> Frontend Fetch Debug</label>

@@ -205,6 +205,7 @@ export class HomeShellOverlay {
       button('home-shell-cmdk', 'cmdk', '⌘K — panels, places, situations…'),
       el('span', 'home-shell-topbar-spacer'),
       button('home-shell-library', 'library', '📚 Library'),
+      button('home-shell-diagnostics', 'diagnostics', 'Diagnostics'),
       button('home-shell-exit', 'exit', 'Classic view ⎋'),
     );
     // Drag the window by its top bar. The shell has no classic toolbar, so
@@ -756,6 +757,10 @@ export class HomeShellOverlay {
     }
     if (action === 'library') {
       document.dispatchEvent(new CustomEvent('cb:toggle-library'));
+      return;
+    }
+    if (action === 'diagnostics') {
+      document.dispatchEvent(new CustomEvent('cb:open-diagnostics'));
       return;
     }
     if (action === 'exit') {

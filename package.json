@@ -181,6 +181,7 @@
     "test:ux010-native": "node --test tests/ux010-location-startup.test.mjs tests/ux010-native-gate.test.mjs",
     "test:ux011": "tsx --test src/services/weather/__tests__/weather-alerts-parse.test.mts src/services/weather/__tests__/evacuation-hazard-exposure.test.mts src/components/__tests__/evacuation-hazard-exposure-panel.test.mts && node --test tests/evacuation-hazard-exposure-wiring.test.mjs",
     "test:ux032": "tsx --test src/components/__tests__/unified-settings-keyboard.test.mts",
+    "test:repair12": "node --test --import tsx tests/diagnostics-navigation.test.mts src/services/keyboard/__tests__/shortcut-bootstrap.test.mts src/services/keyboard/__tests__/shortcut-registry.test.mts src/services/keyboard/__tests__/palette-capture-net.test.mts src/services/command-palette/__tests__/command-registry.test.mts src/services/command-palette/__tests__/command-palette-panel.test.mts src/config/__tests__/panel-metadata.test.mts src/services/home-shell/__tests__/library-view.test.mts src/components/__tests__/unified-settings-keyboard.test.mts src/app/__tests__/gods-vision-events.test.mts",
     "test:ux032-browser": "playwright test e2e/settings-keyboard.spec.ts",
     "test:ux060": "tsx --test tests/ux060-onboarding-digest.test.mjs src/components/__tests__/digest-overlay.test.mts src/components/__tests__/welcome-flow-sources.test.mts",
     "test:ux060-browser": "playwright test e2e/home-shell-boot.spec.ts",

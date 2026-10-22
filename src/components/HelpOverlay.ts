@@ -57,6 +57,11 @@ export class HelpOverlay {
     this.overlay.hidden = true;
   }
 
+  destroy(): void {
+    this.hide();
+    this.overlay.remove();
+  }
+
   private renderBody(): void {
     const body = this.card.querySelector<HTMLElement>('.help-body');
     if (!body) return;

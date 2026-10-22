@@ -1259,3 +1259,28 @@ Update the row in the same PR that does the work.
 | UX-060 | Preserve onboarding keyboard ownership against proactive digest | DONE | #1735 |
 | UX-061 | Truthful, restrained map presentation | DONE | #1802; [bounded evidence](validation/MAP-CLARITY-CLEANUP.md); native acceptance recorded separately |
 | UX-062 | Label forecasts that trail their baseline | NOT STARTED — HIGH ASSURANCE | |
+
+## Repair 12 — Diagnostics entry and shortcut ownership (2026-10-18)
+
+| Item | Scope | Source status | Packaged acceptance | Draft |
+| --- | --- | --- | --- | --- |
+| Repair12 | Existing System Diagnostic destination from Home, live command palette and Settings Debug; registry-owned HUD/Ghost/globe shortcuts and Help | Local implementation and focused source/DOM validation; full gate and independent review pending | Pending: browser/desktop focus, native key delivery and VoiceOver | Not published; remote Draft claims paused pending approval |
+
+The canonical navigation label is **Diagnostics**, backed by the unchanged
+`system-diagnostic` panel ID. Algorithm Diagnostic, Feed Health and Self-Test
+remain available in Library More/search and direct palette commands; existing
+panel enablement and pins remain intact. System Health now features exactly
+System Diagnostic and Source Confidence; every other domain retains its existing
+featured coverage requirement.
+
+The registry owns Cmd/Ctrl+Shift+A (Analyst HUD), Cmd/Ctrl+Shift+G (Ghost Mode),
+bare G (God's Vision), and desktop-only Cmd+M (the existing legacy Ghost alias).
+Primary Ghost restoration and the legacy alias's clearing behavior remain
+distinct. Help renders the installed registry. Opening Diagnostics does not run
+self-test, export, restart, clear logs or change debug/credential settings.
+
+Evidence paths in source: `tests/diagnostics-navigation.test.mts`,
+`src/services/keyboard/__tests__/shortcut-bootstrap.test.mts`, the live palette
+and Settings keyboard suites, and `npm run test:repair12`. Source tests do not
+establish packaged acceptance. UX-000 remains MONITOR with packaged verification
+pending; this addendum does not complete UX-032, UX-050, or any unrelated UX task.

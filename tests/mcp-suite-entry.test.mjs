@@ -52,13 +52,17 @@ test('stdout or stderr TAP bailout remains red even with exit-zero passing summa
   assert.throws(() => validateStageResult(result({ stderr: '  Bail out! descendant\n' })), /bailout/);
 });
 test('the suite map is finite and frozen and cannot launch arbitrary or inherited identifiers', async (t) => {
-  assert.deepEqual(Object.keys(SUITE_STAGES), ['untrusted', 'companion', 'install-smoke', 'domain-retirement']);
+  assert.deepEqual(Object.keys(SUITE_STAGES), ['untrusted', 'companion', 'install-smoke', 'sidecar-remaining', 'domain-retirement']);
   assert.equal(SUITE_STAGES.untrusted.length, 2);
   assert.deepEqual(SUITE_STAGES.untrusted[0].slice(0, 3), ['--import', 'tsx', '--test']);
   assert.equal(SUITE_STAGES.untrusted[0].length, 6);
   assert.equal(SUITE_STAGES.untrusted[1].length, 6);
   assert.equal(SUITE_STAGES.companion[0].length, 7);
   assert.deepEqual(SUITE_STAGES['install-smoke'][0], ['--test', 'tools/mcp-server/__tests__/install-smoke.test.mjs']);
+  assert.equal(SUITE_STAGES['sidecar-remaining'].length, 2);
+  assert.equal(SUITE_STAGES['sidecar-remaining'][0].length, 33);
+  assert.deepEqual(SUITE_STAGES['sidecar-remaining'][1].slice(0, 3), ['--import', 'tsx', '--test']);
+  assert.equal(SUITE_STAGES['sidecar-remaining'][1].length, 5);
   assert.deepEqual(SUITE_STAGES['domain-retirement'], [
     ['--test', 'api/_cors.test.mjs', 'api/_api-key.test.mjs', 'api/youtube/embed.test.mjs', 'api/og-story.test.mjs', 'api/story-retirement.test.mjs', 'scripts/ais-relay-cors.test.cjs', 'tests/csp-allowlist.test.mjs', 'tests/key-compare-hardening.test.mjs', 'api/grid-outages.test.mjs', 'api/local-logistics.test.mjs', 'api/usgs-water-proxy.test.mjs'],
     ['--import', 'tsx', '--test', 'src/services/__tests__/runtime-fetch-fallback.test.mts', 'src/services/__tests__/fetch-attribution.test.mts', 'src/services/__tests__/story-share.test.mts', 'tests/server-cors-retirement.test.mts'],

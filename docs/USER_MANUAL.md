@@ -191,7 +191,7 @@ Press **`G`** (or use the sidebar) to enter the full-viewport Cesium 3D globe. `
 has its own layer registry. These include military bases, nuclear facilities, earthquakes, active
 conflicts, airstrikes, cyclones, fires, vessels, flights, cyber threats, submarine
 cables, ports, satellites, ISS, weather radar, lightning, GPS jamming, trade routes, the
-day/night terminator, and more. 31 are on by default; toggle the rest from the layer bar.
+day/night terminator, and more. 32 are on by default; toggle the rest from the layer bar.
 
 ### Read the HUD
 

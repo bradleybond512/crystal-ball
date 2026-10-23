@@ -1,4 +1,5 @@
 import type { SiteVariant } from '@/config/variant.ts';
+import { deploymentAssetUrl } from '../../utils/deployment-base';
 
 export type PersistedEmergencyPackBaseMap = 'dark' | 'light' | 'satellite' | 'terrain';
 export type EmergencyPackBaseMap = PersistedEmergencyPackBaseMap | 'emergency';
@@ -43,19 +44,19 @@ export function getEmergencyPackBaseMapStyleUrl(
 ): string {
   switch (basemap) {
     case 'emergency': {
-      return '/map-styles/emergency.json';
+      return deploymentAssetUrl('map-styles/emergency.json');
     }
     case 'satellite': {
-      return '/map-styles/satellite.json';
+      return deploymentAssetUrl('map-styles/satellite.json');
     }
     case 'terrain': {
-      return '/map-styles/terrain.json';
+      return deploymentAssetUrl('map-styles/terrain.json');
     }
     case 'light': {
-      return variant === 'happy' ? '/map-styles/happy-light.json' : '/map-styles/light.json';
+      return deploymentAssetUrl(variant === 'happy' ? 'map-styles/happy-light.json' : 'map-styles/light.json');
     }
     case 'dark': {
-      return variant === 'happy' ? '/map-styles/happy-dark.json' : '/map-styles/dark.json';
+      return deploymentAssetUrl(variant === 'happy' ? 'map-styles/happy-dark.json' : 'map-styles/dark.json');
     }
   }
 }

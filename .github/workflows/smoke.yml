@@ -44,6 +44,9 @@ jobs:
       # separate Node suites; renderer globs cannot discover either tree.
       - run: npm run test:api
       - run: npm run test:sidecar
+      # Explicit remaining sidecar files, isolated with strict inner TAP and
+      # an exactly-once inventory guard across the three sidecar test groups.
+      - run: npm run test:sidecar-ci
       - run: npm run test:port-publication
       - run: npm run build
       - run: npm run pwa:budget

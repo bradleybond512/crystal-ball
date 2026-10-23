@@ -454,7 +454,20 @@
   "tests/helpers/run-isolated-mcp.mjs": [
     "test:mcp-untrusted",
     "test:mcp-companion",
-    "test:mcp-install-smoke"
+    "test:mcp-install-smoke",
+    "test:sidecar-entry"
+  ],
+  "tests/helpers/test-file-preflight.mjs": [
+    "test:sidecar-entry"
+  ],
+  "tests/sidecar-test-entry.test.mjs": [
+    "test:sidecar-entry"
+  ],
+  "api/usni-fleet.js": [
+    "test:api"
+  ],
+  "api/__tests__/usni-fleet.test.mjs": [
+    "test:api"
   ],
   "tests/helpers/loopback-only.mjs": [
     "test:mcp-untrusted",

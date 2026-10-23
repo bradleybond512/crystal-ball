@@ -52,13 +52,17 @@ test('stdout or stderr TAP bailout remains red even with exit-zero passing summa
   assert.throws(() => validateStageResult(result({ stderr: '  Bail out! descendant\n' })), /bailout/);
 });
 test('the suite map is finite and frozen and cannot launch arbitrary or inherited identifiers', async (t) => {
-  assert.deepEqual(Object.keys(SUITE_STAGES), ['untrusted', 'companion', 'install-smoke']);
+  assert.deepEqual(Object.keys(SUITE_STAGES), ['untrusted', 'companion', 'install-smoke', 'sidecar-remaining']);
   assert.equal(SUITE_STAGES.untrusted.length, 2);
   assert.deepEqual(SUITE_STAGES.untrusted[0].slice(0, 3), ['--import', 'tsx', '--test']);
   assert.equal(SUITE_STAGES.untrusted[0].length, 6);
   assert.equal(SUITE_STAGES.untrusted[1].length, 6);
   assert.equal(SUITE_STAGES.companion[0].length, 7);
   assert.deepEqual(SUITE_STAGES['install-smoke'][0], ['--test', 'tools/mcp-server/__tests__/install-smoke.test.mjs']);
+  assert.equal(SUITE_STAGES['sidecar-remaining'].length, 2);
+  assert.equal(SUITE_STAGES['sidecar-remaining'][0].length, 33);
+  assert.deepEqual(SUITE_STAGES['sidecar-remaining'][1].slice(0, 3), ['--import', 'tsx', '--test']);
+  assert.equal(SUITE_STAGES['sidecar-remaining'][1].length, 5);
   for (const stages of Object.values(SUITE_STAGES)) {
     assert.equal(Object.isFrozen(stages), true);
     for (const args of stages) assert.equal(Object.isFrozen(args), true);

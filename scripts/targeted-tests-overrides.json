@@ -759,6 +759,29 @@
     "test:local-basemap",
     "test:map-compatibility"
   ],
+  "src/utils/deployment-base.ts": [
+    "test:pwa-deployment"
+  ],
+  "src/config/pwa-manifest.ts": [
+    "test:pwa-deployment"
+  ],
+  "src/config/cesium-init.ts": [
+    "test:pwa-deployment"
+  ],
+  "src/App.ts": [
+    "test:pwa-deployment"
+  ],
+  "src/services/country-geometry.ts": [
+    "test:pwa-deployment",
+    "test:local-basemap"
+  ],
+  "src/services/emergency-pack/emergency-pack-map-style.ts": [
+    "test:pwa-deployment",
+    "test:emergency-pack"
+  ],
+  "scripts/check-pwa-output.mjs": [
+    "test:pwa-deployment"
+  ],
   "src/components/MapPopup.ts": [
     "test:lifelines-map",
     "test:map-clarity",
@@ -804,7 +827,8 @@
     "test:domain-retirement"
   ],
   "index.html": [
-    "test:domain-retirement"
+    "test:domain-retirement",
+    "test:pwa-deployment"
   ],
   "middleware.ts": [
     "test:domain-retirement"
@@ -882,7 +906,8 @@
     "test:domain-retirement"
   ],
   "vite.config.ts": [
-    "test:domain-retirement"
+    "test:domain-retirement",
+    "test:pwa-deployment"
   ],
   "tests/retired-domain-suite.test.mjs": [
     "test:domain-retirement"

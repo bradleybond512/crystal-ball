@@ -9,7 +9,10 @@ import { promisify } from 'util';
 import pkg from './package.json';
 import { isSafetyFeedPath } from './src/utils/sw-safety-feeds';
 import { removeWebLoopbackCspSources } from './src/config/csp-policy';
+import { deploymentAssetUrl, normalizeDeploymentBase } from './src/utils/deployment-base';
+import { createPwaManifestPaths } from './src/config/pwa-manifest';
 
+const deploymentBase = normalizeDeploymentBase(process.env.BASE_PATH);
 const isE2E = process.env.VITE_E2E === '1';
 const isDesktopBuild = process.env.VITE_DESKTOP_RUNTIME === '1';
 const BUILD_VARIANTS = ['full', 'tech', 'finance', 'happy'] as const;
@@ -743,7 +746,7 @@ function satelliteWasmStripPlugin(): Plugin {
 }
 
 export default defineConfig({
-  base: process.env.BASE_PATH || '/',
+  base: deploymentBase,
   define: {
  __APP_VERSION__: JSON.stringify(pkg.version),
  __BUILD_VARIANT__: JSON.stringify(activeVariant),
@@ -777,7 +780,7 @@ export default defineConfig({
  '.wasm': 'application/wasm',
  '.glb': 'model/gltf-binary',
  };
- server.middlewares.use('/cesium', (req, res, next) => {
+ server.middlewares.use(deploymentAssetUrl('cesium', deploymentBase), (req, res, next) => {
  const filePath = join(cesiumRoot, req.url ?? '');
  if (existsSync(filePath)) {
  const ext = extname(filePath);
@@ -811,18 +814,12 @@ export default defineConfig({
  name: `${activeMeta.siteName} - ${activeMeta.subject}`,
  short_name: activeMeta.shortName,
  description: activeMeta.description,
- start_url: '/',
- scope: '/',
+ ...createPwaManifestPaths(deploymentBase),
  display: 'standalone',
  orientation: 'any',
  theme_color: '#0a0f0a',
  background_color: '#0a0f0a',
  categories: activeMeta.categories,
- icons: [
- { src: '/favico/android-chrome-192x192.png', sizes: '192x192', type: 'image/png' },
- { src: '/favico/android-chrome-512x512.png', sizes: '512x512', type: 'image/png' },
- { src: '/favico/android-chrome-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
- ],
  },
 
  workbox: {

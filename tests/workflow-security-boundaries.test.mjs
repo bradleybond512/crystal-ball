@@ -29,7 +29,7 @@ test('every checkout discards its authentication while retaining narrowly scoped
       }
     }
   }
-  assert.equal(count, 32, 'all 30 flagged checkouts and the two already-hardened checkouts are covered');
+  assert.equal(count, 34, 'all 32 existing checkouts and the two browser coverage jobs are covered');
   const wf = workflow('build-desktop.yml');
   assert.deepEqual(wf.jobs['publish-release'].permissions, { contents: 'write', 'id-token': 'write', attestations: 'write' });
   assert.deepEqual(wf.jobs['publish-release'].environment, { name: 'release' });

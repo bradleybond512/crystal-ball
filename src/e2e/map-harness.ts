@@ -198,7 +198,10 @@ declare global {
 }
 
 const localBaselineMode = new URLSearchParams(location.search).has('local-basemap');
-if (localBaselineMode) await import('../styles/home-shell.css');
+if (localBaselineMode) {
+  await import('../styles/home-shell.css');
+  await import('../styles/map-feature-list.css');
+}
 
 const app = document.getElementById('app');
 if (!app) {

@@ -751,6 +751,35 @@
     "test:local-basemap",
     "test:map-compatibility"
   ],
+  "src/utils/deployment-base.ts": [
+    "test:pwa-deployment"
+  ],
+  "src/config/pwa-manifest.ts": [
+    "test:pwa-deployment"
+  ],
+  "src/config/cesium-init.ts": [
+    "test:pwa-deployment"
+  ],
+  "src/App.ts": [
+    "test:pwa-deployment"
+  ],
+  "src/services/country-geometry.ts": [
+    "test:pwa-deployment",
+    "test:local-basemap"
+  ],
+  "src/services/emergency-pack/emergency-pack-map-style.ts": [
+    "test:pwa-deployment",
+    "test:emergency-pack"
+  ],
+  "vite.config.ts": [
+    "test:pwa-deployment"
+  ],
+  "index.html": [
+    "test:pwa-deployment"
+  ],
+  "scripts/check-pwa-output.mjs": [
+    "test:pwa-deployment"
+  ],
   "src/components/MapPopup.ts": [
     "test:lifelines-map",
     "test:map-clarity",

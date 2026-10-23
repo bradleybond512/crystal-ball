@@ -8,6 +8,7 @@ import {
   buildReleaseName,
   buildReleaseTag,
   getReleaseProductName,
+  getDesktopIdentity,
   parseReleaseRef,
 } from './release-metadata.mjs';
 
@@ -239,6 +240,8 @@ async function main() {
  }
   }
 
+  context.tauriConfig = getDesktopIdentity(context.variant).config;
+  context.bundleIdentifier = getDesktopIdentity(context.variant).identifier;
   await writeGithubOutputs(options.githubOutput, context);
   console.log(JSON.stringify(context, null, 2));
 }

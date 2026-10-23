@@ -59,3 +59,19 @@ test('desktop build workflow is tag-driven and publishes only after artifact ver
  'desktop build workflow should support the finance variant in manual build mode',
   );
 });
+
+test('variant builds pass an allowlisted native config and measure macOS identity before collection', () => {
+  assert.match(workflow, /tauri_config: \$\{\{ steps\.context\.outputs\.tauriConfig \}\}/);
+  assert.match(workflow, /--config-only --variant "\$WM_BUILD_VARIANT" --version "\$RELEASE_VERSION"/);
+  assert.match(workflow, /npm exec tauri build -- "\$\{tauri_args\[@\]\}" --config "\$TAURI_CONFIG_PATH"/);
+  assert.match(workflow, /npm exec tauri build -- --config "\$TAURI_CONFIG_PATH"/);
+  const gate = workflow.indexOf('name: Verify measured macOS app and DMG identities');
+  const signing = workflow.indexOf('name: Verify signed macOS bundle');
+  const collect = workflow.indexOf('name: Collect release manifest');
+  assert.ok(gate > 0 && signing > gate && collect > signing);
+  const section = workflow.slice(gate, signing);
+  assert.match(section, /if: contains\(matrix\.platform, 'macos'\)\n/);
+  assert.doesNotMatch(section, /apple-signing/);
+  assert.match(section, /src-tauri\/target\/\$NODE_TARGET\/release\/bundle/);
+  assert.match(section, /--tag "\$RELEASE_TAG".*--built-after.*--include-dmg/);
+});

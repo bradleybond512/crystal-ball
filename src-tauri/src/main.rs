@@ -30,6 +30,7 @@ mod sidecar_publication;
 mod secret_sync;
 mod sidecar_supervisor;
 mod updater_policy;
+mod updater_identity;
 mod vault_coordinator;
 mod watchdog;
 use updater_policy::{BrowserReason, SignerRequirement, UpdateError, UpdateOutcome};
@@ -2296,6 +2297,8 @@ fn update_asset_client(initial: &str, timeout: u64) -> Result<reqwest::Client, U
 #[tauri::command]
 async fn stage_latest_update(webview: Webview) -> Result<UpdateOutcome, UpdateError> {
  require_trusted_window(webview.label()).map_err(|_| UpdateError { code: "unauthorized", message: "This window cannot check updates." })?;
+ let config = webview.app_handle().config();
+ updater_policy::require_full_channel(&config.identifier, config.product_name.as_deref())?;
  let guard = UpdateStageGuard::acquire()?;
  let checked_at = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|_| UpdateError::check())?.as_millis() as u64;
  let client = reqwest::Client::builder().use_native_tls()
@@ -2615,6 +2618,8 @@ fn validate_candidate_bundle(staged: &str, requirement: &SignerRequirement, expe
 #[tauri::command]
 async fn apply_staged_update(webview: Webview) -> Result<(), UpdateError> {
  require_trusted_window(webview.label()).map_err(|_| UpdateError { code: "unauthorized", message: "This window cannot apply updates." })?;
+ let config = webview.app_handle().config();
+ updater_policy::require_full_channel(&config.identifier, config.product_name.as_deref())?;
  #[cfg(not(target_os = "macos"))]
  { Err(UpdateError { code: "unsupported_platform", message: "Automatic updates require macOS." }) }
  #[cfg(target_os = "macos")]
@@ -2685,7 +2690,9 @@ fn apply_staged_update_blocking() -> Result<(), String> {
 /// continues a normal boot; it never blocks startup and cannot loop (after a
 /// successful apply the running version equals the staged version).
 #[cfg(target_os = "macos")]
-fn maybe_apply_staged_update_on_boot() {
+fn maybe_apply_staged_update_on_boot(identifier: &str, product_name: Option<&str>) {
+ // Stop before resolving paths, inspecting or discarding old staged data.
+ if updater_policy::require_full_channel(identifier, product_name).is_err() { return; }
  let dest = match resolve_update_install_path() {
  Ok(d) => d,
  Err(_) => return,
@@ -5050,11 +5057,13 @@ fn main() {
  }
  }));
 
+ // One embedded config is the authority for boot, IPC and the eventual app.
+ let context = tauri::generate_context!();
  // Apply an update staged in the previous session before any window shows, so a
  // manual quit/relaunch lands the new build seamlessly. No-op if nothing is
  // staged; discards + continues normal boot on any verification problem.
  #[cfg(target_os = "macos")]
- maybe_apply_staged_update_on_boot();
+ maybe_apply_staged_update_on_boot(&context.config().identifier, context.config().product_name.as_deref());
 
  // Work around WebKitGTK rendering issues on Linux that can cause blank white
  // screens. DMA-BUF renderer failures are common with NVIDIA drivers and on
@@ -5550,7 +5559,7 @@ fn main() {
 
  Ok(())
  })
- .build(tauri::generate_context!())
+ .build(context)
  .expect("error while running crystalball tauri application")
  .run(|app, event| {
  match &event {

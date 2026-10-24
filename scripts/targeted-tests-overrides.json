@@ -247,7 +247,8 @@
     "test:imessage",
     "test:map-clarity",
     "test:map-compatibility",
-    "test:domain-retirement"
+    "test:domain-retirement",
+    "test:analytics-lifecycle"
   ],
   "src-tauri/src/sidecar_supervisor.rs": [
     "test:sidecar-supervisor"
@@ -392,11 +393,13 @@
   ],
   "tools/mcp-server/tool-catalog.mjs": [
     "test:mcp-untrusted",
-    "test:mcp-companion"
+    "test:mcp-companion",
+    "test:release-capabilities"
   ],
   "tools/mcp-server/tool-registry.mjs": [
     "test:mcp-untrusted",
-    "test:mcp-companion"
+    "test:mcp-companion",
+    "test:release-capabilities"
   ],
   "src/components/AnalystHUD.ts": [
     "test:mcp-untrusted"
@@ -1057,5 +1060,17 @@
   ],
   "src-tauri/sidecar/__tests__/watchboard-engine.test.mjs": [
     "test:sidecar-ci"
+  ],
+  "scripts/release-capabilities.mjs": [
+    "test:release-capabilities"
+  ],
+  "scripts/release-manifest.mjs": [
+    "test:release-capabilities"
+  ],
+  "config/release-features.json": [
+    "test:release-capabilities"
+  ],
+  "src/config/panels.ts": [
+    "test:release-capabilities"
   ]
 }

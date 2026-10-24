@@ -9,7 +9,6 @@ import './styles/library.css';
 import './styles/map-feature-list.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as Sentry from '@sentry/browser';
-import { inject } from '@vercel/analytics';
 import { App } from './App';
 import { filterSentryEvent } from './services/sentry-filter';
 
@@ -155,7 +154,7 @@ import { initMetaTags } from '@/services/meta-tags';
 import { isHomeShellDefaultOn } from '@/services/home-shell/shell-gate';
 import { installRuntimeFetchPatch, installWebApiRedirect, isDesktopRuntime } from '@/services/runtime';
 import { loadDesktopSecretsWhenReady } from '@/services/runtime-config';
-import { initAnalytics, isAnalyticsAllowed, migrateAnalyticsConsent, trackApiKeysSnapshot } from '@/services/analytics';
+import { initAnalytics, migrateAnalyticsConsent, trackApiKeysSnapshot } from '@/services/analytics';
 import { applyStoredTheme, watchSystemTheme } from '@/utils/theme-manager';
 import { installLocalStoragePatch } from '@/utils/safe-storage';
 import { SITE_VARIANT, initializeVariant } from '@/config/variant';
@@ -236,11 +235,6 @@ function showDesktopRuntimeDebugNotice(snapshot: DesktopRuntimeSnapshot): void {
   } as CSSStyleDeclaration);
   document.body.append(banner);
 }
-
-// Initialize Vercel Analytics on web only. beforeSend gates every event at
-// send-time so consent revocation mid-session takes effect immediately without
-// a reload (inject() itself has no shutdown path).
-if (!isDesktopRuntime()) inject({ beforeSend: (e) => isAnalyticsAllowed() ? e : null });
 
 // Migrate pre-consent-gate installs once, then surface a first-run opt-in banner
 // for brand-new installs that have no recorded choice. Must run before

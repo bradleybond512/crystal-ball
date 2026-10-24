@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { accessSync, constants, existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const PLACEHOLDER_TOKENS = [
   'example',
@@ -23,14 +24,14 @@ const PLACEHOLDER_TOKENS = [
 ];
 
 const HIGH_CONFIDENCE_PATTERNS = [
-  { label: 'GitHub fine-grained token', regex: /\bgithub_pat_[A-Za-z0-9_]{20,}\b/g },
+  { label: 'GitHub fine-grained token', regex: /\bgithub_pat_\w{20,}\b/g },
   { label: 'GitHub personal token', regex: /\bgh[pousr]_[A-Za-z0-9]{20,}\b/g },
   { label: 'AWS access key', regex: /\bAKIA[0-9A-Z]{16}\b/g },
   { label: 'Slack token', regex: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g },
   { label: 'OpenAI key', regex: /\bsk-(?:proj|live|test)-[A-Za-z0-9_-]{20,}\b/g },
   { label: 'Anthropic key', regex: /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g },
   { label: 'Google API key', regex: /\bAIza[0-9A-Za-z\\-_]{35}\b/g },
-  { label: 'Private key material', regex: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |)?PRIVATE KEY-----/g },
+  { label: 'Private key material', regex: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----/g },
 ];
 
 const STRUCTURED_SECRET_NAMES = new Set([
@@ -111,11 +112,81 @@ const TEXT_FILE_EXTENSIONS = new Set([
   '.key',
 ]);
 
-function findRepoRoot() {
-  return execFileSync('git', ['rev-parse', '--show-toplevel'], {
- encoding: 'utf8',
-  }).trim();
-}
+// Hooks and CI use the protected system installation, never project-controlled
+// PATH entries. Native Windows and custom Git installations fail closed.
+export const SystemGit = {
+  validateInstallation({
+    platform = process.platform,
+    callerUid = process.getuid?.(),
+    lstat = lstatSync,
+    realpath = realpathSync,
+    access = accessSync,
+  } = {}) {
+    if (!['darwin', 'linux'].includes(platform) || !Number.isInteger(callerUid) || callerUid < 0) {
+      throw new Error('Secret scan requires protected /usr/bin/git on macOS/Linux; native Windows and custom Git installations are unsupported.');
+    }
+    if (realpath('/usr/bin/git') !== '/usr/bin/git') {
+      throw new Error('Secret scan requires canonical /usr/bin/git.');
+    }
+    for (const directory of ['/', '/usr', '/usr/bin']) {
+      const metadata = lstat(directory);
+      if (!metadata.isDirectory() || metadata.uid !== 0 || (metadata.mode & 0o022) !== 0) {
+        throw new Error('Secret scan requires protected root-owned Git directories.');
+      }
+      this.assertCallerCannotWrite(directory, callerUid, access);
+    }
+    const metadata = lstat('/usr/bin/git');
+    if (!metadata.isFile() || metadata.uid !== 0 || (metadata.mode & 0o022) !== 0) {
+      throw new Error('Secret scan requires protected root-owned /usr/bin/git.');
+    }
+    access('/usr/bin/git', constants.X_OK);
+    this.assertCallerCannotWrite('/usr/bin/git', callerUid, access);
+  },
+
+  assertCallerCannotWrite(filePath, callerUid, access) {
+    if (callerUid === 0) return;
+    try {
+      access(filePath, constants.W_OK);
+    } catch (error) {
+      if (['EACCES', 'EPERM', 'EROFS'].includes(error.code)) return;
+      throw error;
+    }
+    throw new Error('Secret scan cannot use a caller-writable Git installation.');
+  },
+
+  execute(args, options) {
+    this.validateInstallation();
+    return execFileSync('/usr/bin/git', args, options);
+  },
+
+  findRepoRoot() {
+    return this.execute(['rev-parse', '--show-toplevel'], {
+      encoding: 'utf8',
+    }).trim();
+  },
+
+  listRepoFiles(repoRoot) {
+    return this.execute(['ls-files', '--cached', '--others', '--exclude-standard'], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    })
+      .split('\n')
+      .map((filePath) => filePath.trim())
+      .filter(Boolean)
+      .map((filePath) => path.join(repoRoot, filePath));
+  },
+
+  listStagedFiles(repoRoot) {
+    return this.execute(['diff', '--cached', '--name-only', '--diff-filter=ACMR'], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    })
+      .split('\n')
+      .map((filePath) => filePath.trim())
+      .filter(Boolean)
+      .map((filePath) => path.join(repoRoot, filePath));
+  },
+};
 
 function parseArgs(argv) {
   const options = {
@@ -142,28 +213,6 @@ function parseArgs(argv) {
   return options;
 }
 
-function listRepoFiles(repoRoot) {
-  return execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], {
- cwd: repoRoot,
- encoding: 'utf8',
-  })
- .split('\n')
- .map((filePath) => filePath.trim())
- .filter(Boolean)
- .map((filePath) => path.join(repoRoot, filePath));
-}
-
-function listStagedFiles(repoRoot) {
-  return execFileSync('git', ['diff', '--cached', '--name-only', '--diff-filter=ACMR'], {
- cwd: repoRoot,
- encoding: 'utf8',
-  })
- .split('\n')
- .map((filePath) => filePath.trim())
- .filter(Boolean)
- .map((filePath) => path.join(repoRoot, filePath));
-}
-
 function normalizeFiles(files) {
   return [...new Set(files.map((filePath) => path.resolve(filePath)))];
 }
@@ -178,10 +227,6 @@ function isLikelyTextFile(filePath) {
 
 function isBinaryContent(content) {
   return content.includes('\u0000');
-}
-
-function isTestLikeFile(filePath) {
-  return /(?:^|\/)(tests?|e2e)\//.test(filePath) || /\.(?:test|spec)\.[cm]?[jt]sx?$/.test(filePath);
 }
 
 function isPlaceholderValue(value) {
@@ -200,7 +245,7 @@ function isPlaceholderValue(value) {
 function isStructuredSecretName(name) {
   if (STRUCTURED_SECRET_NAMES.has(name)) return true;
   if (/(?:^|_)(?:PASSWORD|SECRET|PRIVATE_KEY|AUTH_KEY)$/.test(name)) return true;
-  if (/(?:^|_)(?:TOKEN)$/.test(name) && !name.startsWith('VITE_')) return true;
+  if (/(?:^|_)(?:TOKEN)$/.test(name)) return true;
   return false;
 }
 
@@ -242,9 +287,10 @@ function scanStructuredAssignments(content, filePath) {
  continue;
  }
 
+ const assignmentIndex = (match.index ?? 0) + match[0].indexOf(name);
  findings.push({
  filePath,
- line: lineNumberForIndex(content, match.index ?? 0),
+ line: lineNumberForIndex(content, assignmentIndex),
  reason: `Structured secret assignment for ${name}`,
  snippet: `${name}=${value}`,
  });
@@ -277,37 +323,41 @@ function scanFile(filePath) {
   if (isBinaryContent(content)) return [];
 
   const highConfidenceFindings = scanHighConfidencePatterns(content, filePath);
-  const structuredFindings = isTestLikeFile(filePath)
- ? []
- : scanStructuredAssignments(content, filePath);
+  const structuredFindings = scanStructuredAssignments(content, filePath);
 
   return filterWaivedFindings(content, [...highConfidenceFindings, ...structuredFindings]);
 }
 
 function formatFinding(repoRoot, finding) {
   const relativePath = path.relative(repoRoot, finding.filePath) || path.basename(finding.filePath);
-  return `${relativePath}:${finding.line} ${finding.reason} (${finding.snippet})`;
+  return `${relativePath}:${finding.line} ${finding.reason}`;
 }
 
 function main() {
-  const repoRoot = findRepoRoot();
+  const repoRoot = SystemGit.findRepoRoot();
   const options = parseArgs(process.argv.slice(2));
-  const files =
- options.mode === 'staged'
- ? listStagedFiles(repoRoot)
- : (options.mode === 'files'
- ? options.files
- : listRepoFiles(repoRoot));
+  let files;
+  if (options.mode === 'staged') {
+    files = SystemGit.listStagedFiles(repoRoot);
+  } else if (options.mode === 'files') {
+    files = options.files;
+  } else {
+    files = SystemGit.listRepoFiles(repoRoot);
+  }
 
   const findings = normalizeFiles(files).flatMap((filePath) => scanFile(filePath));
 
   if (findings.length) {
  const report = findings.map((finding) => `- ${formatFinding(repoRoot, finding)}`).join('\n');
  console.error(`Secret scan failed.\n${report}`);
- process.exit(1);
+ process.exitCode = 1;
+ return;
   }
 
   console.log(`Secret scan passed for ${normalizeFiles(files).length} file(s).`);
 }
 
-main();
+if (process.argv[1] && existsSync(process.argv[1])
+    && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
+  main();
+}

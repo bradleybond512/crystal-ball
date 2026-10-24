@@ -14,7 +14,7 @@ function page(result, totalCount = result.length, totalPages = 1) {
 }
 
 beforeEach(() => {
-  process.env.UCDP_API_TOKEN = 'classification-secret';
+  process.env.UCDP_API_TOKEN = 'classification-secret'; // secret-scan: allow -- synthetic credential for mocked UCDP requests
   mod.__resetUcdpClassificationsForTests();
 });
 afterEach(() => {
@@ -75,7 +75,7 @@ test('coalesces concurrent cold starts and rotations into one request per creden
   assert.deepEqual(cold.map((response) => response.status), [200, 200]);
   assert.equal(calls, 1);
 
-  process.env.UCDP_API_TOKEN = 'replacement-secret';
+  process.env.UCDP_API_TOKEN = 'replacement-secret'; // secret-scan: allow -- synthetic rotated credential for mocked UCDP requests
   const rotated = await Promise.all([
     handler(new Request('http://127.0.0.1:46123/api/ucdp-classifications')),
     handler(new Request('http://127.0.0.1:46123/api/ucdp-classifications')),
@@ -202,7 +202,7 @@ test('deletion purges cached classifications and a replacement credential starts
   response = await handler(new Request('http://127.0.0.1:46123/api/ucdp-classifications'));
   assert.equal(response.status, 503);
   assert.equal(calls, 1);
-  process.env.UCDP_API_TOKEN = 'replacement-secret';
+  process.env.UCDP_API_TOKEN = 'replacement-secret'; // secret-scan: allow -- synthetic replacement credential for mocked UCDP requests
   response = await handler(new Request('http://127.0.0.1:46123/api/ucdp-classifications'));
   assert.equal(response.status, 200);
   assert.equal(calls, 2);

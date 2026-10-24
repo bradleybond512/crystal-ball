@@ -73,7 +73,7 @@ test('parseEnvFile: malformed lines are silently skipped', () => {
 });
 
 test('parseEnvFile: value containing = sign keeps everything after first =', () => {
-  const m = parseEnvFile('TOKEN=abc=def=ghi');
+  const m = parseEnvFile('TOKEN=abc=def=ghi'); // secret-scan: allow -- synthetic parser fixture tests embedded equals signs
   assert.equal(m.get('TOKEN'), 'abc=def=ghi');
 });
 

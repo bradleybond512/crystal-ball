@@ -2,23 +2,23 @@
  * PostHog Analytics Service
  *
  * Active when VITE_POSTHOG_KEY is set AND the user has explicitly opted in.
- * All exports are no-ops when the key is absent (dev/local) or user has not consented.
+ * PostHog requires its configured key; web analytics shares the explicit-consent gate.
  *
  * Consent model (opt-in):
  * - localStorage key 'wm-analytics-consent':
- * 'true'  → user explicitly opted in (analytics enabled)
+ * 'true' with version '2' and no conflicting source → proven explicit opt-in
  * 'false' → user explicitly opted out
  * absent  → not consented (analytics disabled by default)
  * - The consent prompt (AnalyticsConsentBanner) asks every install that has
  * no explicit choice on file; 'wm-analytics-consent-prompt-seen' records it.
  * - Consent is never implied. Older builds auto-migrated pre-banner installs
- * to 'true'; that value is reset to unanswered so the banner asks once more
- * (R4-LOW-001) — see migrateAnalyticsConsent().
+ * to 'true'; ambiguous installs are reset off and shown a nonblocking notice
+ * — see migrateAnalyticsConsent().
  * - Ghost Mode always suppresses analytics regardless of consent.
  *
  * Data safety:
  * - Typed allowlists per event — unlisted properties silently dropped
- * - sanitize_properties callback strips strings matching API key prefixes
+ * - Each HTTP send checks consent and strips strings matching API key prefixes
  * - No session recordings, no autocapture
  * - distinct_id is a random UUID — pseudonymous, not identifiable
  */
@@ -32,84 +32,143 @@ import { SITE_VARIANT } from '@/config/variant';
 // ── Analytics consent ──
 
 const CONSENT_KEY = 'wm-analytics-consent';
-/** Marks a consent value as an explicit choice made through the banner or
- *  Settings (R4-LOW-001). Older builds auto-wrote 'true' during migration, so a
- *  'true' without this marker cannot be told apart from implied consent. */
 const CONSENT_VERSION_KEY = 'wm-analytics-consent-version';
 const EXPLICIT_CONSENT_VERSION = '2';
+const CONSENT_SOURCE_KEY = 'wm-analytics-consent-source';
+const CONSENT_REASON_KEY = 'wm-analytics-consent-reason';
+const CONSENT_PROMPT_SEEN_KEY = 'wm-analytics-consent-prompt-seen';
+const RESET_NOTICE_SEEN_KEY = 'wm-analytics-consent-reset-notice-seen';
+let consentBlocked = false;
+let consentGeneration = 0;
+let pendingResetNotice = false;
+let resetNoticeShown = false;
 
 export function hasAnalyticsConsent(): boolean {
-  // Absent key = no consent (default-off). Only 'true' means consented.
-  return localStorage.getItem(CONSENT_KEY) === 'true';
+  if (consentBlocked) return false;
+  try {
+    const source = localStorage.getItem(CONSENT_SOURCE_KEY);
+    return localStorage.getItem(CONSENT_KEY) === 'true'
+      && localStorage.getItem(CONSENT_VERSION_KEY) === EXPLICIT_CONSENT_VERSION
+      && (source === null || source === 'user');
+  } catch {
+    consentBlocked = true;
+    stopAnalytics();
+    return false;
+  }
 }
 
-/** Single gate: consent granted AND not in Ghost Mode. Call before every send path. */
 export function isAnalyticsAllowed(): boolean {
   return hasAnalyticsConsent() && !isGhostMode();
 }
 
-export function setAnalyticsConsent(allow: boolean): void {
-  const next = allow ? 'true' : 'false';
-  // Read-before-write: the banner can re-fire decide() and migration/init paths
-  // also call this; skip the write (and the QuotaExceededError it can throw)
-  // when the stored choice is already what we'd write.
-  if (localStorage.getItem(CONSENT_KEY) !== next) {
-    safeSetItem(CONSENT_KEY, next);
-  }
-  if (localStorage.getItem(CONSENT_VERSION_KEY) !== EXPLICIT_CONSENT_VERSION) {
-    safeSetItem(CONSENT_VERSION_KEY, EXPLICIT_CONSENT_VERSION);
-  }
-  if (!allow) {
-    // Clear the persistent installation ID so re-identification is not possible.
-    localStorage.removeItem('wm-installation-id');
-    // Clear the offline queue — revoked consent must not replay buffered events.
-    try { localStorage.removeItem(OFFLINE_QUEUE_KEY); } catch { /* ignore */ }
-    // Tell the SDK to stop capturing before dropping the reference — the
-    // posthog-js singleton persists in module scope and would otherwise
-    // still fire automatic events (capture_pageleave) after revocation.
-    try { posthogInstance?.opt_out_capturing(); } catch { /* ignore */ }
-    posthogInstance = null;
-    initPromise = null;
+function clearAnalyticsData(): void {
+  for (const key of ['wm-installation-id', OFFLINE_QUEUE_KEY]) {
+    try { localStorage.removeItem(key); } catch { /* Storage failure must not prevent SDK shutdown. */ }
   }
 }
 
-const CONSENT_PROMPT_SEEN_KEY = 'wm-analytics-consent-prompt-seen';
+function stopAnalytics(): void {
+  consentGeneration++;
+  initPromise = null;
+  captureInstance = null;
+  for (const controller of activeRequests) controller.abort();
+  activeRequests.clear();
+  clearAnalyticsData();
+}
 
-/** True once the first-run consent prompt has been shown (or migration ran). */
+export function setAnalyticsConsent(allow: boolean): void {
+  consentBlocked = true;
+  stopAnalytics();
+  pendingResetNotice = false;
+  resetNoticeShown = true;
+  if (!allow) {
+    for (const key of [CONSENT_KEY, CONSENT_VERSION_KEY, CONSENT_SOURCE_KEY]) {
+      try { localStorage.removeItem(key); } catch { /* Keep revocation effective even if one key fails. */ }
+    }
+  }
+  try {
+    const choiceWritten = safeSetItem(CONSENT_KEY, allow ? 'true' : 'false');
+    const sourceWritten = safeSetItem(CONSENT_SOURCE_KEY, 'user');
+    const reasonWritten = safeSetItem(CONSENT_REASON_KEY, 'user-choice');
+    const versionWritten = choiceWritten && sourceWritten && reasonWritten
+      && safeSetItem(CONSENT_VERSION_KEY, EXPLICIT_CONSENT_VERSION);
+    consentBlocked = !versionWritten;
+  } catch { /* Failed writes leave this session opted out. */ }
+}
+
 export function hasSeenConsentPrompt(): boolean {
-  return localStorage.getItem(CONSENT_PROMPT_SEEN_KEY) === 'true';
+  if (pendingResetNotice || resetNoticeShown) return true;
+  try { return localStorage.getItem(CONSENT_PROMPT_SEEN_KEY) === 'true'; }
+  catch { return false; }
 }
 
 export function markConsentPromptSeen(): void {
-  // Idempotent: only write the first time the prompt is marked seen.
-  if (localStorage.getItem(CONSENT_PROMPT_SEEN_KEY) === 'true') return;
-  safeSetItem(CONSENT_PROMPT_SEEN_KEY, 'true');
+  try {
+    if (localStorage.getItem(CONSENT_PROMPT_SEEN_KEY) !== 'true') safeSetItem(CONSENT_PROMPT_SEEN_KEY, 'true');
+  } catch { /* Unavailable storage must not interrupt the app. */ }
 }
 
-/**
- * Consent migration. Runs at boot before initAnalytics(). It never grants
- * consent: only an explicit click (banner or Settings) writes 'true'
- * (R4-LOW-001; analytics in a privacy-first app is opt-in, never implied).
- *
- * - 'true' recorded without the explicit-choice marker → it may be the implied
- *   consent older builds auto-wrote for pre-banner installs, so reset it to
- *   unanswered and let the banner ask once more.
- * - Any other recorded choice ('false', or 'true' with the marker) → keep it and
- *   mark the prompt seen.
- * - No choice on file (new or pre-banner install) → leave it unanswered; the
- *   banner asks and marks the prompt seen.
- */
+export function hasPendingAnalyticsResetNotice(): boolean {
+  if (resetNoticeShown) return false;
+  try {
+    return (pendingResetNotice || localStorage.getItem(CONSENT_REASON_KEY) === 'legacy-reset')
+      && localStorage.getItem(RESET_NOTICE_SEEN_KEY) !== 'true';
+  } catch { return pendingResetNotice; }
+}
+
+export function markAnalyticsResetNoticeSeen(): void {
+  resetNoticeShown = true;
+  pendingResetNotice = false;
+  try { safeSetItem(RESET_NOTICE_SEEN_KEY, 'true'); } catch { /* Best effort across restarts. */ }
+}
+
+function preserveDeclinedConsent(source: string | null, explicit: boolean): void {
+  if (source !== 'user' && source !== 'default') {
+    safeSetItem(CONSENT_SOURCE_KEY, explicit ? 'user' : 'default');
+    safeSetItem(CONSENT_REASON_KEY, explicit ? 'user-choice' : 'default');
+  }
+  markConsentPromptSeen();
+}
+
 export function migrateAnalyticsConsent(): void {
   try {
     const recorded = localStorage.getItem(CONSENT_KEY);
-    const explicit = localStorage.getItem(CONSENT_VERSION_KEY) === EXPLICIT_CONSENT_VERSION;
-    if (recorded === 'true' && !explicit) {
-      localStorage.removeItem(CONSENT_KEY);
-      localStorage.removeItem(CONSENT_PROMPT_SEEN_KEY);
+    const source = localStorage.getItem(CONSENT_SOURCE_KEY);
+    const explicit = localStorage.getItem(CONSENT_VERSION_KEY) === EXPLICIT_CONSENT_VERSION
+      && (source === null || source === 'user');
+    if (recorded === 'true' && explicit) {
+      safeSetItem(CONSENT_SOURCE_KEY, 'user');
+      safeSetItem(CONSENT_REASON_KEY, 'user-choice');
+      markConsentPromptSeen();
       return;
     }
-    if (recorded !== null) markConsentPromptSeen();
-  } catch { /* localStorage unavailable — treat as unconsented */ }
+    const legacy = recorded === 'true' || (recorded === null
+      && (localStorage.getItem('wm-installation-id') !== null || localStorage.getItem(OFFLINE_QUEUE_KEY) !== null));
+    stopAnalytics();
+    if (legacy) {
+      consentBlocked = true;
+      pendingResetNotice = true;
+      safeSetItem(CONSENT_KEY, 'false');
+      safeSetItem(CONSENT_SOURCE_KEY, 'default');
+      safeSetItem(CONSENT_REASON_KEY, 'legacy-reset');
+      localStorage.removeItem(CONSENT_VERSION_KEY);
+      markConsentPromptSeen();
+    } else if (recorded === 'false') {
+      preserveDeclinedConsent(source, explicit);
+    } else if (recorded === null) {
+      safeSetItem(CONSENT_SOURCE_KEY, 'default');
+      safeSetItem(CONSENT_REASON_KEY, 'default');
+    } else {
+      consentBlocked = true;
+      safeSetItem(CONSENT_KEY, 'false');
+      safeSetItem(CONSENT_SOURCE_KEY, 'default');
+      safeSetItem(CONSENT_REASON_KEY, 'invalid');
+      localStorage.removeItem(CONSENT_VERSION_KEY);
+    }
+  } catch {
+    consentBlocked = true;
+    stopAnalytics();
+  }
 }
 
 // ── Installation identity ──
@@ -273,22 +332,26 @@ function deepStripSecrets(props: Record<string, unknown>): Record<string, unknow
   return stripSecretsValue(props) as Record<string, unknown>;
 }
 
-// ── PostHog instance management ──
+// ── Consent-bound capture transport ──
 
-interface PostHogInstance {
-  init: (key: string, config: Record<string, unknown>) => void;
-  register: (props: Record<string, unknown>) => void;
-  capture: (event: string, props?: Record<string, unknown>, options?: { transport?: 'XHR' | 'sendBeacon' }) => void;
-  opt_out_capturing: () => void;
+interface CaptureInstance {
+  capture: (event: string, props?: Record<string, unknown>) => void;
 }
 
-let posthogInstance: PostHogInstance | null = null;
+let captureInstance: CaptureInstance | null = null;
 let initPromise: Promise<void> | null = null;
+const activeRequests = new Set<AbortController>();
+let vercelInitialized = false;
+let consentListenersAdded = false;
 let _onlineListenerAdded = false;
 
-/** Inject a fake PostHog instance for unit tests only. */
-export function _setPosthogForTest(instance: PostHogInstance | null): void {
-  posthogInstance = instance;
+export function _setCaptureForTest(instance: CaptureInstance | null): void {
+  captureInstance = instance;
+  initPromise = null;
+  consentBlocked = false;
+  pendingResetNotice = false;
+  resetNoticeShown = false;
+  consentGeneration++;
 }
 
 const _env = (import.meta.env as Record<string, string> | undefined) ?? {};
@@ -299,59 +362,79 @@ const POSTHOG_HOST = isDesktopRuntime()
 
 // ── Public API ──
 
+function refreshAnalyticsConsent(): void {
+  if (isAnalyticsAllowed()) void initAnalytics();
+  else stopAnalytics();
+}
+
+function attachConsentListeners(): void {
+  if (consentListenersAdded) return;
+  consentListenersAdded = true;
+  window.addEventListener('storage', (event) => {
+    if (event.key === null || [CONSENT_KEY, CONSENT_VERSION_KEY, CONSENT_SOURCE_KEY].includes(event.key)) refreshAnalyticsConsent();
+  });
+  if (typeof document !== 'undefined') document.addEventListener('wm:mode-changed', refreshAnalyticsConsent);
+}
+
 export async function initAnalytics(): Promise<void> {
-  if (!POSTHOG_KEY) return;
+  attachConsentListeners();
   if (!isAnalyticsAllowed()) return;
   if (initPromise) return initPromise;
-
-  initPromise = (async () => {
- try {
- const mod = await import('posthog-js');
- const posthog = mod.default;
-
- posthog.init(POSTHOG_KEY, {
- api_host: POSTHOG_HOST,
- ui_host: 'https://us.posthog.com',
- persistence: 'localStorage',
- autocapture: false,
- capture_pageview: false, // Manual capture below — auto-capture silently fails with bootstrap + SPA
- capture_pageleave: true,
- disable_session_recording: true,
- bootstrap: { distinctID: getOrCreateInstallationId() },
- sanitize_properties: (props: Record<string, unknown>) => deepStripSecrets(props),
- });
-
- // Register minimal super properties — app version + platform only.
- const superProps: Record<string, unknown> = {
- platform: isDesktopRuntime() ? 'desktop' : 'web',
- variant: SITE_VARIANT,
- app_version: __APP_VERSION__,
- };
-
- posthog.register(superProps);
- posthogInstance = posthog as unknown as PostHogInstance;
-
- // Fire $pageview manually after full init — auto capture_pageview: true
- // fires during init() before super props are registered, and silently
- // fails with bootstrap + SPA setups (posthog-js #386).
- posthog.capture('$pageview');
-
- // Flush any events queued while offline (desktop)
- flushOfflineQueue();
-
- // Re-flush when coming back online.  Guard with a flag so that
- // consent-revoke → re-grant cycles (which null initPromise and re-run
- // this IIFE) don't stack duplicate 'online' listeners.
- if (isDesktopRuntime() && !_onlineListenerAdded) {
- _onlineListenerAdded = true;
- window.addEventListener('online', () => flushOfflineQueue());
- }
- } catch (error) {
- // eslint-disable-next-line no-console
- console.warn('[Analytics] Failed to initialize PostHog:', error);
- }
-  })();
-
+  const generation = consentGeneration;
+  const allowed = () => generation === consentGeneration && isAnalyticsAllowed();
+  const initialize = async () => {
+    try {
+      if (!isDesktopRuntime() && !vercelInitialized) {
+        const { inject } = await import('@vercel/analytics');
+        if (!allowed()) return;
+        inject({ beforeSend: (event) => isAnalyticsAllowed() ? event : null });
+        vercelInitialized = true;
+      }
+      if (!POSTHOG_KEY || !allowed()) return;
+      const distinctID = getOrCreateInstallationId();
+      if (!allowed()) return;
+      captureInstance = { capture: (event, properties = {}) => {
+        if (!allowed()) return;
+        const controller = new AbortController();
+        activeRequests.add(controller);
+        const timeout = setTimeout(() => controller.abort(), 10_000);
+        const body = JSON.stringify({
+          api_key: POSTHOG_KEY,
+          distinct_id: distinctID,
+          event,
+          properties: {
+            ...deepStripSecrets(sanitizeProps(event, properties)),
+            platform: isDesktopRuntime() ? 'desktop' : 'web',
+            variant: SITE_VARIANT,
+            app_version: __APP_VERSION__,
+            $process_person_profile: false,
+          },
+        });
+        void fetch(`${POSTHOG_HOST.replace(/\/$/, '')}/i/v0/e/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+          credentials: 'omit',
+          keepalive: false,
+          signal: controller.signal,
+        }).catch(() => undefined).finally(() => {
+          clearTimeout(timeout);
+          activeRequests.delete(controller);
+        });
+      } };
+      captureInstance.capture('$pageview');
+      flushOfflineQueue();
+      if (isDesktopRuntime() && !_onlineListenerAdded) {
+        _onlineListenerAdded = true;
+        window.addEventListener('online', () => flushOfflineQueue());
+      }
+    } catch (error) {
+      if (generation === consentGeneration) initPromise = null;
+      // eslint-disable-next-line no-console
+      console.warn('[Analytics] Failed to initialize analytics:', error);
+    }
+  };
+  initPromise = initialize();
   return initPromise;
 }
 
@@ -361,6 +444,7 @@ const OFFLINE_QUEUE_KEY = 'wm-analytics-offline-queue';
 const OFFLINE_QUEUE_CAP = 200;
 
 function enqueueOffline(name: string, props: Record<string, unknown>): void {
+  if (!isAnalyticsAllowed()) return;
   try {
  const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
  const queue = (raw ? JSON.parse(raw) : []) as { name: string; props: Record<string, unknown>; ts: number }[];
@@ -376,14 +460,15 @@ function flushOfflineQueue(): void {
     try { localStorage.removeItem(OFFLINE_QUEUE_KEY); } catch { /* ignore */ }
     return;
   }
-  if (!posthogInstance) return;
+  if (!captureInstance) return;
   try {
     const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
     if (!raw) return;
     const queue = JSON.parse(raw) as { name: string; props: Record<string, unknown> }[];
     localStorage.removeItem(OFFLINE_QUEUE_KEY);
     for (const { name, props } of queue) {
-      posthogInstance.capture(name, props);
+      if (!isAnalyticsAllowed() || !captureInstance) return;
+      captureInstance.capture(name, props);
     }
   } catch { /* corrupt queue, discard */ }
 }
@@ -391,19 +476,19 @@ function flushOfflineQueue(): void {
 export function trackEvent(name: string, props?: Record<string, unknown>): void {
   if (!isAnalyticsAllowed()) return;
   const safeProps = props ? sanitizeProps(name, props) : {};
-  if (!posthogInstance) {
+  if (!captureInstance) {
     if (isDesktopRuntime() && POSTHOG_KEY) enqueueOffline(name, safeProps);
     return;
   }
-  posthogInstance.capture(name, safeProps);
+  captureInstance.capture(name, safeProps);
 }
 
-/** Use sendBeacon transport for events fired just before page reload. */
+/** Page-exit delivery is best effort so every request remains abortable. */
 export function trackEventBeforeUnload(name: string, props?: Record<string, unknown>): void {
   if (!isAnalyticsAllowed()) return;
-  if (!posthogInstance) return;
+  if (!captureInstance) return;
   const safeProps = props ? sanitizeProps(name, props) : {};
-  posthogInstance.capture(name, safeProps, { transport: 'sendBeacon' });
+  captureInstance.capture(name, safeProps);
 }
 
 export function trackPanelView(panelId: string): void {

@@ -2,18 +2,25 @@
 
 > Real-time global intelligence dashboard — AI-powered news aggregation, geopolitical monitoring, unified alerts, and infrastructure tracking in a single situational awareness interface.
 
-Crystal Ball is an open-source (AGPL-3.0) intelligence platform that aggregates 50+ live data feeds, 264 interactive panels, 75 geospatial layers, and multiple AI models into a single dashboard. It runs as a web app, installable PWA, and native desktop application (Tauri) for macOS, Windows, and Linux.
+Crystal Ball is an open-source (AGPL-3.0) intelligence platform with 409 unique full panel catalog entries (408 enabled by default, one disabled), 78 full map-layer flags, live sources and optional AI. These catalog counts do not establish feed health or the separate Cesium layer inventory. macOS is the primary desktop platform; Windows/Linux builds are experimental, alongside web and PWA builds.
 
-A single codebase produces four specialized variants — full, technology, finance, and happy — each with distinct feeds, panels, map layers, and branding. The variant architecture uses build-time selection via the VITE_VARIANT environment variable, with runtime switching available via the header bar. Each variant tree-shakes unused data files — the finance build excludes military base coordinates and APT group data, while the full build excludes finance-only UI chrome.
+A single codebase produces full, tech, finance and happy variants selected by VITE_VARIANT at build time. SITE_VARIANT is an internal constant. Header navigation and stored UI preferences do not rebuild the compiled variant or establish packaged identity.
 
-The project is built with TypeScript, Vite, MapLibre GL JS, deck.gl, D3.js, and Tauri. All intelligence analysis (clustering, instability scoring, surge detection) runs client-side in the browser — no backend compute dependency for core intelligence. A browser-side ML pipeline (Transformers.js) provides NER and sentiment analysis without server dependency.
+The project uses TypeScript, Vite, MapLibre GL JS, deck.gl, Cesium, D3.js and Tauri. Work spans the renderer, local sidecar and optional remote services; browser-side models support some local NLP without making hosted AI or cloud features local.
 
-## Live Instances
+## Web and variants
 
 - [GitHub Pages Web App](https://bradleybond512.github.io/crystal-ball/): Full web build
-- [Crystal Ball](https://crystalball.app): Geopolitics, military, conflicts, infrastructure — 264 panels, military bases, nuclear facilities, hotspots
-- [Tech Monitor](https://tech.crystalball.app): Startups, AI/ML, cloud, cybersecurity — 35 panels, tech HQs, cloud regions, startup hubs
-- [Finance Monitor](https://finance.crystalball.app): Global markets, trading, central banks, Gulf FDI — 31 panels, stock exchanges, central banks, Gulf investments
+- Crystal Ball (`VITE_VARIANT=full`): 409 catalog entries, including one default-disabled entry
+- Tech Monitor (`VITE_VARIANT=tech`): Startups, AI/ML, cloud, cybersecurity — 35 catalog entries
+- Finance Monitor (`VITE_VARIANT=finance`): Global markets, trading, central banks, Gulf FDI — 31 catalog entries
+- Happy Monitor (`VITE_VARIANT=happy`): Positive news, progress, science and conservation — 10 catalog entries
+
+The former public product/API domains are retired. No replacement public API origin
+is verified here. A static web build does not provide its own backend; API-backed
+features require a separately verified deployment/configuration.
+Removal from this revision's runtime/API allowlists remains pending #1813; the
+retirement recommendation alone does not remove those trust entries.
 
 ## Documentation
 
@@ -153,25 +160,25 @@ The project is built with TypeScript, Vite, MapLibre GL JS, deck.gl, D3.js, and 
 
 ## Supported Languages
 
-English (en), French (fr), Spanish (es), German (de), Italian (it), Polish (pl), Portuguese (pt), Dutch (nl), Swedish (sv), Russian (ru), Arabic (ar) with RTL support, Chinese (zh), Japanese (ja), Turkish (tr). Language bundles are lazy-loaded on demand. Localized news feeds load region-specific RSS sources based on language preference. AI translation available for cross-language intelligence gathering.
+English (en), French (fr), Spanish (es), German (de), Italian (it), Polish (pl), Portuguese (pt), Dutch (nl), Swedish (sv), Russian (ru), Arabic (ar) with RTL support, Chinese (zh), Japanese (ja), Turkish (tr), Czech (cs), Greek (el), Korean (ko), Thai (th), Vietnamese (vi). Language bundles are lazy-loaded on demand. Localized news feeds load region-specific RSS sources based on language preference. AI translation available for cross-language intelligence gathering.
 
 ## Variant Build System
 
 A single codebase produces four specialized dashboards controlled by the VITE_VARIANT environment variable:
 
-- **Crystal Ball** (crystalball.app): 264 panels. Focus: geopolitics, military, conflicts, infrastructure security, cyber, weather, seismic, aviation, space, alerts, and AI reasoning. Unique layers: military bases, nuclear facilities, hotspots, APT groups, spaceports, critical minerals
-- **Tech Monitor** (tech.crystalball.app): 35 panels. Focus: AI/ML, startups, cybersecurity, cloud. Unique layers: tech HQs, cloud regions, startup hubs, accelerators, tech events
-- **Finance Monitor** (finance.crystalball.app): 31 panels. Focus: global markets, trading, central banks, Gulf FDI. Unique layers: 92 stock exchanges, 19 financial centers, 13 central banks, 10 commodity hubs, 64 Gulf FDI investments
-- **Happy Monitor** (happy.crystalball.app): 10 panels. Focus: positive news, progress, science, conservation, and constructive global signals
+- **Crystal Ball** (`full`): 409 unique catalog entries, 408 default-enabled. Focus: geopolitics, military, conflicts, infrastructure security, cyber, weather, seismic, aviation, space, alerts, and AI reasoning. Unique layers: military bases, nuclear facilities, hotspots, APT groups, spaceports, critical minerals
+- **Tech Monitor** (`tech`): 35 catalog entries. Focus: AI/ML, startups, cybersecurity, cloud. Unique layers: tech HQs, cloud regions, startup hubs, accelerators, tech events
+- **Finance Monitor** (`finance`): 31 catalog entries. Focus: global markets, trading, central banks, Gulf FDI. Unique layers: 92 stock exchanges, 19 financial centers, 13 central banks, 10 commodity hubs, 64 Gulf FDI investments
+- **Happy Monitor** (`happy`): 10 catalog entries. Focus: positive news, progress, science, conservation, and constructive global signals
 
-Build-time: Vite HTML plugin transforms meta tags, Open Graph data, PWA manifest, and JSON-LD structured data. Each variant tree-shakes unused data files. Runtime: variant selector in header navigates between deployed domains (web) or sets localStorage preference (desktop).
+Build-time: Vite transforms variant metadata and configuration. Runtime navigation or localStorage preference is distinct from changing the compiled catalog. Deployment reachability and non-full packaged identity require separate verification.
 
 ## Architecture Principles
 
 - **Speed over perfection**: Keyword classifier is instant; LLM refines asynchronously. Users never wait
 - **Assume failure**: Per-feed circuit breakers with 5-minute cooldowns. AI fallback chain: Groq, OpenRouter, browser-side T5. Redis failures degrade gracefully. Edge functions return stale cached data when upstream APIs are down
 - **Show what you can't see**: Intelligence gap tracker explicitly reports data source outages rather than silently hiding them
-- **Browser-first compute**: Analysis runs client-side — no backend compute dependency for core intelligence
+- **Distributed compute**: Analysis can run in the renderer/local sidecar; hosted AI and cloud features have separate dependencies and outbound data paths
 - **Local-first geolocation**: Country detection uses browser-side ray-casting against GeoJSON polygons (sub-millisecond, zero API dependency, works offline)
 - **Multi-signal correlation**: No single data source trusted alone. Focal points require convergence across news + military + markets + protests before escalating
 - **Geopolitical grounding**: Hard-coded conflict zones, baseline country risk, and strategic chokepoints prevent false alerts
@@ -193,18 +200,24 @@ Build-time: Vite HTML plugin transforms meta tags, Open Graph data, PWA manifest
 
 ## Desktop Application
 
-Native desktop app built with Tauri (Rust + Node.js sidecar). The sidecar mirrors all 60+ cloud API handlers locally with gzip compression. Features:
-- OS keychain integration for 17 API keys (macOS Keychain, Windows Credential Manager)
-- Token-authenticated sidecar prevents unauthorized local access
+Native desktop app built with Tauri (Rust + Node.js sidecar). Many handlers run locally; direct/cloud requests and optional hosted AI remain possible. Features:
+- 77 supported native secret/configuration slots; an explicit 17-entry allowlist exposes renderer-required values. macOS uses shared Keychain service crystal-ball and an encrypted machine-bound recovery shadow copy.
+- Session bearer authentication protects sidecar routes with explicit public exceptions; same-user/compromised-renderer access is outside that protection
 - Cloud fallback when local handlers fail
 - Settings window (Cmd+,) for API key management with validation
 - Verbose debug mode with persistent state and traffic logging (last 200 requests)
 - Auto-update checker polling every 6 hours with per-version dismiss
-- Available for macOS (Apple Silicon + Intel), Windows (.exe), and Linux (.AppImage)
+- macOS is the primary desktop platform; Windows (.exe) and Linux (.AppImage) targets are experimental, without a runtime parity claim
+
+Download from [GitHub Releases](https://github.com/bradleybond512/crystal-ball/releases)
+and inspect the chosen release's actual assets for platform/architecture availability.
+Not every target is guaranteed to have a published artifact.
+
+PostHog capture requires explicit opt-in. Ghost or consent revocation stops capture and aborts the app's in-flight PostHog requests; already delivered events are not erased. The app does not initialize PostHog SDK automatic page-leave capture. Web Sentry uses a separate DSN gate, not analytics consent; sendDefaultPii:false is not universal redaction. Saved-place names, coordinates and notes use localStorage. The web credential vault locks on return after 15 minutes hidden, not through a guaranteed hidden timer wipe. Enabled providers/AI, exports and connected MCP agents may carry data outside the device. See [Privacy](https://github.com/bradleybond512/crystal-ball/blob/main/PRIVACY.md).
 
 ## Key Features Summary
 
-- Interactive 3D WebGL globe with 75 toggleable data layers and smart clustering
+- God's Vision Cesium globe (God's Eye is an existing search alias); the full map catalog has 78 flags and the globe has its own layer registry
 - AI-synthesized world briefs with hybrid threat classification
 - Country Instability Index for 22 nations with real-time scoring
 - 9-theater strategic posture assessment
@@ -223,10 +236,10 @@ Native desktop app built with Tauri (Rust + Node.js sidecar). The sidecar mirror
 - Historical playback via IndexedDB snapshots with time slider
 - Dark/light theme, panel reordering, ultra-wide layout (2000px+)
 - Feature toggles for 14 runtime data source controls
-- MCP server with 41 tools for Claude Code intelligence workflows
+- MCP server with 61 tools across 9 categories for compatible agents
 
 ## Optional
 
 - [Source Code](https://github.com/bradleybond512/crystal-ball): GitHub repository (AGPL-3.0)
-- [Releases](https://github.com/bradleybond512/crystal-ball/releases): All desktop releases for macOS, Windows, and Linux
+- [Releases](https://github.com/bradleybond512/crystal-ball/releases): Published assets; platform and architecture availability varies by release
 - [Issues](https://github.com/bradleybond512/crystal-ball/issues): Bug reports and feature requests

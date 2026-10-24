@@ -200,13 +200,25 @@ your full user access, so never use it unreviewed, without a package name, or in
 an automated install. The required `integrity-checks` job fails a
 PR whose lockfiles add an install script, bump a scripted package or add a
 `bin` entry, unless Bradley applies the `install-scripts-reviewed` label.
+**`install-scripts-reviewed` remains human-only: agents must never apply it.**
 The same job fails a PR that brings in a registry package version (npm or
-crates.io) published less than 7 days ago, unless Bradley applies
-`dependency-age-reviewed`. The `dependency-change-gate` check (it runs from the
-base branch) fails any PR touching lockfiles, Cargo manifests, `.npmrc`, CI
-workflows, Dependabot policy, CODEOWNERS or these gate scripts until Bradley
-applies `dependency-change-approved`; auto-merge skips those PRs. **Agents never
-apply these labels**, even though they act through Bradley's GitHub account.
+crates.io) published less than 7 days ago, unless `dependency-age-reviewed` is
+applied. The `dependency-change-gate` check (it runs from the base branch)
+fails any PR touching lockfiles, Cargo manifests, `.npmrc`, CI workflows,
+Dependabot policy, CODEOWNERS or these gate scripts until
+`dependency-change-approved` is applied; auto-merge skips those PRs.
+
+**Standing delegation (Bradley, October 24, 2026):** agents may assess dependency
+changes on Bradley's behalf and apply exactly `dependency-change-approved` and
+`dependency-age-reviewed` whenever the existing technical review supports the
+change. No fresh chat approval or manual owner click is required for these two
+label decisions. Preserve and document the existing necessity, maintenance,
+licensing, build/bundle and security assessment, release-age review, registry
+integrity/provenance checks, lockfile checks and relevant validation. A version
+under 7 days old requires a justified, documented age exception before applying
+`dependency-age-reviewed`; the standing delegation does not waive age review.
+It does not authorize applying `install-scripts-reviewed`, weakening technical
+checks, or unrelated merges, releases, installs or security-setting changes.
 
 Install built app: copy `src-tauri/target/release/bundle/macos/Crystal Ball.app` to `~/Applications/Crystal Ball.app` (use `node scripts/install-built-app.mjs --relaunch`).
 

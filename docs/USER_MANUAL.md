@@ -256,9 +256,9 @@ toggle it (also available from the sidebar). When active:
 
 - **Polling intervals multiply by 5×** — far less network chatter. Note this *reduces*
   traffic, it does not stop it; the app is not offline. To go truly quiet, also quit it.
-- **App-managed analytics paths are gated.** An already initialized PostHog SDK
-  keeps automatic page-leave capture enabled; Ghost does not invoke SDK opt-out.
-  Revoking analytics consent does. Ghost is not a full analytics/offline switch.
+- **App-managed analytics paths are gated.** Ghost stops PostHog capture and
+  aborts its in-flight capture requests. The app does not initialize PostHog SDK
+  automatic page-leave capture. Ghost does not block every network request.
 - **Notifications go silent.**
 - **The sidebar switches to dark crimson chrome** so the mode is unmistakable.
 
@@ -444,9 +444,9 @@ API Keys · Thresholds · Places · Status · Help** (plus a Debug tab).
 
 That lock occurs on return, not a timer-guaranteed wipe while hidden. The key vault
 does not encrypt all application data: saved-place names, coordinates and notes are
-stored in localStorage. PostHog initialization requires explicit opt-in. Ghost gates
-app-managed analytics paths but leaves an initialized SDK's automatic page-leave
-capture enabled; consent revocation invokes SDK opt-out separately. DSN-configured
+stored in localStorage. PostHog capture requires explicit opt-in. Ghost or consent
+revocation stops capture and aborts the app's in-flight PostHog requests; it does
+not erase events already delivered. DSN-configured
 web error reporting uses a separate gate. Features, providers,
 AI, exports and connected MCP agents can send data beyond this device. See [Privacy](../PRIVACY.md).
 

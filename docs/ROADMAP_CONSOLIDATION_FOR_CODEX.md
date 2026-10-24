@@ -13,10 +13,10 @@ Reviewing or correcting this document does not approve D1–D7 or start any RC.
 All queue entries, product rescopes, evidence collection, cleanup and agent-rule
 changes remain proposed. Record Bradley's explicit decisions and the scope of
 each authorized RC before execution. Existing design, privacy/disclosure,
-human-label, review, publication and installation gates in `AGENTS.md` remain
-binding. If cleanup needs destructive operations or a runtime/security change,
-stop for the applicable High Assurance design approval instead of treating the
-Standard classification as permission.
+review, publication and installation gates in `AGENTS.md`, and the scoped
+label policy in `CLAUDE.md`, remain binding. If cleanup needs destructive
+operations or a runtime/security change, stop for the applicable High Assurance
+design approval instead of treating the Standard classification as permission.
 
 ## Why this exists
 
@@ -74,9 +74,11 @@ never restates a status or a count.
   never inside the controller's date field.
 - This repository is public. Commit aggregate metrics only: never forecast
   text, entity names linked to saved places, locations or credentials.
-- Never apply `dependency-change-approved`, `install-scripts-reviewed` or
-  `dependency-age-reviewed`. None of these PRs should need one; if a gate
-  fires, stop and report.
+- Never apply `install-scripts-reviewed`. The standing delegation in
+  `CLAUDE.md` governs `dependency-change-approved` and `dependency-age-reviewed`
+  for assessed dependency changes. Roadmap consolidation PRs should need none
+  of these labels; if an unexpected gate fires, stop and report rather than
+  expanding the PR's scope.
 - To save tokens, do not read `docs/archive/`, the Round 4 doc,
   `docs/PREDICTION_UPLIFT_PLAN.md` or the overhaul and capstone docs unless a
   step names them. Keep the session's authorized implementation model and
@@ -490,7 +492,8 @@ inventory below. Wait for Bradley's approval before editing `CLAUDE.md`.
 - Treat the keyword search as a minimum, not a complete semantic inventory.
   Review every section for operational constraints and caveats without those
   keywords. Preserve review model/effort routing, genuine SHA-pinned reviews,
-  normal hooks, human-only labels, privacy/disclosure and design/publication/
+  normal hooks, the human-only install-script label and standing dependency-label
+  delegation in `CLAUDE.md`, privacy/disclosure and design/publication/
   installation gates, and fail-closed domain invariants. Neither a byte target
   nor D1 waives a rule. Leave implementation settings unchanged.
 - Do not slim `AGENTS.md` in this PR.

@@ -60,3 +60,41 @@ test('release manifest verification treats dot-vs-space app names as equivalent'
  [],
   );
 });
+
+const baseManifest = {
+  version: '2.25.148', variant: 'full', tag: 'v2.25.148', commitSha: 'abc',
+  generatedAt: '2026-10-19T00:00:00.000Z', assets: [],
+};
+const capabilities = {
+  schemaVersion: 1, sourceCommit: 'abc', sourceCatalogs: { panels: { full: 409, tech: 35, finance: 31, happy: 10 } },
+  components: { companion: { bundled: false, version: '0.3.0', toolCounts: { total: 61, read: 53, analystAdditional: 8 } } },
+};
+
+test('combine retains capabilities across JSON roundtrip and accepts legacy manifests', () => {
+  const manifests = [structuredClone({ ...baseManifest, capabilities }), JSON.parse(JSON.stringify({ ...baseManifest, capabilities }))];
+  assert.deepEqual(JSON.parse(JSON.stringify(combineReleaseManifests(manifests))).capabilities, capabilities);
+  assert.equal(Object.hasOwn(combineReleaseManifests([baseManifest, baseManifest]), 'capabilities'), false);
+});
+
+test('combine rejects conflicting or partially absent capability metadata in either order', () => {
+  const withCapabilities = { ...baseManifest, capabilities };
+  const changed = structuredClone(withCapabilities);
+  changed.capabilities.components.companion.toolCounts.total += 1;
+  for (const pair of [[withCapabilities, changed], [withCapabilities, baseManifest], [baseManifest, withCapabilities]]) {
+    assert.throws(() => combineReleaseManifests(pair), /capabilit.*mismatch|mismatch.*capabilit/i);
+  }
+});
+
+test('combine and verify remain usable without the derivation module or npm dependencies', async (t) => {
+  const { mkdtemp, copyFile, rm } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { pathToFileURL } = await import('node:url');
+  const path = await import('node:path');
+  const dir = await mkdtemp(path.join(tmpdir(), 'release-no-deps-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const standalone = path.join(dir, 'release-manifest.mjs');
+  await copyFile(new URL('../scripts/release-manifest.mjs', import.meta.url), standalone);
+  const module = await import(pathToFileURL(standalone).href);
+  assert.deepEqual(module.combineReleaseManifests([{ ...baseManifest, capabilities }]).capabilities, capabilities);
+  assert.deepEqual(module.verifyDownloadedAssets({ assets: [] }, []), []);
+});

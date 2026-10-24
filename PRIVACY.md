@@ -36,24 +36,23 @@ vault, not every other app store or previously exported file.
 
 ## Product analytics
 
-PostHog initialization requires a configured build key and explicit user opt-in.
-Ghost Mode gates initialization and the app-managed event wrappers and queue flush.
-An already initialized PostHog SDK still has automatic page-leave capture enabled
-(`capture_pageleave: true`); Ghost does not invoke the SDK opt-out path, so those
-automatic events are not established as suppressed. Ghost is not an SDK shutdown.
-Consent revocation calls `opt_out_capturing()` separately. Web Vercel Analytics
-sends use the product analytics consent/Ghost check. Consent can be changed in Settings.
+PostHog capture requires a configured build key and explicit user opt-in.
+Ghost Mode gates initialization, app-managed events and queue flush. The app sends
+PostHog events directly, without the PostHog SDK's automatic page-leave capture.
+Enabling Ghost or revoking consent stops new captures and aborts the app's in-flight
+PostHog capture requests. Web Vercel Analytics sends use the product analytics
+consent/Ghost check. Consent can be changed in Settings.
 
 PostHog uses a random persistent installation ID, app version, platform and variant.
 This is pseudonymous identification, not anonymity. Event schemas allow specific
 interaction properties such as panel/layer IDs, country codes, webcam selections,
 search query length/result count and update actions. Key-configuration telemetry
-contains a configured-key count, not key values or a per-key presence map. Interaction
-autocapture and session recording are disabled; automatic page-leave capture remains
-configured as described above. Desktop offline events
-may queue locally and send after reconnection when allowed. Revoking consent clears
-the app's installation ID and queued events and opts the SDK out; it does not erase
-events already delivered to a service.
+contains a configured-key count, not key values or a per-key presence map. The app
+does not initialize PostHog interaction autocapture, session recording or automatic
+page-leave capture. Desktop offline events may queue locally and send after
+reconnection when allowed. Revoking consent stops capture and tries to clear the
+app's installation ID and queued events; it does not erase events already delivered
+to a service.
 
 ## Error reporting is separate
 

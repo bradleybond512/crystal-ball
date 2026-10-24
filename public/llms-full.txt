@@ -213,7 +213,7 @@ Download from [GitHub Releases](https://github.com/bradleybond512/crystal-ball/r
 and inspect the chosen release's actual assets for platform/architecture availability.
 Not every target is guaranteed to have a published artifact.
 
-PostHog initialization requires explicit opt-in. Ghost gates app-managed analytics paths, but an initialized SDK retains automatic page-leave capture; Ghost does not invoke SDK opt-out, while consent revocation does. Web Sentry uses a separate DSN gate, not analytics consent; sendDefaultPii:false is not universal redaction. Saved-place names, coordinates and notes use localStorage. The web credential vault locks on return after 15 minutes hidden, not through a guaranteed hidden timer wipe. Enabled providers/AI, exports and connected MCP agents may carry data outside the device. See [Privacy](https://github.com/bradleybond512/crystal-ball/blob/main/PRIVACY.md).
+PostHog capture requires explicit opt-in. Ghost or consent revocation stops capture and aborts the app's in-flight PostHog requests; already delivered events are not erased. The app does not initialize PostHog SDK automatic page-leave capture. Web Sentry uses a separate DSN gate, not analytics consent; sendDefaultPii:false is not universal redaction. Saved-place names, coordinates and notes use localStorage. The web credential vault locks on return after 15 minutes hidden, not through a guaranteed hidden timer wipe. Enabled providers/AI, exports and connected MCP agents may carry data outside the device. See [Privacy](https://github.com/bradleybond512/crystal-ball/blob/main/PRIVACY.md).
 
 ## Key Features Summary
 

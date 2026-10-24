@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..');
@@ -185,7 +186,9 @@ async function sha256File(filePath) {
   return hash.digest('hex');
 }
 
-export async function collectReleaseArtifacts({ targetRoot, version, variant, tag, commitSha, platform, generatedAt }) {
+export async function collectReleaseArtifacts({ targetRoot, version, variant, tag, commitSha, platform, generatedAt, repoRoot: sourceRoot = repoRoot }) {
+  const { deriveReleaseCapabilities } = await import('./release-capabilities.mjs');
+  const capabilities = await deriveReleaseCapabilities({ repoRoot: sourceRoot, version, commitSha, variant });
   const allFiles = await listFilesRecursive(targetRoot);
   const matches = allFiles
  .filter((filePath) => isReleaseArtifactName(path.basename(filePath), version))
@@ -219,6 +222,7 @@ export async function collectReleaseArtifacts({ targetRoot, version, variant, ta
  commitSha,
  platform,
  generatedAt,
+ capabilities,
  assets,
   };
 }
@@ -232,6 +236,9 @@ export function combineReleaseManifests(manifests) {
   const combinedAssets = [...first.assets];
 
   for (const manifest of rest) {
+ if (!isDeepStrictEqual(manifest.capabilities, first.capabilities)) {
+ throw new Error('Manifest capabilities mismatch');
+ }
  for (const field of ['version', 'variant', 'tag', 'commitSha']) {
  if (manifest[field] !== first[field]) {
  throw new Error(`Manifest ${field} mismatch: ${manifest[field]} != ${first[field]}`);
@@ -253,6 +260,7 @@ export function combineReleaseManifests(manifests) {
  tag: first.tag,
  commitSha: first.commitSha,
  generatedAt: first.generatedAt,
+ ...(first.capabilities === undefined ? {} : { capabilities: first.capabilities }),
  assets: combinedAssets.sort((a, b) => a.name.localeCompare(b.name)),
   };
 }

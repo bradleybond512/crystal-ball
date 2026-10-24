@@ -8,7 +8,7 @@ Crystal Ball exposes its local intelligence surface to MCP-compatible agents wit
 MCP-compatible agent
   | stdio / JSON-RPC
   v
-Crystal Ball MCP server (59 tools across 9 categories)
+Crystal Ball MCP server (61 tools across 9 categories)
   | authenticated HTTP on 127.0.0.1
   v
 Crystal Ball desktop sidecar
@@ -28,7 +28,12 @@ The agent starts `crystalball-mcp` as a child process. The server discovers the 
 5. The sidecar validates the token before serving protected routes.
 6. The app removes session runtime credentials on exit.
 
-Provider credentials stay in Crystal Ball's credential store. MCP results, doctor output, safeguard demonstrations, monitor projections, and Evidence Packet exports must not contain them.
+Native credential storage supplies the sidecar; a separate renderer allowlist exposes
+17 values required by frontend features. MCP results, doctor output, safeguard
+demonstrations, monitor projections, and Evidence Packet exports must not contain
+credentials. Intelligence/evidence results delivered over stdio are available to the
+connected agent and may be sent to its model or other services under that agent's
+configuration. Local transport does not make the entire workflow local. See [Privacy](../PRIVACY.md).
 
 ## Canonical contracts
 
@@ -45,7 +50,7 @@ The first command regenerates the registry reference. The second fails when chec
 
 ## Tool families
 
-The canonical 59-tool surface has nine categories:
+The canonical 61-tool surface has nine categories:
 
 - Foundation: allowlisted raw queries, chaining, and snapshot comparison.
 - Intelligence: correlation, trend, and anomaly analysis.

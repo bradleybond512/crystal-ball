@@ -2,32 +2,40 @@
 
 > Real-time global intelligence dashboard — AI-powered news aggregation, geopolitical monitoring, unified alerts, and infrastructure tracking in a single situational awareness interface.
 
-Crystal Ball is an open-source (AGPL-3.0) intelligence platform that aggregates 50+ live data feeds, 264 interactive panels, 75 geospatial layers, and multiple AI models into a single dashboard. It runs as a web app, installable PWA, and native desktop application (Tauri) for macOS, Windows, and Linux.
+Crystal Ball is an open-source (AGPL-3.0) intelligence platform with 409 unique full-variant panel catalog entries (408 enabled by default, one disabled), 78 full map-layer flags, live data sources and optional AI integrations. Tech has 35 catalog entries, finance 31 and happy 10. These are configuration counts, not working-feed counts or the separate Cesium layer registry. It runs as a web app, PWA and Tauri desktop application. macOS is the primary desktop platform; Windows and Linux builds are experimental and do not imply feature parity.
 
-A single codebase produces four specialized variants — full, technology, finance, and happy — each with distinct feeds, panels, map layers, and branding. The variant architecture uses build-time selection via the VITE_VARIANT environment variable, with runtime switching available via the header bar.
+A single codebase produces full, tech, finance and happy variants. VITE_VARIANT selects the build; SITE_VARIANT is an internal TypeScript constant. Header navigation or stored UI preference does not rebuild a compiled variant.
 
-The project is built with TypeScript, Vite, MapLibre GL JS, deck.gl, D3.js, and Tauri. All intelligence analysis (clustering, instability scoring, surge detection) runs client-side in the browser — no backend compute dependency for core intelligence. A browser-side ML pipeline (Transformers.js) provides NER and sentiment analysis without server dependency.
+The project uses TypeScript, Vite, MapLibre GL JS, deck.gl, Cesium, D3.js and Tauri. Work spans the renderer, local sidecar and optional remote providers. Browser-side models support some local NLP; hosted AI and cloud-backed features have separate network/data requirements.
 
-## Live Instances
+## Web and variants
 
 - [GitHub Pages Web App](https://bradleybond512.github.io/crystal-ball/): Full web build
-- [Crystal Ball](https://crystalball.app): Geopolitics, military, conflicts, infrastructure
-- [Tech Monitor](https://tech.crystalball.app): Startups, AI/ML, cloud, cybersecurity
-- [Finance Monitor](https://finance.crystalball.app): Global markets, trading, central banks, Gulf FDI
+- Crystal Ball (`VITE_VARIANT=full`): Geopolitics, military, conflicts, infrastructure
+- Tech Monitor (`VITE_VARIANT=tech`): Startups, AI/ML, cloud, cybersecurity
+- Finance Monitor (`VITE_VARIANT=finance`): Global markets, trading, central banks, Gulf FDI
+- Happy Monitor (`VITE_VARIANT=happy`): Positive news, progress, science and conservation
+
+The former public product/API domains are retired. No replacement public API
+origin is verified here. A static web build does not provide its own API backend;
+API-backed features require a separately verified deployment/configuration.
+Removal from this revision's runtime/API allowlists remains pending #1813; the
+retirement recommendation alone does not remove those trust entries.
 
 ## Documentation
 
 - [README](https://github.com/bradleybond512/crystal-ball/blob/main/README.md): Full project documentation with architecture details
 - [Full Documentation](https://github.com/bradleybond512/crystal-ball/blob/main/docs/DOCUMENTATION.md): Detailed feature documentation, data layers, and panel reference
 - [Extended LLM Documentation](https://bradleybond512.github.io/crystal-ball/llms-full.txt): Comprehensive version of this file with all data layers, components, and data sources
+- [Privacy](https://github.com/bradleybond512/crystal-ball/blob/main/PRIVACY.md): Local storage, credential boundaries, consent and outbound data
 
 ## Key Features
 
-- Interactive 3D WebGL globe with Cesium, MapLibre, deck.gl rendering, and 75 toggleable data layers (conflicts, military bases, nuclear facilities, undersea cables, pipelines, datacenters, protests, disasters, cyber threats, and more)
+- God's Vision is the current UI label for the Cesium globe; God's Eye remains a search alias. The full map catalog has 78 layer flags; Cesium also has its own layer registry.
 - AI-powered intelligence: LLM-synthesized world briefs, hybrid threat classification, focal point detection, country instability index, trending keyword spike detection, strategic posture assessment, and analyst hypothesis feedback
 - 150+ curated RSS feeds across geopolitics, defense, energy, tech, and finance with domain-allowlisted proxy
 - Unified alert inbox with traceability, native desktop notifications, voice alerts, iMessage/SMS command workflows, notification history, and digest views
-- MCP server with 41 tools for Claude Code intelligence workflows
+- MCP server with 61 tools across 9 categories for compatible agents
 - 8 live news video streams (Bloomberg, Sky News, Al Jazeera, Euronews, DW, France24, CNBC, Al Arabiya)
 - 19 live webcams from geopolitical hotspots across 4 regions
 - Multilingual UI with 19 locale bundles and RTL support
@@ -43,10 +51,10 @@ The project is built with TypeScript, Vite, MapLibre GL JS, deck.gl, D3.js, and 
 
 ## Desktop App
 
-- [Windows Installer](https://crystalball.app/api/download?platform=windows-exe): Windows .exe installer
-- [macOS Apple Silicon](https://crystalball.app/api/download?platform=macos-arm64): macOS ARM64 build
-- [macOS Intel](https://crystalball.app/api/download?platform=macos-x64): macOS x64 build
-- [Linux AppImage](https://crystalball.app/api/download?platform=linux-appimage): Linux .AppImage
+Download only from [GitHub Releases](https://github.com/bradleybond512/crystal-ball/releases).
+Inspect the chosen release's actual assets for platform and architecture availability;
+this document does not promise every target has a published artifact. macOS is primary;
+Windows/Linux builds are experimental, and CI is not proof of packaged runtime parity.
 
 ## Tech Stack
 
@@ -61,5 +69,5 @@ The project is built with TypeScript, Vite, MapLibre GL JS, deck.gl, D3.js, and 
 ## Optional
 
 - [Source Code](https://github.com/bradleybond512/crystal-ball): GitHub repository (AGPL-3.0)
-- [Releases](https://github.com/bradleybond512/crystal-ball/releases): All desktop releases for macOS, Windows, and Linux
+- [Releases](https://github.com/bradleybond512/crystal-ball/releases): Published assets; platform and architecture availability varies by release
 - [Issues](https://github.com/bradleybond512/crystal-ball/issues): Bug reports and feature requests

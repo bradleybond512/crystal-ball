@@ -235,3 +235,42 @@ test('--changelog-advisory keeps structural drift fatal on a tree that has both 
   assert.ok(adv.json.issues.every((i) => !/not in CHANGELOG/.test(i)));
   assert.ok(adv.json.advisoryIssues.some((i) => /PR #123 not in CHANGELOG/.test(i)));
 });
+
+test('docs:check counts panel entries on one line and distinguishes enabled defaults', () => {
+  const fixtureRoot = buildDocsFixture();
+  mkdirSync(join(fixtureRoot, 'src', 'config'), { recursive: true });
+  writeFileSync(join(fixtureRoot, 'src', 'config', 'panels.ts'), `
+const FULL_PANELS = {
+  first: { name: 'First', enabled: true }, second: { name: 'Second', enabled: true },
+  // Retained entries can be disabled without leaving the catalog.
+  retired: { name: 'Retained catalog entry', enabled: false },
+};
+const TECH_PANELS = {
+  only: { name: 'Tech', enabled: true },
+};
+const FINANCE_PANELS = {
+  only: { name: 'Finance', enabled: true },
+};
+const HAPPY_PANELS = {
+  only: { name: 'Happy', enabled: true },
+};
+`);
+  const readme = (total, enabled) => `| Default panel inventory | ${total} full / 1 tech / 1 finance / 1 happy |\n| Default-enabled full panels | ${enabled} |\n`;
+  writeFileSync(join(fixtureRoot, 'README.md'), readme(3, 2));
+  const correct = docsCheck({ fixtureRoot, flags: ['--changelog-advisory'] });
+  assert.deepEqual(correct.json.issues, []);
+  assert.equal(correct.code, 0);
+
+  writeFileSync(join(fixtureRoot, 'README.md'), readme(3, 2).replace('Default panel inventory', 'Panel catalog inventory'));
+  assert.deepEqual(docsCheck({ fixtureRoot, flags: ['--changelog-advisory'] }).json.issues, []);
+
+  writeFileSync(join(fixtureRoot, 'README.md'), readme(2, 2));
+  const missingEntry = docsCheck({ fixtureRoot, flags: ['--changelog-advisory'] });
+  assert.equal(missingEntry.code, 1);
+  assert.ok(missingEntry.json.issues.some((issue) => /README says 2 full panels, code has 3/.test(issue)));
+
+  writeFileSync(join(fixtureRoot, 'README.md'), readme(3, 3));
+  const disabledAsEnabled = docsCheck({ fixtureRoot, flags: ['--changelog-advisory'] });
+  assert.equal(disabledAsEnabled.code, 1);
+  assert.ok(disabledAsEnabled.json.issues.some((issue) => /README says 3 default-enabled full panels, code has 2/.test(issue)));
+});

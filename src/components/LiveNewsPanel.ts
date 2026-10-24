@@ -1,6 +1,6 @@
 import { Panel } from './Panel';
 import { fetchLiveVideoInfo } from '@/services/live-news';
-import { isDesktopRuntime, getRemoteApiBaseUrl, getApiBaseUrl, getLocalApiPort } from '@/services/runtime';
+import { isDesktopRuntime, getRemoteApiBaseUrl, getApiBaseUrl, getLocalApiPort, isRetiredAppUrl } from '@/services/runtime';
 import { tryInvokeTauri } from '@/services/tauri-bridge';
 import { t } from '../services/i18n';
 import { escapeHtml } from '@/utils/sanitize';
@@ -403,15 +403,19 @@ export class LiveNewsPanel extends Panel {
  return url;
   }
 
-  private get embedOrigin(): string {
+  private get embedOrigin(): string | null {
  if (isDesktopRuntime()) return `http://127.0.0.1:${getLocalApiPort()}`;
- try { return new URL(getRemoteApiBaseUrl()).origin; } catch { return 'https://crystalball.app'; }
+ try {
+ const url = new URL(getRemoteApiBaseUrl() || window.location.origin);
+ return ['http:', 'https:'].includes(url.protocol) && !isRetiredAppUrl(url.href) ? url.origin : null;
+ } catch { return null; }
   }
 
   private setupBridgeMessageListener(): void {
  this.boundMessageHandler = (e: MessageEvent) => {
  if (e.source !== this.desktopEmbedIframe?.contentWindow) return;
  const expected = this.embedOrigin;
+ if (!expected) return;
  const localOrigin = getApiBaseUrl();
  if (e.origin !== expected && (!localOrigin || e.origin !== localOrigin)) return;
  const msg = e.data;
@@ -449,28 +453,24 @@ export class LiveNewsPanel extends Panel {
   }
 
   private static resolveYouTubeOrigin(): string | null {
- const fallbackOrigin = SITE_VARIANT === 'tech'
- ? 'https://crystalball.app'
- : 'https://crystalball.app';
-
  try {
  const { protocol, origin, host } = window.location;
  if (protocol === 'http:' || protocol === 'https:') {
  // Desktop webviews commonly run from tauri.localhost which can trigger
- // YouTube embed restrictions. Use canonical public origin instead.
+ // YouTube embed restrictions. Let the local bridge supply its own origin.
   
  if (host === 'tauri.localhost' || host.endsWith('.tauri.localhost')) {
- return fallbackOrigin;
+ return null;
  }
- return origin;
+ return isRetiredAppUrl(origin) ? null : origin;
  }
  if (protocol === 'tauri:' || protocol === 'asset:') {
- return fallbackOrigin;
+ return null;
  }
  } catch {
  // Ignore invalid location values.
  }
- return fallbackOrigin;
+ return null;
   }
 
   private setupIdleDetection(): void {
@@ -968,7 +968,8 @@ export class LiveNewsPanel extends Panel {
 
   private postToEmbed(msg: Record<string, unknown>): void {
  if (!this.desktopEmbedIframe?.contentWindow) return;
- this.desktopEmbedIframe.contentWindow.postMessage(msg, this.embedOrigin);
+ const origin = this.embedOrigin;
+ if (origin) this.desktopEmbedIframe.contentWindow.postMessage(msg, origin);
   }
 
   private syncDesktopEmbedState(): void {

@@ -23,7 +23,7 @@ test('CORS: tauri webview origins are allowed', () => {
   }
 });
 
-test('CORS: enumerated production hosts are allowed', () => {
+test('CORS: retired production hosts are denied', () => {
   for (const origin of [
     'https://crystalball.app',
     'https://tech.crystalball.app',
@@ -31,7 +31,7 @@ test('CORS: enumerated production hosts are allowed', () => {
     'https://happy.crystalball.app',
     'https://api.crystalball.app',
   ]) {
-    assert.equal(isSidecarOriginAllowed(origin), true, origin);
+    assert.equal(isSidecarOriginAllowed(origin), false, origin);
   }
 });
 

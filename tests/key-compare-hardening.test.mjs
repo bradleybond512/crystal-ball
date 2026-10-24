@@ -240,7 +240,7 @@ test('API key preserves configured matching and missing or invalid errors', asyn
 test('API key preserves trusted-browser GET HEAD OPTIONS exemptions and supplied-key rejection', async () => {
   await withEnv({ LOCAL_API_MODE: undefined, CRYSTALBALL_VALID_KEYS: 'browser-key', NODE_ENV: 'production' }, async () => {
     const validate = await loadApiKey();
-    const browser = { origin: 'https://crystalball.app', site: 'same-origin', mode: 'cors' };
+    const browser = { origin: 'https://crystalball-main-bradleybond512.vercel.app', site: 'same-origin', mode: 'cors' };
     for (const method of ['GET', 'HEAD', 'OPTIONS']) {
       assert.deepEqual(validate(makeRequest({ ...browser, method })), { valid: true, required: false });
       assert.deepEqual(validate(makeRequest({ ...browser, method, key: 'browser-key' })), { valid: true, required: false });
@@ -279,14 +279,14 @@ test('API key preserves exact trusted-browser origin allowlist and production lo
   await withEnv({ LOCAL_API_MODE: undefined, CRYSTALBALL_VALID_KEYS: 'valid-key', NODE_ENV: 'production' }, async () => {
     const validate = await loadApiKey();
     const allowed = [
-      'https://crystalball.app',
-      ...['tech', 'finance', 'happy', 'api'].map(subdomain => `https://${subdomain}.crystalball.app`),
       'https://crystalball-pr-42-bradleybond512.vercel.app',
       'https://crystal-ball-pr-42-bradleybond512.vercel.app',
       'https://crystalball-pr-42-elie-abc123.vercel.app',
       'https://crystal-ball-pr-42-elie-abc123.vercel.app',
     ];
     const denied = [
+      'https://crystalball.app',
+      ...['tech', 'finance', 'happy', 'api'].map(subdomain => `https://${subdomain}.crystalball.app`),
       undefined, 'https://unknown.example', 'http://crystalball.app', 'https://CRYSTALBALL.app',
       'https://crystalball.app:443', 'https://crystalball.app/path', 'https://evil.crystalball.app',
       'https://crystalball.app.evil', 'https://crystalball-pr-42.vercel.app',
@@ -314,7 +314,7 @@ test('API key preserves fetch-metadata rules and import-captured development loo
     }
     process.env.NODE_ENV = 'production';
     assert.deepEqual(validate(makeRequest({ origin: 'http://localhost:5173', site: 'same-site' })), { valid: true, required: false });
-    const origin = 'https://crystalball.app';
+    const origin = 'https://crystalball-main-bradleybond512.vercel.app';
     for (const site of ['same-origin', 'same-site', 'SAME-SITE']) {
       for (const mode of [undefined, 'cors', 'same-origin', 'navigate', 'no-cors', 'CORS']) {
         assert.deepEqual(validate(makeRequest({ origin, site, mode })), { valid: true, required: false });
@@ -359,7 +359,7 @@ test('API key trusted-read callsite compares every configured entry and keeps sp
   await withEnv({ LOCAL_API_MODE: undefined, CRYSTALBALL_VALID_KEYS: 'browser-match-key, padded-key ,last-key', NODE_ENV: 'production' }, async () => {
     const validate = await loadApiKey();
     const entries = ['browser-match-key', ' padded-key ', 'last-key'];
-    const browser = { origin: 'https://crystalball.app', site: 'same-origin', mode: 'cors' };
+    const browser = { origin: 'https://crystalball-main-bradleybond512.vercel.app', site: 'same-origin', mode: 'cors' };
     for (const key of [entries[0], 'wrong-first-char']) {
       const request = makeRequest({ ...browser, key });
       const { result, visits } = observeCodeUnits([...entries, key], () => validate(request));

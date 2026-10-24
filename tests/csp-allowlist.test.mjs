@@ -48,7 +48,6 @@ test('connect-src retains load-bearing direct-connect origins', () => {
     'https://nominatim.openstreetmap.org',
     'https://eonet.gsfc.nasa.gov',
     'https://www.fema.gov',
-    'https://*.crystalball.app',
     'https://api.github.com',
     // OWM weather-tile overlays (getOwmTileUrl) fetch from this host; without it
     // the Temperature/Precipitation/Clouds/Wind overlays are CSP-blocked.
@@ -111,8 +110,6 @@ test('index.html meta CSP connect-src keeps self + load-bearing web origins', ()
   // The web build talks to its relay over https + wss and reaches the same
   // direct-connect CDNs/providers as desktop. Dropping any silently breaks it.
   const required = [
-    'https://*.crystalball.app',
-    'wss://*.crystalball.app',
     'https://*.cesium.com',
     'https://*.basemaps.cartocdn.com',
     'https://api.anthropic.com',
@@ -130,5 +127,13 @@ test('every index.html connect-src entry is scheme-qualified or a safe keyword',
   for (const entry of metaConnectSrc) {
     if (keywords.has(entry)) continue;
     assert.match(entry, /^(https?|wss?):\/\//, `connect-src entry "${entry}" must be scheme-qualified`);
+  }
+});
+
+
+test('web and desktop connect/frame policies grant no retired-domain permission', () => {
+  for (const name of ['connect-src', 'frame-src']) {
+    assert.doesNotMatch(directive(name).join(' '), /crystalball[.]app/i, `desktop ${name}`);
+    assert.doesNotMatch(metaDirective(name).join(' '), /crystalball[.]app/i, `web ${name}`);
   }
 });

@@ -2,6 +2,25 @@
 import { getCorsHeaders, isDisallowedOrigin } from './_cors.js';
 export const config = { runtime: 'edge' };
 
+class FwdStartPublicationDate {
+  static #match(block) {
+    return block.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),?\s+(\d{4})/i);
+  }
+
+  static parse(block) {
+    const dateMatch = FwdStartPublicationDate.#match(block);
+    let pubDate = new Date();
+    if (dateMatch) {
+      const dateStr = `${dateMatch[1]} ${dateMatch[2]}, ${dateMatch[3]}`;
+      const parsed = new Date(dateStr);
+      if (!Number.isNaN(parsed.getTime())) {
+        pubDate = parsed;
+      }
+    }
+    return pubDate;
+  }
+}
+
 // Scrape FwdStart newsletter archive and return as RSS
 export default async function handler(req) {
   const cors = getCorsHeaders(req);
@@ -43,15 +62,7 @@ export default async function handler(req) {
  if (!title || title.length < 5) continue;
 
  // Extract date - look for "Mon DD, YYYY" pattern
- const dateMatch = block.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),?\s+(\d{4})/i);
- let pubDate = new Date();
- if (dateMatch) {
- const dateStr = `${dateMatch[1]} ${dateMatch[2]}, ${dateMatch[3]}`;
- const parsed = new Date(dateStr);
- if (!isNaN(parsed.getTime())) {
- pubDate = parsed;
- }
- }
+ const pubDate = FwdStartPublicationDate.parse(block);
 
  // Extract subtitle/description if available
  let description = '';
@@ -82,7 +93,7 @@ export default async function handler(req) {
  <description>Forward-thinking startup and VC news from MENA and beyond</description>
  <language>en-us</language>
  <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
- <atom:link href="https://crystalball.app/api/fwdstart" rel="self" type="application/rss+xml"/>
+ <atom:link href="/api/fwdstart" rel="self" type="application/rss+xml"/>
  ${rssItems}
   </channel>
 </rss>`;

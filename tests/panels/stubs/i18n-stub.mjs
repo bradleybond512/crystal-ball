@@ -15,6 +15,10 @@ export function getCurrentLanguage() {
   return 'en';
 }
 
+export function getLocale() {
+  return 'en-US';
+}
+
 export function isRTL() {
   return false;
 }

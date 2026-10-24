@@ -335,7 +335,8 @@
     "test:sms-panel",
     "test:sms",
     "test:sidecar",
-    "test:sidecar-ci"
+    "test:sidecar-ci",
+    "test:health-contract"
   ],
   "src/services/keychain.ts": [
     "test:secret-boundary",
@@ -514,13 +515,15 @@
   ],
   "tests/mcp-suite-entry.test.mjs": [
     "test:mcp-companion",
-    "test:sidecar-ci"
+    "test:sidecar-ci",
+    "test:health-contract"
   ],
   "tests/helpers/mcp-suite-entry.mjs": [
     "test:mcp-untrusted",
     "test:mcp-companion",
     "test:mcp-install-smoke",
-    "test:sidecar-ci"
+    "test:sidecar-ci",
+    "test:health-contract"
   ],
   "tools/mcp-server/__tests__/framing.test.mjs": [
     "test:mcp-companion",
@@ -952,5 +955,47 @@
   ],
   "src-tauri/sidecar/__tests__/watchboard-engine.test.mjs": [
     "test:sidecar-ci"
+  ],
+  "scripts/checkup.mjs": [
+    "test:health-contract"
+  ],
+  "scripts/sidecar-health-consumers.test.mjs": [
+    "test:health-contract"
+  ],
+  "scripts/sidecar-health-contract.mjs": [
+    "test:health-contract"
+  ],
+  "scripts/sidecar-health-contract.test.mjs": [
+    "test:health-contract"
+  ],
+  "scripts/smoke.mts": [
+    "test:health-contract"
+  ],
+  "src-tauri/sidecar/__tests__/intel-expansion-cluster3.test.mjs": [
+    "test:health-contract"
+  ],
+  "src/components/FeedHealthPanel.ts": [
+    "test:health-contract"
+  ],
+  "src/services/diagnostics/__tests__/live-diagnostics-snapshot.test.mts": [
+    "test:health-contract"
+  ],
+  "src/services/diagnostics/live-diagnostics-snapshot.ts": [
+    "test:health-contract"
+  ],
+  "tests/components/feed-health-auth.test.mts": [
+    "test:health-contract"
+  ],
+  "tests/health-contract-suite.test.mjs": [
+    "test:health-contract"
+  ],
+  "tests/sidecar-health-runtime.test.mjs": [
+    "test:health-contract"
+  ],
+  "tools/mcp-server/__tests__/sidecar-client.test.mjs": [
+    "test:health-contract"
+  ],
+  "tools/mcp-server/sidecar-client.mjs": [
+    "test:health-contract"
   ]
 }

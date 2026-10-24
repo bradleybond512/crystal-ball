@@ -64,13 +64,21 @@ describe('adaptRuntimeSource', () => {
 describe('sidecar health adapters', () => {
   it('builds healthy sidecar from /api/health payload', () => {
     const verdict = sidecarHealthFromPayload(
-      { ok: true, port: 46123, uptime_ms: 600_000 },
+      { ok: true, authenticated: true, port: 46123, uptime_ms: 600_000 },
       1_700_000_000_000,
     );
     assert.equal(verdict.status, 'healthy');
     assert.equal(verdict.authenticated, true);
     assert.equal(verdict.lastReachableAt, 1_700_000_000_000);
     assert.match(verdict.reason, /:46123/);
+  });
+
+  it('public liveness never implies authenticated diagnostic access', () => {
+    const verdict = sidecarHealthFromPayload({ ok: true }, 1_700_000_000_000);
+    assert.equal(verdict.status, 'healthy', 'the process is reachable');
+    assert.equal(verdict.authenticated, false);
+    assert.match(verdict.reason, /authenticated diagnostics pending/);
+    assert.equal(sidecarHealthFromPayload({ ok: false, authenticated: true }, 1).authenticated, false);
   });
 
   it('flags failing for ok=false payload', () => {

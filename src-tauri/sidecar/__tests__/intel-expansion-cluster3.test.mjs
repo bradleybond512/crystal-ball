@@ -690,7 +690,9 @@ test('BGP HTTP route enforces auth and reports a missing key through both health
     });
     assert.ok(Number.isSafeInteger(missingBody.fetchedAt) && missingBody.fetchedAt > 0);
 
-    const health = await fetch(`http://127.0.0.1:${server.port}/api/health`);
+    const health = await fetch(`http://127.0.0.1:${server.port}/api/health`, {
+      headers: { Authorization: `Bearer ${process.env.LOCAL_API_TOKEN}` },
+    });
     const healthBody = await health.json();
     assert.equal(healthBody.feeds.find((feed) => feed.key === 'cloudflare-bgp')?.lastError, 'missing_key');
 
@@ -740,7 +742,9 @@ test('BGP HTTP route retrieves two complete pages once, caches only normalized s
     assert.deepEqual(await cachedResponse.json(), firstBody);
     assert.equal(mock.requests.length, 2, 'cached response must not refetch either upstream page');
 
-    const health = await fetch(`http://127.0.0.1:${server.port}/api/health`);
+    const health = await fetch(`http://127.0.0.1:${server.port}/api/health`, {
+      headers: { Authorization: `Bearer ${process.env.LOCAL_API_TOKEN}` },
+    });
     const healthBody = await health.json();
     const snapshot = healthBody.feeds.find((feed) => feed.key === 'cloudflare-bgp');
     assert.equal(snapshot.lastError, null);
@@ -863,7 +867,9 @@ test('BGP HTTP route invalidates and aborts an old credential generation on rota
     assert.equal(missing.status, 503);
     const missingBody = await missing.json();
     assert.equal(missingBody.error, 'missing_key');
-    const health = await fetch(`http://127.0.0.1:${server.port}/api/health`);
+    const health = await fetch(`http://127.0.0.1:${server.port}/api/health`, {
+      headers: { Authorization: `Bearer ${process.env.LOCAL_API_TOKEN}` },
+    });
     const healthBody = await health.json();
     assert.equal(healthBody.feeds.find((feed) => feed.key === 'cloudflare-bgp')?.lastError, 'missing_key');
   } finally {

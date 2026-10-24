@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createSidecarClient } from '../sidecar-client.mjs';
+import { createSidecarClient, SidecarRuntimeFiles } from '../sidecar-client.mjs';
 import { writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -20,6 +20,40 @@ test('discoverPort reads port from file', () => {
 test('discoverPort returns null when file missing', () => {
   const client = createSidecarClient('/nonexistent/path');
   assert.equal(client.discoverPort(), null);
+});
+
+test('shared published-port discovery rejects malformed ports without a default', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'mcp-port-contract-'));
+  try {
+    const client = createSidecarClient(tmp);
+    for (const raw of ['', '0', '-1', '+1', '65536', '46123junk', '1e3', '12.5', '42\n43']) {
+      writeFileSync(join(tmp, 'sidecar.port'), raw);
+      assert.equal(SidecarRuntimeFiles.discoverPort(tmp), null, JSON.stringify(raw));
+      assert.equal(client.discoverPort(), null, 'doctor/MCP consume the same strict discovery');
+      assert.equal(SidecarRuntimeFiles.healthRequest(tmp), null, 'scripts never fall back to a static port');
+    }
+    for (const port of [1, 40237, 65535]) {
+      writeFileSync(join(tmp, 'sidecar.port'), ` ${port}\n`);
+      assert.equal(SidecarRuntimeFiles.discoverPort(tmp), port);
+      assert.equal(client.discoverPort(), port);
+    }
+  } finally { rmSync(tmp, { recursive: true }); }
+});
+
+test('script health targets use the published alternate port and consume only its optional token', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'mcp-health-target-'));
+  try {
+    assert.equal(SidecarRuntimeFiles.healthRequest(tmp), null);
+    writeFileSync(join(tmp, 'sidecar.port'), '40237');
+    assert.deepEqual(SidecarRuntimeFiles.healthRequest(tmp), {
+      url: 'http://127.0.0.1:40237/api/health', headers: { Accept: 'application/json' },
+    });
+    writeFileSync(join(tmp, 'sidecar.token'), 'fixture-only-token\n');
+    assert.deepEqual(SidecarRuntimeFiles.healthRequest(tmp), {
+      url: 'http://127.0.0.1:40237/api/health',
+      headers: { Accept: 'application/json', Authorization: 'Bearer fixture-only-token' },
+    });
+  } finally { rmSync(tmp, { recursive: true }); }
 });
 
 test('discoverToken returns null when file missing', () => {

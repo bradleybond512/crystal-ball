@@ -38,6 +38,13 @@ Desktop builds persist secrets through Tauri command bindings backed by OS crede
 - Storage backend: consolidated `secrets-vault` entry in the OS keychain
 - Frontend behavior: secrets are not written to plaintext config files
 
+The renderer receives presence for supported secrets plus values for an explicit
+17-entry allowlist (`RENDERER_READABLE_KEYS` in Rust and TypeScript), including map
+tokens, connection settings and the cloud client key. Variants using service
+`crystal-ball` share that credential namespace. macOS also uses an encrypted,
+machine-bound shadow vault for Keychain-timeout recovery; other local application
+data is not covered by that credential encryption. See [Privacy](../PRIVACY.md).
+
 ## Expected Degradation
 
 When secrets are missing or disabled, the desktop app degrades feature-by-feature instead of failing globally:

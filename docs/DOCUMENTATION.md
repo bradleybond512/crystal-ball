@@ -22,14 +22,16 @@ Crystal Ball currently ships:
 
 - `4` web variants
 - `3` desktop build targets (`full`, `tech`, `finance`)
-- a variant-specific panel catalog (see [src/config/panels.ts](../src/config/panels.ts))
-- a configurable 3D globe layer catalog (see [src/config/panels.ts](../src/config/panels.ts) `FULL_MAP_LAYERS`)
+- `409` unique full panel catalog entries (`408` enabled by default, one disabled); `35` tech, `31` finance and `10` happy entries
+- `78` full map-layer flags (see [src/config/panels.ts](../src/config/panels.ts)); Cesium also has its own layer registry
 - `21` generated OpenAPI specs
 - `19` locale bundles
-- `68` desktop secret slots backed by the OS keychain
-- `41` MCP tools for local intelligence workflows
+- `77` supported desktop secret/configuration slots; `17` renderer-readable values
+- `61` MCP tools across `9` categories for local intelligence workflows
 
-Catalog sizes are intentionally derived from the current codebase instead of duplicated here.
+These source counts describe catalog entries, not successful feeds or simultaneously
+visible panels. `VITE_VARIANT` selects the build; `SITE_VARIANT` is an internal constant.
+macOS is the primary desktop platform; Windows/Linux remain experimental.
 
 ## Architecture Reading Path
 
@@ -37,6 +39,7 @@ Catalog sizes are intentionally derived from the current codebase instead of dup
 | --- | --- |
 | [../README.md](../README.md) | High-level system overview and technical posture |
 | [../SECURITY.md](../SECURITY.md) | Security scope, reporting path, and desktop/runtime boundaries |
+| [../PRIVACY.md](../PRIVACY.md) | Local data, credentials, consent, error reporting and outbound integrations |
 | [local-backend-audit.md](local-backend-audit.md) | Desktop sidecar parity matrix and fallback behavior |
 | [TAURI_VALIDATION_REPORT.md](TAURI_VALIDATION_REPORT.md) | Validation outcomes and failure classification |
 
@@ -44,7 +47,7 @@ Catalog sizes are intentionally derived from the current codebase instead of dup
 
 | Guide | Focus |
 | --- | --- |
-| [API_KEYS.md](API_KEYS.md) | All 68 API keys — categories, signup URLs, free/paid status |
+| [API_KEYS.md](API_KEYS.md) | All 77 supported secret/configuration slots — categories, signup URLs, free/paid status |
 | [DESKTOP_CONFIGURATION.md](DESKTOP_CONFIGURATION.md) | Desktop secret keys, feature availability, and degraded behavior |
 | [API_KEY_DEPLOYMENT.md](API_KEY_DEPLOYMENT.md) | Vercel API access rules, trusted origins, and key requirements |
 | [RELAY_PARAMETERS.md](RELAY_PARAMETERS.md) | Relay environment variables for AIS and OpenSky paths |

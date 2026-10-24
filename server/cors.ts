@@ -11,8 +11,6 @@ declare const process: { env: Record<string, string | undefined> };
 // Patterns MUST end with a trusted username segment — never a wildcard `*.vercel.app`
 // match that could let an unrelated third-party project gain CORS approval.
 const PRODUCTION_PATTERNS: RegExp[] = [
-  /^https:\/\/crystalball\.app$/,
-  /^https:\/\/(tech|finance|happy|api)\.crystalball\.app$/,
   // `crystalball` (no dash) project previews.
   /^https:\/\/crystalball-[a-z0-9-]+-elie-[a-z0-9]+\.vercel\.app$/,
   /^https:\/\/crystalball-[a-z0-9-]+-bradleybond512\.vercel\.app$/,
@@ -41,14 +39,15 @@ function isAllowedOrigin(origin: string): boolean {
 
 export function getCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('origin') || '';
-  const allowOrigin = isAllowedOrigin(origin) ? origin : 'https://crystalball.app';
-  return {
- 'Access-Control-Allow-Origin': allowOrigin,
+  const allowed = isAllowedOrigin(origin);
+  const headers: Record<string, string> = {
  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-CrystalBall-Key',
  'Access-Control-Max-Age': '86400',
  'Vary': 'Origin',
   };
+  if (allowed) headers['Access-Control-Allow-Origin'] = origin;
+  return headers;
 }
 
 export function isDisallowedOrigin(req: Request): boolean {

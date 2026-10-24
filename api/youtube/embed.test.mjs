@@ -3,7 +3,7 @@ import test from 'node:test';
 import handler from './embed.js';
 
 function makeRequest(query = '') {
-  return new Request(`https://crystalball.app/api/youtube/embed${query}`);
+  return new Request(`http://localhost:5173/api/youtube/embed${query}`);
 }
 
 test('rejects missing or invalid video ids', async () => {
@@ -24,7 +24,7 @@ test('returns embeddable html for valid video id', async () => {
   assert.equal(html.includes("host:'https://www.youtube.com'"), true);
   assert.equal(html.includes('autoplay:0'), true);
   assert.equal(html.includes('mute:1'), true);
-  assert.equal(html.includes('origin:"https://crystalball.app"'), true);
+  assert.equal(html.includes('origin:"http://localhost:5173"'), true);
   assert.equal(html.includes('postMessage'), true);
 });
 
@@ -35,24 +35,23 @@ test('accepts custom origin parameter', async () => {
 });
 
 test('uses dedicated parentOrigin for iframe postMessage target', async () => {
-  const response = await handler(makeRequest('?videoId=iEpJwprxDdk&origin=https://crystalball.app&parentOrigin=https://tauri.localhost'));
+  const response = await handler(makeRequest('?videoId=iEpJwprxDdk&origin=http://localhost:5173&parentOrigin=https://tauri.localhost'));
   const html = await response.text();
-  assert.match(html, /playerVars:\{[^}]*origin:"https:\/\/crystalball\.app"/);
+  assert.match(html, /playerVars:\{[^}]*origin:"http:\/\/localhost:5173"/);
   assert.match(html, /parentOrigin="https:\/\/tauri\.localhost"/);
   assert.match(html, /if\(allowedOrigin!==['"]\*['"]&&e\.origin!==allowedOrigin\)return/);
 });
 
 test('does not accept wildcard parentOrigin query parameter', async () => {
-  const response = await handler(makeRequest('?videoId=iEpJwprxDdk&origin=https://crystalball.app&parentOrigin=*'));
+  const response = await handler(makeRequest('?videoId=iEpJwprxDdk&origin=http://localhost:5173&parentOrigin=*'));
   const html = await response.text();
   assert.equal(html.includes('parentOrigin="*"'), false);
-  assert.match(html, /parentOrigin="https:\/\/crystalball\.app"/);
+  assert.match(html, /parentOrigin="http:\/\/localhost:5173"/);
 });
 
-test('relay CORS: accepts production origins', async () => {
+test('relay CORS: accepts existing local and anchored preview origins', async () => {
   const ok = [
- 'https://crystalball.app',
- 'https://tech.crystalball.app',
+ 'http://localhost:5173',
  'https://crystalball-my-branch-bradleybond512.vercel.app',
  'https://crystal-ball-fix-bradleybond512.vercel.app',
  'https://crystalball-pr-elie-abc123.vercel.app',
@@ -95,8 +94,17 @@ test('relay CORS: rejects lookalike vercel origins even when flag enabled (R2-SE
   }
 });
 
-test('relay CORS: rejects empty or missing origin', async () => {
+test('relay CORS: missing origin uses the actual allowed local request origin', async () => {
   const res = await handler(makeRequest('?videoId=iEpJwprxDdk&origin='));
   const html = await res.text();
-  assert.ok(html.includes('origin:"https://crystalball.app"'), 'should fall back to default origin');
+  assert.ok(html.includes('origin:"http://localhost:5173"'), 'should fall back to default origin');
+});
+
+
+test('rejects retired origins instead of selecting a public fallback', async () => {
+  for (const origin of ['https://crystalball.app', 'https://api.crystalball.app', 'https://CRYSTALBALL.APP.']) {
+    const response = await handler(makeRequest(`?videoId=iEpJwprxDdk&origin=${encodeURIComponent(origin)}`));
+    assert.equal(response.status, 400, origin);
+    assert.doesNotMatch(await response.text(), /crystalball[.]app/i);
+  }
 });

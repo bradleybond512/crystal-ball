@@ -60,11 +60,11 @@ test('production health returns exact minimal uncached liveness without a valid 
     });
     try {
       for (const authorization of [undefined, 'Basic private-canary', 'Bearer wrong-canary', 'Bearer']) {
-        const headers = { Origin: 'https://crystalball.app', ...(authorization ? { authorization } : {}) };
+        const headers = { Origin: 'http://localhost:5173', ...(authorization ? { authorization } : {}) };
         const response = await fetch(`${base}/api/health`, { headers });
         assert.equal(response.status, 200);
         assert.equal(response.headers.get('cache-control'), 'no-store');
-        assert.equal(response.headers.get('access-control-allow-origin'), 'https://crystalball.app');
+        assert.equal(response.headers.get('access-control-allow-origin'), 'http://localhost:5173');
         assert.deepEqual(await response.json(), { ok: true });
       }
       assert.equal(inventoryReads, 0, 'the production route must leave inventory unevaluated');
@@ -87,9 +87,9 @@ test('public health preserves the production Host guard and auth-free preflight'
       request.on('error', reject);
     });
     assert.equal(forbidden, 403);
-    const preflight = await fetch(`${base}/api/health`, { method: 'OPTIONS', headers: { Origin: 'https://crystalball.app' } });
+    const preflight = await fetch(`${base}/api/health`, { method: 'OPTIONS', headers: { Origin: 'http://localhost:5173' } });
     assert.equal(preflight.status, 204);
-    assert.equal(preflight.headers.get('access-control-allow-origin'), 'https://crystalball.app');
+    assert.equal(preflight.headers.get('access-control-allow-origin'), 'http://localhost:5173');
   });
 });
 

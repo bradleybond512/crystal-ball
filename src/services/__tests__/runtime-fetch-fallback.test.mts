@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createRuntimeFetch, type RuntimeFetchDeps } from '../runtime.ts';
+import { createRuntimeFetch, createWebApiFetch, isRetiredAppUrl, type RuntimeFetchDeps } from '../runtime.ts';
 
 // R4-BUG-004: the desktop fetch router sends /api/* only to a CONFIRMED
 // sidecar port and falls back to the cloud only on a connection failure or a
@@ -16,6 +16,7 @@ function harness(opts: {
   remote?: string;
   cloudKey?: string | null;
   tokens?: string[];
+  localBase?: string;
 } = {}) {
   const calls: Call[] = [];
   let invalidations = 0;
@@ -31,7 +32,7 @@ function harness(opts: {
   const deps: RuntimeFetchDeps = {
     resolvePort: async () => (ports.length > 1 ? ports.shift()! : ports[0] ?? null),
     invalidatePort: () => { invalidations += 1; },
-    localBaseUrl: (port) => `http://127.0.0.1:${port}`,
+    localBaseUrl: (port) => opts.localBase ?? `http://127.0.0.1:${port}`,
     fetchToken: async () => (tokens.length > 1 ? tokens.shift()! : tokens[0] ?? null),
     remoteBaseUrl: () => opts.remote ?? REMOTE,
     cloudApiKey: async () => (opts.cloudKey === undefined ? 'cloud-key' : opts.cloudKey),
@@ -160,4 +161,78 @@ test('a caller-supplied Authorization header is never forwarded to the cloud', a
   const cloud = h.calls.at(-1)!;
   assert.ok(cloud.url.startsWith(REMOTE));
   assert.equal(cloud.auth, null);
+});
+
+const RETIRED_URLS = [
+  'https://crystalball.app/api/health',
+  'https://api.crystalball.app/api/news/v1/list',
+  'https://nested.tech.crystalball.app/ordinary-path',
+  'http://CRYSTALBALL.APP./api/health',
+  'https://api.CRYSTALBALL.APP.:443/api/health',
+  '//happy.crystalball.app/api/health',
+  'wss://relay.crystalball.app/feed',
+];
+
+test('retired hosts are recognized by parsed hostname without rejecting lookalikes', () => {
+  for (const url of RETIRED_URLS) assert.equal(isRetiredAppUrl(url), true, url);
+  for (const url of ['https://crystalball.app.evil.example/api/x', '/api/health', 'http://localhost:3000']) {
+    assert.equal(isRetiredAppUrl(url), false, url);
+  }
+});
+
+test('desktop rejects retired URL input forms before any native fetch', async () => {
+  const inputs: Array<RequestInfo | URL> = [
+    ...RETIRED_URLS,
+    new URL('https://TECH.CRYSTALBALL.APP./api/health'),
+    new Request('https://finance.crystalball.app/api/health'),
+  ];
+  for (const input of inputs) {
+    const h = harness();
+    await assert.rejects(h.fetch(input), /Retired app domain/);
+    assert.deepEqual(h.calls, [], String(input));
+  }
+});
+
+test('retired configured cloud bases never receive a fallback request or key', async () => {
+  for (const remote of ['https://crystalball.app', 'https://API.CRYSTALBALL.APP.', '//tech.crystalball.app']) {
+    const h = harness({ local: status(503), remote });
+    assert.equal((await h.fetch('/api/gdacs?limit=5')).status, 503);
+    assert.equal(h.calls.length, 1);
+    assert.ok(h.calls.every((call) => !isRetiredAppUrl(call.url)));
+    assert.equal(h.calls[0]?.cloudKey, null);
+  }
+});
+
+test('a retired local-base override never receives the sidecar bearer', async () => {
+  const h = harness({ localBase: 'https://crystalball.app', remote: '' });
+  await assert.rejects(h.fetch('/api/health'), /Retired app domain/);
+  assert.deepEqual(h.calls, []);
+});
+
+test('web rejects retired URLs even when no redirect is configured', async () => {
+  for (const remote of ['', 'https://api.crystalball.app']) {
+    const calls: string[] = [];
+    const webFetch = createWebApiFetch((async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      return new Response('local');
+    }) as typeof fetch, remote, 'http://localhost:3000');
+    for (const input of [
+      ...RETIRED_URLS,
+      new URL('https://tech.crystalball.app/api/health'),
+      new Request('https://CRYSTALBALL.APP./api/health'),
+    ]) await assert.rejects(webFetch(input), /Retired app domain/);
+    assert.deepEqual(calls, []);
+    await webFetch('/api/news/v1/list');
+    assert.deepEqual(calls, ['/api/news/v1/list']);
+  }
+});
+
+test('relative web requests cannot target a page served from the retired domain', async () => {
+  let calls = 0;
+  const webFetch = createWebApiFetch((async () => {
+    calls++;
+    return new Response('unexpected');
+  }) as typeof fetch, '', 'https://crystalball.app');
+  await assert.rejects(webFetch('/api/health'), /Retired app domain/);
+  assert.equal(calls, 0);
 });

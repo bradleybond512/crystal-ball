@@ -78,6 +78,22 @@ function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/$/, '');
 }
 
+/** Retired public domain: never a trusted origin or an outbound destination. */
+export function isRetiredAppUrl(value: string): boolean {
+  try {
+ const hostname = new URL(value, 'http://localhost').hostname.toLowerCase().replace(/\.+$/, '');
+ return hostname === 'crystalball.app' || hostname.endsWith('.crystalball.app');
+  } catch {
+ return false;
+  }
+}
+
+function assertActiveRequest(input: RequestInfo | URL, pageOrigin?: string): void {
+  const value = typeof input === 'string' ? input : 'href' in input ? input.href : input.url;
+  const target = pageOrigin ? new URL(value, pageOrigin).href : value;
+  if (isRetiredAppUrl(target)) throw new TypeError('Retired app domain is unavailable');
+}
+
 interface RuntimeProbe {
   hasTauriGlobals: boolean;
   userAgent: string;
@@ -141,6 +157,7 @@ export function getApiBaseUrl(): string {
 export function localApiBaseForPort(port: number): string {
   const configuredBaseUrl = VITE_ENV.VITE_TAURI_API_BASE_URL;
   if (configuredBaseUrl) {
+ if (isRetiredAppUrl(configuredBaseUrl)) throw new TypeError('Retired app domain is unavailable');
  return normalizeBaseUrl(configuredBaseUrl);
   }
   return `http://127.0.0.1:${port}`;
@@ -149,11 +166,12 @@ export function localApiBaseForPort(port: number): string {
 export function getRemoteApiBaseUrl(): string {
   const configuredRemoteBase = VITE_ENV.VITE_TAURI_REMOTE_API_BASE_URL;
   if (configuredRemoteBase) {
- return normalizeBaseUrl(configuredRemoteBase);
+ return isRetiredAppUrl(configuredRemoteBase) ? '' : normalizeBaseUrl(configuredRemoteBase);
   }
 
   const variant = VITE_ENV.VITE_VARIANT || 'full';
-  return DEFAULT_REMOTE_HOSTS[variant] ?? DEFAULT_REMOTE_HOSTS.full ?? '';
+  const base = DEFAULT_REMOTE_HOSTS[variant] ?? DEFAULT_REMOTE_HOSTS.full ?? '';
+  return isRetiredAppUrl(base) ? '' : base;
 }
 
 /**
@@ -185,18 +203,13 @@ export function toRuntimeUrl(path: string): string {
 function extractHostnames(...urls: (string | undefined)[]): string[] {
   const hosts: string[] = [];
   for (const u of urls) {
- if (!u) continue;
+ if (!u || isRetiredAppUrl(u)) continue;
  try { hosts.push(new URL(u).hostname); } catch {}
   }
   return hosts;
 }
 
 const APP_HOSTS = new Set([
-  'crystalball.app',
-  'www.crystalball.app',
-  'tech.crystalball.app',
-  'api.crystalball.app',
-
   'localhost',
   '127.0.0.1',
   ...extractHostnames(WS_API_URL, VITE_ENV.VITE_WS_RELAY_URL),
@@ -206,7 +219,7 @@ function isAppOriginUrl(urlStr: string): boolean {
   try {
  const u = new URL(urlStr);
  const host = u.hostname;
- return APP_HOSTS.has(host) || host.endsWith('.crystalball.app');
+ return !isRetiredAppUrl(urlStr) && APP_HOSTS.has(host);
   } catch {
  return false;
   }
@@ -264,6 +277,7 @@ async function fetchLocalWithStartupRetry(
   localUrl: string,
   init?: RequestInit,
 ): Promise<Response> {
+  assertActiveRequest(localUrl);
   const maxAttempts = 4;
   let lastError: unknown = null;
 
@@ -384,6 +398,7 @@ export function createRuntimeFetch(nativeFetch: typeof window.fetch, deps: Runti
   }
 
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+ assertActiveRequest(input);
  // Default timeout: ~100 data feeds route through this patched fetch with no
  // timeout of their own, so a hung connection would otherwise stall forever.
  // Honor a caller-supplied signal; otherwise give EACH fetch attempt its own
@@ -428,7 +443,7 @@ export function createRuntimeFetch(nativeFetch: typeof window.fetch, deps: Runti
  }
  const remoteBase = deps.remoteBaseUrl();
  const cloudTarget = prepareCloudTarget(target, requestMethod(input, init), requestHasBody(input, init));
- if (!remoteBase || !cloudTarget.ok) {
+ if (!remoteBase || isRetiredAppUrl(remoteBase) || !cloudTarget.ok) {
  if (debug) console.log(`[fetch] cloud fallback skipped for ${target}: ${cloudTarget.ok ? 'no remote base' : cloudTarget.reason}`);
  return onUnavailable();
  }
@@ -529,13 +544,12 @@ export function installRuntimeFetchPatch(): void {
 }
 
 const WEB_RPC_PATTERN = /^\/api\/[^/]+\/v1\//;
-const ALLOWED_REDIRECT_HOSTS = /^https:\/\/([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)*crystalball\.app(:\d+)?$/;
 
 function isAllowedRedirectTarget(url: string): boolean {
   try {
  const parsed = new URL(url);
 
- return ALLOWED_REDIRECT_HOSTS.test(parsed.origin) || parsed.hostname === 'localhost';
+ return !isRetiredAppUrl(url) && parsed.hostname === 'localhost';
   } catch {
  return false;
   }
@@ -564,7 +578,7 @@ function ambientFetchRouting(): FetchRoutingEnv {
  *
  * It matches per input shape rather than on a normalized path, and the shapes
  * are not equivalent: for a string it tests the RAW value against an anchored
- * pattern, so `https://crystalball.app/api/military/v1/x` written as a string
+ * pattern, so an absolute `/api/military/v1/x` URL written as a string
  * is NOT redirected, while the same URL as a `URL` is. `URL`/`Request` inputs
  * additionally have to be exactly same-origin — a sibling app host is not.
  */
@@ -603,6 +617,7 @@ function routedBaseFor(input: RequestInfo | URL, env: FetchRoutingEnv): string |
  */
 export function fetchTargetHost(input: RequestInfo | URL, env: FetchRoutingEnv = ambientFetchRouting()): string {
   try {
+    assertActiveRequest(input);
     const base = routedBaseFor(input, env);
     if (base) return new URL(base).host;
 
@@ -613,33 +628,31 @@ export function fetchTargetHost(input: RequestInfo | URL, env: FetchRoutingEnv =
   }
 }
 
-export function installWebApiRedirect(): void {
-  if (isDesktopRuntime() || typeof window === 'undefined') return;
-  if (!WS_API_URL) return;
-  if (!isAllowedRedirectTarget(WS_API_URL)) {
- console.warn('[runtime] VITE_WS_API_URL blocked — not in hostname allowlist:', WS_API_URL);
- return;
-  }
-  if ((window as unknown as Record<string, unknown>).__wmWebRedirectPatched) return;
-
-  const nativeFetch = window.fetch.bind(window);
-  const API_BASE = WS_API_URL;
-
-  window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
- if (typeof input === 'string' && WEB_RPC_PATTERN.test(input)) {
+/** Web fetch also rejects retired destinations when no redirect is configured. */
+export function createWebApiFetch(nativeFetch: typeof window.fetch, remoteBase: string, pageOrigin: string): typeof window.fetch {
+  const API_BASE = remoteBase && isAllowedRedirectTarget(remoteBase) ? remoteBase : '';
+  return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+ assertActiveRequest(input, pageOrigin);
+ if (API_BASE && typeof input === 'string' && WEB_RPC_PATTERN.test(input)) {
  return nativeFetch(`${API_BASE}${input}`, init);
  }
- if (input instanceof URL && input.origin === window.location.origin && WEB_RPC_PATTERN.test(input.pathname)) {
+ if (API_BASE && input instanceof URL && input.origin === pageOrigin && WEB_RPC_PATTERN.test(input.pathname)) {
  return nativeFetch(new URL(`${API_BASE}${input.pathname}${input.search}`), init);
  }
- if (input instanceof Request) {
+ if (API_BASE && input instanceof Request) {
  const u = new URL(input.url);
- if (u.origin === window.location.origin && WEB_RPC_PATTERN.test(u.pathname)) {
+ if (u.origin === pageOrigin && WEB_RPC_PATTERN.test(u.pathname)) {
  return nativeFetch(new Request(`${API_BASE}${u.pathname}${u.search}`, input), init);
  }
  }
  return nativeFetch(input, init);
   };
+}
+
+export function installWebApiRedirect(): void {
+  if (isDesktopRuntime() || typeof window === 'undefined') return;
+  if ((window as unknown as Record<string, unknown>).__wmWebRedirectPatched) return;
+  window.fetch = createWebApiFetch(window.fetch.bind(window), WS_API_URL, window.location.origin);
 
   (window as unknown as Record<string, unknown>).__wmWebRedirectPatched = true;
 }

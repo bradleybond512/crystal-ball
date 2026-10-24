@@ -4,6 +4,10 @@ All notable changes to Crystal Ball are documented here.
 
 ## [Unreleased]
 
+### Planned 2.25.148
+
+Source-only privacy repair: analytics stay off until you opt in, and ambiguous upgrade consent resets to off with a one-time notice. Desktop version remains 2.25.147; this does not claim the published 147 installers contain the repair. Version preparation for 2.25.148, tagging, signing, publication and installation are deferred. See the [future release notes and readiness checklist](docs/releases/2.25.148-readiness.md); minimum-148 capability and marketing claims remain gated.
+
 ### Added
 
 - **Hierarchical forecast base rate**: every eligible production forecast now
@@ -217,6 +221,7 @@ All notable changes to Crystal Ball are documented here.
 
 ### Fixed
 
+- **Analytics require your choice.** Some v2.25.147 upgrades enabled analytics from an existing installation ID without asking. Ambiguous older consent is now reset to off, with a one-time notice and old analytics queues and identity cleared. Recognizable explicit choices are preserved. Missing or invalid consent stays off, including while analytics code loads.
 - **Fail-closed macOS relaunches**: the local installer now waits for the prior
   Crystal Ball process to exit before replacing the bundle, checks `open`
   failures, waits for the replacement process to start, and records local-build

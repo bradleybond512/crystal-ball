@@ -2849,7 +2849,17 @@ function toHeaders(nodeHeaders, options = {}) {
   return headers;
 }
 
+function isRetiredRemoteBase(value) {
+  try {
+    const hostname = new URL(value, 'http://localhost').hostname.toLowerCase().replace(/\.+$/, '');
+    return hostname === 'crystalball.app' || hostname.endsWith('.crystalball.app');
+  } catch {
+    return false;
+  }
+}
+
 async function proxyToCloud(requestUrl, req, remoteBase) {
+  if (!remoteBase || isRetiredRemoteBase(remoteBase)) return null;
   const target = `${remoteBase}${requestUrl.pathname}${requestUrl.search}`;
   const body = ['GET', 'HEAD'].includes(req.method) ? undefined : await readBody(req);
   const controller = new AbortController();
@@ -3056,7 +3066,8 @@ async function importHandler(modulePath) {
 
 function resolveConfig(options = {}) {
   const port = Number(options.port ?? process.env.LOCAL_API_PORT ?? 46_123);
-  const remoteBase = String(options.remoteBase ?? process.env.LOCAL_API_REMOTE_BASE ?? 'https://crystalball.app').replace(/\/$/, '');
+  const configuredRemote = String(options.remoteBase ?? process.env.LOCAL_API_REMOTE_BASE ?? '').replace(/\/$/, '');
+  const remoteBase = isRetiredRemoteBase(configuredRemote) ? '' : configuredRemote;
   const resourceDir = String(options.resourceDir ?? process.env.LOCAL_API_RESOURCE_DIR ?? process.cwd());
   const apiDir = options.apiDir
  ? String(options.apiDir)
@@ -3104,16 +3115,17 @@ async function handleLocalServiceStatus(context) {
   return json({
  success: true,
  timestamp: new Date().toISOString(),
- summary: { operational: 2, degraded: 0, outage: 0, unknown: 0 },
+ summary: { operational: 1, degraded: 0, outage: 0, unknown: 1 },
  services: [
  { id: 'local-api', name: 'Local Desktop API', category: 'dev', status: 'operational', description: `Running on 127.0.0.1:${context.port}` },
- { id: 'cloud-pass-through', name: 'Cloud pass-through', category: 'cloud', status: 'operational', description: `Fallback target ${context.remoteBase}` },
+ { id: 'cloud-pass-through', name: 'Cloud pass-through', category: 'cloud', status: 'unknown', description: context.cloudFallback && context.remoteBase ? `Configured target ${context.remoteBase}; reachability unverified` : 'Cloud fallback not configured or disabled' },
  ],
  local: { enabled: true, mode: context.mode, port: context.port, remoteBase: context.remoteBase },
   });
 }
 
 async function tryCloudFallback(requestUrl, req, context, reason) {
+  if (!context.remoteBase || isRetiredRemoteBase(context.remoteBase)) return null;
   if (reason) {
  const route = requestUrl.pathname;
  const count = (fallbackCounts.get(route) || 0) + 1;
@@ -3134,17 +3146,6 @@ async function tryCloudFallback(requestUrl, req, context, reason) {
  return null;
   }
 }
-
-// Known crystalball.app subdomains. Enumerated rather than glob-matched so a
-// future DNS / certificate misconfig can't silently grant CORS access to an
-// unrelated subdomain (e.g. an attacker-controlled preview host).
-const SIDECAR_PROD_HOSTS = new Set([
-  'crystalball.app',
-  'tech.crystalball.app',
-  'finance.crystalball.app',
-  'happy.crystalball.app',
-  'api.crystalball.app',
-]);
 
 // Dev-server ports the sidecar may legitimately serve. Other localhost ports
 // must NOT receive Access-Control-Allow-Origin reflection — that would let a
@@ -3172,12 +3173,6 @@ export function isSidecarOriginAllowed(origin) {
   if (!origin) return false;
   for (const p of SIDECAR_TAURI_PATTERNS) {
     if (p.test(origin)) return true;
-  }
-  // Match prod host suffix (handles https://crystalball.app and the four
-  // enumerated subdomains; anything else is denied).
-  if (origin.startsWith('https://')) {
-    const host = origin.slice('https://'.length);
-    if (SIDECAR_PROD_HOSTS.has(host)) return true;
   }
   const localMatch = SIDECAR_LOCALHOST_RE.test(origin)
     ? (origin.match(SIDECAR_LOCALHOST_RE) || [])
@@ -16062,25 +16057,10 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
-  // ── AI Strategic Posture — proxy cloud API server-side (bypasses browser CORS) ─
+  // ── AI Strategic Posture — compute from locally cached public observations ─
   if (requestUrl.pathname === '/api/military/v1/get-theater-posture') {
  const cached = getCached('theater-posture', 5 * 60 * 1000);
  if (cached) return json(cached);
- try {
- // Node.js is not subject to browser CORS — proxy directly to cloud API server-side
- const cloudUrl = 'https://api.crystalball.app/api/military/v1/get-theater-posture' + requestUrl.search;
- const cloudResp = await fetchWithTimeout(cloudUrl, {
- headers: { Accept: 'application/json', 'User-Agent': CHROME_UA },
- }, 10_000);
- if (cloudResp.ok) {
- const body = await cloudResp.json();
- if (body && Array.isArray(body.theaters)) {
- setCached('theater-posture', body, 5 * 60 * 1000);
- return json(body);
- }
- }
- } catch { /* timeout / network error — fall through to local computation */ }
-
  // Compute from locally cached ACLED, AIS, and ADSB data
  const THEATER_DEFS = [
  { theater: 'iran-theater', latMin: 23, latMax: 38, lonMin: 44, lonMax: 63 },

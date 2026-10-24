@@ -5,7 +5,7 @@ import { fetchTargetHost, type FetchRoutingEnv } from '../runtime';
 
 const TAURI_HREF = 'tauri://localhost/index.html';
 const SIDECAR = 'http://127.0.0.1:46123';
-const EDGE = 'https://api.crystalball.app';
+const EDGE = 'http://localhost:5173';
 
 /** Desktop: installRuntimeFetchPatch reroutes app-origin /api/* to the sidecar. */
 const desktop: FetchRoutingEnv = {
@@ -18,7 +18,7 @@ const desktop: FetchRoutingEnv = {
 const web: FetchRoutingEnv = {
   apiBaseUrl: '',
   webRedirectBaseUrl: EDGE,
-  pageHref: 'https://crystalball.app/app',
+  pageHref: 'http://localhost:3000/app',
 };
 
 /** Web with no VITE_WS_API_URL, or one the allowlist rejected. */
@@ -68,9 +68,9 @@ test('a path merely containing /api/ is not treated as a sidecar call', () => {
 
 test('web RPC calls are attributed to the edge the redirect sends them to', () => {
   // installWebApiRedirect rewrites /api/<service>/v1/* off desktop; resolving
-  // against the page origin would credit those to crystalball.app instead.
-  assert.equal(fetchTargetHost('/api/military/v1/posture', web), 'api.crystalball.app');
-  assert.equal(fetchTargetHost(new URL('https://crystalball.app/api/military/v1/posture'), web), 'api.crystalball.app');
+  // against the page origin would credit those to localhost:3000 instead.
+  assert.equal(fetchTargetHost('/api/military/v1/posture', web), 'localhost:5173');
+  assert.equal(fetchTargetHost(new URL('http://localhost:3000/api/military/v1/posture'), web), 'localhost:5173');
 });
 
 // The web redirect matches per input shape rather than on a normalized path, and
@@ -79,24 +79,24 @@ test('web RPC calls are attributed to the edge the redirect sends them to', () =
 test('an app-origin absolute string is NOT redirected on web', () => {
   // installWebApiRedirect tests the raw string against an anchored pattern, so
   // only a relative path matches — the absolute form reaches the page host.
-  assert.equal(fetchTargetHost('https://crystalball.app/api/military/v1/posture', web), 'crystalball.app');
+  assert.equal(fetchTargetHost('http://localhost:3000/api/military/v1/posture', web), 'localhost:3000');
 });
 
 test('a sibling app host is not same-origin, so the redirect leaves it alone', () => {
   assert.equal(
-    fetchTargetHost(new URL('https://tech.crystalball.app/api/military/v1/posture'), web),
-    'tech.crystalball.app',
+    fetchTargetHost(new URL('http://127.0.0.1:3000/api/military/v1/posture'), web),
+    '127.0.0.1:3000',
   );
 });
 
 test('a same-origin Request for an RPC path is redirected', () => {
-  assert.equal(fetchTargetHost(new Request('https://crystalball.app/api/military/v1/posture'), web), 'api.crystalball.app');
+  assert.equal(fetchTargetHost(new Request('http://localhost:3000/api/military/v1/posture'), web), 'localhost:5173');
 });
 
 test('the same absolute URL is attributed differently by shape, exactly as it is routed', () => {
-  const raw = 'https://crystalball.app/api/military/v1/posture';
-  assert.equal(fetchTargetHost(raw, web), 'crystalball.app', 'string: not redirected');
-  assert.equal(fetchTargetHost(new URL(raw), web), 'api.crystalball.app', 'URL: redirected');
+  const raw = 'http://localhost:3000/api/military/v1/posture';
+  assert.equal(fetchTargetHost(raw, web), 'localhost:3000', 'string: not redirected');
+  assert.equal(fetchTargetHost(new URL(raw), web), 'localhost:5173', 'URL: redirected');
 });
 
 test('desktop still normalizes every shape onto the sidecar', () => {
@@ -107,12 +107,12 @@ test('desktop still normalizes every shape onto the sidecar', () => {
 
 test('web paths outside the RPC pattern stay on the page origin', () => {
   // The redirect only matches /api/<service>/v1/ — /api/health is served same-origin.
-  assert.equal(fetchTargetHost('/api/health', web), 'crystalball.app');
-  assert.equal(fetchTargetHost('/map-styles/dark.json', web), 'crystalball.app');
+  assert.equal(fetchTargetHost('/api/health', web), 'localhost:3000');
+  assert.equal(fetchTargetHost('/map-styles/dark.json', web), 'localhost:3000');
 });
 
 test('with no redirect installed, web RPC calls stay on the page origin', () => {
-  assert.equal(fetchTargetHost('/api/military/v1/posture', webNoRedirect), 'crystalball.app');
+  assert.equal(fetchTargetHost('/api/military/v1/posture', webNoRedirect), 'localhost:3000');
 });
 
 test('unparseable input is bucketed as unknown rather than throwing', () => {

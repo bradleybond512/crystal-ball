@@ -6,9 +6,8 @@
  * dismissing) leaves analytics off. Either choice records 'wm-analytics-consent'
  * and marks the prompt as seen so this never re-appears.
  *
- * Already-decided installs never reach here (migrateAnalyticsConsent marks the
- * prompt seen), so mounting is gated on hasSeenConsentPrompt(). Consent that an
- * older build implied is reset first, so those installs are asked (R4-LOW-001).
+ * Already-decided installs do not show the prompt. Ambiguous legacy consent
+ * is reset off and gets a one-time, nonmodal notice instead.
  */
 
 import {
@@ -16,6 +15,8 @@ import {
   markConsentPromptSeen,
   setAnalyticsConsent,
   initAnalytics,
+  hasPendingAnalyticsResetNotice,
+  markAnalyticsResetNoticeSeen,
 } from '@/services/analytics';
 
 const BANNER_ID = 'analytics-consent-banner';
@@ -28,7 +29,36 @@ function decide(banner: HTMLElement, allow: boolean, restoreFocus: HTMLElement |
   restoreFocus?.focus();
 }
 
+function mountResetNotice(): void {
+  const id = 'analytics-consent-reset-notice';
+  if (document.getElementById(id)) return;
+  const notice = document.createElement('div');
+  notice.id = id;
+  notice.setAttribute('role', 'status');
+  notice.setAttribute('aria-live', 'polite');
+  Object.assign(notice.style, {
+    position: 'fixed', bottom: '16px', left: '16px', right: '16px', zIndex: '10000',
+    maxWidth: '560px', padding: '14px 18px', borderRadius: '14px',
+    background: 'var(--surface-1, #141414)', color: 'var(--text-primary, #f2f3f5)', border: '1px solid var(--surface-border-strong, #444444)',
+    display: 'flex', alignItems: 'center', gap: '12px', font: '500 13px/1.45 system-ui',
+  });
+  const message = document.createElement('span');
+  message.textContent = "Analytics are now off. Turn them on in Privacy settings if you'd like to help.";
+  const dismiss = document.createElement('button');
+  dismiss.type = 'button';
+  dismiss.textContent = 'Dismiss';
+  Object.assign(dismiss.style, { minHeight: '44px', padding: '8px 12px', color: 'var(--text-primary, #f2f3f5)', background: 'var(--surface-3, #222222)', border: '1px solid var(--surface-border-strong, #444444)', borderRadius: '8px', cursor: 'pointer' });
+  dismiss.addEventListener('click', () => notice.remove());
+  notice.append(message, dismiss);
+  document.body.append(notice);
+  markAnalyticsResetNoticeSeen();
+}
+
 export function mountAnalyticsConsentBanner(): void {
+  if (hasPendingAnalyticsResetNotice()) {
+    mountResetNotice();
+    return;
+  }
   if (hasSeenConsentPrompt()) return;
   if (document.getElementById(BANNER_ID)) return;
 

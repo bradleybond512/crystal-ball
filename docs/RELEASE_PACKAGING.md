@@ -1,18 +1,30 @@
-# Desktop Release Packaging Guide (Local, Reproducible)
+# Desktop Packaging and Release Evidence
 
-This guide covers the desktop packaging helper as it exists today:
+macOS is the primary desktop platform. Windows and Linux builds are experimental;
+build-matrix coverage is not evidence of feature or packaged-runtime parity.
+
+The packaging helper accepts these variant arguments:
 
 - **full** -> `Crystal Ball`
 - **tech** -> `Tech Monitor`
+- **finance** -> `Finance Monitor`
 
-The repository also includes a finance desktop build config (`npm run desktop:build:finance`), but `scripts/desktop-package.mjs` currently accepts only `full` and `tech` for release packaging.
+**Draft #1811 integration dependency:** at source baseline `78e34040`, the helper
+sets `VITE_VARIANT` but invokes Tauri without a variant-specific config. Only
+`src-tauri/tauri.conf.json` is present, with product name `Crystal Ball` and
+identifier `com.bradleybond.crystalball`. The native identity repair is delivered
+separately in [Draft #1811](https://github.com/bradleybond512/crystal-ball/pull/1811)
+at source commit `7392ef1696e8110701b80a9a64440cac582aaa43`.
 
-Some public GitHub releases also contain Linux AppImage assets for the main `Crystal Ball` build, but this guide documents only the packaging paths currently maintained in-repo: macOS and Windows.
+Until that source is integrated, selecting a tech/finance frontend does not establish
+a distributable native identity. Do not treat the non-full examples as verified
+release procedures. The variant identity, updater and profile safeguards below
+describe that separate repair and apply only after integration. This documentation
+change does not implement it, and source checks do not establish packaged runtime
+acceptance.
 
-Variant identity is controlled by Tauri config:
-
-- full: `src-tauri/tauri.conf.json`
-- tech: `src-tauri/tauri.tech.conf.json`
+The helper also accepts `--os linux` and targets AppImage. Windows targets NSIS/MSI.
+These supported arguments do not change their experimental product status.
 
 ## Prerequisites
 
@@ -52,6 +64,21 @@ See `docs/TAURI_VALIDATION_REPORT.md` for failure classification labels and trou
 
 ## Packaging commands
 
+`npm run desktop:build:full` runs texture-input download, full macOS packaging and
+`local-install.mjs`. Outside CI that last step installs and relaunches
+`~/Applications/Crystal Ball.app`; CI skips the install. This is an operational
+install command, not a build-only check.
+
+Use the separate app-only packaging path when an install is not intended:
+
+```bash
+npm run desktop:build:app:full
+```
+
+It still builds/signs an app and may download build inputs; it does not install,
+relaunch or produce a DMG. Passing `--app-only` through `desktop:build:full` does
+not remove that wrapper's later install step.
+
 To view script usage/help:
 
 ```bash
@@ -76,10 +103,12 @@ npm run desktop:package:windows:tech
 npm run desktop:package -- --os windows --variant tech
 ```
 
-Bundler targets are pinned in both Tauri configs and enforced by packaging scripts:
+The helper's targets are:
 
-- macOS: `app,dmg`
+- macOS local default: build `app`, sign locally, then create a DMG; `--app-only` stops before DMG creation
+- macOS `--sign`: Tauri builds `app,dmg`, followed by signature checks
 - Windows: `nsis,msi`
+- Linux: `appimage`
 
 ## Rust dependency modes (online vs restricted network)
 
@@ -127,9 +156,20 @@ For CI or internal mirrors, publish `src-tauri/vendor/` as an artifact and resto
 
 ## Optional signing/notarization hooks
 
-Unsigned packaging works by default.
+Signing, notarization and artifact integrity are separate evidence:
 
-If signing credentials are present in environment variables, Tauri will sign/notarize automatically during the same packaging commands.
+- Default local macOS packaging attempts the stable self-signed `Crystal Ball Dev`
+  identity (or `CRYSTALBALL_SIGN_IDENTITY`). Interactive builds can fall back to
+  ad-hoc signing. `--require-stable-identity` or the corresponding main-sync setting
+  refuses that fallback. Neither self-signed nor ad-hoc means Developer ID or Apple
+  notarization. See [local signing identity](guides/crystal-ball-dev-signing-identity.md).
+- Explicit `--sign` requires configured signing variables and uses the developer
+  signing path. Notarization needs its own credentials and successful service
+  result; signing success alone does not establish it.
+- The tag-driven `.github/workflows/build-desktop.yml` permits ad-hoc macOS builds
+  when Apple certificate secrets are absent and skips notarization credentials
+  when they are unavailable. A green release workflow is therefore not a blanket
+  claim that every artifact is Developer-ID signed or notarized.
 
 ### macOS Apple Developer signing + notarization
 
@@ -156,11 +196,9 @@ export APPLE_API_ISSUER="00000000-0000-0000-0000-000000000000"
 export APPLE_API_KEY_PATH="$HOME/.keys/AuthKey_ABC123DEFG.p8"
 ```
 
-Then run either standard or explicit sign script aliases:
+Use the explicit developer-signing alias when that is the intended path:
 
 ```bash
-npm run desktop:package:macos:full
-# or
 npm run desktop:package:macos:full:sign
 ```
 
@@ -176,25 +214,70 @@ $env:TAURI_BUNDLE_WINDOWS_CERTIFICATE="C:\path\to\codesign.pfx"
 $env:TAURI_BUNDLE_WINDOWS_CERTIFICATE_PASSWORD="<PFX_PASSWORD>"
 ```
 
-Then run either standard or explicit sign script aliases:
+Use the explicit signing alias when credentials and this experimental target are intended:
 
 ```powershell
-npm run desktop:package:windows:full
-# or
 npm run desktop:package:windows:full:sign
 ```
 
-## Variant-aware outputs (names/icons)
+## Variant-aware outputs after Draft #1811 integration
 
-- Full variant: `Crystal Ball` / `crystal-ball`
-- Tech variant: `Tech Monitor` / `tech-monitor`
+The following describes source commit `7392ef16`, conditional on integrating
+Draft #1811. `VITE_VARIANT` selects the frontend; the shared allowlist in
+`scripts/release-metadata.mjs` selects the native config, passed explicitly with
+`--config` by local packaging and release CI.
 
-Distinct names are configured in Tauri:
+| Variant | Native config | macOS app | Bundle identifier |
+| --- | --- | --- | --- |
+| full | `src-tauri/tauri.conf.json` | `Crystal Ball.app` | `com.bradleybond.crystalball` |
+| tech | `src-tauri/tauri.tech.conf.json` | `Tech Monitor.app` | `com.bradleybond.crystalball.tech` |
+| finance | `src-tauri/tauri.finance.conf.json` | `Finance Monitor.app` | `com.bradleybond.crystalball.finance` |
 
-- `src-tauri/tauri.conf.json` → `Crystal Ball` / `crystal-ball`
-- `src-tauri/tauri.tech.conf.json` → `Tech Monitor` / `tech-monitor`
+Tech and finance override only product name and identifier, inheriting the base
+version, permissions and signing policy. All variants retain the `crystalball`
+executable name. Windows/Linux installer coexistence requires separate packaged
+validation; distinct display names alone do not establish it. Variant-specific
+icons require dedicated `bundle.icon` overrides and assets.
 
-If you want variant-specific icons, set `bundle.icon` separately in each config and point each variant to dedicated icon assets.
+### Identity verification and update channels
+
+After integration, `scripts/check-desktop-identity.mjs` checks the effective config
+before the build. Its app checks measure `CFBundleName`, `CFBundleIdentifier` and
+`CFBundleShortVersionString`, reject mixed or stale output, and verify selected DMG
+payloads through read-only mounts. Local app identity verification precedes manual
+signing; CI checks the exact architecture output before signature verification,
+collection and upload. Tauri's internal signing still occurs during its build.
+These checks do not change signing identities, credentials or signature requirements.
+
+Use a fresh output directory when changing variants. A leftover full app or another
+variant is an error, even when the requested app also exists. Renaming a full app or
+DMG is insufficient. The release manifest binds tag suffix, variant, filename,
+measured native identity and artifact checksum; tech/finance releases must not
+contain the full app under `Crystal Ball.app` or `CrystalBall.app`.
+
+The repaired native updater serves the full app only. Tech/finance staging, manual
+apply and boot-time apply stop before network or staged-data access. A manual check
+explains that automatic updates are unavailable for that variant. No variant update
+channel is introduced. Full updates and the full-only installer/main-sync target
+remain unchanged.
+
+### Profiles, shared storage and packaged acceptance
+
+Tech and finance introduce new native identifiers. Treat WebView preferences,
+saved places, alerts and IndexedDB as fresh profiles until packaged verification
+establishes platform behavior. No existing profile is copied, migrated, merged or
+deleted by this repair. Full retains its existing identifier and profile.
+
+Credentials continue to use the shared `crystal-ball` Keychain service; a new native
+identity may request OS permission. Distinct identifiers do not establish complete
+data isolation: fixed watchdog/export/monitor paths and the full-default MCP lookup
+also remain shared. This repair performs no credential or user-data migration.
+
+After integration, `npm run test:desktop-identity` provides focused source/fixture
+validation, including a dependency-free native policy fixture. It does not launch
+the app or inspect installed profiles. Actual packaged app/DMG, permission-prompt,
+profile behavior and Windows/Linux coexistence checks remain separate acceptance
+evidence. These source checks do not establish installed or offline behavior.
 
 ## Output locations
 
@@ -206,10 +289,15 @@ src-tauri/target/release/bundle/
 
 Common subfolders:
 
-- `app/` → macOS `.app`
+- `macos/` → macOS `.app`
 - `dmg/` → macOS `.dmg`
 - `nsis/` → Windows `.exe` installer
 - `msi/` → Windows `.msi` installer
+
+Explicit cross targets add their triple before `release`, for example
+`src-tauri/target/aarch64-apple-darwin/release/bundle/`. After Draft #1811 integration,
+CI verifies that exact architecture output rather than selecting the first app
+found under `target`.
 
 ## Release checklist (clean machine)
 
@@ -230,7 +318,27 @@ Common subfolders:
 
    - Window title and product name match expected variant.
 
-6. If signing was enabled:
+6. Record signature and notarization evidence separately:
 
    - Verify code-signing metadata in OS dialogs/properties.
-   - Verify notarization/Gatekeeper acceptance on macOS.
+   - For a notarized distribution, record the notarization result and independent
+     Gatekeeper/staple verification for that artifact. Do not infer these from
+     local signing, an app identifier or the installer succeeding.
+
+## Checksums, provenance and local installation
+
+The release workflow generates `release-manifest.json` with the source commit and
+SHA-256 checksums of uploaded artifact files, then creates build-provenance
+attestations for those assets and the manifest before publishing. Verify the actual
+download's checksum against its manifest entry and its repository provenance, for
+example with `gh attestation verify <artifact> --repo bradleybond512/crystal-ball`.
+A checksum establishes equality to the listed file; it is not Apple notarization
+or a substitute for validating the manifest's origin.
+
+`scripts/install-built-app.mjs` verifies the app code signature and expected bundle
+identifier and can compare its own directory-tree hash before installation. That
+directory hash includes relative paths and file contents. It is not the SHA-256
+of a DMG, ZIP or other release artifact file; do not pass a DMG checksum as an app
+directory checksum. The installer does not perform a notarization/Gatekeeper check.
+Treat install/relaunch and signing-identity changes as separate intended operations,
+not documentation-validation steps.

@@ -98,8 +98,13 @@ install-time path and gate the runtime one.
 
 - **Labels are a policy, not a technical lock.** The agents push and comment
   with your GitHub account, so GitHub cannot tell your label from an
-  agent's. AGENTS.md already forbids agents from applying approval labels.
-  The gate makes a bypass a deliberate, visible act, not an accident.
+  agent's. Under Bradley's October 24 standing delegation in `CLAUDE.md`,
+  agents may apply `dependency-change-approved` and `dependency-age-reviewed`
+  after the required dependency assessment, including a justified, documented
+  exception for a version under 7 days old. Fresh chat approval or a manual
+  owner click is not required for these two labels. Age review and all technical
+  checks remain required; `install-scripts-reviewed` remains human-only.
+  The gate records a visible policy decision; GitHub cannot enforce who made it.
 - **Two GitHub settings only you can change** (part of the deferred GitHub
   settings work; nothing here depends on them):
   1. Mark `dependency-change-gate` and `integrity-checks` as **required**

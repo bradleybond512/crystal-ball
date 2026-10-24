@@ -30,11 +30,12 @@ const store = new Map<string, string>();
 const {
   hasAnalyticsConsent,
   hasSeenConsentPrompt,
+  hasPendingAnalyticsResetNotice,
   isAnalyticsAllowed,
   migrateAnalyticsConsent,
   setAnalyticsConsent,
   trackApiKeysSnapshot,
-  _setPosthogForTest,
+  _setCaptureForTest,
 } = await import('../analytics.ts');
 
 // mode-manager is a peer module — import it so we can flip ghost mode.
@@ -47,16 +48,16 @@ describe('analytics consent — default-off', () => {
   beforeEach(() => {
     store.clear();
     setMode(null);
-    _setPosthogForTest(null);
+    _setCaptureForTest(null);
   });
 
   it('absent consent ⇒ hasAnalyticsConsent false', () => {
     assert.equal(hasAnalyticsConsent(), false);
   });
 
-  it('stored "true" ⇒ hasAnalyticsConsent true', () => {
+  it('bare stored true without v2 proof is denied before migration', () => {
     store.set(CONSENT_KEY, 'true');
-    assert.equal(hasAnalyticsConsent(), true);
+    assert.equal(hasAnalyticsConsent(), false);
   });
 
   it('stored "false" ⇒ hasAnalyticsConsent false', () => {
@@ -69,7 +70,7 @@ describe('isAnalyticsAllowed', () => {
   beforeEach(() => {
     store.clear();
     setMode(null);
-    _setPosthogForTest(null);
+    _setCaptureForTest(null);
   });
 
   it('absent consent ⇒ false', () => {
@@ -77,12 +78,12 @@ describe('isAnalyticsAllowed', () => {
   });
 
   it('consent granted, no ghost mode ⇒ true', () => {
-    store.set(CONSENT_KEY, 'true');
+    setAnalyticsConsent(true);
     assert.equal(isAnalyticsAllowed(), true);
   });
 
   it('consent granted + ghost mode ⇒ false', () => {
-    store.set(CONSENT_KEY, 'true');
+    setAnalyticsConsent(true);
     setMode('ghost');
     assert.equal(isAnalyticsAllowed(), false);
   });
@@ -92,7 +93,7 @@ describe('setAnalyticsConsent revocation', () => {
   beforeEach(() => {
     store.clear();
     setMode(null);
-    _setPosthogForTest(null);
+    _setCaptureForTest(null);
   });
 
   it('revoking consent clears the offline queue', () => {
@@ -123,14 +124,11 @@ describe('wm_api_keys_configured payload minimization', () => {
   });
 
   it('sends only configured_key_count — no key names, no OLLAMA_MODEL', () => {
-    store.set(CONSENT_KEY, 'true');
+    setAnalyticsConsent(true);
 
     const captured: Array<{ event: string; props: Record<string, unknown> }> = [];
-    _setPosthogForTest({
-      init: () => undefined,
-      register: () => undefined,
+    _setCaptureForTest({
       capture: (event, props) => captured.push({ event, props: props ?? {} }),
-      opt_out_capturing: () => undefined,
     });
 
     trackApiKeysSnapshot();
@@ -153,14 +151,17 @@ describe('consent migration never implies consent (R4-LOW-001)', () => {
   beforeEach(() => {
     store.clear();
     setMode(null);
-    _setPosthogForTest(null);
+    _setCaptureForTest(null);
   });
 
-  it('a pre-banner install with no choice stays unanswered so the banner asks', () => {
+  it('a pre-banner install is reset off and its old identity is purged', () => {
     store.set('wm-installation-id', 'install-1');
     migrateAnalyticsConsent();
-    assert.equal(store.get(CONSENT_KEY), undefined);
-    assert.equal(hasSeenConsentPrompt(), false);
+    assert.equal(store.get(CONSENT_KEY), 'false');
+    assert.equal(store.get('wm-analytics-consent-source'), 'default');
+    assert.equal(store.get('wm-analytics-consent-reason'), 'legacy-reset');
+    assert.equal(store.has('wm-installation-id'), false);
+    assert.equal(hasSeenConsentPrompt(), true);
     assert.equal(hasAnalyticsConsent(), false);
   });
 
@@ -168,9 +169,14 @@ describe('consent migration never implies consent (R4-LOW-001)', () => {
     store.set('wm-installation-id', 'install-1');
     store.set(CONSENT_KEY, 'true');
     store.set(PROMPT_SEEN_KEY, 'true');
+    store.set(OFFLINE_KEY, JSON.stringify([{name: 'wm_app_loaded', props: {}, ts: 1}]));
     migrateAnalyticsConsent();
-    assert.equal(store.get(CONSENT_KEY), undefined);
-    assert.equal(hasSeenConsentPrompt(), false);
+    assert.equal(store.get(CONSENT_KEY), 'false');
+    assert.equal(store.get('wm-analytics-consent-source'), 'default');
+    assert.equal(store.get('wm-analytics-consent-reason'), 'legacy-reset');
+    assert.equal(store.has('wm-installation-id'), false);
+    assert.equal(store.has(OFFLINE_KEY), false);
+    assert.equal(hasSeenConsentPrompt(), true);
     assert.equal(isAnalyticsAllowed(), false);
   });
 
@@ -195,4 +201,42 @@ describe('consent migration never implies consent (R4-LOW-001)', () => {
       assert.notEqual(store.get(CONSENT_KEY), 'true', JSON.stringify(seed));
     }
   });
+});
+
+
+describe('strict consent proof and unavailable storage', () => {
+  beforeEach(() => { store.clear(); setMode(null); _setCaptureForTest(null); });
+
+  it('accepts exact v2 proof, but rejects missing, invalid and default-source records', () => {
+    for (const [choice, version, source] of [[null, null, null], ['true', null, null], ['true', '1', null], ['true', 'invalid', null], ['TRUE', '2', null], ['false', '2', 'user'], ['true', '2', 'default'], ['true', '2', 'unknown']]) {
+      store.clear();
+      if (choice !== null) store.set(CONSENT_KEY, choice);
+      if (version !== null) store.set('wm-analytics-consent-version', version);
+      if (source !== null) store.set('wm-analytics-consent-source', source);
+      assert.equal(hasAnalyticsConsent(), false, JSON.stringify([choice, version, source]));
+    }
+    store.clear(); store.set(CONSENT_KEY, 'true'); store.set('wm-analytics-consent-version', '2');
+    assert.equal(hasAnalyticsConsent(), true, 'existing explicit v2 opt-in survives');
+  });
+
+  it('fails closed without throwing when consent storage cannot be read', () => {
+    const getItem = localStorage.getItem;
+    localStorage.getItem = () => { throw new Error('storage unavailable'); };
+    try {
+      assert.equal(hasAnalyticsConsent(), false);
+      assert.equal(isAnalyticsAllowed(), false);
+      assert.doesNotThrow(() => setAnalyticsConsent(false));
+      assert.doesNotThrow(() => migrateAnalyticsConsent());
+    } finally { localStorage.getItem = getItem; }
+  });
+});
+
+it('an explicit choice before banner mounting clears a pending legacy-reset notice', () => {
+  store.clear(); _setCaptureForTest(null);
+  store.set(CONSENT_KEY, 'true'); store.set('wm-installation-id', 'legacy-id');
+  migrateAnalyticsConsent();
+  assert.equal(hasPendingAnalyticsResetNotice(), true);
+  setAnalyticsConsent(true);
+  assert.equal(hasAnalyticsConsent(), true);
+  assert.equal(hasPendingAnalyticsResetNotice(), false);
 });

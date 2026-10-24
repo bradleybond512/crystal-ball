@@ -16,6 +16,27 @@ The command discovers the live sidecar port and token from the app's private run
 - algorithm health, evaluation coverage, persistence, errors, and p95 latency;
 - fatal or analysis-worker events from the latest desktop-log session.
 
+`/api/health` reports process liveness: `ok: true` means the sidecar can
+respond, including when a feed fails or API keys are missing. Without a valid
+bearer token its entire payload is `{ "ok": true }`. Authenticated callers
+also receive `authenticated: true`, runtime/feed inventory, and separate
+`degraded` / `degradation` fields with tracked-feed failure and missing-key
+counts. Health responses use `Cache-Control: no-store`; public liveness never
+proves authenticated diagnostic access.
+
+Checkup and the live smoke tier use the same published `sidecar.port` discovery
+as doctor. They authenticate with `sidecar.token` when available and print
+aggregate counts only. Missing or invalid port files produce a warning; these
+commands never guess the launch port. Public-only responses report the process
+as live with authenticated diagnostics pending, while failed tracked feeds or
+missing keys produce separate diagnostic warnings. `smoke --offline` skips
+runtime discovery and requests.
+
+Run `npm run test:health-contract` for focused health and consumer regressions.
+Its plain Node test entry uses disposable HOME/data directories, synthetic
+tokens and databases, monitor/cloud fallback disabled, and owned loopback
+listeners. It does not inspect an installed app or the user's runtime files.
+
 Findings are ordered by operational impact and include evidence plus a suggested next action. Exit codes are `0` for green, `1` for warnings, and `2` for critical failures.
 
 For provider and route probes:

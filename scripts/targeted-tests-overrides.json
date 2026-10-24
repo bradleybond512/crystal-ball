@@ -20,6 +20,30 @@
     "test:sidecar-ci",
     "test:domain-retirement"
   ],
+  "src/components/HomePostureBand.ts": [
+    "test:home-posture"
+  ],
+  "src/components/StormMoveActions.ts": [
+    "test:home-posture"
+  ],
+  "src/components/HomeShellOverlay.ts": [
+    "test:home-posture",
+    "test:home-reassurance",
+    "test:homeshell"
+  ],
+  "src/components/StormPosturePanel.ts": [
+    "test:home-posture"
+  ],
+  "src/styles/home-shell.css": [
+    "test:home-posture"
+  ],
+  "src/components/__tests__/home-posture-band.test.mts": [
+    "test:home-posture"
+  ],
+  "src/components/__tests__/home-shell-reassurance.test.mts": [
+    "test:home-posture",
+    "test:home-reassurance"
+  ],
   "scripts/install-mcp-deps.mjs": [
     "test:mcp-deps",
     "test:install-scripts"

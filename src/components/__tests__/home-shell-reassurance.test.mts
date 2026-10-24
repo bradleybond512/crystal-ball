@@ -79,8 +79,9 @@ async function mountShell(t: test.TestContext) {
 
 function bands(parent: Window['document']['body']) {
   const result = [...parent.querySelectorAll('.home-shell-briefing .hs-band')];
-  assert.equal(result.length, 3, 'personal, digest and worldwide context must remain visible');
-  return result;
+  assert.equal(result.length, 4, 'posture joins the three existing context bands');
+  assert.equal(result[3]!.querySelector('.hs-band-label')?.textContent, 'Survival posture');
+  return result.slice(0, 3);
 }
 
 function assertNotes(parent: Window['document']['body'], zeroPlaces = false): void {

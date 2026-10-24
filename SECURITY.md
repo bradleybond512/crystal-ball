@@ -75,10 +75,11 @@ Crystal Ball is a client-side intelligence dashboard that aggregates publicly av
 
 ### Telemetry and external services
 
-PostHog initialization requires explicit opt-in; Ghost gates app-managed analytics
-paths, but an initialized SDK keeps automatic page-leave capture enabled. Ghost does
-not invoke SDK opt-out; consent revocation does. DSN-configured web Sentry reporting
-uses a separate gate; `sendDefaultPii: false` is not universal
+PostHog capture requires explicit opt-in; Ghost gates app-managed analytics paths.
+The app sends PostHog events directly without the SDK's automatic page-leave capture.
+Ghost or consent revocation stops new PostHog captures and aborts the app's in-flight
+capture requests; it does not erase events already delivered. DSN-configured web
+Sentry reporting uses a separate gate; `sendDefaultPii: false` is not universal
 redaction. Provider requests, optional hosted AI, cloud fallbacks, messaging, exports
 and connected MCP agents can carry data beyond the device. See [Privacy](PRIVACY.md)
 for storage and consent limits; no blanket no-egress or retention guarantee applies.

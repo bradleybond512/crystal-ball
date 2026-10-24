@@ -272,7 +272,7 @@ The MCP server talks to the Crystal Ball sidecar over a bearer-authenticated loc
 
 ## Ghost Mode
 
-Press `Cmd+Shift+G`. Scheduled refresh intervals multiply by 5x, app-managed analytics paths are gated, notification paths apply Ghost suppression, and the sidebar switches to dark crimson chrome. An already initialized PostHog SDK keeps automatic page-leave capture enabled; Ghost does not invoke its opt-out path. Ghost is not an offline or universal no-egress mode; provider requests and separately configured error reporting have their own gates. See [Privacy](PRIVACY.md).
+Press `Cmd+Shift+G`. Scheduled refresh intervals multiply by 5x, app-managed analytics paths are gated, notification paths apply Ghost suppression, and the sidebar switches to dark crimson chrome. PostHog events are sent directly without the SDK's automatic page-leave capture. Ghost or consent revocation stops new PostHog captures and aborts the app's in-flight capture requests; it does not erase events already delivered. Ghost is not an offline or universal no-egress mode; provider requests and separately configured error reporting have their own gates. See [Privacy](PRIVACY.md).
 
 ---
 

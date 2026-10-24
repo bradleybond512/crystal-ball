@@ -11,24 +11,42 @@ const DEFAULT_DATA_DIR = join(
 
 const REQUEST_TIMEOUT_MS = 15_000;
 
-export function createSidecarClient(dataDir = DEFAULT_DATA_DIR) {
-  function discoverPort() {
+// Consumers only read the native app's published runtime files. Discovery
+// never scans listeners, writes files, or guesses the preferred launch port.
+export class SidecarRuntimeFiles {
+  static discoverPort(dataDir = DEFAULT_DATA_DIR) {
     try {
       const raw = readFileSync(join(dataDir, 'sidecar.port'), 'utf8').trim();
-      const port = parseInt(raw, 10);
-      return Number.isFinite(port) ? port : null;
+      if (!/^\d{1,5}$/.test(raw)) return null;
+      const port = Number(raw);
+      return port >= 1 && port <= 65535 ? port : null;
     } catch {
       return null;
     }
   }
 
-  function discoverToken() {
+  static discoverToken(dataDir = DEFAULT_DATA_DIR) {
     try {
       return readFileSync(join(dataDir, 'sidecar.token'), 'utf8').trim() || null;
     } catch {
       return null;
     }
   }
+
+  static healthRequest(dataDir = DEFAULT_DATA_DIR) {
+    const port = SidecarRuntimeFiles.discoverPort(dataDir);
+    if (port === null) return null;
+    const token = SidecarRuntimeFiles.discoverToken(dataDir);
+    return {
+      url: `http://127.0.0.1:${port}/api/health`,
+      headers: { Accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    };
+  }
+}
+
+export function createSidecarClient(dataDir = DEFAULT_DATA_DIR) {
+  const discoverPort = () => SidecarRuntimeFiles.discoverPort(dataDir);
+  const discoverToken = () => SidecarRuntimeFiles.discoverToken(dataDir);
 
   function buildUrl(route, params) {
     const port = discoverPort();

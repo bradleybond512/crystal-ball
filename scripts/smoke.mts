@@ -15,6 +15,8 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
+import { SidecarRuntimeFiles } from '../tools/mcp-server/sidecar-client.mjs';
+import { summarizeSidecarHealth } from './sidecar-health-contract.mjs';
 
 import { runReplay } from '../src/services/ops/replay-harness.ts';
 import { buildCatalogReplayFixtures } from '../src/services/ops/replay-fixtures-catalog.ts';
@@ -25,16 +27,6 @@ import { createNotificationTraceRegistry } from '../src/services/diagnostics/not
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BASELINE_PATH = path.join(root, 'src', 'services', 'ops', 'replay-baseline.json');
-const SIDECAR_URL = 'http://127.0.0.1:46123/api/health';
-
-interface HealthFeedSnapshot { key?: string; lastError?: string | null }
-interface HealthPayload {
-  ok?: boolean;
-  uptime_ms?: number;
-  keys_configured?: number;
-  keys_total?: number;
-  feeds?: HealthFeedSnapshot[];
-}
 
 // Guard: only run the smoke suite when executed directly (not when imported).
 // This lets checkup.mjs import compareReplayBaseline without running the suite.
@@ -148,13 +140,20 @@ if (isMain) {
   } else {
     process.stdout.write(dim('  sidecar... '));
     await new Promise<void>((resolve_) => {
-      const req = http.get(SIDECAR_URL, { timeout: 2000 }, (res) => {
+      const target = SidecarRuntimeFiles.healthRequest();
+      if (!target) {
+        addWarn('smoke:sidecar', 'no valid published sidecar port — start the app first');
+        process.stdout.write(`${YELLOW}–${RESET}\n`);
+        resolve_();
+        return;
+      }
+      const req = http.get(target.url, { timeout: 2000, headers: target.headers }, (res) => {
         let body = '';
         res.on('data', (chunk: Buffer) => { body += String(chunk); });
         res.on('end', () => {
-          let parsed: HealthPayload | null = null;
+          let parsed: unknown;
           try {
-            parsed = JSON.parse(body) as HealthPayload;
+            parsed = JSON.parse(body);
           } catch {
             addWarn('smoke:sidecar', 'responded but returned non-JSON');
             process.stdout.write(`${YELLOW}–${RESET}\n`);
@@ -163,27 +162,23 @@ if (isMain) {
           }
           // Assert the health contract, not just "parses as JSON" — a sidecar
           // that responds with the wrong shape is broken, not healthy.
-          const okShape = parsed?.ok === true
-            && typeof parsed.uptime_ms === 'number'
-            && Array.isArray(parsed.feeds);
-          if (!okShape) {
-            addWarn('smoke:sidecar', 'responded but /api/health payload missing expected fields (ok/uptime_ms/feeds)');
+          const summary = res.statusCode === 200 ? summarizeSidecarHealth(parsed) : null;
+          if (!summary) {
+            addWarn('smoke:sidecar', 'responded but returned an unexpected health schema');
             process.stdout.write(`${YELLOW}–${RESET}\n`);
             resolve_();
             return;
           }
           // Surface up-but-degraded: feeds erroring behind a 200 OK is exactly
           // the "green-when-broken" case a JSON-parse-only check missed.
-          const failingFeeds = (parsed.feeds ?? []).filter((f) => f && f.lastError);
-          const keysConfigured = typeof parsed.keys_configured === 'number' ? parsed.keys_configured : '?';
-          const keysTotal = typeof parsed.keys_total === 'number' ? parsed.keys_total : '?';
-          if (failingFeeds.length > 0) {
-            const names = failingFeeds.slice(0, 5).map((f) => f.key ?? '?').join(', ');
-            addWarn('smoke:sidecar', `responding but ${failingFeeds.length} feed(s) erroring: ${names}`);
+          if (!summary.authenticated) {
+            addWarn('smoke:sidecar', 'process live — authenticated diagnostics pending');
+            process.stdout.write(`${YELLOW}–${RESET}\n`);
+          } else if (summary.failedFeedCount > 0 || summary.keysMissing > 0) {
+            addWarn('smoke:sidecar', `process live — ${summary.failedFeedCount}/${summary.feedCount} tracked feed(s) erroring, ${summary.keysMissing}/${summary.keysTotal} API keys missing`);
             process.stdout.write(`${YELLOW}–${RESET}\n`);
           } else {
-            const upS = Math.round((parsed.uptime_ms ?? 0) / 1000);
-            addOk('smoke:sidecar', `responding — ${keysConfigured}/${keysTotal} keys, ${parsed.feeds?.length ?? 0} feeds, up ${upS}s`);
+            addOk('smoke:sidecar', `process live — ${summary.keysConfigured}/${summary.keysTotal} keys, ${summary.feedCount} tracked feeds`);
             process.stdout.write(`${GREEN}✓${RESET}\n`);
           }
           resolve_();

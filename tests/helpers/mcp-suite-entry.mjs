@@ -32,6 +32,10 @@ export const SUITE_STAGES = Object.freeze({
     Object.freeze(['--test', 'tests/sidecar-port-publication.test.mjs', 'tests/sidecar-supervisor-boundary.test.mjs']),
     Object.freeze(['--import', 'tsx', '--test', 'src/services/diagnostics/__tests__/local-engine-status.test.mts']),
   ]),
+  'health-contract': Object.freeze([
+    Object.freeze(['--test', 'tests/sidecar-health-runtime.test.mjs', 'scripts/sidecar-health-contract.test.mjs', 'scripts/sidecar-health-consumers.test.mjs', 'scripts/doctor-core.test.mjs', 'tools/mcp-server/__tests__/sidecar-client.test.mjs', 'tools/mcp-server/__tests__/doctor.test.mjs', 'tools/mcp-server/__tests__/diagnostics-tools.test.mjs']),
+    Object.freeze(['--import', 'tsx', '--import', './tests/panels/register-hook.mjs', '--test', 'src/services/diagnostics/__tests__/live-diagnostics-snapshot.test.mts', 'src/services/diagnostics/__tests__/sidecar-probe-engine.test.mts', 'src/components/__tests__/feed-health-panel.test.mts', 'tests/components/feed-health-auth.test.mts']),
+  ]),
 });
 
 export function parseFinalTap(stdout) {

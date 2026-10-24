@@ -6,9 +6,14 @@ A private intelligence desk for your Mac. Live signals from around the globe, ex
 
 Live global signals, explained. Private by design. Free on Mac.
 
+Local storage and outbound data paths vary by feature. Enabled providers, cloud AI,
+telemetry, exports and connected agents can carry data outside the device. See
+[Privacy](PRIVACY.md) for storage, consent and outbound data handling.
+
 Crystal Ball is in early access. Information may be incomplete or delayed. Not for emergency, financial, or safety-critical decisions.
 
 macOS is the primary desktop platform. Windows and Linux builds are experimental. Local Ollama inference can run on your Mac; optional cloud AI sends submitted content to its provider.
+CI build targets do not establish feature parity or packaged runtime acceptance.
 
 [![Version](https://img.shields.io/github/v/release/bradleybond512/crystal-ball?label=version)](https://github.com/bradleybond512/crystal-ball/releases/latest)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
@@ -20,8 +25,6 @@ macOS is the primary desktop platform. Windows and Linux builds are experimental
 <a href="https://crystal-ball-observatory.bradleybond512.chatgpt.site/"><strong>🌐 Website</strong></a> | <a href="https://github.com/bradleybond512/crystal-ball/releases/latest"><strong>Download Latest Release</strong></a> | <a href="https://bradleybond512.github.io/crystal-ball/"><strong>Try Web Version</strong></a> | <a href="docs/USER_MANUAL.md"><strong>📖 Operator Manual</strong></a> | <a href="https://github.com/sponsors/bradleybond512"><strong>Support Development</strong></a>
 
 > **New here?** The [Operator Manual](docs/USER_MANUAL.md) is the step-by-step, task-oriented guide to running every feature. This README is the feature catalog; the manual is the how-to.
-
-<!-- screenshot: full-app overview -- 2D map with active panels -->
 
 ---
 
@@ -40,9 +43,10 @@ Four product variants share one codebase:
 
 ---
 
-## God's Eye
+## God's Vision
 
 Full-viewport Cesium.js 3D globe. Press `G` or click the sidebar to enter.
+The command palette also recognizes "God's Eye" as a search alias.
 
 **Configurable data layers** -- military bases, nuclear facilities, earthquakes, active conflicts, airstrikes, cyclones, fires, vessels, flights, cyber threats, submarine cables, ports, satellites, ISS, weather radar, lightning, GPS jamming, trade routes, day/night terminator, and more. Toggle layers from the layer bar.
 
@@ -62,8 +66,6 @@ Full-viewport Cesium.js 3D globe. Press `G` or click the sidebar to enter.
 
 **Spatial audio** -- procedural Web Audio that responds to what's on screen. Sub-bass drone during conflict, teletype clicks during market activity, sonar pings for map events, geiger ticks on the radiation layer. All independently toggleable.
 
-<!-- screenshot: God's Eye 3D globe with HUD overlay and active layers -->
-
 ---
 
 ## Unified Alert System
@@ -77,7 +79,7 @@ A single inbox that ingests from every alert source -- NWS, GDACS, OREF (Israel 
 - **Geofencing** -- set watched locations (home, office, family). Alerts within your radius get promoted automatically.
 - **Reactions** -- acknowledge, pin, snooze, annotate, or bookmark any alert. Snooze re-escalates if the situation worsens.
 - **Correlation** -- the engine detects patterns across domains: market-news divergence, prediction-leads-news, keyword velocity spikes, compound threats, temporal chains, and silence anomalies.
-- **History** -- alerts persist in IndexedDB for 30 days. Search, filter, export. Activity log tracks every action for shift handoff.
+- **History** -- alerts use IndexedDB persistence with component-specific retention. Search, filter, export. Activity logging supports shift handoff; it is not a guaranteed permanent record.
 - **Custom rules** -- define your own alert triggers with condition/action pairs, or use built-in presets (earthquake watcher, storm chaser, conflict monitor).
 - **Traceability** -- the Alert Trace panel answers "why did I, or didn't I, get warned?" across receipt, normalization, geofence, quiet-hours, relevance, and notification routing.
 - **Delivery channels** -- native desktop notifications, voice alerts, iMessage / SMS command workflows, notification history, digest views, and operator mute / handoff controls.
@@ -270,7 +272,7 @@ The MCP server talks to the Crystal Ball sidecar over a bearer-authenticated loc
 
 ## Ghost Mode
 
-Press `Cmd+Shift+G`. Polling intervals multiply by 5x, PostHog analytics are suppressed, notifications go silent, and the sidebar switches to dark crimson chrome. For when you want to monitor without being monitored.
+Press `Cmd+Shift+G`. Scheduled refresh intervals multiply by 5x, app-managed analytics paths are gated, notification paths apply Ghost suppression, and the sidebar switches to dark crimson chrome. PostHog events are sent directly without the SDK's automatic page-leave capture. Ghost or consent revocation stops new PostHog captures and aborts the app's in-flight capture requests; it does not erase events already delivered. Ghost is not an offline or universal no-egress mode; provider requests and separately configured error reporting have their own gates. See [Privacy](PRIVACY.md).
 
 ---
 
@@ -291,7 +293,7 @@ Works in air-gapped environments with just Ollama. Each hop is an explicit bound
 
 | Shortcut | Action |
 |----------|--------|
-| `G` | Toggle God's Eye 3D globe |
+| `G` | Toggle God's Vision 3D globe |
 | `Cmd+K` | Command palette |
 | `Cmd+Shift+A` | Toggle Analyst HUD |
 | `Cmd+Shift+D` | Toggle Reasoning Diagnostics overlay |
@@ -303,9 +305,9 @@ Works in air-gapped environments with just Ollama. Each hop is an explicit bound
 | `Cmd+S` | Copy shareable URL to clipboard |
 | `Cmd+,` | Open Settings (or Analyst HUD settings if HUD is open) |
 | `Cmd+\` | Toggle sidebar |
-| `F` | Enter Fly Mode (in God's Eye) |
-| `N` | Toggle Navigation (in God's Eye) |
-| `Space` | Play/pause Time Machine (in God's Eye) |
+| `F` | Enter Fly Mode (in God's Vision) |
+| `N` | Toggle Navigation (in God's Vision) |
+| `Space` | Play/pause Time Machine (in God's Vision) |
 | `L` | Toggle day/night terminator |
 | `1`-`6` | Fly to theater presets |
 | `Cmd+1`-`5` | Save/recall camera bookmarks |
@@ -328,11 +330,11 @@ All sounds are synthesized with Web Audio API -- no audio files in the repo:
 
 ## What Makes This Hard
 
-**Local-first security boundary** -- the renderer never sees API keys on desktop. Keys live in the macOS keychain, get injected into a Node.js sidecar at startup, and are proxied through a bearer-authenticated localhost port. The MCP server discovers the port and token from disk files with `0o600` permissions.
+**Desktop credential boundary** -- native storage uses the consolidated `crystal-ball` Keychain service and supplies sidecar-only credentials to the local Node.js process. An explicit 17-entry allowlist exposes values needed by renderer features, including map tokens, connection settings and `CRYSTALBALL_API_KEY`; other supported secrets expose presence to the renderer. macOS also keeps an encrypted, machine-bound shadow copy for Keychain-timeout recovery. The MCP client discovers the published loopback port and session bearer token from runtime files. This is not protection against a compromised renderer or same-user process. See [Security](SECURITY.md) and [Privacy](PRIVACY.md).
 
-**Web key vault** -- the browser build has no keychain access, so user-entered keys are persisted in a passphrase-encrypted IndexedDB vault. AES-GCM-256 over PBKDF2-SHA-256 (600,000 iterations, OWASP 2023), per-save random 12-byte IV, AAD-bound ciphertext. The derived key and plaintext map live only in module closure -- never written to localStorage, sessionStorage, or globalThis -- and the vault auto-locks after 15 minutes of the tab being hidden. Lost passphrase = destroy and re-enter; there is no recovery.
+**Web key vault** -- user-entered keys use a passphrase-encrypted IndexedDB vault: AES-GCM-256, PBKDF2-SHA-256 with 600,000 iterations, a random IV and authenticated metadata. When the tab returns after at least 15 minutes hidden, the visibility handler locks the vault. There is no hidden-tab timer guaranteeing a wipe while it remains hidden. Unlocked values are available in memory; other app data, including saved-place names, coordinates and notes, uses localStorage without this vault encryption. A lost passphrase requires destroying and recreating the vault.
 
-**CSP under real constraints** -- `script-src` requires `'unsafe-eval'` because Cesium compiles GLSL shaders dynamically. Removing it silently breaks God's Eye. Compensating controls: trusted-window IPC gating, sidecar bearer auth, no `'unsafe-inline'` on script-src, devtools disabled in production.
+**CSP under real constraints** -- `script-src` requires `'unsafe-eval'` because Cesium compiles GLSL shaders dynamically. Removing it silently breaks God's Vision. Compensating controls: trusted-window IPC gating, sidecar bearer auth, no `'unsafe-inline'` on script-src, devtools disabled in production.
 
 **Variant architecture without forking** -- four product variants share one shell. Panel inventory, map layer defaults, and feed configuration swap through `src/config/panels.ts` and `src/config/variant.ts` at build time.
 
@@ -348,7 +350,7 @@ All sounds are synthesized with Web Audio API -- no audio files in the repo:
 |-------|-------|
 | Frontend | TypeScript, Vite, MapLibre GL, deck.gl, Cesium.js, D3, i18next |
 | Contracts | Buf, Protobuf, generated TypeScript clients + OpenAPI output |
-| Desktop shell | Tauri v2, Rust, macOS keychain, CoreLocation IPC, Node.js sidecar (port 46123) |
+| Desktop shell | Tauri v2, Rust, native credential storage, CoreLocation IPC, Node.js sidecar with published loopback port discovery |
 | AI layer | Ollama > Groq > Claude > OpenRouter |
 | Algorithm intelligence | Pure-deterministic scoring foundation — `intelligence/` (evidence graph, truth scoring, situation clustering, negative evidence, baseline deviation, compound risk, forecast calibration, watchlist relevance) |
 | Domain engines | `weather/` (NWS polygon matching, urgency ladder, Storm Mode, miss diagnostics), `shortage/` (8 commodity forecast models with seasonal multipliers), `insights/` (Big Event Detector, Confidence × Urgency Matrix, What Changed Digest, Action Briefs, Presentation Export) |
@@ -357,7 +359,7 @@ All sounds are synthesized with Web Audio API -- no audio files in the repo:
 | Correlation | Unified event schema, directional rules, temporal chains, situation clustering |
 | Alerts | Unified inbox, composite relevance scoring, IndexedDB persistence, custom rules |
 | Audio | Procedural Web Audio synthesis, per-layer spatial mixing |
-| Verification | TypeScript strict, 600+ deterministic unit tests, Playwright e2e + visual, sidecar unit tests |
+| Verification | TypeScript strict, named deterministic suites, Playwright e2e + visual, sidecar unit tests |
 | CI/CD | Tag-driven desktop publish, release manifest verification, CodeQL, secret scan |
 
 ---
@@ -366,21 +368,22 @@ All sounds are synthesized with Web Audio API -- no audio files in the repo:
 
 | Metric | Value | Source |
 |--------|-------|--------|
-| Panel inventory | Generated from the active variant catalog | `src/config/panels.ts` |
-| God's Eye map layers | Generated from the full map-layer catalog | `src/config/panels.ts` FULL_MAP_LAYERS |
+| Panel catalog inventory | 409 full / 35 tech / 31 finance / 10 happy | Unique catalog entries in `src/config/panels.ts`, including disabled entries |
+| Default-enabled full panels | 408 | One retained full-catalog entry is disabled by default |
+| God's Vision map layers | 78 | `src/config/panels.ts` FULL_MAP_LAYERS; catalog flags, not every Cesium-specific layer |
 | Panel categories | Generated from the panel category map | `src/config/panels.ts` PANEL_CATEGORY_MAP |
 | Product variants | 4 | `src/config/variant.ts` |
-| MCP tools | 61 | `tools/mcp-server/tool-registry.mjs` |
+| MCP tools | 61 | `tools/mcp-server/tool-registry.mjs` (9 categories) |
 | Supported secret keys | 77 | `src-tauri/src/main.rs` |
-| Foundation intelligence modules | 24 | `src/services/{intelligence,weather,insights,shortage}/` |
-| Foundation deterministic tests | 600+ | `npm run test:intelligence` + `test:weather` + `test:insights*` + `test:shortage` |
+| Foundation intelligence modules | See source directories | `src/services/{intelligence,weather,insights,shortage}/` |
+| Foundation deterministic tests | Counts depend on the selected suites | `npm run test:intelligence` + `test:weather` + `test:insights*` + `test:shortage` |
 | Commodity shortage models | 8 (wheat, corn, rice, soybeans, diesel, gasoline, natural gas, jet fuel) | `src/services/shortage/*-shortage-risk.ts` |
 | Reaction playbook categories | 10 | `src/services/insights/reaction-playbooks.ts` |
 | Weather hazard kinds tracked | 16 | `src/services/weather/weather-threat-types.ts` |
 | Locales | 19 | `src/locales/` |
-| Generated OpenAPI specs | 21 | `docs/api/` |
+| Generated OpenAPI specs | 21 | `docs/api/` (21 JSON/YAML pairs) |
 | Desktop build targets | 3 | `package.json` |
-| CI/CD workflows | 12 | `.github/workflows/` |
+| CI/CD workflows | 23 | `.github/workflows/` |
 
 ---
 
@@ -393,25 +396,33 @@ npm run dev                    # web, full variant (default)
 npm run dev:tech               # tech variant
 npm run dev:finance            # finance variant
 npm run desktop:dev            # Tauri desktop with devtools
-npm run desktop:build:full     # production desktop build
+npm run desktop:build:app:full # macOS app-only packaging; does not install
 npm run typecheck:all          # zero-error type check
 ```
 
 Foundation layer tests (run any subset):
 
 ```bash
-npm run test:intelligence      # ~158 tests — algorithm intelligence stack
-npm run test:weather           # ~114 tests — weather warning remediation
-npm run test:shortage          # ~80 tests  — shortage forecast models
-npm run test:insights          # ~47 tests  — Big Event Detector + Matrix
-npm run test:insights2         # ~28 tests  — What Changed Digest
-npm run test:insights3         # ~26 tests  — Action Briefs + Reaction Playbooks
-npm run test:insights6         # ~24 tests  — Presentation Export
+npm run test:intelligence      # algorithm intelligence stack
+npm run test:weather           # weather warning remediation
+npm run test:shortage          # shortage forecast models
+npm run test:insights          # Big Event Detector + Matrix
+npm run test:insights2         # What Changed Digest
+npm run test:insights3         # Action Briefs + Reaction Playbooks
+npm run test:insights6         # Presentation Export
 ```
 
-The `happy` variant shares the default dev server. Set `SITE_VARIANT=happy` in your environment.
+The `happy` variant shares the default dev server: `VITE_VARIANT=happy npm run dev`.
+`SITE_VARIANT` is the internal TypeScript constant, not the build environment variable.
 
-API keys are optional -- most panels degrade gracefully without them. Configure keys in Settings (gear icon) > API Keys tab. See [docs/API_KEYS.md](docs/API_KEYS.md) for the full list.
+`npm run desktop:build:full` also downloads build inputs and, outside CI, installs
+and relaunches the full app at `~/Applications/Crystal Ball.app`. Use it only when
+that install is intended. App-only packaging is separate; signing/notarization and
+release checksum evidence are described in [the release guide](docs/RELEASE_PACKAGING.md).
+
+Credentials are feature-specific: some sources are keyless; others remain unavailable
+until configured, and network/provider failures can still limit either group.
+Configure keys in Settings (gear icon) > API Keys. See [docs/API_KEYS.md](docs/API_KEYS.md).
 
 ---
 

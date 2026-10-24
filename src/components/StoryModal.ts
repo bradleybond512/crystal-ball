@@ -1,6 +1,6 @@
 import type { StoryData } from '@/services/story-data';
 import { renderStoryToCanvas } from '@/services/story-renderer';
-import { generateStoryDeepLink, getShareUrls, shareTexts } from '@/services/story-share';
+import { generateStoryDeepLink, getShareUrls, isPublicStorySharingEnabled, shareTexts } from '@/services/story-share';
 import { t } from '@/services/i18n';
 
 let modalEl: HTMLElement | null = null;
@@ -55,22 +55,41 @@ export function openStoryModal(data: StoryData): void {
   });
   modalEl.querySelector('.story-close-x')?.addEventListener('click', closeStoryModal);
   modalEl.querySelector('.story-save')?.addEventListener('click', downloadStory);
-  modalEl.querySelector('.story-whatsapp')?.addEventListener('click', () => currentData && shareWhatsApp(currentData));
-  modalEl.querySelector('.story-twitter')?.addEventListener('click', () => currentData && shareTwitter(currentData));
-  modalEl.querySelector('.story-linkedin')?.addEventListener('click', () => currentData && shareLinkedIn(currentData));
-  modalEl.querySelector('.story-copy')?.addEventListener('click', () => currentData && copyDeepLink(currentData));
+  modalEl.querySelector('.story-whatsapp')?.addEventListener('click', () => {
+ if (currentData) {
+ void shareWhatsApp(currentData);
+ }
+  });
+  modalEl.querySelector('.story-twitter')?.addEventListener('click', () => {
+ if (currentData) {
+ shareTwitter(currentData);
+ }
+  });
+  modalEl.querySelector('.story-linkedin')?.addEventListener('click', () => {
+ if (currentData) {
+ shareLinkedIn(currentData);
+ }
+  });
+  modalEl.querySelector('.story-copy')?.addEventListener('click', () => {
+ if (currentData) {
+ void copyDeepLink(currentData);
+ }
+  });
+  if (!isPublicStorySharingEnabled()) {
+ modalEl.querySelectorAll<HTMLButtonElement>('.story-share-btn:not(.story-save)').forEach((button) => {
+ button.disabled = true;
+ button.title = 'Public story links are unavailable. Save the image instead.';
+ });
+  }
 
   document.body.append(modalEl);
 
-  requestAnimationFrame(async () => {
+  requestAnimationFrame(() => {
  if (!modalEl) return;
- try {
- await renderAndDisplay(data);
- } catch (error) {
- console.error('[StoryModal] Render error:', error);
+ void renderAndDisplay(data).catch(() => {
  const content = modalEl?.querySelector('.story-modal-content');
  if (content) content.innerHTML = `<div class="story-error">${t('modals.story.error')}</div>`;
- }
+ });
   });
 }
 
@@ -80,7 +99,7 @@ async function renderAndDisplay(data: StoryData): Promise<void> {
 
   const binStr = atob(currentDataUrl.split(',')[1] ?? '');
   const bytes = new Uint8Array(binStr.length);
-  for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+  for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.codePointAt(i) ?? 0;
   currentBlob = new Blob([bytes], { type: 'image/png' });
 
   const content = modalEl?.querySelector('.story-modal-content');
@@ -111,12 +130,14 @@ function downloadStory(): void {
   if (!currentDataUrl) return;
   const a = document.createElement('a');
   a.href = currentDataUrl;
-  a.download = `crystalball-${currentData?.countryCode.toLowerCase() || 'story'}-${Date.now()}.png`;
+  const countryCode = currentData?.countryCode.toLowerCase() ?? '';
+  a.download = `crystalball-${countryCode.length > 0 ? countryCode : 'story'}-${Date.now()}.png`;
   a.click();
   flashButton('.story-save', t('modals.story.saved'), t('modals.story.save'));
 }
 
 async function shareWhatsApp(data: StoryData): Promise<void> {
+  if (!isPublicStorySharingEnabled()) return;
   if (!currentBlob) {
  downloadStory();
  return;
@@ -147,20 +168,24 @@ async function shareWhatsApp(data: StoryData): Promise<void> {
   window.open(urls.whatsapp, '_blank');
 }
 
-async function shareTwitter(data: StoryData): Promise<void> {
+function shareTwitter(data: StoryData): void {
+  if (!isPublicStorySharingEnabled()) return;
   const urls = getShareUrls(data);
   window.open(urls.twitter, '_blank');
   flashButton('.story-twitter', t('modals.story.opening'), t('modals.story.twitter'));
 }
 
-async function shareLinkedIn(data: StoryData): Promise<void> {
+function shareLinkedIn(data: StoryData): void {
+  if (!isPublicStorySharingEnabled()) return;
   const urls = getShareUrls(data);
   window.open(urls.linkedin, '_blank');
   flashButton('.story-linkedin', t('modals.story.opening'), t('modals.story.linkedin'));
 }
 
 async function copyDeepLink(data: StoryData): Promise<void> {
+  if (!isPublicStorySharingEnabled()) return;
   const link = generateStoryDeepLink(data.countryCode);
+  if (!link) return;
   await navigator.clipboard.writeText(link);
   flashButton('.story-copy', t('modals.story.copied'), t('modals.story.copyLink'));
 }
@@ -171,6 +196,6 @@ function flashButton(selector: string, flashText: string, originalText: string):
   const span = btn.querySelector('span');
   if (span) {
  span.textContent = flashText;
- setTimeout(() => { if (span) span.textContent = originalText; }, 2500);
+ setTimeout(() => { span.textContent = originalText; }, 2500);
   }
 }

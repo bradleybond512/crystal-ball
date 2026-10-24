@@ -2634,9 +2634,6 @@ function handleNotamProxyRequest(req, res) {
 
 // CORS origin allowlist — only our domains can use this relay
 const ALLOWED_ORIGINS = [
-  'https://crystalball.app',
-  'https://tech.crystalball.app',
-  'https://finance.crystalball.app',
   'http://localhost:5173', // Vite dev
   'http://localhost:5174', // Vite dev alt port
   'http://localhost:4173', // Vite preview

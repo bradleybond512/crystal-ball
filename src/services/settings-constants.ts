@@ -8,7 +8,6 @@ import type { RuntimeSecretKey, RuntimeFeatureId } from './runtime-config';
 import './settings-descriptions';
 
 export const SIGNUP_URLS: Partial<Record<RuntimeSecretKey, string>> = {
-  CRYSTALBALL_API_KEY: 'https://crystalball.app',
   GROQ_API_KEY: 'https://console.groq.com/keys',
   OPENROUTER_API_KEY: 'https://openrouter.ai/settings/keys',
   FRED_API_KEY: 'https://fredaccount.stlouisfed.org/apikeys',

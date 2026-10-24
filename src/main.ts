@@ -18,9 +18,7 @@ const sentryDsn = import.meta.env.VITE_SENTRY_DSN?.trim();
 Sentry.init({
   dsn: sentryDsn || undefined,
   release: `crystalball@${__APP_VERSION__}`,
-  environment: location.hostname === 'crystalball.app' ? 'production'
- : (location.hostname.includes('vercel.app') ? 'preview'
- : 'development'),
+  environment: import.meta.env.MODE,
   // eslint-disable-next-line no-restricted-syntax -- intentional: Sentry suppression for local web dev (localhost); Tauri runtime is covered by __TAURI_INTERNALS__ check
   enabled: Boolean(sentryDsn) && !location.hostname.startsWith('localhost') && !('__TAURI_INTERNALS__' in window),
   sendDefaultPii: false,
@@ -274,7 +272,7 @@ import('./services/api-diagnostic').then(({ attachDiagnosticToWindow }) => { att
 installLocalStoragePatch();
 // In desktop mode, route /api/* calls to the local Tauri sidecar backend.
 installRuntimeFetchPatch();
-// In web production, route RPC calls through api.crystalball.app (Cloudflare edge).
+// In web production, route RPC calls through the explicitly configured API base.
 installWebApiRedirect();
 loadDesktopSecretsWhenReady().then(async () => {
   await initAnalytics();

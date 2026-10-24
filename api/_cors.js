@@ -3,8 +3,6 @@
 // match that could let an unrelated third-party project (e.g. `crystal-ball-foo.vercel.app`)
 // gain CORS approval just by owning a similarly-named Vercel project.
 const ALLOWED_ORIGIN_PATTERNS = [
-  /^https:\/\/crystalball\.app$/,
-  /^https:\/\/(tech|finance|happy|api)\.crystalball\.app$/,
   // `crystalball` (no dash) project previews.
   /^https:\/\/crystalball-[a-z0-9-]+-elie-[a-z0-9]+\.vercel\.app$/,
   /^https:\/\/crystalball-[a-z0-9-]+-bradleybond512\.vercel\.app$/,
@@ -28,9 +26,9 @@ function isAllowedOrigin(origin) {
 
 export function getCorsHeaders(req, methods = 'GET, OPTIONS') {
   const origin = req.headers.get('origin') || '';
-  const allowOrigin = isAllowedOrigin(origin) ? origin : 'https://crystalball.app';
+  const allowed = isAllowedOrigin(origin);
   return {
- 'Access-Control-Allow-Origin': allowOrigin,
+ ...(allowed ? { 'Access-Control-Allow-Origin': origin } : {}),
  'Access-Control-Allow-Methods': methods,
  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-CrystalBall-Key',
  // `Date`/`Age` are NOT CORS-safelisted response headers. The fusion fetchers

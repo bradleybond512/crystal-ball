@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 
 import handler, { normalizeUsgsLatestContinuous } from './usgs-water-proxy.js';
 
-const request = (query = '', init = {}) => new Request(`https://crystalball.app/api/usgs-water-proxy${query}`, {
-  headers: { origin: 'https://crystalball.app' }, ...init,
+const request = (query = '', init = {}) => new Request(`https://crystalball-main-bradleybond512.vercel.app/api/usgs-water-proxy${query}`, {
+  headers: { origin: 'https://crystalball-main-bradleybond512.vercel.app' }, ...init,
 });
 
 test('USGS water proxy validates a bounded bbox and allows only GET', async () => {

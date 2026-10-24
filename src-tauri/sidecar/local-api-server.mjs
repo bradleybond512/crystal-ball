@@ -6,7 +6,7 @@ import http, { createServer } from 'node:http';
 import { timingSafeEqual, randomUUID, createHash } from 'node:crypto';
 import https from 'node:https';
 import dns from 'node:dns/promises';
-import { constants as fsConstants, existsSync, readFileSync, writeFileSync, statSync, openSync, readSync, closeSync, chmodSync } from 'node:fs';
+import { constants as fsConstants, existsSync, readFileSync, writeFileSync, statSync, openSync, readSync, closeSync, chmodSync, fchmodSync, renameSync, unlinkSync } from 'node:fs';
 import { readdir, readFile, lstat, open, rename, rm } from 'node:fs/promises';
 import { isIP } from 'node:net';
 import { promisify } from 'node:util';
@@ -21484,6 +21484,63 @@ export function parseBfsOdlStations(raw) {
     .filter(s => s.doseRate !== null);
 }
 
+function publicationErrorCode(error) {
+  return typeof error?.code === 'string' && /^[A-Z0-9_]{1,40}$/.test(error.code) ? error.code : 'IO_ERROR';
+}
+
+/** Publish only the complete bound port. Failed attempts own their temporary
+ * file and listener, never a previous target or an unrelated temporary file.
+ * Filesystem injection keeps failure tests independent of user permissions. */
+export async function publishSidecarPort(server, portFile, logger, io = {}) {
+  const fs = { openSync, fchmodSync, writeFileSync, closeSync, renameSync, unlinkSync, ...io };
+  let temporary;
+  let descriptor;
+  let ownsTemporary = false;
+  try {
+    const address = server.address();
+    const port = typeof address === 'object' && address !== null ? address.port : null;
+    if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+      throw Object.assign(new Error('Bound port unavailable'), { code: 'PORT_UNAVAILABLE' });
+    }
+    // Standalone callers without a native portfile retain their existing mode.
+    if (!portFile) return port;
+    temporary = `${portFile}.${process.pid}.${randomUUID()}.tmp`;
+    descriptor = fs.openSync(temporary, 'wx', 0o600);
+    ownsTemporary = true;
+    fs.fchmodSync(descriptor, 0o600);
+    fs.writeFileSync(descriptor, String(port));
+    fs.closeSync(descriptor);
+    descriptor = undefined;
+    fs.renameSync(temporary, portFile);
+    ownsTemporary = false;
+    return port;
+  } catch (error) {
+    if (descriptor !== undefined) {
+      try { fs.closeSync(descriptor); }
+      catch (error_) { logger.error(`[local-api] port publication descriptor cleanup failed (${publicationErrorCode(error_)})`); }
+    }
+    if (ownsTemporary) {
+      try { fs.unlinkSync(temporary); }
+      catch (error_) { logger.error(`[local-api] port publication temporary cleanup failed (${publicationErrorCode(error_)})`); }
+    }
+    const message = `Sidecar port publication failed (${publicationErrorCode(error)})`;
+    logger.error(`[local-api] ${message}`);
+    await new Promise((resolve) => {
+      try {
+        server.close((cleanup) => {
+          if (cleanup) logger.error(`[local-api] port publication listener cleanup failed (${publicationErrorCode(cleanup)})`);
+          resolve();
+        });
+        server.closeAllConnections?.();
+      } catch (error_) {
+        logger.error(`[local-api] port publication listener cleanup failed (${publicationErrorCode(error_)})`);
+        resolve();
+      }
+    });
+    throw new Error(message);
+  }
+}
+
 export async function createLocalApiServer(options = {}) {
   if (!process.env.LOCAL_API_TOKEN) {
     console.error('[sidecar] FATAL: LOCAL_API_TOKEN not set — refusing to start');
@@ -22284,14 +22341,8 @@ export async function createLocalApiServer(options = {}) {
  }
  }
 
- const address = server.address();
- const boundPort = typeof address === 'object' && address?.port ? address.port : context.port;
+ const boundPort = await publishSidecarPort(server, process.env.LOCAL_API_PORT_FILE, context.logger);
  context.port = boundPort;
-
- const portFile = process.env.LOCAL_API_PORT_FILE;
- if (portFile) {
- try { writeFileSync(portFile, String(boundPort)); chmodSync(portFile, 0o600); } catch {}
- }
 
  context.logger.log(`[local-api] listening on http://127.0.0.1:${boundPort} (apiDir=${context.apiDir}, routes=${routes.length}, cloudFallback=${context.cloudFallback})`);
 

@@ -28,6 +28,10 @@ export const SUITE_STAGES = Object.freeze({
     Object.freeze(['--test', ...SIDECAR_REMAINING_NODE_FILES]),
     Object.freeze(['--import', 'tsx', '--test', ...SIDECAR_REMAINING_TSX_FILES]),
   ]),
+  'port-publication': Object.freeze([
+    Object.freeze(['--test', 'tests/sidecar-port-publication.test.mjs', 'tests/sidecar-supervisor-boundary.test.mjs']),
+    Object.freeze(['--import', 'tsx', '--test', 'src/services/diagnostics/__tests__/local-engine-status.test.mts']),
+  ]),
   'domain-retirement': Object.freeze([
     Object.freeze(['--test', 'api/_cors.test.mjs', 'api/_api-key.test.mjs', 'api/youtube/embed.test.mjs', 'api/og-story.test.mjs', 'api/story-retirement.test.mjs', 'scripts/ais-relay-cors.test.cjs', 'tests/csp-allowlist.test.mjs', 'tests/key-compare-hardening.test.mjs', 'api/grid-outages.test.mjs', 'api/local-logistics.test.mjs', 'api/usgs-water-proxy.test.mjs']),
     Object.freeze(['--import', 'tsx', '--test', 'src/services/__tests__/runtime-fetch-fallback.test.mts', 'src/services/__tests__/fetch-attribution.test.mts', 'src/services/__tests__/story-share.test.mts', 'tests/server-cors-retirement.test.mts']),

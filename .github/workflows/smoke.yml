@@ -47,6 +47,7 @@ jobs:
       # Explicit remaining sidecar files, isolated with strict inner TAP and
       # an exactly-once inventory guard across the three sidecar test groups.
       - run: npm run test:sidecar-ci
+      - run: npm run test:port-publication
       - run: npm run build
       - run: npm run pwa:budget
       # PR 16 cognition CI gate: replays the frozen golden-window corpus

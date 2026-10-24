@@ -44,8 +44,8 @@ pub struct PortCell<'a, C> {
 pub enum Publication {
     /// The port is confirmed for this generation.
     Confirmed(u16),
-    /// No port file in time: the default is recorded but stays unconfirmed.
-    Unconfirmed(u16),
+    /// No port file in time: no listener is published yet.
+    AwaitingConfirmation,
     /// This generation is no longer the live child: nothing changed.
     Stale,
 }
@@ -62,6 +62,16 @@ pub enum Tick<S> {
     Failed(std::io::Error),
 }
 
+/// Missing is the expected fresh-start case; any other cleanup failure must
+/// stop startup before an old publication can be mistaken for the new child.
+pub fn stale_port_cleanup(result: std::io::Result<()>) -> Result<(), &'static str> {
+    match result {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(_) => Err("Local engine cannot publish its port: the previous port file could not be removed."),
+    }
+}
+
 impl<C: SidecarChild> PortCell<'_, C> {
     /// Store a freshly spawned child in `slot` (the caller holds the child
     /// lock and has cleared the port) and return its generation.
@@ -71,9 +81,9 @@ impl<C: SidecarChild> PortCell<'_, C> {
     }
 
     /// The starter's publication once its port-file wait ends (`waited` is
-    /// `None` on timeout). The timeout fallback never clears a confirmation
+    /// `None` on timeout). The timeout never clears a confirmation
     /// the monitor already made for the same child.
-    pub fn publish_start(&self, generation: u64, waited: Option<u16>, default_port: u16) -> Publication {
+    pub fn publish_start(&self, generation: u64, waited: Option<u16>) -> Publication {
         let Ok(mut slot) = self.child.lock() else { return Publication::Stale };
         if !self.owns_live(&mut slot, generation) {
             return Publication::Stale;
@@ -87,9 +97,9 @@ impl<C: SidecarChild> PortCell<'_, C> {
             }
             (None, Some(current)) if self.confirmed.load(Ordering::SeqCst) => Publication::Confirmed(current),
             (None, _) => {
-                *port = Some(default_port);
+                *port = None;
                 self.confirmed.store(false, Ordering::SeqCst);
-                Publication::Unconfirmed(default_port)
+                Publication::AwaitingConfirmation
             }
         }
     }

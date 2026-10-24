@@ -10,6 +10,7 @@
     "smoke:offline": "tsx scripts/smoke.mts --offline",
     "checkup": "node scripts/checkup.mjs",
     "doctor": "node scripts/doctor.mjs",
+    "test:health-contract": "node --test tests/health-contract-suite.test.mjs",
     "doctor:claude-auth": "node scripts/claude-auth-doctor.mjs",
     "pwa:budget": "node scripts/check-precache-budget.mjs",
     "checkup:schedule": "node scripts/install-checkup-schedule.mjs",

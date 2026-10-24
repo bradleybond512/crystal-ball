@@ -587,6 +587,27 @@ export function getFeedSnapshots() {
   }));
 }
 
+// `ok` answers only whether this process can respond. Inventory and its
+// degradation are separate and are evaluated only for authenticated callers.
+export const SidecarHealth = {
+  project(authenticated, readDetails) {
+    if (authenticated !== true) return { ok: true };
+    const details = readDetails();
+    const failed = details.feeds.filter((feed) => Boolean(feed.lastError)).length;
+    const missing = details.keys_missing_count;
+    return {
+      ...details,
+      ok: true,
+      authenticated: true,
+      degraded: failed > 0 || missing > 0,
+      degradation: {
+        feeds: { tracked: details.feeds.length, failed },
+        keys: { configured: details.keys_configured, missing, total: details.keys_total },
+      },
+    };
+  },
+};
+
 /** @internal — for tests. Drops all tracked feed state. */
 export function _resetFeedTracker() {
   _feedTracker.clear();
@@ -7720,37 +7741,38 @@ async function dispatch(requestUrl, req, routes, context) {
   }
 
   // ── Read-only diagnostic endpoints (pre-auth) ─────────────────────────
-  // These are localhost-only, expose no secrets, and are polled frequently
-  // by the renderer.  Placing them above the auth gate avoids thousands of
+  // Minimal liveness is public; health inventory requires the existing token.
+  // Placing liveness above the auth gate avoids thousands of
   // spurious 401s when the renderer's IPC token isn't ready yet (cold
   // start / IPC custom-protocol fallback).
 
   if (requestUrl.pathname === '/api/health') {
-    const mem = process.memoryUsage();
-    const missing = wmMissingKeys();
-    if (aisState.socket?.readyState === 1) {
-      recordFeedSuccess('ais', aisState.lastSnapshotAt || Date.now());
-    } else if (aisState.lastSnapshotAt > 0) {
-      recordFeedFailure('ais', 'AIS websocket disconnected', Date.now());
-    }
-    return Response.json({
-      ok: true,
-      pid: process.pid,
-      uptime_ms: Date.now() - SIDECAR_START_MS,
-      port: context.port,
-      rss_mb: Math.round(mem.rss / 1024 / 1024),
-      heap_mb: Math.round(mem.heapUsed / 1024 / 1024),
-      ais_connected: aisState.socket?.readyState === 1,
-      ais_vessels: aisState.vessels.size,
-      // keys_configured / keys_total provided as a count only — key names
-      // are intentionally omitted from the pre-auth response.
-      // keys_missing (the list of unconfigured key names) is only available
-      // via the authenticated /api/diagnostics endpoint.
-      keys_configured: EXPECTED_API_KEYS.length - missing.length,
-      keys_total: EXPECTED_API_KEYS.length,
-      keys_missing_count: missing.length,
-      feeds: getFeedSnapshots(),
-    }, { status: 200, headers: { 'content-type': 'application/json', ...makeCorsHeaders(req) } });
+    const payload = SidecarHealth.project(isValidToken(req.headers.authorization || ''), () => {
+      const mem = process.memoryUsage();
+      const missing = wmMissingKeys();
+      if (aisState.socket?.readyState === 1) {
+        recordFeedSuccess('ais', aisState.lastSnapshotAt || Date.now());
+      } else if (aisState.lastSnapshotAt > 0) {
+        recordFeedFailure('ais', 'AIS websocket disconnected', Date.now());
+      }
+      return {
+        pid: process.pid,
+        uptime_ms: Date.now() - SIDECAR_START_MS,
+        port: context.port,
+        rss_mb: Math.round(mem.rss / 1024 / 1024),
+        heap_mb: Math.round(mem.heapUsed / 1024 / 1024),
+        ais_connected: aisState.socket?.readyState === 1,
+        ais_vessels: aisState.vessels.size,
+        // Names remain in authenticated diagnostics; health reports counts.
+        keys_configured: EXPECTED_API_KEYS.length - missing.length,
+        keys_total: EXPECTED_API_KEYS.length,
+        keys_missing_count: missing.length,
+        feeds: getFeedSnapshots(),
+      };
+    });
+    return Response.json(payload, { status: 200, headers: {
+      'content-type': 'application/json', ...makeCorsHeaders(req), 'cache-control': 'no-store',
+    } });
   }
 
   if (requestUrl.pathname === '/api/spaceweather/status') {

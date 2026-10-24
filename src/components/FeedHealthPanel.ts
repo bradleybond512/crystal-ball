@@ -45,6 +45,8 @@ const STATUS_BADGE: Record<FeedHealth, { icon: string; color: string; label: str
 };
 
 interface SidecarHealthResponse {
+  ok?: boolean;
+  authenticated?: boolean;
   feeds?: SidecarFeedStatus[];
 }
 
@@ -53,6 +55,7 @@ export class FeedHealthPanel extends Panel {
   private snapshots: Record<string, FeedSnapshot> = {};
   private lastFetchAt: number | null = null;
   private lastFetchError: string | null = null;
+  private diagnosticsPending = false;
   private readonly lifelinesUpdated = (event: Event): void => {
     const providers = parseLifelineProviderHealthEvent((event as CustomEvent<unknown>).detail);
     if (providers.length === 0) return;
@@ -109,13 +112,24 @@ export class FeedHealthPanel extends Panel {
         this.render();
         return;
       }
-      const body = (await resp.json()) as SidecarHealthResponse;
-      if (Array.isArray(body.feeds)) {
+      const body = (await resp.json()) as SidecarHealthResponse | null;
+      if (body?.ok === true && body.authenticated !== true) {
+        this.diagnosticsPending = true;
+        this.lastFetchError = null;
+        this.render();
+        return;
+      }
+      if (body?.ok === true && body.authenticated === true && Array.isArray(body.feeds)) {
         this.snapshots = mergeFeedSnapshotsByAttempt(
           this.snapshots,
           mergeSidecarFeeds(body.feeds, FEED_CATALOG),
         );
+      } else {
+        this.lastFetchError = 'Unexpected health diagnostics response';
+        this.render();
+        return;
       }
+      this.diagnosticsPending = false;
       this.lastFetchAt = Date.now();
       this.lastFetchError = null;
     } catch (error) {
@@ -186,6 +200,9 @@ export class FeedHealthPanel extends Panel {
   private renderFooter(): string {
     if (this.lastFetchError) {
       return `<div class="feed-health-footer feed-health-error-msg">⚠ Sidecar /api/health: ${escapeHtml(this.lastFetchError)}</div>`;
+    }
+    if (this.diagnosticsPending) {
+      return '<div class="feed-health-footer">Sidecar process live · authenticated diagnostics pending</div>';
     }
     if (this.lastFetchAt === null) {
       return `<div class="feed-health-footer">Awaiting sidecar /api/health…</div>`;

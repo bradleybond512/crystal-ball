@@ -52,7 +52,7 @@ test('stdout or stderr TAP bailout remains red even with exit-zero passing summa
   assert.throws(() => validateStageResult(result({ stderr: '  Bail out! descendant\n' })), /bailout/);
 });
 test('the suite map is finite and frozen and cannot launch arbitrary or inherited identifiers', async (t) => {
-  assert.deepEqual(Object.keys(SUITE_STAGES), ['untrusted', 'companion', 'install-smoke', 'sidecar-remaining', 'domain-retirement']);
+  assert.deepEqual(Object.keys(SUITE_STAGES), ['untrusted', 'companion', 'install-smoke', 'sidecar-remaining', 'domain-retirement', 'health-contract']);
   assert.equal(SUITE_STAGES.untrusted.length, 2);
   assert.deepEqual(SUITE_STAGES.untrusted[0].slice(0, 3), ['--import', 'tsx', '--test']);
   assert.equal(SUITE_STAGES.untrusted[0].length, 6);
@@ -69,6 +69,9 @@ test('the suite map is finite and frozen and cannot launch arbitrary or inherite
     ['--import', 'tsx', '--import', './tests/panels/register-hook.mjs', '--test', 'src/components/__tests__/story-modal-sharing.test.mts', 'src/components/__tests__/retired-domain-panels.test.mts'],
     ['--test', 'src-tauri/sidecar/local-api-server.test.mjs', 'src-tauri/sidecar/sidecar-cors.test.mjs', 'src-tauri/sidecar/__tests__/intel-expansion-cluster3.test.mjs'],
   ]);
+  assert.equal(SUITE_STAGES['health-contract'].length, 2);
+  assert.deepEqual(SUITE_STAGES['health-contract'][0].slice(0, 2), ['--test', 'tests/sidecar-health-runtime.test.mjs']);
+  assert.deepEqual(SUITE_STAGES['health-contract'][1].slice(0, 5), ['--import', 'tsx', '--import', './tests/panels/register-hook.mjs', '--test']);
   for (const stages of Object.values(SUITE_STAGES)) {
     assert.equal(Object.isFrozen(stages), true);
     for (const args of stages) assert.equal(Object.isFrozen(args), true);

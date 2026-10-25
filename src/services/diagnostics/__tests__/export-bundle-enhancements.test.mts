@@ -399,7 +399,7 @@ test('default cap on algorithmTrace prevents unbounded growth', () => {
 // (which can carry a thrown URL / token / PII) into the GitHub-paste bundle.
 test('redactSystemHealth scrubs free text in panels[].lastError + unsafeSuppressions[].reason', () => {
   const EMAIL = 'panel-canary@example.invalid';
-  const TOKEN = 'aaaabbbbccccddddeeeeffff00001111';
+  const TOKEN = 'aaaabbbbccccddddeeeeffff00001111'; // secret-scan: allow -- synthetic canary verifies diagnostics token redaction
   const systemHealth: SystemHealthReport = {
     ...makeSystemHealth(),
     panels: [{

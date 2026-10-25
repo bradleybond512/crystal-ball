@@ -46,7 +46,7 @@ function gedRow(id) {
 
 test('desktop startup serves event and classification routes in at most nine combined upstream calls', async () => {
   const originalFetch = globalThis.fetch;
-  process.env.UCDP_API_TOKEN = 'sidecar-provider-token';
+  process.env.UCDP_API_TOKEN = 'sidecar-provider-token'; // secret-scan: allow -- synthetic credential for mocked UCDP route requests
   let upstreamCalls = 0;
   globalThis.fetch = async (input, init) => {
     const url = new URL(String(input));

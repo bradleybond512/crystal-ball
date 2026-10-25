@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import nodeOs from 'node:os';
 import path from 'node:path';
 import { resolveStableIdentity, signLocalMacApp, stableIdentityRequired } from './desktop-signing.mjs';
+import { getDesktopIdentity } from './release-metadata.mjs';
+import { verifyMacBundle, verifyDesktopConfig } from './check-desktop-identity.mjs';
 
 const args = process.argv.slice(2);
 
@@ -21,14 +23,6 @@ const sign = hasFlag('sign');
 const appOnly = hasFlag('app-only');
 const skipNodeRuntime = hasFlag('skip-node-runtime');
 const showHelp = hasFlag('help') || hasFlag('h');
-// Product banner per variant. Must match packaging targets emitted by the
-// Tauri build so the expected app bundle name resolves cleanly.
-const variantProductName = {
-  full: 'Crystal Ball',
-  tech: 'Tech Monitor',
-  finance: 'Finance Monitor',
-}[variant];
-
 const validOs = new Set(['macos', 'windows', 'linux']);
 const validVariant = /^(full|tech|finance)$/.test(variant);
 
@@ -52,6 +46,10 @@ if (appOnly && sign) {
   process.exit(1);
 }
 
+// Frontend selection and native config must use the same allowlisted variant.
+const desktopIdentity = getDesktopIdentity(variant);
+const variantProductName = desktopIdentity.productName;
+
 const syncVersionsResult = spawnSync(process.execPath, ['scripts/sync-desktop-version.mjs'], {
   stdio: 'inherit'
 });
@@ -70,7 +68,9 @@ const env = {
   VITE_VARIANT: variant,
   VITE_DESKTOP_RUNTIME: '1',
 };
-const cliArgs = ['build', '--bundles', bundles];
+const bundleVersion = JSON.parse(readFileSync('package.json', 'utf8')).version;
+verifyDesktopConfig({ variant, version: bundleVersion });
+const cliArgs = ['build', '--bundles', bundles, '--config', desktopIdentity.config];
 const tauriBin = path.join('node_modules', '.bin', process.platform === 'win32' ? 'tauri.cmd' : 'tauri');
 
 if (!existsSync(tauriBin)) {
@@ -165,6 +165,7 @@ if (!skipNodeRuntime && targetOs === 'macos') {
 
 console.log(`[desktop-package] OS=${targetOs} VARIANT=${variant} BUNDLES=${bundles} SIGN=${sign ? 'on' : 'off'}`);
 
+const buildStartedAt = Date.now();
 const result = spawnSync(tauriBin, cliArgs, {
   env,
   stdio: 'inherit',
@@ -246,9 +247,9 @@ if (targetOs === 'macos') {
  process.exit(1);
   }
 
-  const bundleVersion = env.npm_package_version;
+  const measuredBundle = verifyMacBundle({ bundleRoot, variant, version: bundleVersion, builtAfter: buildStartedAt, includeDmg: sign });
   const archSuffix = process.arch === 'arm64' ? 'aarch64' : process.arch;
-  const dmgPath = path.join(dmgDir, `${variantProductName}_${bundleVersion}_${archSuffix}.dmg`);
+  const dmgPath = sign ? measuredBundle.dmgs[0].path : path.join(dmgDir, `${variantProductName}_${bundleVersion}_${archSuffix}.dmg`);
   ensureModernMacLaunchServicesPlist(appPath, !sign);
 
   // Stable local signing (R3-SEC-003 phase A): see scripts/desktop-signing.mjs.
@@ -299,6 +300,7 @@ if (targetOs === 'macos') {
  run('hdiutil', ['create', '-volname', variantProductName, '-srcfolder', appPath, '-ov', '-format', 'UDZO', dmgPath]);
   }
 
+  verifyMacBundle({ bundleRoot, variant, version: bundleVersion, builtAfter: buildStartedAt, includeDmg: true });
   const mountPoint = mkdtempSync(path.join(nodeOs.tmpdir(), 'desktop-package-dmg-'));
   try {
  run('hdiutil', ['attach', dmgPath, '-mountpoint', mountPoint, '-nobrowse', '-readonly', '-quiet']);

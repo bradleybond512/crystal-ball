@@ -17,6 +17,13 @@ const BROWSER_DOWNLOAD_REASONS = new Set([
   'missing_manifest', 'invalid_release', 'signer_mismatch',
 ]);
 
+function isUnavailableVariantChannel(error: unknown): boolean {
+  return typeof error === 'object' && error !== null
+    && (error as { code?: unknown }).code === 'variant_updates_unavailable';
+}
+
+const VARIANT_UPDATE_MESSAGE = 'Automatic updates are not available for this variant yet.';
+
 function isUpdateVersion(value: unknown): value is string {
   return typeof value === 'string'
     && /^(0|[1-9]\d{0,9})\.(0|[1-9]\d{0,9})\.(0|[1-9]\d{0,9})$/.test(value)
@@ -153,7 +160,8 @@ export class DesktopUpdater implements AppModule {
  });
  document.querySelector('.update-toast:not(.update-info-toast)')?.remove();
  this.setUpdateState(null);
- if (this.manualCheckRequested) this.showInfoToast('Could not check for updates. Please try again.');
+ if (this.manualCheckRequested) this.showInfoToast(isUnavailableVariantChannel(error)
+   ? VARIANT_UPDATE_MESSAGE : 'Could not check for updates. Please try again.');
  } finally {
  this.checkInFlight = false;
  this.manualCheckRequested = false;
@@ -306,7 +314,8 @@ export class DesktopUpdater implements AppModule {
  });
  this.setUpdateState(null);
  toast.remove();
- this.showInfoToast('Could not apply the update. Check for updates to try again.');
+ this.showInfoToast(isUnavailableVariantChannel(error)
+   ? VARIANT_UPDATE_MESSAGE : 'Could not apply the update. Check for updates to try again.');
  });
  } else if (action === 'dismiss') {
  trackUpdateDismissed(version);

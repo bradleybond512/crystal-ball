@@ -21,14 +21,15 @@ function harness(result: unknown = { status: 'ready', version: '9.2.0', checkedA
   let nextTimer = 0;
   let fetches = 0;
   let response = result;
+  let rejection = false;
   const invoke = async (command: string, payload?: Record<string, unknown>) => {
     calls.push({ command, payload });
     if (command === 'staged_update_status') throw new Error('Unsupported command');
     if (command === 'stage_latest_update' || command === 'stage_update') {
-      if (response instanceof Error) throw response;
+      if (response instanceof Error || rejection) throw response;
       return response;
     }
-    if (command === 'apply_staged_update' && response instanceof Error) throw response;
+    if (command === 'apply_staged_update' && (response instanceof Error || rejection)) throw response;
     return null;
   };
   const dependencies: Record<string, unknown> = {
@@ -69,6 +70,7 @@ function harness(result: unknown = { status: 'ready', version: '9.2.0', checkedA
     browser, calls, ctx, updater,
     check: (manual = true) => (updater as unknown as { checkForUpdate(manual: boolean): Promise<void> }).checkForUpdate(manual),
     respond: (next: unknown) => { response = next; },
+    rejectWith: (error: unknown) => { response = error; rejection = true; },
     fetches: () => fetches,
     flushTimers: () => { const pending = [...timers.values()]; timers.clear(); pending.forEach(callback => callback()); },
   };
@@ -98,6 +100,29 @@ test('native failure cannot promote a forged localStorage staging hint or stale 
   assert.equal(Boolean(h.browser.document.querySelector('[data-action="apply"]')), false);
   assert.match(h.browser.document.body.textContent, /Could not check for updates/);
   assert.equal(h.calls.filter(call => call.command === 'stage_latest_update').length, 2);
+});
+
+test('a disabled variant channel clears stale ready UI and explains the limitation without a full-app link', async () => {
+  const h = harness();
+  await h.check();
+  h.rejectWith({ code: 'variant_updates_unavailable', message: 'untrusted native detail' });
+  await h.check();
+  assert.equal(h.ctx.updateState, null);
+  assert.equal(h.fetches(), 0);
+  assert.equal(h.browser.document.querySelector('[data-action="apply"]'), null);
+  assert.equal(h.browser.document.querySelector('[data-action="download"]'), null);
+  assert.match(h.browser.document.body.textContent, /Automatic updates are not available for this variant yet/);
+  assert.doesNotMatch(h.browser.document.body.textContent, /untrusted native detail|Could not check/);
+  assert.equal(h.calls.some(call => call.command === 'open_url'), false);
+});
+
+test('disabled variant background checks stay quiet and do not claim a successful release check', async () => {
+  const h = harness();
+  h.rejectWith({ code: 'variant_updates_unavailable' });
+  await h.check(false);
+  assert.equal(h.ctx.updateState, null);
+  assert.equal(h.browser.document.querySelector('.update-toast'), null);
+  assert.equal(h.browser.localStorage.getItem('wm-update-last-checked'), null);
 });
 
 test('up-to-date result uses the native current version and check timestamp', async () => {

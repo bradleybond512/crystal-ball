@@ -125,10 +125,12 @@
     "test:signing-phase-a",
     "test:node-pinning",
     "test:native-lows",
-    "test:port-publication"
+    "test:port-publication",
+    "test:desktop-identity"
   ],
   "src-tauri/src/updater_policy.rs": [
-    "test:desktop-updater"
+    "test:desktop-updater",
+    "test:desktop-identity"
   ],
   "src-tauri/src/imessage.rs": [
     "test:imessage",
@@ -192,7 +194,8 @@
   "package.json": [
     "test:install-scripts",
     "test:workflow-security",
-    "test:domain-retirement"
+    "test:domain-retirement",
+    "test:desktop-identity"
   ],
   "scripts/desktop-build-full.mjs": [
     "test:install-scripts"
@@ -232,7 +235,9 @@
     "test:native-notify"
   ],
   "src/app/desktop-updater.ts": [
-    "test:native-notify"
+    "test:native-notify",
+    "test:desktop-updater",
+    "test:desktop-identity"
   ],
   "src/components/CommsHealthPanel.ts": [
     "test:native-notify"
@@ -373,7 +378,8 @@
   ],
   "src-tauri/tauri.conf.json": [
     "test:secret-boundary",
-    "test:domain-retirement"
+    "test:domain-retirement",
+    "test:desktop-identity"
   ],
   "src-tauri/src/vault_coordinator.rs": [
     "test:vault-writer"
@@ -386,7 +392,8 @@
   ],
   "scripts/desktop-package.mjs": [
     "test:signing-phase-a",
-    "test:native-lows"
+    "test:native-lows",
+    "test:desktop-identity"
   ],
   "src/services/diagnostics/vault-diagnostics.ts": [
     "test:signing-phase-a"
@@ -673,7 +680,8 @@
     "test:workflow-security"
   ],
   ".github/workflows/build-desktop.yml": [
-    "test:workflow-security"
+    "test:workflow-security",
+    "test:desktop-identity"
   ],
   ".github/workflows/lint.yml": [
     "test:workflow-security"
@@ -844,7 +852,8 @@
     "test:release-capabilities"
   ],
   "scripts/release-manifest.mjs": [
-    "test:release-capabilities"
+    "test:release-capabilities",
+    "test:desktop-identity"
   ],
   "config/release-features.json": [
     "test:release-capabilities"
@@ -1143,5 +1152,28 @@
   ],
   "tests/retired-domain-suite.test.mjs": [
     "test:domain-retirement"
+  ],
+  "src-tauri/src/updater_identity.rs": [
+    "test:desktop-identity"
+  ],
+  "src-tauri/tests/updater_identity_contract.rs": [
+    "test:desktop-identity"
+  ],
+  "scripts/check-desktop-identity.mjs": [
+    "test:desktop-identity"
+  ],
+  "scripts/release-metadata.mjs": [
+    "test:desktop-identity"
+  ],
+  "scripts/release-context.mjs": [
+    "test:desktop-identity"
+  ],
+  "src-tauri/tauri.tech.conf.json": [
+    "test:desktop-identity",
+    "test:secret-boundary"
+  ],
+  "src-tauri/tauri.finance.conf.json": [
+    "test:desktop-identity",
+    "test:secret-boundary"
   ]
 }

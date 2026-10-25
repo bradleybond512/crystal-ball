@@ -92,7 +92,7 @@ test('updater preserves Apple anchoring and captures one mandatory staging pin',
 
 test('apply and boot each capture a mandatory pin and validate before swapping', () => {
   const manualStart = mainRs.indexOf('fn apply_staged_update_blocking()');
-  const bootStart = mainRs.indexOf('fn maybe_apply_staged_update_on_boot()');
+  const bootStart = mainRs.indexOf('fn maybe_apply_staged_update_on_boot(');
   const nextCommand = mainRs.indexOf('async fn fetch_polymarket(', bootStart);
   assert.ok(manualStart >= 0 && bootStart > manualStart && nextCommand > bootStart);
   for (const section of [mainRs.slice(manualStart, bootStart), mainRs.slice(bootStart, nextCommand)]) {

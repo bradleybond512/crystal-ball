@@ -9,19 +9,12 @@ The packaging helper accepts these variant arguments:
 - **tech** -> `Tech Monitor`
 - **finance** -> `Finance Monitor`
 
-**Draft #1811 integration dependency:** at source baseline `78e34040`, the helper
-sets `VITE_VARIANT` but invokes Tauri without a variant-specific config. Only
-`src-tauri/tauri.conf.json` is present, with product name `Crystal Ball` and
-identifier `com.bradleybond.crystalball`. The native identity repair is delivered
-separately in [Draft #1811](https://github.com/bradleybond512/crystal-ball/pull/1811)
-at source commit `7392ef1696e8110701b80a9a64440cac582aaa43`.
-
-Until that source is integrated, selecting a tech/finance frontend does not establish
-a distributable native identity. Do not treat the non-full examples as verified
-release procedures. The variant identity, updater and profile safeguards below
-describe that separate repair and apply only after integration. This documentation
-change does not implement it, and source checks do not establish packaged runtime
-acceptance.
+The packaging CLI accepts `full`, `tech`, and `finance`. `VITE_VARIANT` selects
+the frontend; it does not select the native app identity by itself. The native
+identity source in this change selects a variant-specific Tauri config through
+`scripts/release-metadata.mjs`. Source checks do not establish packaged runtime
+acceptance; do not treat non-full examples as verified release procedures without
+that separate acceptance evidence.
 
 The helper also accepts `--os linux` and targets AppImage. Windows targets NSIS/MSI.
 These supported arguments do not change their experimental product status.
@@ -220,10 +213,9 @@ Use the explicit signing alias when credentials and this experimental target are
 npm run desktop:package:windows:full:sign
 ```
 
-## Variant-aware outputs after Draft #1811 integration
+## Variant-aware outputs
 
-The following describes source commit `7392ef16`, conditional on integrating
-Draft #1811. `VITE_VARIANT` selects the frontend; the shared allowlist in
+`VITE_VARIANT` selects the frontend; the shared allowlist in
 `scripts/release-metadata.mjs` selects the native config, passed explicitly with
 `--config` by local packaging and release CI.
 
@@ -241,7 +233,7 @@ icons require dedicated `bundle.icon` overrides and assets.
 
 ### Identity verification and update channels
 
-After integration, `scripts/check-desktop-identity.mjs` checks the effective config
+`scripts/check-desktop-identity.mjs` checks the effective config
 before the build. Its app checks measure `CFBundleName`, `CFBundleIdentifier` and
 `CFBundleShortVersionString`, reject mixed or stale output, and verify selected DMG
 payloads through read-only mounts. Local app identity verification precedes manual
@@ -273,7 +265,7 @@ identity may request OS permission. Distinct identifiers do not establish comple
 data isolation: fixed watchdog/export/monitor paths and the full-default MCP lookup
 also remain shared. This repair performs no credential or user-data migration.
 
-After integration, `npm run test:desktop-identity` provides focused source/fixture
+`npm run test:desktop-identity` provides focused source/fixture
 validation, including a dependency-free native policy fixture. It does not launch
 the app or inspect installed profiles. Actual packaged app/DMG, permission-prompt,
 profile behavior and Windows/Linux coexistence checks remain separate acceptance
@@ -295,9 +287,8 @@ Common subfolders:
 - `msi/` → Windows `.msi` installer
 
 Explicit cross targets add their triple before `release`, for example
-`src-tauri/target/aarch64-apple-darwin/release/bundle/`. After Draft #1811 integration,
-CI verifies that exact architecture output rather than selecting the first app
-found under `target`.
+`src-tauri/target/aarch64-apple-darwin/release/bundle/`. CI verifies that exact
+architecture output rather than selecting the first app found under `target`.
 
 ## Release checklist (clean machine)
 

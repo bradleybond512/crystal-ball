@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { collectReleaseArtifacts } from '../scripts/release-manifest.mjs';
+import { assertManifestIdentity, collectReleaseArtifacts } from '../scripts/release-manifest.mjs';
 
 const sourceRoot = fileURLToPath(new URL('..', import.meta.url));
 const version = '2.25.148';
@@ -26,8 +26,8 @@ const TECH_PANELS = {c: {}}; const FINANCE_PANELS = {d: {}}; const HAPPY_PANELS 
   for (const file of ['tool-registry.mjs', 'tool-catalog.mjs']) {
     await writeFile(path.join(repoRoot, 'tools/mcp-server', file), await readFile(path.join(sourceRoot, 'tools/mcp-server', file)));
   }
-  await writeFile(path.join(repoRoot, 'target', `Crystal Ball_${version}_aarch64.dmg`), 'fixture installer');
-  return { repoRoot, version, commitSha, variant: 'full', tag: `v${version}`, platform: 'macos', generatedAt: '2026-10-19T00:00:00.000Z', targetRoot: path.join(repoRoot, 'target') };
+  await writeFile(path.join(repoRoot, 'target', `Crystal Ball_${version}_amd64.AppImage`), 'fixture installer');
+  return { repoRoot, version, commitSha, variant: 'full', tag: `v${version}`, platform: 'Linux-x64', generatedAt: '2026-10-19T00:00:00.000Z', targetRoot: path.join(repoRoot, 'target') };
 }
 
 // Copy only derivation inputs; never alter the checkout's release version.
@@ -104,6 +104,8 @@ test('capabilities qualify the unchanged companion version by revision and separ
 test('collection includes serializable capabilities', async (t) => {
   const options = await fixture(t);
   const collected = await collectReleaseArtifacts(options);
+  assert.equal(collected.assets[0].name, `Crystal Ball_${version}_amd64.AppImage`);
+  assert.equal(assertManifestIdentity(collected).productName, 'Crystal Ball');
   assert.deepEqual(JSON.parse(JSON.stringify(collected)).capabilities, await derive(options));
 });
 

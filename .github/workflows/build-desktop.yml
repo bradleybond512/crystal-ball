@@ -58,6 +58,7 @@ jobs:
       tag: ${{ steps.context.outputs.tag }}
       release_name: ${{ steps.context.outputs.releaseName }}
       product_name: ${{ steps.context.outputs.productName }}
+      tauri_config: ${{ steps.context.outputs.tauriConfig }}
       commit_sha: ${{ steps.context.outputs.commitSha }}
       short_sha: ${{ steps.context.outputs.shortSha }}
     steps:
@@ -277,20 +278,40 @@ jobs:
           WM_BUILD_TAG: ${{ needs.release-context.outputs.tag }}
           WM_BUILD_COMMIT_SHA: ${{ needs.release-context.outputs.commit_sha }}
           CONVEX_URL: ${{ secrets.CONVEX_URL }}
+          TAURI_CONFIG_PATH: ${{ needs.release-context.outputs.tauri_config }}
+          RELEASE_VERSION: ${{ needs.release-context.outputs.version }}
         run: |
+          node scripts/check-desktop-identity.mjs --config-only --variant "$WM_BUILD_VARIANT" --version "$RELEASE_VERSION"
           if [ -n "${TAURI_BUILD_ARGS}" ]; then
             read -r -a tauri_args <<< "${TAURI_BUILD_ARGS}"
-            npm exec tauri build -- "${tauri_args[@]}"
+            npm exec tauri build -- "${tauri_args[@]}" --config "$TAURI_CONFIG_PATH"
           else
-            npm exec tauri build
+            npm exec tauri build -- --config "$TAURI_CONFIG_PATH"
           fi
+
+      - name: Verify measured macOS app and DMG identities
+        if: contains(matrix.platform, 'macos')
+        shell: bash
+        env:
+          RELEASE_VARIANT: ${{ needs.release-context.outputs.variant }}
+          RELEASE_VERSION: ${{ needs.release-context.outputs.version }}
+          RELEASE_TAG: ${{ needs.release-context.outputs.tag }}
+          NODE_TARGET: ${{ matrix.node_target }}
+        run: |
+          node scripts/check-desktop-identity.mjs \
+            --bundle-root "src-tauri/target/$NODE_TARGET/release/bundle" \
+            --variant "$RELEASE_VARIANT" --version "$RELEASE_VERSION" \
+            --tag "$RELEASE_TAG" --built-after "$((JOB_START_EPOCH * 1000))" --include-dmg
 
       - name: Verify signed macOS bundle + embedded runtime
         if: contains(matrix.platform, 'macos') && steps.apple-signing.outputs.available == 'true'
         shell: bash
+        env:
+          APP_PRODUCT_NAME: ${{ needs.release-context.outputs.product_name }}
+          NODE_TARGET: ${{ matrix.node_target }}
         run: |
-          APP_PATH=$(find src-tauri/target -type d -path '*/bundle/macos/*.app' | head -1)
-          if [ -z "$APP_PATH" ]; then
+          APP_PATH="src-tauri/target/$NODE_TARGET/release/bundle/macos/$APP_PRODUCT_NAME.app"
+          if [ ! -d "$APP_PATH" ]; then
             echo "::error::No macOS .app bundle found after build."
             exit 1
           fi
@@ -360,6 +381,7 @@ jobs:
             --tag "$RELEASE_TAG" \
             --commit-sha "$RELEASE_COMMIT_SHA" \
             --platform "${{ matrix.label }}" \
+            --built-after "$((JOB_START_EPOCH * 1000))" \
             --generated-at "$WM_BUILD_TIMESTAMP" \
             --output release-dist/manifest.json
           node --input-type=module -e "import fs from 'node:fs'; import path from 'node:path'; const manifest = JSON.parse(fs.readFileSync('release-dist/manifest.json', 'utf8')); for (const asset of manifest.assets) { fs.copyFileSync(asset.path, path.join('release-dist/assets', asset.name)); }"

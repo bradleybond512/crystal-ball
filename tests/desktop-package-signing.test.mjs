@@ -84,8 +84,8 @@ test('macOS desktop packaging signs and verifies the app bundle before creating 
   );
   assert.match(
  desktopPackageScript,
- /const variantProductName = \{[\s\S]*finance: 'Finance Monitor'[\s\S]*\}\[variant\];/,
- 'macOS packaging should derive an expected app bundle name from the selected variant',
+ /const desktopIdentity = getDesktopIdentity\(variant\);[\s\S]*const variantProductName = desktopIdentity\.productName;/,
+ 'macOS packaging should derive its expected app name and native config from the shared allowlist',
   );
   assert.doesNotMatch(
  desktopPackageScript,

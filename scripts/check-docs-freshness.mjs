@@ -4,6 +4,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import ts from 'typescript';
 
 // CB_DOCS_ROOT is a test seam: tests/agentic-gate.test.mjs points it at a
 // fixture tree to prove structural issues stay fatal under --changelog-advisory
@@ -29,10 +30,36 @@ function countInBlock(src, startRe, endRe, lineRe) {
   return count;
 }
 
-function countFullPanels() {
+// Parse source without evaluating app configuration. Counting matching lines
+// loses entries when two definitions share a line, and includes comment text.
+// A Map also follows object-property identity if a key is repeated.
+function panelInventory(variant) {
   const src = read('src/config/panels.ts');
   if (!src) return null;
-  return countInBlock(src, /^const FULL_PANELS/, /^};/, /enabled:/);
+  const source = ts.createSourceFile('panels.ts', src, ts.ScriptTarget.Latest, true);
+  for (const statement of source.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || declaration.name.text !== variant) continue;
+      if (!declaration.initializer || !ts.isObjectLiteralExpression(declaration.initializer)) continue;
+      const entries = new Map();
+      for (const property of declaration.initializer.properties) {
+        if (!ts.isPropertyAssignment(property)) continue;
+        if (!ts.isIdentifier(property.name) && !ts.isStringLiteral(property.name)) continue;
+        entries.set(property.name.text, property.initializer);
+      }
+      const enabled = [...entries.values()].filter((config) => (
+        ts.isObjectLiteralExpression(config) && config.properties.some((property) => (
+          ts.isPropertyAssignment(property)
+          && (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
+          && property.name.text === 'enabled'
+          && property.initializer.kind === ts.SyntaxKind.TrueKeyword
+        ))
+      )).length;
+      return { total: entries.size, enabled };
+    }
+  }
+  return { total: 0, enabled: 0 };
 }
 
 function countMapLayers() {
@@ -42,9 +69,7 @@ function countMapLayers() {
 }
 
 function countVariantPanels(variant) {
-  const src = read('src/config/panels.ts');
-  if (!src) return null;
-  return countInBlock(src, new RegExp(`^const ${variant}`), /^};/, /enabled:/);
+  return panelInventory(variant)?.total ?? null;
 }
 
 function countSecretKeys() {
@@ -71,11 +96,11 @@ function checkReadme() {
   if (!readme) return [];
   const issues = [];
 
-  const panelMatch = readme.match(/Default panel inventory\s*\|\s*`?\s*(\d+)\s*full\s*\/\s*(\d+)\s*tech\s*\/\s*(\d+)\s*finance\s*\/\s*(\d+)\s*happy/);
+  const panelMatch = readme.match(/(?:Default panel inventory|Panel catalog inventory)\s*\|\s*`?\s*(\d+)\s*full\s*\/\s*(\d+)\s*tech\s*\/\s*(\d+)\s*finance\s*\/\s*(\d+)\s*happy/);
   if (panelMatch) {
     const stated = { full: +panelMatch[1], tech: +panelMatch[2], finance: +panelMatch[3], happy: +panelMatch[4] };
     const actual = {
-      full: countFullPanels(),
+      full: countVariantPanels('FULL_PANELS'),
       tech: countVariantPanels('TECH_PANELS'),
       finance: countVariantPanels('FINANCE_PANELS'),
       happy: countVariantPanels('HAPPY_PANELS'),
@@ -84,6 +109,14 @@ function checkReadme() {
       if (v != null && stated[k] !== v) {
         issues.push(`README says ${stated[k]} ${k} panels, code has ${v}`);
       }
+    }
+  }
+
+  const enabledMatch = readme.match(/Default-enabled full panels\s*\|\s*(\d+)/);
+  if (enabledMatch) {
+    const actual = panelInventory('FULL_PANELS')?.enabled;
+    if (actual != null && +enabledMatch[1] !== actual) {
+      issues.push(`README says ${+enabledMatch[1]} default-enabled full panels, code has ${actual}`);
     }
   }
 

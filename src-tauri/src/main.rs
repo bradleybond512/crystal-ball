@@ -169,8 +169,8 @@ struct LocalApiState {
  token: Mutex<Option<String>>,
  port: Mutex<Option<u16>>,
  // True only once the sidecar has written its real bound port to the port
- // file. On the timeout fallback we record the default port but leave this
- // false — secret injection must not post plaintext to a port we never
+ // file. A timeout leaves the port absent and this false — secret injection
+ // must not post plaintext to a port we never
  // confirmed is actually our child (a squatter on 46123 would receive it).
  port_confirmed: AtomicBool,
  // Restart policy (R4-BUG-004). Lock order: `child` before `supervisor`;
@@ -1053,8 +1053,8 @@ fn set_always_on(webview: Webview, state: tauri::State<AlwaysOnGuard>, enabled: 
 #[tauri::command]
 fn get_local_api_port(webview: Webview, state: tauri::State<'_, LocalApiState>) -> Result<u16, String> {
  require_trusted_window(webview.label())?;
- // Only a port the sidecar confirmed through its port file. The timeout
- // fallback records the default port, which another local process may own;
+ // Only a port the sidecar confirmed through its port file. A preferred
+ // port may belong to another local process while confirmation is pending;
  // the renderer must never send its bearer token or secrets there
  // (R4-BUG-004). The wording keeps tauri-bridge's boot-noise filter.
  if !state.port_confirmed.load(Ordering::SeqCst) {
@@ -4147,7 +4147,12 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  reap_own_orphan_sidecar(app, &node_binary.to_string_lossy(), &sanitize_path_for_node(&script));
 
  let port_file = logs_dir_path(app)?.join("sidecar.port");
- let _ = fs::remove_file(&port_file);
+ if let Err(error) = sidecar_publication::stale_port_cleanup(fs::remove_file(&port_file)) {
+ if let Ok(mut slot) = state.start_error.lock() {
+ *slot = Some(error.to_string());
+ }
+ return Err(error.to_string());
+ }
  let token_file_cleanup = logs_dir_path(app)?.join("sidecar.token");
  let _ = fs::remove_file(&token_file_cleanup);
 
@@ -4406,16 +4411,16 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  // Publish only while this generation is still the live child: a starter that
  // stalls past its child's exit must never overwrite the next child's port.
  let waited = read_port_file(&port_file, 15000);
- match local_api_cell(&state).publish_start(generation, waited, DEFAULT_LOCAL_API_PORT) {
+ match local_api_cell(&state).publish_start(generation, waited) {
  sidecar_publication::Publication::Confirmed(port) => {
  append_desktop_log(app, "INFO", &format!("sidecar confirmed port={port}"));
  schedule_launch_secret_reconciliation(app, generation);
  }
- sidecar_publication::Publication::Unconfirmed(_) => {
+ sidecar_publication::Publication::AwaitingConfirmation => {
  append_desktop_log(
  app,
  "WARN",
- "sidecar port file not found within timeout, using default",
+ "sidecar port confirmation timed out; no listener published (monitor will accept a late confirmation)",
  );
  }
  sidecar_publication::Publication::Stale => {
@@ -4627,9 +4632,13 @@ async fn copy_diagnostics(webview: Webview, app: AppHandle) -> Result<String, St
  }
 
  // Fetch /api/diag from the live sidecar
- let local_state = app.state::<LocalApiState>();
- let port = local_state.port.lock().ok().and_then(|p| *p).unwrap_or(DEFAULT_LOCAL_API_PORT);
- let token = local_state.token.lock().ok().and_then(|t| t.clone()).unwrap_or_default();
+ let (token, port) = match confirmed_sidecar_target(&app) {
+ Ok(target) => target,
+ Err(reason) => {
+ out.push_str(&format!("--- /api/diag ---\n(diag unavailable: {reason})\n"));
+ return Ok(out);
+ }
+ };
  out.push_str(&format!("--- /api/diag (port {port}) ---\n"));
  let client = reqwest::Client::builder()
  .timeout(Duration::from_secs(2))

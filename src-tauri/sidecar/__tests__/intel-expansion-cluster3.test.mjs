@@ -662,7 +662,7 @@ test('BGP HTTP route enforces auth and reports a missing key through both health
   _resetSidecarCacheForTests();
   _resetFeedTracker();
   const server = await startBgpRouteServer();
-  const origin = 'https://crystalball.app';
+  const origin = 'http://127.0.0.1:3000';
   try {
     const unauthorized = await fetch(`http://127.0.0.1:${server.port}/api/infrastructure/bgp`, {
       headers: { Origin: origin },
@@ -690,7 +690,9 @@ test('BGP HTTP route enforces auth and reports a missing key through both health
     });
     assert.ok(Number.isSafeInteger(missingBody.fetchedAt) && missingBody.fetchedAt > 0);
 
-    const health = await fetch(`http://127.0.0.1:${server.port}/api/health`);
+    const health = await fetch(`http://127.0.0.1:${server.port}/api/health`, {
+      headers: { Authorization: `Bearer ${process.env.LOCAL_API_TOKEN}` },
+    });
     const healthBody = await health.json();
     assert.equal(healthBody.feeds.find((feed) => feed.key === 'cloudflare-bgp')?.lastError, 'missing_key');
 
@@ -712,7 +714,7 @@ test('BGP HTTP route retrieves two complete pages once, caches only normalized s
   const originalToken = process.env.LOCAL_API_TOKEN;
   const originalCloudflare = process.env.CLOUDFLARE_API_TOKEN;
   process.env.LOCAL_API_TOKEN = 'test-token-bgp-route-success';
-  process.env.CLOUDFLARE_API_TOKEN = 'test-cloudflare-secret';
+  process.env.CLOUDFLARE_API_TOKEN = 'test-cloudflare-secret'; // secret-scan: allow -- synthetic credential for mocked Cloudflare BGP pages
   _resetSidecarCacheForTests();
   _resetFeedTracker();
   const first = Array.from({ length: 100 }, (_, index) => cloudflareBgpEvent(index + 1));
@@ -722,7 +724,7 @@ test('BGP HTTP route retrieves two complete pages once, caches only normalized s
     [2, { success: true, result: { events: second }, result_info: { page: 2, per_page: 100, count: 1, total_count: 101 } }],
   ]));
   const server = await startBgpRouteServer();
-  const headers = { Authorization: 'Bearer test-token-bgp-route-success', Origin: 'https://crystalball.app' };
+  const headers = { Authorization: 'Bearer test-token-bgp-route-success', Origin: 'http://127.0.0.1:3000' };
   try {
     const firstResponse = await fetch(`http://127.0.0.1:${server.port}/api/infrastructure/bgp`, { headers });
     assert.equal(firstResponse.status, 200);
@@ -740,7 +742,9 @@ test('BGP HTTP route retrieves two complete pages once, caches only normalized s
     assert.deepEqual(await cachedResponse.json(), firstBody);
     assert.equal(mock.requests.length, 2, 'cached response must not refetch either upstream page');
 
-    const health = await fetch(`http://127.0.0.1:${server.port}/api/health`);
+    const health = await fetch(`http://127.0.0.1:${server.port}/api/health`, {
+      headers: { Authorization: `Bearer ${process.env.LOCAL_API_TOKEN}` },
+    });
     const healthBody = await health.json();
     const snapshot = healthBody.feeds.find((feed) => feed.key === 'cloudflare-bgp');
     assert.equal(snapshot.lastError, null);
@@ -765,7 +769,7 @@ test('BGP HTTP route coalesces concurrent cold requests into one bounded page fa
   const originalToken = process.env.LOCAL_API_TOKEN;
   const originalCloudflare = process.env.CLOUDFLARE_API_TOKEN;
   process.env.LOCAL_API_TOKEN = 'test-token-bgp-coalescing';
-  process.env.CLOUDFLARE_API_TOKEN = 'test-cloudflare-coalescing-secret';
+  process.env.CLOUDFLARE_API_TOKEN = 'test-cloudflare-coalescing-secret'; // secret-scan: allow -- synthetic credential for mocked concurrent BGP requests
   _resetSidecarCacheForTests();
   _resetFeedTracker();
   const mock = mockCloudflareBgpHttpsHandler(async ({ page }) => {
@@ -804,7 +808,7 @@ test('BGP HTTP route invalidates and aborts an old credential generation on rota
   const originalToken = process.env.LOCAL_API_TOKEN;
   const originalCloudflare = process.env.CLOUDFLARE_API_TOKEN;
   process.env.LOCAL_API_TOKEN = 'test-token-bgp-generation';
-  process.env.CLOUDFLARE_API_TOKEN = 'old-cloudflare-generation-secret';
+  process.env.CLOUDFLARE_API_TOKEN = 'old-cloudflare-generation-secret'; // secret-scan: allow -- synthetic credential for mocked BGP credential rotation
   _resetSidecarCacheForTests();
   _resetFeedTracker();
   let releaseOld;
@@ -863,7 +867,9 @@ test('BGP HTTP route invalidates and aborts an old credential generation on rota
     assert.equal(missing.status, 503);
     const missingBody = await missing.json();
     assert.equal(missingBody.error, 'missing_key');
-    const health = await fetch(`http://127.0.0.1:${server.port}/api/health`);
+    const health = await fetch(`http://127.0.0.1:${server.port}/api/health`, {
+      headers: { Authorization: `Bearer ${process.env.LOCAL_API_TOKEN}` },
+    });
     const healthBody = await health.json();
     assert.equal(healthBody.feeds.find((feed) => feed.key === 'cloudflare-bgp')?.lastError, 'missing_key');
   } finally {
@@ -880,7 +886,7 @@ test('BGP HTTP route attempts an oversized upstream body once and returns result
   const originalToken = process.env.LOCAL_API_TOKEN;
   const originalCloudflare = process.env.CLOUDFLARE_API_TOKEN;
   process.env.LOCAL_API_TOKEN = 'test-token-bgp-size';
-  process.env.CLOUDFLARE_API_TOKEN = 'test-cloudflare-size-secret';
+  process.env.CLOUDFLARE_API_TOKEN = 'test-cloudflare-size-secret'; // secret-scan: allow -- synthetic credential for mocked oversized BGP response
   _resetSidecarCacheForTests();
   _resetFeedTracker();
   const mock = mockCloudflareBgpHttpsHandler(async () => ({

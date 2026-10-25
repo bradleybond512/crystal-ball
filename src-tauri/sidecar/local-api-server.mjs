@@ -6,7 +6,7 @@ import http, { createServer } from 'node:http';
 import { timingSafeEqual, randomUUID, createHash } from 'node:crypto';
 import https from 'node:https';
 import dns from 'node:dns/promises';
-import { constants as fsConstants, existsSync, readFileSync, writeFileSync, statSync, openSync, readSync, closeSync, chmodSync } from 'node:fs';
+import { constants as fsConstants, existsSync, readFileSync, writeFileSync, statSync, openSync, readSync, closeSync, chmodSync, fchmodSync, renameSync, unlinkSync } from 'node:fs';
 import { readdir, readFile, lstat, open, rename, rm } from 'node:fs/promises';
 import { isIP } from 'node:net';
 import { promisify } from 'node:util';
@@ -586,6 +586,27 @@ export function getFeedSnapshots() {
     lastAttemptAt: s.lastAttemptAt ?? null,
   }));
 }
+
+// `ok` answers only whether this process can respond. Inventory and its
+// degradation are separate and are evaluated only for authenticated callers.
+export const SidecarHealth = {
+  project(authenticated, readDetails) {
+    if (authenticated !== true) return { ok: true };
+    const details = readDetails();
+    const failed = details.feeds.filter((feed) => Boolean(feed.lastError)).length;
+    const missing = details.keys_missing_count;
+    return {
+      ...details,
+      ok: true,
+      authenticated: true,
+      degraded: failed > 0 || missing > 0,
+      degradation: {
+        feeds: { tracked: details.feeds.length, failed },
+        keys: { configured: details.keys_configured, missing, total: details.keys_total },
+      },
+    };
+  },
+};
 
 /** @internal — for tests. Drops all tracked feed state. */
 export function _resetFeedTracker() {
@@ -2828,7 +2849,17 @@ function toHeaders(nodeHeaders, options = {}) {
   return headers;
 }
 
+function isRetiredRemoteBase(value) {
+  try {
+    const hostname = new URL(value, 'http://localhost').hostname.toLowerCase().replace(/\.+$/, '');
+    return hostname === 'crystalball.app' || hostname.endsWith('.crystalball.app');
+  } catch {
+    return false;
+  }
+}
+
 async function proxyToCloud(requestUrl, req, remoteBase) {
+  if (!remoteBase || isRetiredRemoteBase(remoteBase)) return null;
   const target = `${remoteBase}${requestUrl.pathname}${requestUrl.search}`;
   const body = ['GET', 'HEAD'].includes(req.method) ? undefined : await readBody(req);
   const controller = new AbortController();
@@ -3035,7 +3066,8 @@ async function importHandler(modulePath) {
 
 function resolveConfig(options = {}) {
   const port = Number(options.port ?? process.env.LOCAL_API_PORT ?? 46_123);
-  const remoteBase = String(options.remoteBase ?? process.env.LOCAL_API_REMOTE_BASE ?? 'https://crystalball.app').replace(/\/$/, '');
+  const configuredRemote = String(options.remoteBase ?? process.env.LOCAL_API_REMOTE_BASE ?? '').replace(/\/$/, '');
+  const remoteBase = isRetiredRemoteBase(configuredRemote) ? '' : configuredRemote;
   const resourceDir = String(options.resourceDir ?? process.env.LOCAL_API_RESOURCE_DIR ?? process.cwd());
   const apiDir = options.apiDir
  ? String(options.apiDir)
@@ -3083,16 +3115,17 @@ async function handleLocalServiceStatus(context) {
   return json({
  success: true,
  timestamp: new Date().toISOString(),
- summary: { operational: 2, degraded: 0, outage: 0, unknown: 0 },
+ summary: { operational: 1, degraded: 0, outage: 0, unknown: 1 },
  services: [
  { id: 'local-api', name: 'Local Desktop API', category: 'dev', status: 'operational', description: `Running on 127.0.0.1:${context.port}` },
- { id: 'cloud-pass-through', name: 'Cloud pass-through', category: 'cloud', status: 'operational', description: `Fallback target ${context.remoteBase}` },
+ { id: 'cloud-pass-through', name: 'Cloud pass-through', category: 'cloud', status: 'unknown', description: context.cloudFallback && context.remoteBase ? `Configured target ${context.remoteBase}; reachability unverified` : 'Cloud fallback not configured or disabled' },
  ],
  local: { enabled: true, mode: context.mode, port: context.port, remoteBase: context.remoteBase },
   });
 }
 
 async function tryCloudFallback(requestUrl, req, context, reason) {
+  if (!context.remoteBase || isRetiredRemoteBase(context.remoteBase)) return null;
   if (reason) {
  const route = requestUrl.pathname;
  const count = (fallbackCounts.get(route) || 0) + 1;
@@ -3113,17 +3146,6 @@ async function tryCloudFallback(requestUrl, req, context, reason) {
  return null;
   }
 }
-
-// Known crystalball.app subdomains. Enumerated rather than glob-matched so a
-// future DNS / certificate misconfig can't silently grant CORS access to an
-// unrelated subdomain (e.g. an attacker-controlled preview host).
-const SIDECAR_PROD_HOSTS = new Set([
-  'crystalball.app',
-  'tech.crystalball.app',
-  'finance.crystalball.app',
-  'happy.crystalball.app',
-  'api.crystalball.app',
-]);
 
 // Dev-server ports the sidecar may legitimately serve. Other localhost ports
 // must NOT receive Access-Control-Allow-Origin reflection — that would let a
@@ -3151,12 +3173,6 @@ export function isSidecarOriginAllowed(origin) {
   if (!origin) return false;
   for (const p of SIDECAR_TAURI_PATTERNS) {
     if (p.test(origin)) return true;
-  }
-  // Match prod host suffix (handles https://crystalball.app and the four
-  // enumerated subdomains; anything else is denied).
-  if (origin.startsWith('https://')) {
-    const host = origin.slice('https://'.length);
-    if (SIDECAR_PROD_HOSTS.has(host)) return true;
   }
   const localMatch = SIDECAR_LOCALHOST_RE.test(origin)
     ? (origin.match(SIDECAR_LOCALHOST_RE) || [])
@@ -7725,37 +7741,38 @@ async function dispatch(requestUrl, req, routes, context) {
   }
 
   // ── Read-only diagnostic endpoints (pre-auth) ─────────────────────────
-  // These are localhost-only, expose no secrets, and are polled frequently
-  // by the renderer.  Placing them above the auth gate avoids thousands of
+  // Minimal liveness is public; health inventory requires the existing token.
+  // Placing liveness above the auth gate avoids thousands of
   // spurious 401s when the renderer's IPC token isn't ready yet (cold
   // start / IPC custom-protocol fallback).
 
   if (requestUrl.pathname === '/api/health') {
-    const mem = process.memoryUsage();
-    const missing = wmMissingKeys();
-    if (aisState.socket?.readyState === 1) {
-      recordFeedSuccess('ais', aisState.lastSnapshotAt || Date.now());
-    } else if (aisState.lastSnapshotAt > 0) {
-      recordFeedFailure('ais', 'AIS websocket disconnected', Date.now());
-    }
-    return Response.json({
-      ok: true,
-      pid: process.pid,
-      uptime_ms: Date.now() - SIDECAR_START_MS,
-      port: context.port,
-      rss_mb: Math.round(mem.rss / 1024 / 1024),
-      heap_mb: Math.round(mem.heapUsed / 1024 / 1024),
-      ais_connected: aisState.socket?.readyState === 1,
-      ais_vessels: aisState.vessels.size,
-      // keys_configured / keys_total provided as a count only — key names
-      // are intentionally omitted from the pre-auth response.
-      // keys_missing (the list of unconfigured key names) is only available
-      // via the authenticated /api/diagnostics endpoint.
-      keys_configured: EXPECTED_API_KEYS.length - missing.length,
-      keys_total: EXPECTED_API_KEYS.length,
-      keys_missing_count: missing.length,
-      feeds: getFeedSnapshots(),
-    }, { status: 200, headers: { 'content-type': 'application/json', ...makeCorsHeaders(req) } });
+    const payload = SidecarHealth.project(isValidToken(req.headers.authorization || ''), () => {
+      const mem = process.memoryUsage();
+      const missing = wmMissingKeys();
+      if (aisState.socket?.readyState === 1) {
+        recordFeedSuccess('ais', aisState.lastSnapshotAt || Date.now());
+      } else if (aisState.lastSnapshotAt > 0) {
+        recordFeedFailure('ais', 'AIS websocket disconnected', Date.now());
+      }
+      return {
+        pid: process.pid,
+        uptime_ms: Date.now() - SIDECAR_START_MS,
+        port: context.port,
+        rss_mb: Math.round(mem.rss / 1024 / 1024),
+        heap_mb: Math.round(mem.heapUsed / 1024 / 1024),
+        ais_connected: aisState.socket?.readyState === 1,
+        ais_vessels: aisState.vessels.size,
+        // Names remain in authenticated diagnostics; health reports counts.
+        keys_configured: EXPECTED_API_KEYS.length - missing.length,
+        keys_total: EXPECTED_API_KEYS.length,
+        keys_missing_count: missing.length,
+        feeds: getFeedSnapshots(),
+      };
+    });
+    return Response.json(payload, { status: 200, headers: {
+      'content-type': 'application/json', ...makeCorsHeaders(req), 'cache-control': 'no-store',
+    } });
   }
 
   if (requestUrl.pathname === '/api/spaceweather/status') {
@@ -16040,25 +16057,10 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
-  // ── AI Strategic Posture — proxy cloud API server-side (bypasses browser CORS) ─
+  // ── AI Strategic Posture — compute from locally cached public observations ─
   if (requestUrl.pathname === '/api/military/v1/get-theater-posture') {
  const cached = getCached('theater-posture', 5 * 60 * 1000);
  if (cached) return json(cached);
- try {
- // Node.js is not subject to browser CORS — proxy directly to cloud API server-side
- const cloudUrl = 'https://api.crystalball.app/api/military/v1/get-theater-posture' + requestUrl.search;
- const cloudResp = await fetchWithTimeout(cloudUrl, {
- headers: { Accept: 'application/json', 'User-Agent': CHROME_UA },
- }, 10_000);
- if (cloudResp.ok) {
- const body = await cloudResp.json();
- if (body && Array.isArray(body.theaters)) {
- setCached('theater-posture', body, 5 * 60 * 1000);
- return json(body);
- }
- }
- } catch { /* timeout / network error — fall through to local computation */ }
-
  // Compute from locally cached ACLED, AIS, and ADSB data
  const THEATER_DEFS = [
  { theater: 'iran-theater', latMin: 23, latMax: 38, lonMin: 44, lonMax: 63 },
@@ -21482,6 +21484,63 @@ export function parseBfsOdlStations(raw) {
     .filter(s => s.doseRate !== null);
 }
 
+function publicationErrorCode(error) {
+  return typeof error?.code === 'string' && /^[A-Z0-9_]{1,40}$/.test(error.code) ? error.code : 'IO_ERROR';
+}
+
+/** Publish only the complete bound port. Failed attempts own their temporary
+ * file and listener, never a previous target or an unrelated temporary file.
+ * Filesystem injection keeps failure tests independent of user permissions. */
+export async function publishSidecarPort(server, portFile, logger, io = {}) {
+  const fs = { openSync, fchmodSync, writeFileSync, closeSync, renameSync, unlinkSync, ...io };
+  let temporary;
+  let descriptor;
+  let ownsTemporary = false;
+  try {
+    const address = server.address();
+    const port = typeof address === 'object' && address !== null ? address.port : null;
+    if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+      throw Object.assign(new Error('Bound port unavailable'), { code: 'PORT_UNAVAILABLE' });
+    }
+    // Standalone callers without a native portfile retain their existing mode.
+    if (!portFile) return port;
+    temporary = `${portFile}.${process.pid}.${randomUUID()}.tmp`;
+    descriptor = fs.openSync(temporary, 'wx', 0o600);
+    ownsTemporary = true;
+    fs.fchmodSync(descriptor, 0o600);
+    fs.writeFileSync(descriptor, String(port));
+    fs.closeSync(descriptor);
+    descriptor = undefined;
+    fs.renameSync(temporary, portFile);
+    ownsTemporary = false;
+    return port;
+  } catch (error) {
+    if (descriptor !== undefined) {
+      try { fs.closeSync(descriptor); }
+      catch (error_) { logger.error(`[local-api] port publication descriptor cleanup failed (${publicationErrorCode(error_)})`); }
+    }
+    if (ownsTemporary) {
+      try { fs.unlinkSync(temporary); }
+      catch (error_) { logger.error(`[local-api] port publication temporary cleanup failed (${publicationErrorCode(error_)})`); }
+    }
+    const message = `Sidecar port publication failed (${publicationErrorCode(error)})`;
+    logger.error(`[local-api] ${message}`);
+    await new Promise((resolve) => {
+      try {
+        server.close((cleanup) => {
+          if (cleanup) logger.error(`[local-api] port publication listener cleanup failed (${publicationErrorCode(cleanup)})`);
+          resolve();
+        });
+        server.closeAllConnections?.();
+      } catch (error_) {
+        logger.error(`[local-api] port publication listener cleanup failed (${publicationErrorCode(error_)})`);
+        resolve();
+      }
+    });
+    throw new Error(message);
+  }
+}
+
 export async function createLocalApiServer(options = {}) {
   if (!process.env.LOCAL_API_TOKEN) {
     console.error('[sidecar] FATAL: LOCAL_API_TOKEN not set — refusing to start');
@@ -22282,14 +22341,8 @@ export async function createLocalApiServer(options = {}) {
  }
  }
 
- const address = server.address();
- const boundPort = typeof address === 'object' && address?.port ? address.port : context.port;
+ const boundPort = await publishSidecarPort(server, process.env.LOCAL_API_PORT_FILE, context.logger);
  context.port = boundPort;
-
- const portFile = process.env.LOCAL_API_PORT_FILE;
- if (portFile) {
- try { writeFileSync(portFile, String(boundPort)); chmodSync(portFile, 0o600); } catch {}
- }
 
  context.logger.log(`[local-api] listening on http://127.0.0.1:${boundPort} (apiDir=${context.apiDir}, routes=${routes.length}, cloudFallback=${context.cloudFallback})`);
 

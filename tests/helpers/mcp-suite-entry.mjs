@@ -28,6 +28,20 @@ export const SUITE_STAGES = Object.freeze({
     Object.freeze(['--test', ...SIDECAR_REMAINING_NODE_FILES]),
     Object.freeze(['--import', 'tsx', '--test', ...SIDECAR_REMAINING_TSX_FILES]),
   ]),
+  'port-publication': Object.freeze([
+    Object.freeze(['--test', 'tests/sidecar-port-publication.test.mjs', 'tests/sidecar-supervisor-boundary.test.mjs']),
+    Object.freeze(['--import', 'tsx', '--test', 'src/services/diagnostics/__tests__/local-engine-status.test.mts']),
+  ]),
+  'domain-retirement': Object.freeze([
+    Object.freeze(['--test', 'api/_cors.test.mjs', 'api/_api-key.test.mjs', 'api/youtube/embed.test.mjs', 'api/og-story.test.mjs', 'api/story-retirement.test.mjs', 'scripts/ais-relay-cors.test.cjs', 'tests/csp-allowlist.test.mjs', 'tests/key-compare-hardening.test.mjs', 'api/grid-outages.test.mjs', 'api/local-logistics.test.mjs', 'api/usgs-water-proxy.test.mjs']),
+    Object.freeze(['--import', 'tsx', '--test', 'src/services/__tests__/runtime-fetch-fallback.test.mts', 'src/services/__tests__/fetch-attribution.test.mts', 'src/services/__tests__/story-share.test.mts', 'tests/server-cors-retirement.test.mts']),
+    Object.freeze(['--import', 'tsx', '--import', './tests/panels/register-hook.mjs', '--test', 'src/components/__tests__/story-modal-sharing.test.mts', 'src/components/__tests__/retired-domain-panels.test.mts']),
+    Object.freeze(['--test', 'src-tauri/sidecar/local-api-server.test.mjs', 'src-tauri/sidecar/sidecar-cors.test.mjs', 'src-tauri/sidecar/__tests__/intel-expansion-cluster3.test.mjs']),
+  ]),
+  'health-contract': Object.freeze([
+    Object.freeze(['--test', 'tests/sidecar-health-runtime.test.mjs', 'scripts/sidecar-health-contract.test.mjs', 'scripts/sidecar-health-consumers.test.mjs', 'scripts/doctor-core.test.mjs', 'tools/mcp-server/__tests__/sidecar-client.test.mjs', 'tools/mcp-server/__tests__/doctor.test.mjs', 'tools/mcp-server/__tests__/diagnostics-tools.test.mjs']),
+    Object.freeze(['--import', 'tsx', '--import', './tests/panels/register-hook.mjs', '--test', 'src/services/diagnostics/__tests__/live-diagnostics-snapshot.test.mts', 'src/services/diagnostics/__tests__/sidecar-probe-engine.test.mts', 'src/components/__tests__/feed-health-panel.test.mts', 'tests/components/feed-health-auth.test.mts']),
+  ]),
 });
 
 export function parseFinalTap(stdout) {

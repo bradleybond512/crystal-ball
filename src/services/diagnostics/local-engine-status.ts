@@ -110,6 +110,9 @@ export function buildLocalEngineView(status: LocalEngineStatus | null): LocalEng
   const restarts = status.restarts === 1 ? '1 restart' : `${status.restarts} restarts`;
   switch (status.phase) {
     case 'running': {
+      if (!status.portConfirmed || status.port === null) {
+        return { tone: 'warn', text: 'Local engine waiting for port confirmation', canRestart: false };
+      }
       return {
         tone: 'ok',
         text: status.restarts > 0 ? `Local engine running (${restarts} this session)` : 'Local engine running',

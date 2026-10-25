@@ -215,16 +215,21 @@ export function sidecarHealthFromPayload(
   }
   const obj = payload as Record<string, unknown>;
   const ok = obj.ok === true;
+  const authenticated = ok && obj.authenticated === true;
   const port = typeof obj.port === 'number' ? obj.port : undefined;
   const uptimeMs = typeof obj.uptime_ms === 'number' ? obj.uptime_ms : undefined;
+  let reason = 'Sidecar /api/health responded but ok=false';
+  if (ok) {
+    reason = authenticated
+      ? `Sidecar reachable on :${port ?? '?'} (uptime ${formatUptime(uptimeMs)})`
+      : 'Sidecar process live; authenticated diagnostics pending.';
+  }
   return {
     status: ok ? 'healthy' : 'failing',
     lastReachableAt: reachableAt,
     version: typeof obj.version === 'string' ? obj.version : undefined,
-    authenticated: ok,
-    reason: ok
-      ? `Sidecar reachable on :${port ?? '?'} (uptime ${formatUptime(uptimeMs)})`
-      : `Sidecar /api/health responded but ok=false`,
+    authenticated,
+    reason,
   };
 }
 

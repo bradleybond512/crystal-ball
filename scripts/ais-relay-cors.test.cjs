@@ -11,38 +11,33 @@
 const { strict: assert } = require('node:assert');
 const test = require('node:test');
 
-// Replicate the getCorsOrigin logic from ais-relay.cjs so tests don't spin up
-// the full server. Keep this in sync with the regex in scripts/ais-relay.cjs.
-const ALLOWED_ORIGINS = [
-  'https://crystalball.app',
-  'https://tech.crystalball.app',
-  'https://finance.crystalball.app',
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:4173',
-  'https://localhost',
-  'tauri://localhost',
+// Exercise the actual pure CORS declarations/function without starting the relay.
+const { readFileSync } = require('node:fs');
+const path = require('node:path');
+const { runInNewContext } = require('node:vm');
+const source = readFileSync(path.join(__dirname, 'ais-relay.cjs'), 'utf8');
+const declarations = [
+  source.match(/const ALLOWED_ORIGINS = \[[\s\S]*?^\];/m)?.[0],
+  source.match(/const ALLOWED_PREVIEW_PATTERNS = \[[\s\S]*?^\];/m)?.[0],
+  source.match(/function getCorsOrigin\(req\) \{[\s\S]*?^\}/m)?.[0],
 ];
-
-// Owner-anchored patterns — kept in sync with ais-relay.cjs ALLOWED_PREVIEW_PATTERNS.
-// Requires crystalball-/crystal-ball- prefix AND a known owner slug.
-const ALLOWED_PREVIEW_PATTERNS = [
-  /^https:\/\/crystalball-[a-z0-9-]+-bradleybond512\.vercel\.app$/,
-  /^https:\/\/crystal-ball-[a-z0-9-]+-bradleybond512\.vercel\.app$/,
-  /^https:\/\/crystalball-[a-z0-9-]+-elie-[a-z0-9]+\.vercel\.app$/,
-  /^https:\/\/crystal-ball-[a-z0-9-]+-elie-[a-z0-9]+\.vercel\.app$/,
-];
-
+assert.ok(declarations.every(Boolean), 'relay CORS source declarations must be found');
 function getCorsOrigin(origin, allowVercelPreview) {
-  if (ALLOWED_ORIGINS.includes(origin)) return origin;
-  if (allowVercelPreview && ALLOWED_PREVIEW_PATTERNS.some(p => p.test(origin))) return origin;
-  return '';
+  return runInNewContext(`${declarations.join('\n')}\ngetCorsOrigin(req)`, {
+    ALLOW_VERCEL_PREVIEW_ORIGINS: allowVercelPreview,
+    req: { headers: { origin } },
+  });
 }
 
-test('relay CORS: accepts production origins', () => {
-  assert.equal(getCorsOrigin('https://crystalball.app', false), 'https://crystalball.app');
-  assert.equal(getCorsOrigin('https://tech.crystalball.app', false), 'https://tech.crystalball.app');
-  assert.equal(getCorsOrigin('https://finance.crystalball.app', false), 'https://finance.crystalball.app');
+test('relay CORS: rejects every retired public origin', () => {
+  for (const origin of [
+    'https://crystalball.app', 'https://tech.crystalball.app',
+    'https://finance.crystalball.app', 'https://happy.crystalball.app',
+    'https://api.crystalball.app', 'https://CRYSTALBALL.APP.',
+  ]) {
+    assert.equal(getCorsOrigin(origin, false), '', origin);
+    assert.equal(getCorsOrigin(origin, true), '', origin);
+  }
 });
 
 test('relay CORS: accepts localhost dev origins', () => {

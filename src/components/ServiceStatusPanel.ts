@@ -1,7 +1,7 @@
 /* eslint-disable sonarjs/no-nested-conditional, sonarjs/function-return-type, sonarjs/no-async-constructor, no-console */
 import { Panel } from './Panel';
 import { t } from '@/services/i18n';
-import { getLocalApiPort, isDesktopRuntime } from '@/services/runtime';
+import { getLocalApiPort, isDesktopRuntime, isRetiredAppUrl } from '@/services/runtime';
 import {
   getDesktopReadinessChecks,
   getKeyBackedAvailabilitySummary,
@@ -22,6 +22,14 @@ interface LocalBackendStatus {
 
 type CategoryFilter = 'all' | 'cloud' | 'dev' | 'comm' | 'ai' | 'saas';
 
+export function serviceBackendLabel(base: string): string {
+  try {
+ return isRetiredAppUrl(base) ? 'not configured' : new URL(base).host;
+  } catch {
+ return 'not configured';
+  }
+}
+
 function getCategoryLabel(category: CategoryFilter): string {
   const labels: Record<CategoryFilter, string> = {
  all: t('components.serviceStatus.categories.all'),
@@ -41,6 +49,7 @@ export class ServiceStatusPanel extends Panel {
   private filter: CategoryFilter = 'all';
   private localBackend: LocalBackendStatus | null = null;
   private cloudReachable: boolean | null = null;
+  private cloudHealthDestination: string | null = null;
 
   constructor() {
  super({ id: 'service-status', title: t('panels.serviceStatus'), showCount: false });
@@ -49,13 +58,15 @@ export class ServiceStatusPanel extends Panel {
   }
 
   private async probeCloudHealth(): Promise<void> {
- // Cheap HEAD/GET probe to whatever the `/api/*` redirect resolves to in
- // this deployment. Uses a short timeout so a loading panel never hangs
- // on a slow or offline network.
+ // Probe this page's health endpoint and retain its actual destination for
+ // the status label, including a final response URL after a redirect.
+ // A short timeout keeps a slow or offline network from hanging the panel.
  const controller = new AbortController();
  const timer = setTimeout(() => controller.abort(), 4000);
  try {
+ this.cloudHealthDestination = new URL('/api/health', window.location.href).href;
  const res = await fetch('/api/health', { method: 'GET', signal: controller.signal });
+ if (res.url) this.cloudHealthDestination = res.url;
  // Only a 2xx response counts as healthy. A 404 usually means the edge
  // is up but /api/health is not wired on this deployment — that's still
  // a red flag, so surface it as unreachable rather than lying green.
@@ -151,7 +162,7 @@ export class ServiceStatusPanel extends Panel {
  : 'Cloud API unreachable — features that rely on server proxying may fail.');
  const stateClass = reachable === false ? 'service-status-backend warning' : 'service-status-backend';
  return h('div', { className: stateClass },
- label, ' · ', h('strong', null, 'api.crystalball.app'),
+ label, ' · ', h('strong', null, serviceBackendLabel(this.cloudHealthDestination ?? window.location.origin)),
  );
  }
 
@@ -162,7 +173,8 @@ export class ServiceStatusPanel extends Panel {
  }
 
  const port = this.localBackend.port ?? getLocalApiPort();
- const remote = this.localBackend.remoteBase ?? 'https://crystalball.app';
+ const configured = this.localBackend.remoteBase;
+ const remote = configured && !isRetiredAppUrl(configured) ? configured : 'not configured';
 
  return h('div', { className: 'service-status-backend' },
  'Local backend active on ', h('strong', null, `127.0.0.1:${port}`),

@@ -11,8 +11,6 @@ function sanitizeVideoId(value) {
 }
 
 const ALLOWED_ORIGINS = [
-  /^https:\/\/crystalball\.app$/,
-  /^https:\/\/(tech|finance|happy|api)\.crystalball\.app$/,
   // Vercel preview URLs anchored to known owner accounts (mirrors _cors.ts).
   // The `-<account-slug>` suffix (e.g. `-bradleybond512`) is appended by Vercel
   // from the OWNING account and cannot be forged by a third party. Without it,
@@ -49,7 +47,7 @@ function sanitizeAllowedOrigin(raw, fallback, allowList = ALLOWED_ORIGINS) {
 }
 
 function sanitizeOrigin(raw) {
-  return sanitizeAllowedOrigin(raw, 'https://crystalball.app', ALLOWED_ORIGINS);
+  return sanitizeAllowedOrigin(raw, null, ALLOWED_ORIGINS);
 }
 
 function sanitizeParentOrigin(raw, fallback) {
@@ -71,7 +69,10 @@ export default async function handler(request) {
   const mute = parseFlag(url.searchParams.get('mute'), '1');
   const vq = ['small', 'medium', 'large', 'hd720', 'hd1080'].includes(url.searchParams.get('vq') || '') ? url.searchParams.get('vq') : '';
 
-  const origin = sanitizeOrigin(url.searchParams.get('origin'));
+  const origin = sanitizeOrigin(url.searchParams.get('origin') || url.origin);
+  if (!origin) {
+ return new Response('Origin is unavailable', { status: 400 });
+  }
   const parentOrigin = sanitizeParentOrigin(url.searchParams.get('parentOrigin'), origin);
 
   const embedSrc = new URL(`https://www.youtube.com/embed/${videoId}`);

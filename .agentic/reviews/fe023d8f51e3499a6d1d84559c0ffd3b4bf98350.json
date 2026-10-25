@@ -1,0 +1,9 @@
+{
+  "reviewedSha": "fe023d8f51e3499a6d1d84559c0ffd3b4bf98350",
+  "reviewer": "claude",
+  "model": "claude-sonnet-4-6",
+  "verdict": "approve",
+  "blockingFindings": 0,
+  "reviewedAt": "2026-10-24T04:17:01.718Z",
+  "evidence": "Verbatim actual Sonnet review of exact source fe023d8f51e3499a6d1d84559c0ffd3b4bf98350:\n\nfe023 is a minimal two-file correction commit on top of 611824da. It changes only README.md (Ghost Mode section, ~line 275) and SECURITY.md (Telemetry section, ~lines 75–85) to replace stale PostHog-SDK language with accurate direct-capture descriptions. The corrections are: (1) \"PostHog events are sent directly without the SDK's automatic page-leave capture,\" (2) \"Ghost or consent revocation stops new PostHog captures and aborts the app's in-flight capture requests,\" and (3) \"it does not erase events already delivered.\" All three claims are verified against analytics.ts (sha 228d3cca): that file never imports or instantiates the PostHog SDK; all capture is performed through a manually constructed captureInstance using direct fetch() calls, stopAnalytics() aborts active requests via AbortController, and isAnalyticsAllowed() gates Ghost mode. The corrections precisely match the PRIVACY.md authoritative description introduced at 611. Fresh QA at fe023 shows: changed-doc Markdown lint passed (2 files), docs:check --changelog-advisory passed, and all normal commit hooks (conflict markers, staged-secret scan, Markdown×270, typecheck both configs) passed. The prior 611 full gate (15 agentic-gate / 40 analytics-consent / 19 release-capabilities, full build) applies on unchanged runtime/checker/test/gate/package inputs. No dependency changes, no lockfile changes, no source logic changes. Zero blocking findings.\n\nAll actual findings: []"
+}

@@ -425,7 +425,7 @@ test('a cached cloud preference cannot bypass a local-only route', async () => {
 test('FRED sidecar reports live provenance once and cache provenance on reuse', async () => {
   _resetSidecarCacheForTests();
   const priorKey = process.env.FRED_API_KEY;
-  process.env.FRED_API_KEY = 'fred-route-test-key';
+  process.env.FRED_API_KEY = 'fred-route-test-key'; // secret-scan: allow -- synthetic credential for mocked FRED response
   const restoreHttps = mockHttpsRequestOnce({
     statusCode: 200,
     headers: { 'content-type': 'application/json' },
@@ -848,7 +848,7 @@ test('inline /api routes: OPTIONS preflight returns 204 (not 401/405)', async ()
 test('inline /api routes: gated route requires auth, public route does not', async () => {
   const localApi = await setupApiDir({});
   const originalToken = process.env.LOCAL_API_TOKEN;
-  process.env.LOCAL_API_TOKEN = 'secret-inline-token';
+  process.env.LOCAL_API_TOKEN = 'secret-inline-token'; // secret-scan: allow -- synthetic local token for isolated route-auth fixture
   const app = await createLocalApiServer({
  port: 0,
  apiDir: localApi.apiDir,
@@ -971,7 +971,7 @@ test('state mirror routes require the local API token (not loopback-only)', asyn
   // seismic mirrors. All real callers (renderer, MCP client) send the token.
   const localApi = await setupApiDir({});
   const originalToken = process.env.LOCAL_API_TOKEN;
-  process.env.LOCAL_API_TOKEN = 'secret-mirror-token';
+  process.env.LOCAL_API_TOKEN = 'secret-mirror-token'; // secret-scan: allow -- synthetic local token for isolated state-mirror auth fixture
   const app = await createLocalApiServer({
  port: 0,
  apiDir: localApi.apiDir,
@@ -1539,7 +1539,7 @@ test('does not soft-pass provider auth 403 JSON responses even with cf-ray heade
 test('auth-required behavior unchanged — rejects unauthenticated requests when token is set', async () => {
   const localApi = await setupApiDir({});
   const originalToken = process.env.LOCAL_API_TOKEN;
-  process.env.LOCAL_API_TOKEN = 'secret-token-123';
+  process.env.LOCAL_API_TOKEN = 'secret-token-123'; // secret-scan: allow -- synthetic local token for isolated unauthenticated-route fixture
 
   const app = await createLocalApiServer({
  port: 0,
@@ -4530,5 +4530,81 @@ test('/api/spaceweather-kp-gfz — zero valid samples on HTTP 200 is degraded an
   } finally {
     _resetSidecarCacheForTests();
     await app.cleanup();
+  }
+});
+
+test('retired cloud configuration never receives requests, even with fallback enabled', async () => {
+  const localApi = await setupApiDir({});
+  const originalFetch = globalThis.fetch;
+  const outbound = [];
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (!url.startsWith('http://127.0.0.1:')) {
+      outbound.push(url);
+      throw new Error('external requests are forbidden in this fixture');
+    }
+    return originalFetch(input, init);
+  };
+  try {
+    for (const remoteBase of ['https://crystalball.app', 'https://API.CRYSTALBALL.APP.', '//tech.crystalball.app']) {
+      const app = await createLocalApiServer({
+        port: 0, apiDir: localApi.apiDir, dataDir: localApi.apiDir,
+        resourceDir: localApi.apiDir, remoteBase, cloudFallback: 'true',
+        logger: { log() {}, warn() {}, error() {} },
+      });
+      try {
+        const { port } = await app.start();
+        await authFetch(`http://127.0.0.1:${port}/api/missing-retirement-fixture`);
+        const status = await authFetch(`http://127.0.0.1:${port}/api/service-status`);
+        const body = await status.json();
+        assert.equal(body.local?.remoteBase, '');
+      } finally {
+        await app.close();
+      }
+    }
+    assert.deepEqual(outbound, []);
+  } finally {
+    globalThis.fetch = originalFetch;
+    await localApi.cleanup();
+  }
+});
+
+test('theater posture computes locally without a default cloud request', async () => {
+  const localApi = await setupApiDir({});
+  const originalFetch = globalThis.fetch;
+  const outbound = [];
+  const restoreHttps = mockHttpsRequestOnce({
+    statusCode: 200,
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ theaters: [] }),
+    onRequest(options) {
+      outbound.push(`https://${options.hostname}${options.path}`);
+    },
+  });
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (!url.startsWith('http://127.0.0.1:')) {
+      outbound.push(url);
+      throw new Error('external requests are forbidden in this fixture');
+    }
+    return originalFetch(input, init);
+  };
+  const app = await createLocalApiServer({
+    port: 0, apiDir: localApi.apiDir, dataDir: localApi.apiDir, resourceDir: localApi.apiDir,
+    logger: { log() {}, warn() {}, error() {} },
+  });
+  try {
+    _resetSidecarCacheForTests();
+    const { port } = await app.start();
+    const response = await authFetch(`http://127.0.0.1:${port}/api/military/v1/get-theater-posture`);
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.ok(Array.isArray(body.theaters));
+    assert.deepEqual(outbound, []);
+  } finally {
+    restoreHttps();
+    globalThis.fetch = originalFetch;
+    await app.close();
+    await localApi.cleanup();
   }
 });

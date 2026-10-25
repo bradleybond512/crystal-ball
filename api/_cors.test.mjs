@@ -31,7 +31,7 @@ test('rejects unrelated external origins', () => {
   const req = makeRequest('https://evil.example.com');
   assert.equal(isDisallowedOrigin(req), true);
   const cors = getCorsHeaders(req);
-  assert.equal(cors['Access-Control-Allow-Origin'], 'https://crystalball.app');
+  assert.equal(cors['Access-Control-Allow-Origin'], undefined);
 });
 
 test('requests without origin remain allowed', () => {
@@ -39,23 +39,21 @@ test('requests without origin remain allowed', () => {
   assert.equal(isDisallowedOrigin(req), false);
 });
 
-test('allows enumerated crystalball.app subdomains', () => {
+test('rejects retired crystalball.app subdomains', () => {
   const subdomains = ['tech', 'finance', 'happy', 'api'];
   for (const sub of subdomains) {
  const origin = `https://${sub}.crystalball.app`;
  const req = makeRequest(origin);
- assert.equal(isDisallowedOrigin(req), false, `subdomain should be allowed: ${sub}`);
+ assert.equal(isDisallowedOrigin(req), true, `retired subdomain should be rejected: ${sub}`);
  const cors = getCorsHeaders(req);
- assert.equal(cors['Access-Control-Allow-Origin'], origin);
+ assert.equal(cors['Access-Control-Allow-Origin'], undefined);
   }
 });
 
-test('allows bare crystalball.app origin', () => {
-  const origin = 'https://crystalball.app';
-  const req = makeRequest(origin);
-  assert.equal(isDisallowedOrigin(req), false);
-  const cors = getCorsHeaders(req);
-  assert.equal(cors['Access-Control-Allow-Origin'], origin);
+test('rejects the retired apex and emits no fallback CORS permission', () => {
+  const req = makeRequest('https://crystalball.app');
+  assert.equal(isDisallowedOrigin(req), true);
+  assert.equal(getCorsHeaders(req)['Access-Control-Allow-Origin'], undefined);
 });
 
 test('rejects non-enumerated crystalball.app subdomains', () => {

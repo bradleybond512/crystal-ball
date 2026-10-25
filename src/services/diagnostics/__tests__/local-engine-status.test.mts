@@ -68,6 +68,19 @@ test('IPC helpers call the trusted commands and validate the answer', async () =
   assert.equal(await fetchLocalEngineStatus(async () => null), null);
 });
 
+test('a running process stays a warning until its listener is confirmed', () => {
+  for (const status of [
+    { ...base, port: null, portConfirmed: false },
+    { ...base, port: 46_123, portConfirmed: false },
+    { ...base, port: null, portConfirmed: true },
+  ]) {
+    assert.deepEqual(buildLocalEngineView(parseLocalEngineStatus(status)), {
+      tone: 'warn', text: 'Local engine waiting for port confirmation', canRestart: false,
+    });
+  }
+  assert.equal(buildLocalEngineView(parseLocalEngineStatus(base)).tone, 'ok');
+});
+
 test('a refusal to start says why (R3-SEC-005)', () => {
   const reason = "Local engine can't start: its bundled Node runtime was modified (hash mismatch). Reinstall Crystal Ball.";
   const stopped = parseLocalEngineStatus({ ...base, phase: 'stopped', startError: reason });

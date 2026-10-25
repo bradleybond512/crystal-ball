@@ -18,7 +18,7 @@ const {
   recordFeedSuccess,
 } = await import('../src-tauri/sidecar/local-api-server.mjs');
 
-const TOKEN = 'fixture-only-health-contract-token';
+const TOKEN = 'fixture-only-health-contract-token'; // secret-scan: allow -- synthetic credential for owned loopback health-contract fixtures
 
 async function withServer(run) {
   const root = mkdtempSync(path.join(tmpdir(), 'health-contract-'));

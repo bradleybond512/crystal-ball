@@ -425,7 +425,7 @@ test('a cached cloud preference cannot bypass a local-only route', async () => {
 test('FRED sidecar reports live provenance once and cache provenance on reuse', async () => {
   _resetSidecarCacheForTests();
   const priorKey = process.env.FRED_API_KEY;
-  process.env.FRED_API_KEY = 'fred-route-test-key';
+  process.env.FRED_API_KEY = 'fred-route-test-key'; // secret-scan: allow -- synthetic credential for mocked FRED response
   const restoreHttps = mockHttpsRequestOnce({
     statusCode: 200,
     headers: { 'content-type': 'application/json' },
@@ -848,7 +848,7 @@ test('inline /api routes: OPTIONS preflight returns 204 (not 401/405)', async ()
 test('inline /api routes: gated route requires auth, public route does not', async () => {
   const localApi = await setupApiDir({});
   const originalToken = process.env.LOCAL_API_TOKEN;
-  process.env.LOCAL_API_TOKEN = 'secret-inline-token';
+  process.env.LOCAL_API_TOKEN = 'secret-inline-token'; // secret-scan: allow -- synthetic local token for isolated route-auth fixture
   const app = await createLocalApiServer({
  port: 0,
  apiDir: localApi.apiDir,
@@ -971,7 +971,7 @@ test('state mirror routes require the local API token (not loopback-only)', asyn
   // seismic mirrors. All real callers (renderer, MCP client) send the token.
   const localApi = await setupApiDir({});
   const originalToken = process.env.LOCAL_API_TOKEN;
-  process.env.LOCAL_API_TOKEN = 'secret-mirror-token';
+  process.env.LOCAL_API_TOKEN = 'secret-mirror-token'; // secret-scan: allow -- synthetic local token for isolated state-mirror auth fixture
   const app = await createLocalApiServer({
  port: 0,
  apiDir: localApi.apiDir,
@@ -1539,7 +1539,7 @@ test('does not soft-pass provider auth 403 JSON responses even with cf-ray heade
 test('auth-required behavior unchanged — rejects unauthenticated requests when token is set', async () => {
   const localApi = await setupApiDir({});
   const originalToken = process.env.LOCAL_API_TOKEN;
-  process.env.LOCAL_API_TOKEN = 'secret-token-123';
+  process.env.LOCAL_API_TOKEN = 'secret-token-123'; // secret-scan: allow -- synthetic local token for isolated unauthenticated-route fixture
 
   const app = await createLocalApiServer({
  port: 0,

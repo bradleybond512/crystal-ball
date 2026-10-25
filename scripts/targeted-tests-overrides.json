@@ -135,9 +135,6 @@
   "scripts/release-context.mjs": [
     "test:desktop-identity"
   ],
-  "scripts/release-manifest.mjs": [
-    "test:desktop-identity"
-  ],
   "src-tauri/tauri.tech.conf.json": [
     "test:desktop-identity",
     "test:secret-boundary"
@@ -274,7 +271,8 @@
   "src/main.ts": [
     "test:imessage",
     "test:map-clarity",
-    "test:map-compatibility"
+    "test:map-compatibility",
+    "test:analytics-lifecycle"
   ],
   "src-tauri/src/sidecar_supervisor.rs": [
     "test:sidecar-supervisor"
@@ -417,11 +415,13 @@
   ],
   "tools/mcp-server/tool-catalog.mjs": [
     "test:mcp-untrusted",
-    "test:mcp-companion"
+    "test:mcp-companion",
+    "test:release-capabilities"
   ],
   "tools/mcp-server/tool-registry.mjs": [
     "test:mcp-untrusted",
-    "test:mcp-companion"
+    "test:mcp-companion",
+    "test:release-capabilities"
   ],
   "src/components/AnalystHUD.ts": [
     "test:mcp-untrusted"
@@ -483,8 +483,8 @@
     "test:mcp-untrusted",
     "test:mcp-companion",
     "test:mcp-install-smoke",
-    "test:sidecar-ci",
-    "test:sidecar-entry"
+    "test:sidecar-entry",
+    "test:sidecar-ci"
   ],
   "tests/helpers/test-file-preflight.mjs": [
     "test:sidecar-entry"
@@ -827,6 +827,19 @@
     "test:lifelines-map",
     "test:map-clarity",
     "test:untrusted-html"
+  ],
+  "scripts/release-capabilities.mjs": [
+    "test:release-capabilities"
+  ],
+  "scripts/release-manifest.mjs": [
+    "test:desktop-identity",
+    "test:release-capabilities"
+  ],
+  "config/release-features.json": [
+    "test:release-capabilities"
+  ],
+  "src/config/panels.ts": [
+    "test:release-capabilities"
   ],
   "tests/helpers/sidecar-ci-inventory.mjs": [
     "test:sidecar-ci"

@@ -4,7 +4,7 @@ import { readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assertReleaseIdentity, getDesktopIdentity, SUPPORTED_RELEASE_VARIANTS } from './release-metadata.mjs';
-import { verifyMacBundle } from './check-desktop-identity.mjs';
+import { isDeepStrictEqual } from 'node:util';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..');
@@ -223,14 +223,20 @@ async function sha256File(filePath) {
   return hash.digest('hex');
 }
 
-export async function collectReleaseArtifacts({ targetRoot, version, variant, tag, commitSha, platform, generatedAt, builtAfter, verifyNativeBundle = verifyMacBundle }) {
+export async function collectReleaseArtifacts({ targetRoot, version, variant, tag, commitSha, platform, generatedAt, builtAfter, verifyNativeBundle, repoRoot: sourceRoot = repoRoot }) {
   assertReleaseIdentity({ version, variant, tag });
   const macTarget = { 'macOS-ARM64': 'aarch64-apple-darwin', 'macOS-x64': 'x86_64-apple-darwin' }[platform];
   if (String(platform).startsWith('macOS') && !macTarget) throw new Error('Unknown macOS manifest architecture');
-  const measuredDmgs = macTarget ? verifyNativeBundle({
+  const { deriveReleaseCapabilities } = await import('./release-capabilities.mjs');
+  const capabilities = await deriveReleaseCapabilities({ repoRoot: sourceRoot, version, commitSha, variant });
+  let measuredDmgs = [];
+  if (macTarget) {
+    const verifier = verifyNativeBundle ?? await import('./check-desktop-identity.mjs').then(({ verifyMacBundle }) => verifyMacBundle);
+    measuredDmgs = verifier({
     bundleRoot: path.join(targetRoot, macTarget, 'release', 'bundle'),
     version, variant, tag, builtAfter, includeDmg: true,
-  }).dmgs : [];
+    }).dmgs;
+  }
   const allFiles = await listFilesRecursive(targetRoot);
   const matches = allFiles
  .filter((filePath) => isReleaseArtifactName(path.basename(filePath), version))
@@ -269,6 +275,7 @@ export async function collectReleaseArtifacts({ targetRoot, version, variant, ta
  commitSha,
  platform,
  generatedAt,
+ capabilities,
  assets,
   };
   assertManifestIdentity(manifest);
@@ -284,6 +291,9 @@ export function combineReleaseManifests(manifests) {
   const combinedAssets = [...first.assets];
 
   for (const manifest of rest) {
+ if (!isDeepStrictEqual(manifest.capabilities, first.capabilities)) {
+ throw new Error('Manifest capabilities mismatch');
+ }
  for (const field of ['version', 'variant', 'tag', 'commitSha']) {
  if (manifest[field] !== first[field]) {
  throw new Error(`Manifest ${field} mismatch: ${manifest[field]} != ${first[field]}`);
@@ -306,6 +316,7 @@ export function combineReleaseManifests(manifests) {
  tag: first.tag,
  commitSha: first.commitSha,
  generatedAt: first.generatedAt,
+ ...(first.capabilities === undefined ? {} : { capabilities: first.capabilities }),
  assets: combinedAssets.sort((a, b) => a.name.localeCompare(b.name)),
   };
 }

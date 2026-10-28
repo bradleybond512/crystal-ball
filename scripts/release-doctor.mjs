@@ -300,7 +300,7 @@ async function main() {
  encoding: 'utf8',
   });
   if (scenarioResult.error && scenarioResult.error.code === 'ENOENT') {
- console.warn('[release:doctor] Skipped scenario coverage check (npx not on PATH).');
+ console.warn('[release:doctor] Skipped scenario coverage check (tsx is not installed; the scenarios:check job enforces it).');
   } else if (scenarioResult.status !== 0) {
  const stderr = scenarioResult.stderr?.trim() || scenarioResult.stdout?.trim() || 'check-scenario-coverage failed';
  issues.push(`scenario coverage regression: ${stderr.split('\n').join(' | ')}`);

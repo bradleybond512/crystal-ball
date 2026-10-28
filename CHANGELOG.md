@@ -4,9 +4,33 @@ All notable changes to Crystal Ball are documented here.
 
 ## [Unreleased]
 
-### Planned 2.25.148
+Nothing is queued past 2.25.148. Publication of 2.25.148 is prepared and not yet tagged. See [2.25.148 readiness](docs/releases/2.25.148-readiness.md).
 
-Source-only privacy repair: analytics stay off until you opt in, and ambiguous upgrade consent resets to off with a one-time notice. Desktop version remains 2.25.147; this does not claim the published 147 installers contain the repair. Version preparation for 2.25.148, tagging, signing, publication and installation are deferred. See the [future release notes and readiness checklist](docs/releases/2.25.148-readiness.md); minimum-148 capability and marketing claims remain gated.
+## [2.25.148] - unreleased
+
+Preparation only. This version is not tagged, signed, notarized, or published. Merging the version bump to `main` starts the auto-tag publisher; do that only after the readiness checklist.
+
+### Fixed
+
+- **Analytics stay off until you opt in.** Ambiguous consent left by older builds resets to off, with a one-time notice. Explicit choices are kept. (PR #1820)
+- **Sidecar test inventory fails closed** when a listed suite file is missing, and CI runs the full sidecar suites. (PRs #1808, #1812)
+- **Public health stays minimal** and degradation is reported separately from the public payload. (PR #1809)
+- **Tech and Finance native identities** no longer share the Full app identity. (PR #1811)
+- **Retired `crystalball.app` routing** is rejected before native fetch or cloud fallback. (PR #1813)
+- **Sidecar port publication** requires a confirmed publish before clients treat the port as live. (PR #1814)
+- **Secret scanning covers tests**, and Git trust uses the system Git configuration. (PR #1815)
+- **Local API sidecar restarts after a crash.** (commit `6138a7e10`)
+- **Playwright browser install** on GitHub-hosted runners uses Ubuntu 24.04. `ubuntu-latest` is Ubuntu 26.04, which Playwright 1.59.1 cannot install Chromium dependencies for.
+- **Release doctor runs in the merge queue** with the same strict tag check as `main`. Pull requests still allow an already-published target tag.
+- **happy-dom 21.0.4** replaces 20.14.0. Versions 17.0.0 through 21.0.3 are in GHSA-834v-8h66-3h79 (high). No 20.x fix exists.
+- **Roadmap watchdog** keeps the oldest tracking issue and closes later copies. Issues #1680 and #1719 were both open with the same marker, so the daily job failed closed.
+
+### Added
+
+- **Cmd+K** finds panels, saved places, and alerts.
+- **Full edition Home Shell** shows source readiness and evidence notes.
+- **Companion, installed separately:** `crystalball doctor --json`, and read-only or analyst MCP profiles. The companion package version stays 0.3.0; freshness is the source revision.
+- **Runtime fetch guardrails** (`npm run test:e2e:runtime`) run in the full variant identity job. Map, interaction, and Home browser coverage stays with draft PR #1816 so the two workflows do not run the same specs.
 
 ### Added
 

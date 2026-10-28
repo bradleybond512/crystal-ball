@@ -269,7 +269,10 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
+            const { pathToFileURL } = require('node:url');
+            const { RoadmapWatchdogIssues } = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/scripts/roadmap-controller.mjs`).href);
             const marker = '<!-- crystal-ball-roadmap-controller:v1 -->';
+            if (marker !== RoadmapWatchdogIssues.marker) throw new Error('watchdog marker drifted from the planner');
             const body = fs.readFileSync(process.env.REPORT_PATH, 'utf8');
             if (!body.includes(marker)) throw new Error('watchdog report marker is missing');
             const limit = 512;
@@ -287,22 +290,39 @@ jobs:
               if (data.length < 100 || issues.length > limit) break;
             }
             if (issues.length > limit) throw new Error('open issue scan exceeds 512 entries');
-            const matches = issues.filter((issue) => !issue.pull_request && (issue.body ?? '').includes(marker));
-            if (matches.length > 1) throw new Error('multiple roadmap watchdog issues found');
-            if (matches.length === 0) {
+            const plan = RoadmapWatchdogIssues.plan(issues);
+            for (const issueNumber of plan.closeNumbers) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `Closed as a duplicate of #${plan.canonicalNumber}. The roadmap watchdog keeps a single tracking issue.`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                state: 'closed',
+                state_reason: 'duplicate',
+              });
+            }
+            if (plan.action === 'create') {
               await github.rest.issues.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 title: '[Roadmap Controller] Program status',
                 body,
               });
-            } else if ((matches[0].body ?? '') !== body) {
-              await github.rest.issues.update({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: matches[0].number,
-                body,
-              });
+            } else {
+              const canonical = issues.find((issue) => issue.number === plan.canonicalNumber);
+              if ((canonical?.body ?? '') !== body) {
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: plan.canonicalNumber,
+                  body,
+                });
+              }
             }
       - name: Enforce reconciliation result
         env:

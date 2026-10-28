@@ -571,6 +571,27 @@ function writeReferenceExport(state, outputPath) {
   writeFileSync(path.resolve(outputPath), `${JSON.stringify(references)}\n`);
 }
 
+export const RoadmapWatchdogIssues = {
+  marker: '<!-- crystal-ball-roadmap-controller:v1 -->',
+
+  plan(issues) {
+    if (!Array.isArray(issues)) throw new Error('watchdog issue list is invalid');
+    const matches = issues.filter((issue) => {
+      if (!issue || !Number.isSafeInteger(issue.number) || issue.number < 1) return false;
+      if (issue.pull_request) return false;
+      return String(issue.body ?? '').includes(RoadmapWatchdogIssues.marker);
+    }).sort((left, right) => left.number - right.number);
+    if (matches.length === 0) {
+      return { action: 'create', canonicalNumber: null, closeNumbers: [] };
+    }
+    return {
+      action: 'update',
+      canonicalNumber: matches[0].number,
+      closeNumbers: matches.slice(1).map((issue) => issue.number),
+    };
+  },
+};
+
 export function runCli(argv = process.argv.slice(2)) {
   let options;
   try {

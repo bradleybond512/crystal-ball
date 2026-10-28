@@ -12,6 +12,7 @@ import {
   parseRoadmaps,
   reconcileRoadmaps,
   renderWatchdog,
+  RoadmapWatchdogIssues,
   validateSnapshot,
 } from '../scripts/roadmap-controller.mjs';
 
@@ -880,4 +881,174 @@ test('workflow is pinned, least-privileged, token-free at the Node boundary, and
   assert.match(workflow, /concurrency:\s*\n\s*group: roadmap-controller-watchdog/);
   assert.doesNotMatch(workflow, /node scripts\/roadmap-controller\.mjs[^\n]*\$\{\{ secrets\.GITHUB_TOKEN \}\}/);
   assert.match(workflow, /crystal-ball-roadmap-controller:v1/);
+  assert.match(workflow, /await RoadmapWatchdogIssues\.reconcile\(\{ github, \.\.\.context\.repo, issues, body \}\)/);
+  const planner = readFileSync(join(root, 'scripts/roadmap-controller.mjs'), 'utf8');
+  assert.match(planner, /state_reason: 'duplicate'/);
+  assert.doesNotMatch(workflow, /multiple roadmap watchdog issues found/);
+});
+
+function tracker(number, overrides = {}) {
+  return {
+    number, state: 'open', title: '[Roadmap Controller] Program status',
+    user: { id: 41898282, login: 'github-actions[bot]' },
+    body: `${RoadmapWatchdogIssues.marker}\nold report`,
+    ...overrides,
+  };
+}
+
+const watchdogBody = `${RoadmapWatchdogIssues.marker}\ncurrent report`;
+
+function watchdogApi(initial, { comments = [], failClose = false, failCanonical = false, getTransform } = {}) {
+  const current = new Map(initial.map(issue => [issue.number, structuredClone(issue)]));
+  const events = [];
+  const savedComments = structuredClone(comments);
+  let closeFails = failClose;
+  const api = {
+    get: async ({ issue_number }) => {
+      events.push(['get', issue_number]);
+      const issue = structuredClone(current.get(issue_number));
+      return { data: getTransform ? getTransform(issue, events) : issue };
+    },
+    update: async (args) => {
+      events.push(['update', args.issue_number, args.state ?? 'body']);
+      if (args.body && failCanonical) throw new Error('canonical update failed');
+      if (args.state && closeFails) {
+        closeFails = false;
+        throw new Error('close failed');
+      }
+      Object.assign(current.get(args.issue_number), args);
+      return { data: structuredClone(current.get(args.issue_number)) };
+    },
+    listComments: async ({ issue_number, page, per_page }) => {
+      events.push(['comments', issue_number, page]);
+      return { data: savedComments.filter(comment => comment.issue_number === issue_number).slice((page - 1) * per_page, page * per_page) };
+    },
+    createComment: async ({ issue_number, body }) => {
+      events.push(['comment', issue_number]);
+      savedComments.push({ issue_number, body, user: { id: 41898282, login: 'github-actions[bot]' } });
+      return { data: savedComments.at(-1) };
+    },
+    create: async (args) => { events.push(['create', args]); return { data: tracker(2000, args) }; },
+  };
+  return { github: { rest: { issues: api } }, events, current, savedComments };
+}
+
+const runWatchdog = (fixture, issues) => RoadmapWatchdogIssues.reconcile({
+  github: fixture.github, owner: 'fixture', repo: 'fixture', issues, body: watchdogBody,
+});
+
+test('watchdog keeps trusted #1680 and ignores copied markers, PRs and closed issues', () => {
+  assert.deepEqual(RoadmapWatchdogIssues.plan([]), {
+    action: 'create', canonicalNumber: null, closeNumbers: [],
+  });
+  const invalid = [
+    null, tracker(0), tracker(-1), tracker(1.5), tracker(9, { user: null }),
+    tracker(1, { title: 'Bug quoting a report' }),
+    tracker(2, { user: { id: 42, login: 'someone' } }),
+    tracker(3, { user: { id: 41898282, login: 'someone' } }),
+    tracker(4, { user: { id: 42, login: 'github-actions[bot]' } }),
+    tracker(5, { body: `quoted\n${RoadmapWatchdogIssues.marker}` }),
+    tracker(6, { state: 'closed' }),
+    tracker(7, { pull_request: {} }),
+    tracker(8, { body: `${RoadmapWatchdogIssues.marker}copied` }),
+  ];
+  assert.deepEqual(RoadmapWatchdogIssues.plan(invalid), { action: 'create', canonicalNumber: null, closeNumbers: [] });
+  assert.deepEqual(RoadmapWatchdogIssues.plan([...invalid, tracker(1719), tracker(1680), tracker(100)]), {
+    action: 'update', canonicalNumber: 1680, closeNumbers: [100, 1719],
+  });
+  assert.deepEqual(RoadmapWatchdogIssues.plan([tracker(1719), tracker(1800)]), {
+    action: 'update', canonicalNumber: 1719, closeNumbers: [1800],
+  });
+  assert.throws(() => RoadmapWatchdogIssues.plan(null), /watchdog issue list is invalid/);
+  assert.throws(() => RoadmapWatchdogIssues.plan([tracker(1680), tracker(1680)]), /duplicate issue number/);
+});
+
+test('watchdog revalidates targets, updates canonical first and is stable on reruns', async () => {
+  const issues = [tracker(1719), tracker(1680)];
+  const fixture = watchdogApi(issues);
+  await runWatchdog(fixture, issues);
+  assert.equal(fixture.current.get(1680).body, watchdogBody);
+  assert.equal(fixture.current.get(1680).state, 'open');
+  assert.equal(fixture.current.get(1719).state, 'closed');
+  assert.equal(fixture.current.get(1719).state_reason, 'duplicate');
+  const writes = fixture.events.filter(event => ['update', 'comment', 'create'].includes(event[0]));
+  assert.deepEqual(writes, [['update', 1680, 'body'], ['comment', 1719], ['update', 1719, 'closed']]);
+  assert.ok(fixture.events.findIndex(event => event[0] === 'get' && event[1] === 1719) < fixture.events.findIndex(event => event[0] === 'update'));
+  await runWatchdog(fixture, issues); // Stale open snapshot: fresh state must prevent a second comment/close.
+  await runWatchdog(fixture, [fixture.current.get(1680)]);
+  assert.equal(fixture.savedComments.length, 1);
+  assert.equal(fixture.events.filter(event => event[0] === 'update').length, 2);
+});
+
+test('watchdog refuses changed identities before making any writes', async () => {
+  for (const number of [1680, 1719]) {
+    for (const replacement of [{ title: 'Changed title' }, { state: 'closed' }, { number: 88 }, { user: { id: 42, login: 'someone' } }]) {
+      if (number === 1719 && replacement.state === 'closed') continue; // Trusted closed duplicate is a safe rerun.
+      const issues = [tracker(1680), tracker(1719)];
+      const fixture = watchdogApi(issues, { getTransform: issue => issue.number === number ? { ...issue, ...replacement } : issue });
+      await assert.rejects(runWatchdog(fixture, issues), /watchdog target changed/);
+      assert.deepEqual(fixture.events.filter(event => ['update', 'comment', 'create'].includes(event[0])), []);
+    }
+  }
+});
+
+test('canonical update failure leaves duplicates untouched', async () => {
+  const issues = [tracker(1680), tracker(1719)];
+  const fixture = watchdogApi(issues, { failCanonical: true });
+  await assert.rejects(runWatchdog(fixture, issues), /canonical update failed/);
+  assert.equal(fixture.current.get(1719).state, 'open');
+  assert.deepEqual(fixture.events.filter(event => ['update', 'comment', 'create'].includes(event[0])), [['update', 1680, 'body']]);
+});
+
+test('comment success followed by close failure does not duplicate comments on retry', async () => {
+  const issues = [tracker(1680), tracker(1719)];
+  const fixture = watchdogApi(issues, { failClose: true });
+  await assert.rejects(runWatchdog(fixture, issues), /close failed/);
+  await runWatchdog(fixture, issues);
+  assert.equal(fixture.savedComments.length, 1);
+  assert.equal(fixture.current.get(1719).state, 'closed');
+});
+
+test('duplicate comment scan is paginated, bot-owned, and bounded before closure', async () => {
+  const issues = [tracker(1680), tracker(1719)];
+  const marker = '<!-- crystal-ball-roadmap-duplicate:1680 -->';
+  const human = { issue_number: 1719, body: marker, user: { id: 42, login: 'someone' } };
+  const bot = { ...human, user: { id: 41898282, login: 'github-actions[bot]' } };
+  const fixture = watchdogApi(issues, { comments: [...Array.from({ length: 100 }, () => human), bot] });
+  await runWatchdog(fixture, issues);
+  assert.equal(fixture.savedComments.length, 101);
+  assert.ok(fixture.events.some(event => event[0] === 'comments' && event[2] === 2));
+  const humanOnly = watchdogApi(issues, { comments: [human] });
+  await runWatchdog(humanOnly, issues);
+  assert.equal(humanOnly.savedComments.length, 2, 'a human copy is not a bot receipt');
+  const bounded = watchdogApi(issues, { comments: Array.from({ length: 513 }, () => human) });
+  await assert.rejects(runWatchdog(bounded, issues), /comment scan exceeds 512/);
+  assert.equal(bounded.current.get(1719).state, 'open');
+  assert.equal(bounded.savedComments.length, 513);
+});
+
+test('watchdog rechecks identity after comment scans and refuses malformed reports', async () => {
+  const issues = [tracker(1680), tracker(1719)];
+  const fixture = watchdogApi(issues, { getTransform: (issue, events) => events.some(event => event[0] === 'comments') && issue.number === 1719 ? { ...issue, title: 'Changed meanwhile' } : issue });
+  await assert.rejects(runWatchdog(fixture, issues), /watchdog target changed/);
+  assert.equal(fixture.savedComments.length, 0);
+  assert.equal(fixture.current.get(1719).state, 'open');
+  await assert.rejects(RoadmapWatchdogIssues.reconcile({ github: fixture.github, owner: 'fixture', repo: 'fixture', issues, body: 'bad report' }), /report marker/);
+});
+
+
+test('watchdog creates a tracker only when no trusted open tracker exists', async () => {
+  const fixture = watchdogApi([]);
+  await runWatchdog(fixture, [tracker(10, { title: 'Unrelated' })]);
+  assert.deepEqual(fixture.events, [['create', { owner: 'fixture', repo: 'fixture', title: '[Roadmap Controller] Program status', body: watchdogBody }]]);
+});
+
+test('watchdog rechecks canonical and duplicate identities after commenting before closing', async () => {
+  for (const number of [1680, 1719]) {
+    const issues = [tracker(1680), tracker(1719)];
+    const fixture = watchdogApi(issues, { getTransform: (issue, events) => events.some(event => event[0] === 'comment') && issue.number === number ? { ...issue, title: 'Changed after comment' } : issue });
+    await assert.rejects(runWatchdog(fixture, issues), /watchdog target changed/);
+    assert.equal(fixture.current.get(1719).state, 'open');
+    assert.equal(fixture.events.some(event => event[0] === 'update' && event[2] === 'closed'), false);
+  }
 });

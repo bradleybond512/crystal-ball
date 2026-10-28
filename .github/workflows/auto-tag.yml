@@ -5,10 +5,10 @@ name: Auto-tag on version bump
 # in publish mode. We cannot rely on the tag-push trigger alone because
 # GITHUB_TOKEN tag pushes do not fire downstream workflows (GitHub's anti-loop
 # protection). Explicit workflow_dispatch via the same token IS allowed, so we
-# use it as the always-on release driver.
+# use it as an explicitly enabled release driver.
 #
-# Recovery: if the tag already exists but no GitHub release has been published
-# yet, the dispatch still fires. That lets us unstick releases that were
+# Recovery: if the tag already exists but no GitHub release exists yet,
+# the dispatch still fires. That lets us unstick releases that were
 # created before this workflow gained the dispatch step.
 
 on:
@@ -26,6 +26,8 @@ permissions:
 
 jobs:
   auto-tag:
+    # Unset/false is the source-preparation state: no tag or dispatch.
+    if: vars.DESKTOP_RELEASE_ENABLED == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

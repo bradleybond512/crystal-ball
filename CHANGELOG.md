@@ -4,11 +4,49 @@ All notable changes to Crystal Ball are documented here.
 
 ## [Unreleased]
 
-### Planned 2.25.148
+No release beyond 2.25.148 is prepared. See [2.25.148 readiness](docs/releases/2.25.148-readiness.md).
 
-Source-only privacy repair: analytics stay off until you opt in, and ambiguous upgrade consent resets to off with a one-time notice. Desktop version remains 2.25.147; this does not claim the published 147 installers contain the repair. Version preparation for 2.25.148, tagging, signing, publication and installation are deferred. See the [future release notes and readiness checklist](docs/releases/2.25.148-readiness.md); minimum-148 capability and marketing claims remain gated.
+## [2.25.148] - unreleased
+
+Source preparation only; no 2.25.148 tag, signed artifacts or public release are claimed. Release automation requires the explicit `DESKTOP_RELEASE_ENABLED` opt-in. Its upload path leaves a draft release for artifact acceptance and separately authorized publication.
+
+### Fixed
+
+- **Analytics stay off until you opt in.** Ambiguous consent left by older builds resets to off, with a one-time notice. Explicit choices are kept. (PR #1820)
+- **Sidecar test inventory fails closed** when a listed suite file is missing, and CI runs the full sidecar suites. (PRs #1808, #1812)
+- **Public health stays minimal** and degradation is reported separately from the public payload. (PR #1809)
+- **Tech and Finance native identities** no longer share the Full app identity. (PR #1811)
+- **Retired `crystalball.app` routing** is rejected before native fetch or cloud fallback. (PR #1813)
+- **Sidecar port publication** requires a confirmed publish before clients treat the port as live. (PR #1814)
+- **Secret scanning covers tests**, and Git execution validates the protected system Git executable and its ancestor ownership/permissions. (PR #1815)
+- **Local API sidecar restarts after a crash.** (commit `6138a7e10`)
+- **Playwright browser install** on GitHub-hosted runners uses Ubuntu 24.04. The `ubuntu-latest` rollout can select Ubuntu 26.04, which Playwright 1.59.1 cannot install Chromium dependencies for.
+- **Release doctor runs in the merge queue** with the same strict tag check as `main`. Pull requests still allow an already-published target tag.
+- **happy-dom 21.0.4** replaces locked 20.14.6. Versions 17.0.0 through 21.0.3 are in GHSA-834v-8h66-3h79 (high). No 20.x fix exists.
+- **Roadmap watchdog** keeps the verified canonical bot tracker and closes verified duplicates. Issues #1680 and #1719 were both open with the same marker, so the daily job failed closed.
+
+- **Native updater trust and staging** adds visible checks, background staging and apply-on-relaunch, with subsequent authority, signer-pin and concurrency hardening. (PRs #1546, #1565; commits `5b00cedb`, `959644dd`)
+- **Vault backup and restore** uses the consolidated secrets vault, preserves the prior backup on failure, and serializes publication. (commits `dbb2d563`, `bfb2ae23`, `0adcfaf2`)
+- **Critical notification delivery** records native outcomes and retries undelivered reactor alerts; iMessage pause state remains visible. (commits `26306a96`, `2d6d66ed`, `9bf0aff7`, `e96a91d1`)
+- **PWA subpath deployments** retain correct asset and service-worker URLs. (commit `1892a60d`)
+- **Cmd+K keyboard behavior** improves foreground dismissal and capture. Cmd+K itself was already a 2.25.147 capability. (commits `6972023d`, `8f10b641`)
+- **Release safety** requires opt-in before automatic tagging or publisher dispatch, rejects missing Apple signing/notarization credentials in publish mode, and keeps uploaded releases draft until maintainer acceptance.
+
+- **Fail-closed macOS relaunches**: the local installer now waits for the prior
+  Crystal Ball process to exit before replacing the bundle, checks `open`
+  failures, waits for the replacement process to start, and records local-build
+  state only after a requested relaunch succeeds. Main sync can no longer report
+  an installed release while the desktop app is not running.
+- **Stable delegated click handling**: seven render-rebuilding components now
+  delegate clicks from stable roots, preventing background renders between
+  pointer-down and pointer-up from swallowing user actions. (PR #1526)
 
 ### Added
+
+- **Full edition Home Shell** shows source readiness and evidence notes, with honest degraded and unavailable states. (commits `d9af111a`, `59e4109b`)
+- **Companion, installed separately:** `crystalball doctor --json`, read-only or analyst MCP profiles, and hardened isolated installation/testing. Its package stays 0.3.0; freshness is the source revision. (commit `13a86d91`; PR #1820 capability contracts)
+- **Disaster Lifelines and emergency preparation** add response services, precise-location privacy controls and observable offline-pack preparation. (PR #1656; commits `54ddd454`, `8903e7f4`)
+- **Smoke, fusion, correlation and survival analysis** add HRRR/FireWork smoke frames, more independent provider groups, calibrated correlation, scenario boards and benchmark/promotion gates. (PRs #1517, #1583, #1593, #1566; commits `eda1ce46`, `e51ad29b`)
 
 - **Hierarchical forecast base rate**: every eligible production forecast now
   receives a versioned, same-target baseline after the ledger has 30
@@ -81,6 +119,18 @@ Source-only privacy repair: analytics stay off until you opt in, and ambiguous u
   no-lookahead resolver records direct or proxy-marked outcomes with evidence
   provenance, while live diagnostics expose resolver coverage, expirations,
   and market-history health. (PR #1514)
+
+### Security
+
+- **Sidecar-only secrets stay write-only to webviews**, with bounded vault writes and stale-generation fencing. (commits `6b035932`, `73472512`, `6c20ee66`)
+- **Supply-chain repairs** include DOMPurify 3.4.17, ctutils 0.4.4, the October 26 vulnerability batch and the happy-dom fix above; install scripts remain disabled and dependency approval/cooldown checks remain enforced. (PRs #1812, #1820; commits `70fef4c5`, `a7b05516`, `57ba81f2`)
+
+## [2.25.147] - 2026-07-20
+
+The entries below were already present in the published 2.25.147 tag, where they were accumulated under Unreleased. They are retained here as historical source notes, not new 2.25.148 changes.
+
+### Added
+
 - **Home Shell UI re-imagination, Phases 3-4** (#1402 + follow-up): the
   situation dossier drawer (`src/components/SituationDossier.ts`) — evidence
   grid composed from `evidenceFor` panel metadata, honest "why this surfaced"
@@ -198,6 +248,9 @@ Source-only privacy repair: analytics stay off until you opt in, and ambiguous u
   536-file/11,900+-test `test:renderer` suite now completes in under a
   minute. (PR #1371)
 
+- **NWS in-flight dedupe** and **poweroutage cache TTL**: collapse concurrent
+  duplicate NWS requests and bound poweroutage payload lifetime (PRs #1129, #1130).
+
 ### Removed
 
 - **No-op mode evaluators**: deleted the six dead auto-trigger evaluator stubs
@@ -214,22 +267,8 @@ Source-only privacy repair: analytics stay off until you opt in, and ambiguous u
   earthquake mission bridge, and completed the daily PDF brief (PRs #1140, #1139,
   #1143, #1142).
 
-### Performance
-
-- **NWS in-flight dedupe** and **poweroutage cache TTL**: collapse concurrent
-  duplicate NWS requests and bound poweroutage payload lifetime (PRs #1129, #1130).
-
 ### Fixed
 
-- **Analytics require your choice.** Some v2.25.147 upgrades enabled analytics from an existing installation ID without asking. Ambiguous older consent is now reset to off, with a one-time notice and old analytics queues and identity cleared. Recognizable explicit choices are preserved. Missing or invalid consent stays off, including while analytics code loads.
-- **Fail-closed macOS relaunches**: the local installer now waits for the prior
-  Crystal Ball process to exit before replacing the bundle, checks `open`
-  failures, waits for the replacement process to start, and records local-build
-  state only after a requested relaunch succeeds. Main sync can no longer report
-  an installed release while the desktop app is not running.
-- **Stable delegated click handling**: seven render-rebuilding components now
-  delegate clicks from stable roots, preventing background renders between
-  pointer-down and pointer-up from swallowing user actions. (PR #1526)
 - **Performance sprint**: panel lifecycle teardown on `destroy()` and the Groq
   egress-disclosure gate (scoped to desktop, honors local-only in the sidecar)
   (PRs #1135, #1136).
@@ -249,12 +288,6 @@ Source-only privacy repair: analytics stay off until you opt in, and ambiguous u
 - **Security sprint (2026-06-12)**: Privacy Fix 1 — secret-in-query tripwire that
   warns when an API key would be sent in a query string to a non-allowlisted host
   — and removal of the `RELAY_ALLOW_ANON` anonymous-relay bypass (PRs #1138, #1144).
-
-## [2.25.147] - 2026-07-26
-
-### Fixed
-
-- Synchronized the release documentation with the packaged desktop version.
 
 ## [2.25.143] - 2026-06-08
 

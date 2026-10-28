@@ -22,7 +22,7 @@ on:
           - tech
           - finance
       publish_mode:
-        description: 'build = artifacts only, publish = cut a GitHub release from release_tag'
+        description: 'build = artifacts only, publish = prepare a draft GitHub release from release_tag'
         required: true
         default: build
         type: choice
@@ -50,6 +50,9 @@ permissions:
 
 jobs:
   release-context:
+    # Explicit build-only dispatches remain available for candidate artifacts.
+    # Tags and publish recovery require separate maintainer release opt-in.
+    if: vars.DESKTOP_RELEASE_ENABLED == 'true' || (github.event_name == 'workflow_dispatch' && inputs.publish_mode == 'build')
     runs-on: ubuntu-latest
     outputs:
       publish: ${{ steps.context.outputs.publish }}
@@ -214,11 +217,20 @@ jobs:
       - name: Check Apple signing secrets
         if: contains(matrix.platform, 'macos')
         id: apple-signing
+        env:
+          PUBLISH: ${{ needs.release-context.outputs.publish }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         shell: bash
         run: |
-          if [ -n "${{ secrets.APPLE_CERTIFICATE }}" ] && [ -n "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" ] && [ -n "${{ secrets.KEYCHAIN_PASSWORD }}" ]; then
+          if [ -n "$APPLE_CERTIFICATE" ] && [ -n "$APPLE_CERTIFICATE_PASSWORD" ] && [ -n "$KEYCHAIN_PASSWORD" ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
+            if [ "$PUBLISH" = 'true' ]; then
+              echo "::error::Publish mode requires complete Apple Developer ID signing credentials."
+              exit 1
+            fi
             echo "available=false" >> "$GITHUB_OUTPUT"
             echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
             echo "Apple signing secrets unavailable; using ad-hoc signing identity (-)."
@@ -249,17 +261,23 @@ jobs:
           echo "APPLE_SIGNING_IDENTITY=$CERT_ID" >> "$GITHUB_ENV"
 
       - name: Configure Apple notarization credentials
+        id: apple-notarization
         if: contains(matrix.platform, 'macos')
+        env:
+          PUBLISH: ${{ needs.release-context.outputs.publish }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         shell: bash
         run: |
-          if [ -n "${{ secrets.APPLE_ID }}" ] && [ -n "${{ secrets.APPLE_PASSWORD }}" ] && [ -n "${{ secrets.APPLE_TEAM_ID }}" ]; then
-            {
-              echo "APPLE_ID=${{ secrets.APPLE_ID }}"
-              echo "APPLE_PASSWORD=${{ secrets.APPLE_PASSWORD }}"
-              echo "APPLE_TEAM_ID=${{ secrets.APPLE_TEAM_ID }}"
-            } >> "$GITHUB_ENV"
+          if [ -n "$APPLE_ID" ] && [ -n "$APPLE_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
             echo "Apple notarization secrets found."
+          elif [ "$PUBLISH" = 'true' ]; then
+            echo "::error::Publish mode requires complete Apple notarization credentials."
+            exit 1
           else
+            echo "available=false" >> "$GITHUB_OUTPUT"
             echo "Apple notarization secrets unavailable; skipping notarization."
           fi
 
@@ -272,6 +290,9 @@ jobs:
       - name: Build Tauri app
         shell: bash
         env:
+          APPLE_ID: ${{ steps.apple-notarization.outputs.available == 'true' && secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ steps.apple-notarization.outputs.available == 'true' && secrets.APPLE_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ steps.apple-notarization.outputs.available == 'true' && secrets.APPLE_TEAM_ID || '' }}
           VITE_VARIANT: ${{ needs.release-context.outputs.variant }}
           VITE_DESKTOP_RUNTIME: '1'
           WM_BUILD_VARIANT: ${{ needs.release-context.outputs.variant }}
@@ -428,7 +449,7 @@ jobs:
     needs:
       - release-context
       - build-tauri
-    if: needs.release-context.outputs.publish == 'true'
+    if: vars.DESKTOP_RELEASE_ENABLED == 'true' && needs.release-context.outputs.publish == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -484,9 +505,19 @@ jobs:
         shell: bash
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
+            IS_DRAFT=$(gh release view "$TAG" --json isDraft --jq .isDraft) || {
+              echo "::error::Could not verify draft release state."
+              exit 1
+            }
+            if [ "$IS_DRAFT" != 'true' ]; then
+              echo "::error::Refusing to mutate a public release."
+              exit 1
+            fi
             gh release edit "$TAG" --title "$TITLE"
           else
-            gh release create "$TAG" --title "$TITLE" --notes "See changelog below." --verify-tag
+            # Upload/verification is preparation. A maintainer publishes only
+            # after the exact draft artifacts pass native smoke acceptance.
+            gh release create "$TAG" --title "$TITLE" --notes "See changelog below." --verify-tag --draft
           fi
 
       - name: Upload release assets and manifest
@@ -495,6 +526,14 @@ jobs:
           TAG: ${{ needs.release-context.outputs.tag }}
         shell: bash
         run: |
+          IS_DRAFT=$(gh release view "$TAG" --json isDraft --jq .isDraft) || {
+            echo "::error::Could not verify draft release state."
+            exit 1
+          }
+          if [ "$IS_DRAFT" != 'true' ]; then
+            echo "::error::Refusing to mutate a public release."
+            exit 1
+          fi
           mapfile -t ASSET_FILES < <(find downloaded-bundles -type f -path '*/assets/*' | sort)
           gh release upload "$TAG" "${ASSET_FILES[@]}" release-manifest.json --clobber
 
@@ -519,6 +558,14 @@ jobs:
           SHORT_SHA: ${{ needs.release-context.outputs.short_sha }}
         shell: bash
         run: |
+          IS_DRAFT=$(gh release view "$TAG" --json isDraft --jq .isDraft) || {
+            echo "::error::Could not verify draft release state."
+            exit 1
+          }
+          if [ "$IS_DRAFT" != 'true' ]; then
+            echo "::error::Refusing to mutate a public release."
+            exit 1
+          fi
           PREV_TAG=$(node --input-type=module -e "import { execSync } from 'node:child_process'; const tag = process.env.TAG; const tags = execSync('git tag --sort=-version:refname', { encoding: 'utf8' }).trim().split('\\n').filter(Boolean); const matcher = /^v\\d+\\.\\d+\\.\\d+$/; const previous = tags.find((candidate) => candidate !== tag && matcher.test(candidate)) || ''; process.stdout.write(previous);")
           if [ -z "$PREV_TAG" ]; then
             COMMITS="Initial release"

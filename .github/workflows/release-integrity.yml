@@ -106,20 +106,20 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/release-doctor.mjs --allow-existing-target-release --variant finance
 
-      - name: Run release doctor for full variant on main push
-        if: github.event_name == 'push'
+      - name: Run release doctor for full variant on main push and merge queue
+        if: github.event_name == 'push' || github.event_name == 'merge_group'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/release-doctor.mjs --variant full
 
-      - name: Run release doctor for tech variant on main push
-        if: github.event_name == 'push'
+      - name: Run release doctor for tech variant on main push and merge queue
+        if: github.event_name == 'push' || github.event_name == 'merge_group'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/release-doctor.mjs --variant tech
 
-      - name: Run release doctor for finance variant on main push
-        if: github.event_name == 'push'
+      - name: Run release doctor for finance variant on main push and merge queue
+        if: github.event_name == 'push' || github.event_name == 'merge_group'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/release-doctor.mjs --variant finance

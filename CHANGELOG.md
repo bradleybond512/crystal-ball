@@ -30,7 +30,6 @@ Preparation only. This version is not tagged, signed, notarized, or published. M
 - **Cmd+K** finds panels, saved places, and alerts.
 - **Full edition Home Shell** shows source readiness and evidence notes.
 - **Companion, installed separately:** `crystalball doctor --json`, and read-only or analyst MCP profiles. The companion package version stays 0.3.0; freshness is the source revision.
-- **Runtime fetch guardrails** (`npm run test:e2e:runtime`) run in the full variant identity job. Map, interaction, and Home browser coverage stays with draft PR #1816 so the two workflows do not run the same specs.
 
 ### Added
 

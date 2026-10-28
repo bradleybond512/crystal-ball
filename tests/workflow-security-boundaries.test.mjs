@@ -58,6 +58,16 @@ test('build and publish modes restore no Rust or npm caches before secret-bearin
   assert.equal(setups, 3);
 });
 
+test('merge queue runs strict release-doctor instead of an empty job', () => {
+  const steps = workflow('release-integrity.yml').jobs['release-doctor'].steps;
+  const strict = steps.filter((step) => String(step.if ?? '').includes("github.event_name == 'merge_group'"));
+  assert.equal(strict.length, 3);
+  for (const step of strict) {
+    assert.match(step.run, /^node scripts\/release-doctor\.mjs --variant (full|tech|finance)$/);
+    assert.doesNotMatch(step.run, /allow-existing-target-release/);
+  }
+});
+
 test('dependency policy retains base-only trusted execution and read-only trigger permissions', () => {
   const wf = workflow('dependency-change-gate.yml');
   assert.ok(wf.on.pull_request_target);

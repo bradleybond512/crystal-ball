@@ -13,7 +13,11 @@ permissions:
 jobs:
   identity:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    # ubuntu-latest is Ubuntu 26.04. Playwright 1.59.1 has no ubuntu26.04
+    # browser dependency map (install --with-deps exits 1). 24.04 is the image
+    # 1.59.1 supports; test-linux-app.yml already pins it. Do not float back to
+    # ubuntu-latest until the installed Playwright release lists ubuntu26.04.
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -35,3 +39,9 @@ jobs:
       - run: npx playwright test e2e/variant-identity.spec.ts
         env:
           VITE_VARIANT: ${{ matrix.variant }}
+      # runtime-fetch is not in draft PR #1816. That PR owns map, interaction,
+      # and Home browser coverage on the smoke workflow. This step stays on the
+      # full leg only so the two PRs do not schedule the same specs.
+      - name: Runtime fetch guardrails
+        if: matrix.variant == 'full'
+        run: npm run test:e2e:runtime

@@ -40,4 +40,9 @@ test('release integrity workflow blocks stale release versions on main pushes', 
  /Run release doctor for full variant on pull requests[\s\S]*allow-existing-target-release[\s\S]*--variant full/,
  'pull requests can keep the softer release-doctor mode to avoid breaking unrelated work',
   );
+  assert.equal(
+ [...workflow.matchAll(/github\.event_name == 'push' \|\| github\.event_name == 'merge_group'/g)].length,
+ 3,
+ 'strict release-doctor must run for full, tech, and finance on merge_group as well as main push',
+  );
 });

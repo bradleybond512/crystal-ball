@@ -12,6 +12,7 @@ import {
   parseRoadmaps,
   reconcileRoadmaps,
   renderWatchdog,
+  RoadmapWatchdogIssues,
   validateSnapshot,
 } from '../scripts/roadmap-controller.mjs';
 
@@ -880,4 +881,23 @@ test('workflow is pinned, least-privileged, token-free at the Node boundary, and
   assert.match(workflow, /concurrency:\s*\n\s*group: roadmap-controller-watchdog/);
   assert.doesNotMatch(workflow, /node scripts\/roadmap-controller\.mjs[^\n]*\$\{\{ secrets\.GITHUB_TOKEN \}\}/);
   assert.match(workflow, /crystal-ball-roadmap-controller:v1/);
+  assert.match(workflow, /RoadmapWatchdogIssues\.plan\(issues\)/);
+  assert.match(workflow, /state_reason: 'duplicate'/);
+  assert.doesNotMatch(workflow, /multiple roadmap watchdog issues found/);
+});
+
+test('watchdog keeps the oldest marker issue and closes later duplicates', () => {
+  const marker = RoadmapWatchdogIssues.marker;
+  assert.deepEqual(RoadmapWatchdogIssues.plan([]), {
+    action: 'create', canonicalNumber: null, closeNumbers: [],
+  });
+  assert.deepEqual(RoadmapWatchdogIssues.plan([
+    { number: 1719, body: `${marker}\nnewer` },
+    { number: 1680, body: `${marker}\nolder` },
+    { number: 50, pull_request: {}, body: marker },
+    { number: 9, body: 'unrelated' },
+  ]), {
+    action: 'update', canonicalNumber: 1680, closeNumbers: [1719],
+  });
+  assert.throws(() => RoadmapWatchdogIssues.plan(null), /watchdog issue list is invalid/);
 });

@@ -5,7 +5,7 @@
  */
 
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { after } from 'node:test';
 import { Window } from 'happy-dom';
 
 const G = globalThis as unknown as Record<string, unknown>;
@@ -91,8 +91,23 @@ import {
   type BlocTension,
 } from '../../src/components/alliance-cohesion-helpers.ts';
 
+const ownedPanels = new Set<AllianceCohesionPanel>();
+
+after(async () => {
+  try {
+    for (const panel of ownedPanels) {
+      panel.destroy();
+    }
+  } finally {
+    ownedPanels.clear();
+    await happyWindow.happyDOM.close();
+  }
+});
+
 function makePanel(): AllianceCohesionPanel {
-  return new AllianceCohesionPanel();
+  const panel = new AllianceCohesionPanel();
+  ownedPanels.add(panel);
+  return panel;
 }
 
 function emptyData(): AllianceCohesionData {

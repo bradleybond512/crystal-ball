@@ -75,3 +75,20 @@ test('variant builds pass an allowlisted native config and measure macOS identit
   assert.match(section, /src-tauri\/target\/\$NODE_TARGET\/release\/bundle/);
   assert.match(section, /--tag "\$RELEASE_TAG".*--built-after.*--include-dmg/);
 });
+
+
+test('release assets remain draft until separately authorized artifact acceptance', () => {
+  assert.match(workflow, /gh release create[^\n]*--draft/);
+  assert.doesNotMatch(workflow, /gh release edit[^\n]*--draft(?:=| )false/);
+  const create = workflow.indexOf('name: Create or update GitHub release');
+  const upload = workflow.indexOf('name: Upload release assets and manifest');
+  const verify = workflow.indexOf('name: Verify uploaded release payload');
+  assert.ok(create > 0 && upload > create && verify > upload);
+  for (const name of ['Create or update GitHub release', 'Upload release assets and manifest', 'Generate and update release notes']) {
+    const start = workflow.indexOf(`name: ${name}`);
+    const end = workflow.indexOf('\n      - name:', start);
+    const section = workflow.slice(start, end === -1 ? undefined : end);
+    assert.match(section, /--json isDraft --jq \.isDraft/);
+    assert.match(section, /Refusing to mutate a public release/);
+  }
+});

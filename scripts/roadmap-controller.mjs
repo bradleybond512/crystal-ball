@@ -571,24 +571,96 @@ function writeReferenceExport(state, outputPath) {
   writeFileSync(path.resolve(outputPath), `${JSON.stringify(references)}\n`);
 }
 
+function watchdogBot(user) {
+  return user?.id === 41_898_282 && user.login === 'github-actions[bot]';
+}
+
+function startsWithMarker(body, marker) {
+  return typeof body === 'string' && (body === marker || body.startsWith(`${marker}\n`) || body.startsWith(`${marker}\r\n`));
+}
+
+function watchdogTracker(issue, states = ['open']) {
+  return issue && Number.isSafeInteger(issue.number) && issue.number > 0
+    && !issue.pull_request && states.includes(issue.state)
+    && issue.title === '[Roadmap Controller] Program status' && watchdogBot(issue.user)
+    && startsWithMarker(issue.body, RoadmapWatchdogIssues.marker);
+}
+
+async function freshWatchdogTarget(api, repository, number, allowClosed = false) {
+  const { data } = await api.get({ ...repository, issue_number: number });
+  if (data?.number !== number || !watchdogTracker(data, allowClosed ? ['open', 'closed'] : ['open'])) {
+    throw new Error(`watchdog target changed: #${number}`);
+  }
+  return data;
+}
+
+async function hasWatchdogDuplicateComment(api, repository, number, marker) {
+  let count = 0;
+  for (let page = 1; page <= 6; page += 1) {
+    const { data } = await api.listComments({ ...repository, issue_number: number, per_page: 100, page });
+    if (!Array.isArray(data)) throw new Error('watchdog comment list is invalid');
+    count += data.length;
+    if (count > 512) throw new Error('watchdog comment scan exceeds 512 entries');
+    if (data.some(comment => watchdogBot(comment.user) && startsWithMarker(comment.body, marker))) return true;
+    if (data.length < 100) return false;
+  }
+  throw new Error('watchdog comment scan exceeds 512 entries');
+}
+
+async function closeWatchdogDuplicate(api, repository, canonicalNumber, issueNumber) {
+  const duplicate = await freshWatchdogTarget(api, repository, issueNumber, true);
+  if (duplicate.state === 'closed') return;
+  const marker = `<!-- crystal-ball-roadmap-duplicate:${canonicalNumber} -->`;
+  const commented = await hasWatchdogDuplicateComment(api, repository, issueNumber, marker);
+  const current = await freshWatchdogTarget(api, repository, issueNumber, true);
+  if (current.state === 'closed') return;
+  await freshWatchdogTarget(api, repository, canonicalNumber);
+  if (!commented) {
+    await api.createComment({
+      ...repository, issue_number: issueNumber,
+      body: `${marker}\nClosed as a duplicate of #${canonicalNumber}. The roadmap watchdog keeps a single tracking issue.`,
+    });
+  }
+  await freshWatchdogTarget(api, repository, canonicalNumber);
+  const closing = await freshWatchdogTarget(api, repository, issueNumber, true);
+  if (closing.state === 'closed') return;
+  await api.update({ ...repository, issue_number: issueNumber, state: 'closed', state_reason: 'duplicate' });
+}
+
 export const RoadmapWatchdogIssues = {
   marker: '<!-- crystal-ball-roadmap-controller:v1 -->',
 
   plan(issues) {
     if (!Array.isArray(issues)) throw new Error('watchdog issue list is invalid');
-    const matches = issues.filter((issue) => {
-      if (!issue || !Number.isSafeInteger(issue.number) || issue.number < 1) return false;
-      if (issue.pull_request) return false;
-      return String(issue.body ?? '').includes(RoadmapWatchdogIssues.marker);
-    }).sort((left, right) => left.number - right.number);
+    const numbers = issues.filter(issue => Number.isSafeInteger(issue?.number)).map(issue => issue.number);
+    if (new Set(numbers).size !== numbers.length) throw new Error('watchdog duplicate issue number');
+    const matches = issues.filter(issue => watchdogTracker(issue)).sort((left, right) => left.number - right.number);
     if (matches.length === 0) {
       return { action: 'create', canonicalNumber: null, closeNumbers: [] };
     }
+    const canonicalNumber = matches.some(issue => issue.number === 1680) ? 1680 : matches[0].number;
     return {
-      action: 'update',
-      canonicalNumber: matches[0].number,
-      closeNumbers: matches.slice(1).map((issue) => issue.number),
+      action: 'update', canonicalNumber,
+      closeNumbers: matches.filter(issue => issue.number !== canonicalNumber).map(issue => issue.number),
     };
+  },
+
+  async reconcile({ github, owner, repo, issues, body }) {
+    if (!startsWithMarker(body, RoadmapWatchdogIssues.marker)) throw new Error('watchdog report marker is missing');
+    const plan = RoadmapWatchdogIssues.plan(issues);
+    const api = github.rest.issues;
+    const repository = { owner, repo };
+    if (plan.action === 'create') {
+      await api.create({ ...repository, title: '[Roadmap Controller] Program status', body });
+      return plan;
+    }
+    const canonical = await freshWatchdogTarget(api, repository, plan.canonicalNumber);
+    // Validate every planned target before the first write. Later reads narrow
+    // the remaining API race; GitHub does not offer a conditional issue update.
+    for (const number of plan.closeNumbers) await freshWatchdogTarget(api, repository, number, true);
+    if (canonical.body !== body) await api.update({ ...repository, issue_number: plan.canonicalNumber, body });
+    for (const number of plan.closeNumbers) await closeWatchdogDuplicate(api, repository, plan.canonicalNumber, number);
+    return plan;
   },
 };
 

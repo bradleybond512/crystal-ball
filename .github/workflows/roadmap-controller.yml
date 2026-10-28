@@ -274,7 +274,7 @@ jobs:
             const marker = '<!-- crystal-ball-roadmap-controller:v1 -->';
             if (marker !== RoadmapWatchdogIssues.marker) throw new Error('watchdog marker drifted from the planner');
             const body = fs.readFileSync(process.env.REPORT_PATH, 'utf8');
-            if (!body.includes(marker)) throw new Error('watchdog report marker is missing');
+            if (!body.startsWith(`${marker}\n`)) throw new Error('watchdog report marker is missing');
             const limit = 512;
             const issues = [];
             for (let page = 1; issues.length <= limit; page += 1) {
@@ -290,40 +290,7 @@ jobs:
               if (data.length < 100 || issues.length > limit) break;
             }
             if (issues.length > limit) throw new Error('open issue scan exceeds 512 entries');
-            const plan = RoadmapWatchdogIssues.plan(issues);
-            for (const issueNumber of plan.closeNumbers) {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber,
-                body: `Closed as a duplicate of #${plan.canonicalNumber}. The roadmap watchdog keeps a single tracking issue.`,
-              });
-              await github.rest.issues.update({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber,
-                state: 'closed',
-                state_reason: 'duplicate',
-              });
-            }
-            if (plan.action === 'create') {
-              await github.rest.issues.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title: '[Roadmap Controller] Program status',
-                body,
-              });
-            } else {
-              const canonical = issues.find((issue) => issue.number === plan.canonicalNumber);
-              if ((canonical?.body ?? '') !== body) {
-                await github.rest.issues.update({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: plan.canonicalNumber,
-                  body,
-                });
-              }
-            }
+            await RoadmapWatchdogIssues.reconcile({ github, ...context.repo, issues, body });
       - name: Enforce reconciliation result
         env:
           STATUS: ${{ steps.reconcile.outputs.status }}

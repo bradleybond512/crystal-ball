@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
+import { runInNewContext } from 'node:vm';
 import { parse } from 'yaml';
 
 const root = path.resolve(import.meta.dirname, '..');
@@ -33,7 +34,7 @@ test('every checkout discards its authentication while retaining narrowly scoped
   const wf = workflow('build-desktop.yml');
   assert.deepEqual(wf.jobs['publish-release'].permissions, { contents: 'write', 'id-token': 'write', attestations: 'write' });
   assert.deepEqual(wf.jobs['publish-release'].environment, { name: 'release' });
-  assert.equal(wf.jobs['publish-release'].if, "needs.release-context.outputs.publish == 'true'");
+  assert.equal(wf.jobs['publish-release'].if, "vars.DESKTOP_RELEASE_ENABLED == 'true' && needs.release-context.outputs.publish == 'true'");
   assert.deepEqual(wf.jobs['publish-release'].needs, ['release-context', 'build-tauri']);
   assert.deepEqual(workflow('auto-tag.yml').permissions, { contents: 'write', actions: 'write' });
 });
@@ -77,4 +78,36 @@ test('dependency policy retains base-only trusted execution and read-only trigge
   assert.equal(steps.at(-1).run, 'node scripts/dependency-change-policy.mjs --pr "$PR_NUMBER"');
   assert.ok(steps.every((s) => !/npm (?:ci|install)|checkout.*head|actions\/cache/.test(JSON.stringify(s))));
   assert.match(readFileSync(path.join(root, '.github/workflows/dependency-change-gate.yml'), 'utf8'), /pull_request_target: # zizmor: ignore\[dangerous-triggers\]/);
+});
+
+
+test('release entry points require opt-in before any privileged work', () => {
+  const autoTag = workflow('auto-tag.yml').jobs['auto-tag'];
+  const desktop = workflow('build-desktop.yml');
+  assert.equal(autoTag.if, "vars.DESKTOP_RELEASE_ENABLED == 'true'");
+  assert.equal(desktop.jobs['release-context'].if, "vars.DESKTOP_RELEASE_ENABLED == 'true' || (github.event_name == 'workflow_dispatch' && inputs.publish_mode == 'build')");
+  assert.equal(desktop.jobs['publish-release'].if, "vars.DESKTOP_RELEASE_ENABLED == 'true' && needs.release-context.outputs.publish == 'true'");
+  // Evaluate the actual restricted expressions across the trigger matrix. GitHub
+  // string comparisons are case-insensitive. An
+  // absent guard means true, exactly as GitHub would permit the whole job.
+  const evaluate = (expression, { enabled, event, mode, publish }) => {
+    const values = {
+      'vars.DESKTOP_RELEASE_ENABLED': JSON.stringify((enabled ?? '').toLowerCase()),
+      'github.event_name': JSON.stringify(event),
+      'inputs.publish_mode': JSON.stringify(mode),
+      'needs.release-context.outputs.publish': JSON.stringify(publish),
+    };
+    let resolved = expression ?? 'true';
+    for (const [key, value] of Object.entries(values)) resolved = resolved.replaceAll(key, value);
+    assert.match(resolved, /^[a-zA-Z0-9_\s'"=|&().-]+$/);
+    return runInNewContext(resolved.replaceAll('==', '==='), Object.create(null), { timeout: 100 });
+  };
+  for (const enabled of [undefined, '', 'false', 'TRUE', 'true']) {
+    for (const [event, mode, publishing] of [['push', '', true], ['workflow_dispatch', 'publish', true], ['workflow_dispatch', 'build', false]]) {
+      const context = { enabled, event, mode, publish: String(publishing) };
+      assert.equal(evaluate(autoTag.if, context), enabled?.toLowerCase() === 'true');
+      assert.equal(evaluate(desktop.jobs['release-context'].if, context), enabled?.toLowerCase() === 'true' || !publishing);
+      assert.equal(evaluate(desktop.jobs['publish-release'].if, context), enabled?.toLowerCase() === 'true' && publishing);
+    }
+  }
 });

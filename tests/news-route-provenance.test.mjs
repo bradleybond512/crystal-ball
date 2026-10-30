@@ -6,12 +6,12 @@ import newsdata from '../api/newsdata-feed.js';
 
 const sidecar = readFileSync(new URL('../src-tauri/sidecar/local-api-server.mjs', import.meta.url), 'utf8');
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-function localRoute(path, cache = new Map(), context = {}) {
+function localRoute(path, cache = new Map(), context = {}, clock = Date) {
   const start = sidecar.indexOf(path === '/api/news/headlines' ? '  // ── News headlines aggregator' : '  // ── NewsAPI.org headlines');
   const end = sidecar.indexOf(path === '/api/news/headlines' ? '  // ── GDELT Intelligence' : '  // ── USGS Volcano', start);
   const helpers = sidecar.slice(sidecar.indexOf('  // ── News provenance helpers'), sidecar.indexOf('  // ── NewsAPI.org headlines'));
-  const run = new AsyncFunction('requestUrl', 'fetchWithTimeout', 'getCached', 'getCachedStale', 'setCached', 'context', 'json', 'CHROME_UA', helpers + sidecar.slice(start, end));
-  return (url) => run(new URL(url), globalThis.fetch, (key) => cache.get(key)?.fresh ? cache.get(key).data : null, (key) => cache.get(key)?.data, (key, data) => cache.set(key, { data, fresh: true }), context, (body, status = 200, headers = {}) => Response.json(body, { status, headers }), 'test');
+  const run = new AsyncFunction('requestUrl', 'fetchWithTimeout', 'getCached', 'getCachedStale', 'setCached', 'context', 'json', 'CHROME_UA', 'Date', helpers + sidecar.slice(start, end));
+  return (url) => run(new URL(url), globalThis.fetch, (key) => cache.get(key)?.fresh ? cache.get(key).data : null, (key) => cache.get(key)?.data, (key, data) => cache.set(key, { data, fresh: true }), context, (body, status = 200, headers = {}) => Response.json(body, { status, headers }), 'test', clock);
 }
 const fixtures = {
   newsapi: { articles: [{ title: 'Headline', url: 'https://example.com/a' }] },
@@ -59,10 +59,13 @@ test('GDELT distinguishes observation from publication and preserves acquisition
   const old = globalThis.fetch; const cache = new Map();
   globalThis.fetch = async () => Response.json({ articles: [{ title: 'Headline', url: 'https://example.com/a', seendate: '20261029T120000Z' }] });
   try {
-    const route = localRoute('/api/news/headlines', cache);
+    let now = Date.now();
+    class RouteDate extends Date { static now() { return now; } }
+    const route = localRoute('/api/news/headlines', cache, {}, RouteDate);
     const first = await (await route('https://local/api/news/headlines')).json();
     assert.equal(first.acquisition.outcome, 'ok'); assert.equal(first.articles[0].provenance.publishedAt, null);
     assert.equal(first.articles[0].provenance.observedAt, Date.parse('2026-10-29T12:00:00Z'));
+    now += 1_000;
     const cached = await (await route('https://local/api/news/headlines')).json();
     assert.equal(cached.acquisition.delivery, 'memory_cache'); assert.equal(cached.acquisition.acquiredAt, first.acquisition.acquiredAt);
     for (const value of cache.values()) value.fresh = false;
@@ -119,8 +122,11 @@ for (const [provider, edge] of [['newsapi', newsapi], ['newsdata', newsdata]]) {
     globalThis.fetch = async () => { calls++; return Response.json(fixtures[provider]); };
     const cache = new Map([[`${provider}:world news`, { fresh: true, data: [{ title: 'legacy' }] }]]);
     try {
-      const route = localRoute(path, cache);
+      let now = Date.now();
+      class RouteDate extends Date { static now() { return now; } }
+      const route = localRoute(path, cache, {}, RouteDate);
       const first = await (await route(`https://local${path}?responseMode=tracked-v1`)).json();
+      now += 1_000;
       const second = await (await route(`https://local${path}?responseMode=tracked-v1`)).json();
       assert.equal(calls, 1); assert.equal(second.acquisition.delivery, 'memory_cache');
       assert.equal(second.acquisition.acquiredAt, first.acquisition.acquiredAt);

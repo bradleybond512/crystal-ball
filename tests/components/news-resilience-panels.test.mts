@@ -9,9 +9,10 @@ const { MediastackNewsPanel } = await import('../../src/components/MediastackNew
 after(() => Panel.stopHeartbeatTicker());
 const settle = () => new Promise(resolve => setTimeout(resolve, 220));
 function response(body: unknown) { return Promise.resolve({ ok: true, json: async () => body } as Response); }
-test('legacy empty response remains unknown rather than verified empty', async () => {
+test('legacy empty response remains unknown rather than verified empty', async (t) => {
   globalThis.fetch = () => response({ articles: [] });
   const panel = new MediastackNewsPanel();
+  t.after(() => panel.destroy());
   await settle();
   assert.match(panel.getElement().textContent ?? '', /GDELT status unknown/);
   panel.destroy();
@@ -29,11 +30,13 @@ function populated(age = 0) {
   snapshot.publish(generation, 'rss', [item], acquisition);
   return { snapshot, generation, item, acquisition };
 }
-test('verified empty GDELT uses eligible snapshot and subscriptions never fetch', async () => {
+test('verified empty GDELT uses eligible snapshot and subscriptions never fetch', async (t) => {
   let calls = 0;
   globalThis.fetch = () => { calls++; return response({ articles: [], acquisition: { outcome: 'empty', delivery: 'upstream', acquiredAt: Date.now() } }); };
   const { snapshot, generation, item, acquisition } = populated();
+  t.after(() => snapshot.destroy());
   const panel = new MediastackNewsPanel(snapshot);
+  t.after(() => panel.destroy());
   document.body.append(panel.getElement());
   await settle();
   assert.match(panel.getElement().textContent ?? '', /verified empty.*Fallback.*Example publisher/s);
@@ -48,28 +51,32 @@ test('verified empty GDELT uses eligible snapshot and subscriptions never fetch'
   assert.equal(calls, 1);
   panel.destroy(); snapshot.destroy();
 });
-test('expired snapshot cannot fill an unavailable request', async () => {
+test('expired snapshot cannot fill an unavailable request', async (t) => {
   globalThis.fetch = async () => { throw new Error('secret upstream failure'); };
   const { snapshot } = populated(2 * 60 * 60_000);
+  t.after(() => snapshot.destroy());
   const panel = new MediastackNewsPanel(snapshot);
+  t.after(() => panel.destroy());
   await settle();
   assert.match(panel.getElement().textContent ?? '', /GDELT unavailable.*No matching eligible fallback/s);
   assert.doesNotMatch(panel.getElement().textContent ?? '', /secret upstream|Cyber attack/);
   panel.destroy(); snapshot.destroy();
 });
-test('observed time is labelled separately and never makes breaking news', async () => {
+test('observed time is labelled separately and never makes breaking news', async (t) => {
   globalThis.fetch = () => response({ articles: [{ title: 'Cyber news', url: 'https://example.com/observed', seendate: '20261030T120000Z', provenance: { publicationState: 'missing', observedAt: Date.now() } }], acquisition: { outcome: 'ok', delivery: 'server_cache' } });
   const panel = new MediastackNewsPanel();
+  t.after(() => panel.destroy());
   await settle();
   const text = panel.getElement().textContent ?? '';
   assert.match(text, /Observed .*Publication time unknown/);
   assert.doesNotMatch(panel.getElement().querySelector('.news-feed')?.textContent ?? '', /Breaking/);
   panel.destroy();
 });
-test('destroy invalidates queued and in-flight completion', async () => {
+test('destroy invalidates queued and in-flight completion', async (t) => {
   let resolve!: (value: Response) => void;
   globalThis.fetch = () => new Promise<Response>(done => { resolve = done; });
   const panel = new MediastackNewsPanel();
+  t.after(() => panel.destroy());
   await Promise.resolve();
   const before = panel.getElement().innerHTML;
   panel.destroy();
@@ -77,12 +84,14 @@ test('destroy invalidates queued and in-flight completion', async () => {
   await settle();
   assert.equal(panel.getElement().innerHTML, before);
 });
-test('Overview reports passive acquisition coverage and shared delivery groups', async () => {
+test('Overview reports passive acquisition coverage and shared delivery groups', async (t) => {
   let calls = 0;
   globalThis.fetch = () => { calls++; return response({}); };
   const { snapshot, generation, item, acquisition } = populated();
+  t.after(() => snapshot.destroy());
   disclosureService.setLevel('system-diagnostic', 'detail');
   const panel = new SystemDiagnosticPanel(snapshot);
+  t.after(() => panel.destroy());
   await settle();
   const section = panel.getElement().querySelector('.news-diagnostic-coverage');
   assert.ok(section);
@@ -95,11 +104,13 @@ test('Overview reports passive acquisition coverage and shared delivery groups',
   assert.equal(calls, before);
   panel.destroy(); snapshot.destroy();
 });
-test('topic and query filter fallback without additional query acquisition', async () => {
+test('topic and query filter fallback without additional query acquisition', async (t) => {
   let calls = 0;
   globalThis.fetch = () => { calls++; return response({ articles: [], acquisition: { outcome: 'empty' } }); };
   const { snapshot } = populated();
+  t.after(() => snapshot.destroy());
   const panel = new MediastackNewsPanel(snapshot);
+  t.after(() => panel.destroy());
   await settle();
   panel.getElement().querySelector<HTMLButtonElement>('[data-chip="health"]')?.click();
   await settle();
@@ -115,10 +126,11 @@ test('topic and query filter fallback without additional query acquisition', asy
   assert.equal(panel.getElement().querySelector('.news-row'), null);
   panel.destroy(); snapshot.destroy(); localStorage.clear();
 });
-test('later chip request wins over an older in-flight completion', async () => {
+test('later chip request wins over an older in-flight completion', async (t) => {
   const pending: ((response: Response) => void)[] = [];
   globalThis.fetch = () => new Promise<Response>(resolve => { pending.push(resolve); });
   const panel = new MediastackNewsPanel();
+  t.after(() => panel.destroy());
   await settle();
   panel.getElement().querySelector<HTMLButtonElement>('[data-chip="health"]')?.click();
   await Promise.resolve();

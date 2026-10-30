@@ -1175,5 +1175,8 @@
   "src-tauri/tauri.finance.conf.json": [
     "test:desktop-identity",
     "test:secret-boundary"
+  ],
+  "api/_news-provenance.js": [
+    "test:news-resilience"
   ]
 }

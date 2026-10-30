@@ -900,9 +900,10 @@ source-fusion program, requiring domain evidence before tolerance changes.
 
 ### UX-033 — Keep content reachable during stacked warnings
 
-Status: NOT STARTED
+Status: IN PROGRESS
 Priority: S
 Source findings: PR1731 H1.
+Implementation claim (2026-10-30): Cap the existing measured warning shelf while preserving warning order and actions. Implementation, browser qualification and cross-agent review are pending; no completion or native acceptance is claimed.
 
 Acceptance: Cap the measured notification stack and its reserved space together. At small window sizes, stacked warnings remain scrollable while content and navigation remain reachable.
 
@@ -1231,7 +1232,7 @@ Update the row in the same PR that does the work.
 | UX-027 | Evidence-scoped Home reassurance | DONE | #1707 |
 | UX-031 | Reliable system appearance lifecycle | MONITOR | #1720 |
 | UX-032 | Settings keyboard containment | MONITOR | #1723 |
-| UX-033 | Keep content reachable during stacked warnings | NOT STARTED | — |
+| UX-033 | Keep content reachable during stacked warnings | IN PROGRESS | — |
 | UX-034 | Assign ownership of top-of-window surfaces | MONITOR | #1730 |
 | UX-035 | Gate background panel work by actual need | NOT STARTED — HIGH ASSURANCE | — |
 | UX-036 | Spread refresh work and honor battery policy | NOT STARTED — HIGH ASSURANCE | — |

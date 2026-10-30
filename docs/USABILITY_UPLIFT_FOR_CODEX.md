@@ -961,8 +961,12 @@ Bounded approved slice: preserve acquisition, cache and publication provenance;
 use already-acquired matching news with verified acquisition age under two hours
 when GDELT fails or returns empty; explain coverage and shared delivery groups
 in the existing System Diagnostic overview. No new provider, polling, scoring,
-navigation, deployment or installation is included. Implementation and required
-validation/review evidence are pending; this draft initially claims the task only.
+navigation, deployment or installation is included. Local implementation preserves
+legacy response shapes and analytical dates while the new views use explicit
+provenance; proxied or legacy cache timestamps without acquisition proof stay
+unknown and cannot qualify for fallback. Shared delivery groups do not establish
+independent reporting. Required qualification and opposite-agent review remain
+pending; the remote draft initially contains only the task claim.
 
 ### UX-042 — Construct panels when needed without losing coverage
 
@@ -1244,7 +1248,7 @@ Update the row in the same PR that does the work.
 | UX-036 | Spread refresh work and honor battery policy | NOT STARTED — HIGH ASSURANCE | — |
 | UX-037 | Prevent new unowned stacking levels | NOT STARTED | — |
 | UX-038 | Constrain video-channel link construction | NOT STARTED — HIGH ASSURANCE | — |
-| UX-040 | Expose unavailable and stale feed outcomes | IN PROGRESS — HIGH ASSURANCE | draft claim |
+| UX-040 | Expose unavailable and stale feed outcomes | IN PROGRESS — HIGH ASSURANCE | #1841 — local implementation; qualification/review pending |
 | UX-042 | Construct panels when needed without losing coverage | MONITOR | #1714 |
 | UX-043 | Reduce repeated alert subscriber scans | NOT STARTED | — |
 | UX-044 | Announce critical UI changes accessibly | NOT STARTED | — |

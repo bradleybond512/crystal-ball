@@ -174,6 +174,7 @@
     "test:infrarisks": "tsx --test src/services/infrarisks/__tests__/infra-risk-service.test.mts",
     "test:earthquake": "tsx --test src/services/earthquake/__tests__/earthquake-intelligence.test.mts src/services/earthquake/__tests__/earthquake-fusion-observations.test.mts",
     "test:news": "tsx --test src/services/news/__tests__/news-aggregator.test.mts",
+    "test:news-resilience": "node --import tsx --test src/services/__tests__/news-provenance.test.mts src/services/__tests__/rss-adapters-tracked.test.mts src/services/news/__tests__/news-snapshot.test.mts tests/components/news-resilience-panels.test.mts && node --test tests/news-route-provenance.test.mjs tests/ux040-news-snapshot-wiring.test.mjs",
     "test:bio": "tsx --test src/services/biosurveillance/__tests__/cdc-ari.test.mts",
     "test:macro": "tsx --test src/services/economic/__tests__/macro-stress.test.mts src/services/cyber/__tests__/ransomware-mentions.test.mts",
     "test:wildfire": "tsx --test src/services/__tests__/fire-intel-service.test.mts",

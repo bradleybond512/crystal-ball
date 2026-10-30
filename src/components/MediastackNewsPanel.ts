@@ -1,5 +1,7 @@
  
 import { Panel } from './Panel';
+import type { NewsSnapshot } from '@/services/news-snapshot';
+import { acquisitionAge, normalizeAcquisition, normalizeNewsProvenance, type NewsAcquisition } from '@/services/news-provenance';
 import { escapeHtml, sanitizeUrl } from '@/utils/sanitize';
 import { getApiBaseUrl } from '@/services/runtime';
 import {
@@ -32,14 +34,24 @@ export class MediastackNewsPanel extends Panel {
   private loading = false;
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
-  constructor() {
+  private disposed = false;
+  private requestSequence = 0;
+  private unsubscribeNews: (() => void) | null = null;
+  private acquisition: NewsAcquisition = normalizeAcquisition(null);
+  private primaryArticles: Article[] = [];
+  private primaryGeneration: number | undefined;
+  private fallback = false;
+  private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor(private readonly newsSnapshot?: NewsSnapshot) {
     super({
       id: 'mediastack-news',
       title: 'News Feed',
       showCount: true,
       trackActivity: true,
-      infoTooltip: 'GDELT-backed news feed with topic filters. Articles under 30 min old show a "Breaking" badge. 15-min refresh.',
+      infoTooltip: 'News with acquisition status and topic filters. Breaking requires a known publication time. 15-min refresh.',
     });
+    this.unsubscribeNews = this.newsSnapshot?.subscribe(() => { if (!this.disposed) this.render(); }) ?? null;
     this.render();
     // Defer the first fetch off the constructor so we don't block boot.
     queueMicrotask(() => { void this.load(); });
@@ -48,28 +60,82 @@ export class MediastackNewsPanel extends Panel {
   }
 
   private async load(): Promise<void> {
-    if (this.loading) return;
+    if (this.disposed) return;
+    const sequence = ++this.requestSequence;
+    const generation = this.newsSnapshot?.getSnapshot().generation;
     this.loading = true;
-    try {
-      const topics = this.activeChip === 'all'
-        ? 'security,geopolitical,natural_disasters,economic,health,weather,emergency'
-        : this.activeChip;
-      const url = `/api/news/headlines?topics=${encodeURIComponent(topics)}&limit=80`;
-      const data = await fetchJson(url);
-      const raw = (data as { articles?: RawArticle[] } | null)?.articles ?? [];
-      this.articles = aggregateHeadlines([raw], { limit: 80 });
-      this.setCount(this.articles.length);
+    this.render();
+    const topics = this.activeChip === 'all'
+      ? 'security,geopolitical,natural_disasters,economic,health,weather,emergency'
+      : this.activeChip;
+    const data = await fetchJson(`/api/news/headlines?topics=${encodeURIComponent(topics)}&limit=80`);
+    if (this.disposed || sequence !== this.requestSequence) return;
+    this.loading = false;
+    if (generation !== this.newsSnapshot?.getSnapshot().generation) {
+      this.primaryArticles = [];
+      this.acquisition = normalizeAcquisition(null);
       this.render();
-    } finally {
-      this.loading = false;
+      return;
     }
+    const envelope = data as { articles?: RawArticle[]; acquisition?: unknown } | null;
+    this.acquisition = normalizeAcquisition(envelope?.acquisition);
+    if (data === null) this.acquisition = { ...this.acquisition, outcome: 'unavailable' };
+    const raw = Array.isArray(envelope?.articles) ? envelope.articles : [];
+    this.primaryGeneration = generation;
+    this.primaryArticles = aggregateHeadlines([raw.map(row => ({ ...row,
+      // A legacy GDELT response cannot turn seendate into publication time.
+      provenance: normalizeNewsProvenance(row.provenance),
+    }))], { limit: 80 });
+    if (generation !== undefined) {
+      this.newsSnapshot?.publish(generation, 'gdelt', this.primaryArticles.map(article => ({
+        title: article.title, link: article.url, source: article.source,
+        pubDate: new Date(article.publishedAt ?? Number.NaN), isAlert: false, provenance: article.provenance,
+      })), this.acquisition);
+    }
+    this.render();
   }
 
-  public destroy(): void {
-    if (this.refreshTimer) {
-      clearInterval(this.refreshTimer);
-      this.refreshTimer = null;
+  public override destroy(): void {
+    this.disposed = true;
+    ++this.requestSequence;
+    this.unsubscribeNews?.();
+    this.unsubscribeNews = null;
+    if (this.debounceTimer) clearTimeout(this.debounceTimer);
+    if (this.refreshTimer) clearInterval(this.refreshTimer);
+    this.refreshTimer = null;
+    super.destroy();
+  }
+
+  private selectArticles(): void {
+    if (this.primaryGeneration !== this.newsSnapshot?.getSnapshot().generation) {
+      this.primaryArticles = [];
+      this.acquisition = normalizeAcquisition(null);
     }
+    this.fallback = this.primaryArticles.length === 0 || !['ok', 'unknown'].includes(this.acquisition.outcome);
+    const raw = this.fallback ? (this.newsSnapshot?.getEligibleItems() ?? []).map(item => ({
+      title: item.title, url: item.link, source: item.source,
+      publishedAt: item.pubDate.getTime(), provenance: item.provenance,
+    })) : [];
+    this.articles = this.fallback
+      ? aggregateHeadlines([raw], { topic: this.activeChip, query: this.query, limit: 80 })
+      : this.primaryArticles;
+    this.setCount(this.articles.length);
+  }
+
+  private renderStatus(): string {
+    let reason = `GDELT ${this.acquisition.outcome.replace(/_/g, ' ')}`;
+    if (this.acquisition.outcome === 'empty') reason = 'GDELT verified empty';
+    if (this.acquisition.outcome === 'unknown') reason = 'GDELT status unknown';
+    if (this.acquisition.outcome === 'ok') reason = 'GDELT returned no accepted headlines';
+    if (!this.fallback) {
+      const age = acquisitionAge(this.acquisition);
+      const ageText = age === null ? 'Acquisition age unknown' : `Acquired ${timeAgo(Date.now() - age, Date.now())}`;
+      return `<div class="news-acquisition-status">GDELT ${escapeHtml(this.acquisition.outcome)} · ${escapeHtml(this.acquisition.delivery.replace(/_/g, ' '))} delivery · ${escapeHtml(ageText)}</div>`;
+    }
+    const sources = [...new Set(this.articles.map(article => article.source))].join(', ');
+    return `<div class="news-acquisition-status" role="status">${escapeHtml(reason)}. ${this.articles.length
+      ? `Fallback · ${escapeHtml(sources)} · validated acquisition under 2h old`
+      : 'No matching eligible fallback headlines.'}</div>`;
   }
 
   // ─── Rendering ─────────────────────────────────────────────────────
@@ -100,11 +166,13 @@ export class MediastackNewsPanel extends Panel {
     const now = Date.now();
     const rows = articles.slice(0, 50).map((a) => renderArticleRow(a, now, q)).join('');
     return `<div class="news-feed" style="display:flex;flex-direction:column;gap:6px;max-height:520px;overflow-y:auto">${rows}</div>
-      <div style="opacity:0.65;font-size:11px;margin-top:6px">Source: GDELT 2.0 Doc · 15-min refresh · ${articles.length} articles</div>`;
+      <div style="opacity:0.65;font-size:11px;margin-top:6px">${this.fallback ? 'Snapshot fallback' : 'Source: GDELT 2.0 Doc'} · 15-min refresh · ${articles.length} articles</div>`;
   }
 
   private render(): void {
-    this.setContent(`${this.renderChipStrip()}${this.renderSearchInput()}${this.renderFeed()}`, () => this.wireHandlers());
+    if (this.disposed) return;
+    this.selectArticles();
+    this.setContent(`${this.renderChipStrip()}${this.renderSearchInput()}${this.renderStatus()}${this.renderFeed()}`, () => this.wireHandlers());
   }
 
   private wireHandlers(): void {
@@ -127,11 +195,10 @@ export class MediastackNewsPanel extends Panel {
         input.focus();
         try { input.setSelectionRange(len, len); } catch { /* noop */ }
       }
-      let debounceTimer: ReturnType<typeof setTimeout> | null = null;
       input.addEventListener('input', () => {
         const value = input.value;
-        if (debounceTimer) clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
+        if (this.debounceTimer) clearTimeout(this.debounceTimer);
+        this.debounceTimer = setTimeout(() => {
           this.query = value;
           this.render();
         }, 150);
@@ -147,7 +214,9 @@ function renderArticleRow(a: Article, now: number, query: string): string {
   const safeUrl = sanitizeUrl(a.url) || '';
   const titleHtml = highlight(a.title, query);
   const countryBit = a.country ? ` · ${escapeHtml(a.country)}` : '';
-  const ago = a.publishedAt ? timeAgo(a.publishedAt, now) : '';
+  let ago = 'Publication time unknown';
+  if (a.publishedAt) ago = `Published ${timeAgo(a.publishedAt, now)}`;
+  else if (a.provenance?.observedAt) ago = `Observed ${timeAgo(a.provenance.observedAt, now)} · Publication time unknown`;
   return `<div class="news-row" style="padding:8px;border-radius:4px;background:rgba(255,255,255,0.03);display:flex;flex-direction:column;gap:2px">
     <div>
       ${breaking ? '<span style="padding:1px 5px;border-radius:3px;background:rgba(248,113,113,0.32);font-size:9px;font-weight:600;text-transform:uppercase;margin-right:6px">Breaking</span>' : ''}

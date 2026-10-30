@@ -2114,7 +2114,7 @@ export class PanelLayoutManager implements AppModule {
 
  this.ctx.panels['what-changed'] = new WhatChangedPanel();
 
- const mediastackNewsPanel = new MediastackNewsPanel();
+ const mediastackNewsPanel = new MediastackNewsPanel(this.ctx.newsSnapshot);
  this.ctx.panels['mediastack-news'] = mediastackNewsPanel;
 
  const wildfireIncidentsPanel = new WildfireIncidentsPanel();
@@ -3724,7 +3724,7 @@ export class PanelLayoutManager implements AppModule {
   private registerDiagnosticPanels(): void {
  const slots: Array<[string, () => Promise<Panel>]> = [
  ['api-diagnostic',       () => import('@/components/ApiDiagnosticPanel').then((m) => new m.ApiDiagnosticPanel())],
- ['system-diagnostic',    () => import('@/components/SystemDiagnosticPanel').then((m) => new m.SystemDiagnosticPanel())],
+ ['system-diagnostic',    () => import('@/components/SystemDiagnosticPanel').then((m) => new m.SystemDiagnosticPanel(this.ctx.newsSnapshot))],
  ['self-test',            () => import('@/components/DiagnosticSelfTestPanel').then((m) => new m.DiagnosticSelfTestPanel())],
  ['command-center',       () => import('@/components/CommandCenterPanel').then((m) => new m.CommandCenterPanel())],
  ['algorithm-diagnostic', () => import('@/components/AlgorithmDiagnosticPanel').then((m) => new m.AlgorithmDiagnosticPanel())],

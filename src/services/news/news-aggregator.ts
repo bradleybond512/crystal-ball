@@ -1,3 +1,4 @@
+import { normalizeNewsProvenance, type NewsProvenance } from '../news-provenance';
 /**
  * News aggregator — pure-deterministic projection over GDELT 2.0 Doc
  * articles (the existing /api/gdelt-intel sidecar shape) plus any
@@ -41,6 +42,7 @@ export interface Article {
   topic: NewsTopic;
   /** GDELT tone, -1..+1 (rescaled). Null when not available. */
   tone: number | null;
+  provenance?: NewsProvenance;
 }
 
 export interface AggregateOptions {
@@ -86,6 +88,7 @@ export function classifyTopic(title: string, url: string, source: string): NewsT
 // ─── Normalization ────────────────────────────────────────────────────
 
 export interface RawArticle {
+  provenance?: unknown;
   title?: unknown;
   url?: unknown;
   source?: unknown;
@@ -106,7 +109,8 @@ export function normalizeArticle(raw: RawArticle): Article | null {
   if (!title || !url) return null;
   const source = stringOrEmpty(raw.source ?? raw.domain);
   const country = stringOrNull(raw.country);
-  const publishedAt = parseAnyTimestamp(raw.publishedAt ?? raw.published_at ?? raw.timestamp ?? raw.seendate);
+  const provenance = raw.provenance === undefined ? undefined : normalizeNewsProvenance(raw.provenance);
+  const publishedAt = provenance ? provenance.publishedAt : parseAnyTimestamp(raw.publishedAt ?? raw.published_at ?? raw.timestamp ?? raw.seendate);
   const tone = numOrNull(raw.tone);
   return {
     id: urlToId(url),
@@ -117,6 +121,7 @@ export function normalizeArticle(raw: RawArticle): Article | null {
     publishedAt,
     topic: classifyTopic(title, url, source),
     tone,
+    ...(provenance ? { provenance } : {}),
   };
 }
 

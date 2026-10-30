@@ -1,3 +1,5 @@
+import { normalizeAcquisition, normalizeNewsProvenance } from '@/services/news-provenance';
+import type { NewsSnapshotConfiguration } from '@/services/news-snapshot';
 import type { AppContext, AppModule } from '@/app/app-context';
 import type { NewsItem, MapLayers, SocialUnrestEvent } from '@/types';
 import type { MarketData } from '@/types';
@@ -109,7 +111,7 @@ import { enrichEventsWithExposure } from '@/services/population-exposure';
 import { getTopActiveGeoHubs } from '@/services/geo-activity';
 import { getTopActiveHubs } from '@/services/tech-activity';
 import { debounce, getCircuitBreakerCooldownInfo } from '@/utils';
-import { isFeatureAvailable } from '@/services/runtime-config';
+import { isFeatureAvailable, isFeatureEnabled, subscribeRuntimeConfig } from '@/services/runtime-config';
 import { getApiBaseUrl, isDesktopRuntime } from '@/services/runtime';
 import { getAiFlowSettings } from '@/services/ai-flow-settings';
 import { t, getCurrentLanguage } from '@/services/i18n';
@@ -236,8 +238,8 @@ import {
   ingestEarthquakesToMatrix, ingestCyberToMatrix, ingestAirstrikesToMatrix,
   checkVesselsAgainstSanctions,
 } from '@/services/intel-pipeline';
-import { fetchNewsApiHeadlines } from '@/services/newsapi';
-import { fetchNewsDataFeed } from '@/services/newsdata';
+import { fetchNewsApiHeadlinesTracked } from '@/services/newsapi';
+import { fetchNewsDataFeedTracked } from '@/services/newsdata';
 import type { ThreatLevel as ClientThreatLevel } from '@/services/threat-classifier';
 import type { NewsItem as ProtoNewsItem, ThreatLevel as ProtoThreatLevel } from '@/generated/client/crystalball/news/v1/service_client';
 import { fetchIswReports } from '@/services/isw-reports';
@@ -480,6 +482,7 @@ const WEATHER_NOTIFY_DEDUPE_WINDOW_MS = 60 * 60 * 1000;
 function protoItemToNewsItem(p: ProtoNewsItem): NewsItem {
   const level = PROTO_TO_CLIENT_LEVEL[p.threat?.level ?? 'THREAT_LEVEL_UNSPECIFIED'];
   return {
+ ...(p.provenance ? { provenance: normalizeNewsProvenance(p.provenance) } : {}),
  source: p.source,
  title: p.title,
  link: p.link,
@@ -539,6 +542,7 @@ interface RssNewsLoadResult {
 export class DataLoaderManager implements AppModule {
   private ctx: AppContext;
   private callbacks: DataLoaderCallbacks;
+  private unsubscribeNewsRuntimeConfig: (() => void) | null = null;
 
   private mapFlashCache = new Map<string, number>();
   private readonly dedupeConflictObservations =
@@ -556,6 +560,45 @@ export class DataLoaderManager implements AppModule {
   // rather than utils.debounce so destroy() can cancel a pending evaluation.
   private compoundThreatTimer: ReturnType<typeof setTimeout> | null = null;
 
+  private newsSnapshotConfiguration(): NewsSnapshotConfiguration {
+ const language = getCurrentLanguage();
+ const sources = new Map<string, import('@/services/news-snapshot').NewsSnapshotSourceConfig>();
+ const categories = Object.entries(FEEDS);
+ if (SITE_VARIANT === 'full') categories.push(['intel', INTEL_SOURCES]);
+ for (const [category, feeds] of categories) {
+ for (const feed of feeds ?? []) {
+ const configuredUrl = typeof feed.url === 'string' ? feed.url
+   : feed.url[language] || feed.url.en || Object.values(feed.url)[0] || '';
+ sources.set(feed.name, {
+   sourceId: feed.name, label: feed.name, configuredUrl, category,
+   enabled: !this.ctx.disabledSources.has(feed.name) && (!feed.lang || feed.lang === language),
+ });
+ }
+ }
+ const providerSettings = [
+   { provider: 'gdelt', enabled: true },
+   { provider: 'newsapi', enabled: isFeatureEnabled('newsApiHeadlines') },
+   { provider: 'newsdata', enabled: isFeatureEnabled('newsDataFeed') },
+ ];
+ for (const { provider, enabled } of providerSettings) {
+ sources.set(provider, { sourceId: provider, label: provider, configuredUrl: provider, category: 'supplemental', enabled });
+ }
+ const configs = [...sources.values()];
+ return { scope: {
+   variant: SITE_VARIANT, language,
+   query: 'geopolitics world conflict crisis|world news geopolitics',
+   configSignature: JSON.stringify(configs),
+ }, sources: configs };
+  }
+
+  private publishNewsFeeds(generation: number, feeds: typeof FEEDS.politics, items: NewsItem[], acquisitions?: Record<string, unknown>): void {
+ for (const feed of feeds ?? []) {
+ const feedItems = items.filter(item => item.source === feed.name);
+ const acquisition = acquisitions?.[feed.name] ?? feedItems[0]?.provenance;
+ this.ctx.newsSnapshot.publish(generation, feed.name, feedItems, normalizeAcquisition(acquisition));
+ }
+  }
+
   private scheduleCompoundThreatEvaluation(): void {
  if (this.compoundThreatTimer !== null) clearTimeout(this.compoundThreatTimer);
  this.compoundThreatTimer = setTimeout(() => {
@@ -572,6 +615,8 @@ export class DataLoaderManager implements AppModule {
   constructor(ctx: AppContext, callbacks: DataLoaderCallbacks) {
  this.ctx = ctx;
  this.callbacks = callbacks;
+ this.ctx.newsSnapshot.bindScope(() => this.newsSnapshotConfiguration());
+ this.unsubscribeNewsRuntimeConfig = subscribeRuntimeConfig(() => { this.ctx.newsSnapshot.getSnapshot(); });
   }
 
   init(): void {
@@ -625,6 +670,8 @@ export class DataLoaderManager implements AppModule {
   }
 
   destroy(): void {
+ this.unsubscribeNewsRuntimeConfig?.();
+ this.unsubscribeNewsRuntimeConfig = null;
  if (this.compoundThreatTimer !== null) {
  clearTimeout(this.compoundThreatTimer);
  this.compoundThreatTimer = null;
@@ -1116,7 +1163,7 @@ export class DataLoaderManager implements AppModule {
  this.applyTimeRangeFilterToNewsPanelsDebounced();
   }
 
-  private async loadNewsCategory(category: string, feeds: typeof FEEDS.politics, digest?: RssDigestFetchResult): Promise<RssNewsLoadResult> {
+  private async loadNewsCategory(category: string, feeds: typeof FEEDS.politics, digest?: RssDigestFetchResult, generation = this.ctx.newsSnapshot.getSnapshot().generation): Promise<RssNewsLoadResult> {
  try {
  const panel = this.ctx.newsPanels[category];
 
@@ -1137,6 +1184,8 @@ export class DataLoaderManager implements AppModule {
  const items = (digest.digest.categories[category]?.items ?? [])
  .map(protoItemToNewsItem)
  .filter(i => enabledNames.has(i.source));
+
+ this.publishNewsFeeds(generation, enabledFeeds, items, digest.digest.feedAcquisitions);
 
  ingestHeadlines(items.map(i => ({ title: i.title, pubDate: i.pubDate, source: i.source, link: i.link })));
 
@@ -1222,6 +1271,7 @@ export class DataLoaderManager implements AppModule {
  }), 2 * 60 * 60 * 1000);
  const rssResult = rssSnapshot.data;
  const items = rssResult.items;
+ this.publishNewsFeeds(generation, enabledFeeds, items, rssResult.feedAcquisitions);
 
  this.renderNewsForCategory(category, items);
  if (panel) {
@@ -1268,6 +1318,7 @@ export class DataLoaderManager implements AppModule {
 
  return { items, dataState };
  } catch (error) {
+ for (const feed of feeds ?? []) this.ctx.newsSnapshot.publish(generation, feed.name, [], normalizeAcquisition({ outcome: 'unavailable', attemptedAt: Date.now() }));
  this.ctx.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), {
  status: 'error',
  errorMessage: String(error),
@@ -1281,6 +1332,7 @@ export class DataLoaderManager implements AppModule {
   }
 
   async loadNews(): Promise<void> {
+ const newsGeneration = this.ctx.newsSnapshot.getSnapshot().generation;
  // Reset happy variant accumulator for fresh pipeline run
  if (SITE_VARIANT === 'happy') {
  this.ctx.happyAllItems = [];
@@ -1301,7 +1353,7 @@ export class DataLoaderManager implements AppModule {
  for (let i = 0; i < categories.length; i += categoryConcurrency) {
  const chunk = categories.slice(i, i + categoryConcurrency);
  const chunkResults = await Promise.allSettled(
- chunk.map(({ key, feeds }) => this.loadNewsCategory(key, feeds, digestResult))
+ chunk.map(({ key, feeds }) => this.loadNewsCategory(key, feeds, digestResult, newsGeneration))
  );
  categoryResults.push(...chunkResults);
  }
@@ -1343,6 +1395,7 @@ export class DataLoaderManager implements AppModule {
  const intel = (digestResult.digest.categories.intel?.items ?? [])
  .map(protoItemToNewsItem)
  .filter(i => enabledNames.has(i.source));
+ this.publishNewsFeeds(newsGeneration, enabledIntelSources, intel, digestResult.digest.feedAcquisitions);
  checkBatchForBreakingAlerts(intel);
  this.renderNewsForCategory('intel', intel);
  if (intelPanel) {
@@ -1363,6 +1416,7 @@ export class DataLoaderManager implements AppModule {
  const intelResult = await Promise.allSettled([fetchCategoryFeedsTracked(enabledIntelSources)]);
  if (intelResult[0]?.status === 'fulfilled') {
  const { items: intel, dataState } = intelResult[0].value;
+ this.publishNewsFeeds(newsGeneration, enabledIntelSources, intel, intelResult[0].value.feedAcquisitions);
  checkBatchForBreakingAlerts(intel);
  this.renderNewsForCategory('intel', intel);
  if (intelPanel) {
@@ -1404,11 +1458,14 @@ export class DataLoaderManager implements AppModule {
  }
 
  // Augment with NewsAPI and NewsData headlines (non-blocking, best-effort)
- const [newsApiItems, newsDataItems] = await Promise.all([
- fetchNewsApiHeadlines('geopolitics world conflict crisis', 15).catch(() => [] as typeof collectedNews),
- fetchNewsDataFeed('world news geopolitics').catch(() => [] as typeof collectedNews),
+ const unavailableNews = () => ({ items: [] as NewsItem[], acquisition: normalizeAcquisition({ outcome: 'unavailable', attemptedAt: Date.now() }) });
+ const [newsApiResult, newsDataResult] = await Promise.all([
+ fetchNewsApiHeadlinesTracked('geopolitics world conflict crisis', 15).catch(unavailableNews),
+ fetchNewsDataFeedTracked('world news geopolitics').catch(unavailableNews),
  ]);
- collectedNews.push(...newsApiItems, ...newsDataItems);
+ this.ctx.newsSnapshot.publish(newsGeneration, 'newsapi', newsApiResult.items, newsApiResult.acquisition);
+ this.ctx.newsSnapshot.publish(newsGeneration, 'newsdata', newsDataResult.items, newsDataResult.acquisition);
+ collectedNews.push(...newsApiResult.items, ...newsDataResult.items);
 
  this.ctx.allNews = collectedNews;
  this.ctx.initialLoadComplete = true;

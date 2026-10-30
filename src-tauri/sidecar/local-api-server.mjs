@@ -10695,72 +10695,103 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
-  // ── NewsAPI.org headlines ─────────────────────────────────────────────────
-  if (requestUrl.pathname === '/api/newsapi-headlines') {
- const apiKey = process.env.NEWSAPI_KEY;
- if (!apiKey) return json({ error: 'NEWSAPI_KEY not configured' }, 503);
- const q = requestUrl.searchParams.get('q') ?? 'geopolitics';
- const pageSize = Math.min(20, parseInt(requestUrl.searchParams.get('pageSize') ?? '10', 10));
- const _newsCacheKey = `newsapi:${q}:${pageSize}`;
- const _newsCached = getCached(_newsCacheKey, 10 * 60 * 1000);
- if (_newsCached) return json(_newsCached);
- try {
- const params = new URLSearchParams({ q, pageSize: String(pageSize), language: 'en', sortBy: 'publishedAt', apiKey });
- const resp = await fetchWithTimeout(
- `https://newsapi.org/v2/everything?${params}`,
- { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } },
- 12000,
- );
- if (!resp.ok) return json([], 200);
- const data = await resp.json();
- const articles = Array.isArray(data?.articles) ? data.articles : [];
- const items = articles.map((a, i) => ({
- id: `newsapi-${i}`,
- source: a.source?.name ?? 'NewsAPI',
- title: a.title ?? '',
- link: a.url ?? '',
- pubDate: a.publishedAt ?? new Date().toISOString(),
- description: a.description ?? '',
- imageUrl: a.urlToImage ?? undefined,
- }));
- setCached(_newsCacheKey, items, 10 * 60 * 1000);
- return json(items);
- } catch {
- return json([], 200);
- }
-  }
+  // ── News provenance helpers ────────────────────────────────────────────
+  // Shared by the three news routes; no edge-module dependency in the packaged sidecar.
+// Acquisition is independent of publisher timestamps, which may be absent or invalid.
+function newsAcquisition(outcome, attemptedAt = null, acquiredAt = null, acceptedCount = 0, delivery = 'unknown', cacheStoredAt = null) {
+  return { outcome, delivery, attemptedAt, acquiredAt, cacheStoredAt, acceptedCount };
+}
+function newsFailure(error) {
+  return error?.newsOutcome ?? (error?.name === 'TimeoutError' || error?.name === 'AbortError' ? 'timeout' : 'unavailable');
+}
+function newsStatus(outcome) {
+  return ({ denied: 403, rate_limited: 429, timeout: 504, malformed: 502, unavailable: 502, unconfigured: 503 })[outcome] ?? 200;
+}
+function newsHttpOutcome(status) {
+  if (status === 429) return 'rate_limited';
+  if (status === 401 || status === 403) return 'denied';
+  return 'unavailable';
+}
+function newsTimestamp(value) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const parsed = Date.parse(value.replace(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/, '$1-$2-$3T$4:$5:$6Z'));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+function newsHttpUrl(value) {
+  if (typeof value !== 'string') return false;
+  try {
+    const url = new URL(value);
+    return (url.protocol === 'http:' || url.protocol === 'https:') && Boolean(url.hostname);
+  } catch { return false; }
+}
+function normalizeNewsRows(data, provider) {
+  const rows = data?.[provider === 'newsapi' ? 'articles' : 'results'];
+  if (!Array.isArray(rows)) throw Object.assign(new Error('news_malformed'), { newsOutcome: 'malformed' });
+  const items = rows.flatMap((a, i) => {
+    const link = provider === 'newsapi' ? a?.url : a?.link;
+    if (typeof a?.title !== 'string' || !a.title.trim() || !newsHttpUrl(link)) return [];
+    const rawDate = provider === 'newsapi' ? a.publishedAt : a.pubDate;
+    const publishedAt = newsTimestamp(rawDate);
+    const rawSource = provider === 'newsapi' ? a.source?.name : a.source_name ?? a.source_id;
+    let source = provider === 'newsapi' ? 'NewsAPI' : 'NewsData';
+    if (typeof rawSource === 'string' && rawSource.trim()) source = rawSource;
+    let publicationState = 'known';
+    if (rawDate == null || rawDate === '') publicationState = 'missing';
+    else if (publishedAt === null) publicationState = 'invalid';
+    return [{
+      id: `${provider}-${i}`,
+      source,
+      title: a.title, link,
+      pubDate: rawDate ?? new Date().toISOString(),
+      description: a.description ?? '',
+      imageUrl: (provider === 'newsapi' ? a.urlToImage : a.image_url) ?? undefined,
+      provenance: { sourceId: provider, deliveryGroup: provider, publicationState, publishedAt, observedAt: null },
+    }];
+  });
+  if (rows.length && !items.length) throw Object.assign(new Error('news_malformed'), { newsOutcome: 'malformed' });
+  return items;
+}
+function newsEnvelope(items, acquisition) {
+  return { format: 'tracked-v1', items: items.map((item) => ({ ...item, provenance: { ...item.provenance, ...acquisition } })), acquisition };
+}
+function legacyNewsItems(items) {
+  return items.map((item) => {
+    const legacy = { ...item };
+    delete legacy.provenance;
+    return legacy;
+  });
+}
 
-  // ── NewsData.io feed ──────────────────────────────────────────────────────
-  if (requestUrl.pathname === '/api/newsdata-feed') {
- const apiKey = process.env.NEWSDATA_API_KEY;
- if (!apiKey) return json({ error: 'NEWSDATA_API_KEY not configured' }, 503);
- const q = requestUrl.searchParams.get('q') ?? 'world news';
- const _ndCacheKey = `newsdata:${q}`;
- const _ndCached = getCached(_ndCacheKey, 10 * 60 * 1000);
- if (_ndCached) return json(_ndCached);
+  // ── NewsAPI.org headlines / NewsData.io feed ─────────────────────────────
+  if (requestUrl.pathname === '/api/newsapi-headlines' || requestUrl.pathname === '/api/newsdata-feed') {
+ const provider = requestUrl.pathname === '/api/newsapi-headlines' ? 'newsapi' : 'newsdata';
+ const mode = requestUrl.searchParams.get('responseMode');
+ const tracked = mode === 'tracked-v1';
+ if (mode !== null && !tracked) return json({ error: 'news_invalid_response_mode' }, 400, { 'Cache-Control': 'no-store' });
+ const respond = (items, acquisition) => json(tracked ? newsEnvelope(items, acquisition) : legacyNewsItems(items), tracked ? newsStatus(acquisition.outcome) : 200, !tracked && ['ok', 'empty'].includes(acquisition.outcome) ? {} : { 'Cache-Control': 'no-store' });
+ const apiKey = provider === 'newsapi' ? process.env.NEWSAPI_KEY : process.env.NEWSDATA_API_KEY;
+ if (!apiKey) return tracked ? respond([], newsAcquisition('unconfigured')) : json({ error: 'news_unconfigured' }, 503, { 'Cache-Control': 'no-store' });
+ const q = requestUrl.searchParams.get('q') ?? (provider === 'newsapi' ? 'geopolitics' : 'world news');
+ const rawPageSize = Number.parseInt(requestUrl.searchParams.get('pageSize') ?? '10', 10);
+ const pageSize = Math.min(20, Number.isNaN(rawPageSize) ? 10 : rawPageSize);
+ const cacheKey = `news-tracked-v1:${provider}:${q}:${provider === 'newsapi' ? pageSize : ''}`;
+ const cached = getCached(cacheKey, 10 * 60 * 1000);
+ if (cached?.format === 'tracked-v1') return respond(cached.items, { ...cached.acquisition, delivery: 'memory_cache' });
+ const attemptedAt = Date.now();
  try {
- const params = new URLSearchParams({ apikey: apiKey, q, language: 'en' });
- const resp = await fetchWithTimeout(
- `https://newsdata.io/api/1/latest?${params}`,
- { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } },
- 12000,
- );
- if (!resp.ok) return json([], 200);
- const data = await resp.json();
- const results = Array.isArray(data?.results) ? data.results : [];
- const items = results.map((a, i) => ({
- id: `newsdata-${i}`,
- source: a.source_name ?? a.source_id ?? 'NewsData',
- title: a.title ?? '',
- link: a.link ?? '',
- pubDate: a.pubDate ?? new Date().toISOString(),
- description: a.description ?? '',
- imageUrl: a.image_url ?? undefined,
- }));
- setCached(_ndCacheKey, items, 10 * 60 * 1000);
- return json(items);
- } catch {
- return json([], 200);
+ const params = new URLSearchParams(provider === 'newsapi' ? { q, pageSize: String(pageSize), language: 'en', sortBy: 'publishedAt', apiKey } : { apikey: apiKey, q, language: 'en' });
+ const upstream = provider === 'newsapi' ? 'https://newsapi.org/v2/everything' : 'https://newsdata.io/api/1/latest';
+ const resp = await fetchWithTimeout(`${upstream}?${params}`, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 12000);
+ if (!resp.ok) return respond([], newsAcquisition(newsHttpOutcome(resp.status), attemptedAt));
+ let data;
+ try { data = await resp.json(); } catch { return respond([], newsAcquisition('malformed', attemptedAt)); }
+ const items = normalizeNewsRows(data, provider);
+ const acquiredAt = Date.now();
+ const acquisition = newsAcquisition(items.length ? 'ok' : 'empty', attemptedAt, acquiredAt, items.length, 'upstream', acquiredAt);
+ setCached(cacheKey, newsEnvelope(items, acquisition), 10 * 60 * 1000);
+ return respond(items, acquisition);
+ } catch (error) {
+ return respond([], newsAcquisition(newsFailure(error), attemptedAt));
  }
   }
 
@@ -16759,11 +16790,6 @@ async function dispatch(requestUrl, req, routes, context) {
   }
 
   // ── News headlines aggregator (GDELT 2.0 Doc, no key required) ─────────
-  // GET /api/news/headlines?topics=security,emergency,weather,geopolitical&limit=50&q=...
-  // Returns the GDELT article list shaped for the renderer's news
-  // aggregator (title/url/source/country/seendate/tone). 15-min cache
-  // per topic-set. Falls back to last-known data on rate-limit, just
-  // like /api/gdelt-intel.
   if (requestUrl.pathname === '/api/news/headlines') {
  const topicsRaw = requestUrl.searchParams.get('topics') ?? 'security,geopolitical,weather,emergency';
  const limit = Math.max(1, Math.min(100, Number.parseInt(requestUrl.searchParams.get('limit') ?? '50', 10) || 50));
@@ -16781,52 +16807,52 @@ async function dispatch(requestUrl, req, routes, context) {
  const queryParts = topics.map((t) => topicMap[t]).filter(Boolean);
  const composedQuery = queryParts.length > 0 ? `(${queryParts.join(' OR ')})` : '(news)';
  const finalQuery = q ? `${composedQuery} AND ${q}` : composedQuery;
- const cacheKey = `news-headlines:${topics.sort().join(',')}:${q}:${limit}`;
+
+ const mode = requestUrl.searchParams.get('responseMode');
+ if (mode !== null && mode !== 'tracked-v1') return json({ error: 'news_invalid_response_mode' }, 400, { 'Cache-Control': 'no-store' });
+ const cacheKey = `news-headlines:tracked-v1:${topics.sort().join(',')}:${q}:${limit}`;
+ const deliver = (result, acquisition) => ({ ...result, acquisition, articles: result.articles.map((a) => ({ ...a, provenance: { ...a.provenance, ...acquisition } })) });
  const cached = getCached(cacheKey, 15 * 60 * 1000);
- if (cached) return json(cached);
+ if (cached?.acquisition) return json(deliver(cached, { ...cached.acquisition, delivery: 'memory_cache' }), 200, mode === 'tracked-v1' ? { 'Cache-Control': 'no-store' } : {});
  if (!context._headlinesBackoff) context._headlinesBackoff = { until: 0, fails: 0 };
  const bo = context._headlinesBackoff;
- if (Date.now() < bo.until) {
+ const failed = (outcome, attemptedAt) => {
  const stale = getCachedStale(cacheKey);
- if (stale) return json({ ...stale, stale: true, error: 'rate-limited; serving cached' });
- return json({ articles: [], updatedAt: Math.floor(Date.now() / 1000), error: 'rate-limited' });
- }
+ const acquisition = newsAcquisition(outcome, attemptedAt, stale?.acquisition?.acquiredAt ?? null, stale?.articles?.length ?? 0, stale?.acquisition ? 'memory_cache' : 'unknown', stale?.acquisition?.cacheStoredAt ?? null);
+ const result = deliver(stale?.acquisition ? { ...stale, stale: true, error: `news_${outcome}` } : { articles: [], topics, updatedAt: 0, error: `news_${outcome}` }, acquisition);
+ return json(result, mode === 'tracked-v1' ? newsStatus(outcome) : 200, { 'Cache-Control': 'no-store' });
+ };
+ if (Date.now() < bo.until) return failed(bo.outcome ?? 'rate_limited', bo.attemptedAt ?? null);
+ const attemptedAt = Date.now();
  try {
- const params = new URLSearchParams({
- query: finalQuery,
- mode: 'artlist',
- maxrecords: String(limit),
- format: 'json',
- sort: 'DateDesc',
- timespan: '24h',
- });
+ const params = new URLSearchParams({ query: finalQuery, mode: 'artlist', maxrecords: String(limit), format: 'json', sort: 'DateDesc', timespan: '24h' });
  const res = await fetchWithTimeout(`https://api.gdeltproject.org/api/v2/doc/doc?${params}`, { headers: { 'User-Agent': CHROME_UA } }, 12_000);
  if (res.status === 429 || res.status === 503) {
  bo.fails = Math.min(bo.fails + 1, 6);
- const waitMs = Math.min(5_000 * (2 ** bo.fails), 5 * 60_000);
- bo.until = Date.now() + waitMs;
- const stale = getCachedStale(cacheKey);
- if (stale) return json({ ...stale, stale: true, error: `rate-limited HTTP ${res.status}` });
- return json({ articles: [], updatedAt: Math.floor(Date.now() / 1000), error: `rate-limited HTTP ${res.status}` });
+ bo.until = Date.now() + Math.min(5_000 * (2 ** bo.fails), 5 * 60_000);
+ bo.attemptedAt = attemptedAt;
+ bo.outcome = res.status === 429 ? 'rate_limited' : 'unavailable';
+ return failed(bo.outcome, attemptedAt);
  }
- if (!res.ok) throw new Error(`GDELT HTTP ${res.status}`);
- const data = await res.json();
- const articles = (Array.isArray(data?.articles) ? data.articles : []).map((a) => ({
- title: a.title ?? '',
- url: a.url ?? '',
- domain: a.domain ?? '',
- country: a.sourcecountry ?? null,
- seendate: a.seendate ?? null,
+ if (!res.ok) return failed(newsHttpOutcome(res.status), attemptedAt);
+ let data;
+ try { data = await res.json(); } catch { return failed('malformed', attemptedAt); }
+ if (!Array.isArray(data?.articles)) return failed('malformed', attemptedAt);
+ const articles = data.articles.flatMap((a) => {
+ if (typeof a?.title !== 'string' || !a.title.trim() || !newsHttpUrl(a.url)) return [];
+ return [{ title: a.title, url: a.url, domain: a.domain ?? '', country: a.sourcecountry ?? null, seendate: a.seendate ?? null,
  tone: typeof a.tone === 'number' ? Math.round(a.tone * 10) / 10 : null,
- })).filter((a) => a.title && a.url);
- const result = { articles, topics, updatedAt: Math.floor(Date.now() / 1000) };
+ provenance: { sourceId: 'gdelt', deliveryGroup: 'gdelt', publicationState: 'unknown', publishedAt: null, observedAt: newsTimestamp(a.seendate) } }];
+ });
+ if (data.articles.length && !articles.length) return failed('malformed', attemptedAt);
+ const acquiredAt = Date.now();
+ const acquisition = newsAcquisition(articles.length ? 'ok' : 'empty', attemptedAt, acquiredAt, articles.length, 'upstream', acquiredAt);
+ const result = deliver({ articles, topics, updatedAt: Math.floor(acquiredAt / 1000) }, acquisition);
  setCached(cacheKey, result, 15 * 60 * 1000);
  bo.fails = 0; bo.until = 0;
- return json(result);
+ return json(result, 200, mode === 'tracked-v1' ? { 'Cache-Control': 'no-store' } : {});
  } catch (error) {
- const stale = getCachedStale(cacheKey);
- if (stale) return json({ ...stale, stale: true, error: error?.message ?? 'unknown' });
- return json({ articles: [], updatedAt: Math.floor(Date.now() / 1000), error: error?.message ?? 'unknown' });
+ return failed(newsFailure(error), attemptedAt);
  }
   }
 

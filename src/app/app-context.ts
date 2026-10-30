@@ -1,3 +1,4 @@
+import type { NewsSnapshot } from '@/services/news-snapshot';
 import type { NewsItem, Monitor, PanelConfig, MapLayers, InternetOutage, SocialUnrestEvent, MilitaryFlight, MilitaryFlightCluster, MilitaryVessel, MilitaryVesselCluster, CyberThreat, USNIFleetReport } from '@/types';
 import type { AirportDelayAlert } from '@/services/aviation';
 import type { IranEvent } from '@/generated/client/crystalball/conflict/v1/service_client';
@@ -78,6 +79,7 @@ export interface AppModule {
 }
 
 export interface AppContext {
+  readonly newsSnapshot: NewsSnapshot;
   map: MapContainer | null;
   readonly isMobile: boolean;
   readonly isDesktopApp: boolean;

@@ -829,6 +829,7 @@ export class EventHandlerManager implements AppModule {
  } else {
  this.ctx.disabledSources.add(name);
  }
+ this.ctx.newsSnapshot.getSnapshot();
  saveToStorage(STORAGE_KEYS.disabledFeeds, [...this.ctx.disabledSources]);
  },
  setSourcesEnabled: (names: string[], enabled: boolean) => {
@@ -836,6 +837,7 @@ export class EventHandlerManager implements AppModule {
  if (enabled) this.ctx.disabledSources.delete(name);
  else this.ctx.disabledSources.add(name);
  }
+ this.ctx.newsSnapshot.getSnapshot();
  saveToStorage(STORAGE_KEYS.disabledFeeds, [...this.ctx.disabledSources]);
  },
  getAllSourceNames: () => this.getAllSourceNames(),

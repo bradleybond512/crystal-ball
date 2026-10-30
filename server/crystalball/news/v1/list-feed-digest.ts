@@ -1,3 +1,4 @@
+import { XMLValidator } from 'fast-xml-parser';
 import type {
   ServerContext,
   ListFeedDigestRequest,
@@ -6,7 +7,8 @@ import type {
   NewsItem as ProtoNewsItem,
   ThreatLevel as ProtoThreatLevel,
 } from '../../../../src/generated/server/crystalball/news/v1/service_server';
-import { cachedFetchJson } from '../../../_shared/redis';
+import { cachedFetchJsonWithMeta } from '../../../_shared/redis';
+import { normalizeAcquisition, normalizeNewsProvenance, newsAcquisitionToProto, newsProvenanceToProto, publicationMetadata, newsDeliveryGroup, type NewsAcquisition, type NewsProvenance, type NewsFetchResult } from '../../../../src/services/news-provenance';
 import { CHROME_UA } from '../../../_shared/constants';
 import { VARIANT_FEEDS, INTEL_SOURCES, type ServerFeed } from './_feeds';
 import { classifyByKeyword, type ThreatLevel } from './_classifier';
@@ -29,6 +31,7 @@ const LEVEL_TO_PROTO: Record<ThreatLevel, ProtoThreatLevel> = {
 };
 
 interface ParsedItem {
+  provenance: NewsProvenance;
   source: string;
   title: string;
   link: string;
@@ -40,47 +43,48 @@ interface ParsedItem {
   classSource: 'keyword';
 }
 
-async function fetchAndParseRss(
-  feed: ServerFeed,
-  variant: string,
-  signal: AbortSignal,
-): Promise<ParsedItem[]> {
-  const cacheKey = `rss:feed:v1:${feed.url}`;
-
+export async function fetchAndParseRss(
+  feed: ServerFeed, variant: string, signal: AbortSignal,
+): Promise<NewsFetchResult<ParsedItem>> {
+  const attemptedAt = Date.now();
+  const failure = (outcome: NewsAcquisition['outcome']): NewsFetchResult<ParsedItem> => ({
+    items: [], acquisition: normalizeAcquisition({ outcome, attemptedAt }),
+  });
   try {
- const cached = await cachedFetchJson<ParsedItem[]>(cacheKey, 600, async () => {
- const controller = new AbortController();
- const timeout = setTimeout(() => controller.abort(), FEED_TIMEOUT_MS);
-
- const onAbort = () => controller.abort();
- signal.addEventListener('abort', onAbort, { once: true });
-
- try {
- const resp = await fetch(feed.url, {
- headers: {
- 'User-Agent': CHROME_UA,
- 'Accept': 'application/rss+xml, application/xml, text/xml, */*',
- 'Accept-Language': 'en-US,en;q=0.9',
- },
- signal: controller.signal,
- });
- if (!resp.ok) return null;
-
- const text = await resp.text();
- return parseRssXml(text, feed, variant);
- } finally {
- clearTimeout(timeout);
- signal.removeEventListener('abort', onAbort);
- }
- });
-
- return cached ?? [];
-  } catch {
- return [];
+    const cached = await cachedFetchJsonWithMeta<{ format: 'tracked-v1'; items: ParsedItem[]; acquisition: NewsAcquisition }>(
+      `rss:feed:tracked-v1:${feed.url}`, 600, async () => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), FEED_TIMEOUT_MS);
+        const onAbort = () => controller.abort();
+        signal.addEventListener('abort', onAbort, { once: true });
+        if (signal.aborted) controller.abort();
+        try {
+          const resp = await fetch(feed.url, {
+            headers: { 'User-Agent': CHROME_UA, 'Accept': 'application/rss+xml, application/xml, text/xml, */*', 'Accept-Language': 'en-US,en;q=0.9' },
+            signal: controller.signal,
+          });
+          if (!resp.ok) throw Object.assign(new Error('HTTP failure'), { outcome: resp.status === 429 ? 'rate_limited' : resp.status === 401 || resp.status === 403 ? 'denied' : 'unavailable' });
+          const items = parseRssXml(await resp.text(), feed, variant);
+          if (items === null) throw Object.assign(new Error('Invalid RSS'), { outcome: 'malformed' });
+          const acquisition = normalizeAcquisition({ outcome: items.length ? 'ok' : 'empty', delivery: 'upstream', attemptedAt, acquiredAt: Date.now(), cacheStoredAt: Date.now(), acceptedCount: items.length });
+          for (const item of items) Object.assign(item.provenance, acquisition, { observedAt: acquisition.acquiredAt });
+          return { format: 'tracked-v1', items, acquisition };
+        } finally {
+          clearTimeout(timeout);
+          signal.removeEventListener('abort', onAbort);
+        }
+      });
+    if (!cached.data || cached.data.format !== 'tracked-v1' || !Array.isArray(cached.data.items)) return failure('malformed');
+    const acquisition = { ...normalizeAcquisition(cached.data.acquisition), ...(cached.source === 'cache' && { delivery: 'server_cache' as const }) };
+    return { acquisition, items: cached.data.items.map(item => ({ ...item, provenance: { ...normalizeNewsProvenance(item.provenance), ...acquisition } })) };
+  } catch (error) {
+    const issue = error as { outcome?: NewsAcquisition['outcome']; name?: string };
+    return failure(issue.outcome ?? (issue.name === 'AbortError' || issue.name === 'TimeoutError' ? 'timeout' : 'unavailable'));
   }
 }
 
-function parseRssXml(xml: string, feed: ServerFeed, variant: string): ParsedItem[] | null {
+export function parseRssXml(xml: string, feed: ServerFeed, variant: string): ParsedItem[] | null {
+  if (XMLValidator.validate(xml) !== true || !/^\s*(?:<\?xml[^>]*>\s*)?(?:<!--[\s\S]*?-->\s*)*<(?:rss|feed|rdf:RDF)(?:\s|\/?>)/i.test(xml)) return null;
   const items: ParsedItem[] = [];
 
   const itemRegex = /<item[\s>]([\s\S]*?)<\/item>/gi;
@@ -104,6 +108,11 @@ function parseRssXml(xml: string, feed: ServerFeed, variant: string): ParsedItem
  link = extractTag(block, 'link');
  }
 
+ try {
+ const parsedLink = new URL(link);
+ if (parsedLink.protocol !== 'http:' && parsedLink.protocol !== 'https:') continue;
+ } catch { continue; }
+
  const pubDateStr = isAtom
  ? (extractTag(block, 'published') || extractTag(block, 'updated'))
  : extractTag(block, 'pubDate');
@@ -115,6 +124,7 @@ function parseRssXml(xml: string, feed: ServerFeed, variant: string): ParsedItem
 
  items.push({
  source: feed.name,
+ provenance: { ...normalizeNewsProvenance(undefined), sourceId: feed.name, deliveryGroup: newsDeliveryGroup(feed.url), ...publicationMetadata(pubDateStr) },
  title,
  link,
  publishedAt,
@@ -126,7 +136,7 @@ function parseRssXml(xml: string, feed: ServerFeed, variant: string): ParsedItem
  });
   }
 
-  return items.length > 0 ? items : null;
+  return matches.length > 0 && items.length === 0 ? null : items;
 }
 
 const TAG_REGEX_CACHE = new Map<string, { cdata: RegExp; plain: RegExp }>();
@@ -164,6 +174,7 @@ function decodeXmlEntities(s: string): string {
 function toProtoItem(item: ParsedItem): ProtoNewsItem {
   return {
  source: item.source,
+ provenance: newsProvenanceToProto(item.provenance),
  title: item.title,
  link: item.link,
  publishedAt: item.publishedAt,
@@ -185,21 +196,26 @@ export async function listFeedDigest(
   const variant = VALID_VARIANTS.has(req.variant) ? req.variant : 'full';
   const lang = req.lang || 'en';
 
-  const digestCacheKey = `news:digest:v1:${variant}:${lang}`;
-
+  const digestCacheKey = `news:digest:tracked-v1:${variant}:${lang}`;
+  const unavailable = () => ({ categories: {}, feedStatuses: {}, feedAcquisitions: {}, generatedAt: new Date().toISOString() });
   try {
- const cached = await cachedFetchJson<ListFeedDigestResponse>(digestCacheKey, 300, async () => {
- return buildDigest(variant, lang);
- });
- return cached ?? { categories: {}, feedStatuses: {}, generatedAt: new Date().toISOString() };
-  } catch {
- return { categories: {}, feedStatuses: {}, generatedAt: new Date().toISOString() };
-  }
+    const cached = await cachedFetchJsonWithMeta<{ format: 'tracked-v1'; digest: ListFeedDigestResponse }>(digestCacheKey, 300, async () => ({ format: 'tracked-v1', digest: await buildDigest(variant, lang) }));
+    if (!cached.data || cached.data.format !== 'tracked-v1') return unavailable();
+    const digest = cached.data.digest;
+    if (cached.source === 'cache') {
+      for (const acquisition of Object.values(digest.feedAcquisitions)) acquisition.delivery = 'NEWS_DELIVERY_SERVER_CACHE';
+      for (const category of Object.values(digest.categories)) for (const item of category.items) {
+        if (item.provenance) item.provenance.delivery = 'NEWS_DELIVERY_SERVER_CACHE';
+      }
+    }
+    return digest;
+  } catch { return unavailable(); }
 }
 
 async function buildDigest(variant: string, lang: string): Promise<ListFeedDigestResponse> {
   const feedsByCategory = VARIANT_FEEDS[variant] ?? {};
   const feedStatuses: Record<string, string> = {};
+  const feedAcquisitions: ListFeedDigestResponse['feedAcquisitions'] = {};
   const categories: Record<string, CategoryBucket> = {};
 
   const deadlineController = new AbortController();
@@ -230,9 +246,10 @@ async function buildDigest(variant: string, lang: string): Promise<ListFeedDiges
  const batch = allEntries.slice(i, i + BATCH_CONCURRENCY);
  const settled = await Promise.allSettled(
  batch.map(async ({ category, feed }) => {
- const items = await fetchAndParseRss(feed, variant, deadlineController.signal);
- feedStatuses[feed.name] = items.length > 0 ? 'ok' : 'empty';
- return { category, items };
+ const result = await fetchAndParseRss(feed, variant, deadlineController.signal);
+ feedStatuses[feed.name] = result.acquisition.outcome;
+ feedAcquisitions[feed.name] = newsAcquisitionToProto(result.acquisition);
+ return { category, items: result.items };
  }),
  );
 
@@ -249,6 +266,7 @@ async function buildDigest(variant: string, lang: string): Promise<ListFeedDiges
  for (const entry of allEntries) {
  if (!(entry.feed.name in feedStatuses)) {
  feedStatuses[entry.feed.name] = 'timeout';
+ feedAcquisitions[entry.feed.name] = newsAcquisitionToProto(normalizeAcquisition({ outcome: 'timeout' }));
  }
  }
 
@@ -262,6 +280,7 @@ async function buildDigest(variant: string, lang: string): Promise<ListFeedDiges
  return {
  categories,
  feedStatuses,
+ feedAcquisitions,
  generatedAt: new Date().toISOString(),
  };
   } finally {

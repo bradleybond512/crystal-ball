@@ -1,3 +1,4 @@
+import { NewsSnapshot } from '@/services/news-snapshot';
 import type { Monitor, PanelConfig, MapLayers } from '@/types';
 import type { AppContext } from '@/app/app-context';
 import {
@@ -264,6 +265,7 @@ export class App {
  newsPanels: {},
  panelSettings,
  mapLayers,
+ newsSnapshot: new NewsSnapshot(),
  allNews: [],
  newsByCategory: {},
  latestMarkets: [],
@@ -562,6 +564,7 @@ export class App {
 
  public destroy(): void {
  this.state.isDestroyed = true;
+ this.state.newsSnapshot.destroy();
  this.releaseGodsVisionControls();
 
  if (this.onPanelRetry) {

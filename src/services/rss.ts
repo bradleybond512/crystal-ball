@@ -8,6 +8,8 @@ import { ingestHeadlines } from './trending-keywords';
 import { getCurrentLanguage } from './i18n';
 import { canQueueAiClassification, AI_CLASSIFY_MAX_PER_FEED } from './ai-classify-queue';
 import { summarizeAdapterDataStates } from './adapter-provenance';
+import { getProxyResponseAcquisition } from '@/utils/proxy';
+import { normalizeAcquisition, normalizeNewsProvenance, newsDeliveryGroup, publicationMetadata, type NewsAcquisition, type NewsOutcome } from './news-provenance';
 import type { BreakerDataState } from '@/utils/circuit-breaker';
 
 const FEED_COOLDOWN_MS = 5 * 60 * 1000;
@@ -15,7 +17,8 @@ const MAX_FAILURES = 2;
 const MAX_CACHE_ENTRIES = 100;
 const FEED_SCOPE_SEPARATOR = '::';
 const feedFailures = new Map<string, { count: number; cooldownUntil: number }>();
-const feedCache = new Map<string, { items: NewsItem[]; timestamp: number }>();
+const feedCache = new Map<string, CachedFeedItems>();
+const feedAttempts = new Map<string, Pick<NewsAcquisition, 'outcome' | 'attemptedAt'>>();
 const CACHE_TTL = 20 * 60 * 1000;
 
 function toSerializable(items: NewsItem[]): (Omit<NewsItem, 'pubDate'> & { pubDate: string })[] {
@@ -46,12 +49,22 @@ function getPersistentFeedKey(feedScope: string): string {
 interface CachedFeedItems {
   items: NewsItem[];
   timestamp: number;
+  acquisition: NewsAcquisition;
 }
 
 async function readPersistentFeed(key: string): Promise<CachedFeedItems | null> {
-  const entry = await getPersistentCache<(Omit<NewsItem, 'pubDate'> & { pubDate: string })[]>(key);
-  if (!entry?.data?.length) return null;
-  return { items: fromSerializable(entry.data), timestamp: entry.updatedAt };
+  type Serialized = (Omit<NewsItem, 'pubDate'> & { pubDate: string })[];
+  const entry = await getPersistentCache<Serialized | { format: 'tracked-v1'; items: Serialized; acquisition: NewsAcquisition }>(key);
+  if (!entry?.data) return null;
+  if (!Array.isArray(entry.data) && entry.data.format !== 'tracked-v1') return null;
+  const rows = Array.isArray(entry.data) ? entry.data : entry.data.items;
+  if (!Array.isArray(rows) || !rows.every(item => item && typeof item.title === 'string' && Boolean(item.title.trim())
+    && typeof item.source === 'string' && typeof item.link === 'string' && validRssLink(item.link) && Number.isFinite(Date.parse(item.pubDate)))) return null;
+  const acquisition = normalizeAcquisition(Array.isArray(entry.data) ? undefined : entry.data.acquisition);
+  const items = fromSerializable(rows).map(item => ({ ...item, provenance: {
+    ...normalizeNewsProvenance(item.provenance), delivery: 'persistent_cache' as const,
+  } }));
+  return { items, timestamp: entry.updatedAt, acquisition: { ...acquisition, delivery: 'persistent_cache', acceptedCount: items.length } };
 }
 
 async function loadPersistentFeed(feedScope: string): Promise<CachedFeedItems | null> {
@@ -79,6 +92,7 @@ function cleanupCaches(): void {
   for (const [key, state] of feedFailures) {
  if (state.cooldownUntil > 0 && now > state.cooldownUntil) {
  feedFailures.delete(key);
+ feedAttempts.delete(key);
  }
   }
 
@@ -201,7 +215,24 @@ function extractImageUrl(item: Element): string | undefined {
   return undefined;
 }
 
+function validRssLink(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:';
+  } catch { return false; }
+}
+
+function rssItemLink(item: Element, isAtom: boolean): string {
+  if (isAtom) return item.querySelector('link[href]')?.getAttribute('href') ?? '';
+  return item.querySelector('link')?.textContent ?? '';
+}
+
+function acceptedRssItem(item: Element, isAtom: boolean): boolean {
+  return Boolean(item.querySelector('title')?.textContent?.trim()) && validRssLink(rssItemLink(item, isAtom));
+}
+
 export interface RssFeedFetchResult {
+  acquisition: NewsAcquisition;
   items: NewsItem[];
   dataState: BreakerDataState;
 }
@@ -212,15 +243,23 @@ export async function fetchFeedTracked(feed: Feed): Promise<RssFeedFetchResult> 
   const feedScope = getFeedScope(feed.name, currentLang);
   const cached = feedCache.get(feedScope);
 
-  const cachedFallback = async (): Promise<RssFeedFetchResult> => {
+  const cachedResult = (entry: CachedFeedItems, delivery: 'memory_cache' | 'persistent_cache', attempt?: Pick<NewsAcquisition, 'outcome' | 'attemptedAt'>): RssFeedFetchResult => {
+    const acquisition = { ...entry.acquisition, delivery, ...attempt };
+    return { items: entry.items.map(item => ({ ...item, provenance: {
+      ...normalizeNewsProvenance(item.provenance), ...acquisition,
+    } })), acquisition, dataState: { mode: 'cached', timestamp: acquisition.acquiredAt, offline: false } };
+  };
+  const cachedFallback = async (outcome?: NewsOutcome): Promise<RssFeedFetchResult> => {
+    const attempt = outcome ? { outcome, attemptedAt: Date.now() } : feedAttempts.get(feedScope);
+    if (attempt) feedAttempts.set(feedScope, attempt);
     if (cached) {
-      return { items: cached.items, dataState: { mode: 'cached', timestamp: cached.timestamp, offline: false } };
+      return cachedResult(cached, 'memory_cache', attempt);
     }
     const persistent = await loadPersistentFeed(feedScope);
     if (persistent) {
-      return { items: persistent.items, dataState: { mode: 'cached', timestamp: persistent.timestamp, offline: false } };
+      return cachedResult(persistent, 'persistent_cache', attempt);
     }
-    return { items: [], dataState: { mode: 'unavailable', timestamp: null, offline: false } };
+    return { items: [], acquisition: normalizeAcquisition(attempt), dataState: { mode: 'unavailable', timestamp: null, offline: false } };
   };
 
   if (isFeedOnCooldown(feedScope)) {
@@ -228,7 +267,7 @@ export async function fetchFeedTracked(feed: Feed): Promise<RssFeedFetchResult> 
   }
 
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
- return { items: cached.items, dataState: { mode: 'cached', timestamp: cached.timestamp, offline: false } };
+ return cachedResult(cached, 'memory_cache');
   }
 
   try {
@@ -239,34 +278,48 @@ export async function fetchFeedTracked(feed: Feed): Promise<RssFeedFetchResult> 
 
  if (!url) throw new Error(`No URL found for feed ${feed.name}`);
 
- const response = await fetchWithProxy(url);
- if (!response.ok) throw new Error(`HTTP ${response.status}`);
+ const attemptedAt = Date.now();
+ const response = await fetchWithProxy(url, body => {
+ const document = new DOMParser().parseFromString(body, 'text/xml');
+ if (document.querySelector('parsererror') || !['rss', 'feed', 'rdf:RDF'].includes(document.documentElement?.tagName ?? '')) return false;
+ const rssRows = document.querySelectorAll('item');
+ const isAtom = rssRows.length === 0;
+ const rows = [...(isAtom ? document.querySelectorAll('entry') : rssRows)];
+ return rows.length === 0 || rows.some(row => acceptedRssItem(row, isAtom));
+ }, AbortSignal.timeout(10_000));
+ if (!response.ok) {
+ recordFeedFailure(feedScope);
+ let outcome: NewsOutcome = 'unavailable';
+ if (response.status === 429) outcome = 'rate_limited';
+ if (response.status === 401 || response.status === 403) outcome = 'denied';
+ return cachedFallback(outcome);
+ }
  const text = await response.text();
  const parser = new DOMParser();
  const doc = parser.parseFromString(text, 'text/xml');
 
  const parseError = doc.querySelector('parsererror');
- if (parseError) {
+ if (parseError || !['rss', 'feed', 'rdf:RDF'].includes(doc.documentElement?.tagName ?? '')) {
  console.warn(`Parse error for ${feed.name}`);
  recordFeedFailure(feedScope);
- return cachedFallback();
+ return cachedFallback('malformed');
  }
 
  let items = doc.querySelectorAll('item');
  const isAtom = items.length === 0;
  if (isAtom) items = doc.querySelectorAll('entry');
 
+ const responseAcquisition = getProxyResponseAcquisition(response);
+ const direct = !url.includes('/api/');
+ const acquisition = normalizeAcquisition({ ...responseAcquisition, outcome: 'ok',
+ ...(direct && { delivery: 'upstream', attemptedAt, acquiredAt: Date.now() }),
+ });
  const parsed = [...items]
+ .filter(item => acceptedRssItem(item, isAtom))
  .slice(0, 5)
  .map((item) => {
  const title = item.querySelector('title')?.textContent || '';
- let link = '';
- if (isAtom) {
- const linkEl = item.querySelector('link[href]');
- link = linkEl?.getAttribute('href') || '';
- } else {
- link = item.querySelector('link')?.textContent || '';
- }
+ const link = rssItemLink(item, isAtom);
 
  const pubDateStr = isAtom
  ? (item.querySelector('published')?.textContent || item.querySelector('updated')?.textContent || '')
@@ -280,6 +333,7 @@ export async function fetchFeedTracked(feed: Feed): Promise<RssFeedFetchResult> 
 
  return {
  source: feed.name,
+ provenance: { ...acquisition, sourceId: feed.name, deliveryGroup: newsDeliveryGroup(url), ...publicationMetadata(pubDateStr), observedAt: acquisition.acquiredAt },
  title,
  link,
  pubDate,
@@ -291,9 +345,17 @@ export async function fetchFeedTracked(feed: Feed): Promise<RssFeedFetchResult> 
  };
  });
 
- feedCache.set(feedScope, { items: parsed, timestamp: Date.now() });
- void setPersistentCache(getPersistentFeedKey(feedScope), toSerializable(parsed));
+ acquisition.acceptedCount = parsed.length;
+ acquisition.outcome = parsed.length > 0 ? 'ok' : 'empty';
+ if (parsed.length === 0 && items.length > 0) acquisition.outcome = 'malformed';
+ if (acquisition.outcome === 'malformed') { recordFeedFailure(feedScope); return cachedFallback('malformed'); }
+ const cacheStoredAt = Date.now();
+ acquisition.cacheStoredAt = cacheStoredAt;
+ for (const item of parsed) Object.assign(item.provenance, acquisition);
+ feedCache.set(feedScope, { items: parsed, timestamp: cacheStoredAt, acquisition });
+ void setPersistentCache(getPersistentFeedKey(feedScope), { format: 'tracked-v1', items: toSerializable(parsed), acquisition });
  recordFeedSuccess(feedScope);
+ feedAttempts.delete(feedScope);
  ingestHeadlines(parsed.map(item => ({
  title: item.title,
  pubDate: item.pubDate,
@@ -316,12 +378,14 @@ export async function fetchFeedTracked(feed: Feed): Promise<RssFeedFetchResult> 
  }).catch(() => {});
  }
 
- const timestamp = Date.now();
- return { items: parsed, dataState: { mode: 'live', timestamp, offline: false } };
+ let mode: BreakerDataState['mode'] = 'unavailable';
+ if (acquisition.delivery === 'upstream') mode = 'live';
+ if (acquisition.delivery === 'persistent_cache') mode = 'cached';
+ return { items: parsed, acquisition, dataState: { mode, timestamp: acquisition.acquiredAt, offline: false } };
   } catch (error) {
  console.error(`Failed to fetch ${feed.name}:`, error);
  recordFeedFailure(feedScope);
- return cachedFallback();
+ return cachedFallback(error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError') ? 'timeout' : 'unavailable');
   }
 }
 /* eslint-enable @typescript-eslint/prefer-nullish-coalescing, no-console, sonarjs/cognitive-complexity, sonarjs/no-clear-text-protocols, @typescript-eslint/no-empty-function */
@@ -332,6 +396,7 @@ export async function fetchFeed(feed: Feed): Promise<NewsItem[]> {
 }
 
 export interface RssCategoryFetchResult {
+  feedAcquisitions: Record<string, NewsAcquisition>;
   items: NewsItem[];
   dataState: BreakerDataState;
 }
@@ -355,6 +420,7 @@ export async function fetchCategoryFeedsTracked(
   const batches = chunkArray(filteredFeeds, batchSize);
   const topItems: NewsItem[] = [];
   const feedStates: BreakerDataState[] = [];
+  const feedAcquisitions: Record<string, NewsAcquisition> = {};
 
   const ensureSortedDescending = () => [...topItems].sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime());
 
@@ -377,12 +443,13 @@ export async function fetchCategoryFeedsTracked(
 
   for (const batch of batches) {
  const results = await Promise.all(batch.map((feed) => fetchFeedTracked(feed)));
+ results.forEach((result, index) => { feedAcquisitions[batch[index]!.name] = result.acquisition; });
  feedStates.push(...results.map((result) => result.dataState));
  results.flatMap((result) => result.items).forEach((item) => insertTopItem(item));
  options.onBatch?.(ensureSortedDescending());
   }
 
-  return { items: ensureSortedDescending(), dataState: summarizeAdapterDataStates(feedStates) };
+  return { items: ensureSortedDescending(), feedAcquisitions, dataState: summarizeAdapterDataStates(feedStates) };
 }
 
 export async function fetchCategoryFeeds(

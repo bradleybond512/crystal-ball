@@ -32,6 +32,7 @@ export interface ListFeedDigestResponse {
   categories: Record<string, CategoryBucket>;
   feedStatuses: Record<string, string>;
   generatedAt: string;
+  feedAcquisitions: Record<string, NewsAcquisition>;
 }
 
 export interface CategoryBucket {
@@ -47,6 +48,7 @@ export interface NewsItem {
   threat?: ThreatClassification;
   location?: GeoCoordinates;
   locationName: string;
+  provenance?: NewsProvenance;
 }
 
 export interface ThreatClassification {
@@ -61,6 +63,35 @@ export interface GeoCoordinates {
   longitude: number;
 }
 
+export interface NewsProvenance {
+  outcome: NewsOutcome;
+  delivery: NewsDelivery;
+  attemptedAt?: number;
+  acquiredAt?: number;
+  cacheStoredAt?: number;
+  acceptedCount: number;
+  sourceId: string;
+  deliveryGroup: string;
+  publicationState: NewsPublicationState;
+  publishedAt?: number;
+  observedAt?: number;
+}
+
+export interface NewsAcquisition {
+  outcome: NewsOutcome;
+  delivery: NewsDelivery;
+  attemptedAt?: number;
+  acquiredAt?: number;
+  cacheStoredAt?: number;
+  acceptedCount: number;
+}
+
+export type NewsDelivery = "NEWS_DELIVERY_UNSPECIFIED" | "NEWS_DELIVERY_UPSTREAM" | "NEWS_DELIVERY_SERVER_CACHE" | "NEWS_DELIVERY_MEMORY_CACHE" | "NEWS_DELIVERY_PERSISTENT_CACHE";
+
+export type NewsOutcome = "NEWS_OUTCOME_UNSPECIFIED" | "NEWS_OUTCOME_DISABLED" | "NEWS_OUTCOME_UNCONFIGURED" | "NEWS_OUTCOME_OK" | "NEWS_OUTCOME_EMPTY" | "NEWS_OUTCOME_DENIED" | "NEWS_OUTCOME_RATE_LIMITED" | "NEWS_OUTCOME_TIMEOUT" | "NEWS_OUTCOME_MALFORMED" | "NEWS_OUTCOME_UNAVAILABLE";
+
+export type NewsPublicationState = "NEWS_PUBLICATION_STATE_UNSPECIFIED" | "NEWS_PUBLICATION_STATE_KNOWN" | "NEWS_PUBLICATION_STATE_MISSING" | "NEWS_PUBLICATION_STATE_INVALID";
+
 export type ThreatLevel = "THREAT_LEVEL_UNSPECIFIED" | "THREAT_LEVEL_LOW" | "THREAT_LEVEL_MEDIUM" | "THREAT_LEVEL_HIGH" | "THREAT_LEVEL_CRITICAL";
 
 export interface FieldViolation {
@@ -72,9 +103,9 @@ export class ValidationError extends Error {
   violations: FieldViolation[];
 
   constructor(violations: FieldViolation[]) {
- super("Validation failed");
- this.name = "ValidationError";
- this.violations = violations;
+    super("Validation failed");
+    this.name = "ValidationError";
+    this.violations = violations;
   }
 }
 
@@ -83,10 +114,10 @@ export class ApiError extends Error {
   body: string;
 
   constructor(statusCode: number, message: string, body: string) {
- super(message);
- this.name = "ApiError";
- this.statusCode = statusCode;
- this.body = body;
+    super(message);
+    this.name = "ApiError";
+    this.statusCode = statusCode;
+    this.body = body;
   }
 }
 
@@ -117,97 +148,97 @@ export function createNewsServiceRoutes(
   options?: ServerOptions,
 ): RouteDescriptor[] {
   return [
- {
- method: "POST",
- path: "/api/news/v1/summarize-article",
- handler: async (req: Request): Promise<Response> => {
- try {
- const pathParams: Record<string, string> = {};
- const body = await req.json() as SummarizeArticleRequest;
- if (options?.validateRequest) {
- const bodyViolations = options.validateRequest("summarizeArticle", body);
- if (bodyViolations) {
- throw new ValidationError(bodyViolations);
- }
- }
+    {
+      method: "POST",
+      path: "/api/news/v1/summarize-article",
+      handler: async (req: Request): Promise<Response> => {
+        try {
+          const pathParams: Record<string, string> = {};
+          const body = await req.json() as SummarizeArticleRequest;
+          if (options?.validateRequest) {
+            const bodyViolations = options.validateRequest("summarizeArticle", body);
+            if (bodyViolations) {
+              throw new ValidationError(bodyViolations);
+            }
+          }
 
- const ctx: ServerContext = {
- request: req,
- pathParams,
- headers: Object.fromEntries(req.headers.entries()),
- };
+          const ctx: ServerContext = {
+            request: req,
+            pathParams,
+            headers: Object.fromEntries(req.headers.entries()),
+          };
 
- const result = await handler.summarizeArticle(ctx, body);
- return new Response(JSON.stringify(result as SummarizeArticleResponse), {
- status: 200,
- headers: { "Content-Type": "application/json" },
- });
- } catch (err: unknown) {
- if (err instanceof ValidationError) {
- return new Response(JSON.stringify({ violations: err.violations }), {
- status: 400,
- headers: { "Content-Type": "application/json" },
- });
- }
- if (options?.onError) {
- return options.onError(err, req);
- }
- const message = err instanceof Error ? err.message : String(err);
- return new Response(JSON.stringify({ message }), {
- status: 500,
- headers: { "Content-Type": "application/json" },
- });
- }
- },
- },
- {
- method: "GET",
- path: "/api/news/v1/list-feed-digest",
- handler: async (req: Request): Promise<Response> => {
- try {
- const pathParams: Record<string, string> = {};
- const url = new URL(req.url, "http://localhost");
- const params = url.searchParams;
- const body: ListFeedDigestRequest = {
- variant: params.get("variant") ?? "",
- lang: params.get("lang") ?? "",
- };
- if (options?.validateRequest) {
- const bodyViolations = options.validateRequest("listFeedDigest", body);
- if (bodyViolations) {
- throw new ValidationError(bodyViolations);
- }
- }
+          const result = await handler.summarizeArticle(ctx, body);
+          return new Response(JSON.stringify(result as SummarizeArticleResponse), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        } catch (err: unknown) {
+          if (err instanceof ValidationError) {
+            return new Response(JSON.stringify({ violations: err.violations }), {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+          if (options?.onError) {
+            return options.onError(err, req);
+          }
+          const message = err instanceof Error ? err.message : String(err);
+          return new Response(JSON.stringify({ message }), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      },
+    },
+    {
+      method: "GET",
+      path: "/api/news/v1/list-feed-digest",
+      handler: async (req: Request): Promise<Response> => {
+        try {
+          const pathParams: Record<string, string> = {};
+          const url = new URL(req.url, "http://localhost");
+          const params = url.searchParams;
+          const body: ListFeedDigestRequest = {
+            variant: params.get("variant") ?? "",
+            lang: params.get("lang") ?? "",
+          };
+          if (options?.validateRequest) {
+            const bodyViolations = options.validateRequest("listFeedDigest", body);
+            if (bodyViolations) {
+              throw new ValidationError(bodyViolations);
+            }
+          }
 
- const ctx: ServerContext = {
- request: req,
- pathParams,
- headers: Object.fromEntries(req.headers.entries()),
- };
+          const ctx: ServerContext = {
+            request: req,
+            pathParams,
+            headers: Object.fromEntries(req.headers.entries()),
+          };
 
- const result = await handler.listFeedDigest(ctx, body);
- return new Response(JSON.stringify(result as ListFeedDigestResponse), {
- status: 200,
- headers: { "Content-Type": "application/json" },
- });
- } catch (err: unknown) {
- if (err instanceof ValidationError) {
- return new Response(JSON.stringify({ violations: err.violations }), {
- status: 400,
- headers: { "Content-Type": "application/json" },
- });
- }
- if (options?.onError) {
- return options.onError(err, req);
- }
- const message = err instanceof Error ? err.message : String(err);
- return new Response(JSON.stringify({ message }), {
- status: 500,
- headers: { "Content-Type": "application/json" },
- });
- }
- },
- },
+          const result = await handler.listFeedDigest(ctx, body);
+          return new Response(JSON.stringify(result as ListFeedDigestResponse), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        } catch (err: unknown) {
+          if (err instanceof ValidationError) {
+            return new Response(JSON.stringify({ violations: err.violations }), {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+          if (options?.onError) {
+            return options.onError(err, req);
+          }
+          const message = err instanceof Error ? err.message : String(err);
+          return new Response(JSON.stringify({ message }), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      },
+    },
   ];
 }
 

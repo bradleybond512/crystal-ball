@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package crystalball.news.v1;
+
+import "sebuf/http/annotations.proto";
+
+// NewsOutcome describes the latest acquisition attempt independently of delivery.
+enum NewsOutcome {
+  // No trustworthy acquisition outcome is known.
+  NEWS_OUTCOME_UNSPECIFIED = 0;
+  // The configured feature is disabled.
+  NEWS_OUTCOME_DISABLED = 1;
+  // Required provider configuration is absent.
+  NEWS_OUTCOME_UNCONFIGURED = 2;
+  // Valid accepted articles were acquired.
+  NEWS_OUTCOME_OK = 3;
+  // A valid collection contained no articles.
+  NEWS_OUTCOME_EMPTY = 4;
+  // Provider access was denied.
+  NEWS_OUTCOME_DENIED = 5;
+  // The provider imposed a rate limit.
+  NEWS_OUTCOME_RATE_LIMITED = 6;
+  // The attempt exceeded its timeout.
+  NEWS_OUTCOME_TIMEOUT = 7;
+  // The response failed boundary validation.
+  NEWS_OUTCOME_MALFORMED = 8;
+  // The provider was otherwise unavailable.
+  NEWS_OUTCOME_UNAVAILABLE = 9;
+}
+
+// NewsDelivery identifies how the current articles were delivered.
+enum NewsDelivery {
+  // The delivery path is unknown.
+  NEWS_DELIVERY_UNSPECIFIED = 0;
+  // Articles came from a genuine upstream acquisition.
+  NEWS_DELIVERY_UPSTREAM = 1;
+  // Articles came from a server cache.
+  NEWS_DELIVERY_SERVER_CACHE = 2;
+  // Articles came from application memory.
+  NEWS_DELIVERY_MEMORY_CACHE = 3;
+  // Articles came from persistent application storage.
+  NEWS_DELIVERY_PERSISTENT_CACHE = 4;
+}
+
+// NewsPublicationState separates publication truth from legacy scoring dates.
+enum NewsPublicationState {
+  // Publication metadata is unknown, including legacy substituted dates.
+  NEWS_PUBLICATION_STATE_UNSPECIFIED = 0;
+  // A valid publication timestamp is known.
+  NEWS_PUBLICATION_STATE_KNOWN = 1;
+  // The provider supplied no publication date.
+  NEWS_PUBLICATION_STATE_MISSING = 2;
+  // The provider supplied a malformed publication date.
+  NEWS_PUBLICATION_STATE_INVALID = 3;
+}
+
+// NewsAcquisition records acquisition and delivery without inferred fetch times.
+message NewsAcquisition {
+  // Latest known acquisition outcome.
+  NewsOutcome outcome = 1;
+  // Current delivery path.
+  NewsDelivery delivery = 2;
+  // Actual upstream attempt time; absent when unknown, in epoch milliseconds.
+  optional int64 attempted_at = 3 [(sebuf.http.int64_encoding) = INT64_ENCODING_NUMBER];
+  // Genuine successful upstream acquisition time, in epoch milliseconds.
+  optional int64 acquired_at = 4 [(sebuf.http.int64_encoding) = INT64_ENCODING_NUMBER];
+  // Cache write time, never an acquisition surrogate, in epoch milliseconds.
+  optional int64 cache_stored_at = 5 [(sebuf.http.int64_encoding) = INT64_ENCODING_NUMBER];
+  // Number of articles accepted after boundary validation.
+  uint32 accepted_count = 6;
+}
+
+// NewsProvenance records article provenance independently of legacy dates.
+message NewsProvenance {
+  // Latest known acquisition outcome.
+  NewsOutcome outcome = 1;
+  // Current delivery path.
+  NewsDelivery delivery = 2;
+  // Actual upstream attempt time; absent when unknown, in epoch milliseconds.
+  optional int64 attempted_at = 3 [(sebuf.http.int64_encoding) = INT64_ENCODING_NUMBER];
+  // Genuine successful upstream acquisition time, in epoch milliseconds.
+  optional int64 acquired_at = 4 [(sebuf.http.int64_encoding) = INT64_ENCODING_NUMBER];
+  // Cache write time, never an acquisition surrogate, in epoch milliseconds.
+  optional int64 cache_stored_at = 5 [(sebuf.http.int64_encoding) = INT64_ENCODING_NUMBER];
+  // Number of articles accepted by the acquisition.
+  uint32 accepted_count = 6;
+  // Configured source identifier; distinct from publisher independence.
+  string source_id = 7;
+  // Configured delivery group: google-rss, rss-direct:hostname, gdelt, newsapi, newsdata, or unknown.
+  string delivery_group = 8;
+  // Whether the raw provider publication date is trustworthy.
+  NewsPublicationState publication_state = 9;
+  // Valid raw publication time, in epoch milliseconds; absent when unknown.
+  optional int64 published_at = 10 [(sebuf.http.int64_encoding) = INT64_ENCODING_NUMBER];
+  // Provider observation time, in epoch milliseconds; distinct from publication.
+  optional int64 observed_at = 11 [(sebuf.http.int64_encoding) = INT64_ENCODING_NUMBER];
+}

@@ -5,6 +5,7 @@ package crystalball.news.v1;
 import "buf/validate/validate.proto";
 import "sebuf/http/annotations.proto";
 import "crystalball/core/v1/geo.proto";
+import "crystalball/news/v1/news_provenance.proto";
 
 // NewsItem represents a single news article from RSS feed aggregation.
 message NewsItem {
@@ -30,6 +31,8 @@ message NewsItem {
   crystalball.core.v1.GeoCoordinates location = 7;
   // Human-readable location name.
   string location_name = 8;
+  // Acquisition, delivery, and truthful publication metadata.
+  NewsProvenance provenance = 9;
 }
 
 // ThreatClassification represents an AI-assessed threat level for a news item.

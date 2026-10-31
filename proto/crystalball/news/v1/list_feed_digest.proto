@@ -4,6 +4,7 @@ package crystalball.news.v1;
 
 import "sebuf/http/annotations.proto";
 import "crystalball/news/v1/news_item.proto";
+import "crystalball/news/v1/news_provenance.proto";
 
 message ListFeedDigestRequest {
   // Site variant: full, tech, finance, happy
@@ -19,6 +20,8 @@ message ListFeedDigestResponse {
   map<string, string> feed_statuses = 2;
   // ISO 8601 timestamp of when this digest was generated
   string generated_at = 3;
+  // Per-feed acquisition outcomes and delivery, independent of legacy statuses.
+  map<string, NewsAcquisition> feed_acquisitions = 4;
 }
 
 message CategoryBucket {

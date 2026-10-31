@@ -515,6 +515,29 @@ const SCRIPTS = {
   'build': 'vite build',
 };
 
+test('production news resilience command indexes all six existing regression files', () => {
+  const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
+  const index = deriveScriptIndex(scripts);
+  assert.equal(index.has('test:news-resilience'), true, 'the production resilience command must use an indexed runner');
+  assert.deepEqual([...index.get('test:news-resilience').testFiles], [
+    'src/services/__tests__/news-provenance.test.mts',
+    'src/services/__tests__/rss-adapters-tracked.test.mts',
+    'src/services/news/__tests__/news-snapshot.test.mts',
+    'tests/components/news-resilience-panels.test.mts',
+    'tests/news-route-provenance.test.mjs',
+    'tests/ux040-news-snapshot-wiring.test.mjs',
+  ]);
+});
+
+test('production news resilience helper selects its real regression suite without a coverage gap', () => {
+  const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
+  const index = deriveScriptIndex(scripts);
+  const overrides = mergeOverrides(OVERRIDES, prDeclaredOverrides());
+  const result = selectScripts(['api/_news-provenance.js'], index, overrides);
+  assert.ok(result.scripts.includes('test:news-resilience'));
+  assert.deepEqual(result.unmapped, []);
+});
+
 test('index derivation: only plain test runners are eligible', () => {
   const index = deriveScriptIndex(SCRIPTS);
   assert.deepEqual([...index.keys()].sort(), ['test:agentic-gate', 'test:providers', 'test:sidecar', 'test:weather']);

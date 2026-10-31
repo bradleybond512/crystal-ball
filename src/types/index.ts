@@ -20,6 +20,7 @@ export type {
 } from '@/services/evidence-pack';
 
 export interface NewsItem {
+  provenance?: import('@/services/news-provenance').NewsProvenance;
   source: string;
   title: string;
   link: string;

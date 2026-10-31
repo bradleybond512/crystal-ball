@@ -12,6 +12,8 @@
  */
 
 import { Panel } from './Panel';
+import type { NewsSnapshot } from '@/services/news-snapshot';
+import { acquisitionAge } from '@/services/news-provenance';
 import {
   attachDisclosureClickDelegation,
   renderDisclosureSwitcherHtml,
@@ -130,7 +132,9 @@ export class SystemDiagnosticPanel extends Panel {
   /** Keys & signing status (R3-SEC-003 phase A); desktop only. */
   private vaultDiagnostics: VaultDiagnostics | null = null;
 
-  constructor() {
+  private unsubscribeNews: (() => void) | null = null;
+
+  constructor(private readonly newsSnapshot?: NewsSnapshot) {
     super({
       id: 'system-diagnostic',
       title: 'System Diagnostic',
@@ -139,6 +143,7 @@ export class SystemDiagnosticPanel extends Panel {
       infoTooltip:
         'Unified health view: features, panels, notifications, feeds, and an on-demand self-test. Use this to answer "why didn\'t I get warned?".',
     });
+    this.unsubscribeNews = this.newsSnapshot?.subscribe(() => this.render()) ?? null;
     this.start();
   }
 
@@ -160,6 +165,8 @@ export class SystemDiagnosticPanel extends Panel {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
+    this.unsubscribeNews?.();
+    this.unsubscribeNews = null;
     this.detachDisclosure?.();
     this.detachDisclosure = null;
     this.unsubscribeDisclosure?.();
@@ -366,11 +373,42 @@ export class SystemDiagnosticPanel extends Panel {
         ${recHtml}
       </div>
       ${this.renderTallyRow(ctx)}
+      ${this.renderNewsCoverage()}
       <div>
         <div style="font-size:11px;text-transform:uppercase;color:var(--text-secondary,#aaa);margin-bottom:6px;">Recent events (last 5)</div>
         ${eventHtml}
       </div>
     </div>`;
+  }
+
+  private renderNewsCoverage(): string {
+    const sources = this.newsSnapshot?.getSnapshot().sources ?? [];
+    const now = Date.now();
+    const enabled = sources.filter(source => source.enabled);
+    const groups = [...new Set(enabled.map(source => source.deliveryGroup).filter(group => group !== 'unknown'))];
+    const rows = sources.map(source => {
+      const acquisition = source.acquisition;
+      const age = acquisitionAge(acquisition, now);
+      const ageText = age === null ? 'Acquisition age unknown' : `Acquired ${formatAge(age)}`;
+      let cacheText = '';
+      if (acquisition.delivery.endsWith('_cache')) {
+        const cacheAge = acquisition.cacheStoredAt === null ? 'at unknown time' : formatAge(now - acquisition.cacheStoredAt);
+        cacheText = ` · Cache stored ${cacheAge}`;
+      }
+      const retainedAges = source.items.map(item => acquisitionAge(item.provenance ?? { acquiredAt: null }, now)).filter((value): value is number => value !== null);
+      const retainedAge = retainedAges.length ? Math.min(...retainedAges) : null;
+      const retainedText = retainedAge === null ? '' : ` · Latest retained row acquired ${formatAge(retainedAge)}`;
+      const freshness = retainedAge !== null && retainedAge >= 2 * 60 * 60_000 ? ' · Expired for fallback' : '';
+      return `<li><strong>${escapeHtml(source.label)}</strong>: ${escapeHtml(acquisition.outcome.replace(/_/g, ' '))} · ${acquisition.acceptedCount} accepted rows · ${escapeHtml(acquisition.delivery.replace(/_/g, ' '))} · ${escapeHtml(ageText + cacheText + retainedText + freshness)} · Delivery group: ${escapeHtml(source.deliveryGroup)}</li>`;
+    }).join('');
+    const eligible = this.newsSnapshot?.getEligibleItems(now).length ?? 0;
+    return `<section class="news-diagnostic-coverage" aria-label="News acquisition coverage">
+      <div style="font-size:11px;text-transform:uppercase">News acquisition coverage</div>
+      <p>${enabled.length} enabled feeds · ${groups.length} configured delivery groups · ${eligible} eligible fallback rows.</p>
+      ${rows ? `<ul>${rows}</ul>` : '<p>News acquisition status unknown; no snapshot sources reported.</p>'}
+      <p>Google RSS feeds share Google delivery. Direct RSS feeds are grouped by configured host; GDELT, NewsAPI and NewsData each share their provider delivery. Publisher names do not measure delivery diversity. Shared backend failures may affect several feeds; backend independence is unknown.</p>
+      <p>Unavailable, expired or unknown acquisition can leave news coverage incomplete. Accepted rows describe delivery, not reporting accuracy or independent corroboration. This view reads existing state and does not acquire news.</p>
+    </section>`;
   }
 
   private renderTallyRow(ctx: DiagnosticContext): string {

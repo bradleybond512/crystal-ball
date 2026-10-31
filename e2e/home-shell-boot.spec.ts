@@ -227,6 +227,13 @@ test.describe('home shell default boot', () => {
     await skipFirstRunDialogs(page);
     await page.goto('/');
     await expect(page.locator('.home-shell')).toBeVisible({ timeout: 30_000 });
+    // Opening on demand cancels the proactive brief; closing aborts pending
+    // generation so the real dialog cannot intercept the panel interaction.
+    await page.evaluate(() => document.dispatchEvent(new CustomEvent('cb:show-digest')));
+    const digest = page.getByRole('dialog', { name: 'Crystal Ball — Since you last looked' });
+    await expect(digest).toBeVisible();
+    await digest.getByRole('button', { name: 'Close since-you-last-looked brief' }).click();
+    await expect(digest).toBeHidden();
     // Scroll the deck into view and open the first pinned card.
     const firstCard = page.locator('.hs-deck-grid .hs-card').first();
     await firstCard.scrollIntoViewIfNeeded();

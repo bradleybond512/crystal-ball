@@ -40,6 +40,7 @@ import { selectPostureCards } from './storm-posture-view.ts';
 import { buildSurvivalOutlook } from '@/services/survival/survival-outlook.ts';
 import { renderSurvivalOutlook } from '@/services/survival/survival-outlook-render.ts';
 import { escapeHtml } from '@/utils/sanitize.ts';
+import { bindStormMoveActions } from './StormMoveActions';
 
 const REFRESH_MS = 120_000;
 
@@ -62,6 +63,7 @@ function bandColor(band: SurvivalBand): string {
 export class StormPosturePanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private readonly unsubscribe: () => void;
+  private readonly unbindMoves: () => void;
 
   constructor() {
     super({
@@ -74,7 +76,13 @@ export class StormPosturePanel extends Panel {
     });
 
     this.unsubscribe = subscribeStormPosture(() => this.render());
-    document.addEventListener('click', this.onCommitClick);
+    this.unbindMoves = bindStormMoveActions(this.getContentElement(), {
+      resolveMove: (id) => {
+        const snapshot = getStormSnapshot();
+        return snapshot ? availableMoves(snapshot.posture, snapshot, { now: Date.now() }).find((move) => move.id === id) : undefined;
+      },
+      commitMove: commitStormMove,
+    });
     document.addEventListener('click', this.onModeClick);
     this.start();
   }
@@ -90,7 +98,7 @@ export class StormPosturePanel extends Panel {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
-    document.removeEventListener('click', this.onCommitClick);
+    this.unbindMoves();
     document.removeEventListener('click', this.onModeClick);
     this.unsubscribe();
     super.destroy();
@@ -211,19 +219,6 @@ export class StormPosturePanel extends Panel {
     const axisLabel = first.axis.replace(/_/g, ' ');
     return `${sign}${Math.abs(first.deltaLevel)} ${axisLabel}`;
   }
-
-  private readonly onCommitClick = (ev: Event): void => {
-    const btn = (ev.target as Element | null)?.closest('[data-storm-move]');
-    if (!btn) return;
-    const moveId = btn.getAttribute('data-storm-move');
-    if (!moveId) return;
-    const snap = getStormSnapshot();
-    if (!snap) return;
-    const moves = availableMoves(snap.posture, snap, { now: Date.now() });
-    const move = moves.find((m) => m.id === moveId);
-    if (!move) return;
-    commitStormMove(move);
-  };
 
   /** Map-mode chips: focus the map on one survival axis' layers (E4 glue). */
   private buildMapModeChips(): string {

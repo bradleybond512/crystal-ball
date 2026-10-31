@@ -1200,6 +1200,29 @@ State these as open questions rather than treating them as settled:
 
 Update the row in the same PR that does the work.
 
+### Repair 11 local source addendum — 2026-10-18
+
+Status: bounded local implementation; complete source validation and packaged
+acceptance pending. Remote Draft publication is paused pending approval; no
+published Draft or packaged pass is claimed. The numbered repair queue authorizes
+this single item to cover the UX-001/UX-002 presentation seams together and takes
+precedence over this document's default one-UX-task grouping. Independent review
+for this queue uses Sol only and remains pending.
+
+The current shell already shares posture hydration and subscription for contextual
+Deck guidance; the historical zero-reference finding above describes an earlier
+surface. Repair 11 adds a fourth render-only posture band, the exact existing
+outlook recommendation, and evidence navigation to the existing Storm Posture
+panel. Explicit Commit uses the existing plan action with scoped click ownership.
+Modeled/last-known wording separates recorded weather age from unknown source age
+and coverage in other domains. It introduces no engine, contributor, refresh loop,
+source-freshness promotion, stale-action policy or emergency-action precedence.
+
+UX-000 remains MONITOR with packaged acceptance outstanding. UX-001's dependency
+remains unresolved; the rows below are unchanged and are not marked complete by
+local source work. Browser layout, keyboard/VoiceOver, bundle budget, full source
+gate and packaged behavior require separate validation of the actual candidate.
+
 | Task | Title | Status | PR |
 |---|---|---|---|
 | UX-000 | Zero-key first-run contract | MONITOR | #1660; [failed packaged test](https://github.com/bradleybond512/crystal-ball/issues/1725); Home #1726; request errors #1728; basic map #1729; [validation](validation/PR-1729-LOCAL-BASEMAP.md) |

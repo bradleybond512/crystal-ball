@@ -6,7 +6,7 @@
  */
 
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { after } from 'node:test';
 import { Window } from 'happy-dom';
 
 // ── Vite env shim (register-hook.mjs rewrites import.meta.env refs) ───
@@ -68,8 +68,23 @@ import {
   type NuclearSuperpowerData,
 } from '../../src/components/NuclearSuperpowerPanel.ts';
 
+const ownedPanels = new Set<NuclearSuperpowerPanel>();
+
+after(async () => {
+  try {
+    for (const panel of ownedPanels) {
+      panel.destroy();
+    }
+  } finally {
+    ownedPanels.clear();
+    await happyWindow.happyDOM.close();
+  }
+});
+
 function makePanel(): NuclearSuperpowerPanel {
-  return new NuclearSuperpowerPanel();
+  const panel = new NuclearSuperpowerPanel();
+  ownedPanels.add(panel);
+  return panel;
 }
 
 function makeIncident(overrides: Partial<NuclearIncident> = {}): NuclearIncident {

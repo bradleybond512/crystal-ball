@@ -7,6 +7,13 @@ import { parse } from 'yaml';
 const root = path.resolve(import.meta.dirname, '..');
 const workflow = (name) => parse(readFileSync(path.join(root, '.github/workflows', name), 'utf8'));
 
+test('existing browser jobs stay on the Ubuntu release supported by pinned Playwright', () => {
+  for (const [name, job] of [['accessibility', 'axe'], ['variant-e2e', 'identity']]) {
+    const definition = workflow(`${name}.yml`).jobs[job];
+    assert.equal(definition['runs-on'], 'ubuntu-24.04', `${name}/${job}`);
+  }
+});
+
 test('read-only workflow defaults constrain every previously unscoped job', () => {
   for (const name of ['actionlint', 'build-desktop', 'security-audit', 'eslint', 'lint', 'secret-scan', 'typecheck']) {
     const wf = workflow(`${name}.yml`);

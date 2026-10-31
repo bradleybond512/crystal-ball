@@ -5,7 +5,7 @@
  */
 
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { after } from 'node:test';
 import { Window } from 'happy-dom';
 
 const G = globalThis as unknown as Record<string, unknown>;
@@ -93,8 +93,23 @@ import {
   type FiuAlert,
 } from '../../src/components/financial-crimes-helpers.ts';
 
+const ownedPanels = new Set<FinancialCrimesPanel>();
+
+after(async () => {
+  try {
+    for (const panel of ownedPanels) {
+      panel.destroy();
+    }
+  } finally {
+    ownedPanels.clear();
+    await happyWindow.happyDOM.close();
+  }
+});
+
 function makePanel(): FinancialCrimesPanel {
-  return new FinancialCrimesPanel();
+  const panel = new FinancialCrimesPanel();
+  ownedPanels.add(panel);
+  return panel;
 }
 
 function emptyData(): FinancialCrimesData {

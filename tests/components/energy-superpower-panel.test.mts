@@ -6,7 +6,7 @@
  */
 
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { after } from 'node:test';
 import { Window } from 'happy-dom';
 
 // ── Vite env shim ─────────────────────────────────────────────────────────
@@ -67,7 +67,24 @@ import {
   type EnergySuperpowerData,
 } from '../../src/components/EnergySuperpowerPanel.ts';
 
-function makePanel(): EnergySuperpowerPanel { return new EnergySuperpowerPanel(); }
+const ownedPanels = new Set<EnergySuperpowerPanel>();
+
+after(async () => {
+  try {
+    for (const panel of ownedPanels) {
+      panel.destroy();
+    }
+  } finally {
+    ownedPanels.clear();
+    await happyWindow.happyDOM.close();
+  }
+});
+
+function makePanel(): EnergySuperpowerPanel {
+  const panel = new EnergySuperpowerPanel();
+  ownedPanels.add(panel);
+  return panel;
+}
 
 function makeGridStress(overrides: Partial<GridStressIndex> = {}): GridStressIndex {
   return { score: 30, tier: 'elevated', activeOutages: 2, pipelineDisruptions: 1, refineryIncidents: 0, ...overrides };

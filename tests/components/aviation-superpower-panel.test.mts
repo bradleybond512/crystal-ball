@@ -6,7 +6,7 @@
  */
 
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { after } from 'node:test';
 import { Window } from 'happy-dom';
 
 // ── Vite env shim (register-hook.mjs rewrites import.meta.env refs) ───
@@ -68,8 +68,23 @@ import {
   type AviationSuperpowerData,
 } from '../../src/components/AviationSuperpowerPanel.ts';
 
+const ownedPanels = new Set<AviationSuperpowerPanel>();
+
+after(async () => {
+  try {
+    for (const panel of ownedPanels) {
+      panel.destroy();
+    }
+  } finally {
+    ownedPanels.clear();
+    await happyWindow.happyDOM.close();
+  }
+});
+
 function makePanel(): AviationSuperpowerPanel {
-  return new AviationSuperpowerPanel();
+  const panel = new AviationSuperpowerPanel();
+  ownedPanels.add(panel);
+  return panel;
 }
 
 function makeSquawk(overrides: Partial<SquawkEntry> = {}): SquawkEntry {

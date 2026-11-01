@@ -1,4 +1,7 @@
 {
+  "scripts/acc008-production-baseline.mts": [
+    "test:acc008"
+  ],
   "api/_api-key.js": [
     "test:key-compare",
     "test:api",

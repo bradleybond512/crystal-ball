@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vite/client", "node"]
+  },
+  "include": [
+    "scripts/acc008-production-baseline.mts",
+    "tests/acc008-production-baseline.test.mts"
+  ],
+  "exclude": []
+}

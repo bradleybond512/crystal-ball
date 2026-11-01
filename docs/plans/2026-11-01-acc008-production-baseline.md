@@ -11,8 +11,9 @@ cannot qualify ACC-703.
 
 ## Scope and risk
 
-Standard read-only diagnostic acquisition. Bradley authorized implementing the
-execution plan and launching the existing installed app to collect aggregates.
+High-assurance implementation of read-only diagnostic acquisition. Bradley
+approved this concrete collector design on 2026-11-01 after discovery and
+design, in addition to launching the installed app to collect aggregates.
 The app is version 2.25.147. No installation, release, deployment, provider,
 inference, tuning, promotion, monitoring schedule, or production-storage changes
 are included. Existing Pages and updater pauses remain in force.
@@ -31,6 +32,8 @@ production evidence window.
    Python's SQLite URI `mode=ro`, `query_only`, and one short transaction. Select
    only calibration, shadow runs, shadow comparisons, and champion-registry
    keys. Keep raw values in memory/private process pipes; emit aggregates only.
+   Parent-owned package scripts, a focused TypeScript configuration, and additive
+   targeted-test mapping make the new tooling explicitly verifiable.
 3. Reuse existing pure scoring, horizon grouping, exact-join, resolution-origin,
    and registry readers. Inject no-op persistence. Do not hydrate application
    singletons. Partition by source/version/horizon before exact joins, since

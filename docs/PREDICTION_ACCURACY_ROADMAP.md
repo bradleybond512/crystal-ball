@@ -174,7 +174,14 @@ Phase exit: ACC-001 through ACC-007 are on main; ACC-008 refreshes the baseline.
 
 ### ACC-008 — Refresh the production baseline
 
-Status: `TODO`
+Status: `IN REVIEW`
+
+Owner: Codex
+
+Branch: `codex/acc008-production-baseline-nov1`
+
+Scope: [read-only acquisition plan](plans/2026-11-01-acc008-production-baseline.md).
+This is a task claim; measurement, validation, and acceptance remain pending.
 
 Priority: S
 

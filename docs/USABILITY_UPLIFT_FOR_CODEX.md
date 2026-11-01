@@ -951,7 +951,10 @@ Acceptance: Verify configured and external handle paths, encode safe URL compone
 
 ### UX-040 — Expose unavailable and stale feed outcomes
 
-Status: IN PROGRESS — HIGH ASSURANCE
+Status: MONITOR — HIGH ASSURANCE
+Evidence: #1841 — merged bounded news/status slice; local qualification, independent review and hosted checks passed.
+Exit condition: Assess remaining feed-outcome gaps from measured failures; complete any warranted broader work only after separate evidence, design and approval, or document why no further work is needed.
+Review after: 2026-11-15
 Priority: S
 Source findings: PR1731 M4/M8.
 
@@ -965,8 +968,10 @@ navigation, deployment or installation is included. Local implementation preserv
 legacy response shapes and analytical dates while the new views use explicit
 provenance; proxied or legacy cache timestamps without acquisition proof stay
 unknown and cannot qualify for fallback. Shared delivery groups do not establish
-independent reporting. Required qualification and opposite-agent review remain
-pending; the remote draft initially contains only the task claim.
+independent reporting. The approved slice merged in #1841 at
+1509a12e4656a40f6725282c83033f1037018cfc after qualification and opposite-agent
+review. Broader feed-outcome acceptance remains open; this evidence does not
+establish complete app-wide coverage or a deployment.
 
 ### UX-042 — Construct panels when needed without losing coverage
 
@@ -1248,7 +1253,7 @@ Update the row in the same PR that does the work.
 | UX-036 | Spread refresh work and honor battery policy | NOT STARTED — HIGH ASSURANCE | — |
 | UX-037 | Prevent new unowned stacking levels | NOT STARTED | — |
 | UX-038 | Constrain video-channel link construction | NOT STARTED — HIGH ASSURANCE | — |
-| UX-040 | Expose unavailable and stale feed outcomes | IN PROGRESS — HIGH ASSURANCE | #1841 — local implementation; qualification/review pending |
+| UX-040 | Expose unavailable and stale feed outcomes | MONITOR — HIGH ASSURANCE | #1841 — merged bounded news/status slice; broader acceptance remains open |
 | UX-042 | Construct panels when needed without losing coverage | MONITOR | #1714 |
 | UX-043 | Reduce repeated alert subscriber scans | NOT STARTED | — |
 | UX-044 | Announce critical UI changes accessibly | NOT STARTED | — |

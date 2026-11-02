@@ -206,20 +206,15 @@ export const PANEL_FIXTURES: Record<string, PanelFixtureBundle> = {
   },
 
   'nws-alerts': {
-    install: () => { /* fed via update() — see directUpdate */ },
+    install: () => { /* fed via updateSnapshot() */ },
     directUpdate: async (panel) => {
-      const p = panel as { update: (alerts: unknown[]) => void };
-      p.update([
-        {
-          id: 'NWS.IND.123',
-          event: 'Severe Thunderstorm Watch',
-          severity: 'Severe',
-          urgency: 'Expected',
-          areaDesc: 'La Porte; St. Joseph',
-          headline: 'Severe Thunderstorm Watch in effect',
-          onset: new Date(NOW_MS).toISOString(),
-        },
-      ]);
+      const p = panel as { updateSnapshot: (snapshot: { alerts: unknown[]; state: 'current'; observedAt: number }) => void };
+      p.updateSnapshot({ state: 'current', observedAt: NOW_MS, alerts: [{
+        id: 'NWS.IND.123', event: 'Severe Thunderstorm Watch', severity: 'Severe',
+        urgency: 'Expected', areaDesc: 'La Porte; St. Joseph',
+        headline: 'Severe Thunderstorm Watch in effect',
+        sent: new Date(NOW_MS - 60_000).toISOString(), onset: new Date(NOW_MS).toISOString(),
+      }] });
     },
   },
 

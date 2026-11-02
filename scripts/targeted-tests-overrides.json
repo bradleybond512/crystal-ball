@@ -49,7 +49,8 @@
   ],
   "src/services/unified-alerts.ts": [
     "test:acc509",
-    "test:ux059"
+    "test:ux059",
+    "test:ux047"
   ],
   "src/services/intel-channels-bridge.ts": [
     "test:acc509"
@@ -104,7 +105,8 @@
     "test:ux059"
   ],
   "src/services/alert-normalizer.ts": [
-    "test:ux059"
+    "test:ux059",
+    "test:ux047"
   ],
   "src/services/gdacs.ts": [
     "test:ux059",
@@ -117,7 +119,8 @@
     "test:quiet-hours",
     "test:datacenter",
     "test:datacenter-ownership",
-    "test:acc510"
+    "test:acc510",
+    "test:ux047"
   ],
   "src/services/gdacs-coverage.ts": [
     "test:gdacs-map"
@@ -369,7 +372,8 @@
     "test:port-publication",
     "test:sidecar-ci",
     "test:health-contract",
-    "test:domain-retirement"
+    "test:domain-retirement",
+    "test:ux047"
   ],
   "src/services/keychain.ts": [
     "test:secret-boundary",
@@ -395,7 +399,8 @@
   "src-tauri/tauri.conf.json": [
     "test:secret-boundary",
     "test:domain-retirement",
-    "test:desktop-identity"
+    "test:desktop-identity",
+    "test:ux047"
   ],
   "src-tauri/src/vault_coordinator.rs": [
     "test:vault-writer"
@@ -828,7 +833,8 @@
     "test:pwa-deployment"
   ],
   "src/App.ts": [
-    "test:pwa-deployment"
+    "test:pwa-deployment",
+    "test:ux047"
   ],
   "src/services/country-geometry.ts": [
     "test:pwa-deployment",
@@ -1229,5 +1235,47 @@
   ],
   "src/services/situation-forecaster.ts": [
     "test:acc510"
+  ],
+  "api/nws-alerts.js": [
+    "test:ux047"
+  ],
+  "src-tauri/sidecar/nws-alert-snapshot.mjs": [
+    "test:ux047"
+  ],
+  "src/services/nws-alerts.ts": [
+    "test:ux047"
+  ],
+  "src/services/nws-alert-snapshot.ts": [
+    "test:ux047"
+  ],
+  "src/services/nws-alert-lifecycle.ts": [
+    "test:ux047"
+  ],
+  "src/services/nws-alert-snapshot-cache.ts": [
+    "test:ux047"
+  ],
+  "src/services/offline-alert-cache.ts": [
+    "test:ux047"
+  ],
+  "src/components/NWSAlertsPanel.ts": [
+    "test:ux047"
+  ],
+  "src/components/TriageBar.ts": [
+    "test:ux047"
+  ],
+  "src/components/SummaryStrip.ts": [
+    "test:ux047"
+  ],
+  "src/services/sidebar-heat.ts": [
+    "test:ux047"
+  ],
+  "src/services/native/menubar-status.ts": [
+    "test:ux047"
+  ],
+  "src/services/native/dock-badge.ts": [
+    "test:ux047"
+  ],
+  "src/services/notification-digest.ts": [
+    "test:ux047"
   ]
 }

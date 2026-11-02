@@ -36,6 +36,7 @@ import {
   ACLED_REFRESH_TOKEN_WARN_DAYS,
 } from './acled-token-helpers.mjs';
 import { fetchWithFallback } from './feed-resilience.mjs';
+import { createNwsSnapshotProvider } from './nws-alert-snapshot.mjs';
 import { fetchEnviroflashCap, alertMatchesArea } from './enviroflash-cap.mjs';
 import { normalizeAirnowForecast, peakForecastAqi } from './airnow-forecast.mjs';
 import { trackSuccess, trackFailure, getAllFeedStatuses, getFeedStatus } from './feed-health-tracker.mjs';
@@ -5786,6 +5787,7 @@ export function odinRequestCanStart(inFlight, cacheKey, maximum = ODIN_IN_FLIGHT
 // Test-only: clear every TTL-cache entry so route tests can cross cache
 // boundaries without sleeping (same convention as _resetSecurityCaches).
 export function _resetSidecarCacheForTests() {
+  nwsSnapshotProvider.reset();
   _sidecarCache.clear();
   _odinInFlight.clear();
   resetInfrastructureBgpCredentialState();
@@ -7119,6 +7121,12 @@ function parseSeaIceForSidecar(csv) {
     isRecordLow: min !== undefined && Math.abs(latest.extent - min) < 0.005,
   };
 }
+
+const nwsSnapshotProvider = createNwsSnapshotProvider({
+  fetchFn: fetchWithTimeout,
+  readJson: (response) => response.json(),
+  clock: () => Date.now(),
+});
 
 function extractAlertCentroid(feature) {
   const geom = feature?.geometry;
@@ -11032,54 +11040,15 @@ function legacyNewsItems(items) {
 
   // ── NOAA NWS All-Hazards alerts ──────────────────────────────────────────
   if (requestUrl.pathname === '/api/nws-alerts') {
- try {
- const NWS_PRIMARY = 'https://api.weather.gov/alerts/active?status=actual&message_type=alert,update&urgency=Immediate,Expected&severity=Extreme,Severe,Moderate';
- const NWS_FALLBACK = 'https://api.weather.gov/alerts/active?status=actual&message_type=alert,update';
- let result;
- try {
-   result = await fetchWithFallback(NWS_PRIMARY, [NWS_FALLBACK], {
-     cacheKey: 'nws-alerts-last-good',
-     timeoutMs: 12_000,
-     headers: { Accept: 'application/geo+json', 'User-Agent': 'CrystalBall-NWS/1.0 (https://github.com/bradleybond512/crystal-ball)' },
-   });
- } catch (error) {
-   // Total upstream failure — never report an outage as a fresh all-clear.
-   trackFailure('nws-alerts', error);
-   return json({ error: 'nws-alerts upstream unavailable', stale: true }, 503);
- }
- // A stale last-good cache hit (`source: 'cached'`) is NOT a fresh fetch — surface
- // it as a failure so dataFreshness doesn't advance and downstream guards keep posture.
- if (result.source === 'cached') {
-   trackFailure('nws-alerts', new Error('nws-alerts upstream unavailable; served stale cache'));
-   return json({ error: 'nws-alerts upstream unavailable', stale: true }, 503);
- }
- trackSuccess('nws-alerts', result.source);
- const data = result.data;
- const features = Array.isArray(data?.features) ? data.features : [];
- const alerts = features.slice(0, 100).map((f, i) => {
- const p = f.properties ?? {};
- return {
- id: p.id ?? `nws-${i}`,
- event: p.event ?? '',
- headline: p.headline ?? '',
- description: String(p.description ?? '').slice(0, 300),
- severity: p.severity ?? 'Unknown',
- urgency: p.urgency ?? 'Unknown',
- areaDesc: p.areaDesc ?? '',
- sent: p.sent ?? p.onset ?? '',
- onset: p.onset ?? '',
- expires: p.expires ?? '',
- status: p.status ?? '',
- messageType: p.messageType ?? null,
- centroid: extractAlertCentroid(f),
- geometry: f?.geometry ?? null,
- };
- });
- return json(alerts);
- } catch (error) {
- trackFailure('nws-alerts', error);
- return json({ error: 'nws-alerts upstream unavailable', stale: true }, 503);
- }
+    try {
+      const snapshot = await nwsSnapshotProvider.get();
+      // A validated complete empty national inventory is a real healthy observation.
+      trackSuccess('nws-alerts', 'primary', snapshot.observedAt);
+      return json(snapshot);
+    } catch (error) {
+      trackFailure('nws-alerts', error);
+      return json({ error: 'NWS national snapshot unavailable', stale: true }, 503);
+    }
   }
 
   // ── Weather hazards: severity-filtered NWS alerts (PR 1) ─────────────────

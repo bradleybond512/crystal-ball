@@ -77,7 +77,7 @@ export function startSidebarHeat(
   const controller: SidebarHeatController = {
     refresh(): void {
       if (destroyed) return;
-      snapshot = projectPanelAttention(unifiedAlertStore.getAll(), {
+      snapshot = projectPanelAttention(unifiedAlertStore.getOperationalAlerts(), {
         score: scoreAlert,
         route: panelForAlert,
         reviewed,

@@ -3,9 +3,9 @@
 Status: Bradley approved this high-assurance design and implementation on
 2026-11-02 UTC. Read-only repository analysis and architect discovery preceded
 approval. Branch: `codex/ux047-warning-freshness-nov1`. Draft claim #1844 preceded
-implementation. Local implementation has passed the integrated gate; mutation
-proofs and independent review govern completion. Native WKWebView acceptance
-remains a delivery gate.
+implementation. Local implementation passed the integrated gate, 57 mutation
+proofs and independent review. [Validation evidence](../validation/UX-047-NATIONAL-WARNINGS.md)
+records results and rollback. Native WKWebView acceptance remains a delivery gate.
 
 ## Objective and constraints
 
@@ -188,5 +188,5 @@ Three read-only body samples on November 2 UTC at 03:26:58, 03:27:04 and
 values occur in the real national feed and must not silently disappear.
 The proposed bounds are conservative resource limits, not a statistically
 established upper tail; all three short-interval samples were identical.
-Final evidence must run the completed adapter/validator against the live body
-and reconcile accepted rows, not merely assert HTTP 200 or inspect raw shape.
+The completed adapter probe at 03:57:08 UTC reconciled 430 upstream rows to 430
+backend, renderer and lifecycle records with original observation time intact.

@@ -85,6 +85,27 @@ Do not compare future raw Brier values to this table across a different event
 mix. Use matched cohorts and Brier skill against a baseline trained only on the
 earlier portion of the same time-ordered evaluation window.
 
+### 2026-11-02 UTC refresh (ACC-008)
+
+Installed release 2.25.147, measured `2026-11-02T00:07:25.253Z`; manifest
+recorded `2026-11-02T00:07:25.263Z`. This retained working set contains
+500 records: 424 resolved (49 direct, 375 proxy), 2 pending and 74 expired.
+
+| Forecaster / version | Resolved | Direct | Proxy | Manual | Retained Brier | Direct Brier | Proxy Brier |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| analyst-loop / 2.0.0 | 26 | 0 | 26 | 0 | 0.722500 | unavailable (n=0; insufficient_evidence) | 0.722500 |
+| hierarchical-base-rate / 1.0.0 | 115 | 14 | 101 | 0 | 0.488865 | unavailable (n=14; insufficient_evidence) | 0.556621 |
+| mode-forecast:disaster / 1.0.0 | 43 | 0 | 43 | 0 | 0.155626 | unavailable (n=0; insufficient_evidence) | 0.155626 |
+| mode-forecast:security / 1.0.0 | 36 | 0 | 36 | 0 | 0.133913 | unavailable (n=0; insufficient_evidence) | 0.133913 |
+| nws-warning / 1.0.0 | 204 | 35 | 169 | 0 | 0.421373 | 0.090000 | 0.490000 |
+
+Full [paired-baseline metrics, cohort/version manifest and acquisition command](validation/ACC-008-PRODUCTION-BASELINE.md)
+include 115 exact pairs across six cohorts. Champion/challenger decision state
+is unavailable for every forecaster; the registry is missing. Installed
+evaluation revision is unavailable. `proofWindowEligible` remains false.
+Counts include shared outcomes across models and do not establish training
+readiness. ACC-601–605 were reassessed on November 2 UTC and remain WAITING.
+
 ## Coordination protocol
 
 ### Claiming work
@@ -181,7 +202,9 @@ Owner: Codex
 Branch: `codex/acc008-production-baseline-nov1`
 
 Scope: [read-only acquisition plan](plans/2026-11-01-acc008-production-baseline.md).
-This is a task claim; measurement, validation, and acceptance remain pending.
+Draft PR: #1843. [Production measurement and manifest](validation/ACC-008-PRODUCTION-BASELINE.md)
+collected 2026-11-02 UTC; [validation and review](validation/ACC-008-QA-QC.md)
+recorded locally. Status remains IN REVIEW until acceptance lands on main.
 
 Priority: S
 
@@ -2030,17 +2053,14 @@ Dependencies: ACC-204
 Exit condition: The current production cohort contains enough resolved and
 class-balanced evidence to issue a model-readiness verdict for every domain.
 
-Review after: 2026-11-15
+Review after: 2026-11-16
 
-Reviewed 2026-10-16: The ACC-008 production-baseline refresh is still pending;
-refreshed per-domain resolved counts, class balance and model-readiness
-evidence have not been established by this docs-only review. This is a
-provisional reminder, not a predicted completion date or readiness claim.
-
-In ACC-008's completion PR, reassess this task using its measured sample
-counts, record the actual UTC measurement/review date, and set the exact
-`Review after:` date no more than 30 days after that assessment. Refresh
-stale dates before merge; never use an unknown future merge date.
+Reviewed 2026-11-02 UTC against the [ACC-008 production receipt](validation/ACC-008-2026-11-02.json),
+measured `2026-11-02T00:07:25.253Z`. Measured 500 retained records, 424 resolved (49 direct and 375 proxy).
+The manifest separates ten source/version/domain/horizon cohorts; it does not
+establish unique training outcomes, prediction-time feature availability,
+missingness or provider drift. Model readiness remains unestablished.
+This is a review reminder, not a readiness claim or completion forecast.
 
 For every domain, report:
 
@@ -2059,18 +2079,15 @@ Dependencies: ACC-601 and at least 200 resolved, class-balanced-enough outcomes
 Exit condition: ACC-601 is `DONE` and records at least 200 resolved outcomes
 with usable class balance for an eligible domain.
 
-Review after: 2026-11-15
+Review after: 2026-11-16
 
-Reviewed 2026-10-16: The ACC-008 production-baseline refresh is still pending
-and ACC-601 remains `WAITING`; this docs-only review does not establish
-200 resolved outcomes with usable class balance for an eligible domain.
-This is a provisional reminder, not a predicted completion date or
-readiness claim.
-
-In ACC-008's completion PR, reassess this task using its measured sample
-counts, record the actual UTC measurement/review date, and set the exact
-`Review after:` date no more than 30 days after that assessment. Refresh
-stale dates before merge; never use an unknown future merge date.
+Reviewed 2026-11-02 UTC against the [ACC-008 production receipt](validation/ACC-008-2026-11-02.json),
+measured `2026-11-02T00:07:25.253Z`. NWS has 204 resolved records across two horizons (35 positive and
+169 negative; separately, 35 direct and 169 proxy); its largest individual horizon has 126. Other live
+forecasters have 26, 36 or 43 resolved records. These descriptive counts do
+not establish usable class balance or prediction-time features for training.
+ACC-601 remains WAITING, so no eligible logistic cohort is accepted.
+This is a review reminder, not a readiness claim or completion forecast.
 
 Use regularized or hierarchical logistic prediction with domain/horizon priors.
 It must expose coefficients or feature contributions and run in shadow mode.
@@ -2084,17 +2101,14 @@ Dependencies: ACC-601 and at least 300 timestamped event/censoring records
 Exit condition: ACC-601 is `DONE` and records at least 300 usable timestamped
 event or censoring records.
 
-Review after: 2026-11-15
+Review after: 2026-11-16
 
-Reviewed 2026-10-16: The ACC-008 production-baseline refresh is still pending
-and ACC-601 remains `WAITING`; this docs-only review does not establish
-300 usable timestamped event or censoring records. This is a provisional
-reminder, not a predicted completion date or readiness claim.
-
-In ACC-008's completion PR, reassess this task using its measured sample
-counts, record the actual UTC measurement/review date, and set the exact
-`Review after:` date no more than 30 days after that assessment. Refresh
-stale dates before merge; never use an unknown future merge date.
+Reviewed 2026-11-02 UTC against the [ACC-008 production receipt](validation/ACC-008-2026-11-02.json),
+measured `2026-11-02T00:07:25.253Z`. The retained snapshot has 424 resolved and 74 expired records, but
+it does not establish 300 usable event/censoring records with defensible
+durations and feature provenance. ACC-601 remains WAITING; expired forecasts
+are not automatically valid censored training examples.
+This is a review reminder, not a readiness claim or completion forecast.
 
 Use a time-to-event model for questions such as escalation within a horizon.
 Score both occurrence probability and timing. Keep censoring explicit.
@@ -2109,18 +2123,14 @@ positive and 100 negative outcomes in the training cohort
 Exit condition: ACC-601 is `DONE` and records at least 1,000 resolved outcomes,
 including at least 100 outcomes in each class, for an eligible cohort.
 
-Review after: 2026-11-15
+Review after: 2026-11-16
 
-Reviewed 2026-10-16: The ACC-008 production-baseline refresh is still pending
-and ACC-601 remains `WAITING`; this docs-only review does not establish
-1,000 resolved outcomes with at least 100 in each class for an eligible
-cohort. This is a provisional reminder, not a predicted completion date
-or readiness claim.
-
-In ACC-008's completion PR, reassess this task using its measured sample
-counts, record the actual UTC measurement/review date, and set the exact
-`Review after:` date no more than 30 days after that assessment. Refresh
-stale dates before merge; never use an unknown future merge date.
+Reviewed 2026-11-02 UTC against the [ACC-008 production receipt](validation/ACC-008-2026-11-02.json),
+measured `2026-11-02T00:07:25.253Z`. The collector reads the bounded 500-record working set, with 424
+resolved records across models of shared outcomes. It cannot establish the
+1,000-record historical training gate or 100 usable outcomes of each class
+within an eligible cohort. ACC-601 remains WAITING.
+This is a review reminder, not a readiness claim or completion forecast.
 
 Use only lagged, prediction-time-available features. Compare against the
 regularized model and base rate. Reject it if the added complexity does not
@@ -2135,17 +2145,13 @@ Dependencies: ACC-602 or ACC-604
 Exit condition: ACC-602 or ACC-604 is `DONE` with a frozen comparison cohort
 that can support the ablation.
 
-Review after: 2026-11-15
+Review after: 2026-11-16
 
-Reviewed 2026-10-16: The ACC-008 production-baseline refresh is still pending;
-ACC-602 and ACC-604 remain `WAITING`, so neither a completed eligible
-model nor its frozen comparison cohort is recorded. This is a provisional
-reminder, not a predicted completion date or readiness claim.
-
-In ACC-008's completion PR, reassess this task using its measured sample
-counts, record the actual UTC measurement/review date, and set the exact
-`Review after:` date no more than 30 days after that assessment. Refresh
-stale dates before merge; never use an unknown future merge date.
+Reviewed 2026-11-02 UTC against the [ACC-008 production receipt](validation/ACC-008-2026-11-02.json),
+measured `2026-11-02T00:07:25.253Z`. ACC-602 and ACC-604 remain WAITING after this production measurement.
+No eligible completed model or frozen comparison cohort supports the
+feature-extraction ablation; no LLM-generated label is introduced.
+This is a review reminder, not a readiness claim or completion forecast.
 
 Compare:
 
@@ -2375,3 +2381,4 @@ Every task runs focused tests first, then the smallest relevant rows:
 | 2026-07-26 | Require baselines and walk-forward evaluation before model promotion | Raw accuracy and in-sample fit are insufficient |
 | 2026-07-26 | Keep LLMs out of the ground-truth role | LLM judgment is useful fallback evidence, not authoritative API truth |
 | 2026-07-26 | Make advanced model tasks conditional | Current 44 resolved forecasts cannot support complex ML responsibly |
+| 2026-11-02 | Refresh ACC-008 from the installed app; retain ACC-601–605 as WAITING | 424 retained resolved records are proxy-dominated; exact pairs and missing champion/evaluation metadata do not establish training readiness or a proof window |

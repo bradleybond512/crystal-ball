@@ -257,3 +257,134 @@ test('menubar stop cancels queued updates and stale callbacks cannot affect a re
     assert.equal(f.invocations.length, 1);
   } finally { f.exports.stopMenubarStatus(); f.window.happyDOM.abort(); }
 });
+
+function reactionsFixture(bootstrap: typeof retired[] = []) {
+  const sounds: string[] = [];
+  const pulseIds: string[][] = [];
+  const delayed: Array<{ delay: number; callback: () => void }> = [];
+  const inactive = new Set<string>();
+  const state = { alerts: bootstrap, ghost: false, channels: { sound: true, borderFlash: true, mapPulse: true, panelFlash: true, desktopNotif: true } };
+  const f = fixture('src/services/alert-reactions.ts', {
+    './alert-routing': { panelForAlert: () => 'nws-alerts', scoreAlert: (alert: typeof retired) => alert.severity === 'critical' ? 100 : alert.severity === 'high' ? 75 : 40 },
+    './sound-manager': { playAlertPing: () => sounds.push('critical'), playSonarPing: () => sounds.push('sonar') },
+    './mode-manager': { isGhostMode: () => state.ghost },
+    './alerting-prefs': { getChannels: () => state.channels },
+    './alert-debug': { logEvent: () => {} },
+  });
+  f.store.getAll = () => state.alerts;
+  f.store.getOperationalAlerts = () => state.alerts.filter(alert => !inactive.has(alert.id));
+  f.store.isOperationalAlert = alert => !inactive.has(alert.id);
+  Object.defineProperty(f.window, 'setTimeout', { configurable: true, value: (callback: () => void, delay: number) => { delayed.push({ callback, delay }); return delayed.length; } });
+  const panel = f.window.document.createElement('div');
+  panel.dataset.panel = 'nws-alerts';
+  f.window.document.body.append(panel);
+  f.window.document.addEventListener('cb:alert-pulses', (event) => {
+    pulseIds.push(Array.from((event as unknown as { detail: Array<{ id: string }> }).detail, alert => alert.id));
+  });
+  return { ...f, state, sounds, pulseIds, delayed, inactive, panel,
+    emit: () => f.listeners[0]!(),
+    clearVisuals: () => { panel.className = ''; f.window.document.body.className = ''; },
+  };
+}
+
+const criticalReactionAlert = (id: string, source = 'nws') => ({ ...retired, id, source, location: { lat: 0, lon: 0 } });
+
+test('alert reactions suppress warnings retired before the coalesced subscriber runs and preserve history seen semantics', () => {
+  const bootHistory = criticalReactionAlert('boot-history');
+  const f = reactionsFixture([bootHistory]);
+  try {
+    f.inactive.add(bootHistory.id);
+    f.exports.startAlertReactions();
+    const warning = criticalReactionAlert('retired-before-notify');
+    f.state.alerts = [bootHistory, warning];
+    f.inactive.add(warning.id);
+    f.emit();
+    assert.deepEqual(f.sounds, []);
+    assert.deepEqual(f.pulseIds, []);
+    assert.equal(f.panel.classList.contains('panel-alert-flash'), false);
+    assert.equal(f.window.document.body.classList.contains('window-alert-flash'), false);
+    assert.equal(f.delayed.filter(task => task.delay === 300_000).length, 0);
+    f.inactive.clear();
+    f.emit();
+    assert.deepEqual(f.sounds, [], 'history already considered while inactive must not react again');
+    assert.deepEqual(f.pulseIds, []);
+  } finally { f.window.happyDOM.abort(); }
+});
+
+test('critical NWS reminders recheck retirement at execution after five minutes', () => {
+  const f = reactionsFixture();
+  try {
+    f.exports.startAlertReactions();
+    const warning = criticalReactionAlert('retires-during-delay');
+    f.state.alerts = [warning];
+    f.emit();
+    assert.deepEqual(f.sounds, ['critical']);
+    assert.deepEqual(f.pulseIds, [[warning.id]]);
+    const reminders = f.delayed.filter(task => task.delay === 300_000);
+    assert.equal(reminders.length, 1);
+    f.inactive.add(warning.id);
+    f.clearVisuals();
+    reminders[0]!.callback();
+    assert.deepEqual(f.sounds, ['critical'], 'retired warning cannot sound a second time');
+    assert.equal(f.panel.classList.contains('panel-alert-flash'), false);
+    assert.equal(f.window.document.body.classList.contains('window-alert-flash'), false);
+    assert.deepEqual(f.pulseIds, [[warning.id]]);
+  } finally { f.window.happyDOM.abort(); }
+});
+
+test('active NWS and other-source critical reactions retain channels, coordinates and five-minute reminders', () => {
+  for (const source of ['nws', 'cyber']) {
+    const f = reactionsFixture();
+    try {
+      f.exports.startAlertReactions();
+      const warning = criticalReactionAlert(`active-${source}`, source);
+      f.state.alerts = [warning]; f.emit();
+      assert.deepEqual(f.sounds, ['critical']);
+      assert.deepEqual(f.pulseIds, [[warning.id]]);
+      assert.equal(f.panel.classList.contains('panel-alert-flash'), true);
+      assert.equal(f.window.document.body.classList.contains('window-alert-flash'), true);
+      const reminder = f.delayed.find(task => task.delay === 300_000);
+      assert.ok(reminder);
+      f.clearVisuals(); reminder.callback();
+      assert.deepEqual(f.sounds, ['critical', 'critical']);
+      assert.equal(f.panel.classList.contains('panel-alert-flash'), true);
+      assert.equal(f.window.document.body.classList.contains('window-alert-flash'), true);
+      f.emit();
+      assert.equal(f.sounds.length, 2, 'unchanged warning must not react again on a subscriber update');
+    } finally { f.window.happyDOM.abort(); }
+  }
+});
+
+test('critical reminders still respect acknowledgement and current sound/border channel settings', () => {
+  for (const mode of ['acknowledged', 'silent-channels', 'ghost']) {
+    const f = reactionsFixture();
+    try {
+      f.exports.startAlertReactions();
+      const warning = criticalReactionAlert(mode);
+      f.state.alerts = [warning]; f.emit();
+      const reminder = f.delayed.find(task => task.delay === 300_000);
+      assert.ok(reminder);
+      if (mode === 'acknowledged') warning.acknowledged = true;
+      if (mode === 'silent-channels') { f.state.channels.sound = false; f.state.channels.borderFlash = false; }
+      if (mode === 'ghost') f.state.ghost = true;
+      f.clearVisuals(); reminder.callback();
+      assert.deepEqual(f.sounds, ['critical']);
+      assert.equal(f.window.document.body.classList.contains('window-alert-flash'), false);
+      assert.equal(f.panel.classList.contains('panel-alert-flash'), mode !== 'acknowledged');
+    } finally { f.window.happyDOM.abort(); }
+  }
+});
+
+test('reaction score threshold and non-critical reminder behavior stay unchanged', () => {
+  for (const severity of ['medium', 'high']) {
+    const f = reactionsFixture();
+    try {
+      f.exports.startAlertReactions();
+      f.state.alerts = [{ ...criticalReactionAlert(severity), severity }];
+      f.emit();
+      assert.deepEqual(f.sounds, severity === 'high' ? ['sonar'] : []);
+      assert.equal(f.pulseIds.length, severity === 'high' ? 1 : 0);
+      assert.equal(f.delayed.filter(task => task.delay === 300_000).length, 0);
+    } finally { f.window.happyDOM.abort(); }
+  }
+});

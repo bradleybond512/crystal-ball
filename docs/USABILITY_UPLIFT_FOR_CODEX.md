@@ -1042,6 +1042,7 @@ Owner: Codex (`codex/ux047-warning-freshness-nov1`); draft claim #1844.
 Approval: November 2 UTC; complete national snapshots, five-minute base refresh,
 offline/restart lifecycle and preserved history/user state.
 Design: [approved implementation plan](plans/2026-11-02-ux047-national-warning-lifecycle.md).
+Evidence: #1844 — [local validation, 57 mutation proofs and review](validation/UX-047-NATIONAL-WARNINGS.md). Implementation is committed locally; packaged WKWebView acceptance and publication remain pending.
 Priority: S
 Source findings: PR1731 H12/H13/H14.
 
@@ -1270,7 +1271,7 @@ Update the row in the same PR that does the work.
 | UX-044 | Announce critical UI changes accessibly | NOT STARTED | — |
 | UX-045 | Keep advisories from suppressing warnings | DONE | #1733 |
 | UX-046 | Preserve alert priorities at capacity | DONE — HIGH ASSURANCE | #1734 |
-| UX-047 | Keep national weather warnings current | IN PROGRESS — HIGH ASSURANCE | #1844 — Codex claim; [approved design](plans/2026-11-02-ux047-national-warning-lifecycle.md) |
+| UX-047 | Keep national weather warnings current | IN PROGRESS — HIGH ASSURANCE | #1844 — [local implementation, validation and review](validation/UX-047-NATIONAL-WARNINGS.md); native acceptance/publication pending |
 | UX-048 | Restore verified GDACS ingestion | DONE — HIGH ASSURANCE | #1740 — approved five-feed repair; [validation](validation/UX-048-GDACS.md) and [alert burst performance evidence](validation/UX-048-PERFORMANCE.md); final review/CI govern delivery |
 | UX-049 | Distinguish quiet sensors from missing observations | NOT STARTED — HIGH ASSURANCE | — |
 | UX-050 | Make Ghost Mode suppression unmistakable | NOT STARTED — HIGH ASSURANCE | — |

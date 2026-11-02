@@ -1277,5 +1277,8 @@
   ],
   "src/services/notification-digest.ts": [
     "test:ux047"
+  ],
+  "src/services/alert-reactions.ts": [
+    "test:ux047"
   ]
 }

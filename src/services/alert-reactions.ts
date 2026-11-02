@@ -109,6 +109,7 @@ export function startAlertReactions(): void {
     for (const a of unifiedAlertStore.getAll()) {
       if (seen.has(a.id)) continue;
       seen.add(a.id);
+      if (!unifiedAlertStore.isOperationalAlert(a)) continue;
       fresh.push(a);
     }
     if (fresh.length === 0) return;
@@ -158,7 +159,7 @@ export function startAlertReactions(): void {
     if (top.severity === 'critical') {
       window.setTimeout(() => {
         const still = unifiedAlertStore.getAll().find(a => a.id === top.id);
-        if (still && !still.acknowledged) {
+        if (still && !still.acknowledged && unifiedAlertStore.isOperationalAlert(still)) {
           const ch2 = isGhostMode() ? { sound: false, borderFlash: false } : getChannels();
           if (ch.panelFlash) flashPanel(panelId);
           if (ch2.borderFlash) flashWindowBorder();

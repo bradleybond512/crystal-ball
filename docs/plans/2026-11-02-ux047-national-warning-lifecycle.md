@@ -2,9 +2,10 @@
 
 Status: Bradley approved this high-assurance design and implementation on
 2026-11-02 UTC. Read-only repository analysis and architect discovery preceded
-approval. Branch: `codex/ux047-warning-freshness-nov1`. This initial claim changes
-documentation only. Draft claim #1844 is now open and production implementation
-proceeds under the approved design.
+approval. Branch: `codex/ux047-warning-freshness-nov1`. Draft claim #1844 preceded
+implementation. Local implementation has passed the integrated gate; mutation
+proofs and independent review govern completion. Native WKWebView acceptance
+remains a delivery gate.
 
 ## Objective and constraints
 
@@ -160,7 +161,11 @@ boot-owned ancillary and model responsibilities. App schedules only the new
 refresh at five minutes, preserving hidden-window pause and bounded resume.
 
 Operational consumers receive a narrow integration: TriageBar, SummaryStrip,
-sidebar heat, native menubar and notification digest use the operational view.
+sidebar heat, native menubar/dock and notification digest use the operational view.
+Independent review identified alert-reactions as another current delivery path:
+both initial reactions and the five-minute critical reminder must recheck
+operational eligibility, preserving channels, thresholds and timing. Distinct
+retired-before-notification and retired-during-delay regressions cover the paths.
 History, timelines, replay, learning and forecast consumers retain `getAll()`.
 Each changed operational consumer needs a regression excluding inactive NWS
 rows while preserving non-NWS behavior. The panel uses the full national

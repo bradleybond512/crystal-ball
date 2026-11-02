@@ -59,6 +59,7 @@
       "sidecar/explainer.mjs",
       "sidecar/faa-tfrs.mjs",
       "sidecar/gdacs-rss.mjs",
+      "sidecar/nws-alert-snapshot.mjs",
       "sidecar/enviroflash-cap.mjs",
       "sidecar/airnow-forecast.mjs",
       "sidecar/feed-latency-config.mjs",

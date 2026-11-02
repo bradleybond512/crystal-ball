@@ -20,7 +20,7 @@ export function startDockBadge(): void {
 
   const push = () => {
     let count = 0;
-    try { count = unifiedAlertStore.getUnacknowledgedCount(); } catch { return; }
+    try { count = unifiedAlertStore.getOperationalAlerts().filter((alert) => !alert.acknowledged).length; } catch { return; }
     if (count === lastSent) return;
     lastSent = count;
     void tryInvokeTauri('set_dock_badge', { count });

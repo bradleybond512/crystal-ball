@@ -9,7 +9,7 @@
  *   - green  → none of the above
  *
  * Recomputes on every unified-alerts notify; debounced with rAF to avoid
- * thrashing during bulk ingests.
+ * thrashing during bulk ingests, with a bounded timer fallback while hidden.
  */
 
 import { unifiedAlertStore, type UnifiedAlert } from '@/services/unified-alerts';
@@ -20,7 +20,7 @@ export type ThreatLevel = 'green' | 'yellow' | 'red';
 let started = false;
 let unsubscribe: (() => void) | null = null;
 let lastSent: ThreatLevel | null = null;
-let scheduled = false;
+let cancelScheduled: (() => void) | null = null;
 
 /**
  * Pure: derive the threat level from a list of alerts. Exposed for tests.
@@ -44,17 +44,27 @@ export function startMenubarStatus(): void {
   if (!hasTauriInvokeBridge()) return; // web — no menubar
 
   const push = () => {
-    if (scheduled) return;
-    scheduled = true;
-    requestAnimationFrame(() => {
-      scheduled = false;
+    if (cancelScheduled) return;
+    let cancelled = false;
+    const cancel = () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+    };
+    const run = () => {
+      if (cancelled) return;
+      cancel();
+      cancelScheduled = null;
       let alerts: UnifiedAlert[] = [];
-      try { alerts = unifiedAlertStore.getAll(); } catch { return; }
+      try { alerts = unifiedAlertStore.getOperationalAlerts(); } catch { return; }
       const level = computeThreatLevel(alerts);
       if (level === lastSent) return;
       lastSent = level;
       void tryInvokeTauri('set_menubar_status', { level });
-    });
+    };
+    cancelScheduled = cancel;
+    const frame = requestAnimationFrame(run);
+    const timer = setTimeout(run, 100);
   };
 
   push();
@@ -64,6 +74,8 @@ export function startMenubarStatus(): void {
 export function stopMenubarStatus(): void {
   unsubscribe?.();
   unsubscribe = null;
+  cancelScheduled?.();
+  cancelScheduled = null;
   started = false;
   lastSent = null;
 }

@@ -202,7 +202,7 @@ export class SummaryStrip {
   }
 
   private alertsSegHtml(): string {
-    const unacked = unifiedAlertStore.getAll().filter((a) => !a.acknowledged);
+    const unacked = unifiedAlertStore.getOperationalAlerts().filter((a) => !a.acknowledged);
     const parts: string[] = [];
     for (const sev of ['critical', 'high', 'medium'] as const) {
       const n = unacked.filter((a) => a.severity === sev).length;

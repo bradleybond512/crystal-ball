@@ -3,7 +3,8 @@
 Status: Bradley approved this high-assurance design and implementation on
 2026-11-02 UTC. Read-only repository analysis and architect discovery preceded
 approval. Branch: `codex/ux047-warning-freshness-nov1`. This initial claim changes
-documentation only; production implementation follows the draft claim.
+documentation only. Draft claim #1844 is now open and production implementation
+proceeds under the approved design.
 
 ## Objective and constraints
 
@@ -115,6 +116,72 @@ before fixing new response limits; never loosen safety tests to accept truncatio
   Preserve the existing 500-alert retained-store policy; national source
   membership completeness cannot be inferred from a capacity-truncated view.
 
-The architect will finalize shared interfaces and bounded task scopes before
-production edits. Specialists own provider, lifecycle and UI surfaces as listed
-above; parent owns package/test routing, integration and documentation.
+The architect finalized these shared interfaces before production edits.
+Specialists own provider, lifecycle and UI surfaces as listed above; parent
+owns package/test routing, sidecar resource registration, integration and docs.
+
+## Final interface and task contracts
+
+Provider boundary:
+
+```ts
+interface NWSAlertSnapshot {
+  schemaVersion: 1;
+  scope: 'national-active';
+  completeness: 'complete';
+  observedAt: number;
+  alerts: NWSAlert[];
+}
+```
+
+A pure renderer boundary module holds the type and validator; the existing
+client re-exports it and exposes `fetchNWSAlertsSnapshot()`, retaining the
+array accessor as a projection. A dependency-free sidecar helper is shared by
+web and desktop transports and explicitly registered as a packaged resource.
+The fixed official active endpoint has no pagination in observed bodies;
+unsupported continuation is rejected, not silently omitted. Resource bounds
+are 8 MiB and 2,000 alerts, with existing geometry budgets; exceeding any bound
+fails acquisition without caching a malformed or incomplete success.
+
+Lifecycle exposes `reconcileNwsSnapshot`, `getOperationalAlerts` and narrow NWS
+operational predicates/views. Full validated national membership and the
+accepted watermark are persisted independently of the 500 retained-row cap.
+Equal-time identical membership is a no-op; equal-time conflict is invalid.
+Legacy hydration never fabricates authority and writes/notifies zero times.
+One explicitly started/stopped lifecycle timer invalidates operational views
+at expiry, including while offline, without deleting history or user state.
+
+UI owns the new offline key `nws-alerts-snapshot-v1` and atomically migrates
+all three loader readers and critical-source inventory. Snapshot age comes
+from original acquisition time. Cache bootstrap performs no reconciliation or
+notification. `refreshNWSAlerts()` owns only snapshot acquisition, authority,
+reconciliation, NWS panel/context; the existing broader loader retains its
+boot-owned ancillary and model responsibilities. App schedules only the new
+refresh at five minutes, preserving hidden-window pause and bounded resume.
+
+Operational consumers receive a narrow integration: TriageBar, SummaryStrip,
+sidebar heat, native menubar and notification digest use the operational view.
+History, timelines, replay, learning and forecast consumers retain `getAll()`.
+Each changed operational consumer needs a regression excluding inactive NWS
+rows while preserving non-NWS behavior. The panel uses the full national
+snapshot rather than deriving completeness from retained history.
+
+Provider tests precede provider implementation; lifecycle tests precede state
+changes; loader, scheduler and panel tests precede their behavior changes.
+Integration runs new `test:ux047` plus existing UX-059, ACC-509, alert-capacity,
+warning-delivery, UX-026, weather, storm-source revision, API/sidecar and panel
+regressions. Mutation proofs begin only from a clean integrated checkpoint.
+Actual renderer/offline/restart acceptance and packaged-resource verification
+must be recorded without installing over the user's application.
+
+## Live provider measurements
+
+Three read-only body samples on November 2 UTC at 03:26:58, 03:27:04 and
+03:27:11 each returned 428 features and 2,054,330 bytes: 89 Polygon geometries,
+339 null geometries, 89 rings and 1,035 vertices. They contained 128 rows with
+197 references and no continuation field. Minor, Unknown and Future enum
+values occur in the real national feed and must not silently disappear.
+The proposed bounds are conservative resource limits, not a statistically
+established upper tail; all three short-interval samples were identical.
+Final evidence must run the completed adapter/validator against the live body
+and reconcile accepted rows, not merely assert HTTP 200 or inspect raw shape.

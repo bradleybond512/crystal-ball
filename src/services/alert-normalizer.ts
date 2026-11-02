@@ -142,7 +142,7 @@ export function normalizeNWSAlert(alert: NWSAlert, context: AlertObservationCont
  severity: NWS_SEVERITY_MAP[alert.severity] ?? 'info',
  title: alert.event,
  body: alert.headline,
- timestamp: new Date(alert.onset ?? alert.sent).getTime(),
+ timestamp: new Date(alert.sent).getTime(),
  location: alert.centroid
  ? { lat: alert.centroid[1], lon: alert.centroid[0], label: alert.areaDesc }
  : undefined,

@@ -163,7 +163,41 @@ test('excludes conflicting outcomes or domains for the same resolved identity', 
     records.push(record(0, { id: 'conflict', ...change }));
     const report = buildBaselineReport(snapshot(records, comparisons), metadata);
     assert.equal(report.paired.acceptedCount, 19);
-    assert.equal(report.paired.exclusions.ambiguous_outcome, 1);
+    assert.equal(report.paired.exclusions.duplicate_outcome_identity, 1);
+  }
+});
+
+test('excludes duplicate outcome identities regardless of provenance order', () => {
+  const records = Array.from({ length: 20 }, (_, i) => record(i));
+  const comparisons = records.map((r, i) => comparison(r, i));
+  const contradictory = record(0, { id: 'duplicate-provenance', resolutionProvenance: {
+    kind: 'direct', resolverId: 'test-resolver', evidence: [{
+      sourceIds: ['test'], observedAt: NOW - 1_200, supportsOutcome: false,
+    }],
+  } });
+  const reports = [[...records, contradictory], [contradictory, ...records]]
+    .map((rows) => buildBaselineReport(snapshot(rows, comparisons), metadata));
+  for (const report of reports) {
+    assert.equal(report.paired.acceptedCount, 19);
+    assert.equal(report.paired.exclusions.duplicate_outcome_identity, 1);
+  }
+  assert.deepEqual(reports[0]!.paired, reports[1]!.paired);
+});
+
+test('requires comparisons to precede the earliest structured outcome observation', () => {
+  for (const [timestamp, accepted] of [[NOW - 1_300, 20], [NOW - 1_200, 19], [NOW - 800, 19]]) {
+    const records = Array.from({ length: 20 }, (_, i) => record(i));
+    records[0]!.resolutionProvenance = {
+      kind: 'direct', resolverId: 'test-resolver', evidence: [
+        { sourceIds: ['test-later'], observedAt: NOW - 1_100, supportsOutcome: true },
+        { sourceIds: ['test-earlier'], observedAt: NOW - 1_200, supportsOutcome: true },
+      ],
+    };
+    const comparisons = records.map((r, i) => comparison(r, i));
+    comparisons[0]!.timestamp = timestamp!;
+    const report = buildBaselineReport(snapshot(records, comparisons), metadata);
+    assert.equal(report.paired.acceptedCount, accepted);
+    assert.equal(report.paired.exclusions.temporal_integrity ?? 0, 20 - accepted!);
   }
 });
 

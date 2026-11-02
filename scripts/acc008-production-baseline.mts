@@ -217,15 +217,15 @@ function pairedRows(raw: unknown[], records: PredictionRecord[], now: number) {
     const jk = cmp.joinKey!;
     const matches = resolvedIndex.get(JSON.stringify([jk.targetKey, jk.predictedAt, jk.resolveBy, jk.liveModelId, jk.liveModelVersion]));
     if (!matches?.length) { exclude('unmatched_identity'); continue; }
+    if (matches.length > 1) { exclude('duplicate_outcome_identity'); continue; }
     const first = matches[0]!;
-    if (matches.some((r) => r.status !== first.status || r.domain !== first.domain
-      || r.probability !== first.probability || r.resolvedAt !== first.resolvedAt
-      || origin(r, now) !== origin(first, now))) { exclude('ambiguous_outcome'); continue; }
     const quality = auditResolutionQuality([first], now).summary;
     if (quality.malformed || quality.labelLeakage || quality.contradictoryEvidence) {
       exclude('invalid_outcome_quality'); continue;
     }
-    if (cmp.timestamp < first.predictedAt || cmp.timestamp >= first.resolvedAt! || cmp.timestamp > now) {
+    const outcomeObservedAt = Math.min(first.resolvedAt!,
+      ...(first.resolutionProvenance?.evidence?.map((item) => item.observedAt) ?? []));
+    if (cmp.timestamp < first.predictedAt || cmp.timestamp >= outcomeObservedAt || cmp.timestamp > now) {
       exclude('temporal_integrity'); continue;
     }
     if (cmp.liveOutput !== first.probability) { exclude('forecast_probability_mismatch'); continue; }
@@ -322,6 +322,7 @@ export function buildBaselineReport(snapshot: StorageSnapshot, metadata: Baselin
       byForecaster: groupRecords(records, now, false),
     },
     paired: {
+      temporalPolicy: 'before_earliest_structured_evidence_or_legacy_resolved_at',
       availability: stores.calibration.status === 'available' && stores.comparisons.status === 'available' ? 'available' : 'unavailable',
       ...pairedRows(comparisons, records, now),
     },

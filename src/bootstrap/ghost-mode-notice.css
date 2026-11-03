@@ -1,0 +1,26 @@
+/* The denied-start notice can outlive the main bundle, including its theme. */
+.cb-ghost-boot-host {
+  --below-eew: 0px;
+  font: 14px/1.4 system-ui, sans-serif;
+}
+
+.cb-ghost-boot-host :is(.cb-ghost-notice, .cb-ghost-startup-failure) {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 8px 12px;
+  background: Canvas;
+  color: CanvasText;
+  overflow-wrap: anywhere;
+  pointer-events: auto;
+}
+
+.cb-ghost-boot-host .cb-ghost-notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cb-ghost-boot-host button {
+  min-height: 44px;
+  font: inherit;
+}

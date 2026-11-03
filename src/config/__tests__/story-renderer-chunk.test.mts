@@ -10,7 +10,9 @@ const loaded = await loadConfigFromFile(
 assert.ok(loaded);
 const output = loaded.config.build?.rollupOptions?.output;
 assert.ok(output && !Array.isArray(output));
-const manualChunks = output.manualChunks;
+const splitting = output.codeSplitting;
+assert.ok(splitting && typeof splitting === 'object');
+const manualChunks = splitting.groups?.find(group => typeof group.name === 'function')?.name;
 assert.equal(typeof manualChunks, 'function');
 const chunkFor = (id: string) => (manualChunks as (id: string) => string | undefined)(id);
 

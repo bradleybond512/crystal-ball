@@ -265,6 +265,12 @@ Promise.all([
 ]).then(([{ mountImessagePausedNotice }, { notificationStack }]) => {
   mountImessagePausedNotice(notificationStack.element);
 }).catch((error: unknown) => console.warn('[boot] ImessagePausedNotice failed to mount', error));
+Promise.all([
+  import('./components/GhostModeNotice'),
+  import('./components/NotificationStack'),
+]).then(([{ mountGhostModeNotice }, { notificationStack }]) => {
+  mountGhostModeNotice(notificationStack.element);
+}).catch((error: unknown) => console.warn('[boot] GhostModeNotice failed to mount', error));
 import('./services/api-diagnostic').then(({ attachDiagnosticToWindow }) => { attachDiagnosticToWindow(); }).catch((error: unknown) => console.warn('[boot] api-diagnostic failed to mount', error));
 
 // Catch QuotaExceededError from any bare localStorage.setItem across the
@@ -306,22 +312,25 @@ localStorage.removeItem('wm-settings-open');
 // Standalone windows: ?settings=1 = panel display settings, ?live-channels=1 = channel management
 // Both need i18n initialized so t() does not return undefined.
 const urlParams = new URL(location.href).searchParams;
+export let appStartup: Promise<void>;
 if (urlParams.get('settings') === '1') {
-  void Promise.all([import('./services/i18n'), import('./settings-window')]).then(
+  appStartup = Promise.all([import('./services/i18n'), import('./settings-window')]).then(
  async ([i18n, m]) => {
  await i18n.initI18n();
  m.initSettingsWindow();
  }
-  ).catch((error: unknown) => {
+  );
+  void appStartup.catch((error: unknown) => {
  console.error('[boot] settings-window init failed:', error);
   });
 } else if (urlParams.get('live-channels') === '1') {
-  void Promise.all([import('./services/i18n'), import('./live-channels-window')]).then(
+  appStartup = Promise.all([import('./services/i18n'), import('./live-channels-window')]).then(
  async ([i18n, m]) => {
  await i18n.initI18n();
  m.initLiveChannelsWindow();
  }
-  ).catch((error: unknown) => {
+  );
+  void appStartup.catch((error: unknown) => {
  console.error('[boot] live-channels-window init failed:', error);
   });
 } else {
@@ -334,23 +343,20 @@ if (urlParams.get('settings') === '1') {
 
  const app = new App('app');
 
+ const appInitPromise = app.init();
  if (desktopRuntime.detected || desktopRuntime.forcedDesktopBuild) {
  // Start loading behind the visual intro so the workspace is ready when it finishes.
- const appInitPromise = app.init();
+ const introReady = appInitPromise.catch(() => {});
  const { runVaultIntro } = await import('./app/vault-intro');
- const introCompleted = await runVaultIntro(appInitPromise.catch(() => {}));
- if (!introCompleted) return;
- appInitPromise
- .then(() => { clearChunkReloadGuard(chunkReloadStorageKey); try { window.getSelection()?.removeAllRanges(); } catch { /* clear any stray boot text-selection (Defect C) */ } })
- .catch(console.error);
- } else {
- app
- .init()
- .then(() => { clearChunkReloadGuard(chunkReloadStorageKey); try { window.getSelection()?.removeAllRanges(); } catch { /* clear any stray boot text-selection (Defect C) */ } })
- .catch(console.error);
+ const introCompleted = await runVaultIntro(introReady);
+ if (!introCompleted) return appInitPromise;
  }
+ await appInitPromise;
+ clearChunkReloadGuard(chunkReloadStorageKey);
+ try { window.getSelection()?.removeAllRanges(); } catch { /* stray boot text-selection */ }
   };
-  void boot();
+  appStartup = boot();
+  void appStartup.catch(console.error);
 }
 
 // Debug helpers for geo-convergence testing (development only)

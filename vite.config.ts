@@ -1021,7 +1021,14 @@ export default defineConfig({
  liveChannels: resolve(__dirname, 'live-channels.html'),
  },
  output: {
- manualChunks(id) {
+ codeSplitting: {
+   groups: [
+     // Keep Vite's shared import helper out of application chunks, even when
+     // deck-stack claims it transitively. The mode check must run first.
+     { name: 'preload-helper', test: /vite\/preload-helper\.js$/, priority: 1 },
+     { name(id) {
+ if (id.endsWith('/src/services/mode-manager.ts')) return 'mode-preference';
+ if (id.endsWith('/src/bootstrap/ghost-notice-en.json')) return 'ghost-notice-copy';
  if (id.includes('node_modules')) {
  if (id.includes('/@xenova/transformers/')) {
  return 'transformers';
@@ -1293,6 +1300,8 @@ export default defineConfig({
  return `locale-${localeMatch[1]}`;
  }
  return undefined;
+     } },
+   ],
  },
  },
  },

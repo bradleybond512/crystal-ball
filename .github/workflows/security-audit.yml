@@ -12,22 +12,63 @@ permissions:
 
 jobs:
   npm-audit:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '22'
-          cache: 'npm'
-      - run: npm ci
-      - name: npm audit (high+)
-        run: npm audit --audit-level=high
-      # R4-SEC-002 step 4: every installed package must carry a valid
-      # registry signature; published provenance attestations must verify.
+          package-manager-cache: false
+      - name: Audit all npm lockfiles
+        id: advisories
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          MERGE_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          ROLLOUT_BASE: cd459dfec514c80e2fcc3f0d7965ea6ef76a7b6a
+          ROLLOUT_SHA256: '040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd'
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$(git rev-parse HEAD)" == "$GITHUB_SHA" ]] || exit 1
+          case "$GITHUB_EVENT_NAME" in
+            pull_request) policy="$PR_BASE_SHA" ;;
+            merge_group) policy="$MERGE_BASE_SHA" ;;
+            push) [[ "$GITHUB_REF" == refs/heads/main ]] || exit 1; policy="$GITHUB_SHA" ;;
+            *) exit 1 ;;
+          esac
+          [[ "$policy" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          git cat-file -e "$policy^{commit}"
+
+          checker=scripts/audit-npm-locks.mjs
+          source="$policy"
+          # The initial base predates this checker. Only the reviewed bytes may
+          # bootstrap it; any later base must supply its own evaluator.
+          if [[ "$policy" == "$ROLLOUT_BASE" ]]; then source="$GITHUB_SHA"; fi
+          mode=$(git ls-tree "$source" -- "$checker" | cut -d' ' -f1)
+          [[ "$mode" == 100644 || "$mode" == 100755 ]] || exit 1
+          scratch=$(mktemp -d "$RUNNER_TEMP/ux054.XXXXXX")
+          trap 'rm -rf -- "$scratch"' EXIT
+          runner="$scratch/audit-npm-locks.mjs"
+          git cat-file blob "$source:$checker" > "$runner"
+          if [[ "$policy" == "$ROLLOUT_BASE" ]]; then
+            [[ "$(sha256sum < "$runner" | cut -d' ' -f1)" == "$ROLLOUT_SHA256" ]] || exit 1
+          fi
+          env -i PATH="$(dirname "$(command -v node)"):/usr/bin:/bin" node "$runner"
+      # Keep the existing root signature check on its trusted events. Forks
+      # only submit lockfile blobs to the advisory scan above.
+      - run: npm ci --ignore-scripts
+        id: root_install
+        if: >-
+          !cancelled() && (steps.advisories.outcome == 'success' || steps.advisories.outcome == 'failure') &&
+          (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
       - name: npm audit signatures
+        if: >-
+          !cancelled() && steps.root_install.outcome == 'success' &&
+          (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         run: npm audit signatures
 
   cargo-audit:

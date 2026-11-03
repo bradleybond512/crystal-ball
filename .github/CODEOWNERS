@@ -21,3 +21,4 @@
 /scripts/check-install-script-drift.mjs @bradleybond512
 /scripts/check-dependency-age.mjs @bradleybond512
 /scripts/dependency-change-policy.mjs @bradleybond512
+/scripts/audit-npm-locks.mjs @bradleybond512

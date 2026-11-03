@@ -212,10 +212,14 @@
   "scripts/desktop-build-full.mjs": [
     "test:install-scripts"
   ],
+  "scripts/audit-npm-locks.mjs": [
+    "test:ux054"
+  ],
   "scripts/check-dependency-age.mjs": [
     "test:supply-chain-gates"
   ],
   "scripts/dependency-change-policy.mjs": [
+    "test:ux054",
     "test:supply-chain-gates",
     "test:workflow-security"
   ],
@@ -742,6 +746,7 @@
     "test:workflow-security"
   ],
   ".github/workflows/security-audit.yml": [
+    "test:ux054",
     "test:workflow-security"
   ],
   ".github/workflows/smoke.yml": [

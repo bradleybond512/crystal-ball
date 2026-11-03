@@ -24,7 +24,7 @@ registerHooks({
   },
 });
 
-function start(scenario: Scenario) {
+async function start(scenario: Scenario) {
   fixture = { events: [], requested: [], scenario };
   Object.assign(globalThis, { __ghostBootTest: fixture, window: new EventTarget(), localStorage: {
     getItem(key: string) {
@@ -33,7 +33,9 @@ function start(scenario: Scenario) {
       return null;
     },
   } });
-  return import(`../src/entry.ts?boot=${++sequence}`);
+  const { entryStartup } = await import(`../src/entry.ts?boot=${++sequence}`);
+  assert.ok(entryStartup instanceof Promise, 'entry publishes its immediately started boot promise');
+  return entryStartup;
 }
 
 test('healthy entry reads only mode then starts main without loading an early notice', async () => {

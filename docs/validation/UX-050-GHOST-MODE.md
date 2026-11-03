@@ -66,3 +66,35 @@ The integrated repository gate ran `bash scripts/agentic-validate.sh --tests 'te
 Agentic validation gate passed.
 Tests run: test:ux050 test:quiet-hours test:analytics-consent test:home-reassurance
 ```
+
+## Offline cache repair after draft CI
+
+The published draft failed the smoke job at `npm run pwa:budget`. Its default production build precached **607 entries, 21.91 MiB**, exceeding the 500-entry limit. All 330 cached Cesium assets were present. Top-level await in the document entry caused the bundler to emit forwarding JavaScript files for many lazy imports. Excluding those URLs from the cache could break those imports offline.
+
+Commit `55dfd847f` starts the same boot sequence immediately and exposes its completion as a promise. The preference read is synchronous. An unreadable preference still mounts the notice before importing the app, and startup failures still reach the appropriate observer. The new form lets the bundler share the existing chunks. No Workbox exclusions, cache budgets or notification rules changed.
+
+On the repaired full build, `npm run test:ux050` reported
+
+```text
+# pass 65
+# fail 0
+# pass 4
+# fail 0
+[pwa:budget] 468 entries, 21.90 MiB
+# pass 2
+# fail 0
+```
+
+The suite now checks the actual service-worker budget after its full production build, alongside the emitted dependency graph. The earlier reports above document the original implementation. The repair-specific receipts verify the updated startup path.
+
+The reachable repair passed 93/93 checks per engine, including global read denial, a throwing storage getter, mode-key-only denial, keyboard focus transfer and late application-start failure. Both web and desktop distributions included all 330 Cesium entries and passed the same budget. [Repair renderer certificate](UX-050-OFFLINE-RENDERERS.json).
+
+All 13 repair mutations triggered the intended failures. Both top-level-await reversals independently grew the precache from 468 entries to 607. Restoring the files recovered the entry, budget and compiled-graph controls at 4/0, 2/0 and 2/0 respectively. [Repair mutation certificate](UX-050-OFFLINE-MUTATIONS.json).
+
+The local repository gate and the full production budget reported
+
+```text
+Agentic validation gate passed.
+Tests run: test:ux050 test:pwa-deployment
+[pwa:budget] 468 entries, 21.90 MiB
+```

@@ -1,0 +1,2034 @@
+{
+  "implementation": "7efdff90cd05a676f90cefa9e9c841b6a8464cc9",
+  "finalTestedTip": "45d8ee421330d5de184a08bb0e86226a2ca27f0d",
+  "finalTree": "7e268195898f728248a65a3e8fe6c16e6b78412e",
+  "node": "v22.23.1",
+  "scope": "Node behavior and source-wiring reversals. Fresh detached trees started clean. Each applied git diff was inspected and hashed, the exact same reversal was repeated, a named assertion was required to fail, and the original checksum and clean tree were verified after restore. Full focused suites were run before and after reversals. The Chromium and Tauri certificates separately cover renderers.",
+  "supersededDiagnostics": [
+    {
+      "id": "ENTRY10",
+      "finding": "Earlier DOM-object equality failed to emit its focused assertion under mutation. The diagnostic was terminated in its detached test process. An explicit boolean comparison preserving DOM identity now fails normally. This earlier diagnostic is excluded from totals.",
+      "oldTestedTree": "dd8fa876f649398b9b3af5032fcf96f7d0c87716"
+    },
+    {
+      "id": "ENTRY21",
+      "finding": "Earlier DOM-object equality failed to emit its focused assertion under mutation. The diagnostic was terminated in its detached test process. An explicit boolean comparison preserving DOM identity now fails normally. This earlier diagnostic is excluded from totals.",
+      "oldTestedTree": "dd8fa876f649398b9b3af5032fcf96f7d0c87716"
+    },
+    {
+      "id": "ROUTER01",
+      "finding": "retired asynchronous import installed an obsolete subscriber without producing a visible transport",
+      "originalResult": "9 pass / 0 fail",
+      "oldSuite": "router-retry",
+      "correctedSuite": "router-fanout",
+      "identicalDiffSha256": "ff70eb717001743f8a0659c3015bbd03f7b532fdc9bea9e76b5be801834ee635"
+    },
+    {
+      "id": "ROUTER04",
+      "finding": "inactive callback remained physically subscribed even though its abort guard blocked sends",
+      "originalResult": "9 pass / 0 fail",
+      "oldSuite": "router-retry",
+      "correctedSuite": "router-fanout",
+      "identicalDiffSha256": "2739395b43e787c38750caaaa568d4bc1c30d807802e0d3982e24b5e0b332402"
+    },
+    {
+      "id": "FANOUT03",
+      "finding": "stale deduplication lookup could still examine mode without sending",
+      "originalResult": "17 pass / 0 fail",
+      "oldSuite": "router-fanout",
+      "correctedSuite": "router-fanout",
+      "identicalDiffSha256": "e77758ff491a0844c4204086301e5406f0a5220f5c2f8fda011405abe75fd682"
+    },
+    {
+      "id": "FANOUT08",
+      "finding": "high-level delivery stub discarded the actual reactor callback retry disposition",
+      "originalResult": "17 pass / 0 fail",
+      "oldSuite": "router-fanout",
+      "correctedSuite": "router-fanout",
+      "identicalDiffSha256": "92e3b618e6f68497c84e908e729bc2d1bcf6c317f575992ba421723f28cad3d5"
+    },
+    {
+      "id": "FANOUT09",
+      "finding": "require substitute wrapped a pending promise as a module. The missing dependency suppressed effects even without a disposal guard.",
+      "originalResult": "17 pass / 0 fail",
+      "oldSuite": "router-fanout",
+      "correctedSuite": "router-fanout",
+      "identicalDiffSha256": "d7dd14337c7b5b52968ba818a7037e7cc114154151c9f9d02da5ba2931eda28f"
+    },
+    {
+      "id": "FANOUT10",
+      "finding": "require substitute wrapped a pending promise as a module. The missing dependency suppressed effects even without a disposal guard.",
+      "originalResult": "17 pass / 0 fail",
+      "oldSuite": "router-fanout",
+      "correctedSuite": "router-fanout",
+      "identicalDiffSha256": "336cbbafb2a2fb76a4ae324eb1c08cb8ea582459d93dee53ce400cbe497a81c7"
+    },
+    {
+      "id": "FANOUT11",
+      "finding": "require substitute wrapped a pending promise as a module. The missing dependency suppressed effects even without a disposal guard.",
+      "originalResult": "17 pass / 0 fail",
+      "oldSuite": "router-fanout",
+      "correctedSuite": "router-fanout",
+      "identicalDiffSha256": "9c05d5bc00040d2d2226d609bff882439c5f986f52ca00c1421665ccc7ae1cc7"
+    },
+    {
+      "id": "FANOUT12",
+      "finding": "require substitute wrapped a pending promise as a module. The missing dependency suppressed effects even without a disposal guard.",
+      "originalResult": "17 pass / 0 fail",
+      "oldSuite": "router-fanout",
+      "correctedSuite": "router-fanout",
+      "identicalDiffSha256": "e4c54dbd8351ef119017ec796a1696bf58377f83c8de80b2cc07f99a34187564"
+    },
+    {
+      "id": "APP19",
+      "finding": "The earlier ML fixture raised a stub loadModel TypeError after removal of the disposal guard. The final test specifies BETA_MODE so it checks observable work after cancellation instead. The earlier error is excluded."
+    }
+  ],
+  "executedTrees": {
+    "app-ship": {
+      "checkpoint": "982f8e42a53e3caa6796e20e9578ff022a842da5",
+      "tree": "cb76564d4e101d2e145923d9f14ac6984f64ad0f",
+      "differencesFromFinalTip": [
+        "src/services/__tests__/notification-router.test.mts"
+      ],
+      "restoredGitStatus": ""
+    },
+    "entry-ship": {
+      "checkpoint": "982f8e42a53e3caa6796e20e9578ff022a842da5",
+      "tree": "cb76564d4e101d2e145923d9f14ac6984f64ad0f",
+      "differencesFromFinalTip": [
+        "src/services/__tests__/notification-router.test.mts"
+      ],
+      "restoredGitStatus": ""
+    },
+    "loader-ship": {
+      "checkpoint": "982f8e42a53e3caa6796e20e9578ff022a842da5",
+      "tree": "cb76564d4e101d2e145923d9f14ac6984f64ad0f",
+      "differencesFromFinalTip": [
+        "src/services/__tests__/notification-router.test.mts"
+      ],
+      "restoredGitStatus": ""
+    },
+    "notify-ship": {
+      "checkpoint": "982f8e42a53e3caa6796e20e9578ff022a842da5",
+      "tree": "cb76564d4e101d2e145923d9f14ac6984f64ad0f",
+      "differencesFromFinalTip": [
+        "src/services/__tests__/notification-router.test.mts"
+      ],
+      "restoredGitStatus": ""
+    },
+    "router-tested": {
+      "checkpoint": "90ccccea2191a8cdd3c86179beb78b6cc93b7923",
+      "tree": "7e268195898f728248a65a3e8fe6c16e6b78412e",
+      "differencesFromFinalTip": [],
+      "restoredGitStatus": ""
+    },
+    "fanout-tested": {
+      "checkpoint": "90ccccea2191a8cdd3c86179beb78b6cc93b7923",
+      "tree": "7e268195898f728248a65a3e8fe6c16e6b78412e",
+      "differencesFromFinalTip": [],
+      "restoredGitStatus": ""
+    }
+  },
+  "suites": {
+    "boot-workspace": {
+      "command": "node --import tsx --test src/app/__tests__/boot-workspace.test.mts",
+      "baseline": "8 pass / 0 fail",
+      "restored": "8 pass / 0 fail"
+    },
+    "workspace-startup": {
+      "command": "node --import tsx --test tests/workspace-startup.test.mts",
+      "baseline": "13 pass / 0 fail",
+      "restored": "13 pass / 0 fail"
+    },
+    "startup-acquisition": {
+      "command": "node --import tsx --test src/app/__tests__/startup-acquisition.test.mts",
+      "baseline": "10 pass / 0 fail",
+      "restored": "10 pass / 0 fail"
+    },
+    "desktop-imessage": {
+      "command": "node --import tsx --test src/app/__tests__/desktop-imessage.test.mts",
+      "baseline": "12 pass / 0 fail",
+      "restored": "12 pass / 0 fail"
+    },
+    "router-retry": {
+      "command": "node --import tsx --test src/services/__tests__/threat-reactor-retry.test.mts",
+      "baseline": "9 pass / 0 fail",
+      "restored": "9 pass / 0 fail"
+    },
+    "router-fanout": {
+      "command": "node --import tsx --test src/services/__tests__/notification-router.test.mts",
+      "baseline": "18 pass / 0 fail",
+      "restored": "18 pass / 0 fail"
+    }
+  },
+  "verifiedProductionAndTestFiles": {
+    "src/App.ts": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+    "src/app/__tests__/boot-workspace.test.mts": "6a15d5855426753a8325d92f69199ac916cd7bc63206cb46a2590e8f286931fd",
+    "src/app/panel-layout.ts": "0c58d0f29c4f9d313f07a9b0a57ca7cacff2a7cf69503ddaa6d587dc503093ac",
+    "src/app/workspace-startup.ts": "f7193781ecf1d7113f9b5375de14a191242086da8d181317de7d6bd68f1a40a3",
+    "tests/workspace-startup.test.mts": "895686eeba43b9145229a08252c1bedf20d492b39b032dcc8161a1f7faefe11b",
+    "src/app/vault-intro.ts": "1911c1640e6f09c1e513959a1dbd95c5ebde1592f059787f648e354289d8a00a",
+    "src/main.ts": "9b1863e2c2c61915a1f46fdc31ad07e2c20efcee7d450eb7a49a9cf9a4e00ccb",
+    "src/app/data-loader.ts": "fdd429f51168f40bdda4129fa081efb3446604759998aa758a5c04f54b6c4a9a",
+    "src/app/__tests__/startup-acquisition.test.mts": "51166c3222bebef8c0bc2668f8e56ba427a8aaf490b3fc14de1e7f53ab0b7b49",
+    "src/app/loaders/cyber.ts": "7cf39caa15d93d346baa44f94e0fc1983e07435ea24e7d5b19d3892a9ed08e4b",
+    "src/app/desktop-notifications.ts": "59828e585fb85a6e930792aae26e4e3286d3f3a9b1dd1cd35fe2be5e8490c7d7",
+    "src/app/__tests__/desktop-imessage.test.mts": "7fbb9ec89c3d75ea4d1d1412ed0458a7a8dbf71e849108615e9e8d0fe6abd16e",
+    "src/services/notification-router.ts": "0a36039125aca5f7b602f9458310316cf6a70a7463ac2504d8296a7e6c55f18c",
+    "src/services/__tests__/notification-router.test.mts": "3088ecc783946afe0573e9e6b35e67fdaf7222197db3e7f5b91d6ea1f46c74d3",
+    "src/services/__tests__/threat-reactor-retry.test.mts": "098e5ddccaae23e5d7c4829fbe65edf01626d740f9e1a88b818f2b0bffac667d"
+  },
+  "mutations": [
+    {
+      "id": "APP01",
+      "behavior": "Only one initial acquisition is owned per app",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..5e5ff13a4 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -370,3 +370,3 @@ export class App {\n   public init(): Promise<void> {\n-    this.startup ??= this.initialize();\n+    this.startup = this.initialize();\n     return this.startup;\n",
+      "appliedDiffSha256": "acfba692397c5c77c4ce24dcd59cb0ee2853781a5bd02b2d71a92ea579ad3c56",
+      "mutantSha256": "a948be00580bd4bfee5abd3eca2d002d81f05ec3ec18c506892f73e6b85f9207",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "interactive prerequisites resolve once while acquisition and geometry remain outstanding"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    2 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 2\n  operator: 'strictEqual'",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP02",
+      "behavior": "Background acquisition does not delay usable controls",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..67a8052d3 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -552,3 +552,3 @@ export class App {\n  bootTrace('workspace:controls-wired');\n- void this.finishInitialLoad(initStart, uiOnlyE2E, bootTrace).catch((error: unknown) => {\n+ await this.finishInitialLoad(initStart, uiOnlyE2E, bootTrace).catch((error: unknown) => {\n    if (this.state.isDestroyed) return;\n",
+      "appliedDiffSha256": "8d7f6546a0a6a9778d0c1940b709675a472e45bf3cbb694f18a506d59bd0ae69",
+      "mutantSha256": "c27a006f85968871a5053845373b9f085e51827d9773ab3ccb4d725c5e41dd17",
+      "red": "5 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "interactive prerequisites resolve once while acquisition and geometry remain outstanding",
+        "deep-link timers act on live data and leave replacement workspaces alone after teardown",
+        "only App owns the threat-router subscription across a real layout init"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    0 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 0\n  operator: 'strictEqual'",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true,
+      "additionalCancellations": 2
+    },
+    {
+      "id": "APP03",
+      "behavior": "Do not allow effects before UI readiness",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..82937313d 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -375,3 +375,3 @@ export class App {\n   public openWorkspace(): void {\n-    if (this.interactive && !this.state.isDestroyed) this.desktopNotifications.openWorkspace();\n+    if (!this.state.isDestroyed) this.desktopNotifications.openWorkspace();\n   }\n",
+      "appliedDiffSha256": "305a1979297e9482434f20480f6422dcd71d2d8297fcde094e2250cd4b4363d5",
+      "mutantSha256": "177ad577fce07e86363a6b4fa8241141f659587e40258212e5051b0eb682f099",
+      "red": "6 pass / 2 fail",
+      "exit": 1,
+      "failingTests": [
+        "interactive prerequisites resolve once while acquisition and geometry remain outstanding",
+        "fatal prerequisite failure never marks the workspace interactive"
+      ],
+      "assertion": "error: |-\n    The expression evaluated to a falsy value:\n    \n      assert.ok(!calls.includes('allow'))\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP04",
+      "behavior": "Remember control readiness on successful wiring",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..1f6361f1d 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -550,3 +550,3 @@ export class App {\n  this.dataLoader.syncDataFreshnessWithLayers();\n- this.interactive = true;\n+ this.interactive = false;\n  bootTrace('workspace:controls-wired');\n",
+      "appliedDiffSha256": "816c2a0775e58322384144a95d94d0843c520e7c4f6c4162ad584f840c64aaa7",
+      "mutantSha256": "6d4167c806086e278ea0bad7e17fc41544e911ca71f09ce2768e752e88224fc5",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "interactive prerequisites resolve once while acquisition and geometry remain outstanding"
+      ],
+      "assertion": "error: |-\n    The expression evaluated to a falsy value:\n    \n      assert.ok(calls.includes('allow'))\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP05",
+      "behavior": "Install the passive warning listener before acquisition",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..9c68a6885 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -456,3 +456,3 @@ export class App {\n  bootTrace('preload:stores:done');\n- this.desktopNotifications.init();\n+ void this.desktopNotifications;\n  bootTrace('breaking-news:listener-attached');\n",
+      "appliedDiffSha256": "bcb16e881873f4003a829d2a84d486029514409a75cf082c05e325fa63a0ce5e",
+      "mutantSha256": "57312e534dcae809351464225189488861d50c9362ffd37a046dc98326027656",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "interactive prerequisites resolve once while acquisition and geometry remain outstanding"
+      ],
+      "assertion": "error: |-\n    The expression evaluated to a falsy value:\n    \n      assert.ok(calls.indexOf('listen') >= 0 && calls.indexOf('listen') < calls.indexOf('wave'))\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP06",
+      "behavior": "Show a safe, observable background error",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..f12a9310b 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -556,3 +556,3 @@ export class App {\n    console.error('[boot] initial acquisition failed:', error);\n-   this.eventHandlers.showToast('Startup data could not finish loading. Reload to retry.');\n+   void error;\n  });\n",
+      "appliedDiffSha256": "033b289c0b40f58f44ccb8ad167554be4005d6645838618c20ec26f153091836",
+      "mutantSha256": "8873f7c7152f2f9a11a8993783c4ef3e70dfb654083ba508699cdff4954e1889",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "an acquisition error remains visible without rejecting an interactive workspace"
+      ],
+      "assertion": "error: |-\n    The expression evaluated to a falsy value:\n    \n      assert.ok(calls.includes('showToast'))\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP07",
+      "behavior": "Late detached errors cannot update a destroyed app",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..c08560054 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -553,3 +553,2 @@ export class App {\n  void this.finishInitialLoad(initStart, uiOnlyE2E, bootTrace).catch((error: unknown) => {\n-   if (this.state.isDestroyed) return;\n    bootTrace('phase6:data-load:failed');\n",
+      "appliedDiffSha256": "d821d8e676e08e7a66239a73fa4876f7bda4bb0b7118f08140324f28c5596b31",
+      "mutantSha256": "163f655403a66e4a23bf7da7d7ec815fb778d23b7fad4e5c99b602878d4fee5e",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "destroy during prerequisite, successful acquisition or failed acquisition leaves no late effects"
+      ],
+      "assertion": "error: |-\n    failure\n    + actual - expected\n    \n    + [\n    +   'phase6:data-load:failed',\n    +   'showToast'\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0: 'phase6:data-load:failed'\n    1: 'showToast'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP08",
+      "behavior": "Late acquisition fulfillment cannot activate a destroyed app",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..896f98819 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -565,3 +565,2 @@ export class App {\n  }\n- if (this.state.isDestroyed) return;\n  bootTrace('phase6:data-load:done');\n",
+      "appliedDiffSha256": "158e9cd7d1e8c2e5ee7aadbabf0b48613e5a596eac6052d68c2d544cb83d3305",
+      "mutantSha256": "ebfab26451f7111bb0b3f07f3fccc877807fb20ae231458a46952622cbac2f4f",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "destroy during prerequisite, successful acquisition or failed acquisition leaves no late effects"
+      ],
+      "assertion": "error: |-\n    success\n    + actual - expected\n    \n    + [\n    +   'phase6:data-load:done',\n    +   'startLearning',\n    +   'startLearning:done',\n    +   'isAisConfigured',\n    +   'isOutagesConfigured',\n    +   'refresh',\n    +   'setupSnapshotSaving',\n    +   'deep-links',\n    +   'init',\n    +   'settings-ready',\n    +   'wm_app_loaded',\n    +   'setupPanelViewTracking'\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP09",
+      "behavior": "Dependent work waits for geometry",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..9fdfe934e 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -563,3 +563,3 @@ export class App {\n  if (!uiOnlyE2E) {\n- await Promise.all([preloadCountryGeometry(), this.dataLoader.loadAllData()]);\n+ void preloadCountryGeometry(); await this.dataLoader.loadAllData();\n  }\n",
+      "appliedDiffSha256": "a415bf8af6c37bce4102d266a4975ede44db9739525388a8563b019e4f0fd287",
+      "mutantSha256": "0edee27db52f4bbd8e2f50d1f1348921032ea199193614c5c896d833608a9e20",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "interactive prerequisites resolve once while acquisition and geometry remain outstanding"
+      ],
+      "assertion": "error: |-\n    The expression evaluated to a falsy value:\n    \n      assert.ok(!calls.includes('wm_app_loaded'))\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP10",
+      "behavior": "Learning startup still runs once after data",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..1ddf71a99 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -568,3 +568,3 @@ export class App {\n \n- if (!uiOnlyE2E) startLearning();\n+ void uiOnlyE2E;\n  bootTrace('startLearning:done');\n",
+      "appliedDiffSha256": "d1fdbf5a0a13de09e4f3ee7e843f6c7cfd5084050608e05ce7ab2bacab567e6b",
+      "mutantSha256": "dd4455b77226b799700abfd7c86441f5603788f13b275d75d2e4966084ea08bd",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "interactive prerequisites resolve once while acquisition and geometry remain outstanding"
+      ],
+      "assertion": "error: |-\n    startLearning\n    \n    0 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 0\n  operator: 'strictEqual'",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP11",
+      "behavior": "Keep data-dependent snapshot saving",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..9487afffb 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -585,3 +585,3 @@ export class App {\n  this.setupRefreshIntervals();\n- this.eventHandlers.setupSnapshotSaving();\n+ void this.eventHandlers;\n  cleanOldSnapshots().catch((error) => console.warn('[Storage] Snapshot cleanup failed:', error));\n",
+      "appliedDiffSha256": "fdc217797da19423212e577feede64bc9399eccb3932478652efdc5429b8b283",
+      "mutantSha256": "419fdc0f4b03be83055ee7aec7ee7c297ffa55e41d6d5acedb46482ce9cc6fa5",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "interactive prerequisites resolve once while acquisition and geometry remain outstanding"
+      ],
+      "assertion": "error: |-\n    setupSnapshotSaving\n    \n    0 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 0\n  operator: 'strictEqual'",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP12",
+      "behavior": "Keep refresh registration once after acquisition",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..21cc5e535 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -584,3 +584,3 @@ export class App {\n  if (!uiOnlyE2E) {\n- this.setupRefreshIntervals();\n+ void this.refreshScheduler;\n  this.eventHandlers.setupSnapshotSaving();\n",
+      "appliedDiffSha256": "8bc17e16adc3ddedaec0e14f454f17189363ee28f4656cee2422466344d0e261",
+      "mutantSha256": "dcaee3718707e70aa3aa70b392b4351c782d2418e770c0cfaa2d0083071858dc",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "interactive prerequisites resolve once while acquisition and geometry remain outstanding"
+      ],
+      "assertion": "error: |-\n    refresh\n    \n    0 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 0\n  operator: 'strictEqual'",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP13",
+      "behavior": "Keep deep-link startup after the initial wave",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..1ad24d708 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -590,3 +590,3 @@ export class App {\n  // Phase 8: Deep links + update checks\n- this.handleDeepLinks();\n+ void this.pendingDeepLinkCountry;\n  this.desktopUpdater.init();\n",
+      "appliedDiffSha256": "fef570f5f331b68e99e37675b010c4879d9491b98ef54aa0dc705bd6c1186396",
+      "mutantSha256": "03dd1c8e12cffb1e311471b2c2d049ba11f17995446885a603785f3c9e954a16",
+      "red": "6 pass / 2 fail",
+      "exit": 1,
+      "failingTests": [
+        "interactive prerequisites resolve once while acquisition and geometry remain outstanding",
+        "deep-link timers act on live data and leave replacement workspaces alone after teardown"
+      ],
+      "assertion": "error: |-\n    deep-links\n    \n    0 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 0\n  operator: 'strictEqual'",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP14",
+      "behavior": "Retain the data-settled signal for relay hydration",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..279a15c94 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -592,3 +592,3 @@ export class App {\n  this.desktopUpdater.init();\n- this.desktopNotifications.sourcesSettled();\n+ void this.desktopNotifications;\n \n",
+      "appliedDiffSha256": "a2a3720fe4096e8c2ce452bffe7af4847e401f023d6e9ad69e3022b612be36ae",
+      "mutantSha256": "93aa1623703dfcaab205b4b3325014e3d755a06c0d0d607f8af8ee6ca05d4518",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "interactive prerequisites resolve once while acquisition and geometry remain outstanding"
+      ],
+      "assertion": "error: |-\n    settings-ready\n    \n    0 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 0\n  operator: 'strictEqual'",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP15",
+      "behavior": "Preserve historical app-loaded analytics",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..07a7facf7 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -595,3 +595,3 @@ export class App {\n  // Analytics\n- trackEvent('wm_app_loaded', {\n+ trackEvent('mutant_loaded', {\n  load_time_ms: Math.round(performance.now() - initStart),\n",
+      "appliedDiffSha256": "d32ab38cb777d18a41905aa596149c3d403ceae4ae0069ec5ec412da90479bf3",
+      "mutantSha256": "2ae858718a03cfc27ba1e269b92d871beda4ad6b88a000c315ebadb728dae569",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "interactive prerequisites resolve once while acquisition and geometry remain outstanding"
+      ],
+      "assertion": "error: |-\n    wm_app_loaded\n    \n    0 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 0\n  operator: 'strictEqual'",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP16",
+      "behavior": "Stop stale continuations after log bridge init",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..796c1965d 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -387,3 +387,2 @@ export class App {\n  const { installLogBridge, bootTrace, resetBootTrace } = await import('@/services/log-bridge');\n- if (this.state.isDestroyed) return;\n  installLogBridge();\n",
+      "appliedDiffSha256": "a86da1299d5ee9553ae9f50cdc2d18ca703ccde7d20da619eb663d9715955d29",
+      "mutantSha256": "f4fedb5ae5b4137dd2fbd83d8906546c1db7ca353be7be340538e9f5b37132b0",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "canceling each async prerequisite prevents new boot work after destruction"
+      ],
+      "assertion": "error: |-\n    log\n    + actual - expected\n    \n    + [\n    +   'installLogBridge',\n    +   'resetBootTrace',\n    +   'init:start'\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0: 'installLogBridge'\n    1: 'resetBootTrace'\n    2: 'init:start'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP17",
+      "behavior": "Stop stale continuations after IDB open",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..ea0f1171e 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -392,3 +392,2 @@ export class App {\n  await initDB();\n- if (this.state.isDestroyed) return;\n  await initI18n();\n",
+      "appliedDiffSha256": "6a84274a32e7929300aad12890e0a77d47bc627ddd30c7e65d045b97b294abf8",
+      "mutantSha256": "cf470bc04c1a137c207285939aa23eeb99c65205966b1ac43433c5dbc4fddd0b",
+      "red": "6 pass / 2 fail",
+      "exit": 1,
+      "failingTests": [
+        "destroy during prerequisite, successful acquisition or failed acquisition leaves no late effects",
+        "canceling each async prerequisite prevents new boot work after destruction"
+      ],
+      "assertion": "error: |-\n    initDB\n    + actual - expected\n    \n    + [\n    +   'initI18n'\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0: 'initI18n'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP18",
+      "behavior": "Stop stale continuations after locale",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..397448bac 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -394,3 +394,2 @@ export class App {\n  await initI18n();\n- if (this.state.isDestroyed) return;\n  this.releaseNotificationRouter = startNotificationRouter();\n",
+      "appliedDiffSha256": "3515439a3d962bafd2988537f275e2f48442ee616c2a93971a4093feeb88fc40",
+      "mutantSha256": "296d2b467da700aff86901cd972418025cfe5ddebedbd2275151ee1384110f93",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "canceling each async prerequisite prevents new boot work after destruction"
+      ],
+      "assertion": "error: |-\n    initI18n\n    + actual - expected\n    \n    + [\n    +   'router-attached',\n    +   'getAiFlowSettings',\n    +   'isAisConfigured',\n    +   'fetchBootstrapData'\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0: 'router-attached'\n    1: 'getAiFlowSettings'\n    2: 'isAisConfigured'\n    3: 'fetchBootstrapData'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP19",
+      "behavior": "Stop stale continuations after ML init",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..362a7dda5 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -400,3 +400,2 @@ export class App {\n  await mlWorker.init();\n- if (this.state.isDestroyed) return;\n  if (BETA_MODE) mlWorker.loadModel('summarization-beta').catch(() => {});\n",
+      "appliedDiffSha256": "7b35ad6c2638e0e5872721b4da53edbcd44f45231fa9463bee7ee612b70e7f78",
+      "mutantSha256": "05a536194975cc0d48cf86ea8c328680db78296dcbabdcb984f268c60a57cdc5",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "canceling each async prerequisite prevents new boot work after destruction"
+      ],
+      "assertion": "error: |-\n    ml\n    + actual - expected\n    \n    + [\n    +   'isAisConfigured',\n    +   'fetchBootstrapData'\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0: 'isAisConfigured'\n    1: 'fetchBootstrapData'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP20",
+      "behavior": "Stop stale continuations after bootstrap hydration",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..0465c2df0 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -424,3 +424,2 @@ export class App {\n  await fetchBootstrapData();\n- if (this.state.isDestroyed) return;\n \n",
+      "appliedDiffSha256": "fc9366127d79707afa9f2b507332a8a1f21edddf3d658de41d7759c585c568d7",
+      "mutantSha256": "a5eaab46b84b6f0089f3293fcb916ec60743153ead95c2129a222fe8a785a7cb",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "canceling each async prerequisite prevents new boot work after destruction"
+      ],
+      "assertion": "error: |-\n    fetchBootstrapData\n    + actual - expected\n    \n    + [\n    +   'resolveUserRegion'\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0: 'resolveUserRegion'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP21",
+      "behavior": "Stop stale continuations after region resolution",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..9197e47e8 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -427,3 +427,2 @@ export class App {\n  const resolvedRegion = await resolveUserRegion();\n- if (this.state.isDestroyed) return;\n  this.state.resolvedLocation = resolvedRegion;\n",
+      "appliedDiffSha256": "a705e6e7b3bd4476b29ef937767b437a3027fc48fa010c79921294e87bb79800",
+      "mutantSha256": "d26f96f66bbaff3229c54c0ce091b4d7cb6b02942a8f0aed7719c13f855e990f",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "canceling each async prerequisite prevents new boot work after destruction"
+      ],
+      "assertion": "error: |-\n    resolveUserRegion\n    + actual - expected\n    \n    + [\n    +   'preload:stores:start',\n    +   'preloadIdbBackedStores'\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0: 'preload:stores:start'\n    1: 'preloadIdbBackedStores'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP22",
+      "behavior": "Stop stale continuations after warm store preload",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..52a326992 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -438,3 +438,2 @@ export class App {\n  await preloadIdbBackedStores();\n- if (this.state.isDestroyed) return;\n  installIdbStorageRouting();\n",
+      "appliedDiffSha256": "d9872d2a03fca13dd379043cf758d385bc03da3f4618790ac45ff863b814571a",
+      "mutantSha256": "b1852dd8883e8dd7682ab874ac9ea14284ac7bcf569deae9e495abe3a3062178",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "canceling each async prerequisite prevents new boot work after destruction"
+      ],
+      "assertion": "error: |-\n    preloadIdbBackedStores\n    + actual - expected\n    \n    + [\n    +   'installIdbStorageRouting'\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0: 'installIdbStorageRouting'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP23",
+      "behavior": "Stop stale continuations after optional preload rejection",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..cad1807db 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -441,3 +441,2 @@ export class App {\n  } catch { /* non-fatal */ }\n- if (this.state.isDestroyed) return;\n  try {\n",
+      "appliedDiffSha256": "e294047909869a02f9e67d0c394b669a03083b45e678176cac3733d77223c3c2",
+      "mutantSha256": "18d85284ec7db5e25ebe01b988f4b6eba1669339cf472a1280afefbd6157c655",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "an optional preload or ledger rejection after cancel cannot resume layout"
+      ],
+      "assertion": "error: |-\n    preloadIdbBackedStores\n    + actual - expected\n    \n    + [\n    +   'getAlgorithmEvaluationLedger',\n    +   'startAlgorithmLedgerPersistence'\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0: 'getAlgorithmEvaluationLedger'\n    1: 'startAlgorithmLedgerPersistence'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP24",
+      "behavior": "Stop stale continuations after ledger binding",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..1c362e0ad 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -445,3 +445,2 @@ export class App {\n  await startAlgorithmLedgerPersistence({ ledger: algorithmLedger });\n- if (this.state.isDestroyed) return;\n  syncForecastEvaluations(\n",
+      "appliedDiffSha256": "b7b142e992fa67e3ee09c5a14be468020e0c6eb0d4f11752a9a39e3845647329",
+      "mutantSha256": "242a83cca56ba241c94099bcf817c8baf04ebeebeb3d02d4013652ea14dc10f9",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "canceling each async prerequisite prevents new boot work after destruction"
+      ],
+      "assertion": "error: |-\n    startAlgorithmLedgerPersistence\n    + actual - expected\n    \n    + [\n    +   'syncForecastEvaluations',\n    +   'persistAlgorithmLedger'\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0: 'syncForecastEvaluations'\n    1: 'persistAlgorithmLedger'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP25",
+      "behavior": "Stop stale continuations after ledger persistence",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..a82b73edf 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -454,3 +454,3 @@ export class App {\n  }\n- if (this.state.isDestroyed) return;\n+ \n  bootTrace('preload:stores:done');\n",
+      "appliedDiffSha256": "87e6f1506d9d5fe657e02d473395adfa754818b6c9b28fadd9361c1e690a90de",
+      "mutantSha256": "fc610e01133584631ba1ee46a3bcdc1d45c0558bed6e55688ac7ade6cc603371",
+      "red": "6 pass / 2 fail",
+      "exit": 1,
+      "failingTests": [
+        "canceling each async prerequisite prevents new boot work after destruction",
+        "an optional preload or ledger rejection after cancel cannot resume layout"
+      ],
+      "assertion": "error: |-\n    persistAlgorithmLedger\n    + actual - expected\n    \n    + [\n    +   'preload:stores:done',\n    +   'listen',\n    +   'breaking-news:listener-attached',\n    +   'panelLayout.init:start',\n    +   'init',\n    +   'panelLayout.init:done',\n    +   'phase2:shared-ui:start',\n    +   'phase3:ui-setup:start',\n    +   'initSoundManager',\n    +   'startHeaderClock',\n    +   'setupMobileWarning',\n    +   'setupPlaybackControl',\n    +   'phase3:status-p",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP26",
+      "behavior": "Stop stale continuations after happy cached layout",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..1e7e6bcdf 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -474,3 +474,2 @@ export class App {\n  await this.dataLoader.hydrateHappyPanelsFromCache();\n- if (this.state.isDestroyed) return;\n  }\n",
+      "appliedDiffSha256": "c9e2bb8963d36ff2029569e4f6511beba61649128be1aabf3e7baaa3e33116e9",
+      "mutantSha256": "a4322c10845b039392903cc83e97b3050409900ad8decaff9fef7d8c0f791043",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "canceling each async prerequisite prevents new boot work after destruction"
+      ],
+      "assertion": "error: |-\n    happy-cache\n    + actual - expected\n    \n    + [\n    +   'phase2:shared-ui:start',\n    +   'phase3:ui-setup:start',\n    +   'initSoundManager',\n    +   'startHeaderClock',\n    +   'setupMobileWarning',\n    +   'setupPlaybackControl',\n    +   'phase3:status-panel:start',\n    +   'setupStatusPanel',\n    +   'setupPizzIntIndicator',\n    +   'setupExportPanel',\n    +   'phase3:unified-settings:start',\n    +   'setupUnifiedSettings',\n    +   'wi",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP27",
+      "behavior": "Release the App-owned warning router",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..69d8fcf08 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -605,3 +605,3 @@ export class App {\n  this.state.isDestroyed = true;\n- this.releaseNotificationRouter?.();\n+ void this.releaseNotificationRouter;\n  if (cyberReactorUnsubscribe === this.releaseNotificationRouter) cyberReactorUnsubscribe = null;\n",
+      "appliedDiffSha256": "754bcd8a3a9b055333a62bd29e46af7c52de397e0aff302cbe2ccb650da46fd3",
+      "mutantSha256": "342ed79aa77fefb0412a3d25c66e6cb409fd4e1ea4d83428a226bcb5cfd4974d",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "canceling each async prerequisite prevents new boot work after destruction"
+      ],
+      "assertion": "error: |-\n    ml\n    \n    0 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 0\n  operator: 'strictEqual'",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP28",
+      "behavior": "A disposed owner cannot open its stale story",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..3a2ed2e7c 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -669,3 +669,2 @@ export class App {\n  const checkAndOpen = () => {\n- if (this.state.isDestroyed) return;\n  if (dataFreshness.hasSufficientData() && this.state.latestClusters.length > 0) {\n",
+      "appliedDiffSha256": "b26b7e3ca12a76c2a6c9b76d8f2f44771130f709b986f22d5fd58e6444dc576d",
+      "mutantSha256": "a355e70c27dc6b98a7ba4be902fe0fc8734720bd5cda1aa9cf4009ef02142604",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "deep-link timers act on live data and leave replacement workspaces alone after teardown"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + [\n    +   'openCountryStory'\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0: 'openCountryStory'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP29",
+      "behavior": "A disposed owner cannot open its stale country brief",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..ee7bd0fc1 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -697,3 +697,2 @@ export class App {\n  const checkAndOpenBrief = () => {\n- if (this.state.isDestroyed) return;\n  if (dataFreshness.hasSufficientData()) {\n",
+      "appliedDiffSha256": "551cd2bc941dc719ea6ce0f5fd4a5f392ac81cad9b1739945efdbd03e765cc3d",
+      "mutantSha256": "b3a28d183106f4a54086fa7b91283ef35157253f325ca5d09aaf0d192095dcb5",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "deep-link timers act on live data and leave replacement workspaces alone after teardown"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + [\n    +   'openCountryBriefByCode'\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0: 'openCountryBriefByCode'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP30",
+      "behavior": "Destroying a partial or stale app twice is idempotent",
+      "file": "src/App.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/App.ts b/src/App.ts\nindex 04b9e70b2..d70c6fa6b 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -603,3 +603,2 @@ export class App {\n  public destroy(): void {\n- if (this.state.isDestroyed) return;\n  this.state.isDestroyed = true;\n",
+      "appliedDiffSha256": "97e67824207b5080c76fa4d80d4d75501013c0bee96e5b07859db3392edc30ce",
+      "mutantSha256": "e40bff302b7c6af77d650305df59fb88ae5356a8883ff6f8fe1e1a44adc64092",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "destroy during prerequisite, successful acquisition or failed acquisition leaves no late effects"
+      ],
+      "assertion": "error: |-\n    repeated destroy is inert\n    \n    11 !== 7\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 7\n  actual: 11\n  operator: 'strictEqual'",
+      "restoredSha256": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "restoredClean": true
+    },
+    {
+      "id": "APP31",
+      "behavior": "Layout may not acquire a second unowned threat-router lease",
+      "file": "src/app/panel-layout.ts",
+      "suite": "boot-workspace",
+      "diff": "diff --git a/src/app/panel-layout.ts b/src/app/panel-layout.ts\nindex ee268cc51..6d06ae993 100644\n--- a/src/app/panel-layout.ts\n+++ b/src/app/panel-layout.ts\n@@ -1372,2 +1372,3 @@ export class PanelLayoutManager implements AppModule {\n  startEpistemicBridge();\n+ startNotificationRouter();\n  startSilenceDetector();\n",
+      "appliedDiffSha256": "72b56fe8ac72658321f0892801f82a845a31acbf712051bae215e4d7d027cf25",
+      "mutantSha256": "aeb311d638aeb9a7ff720bc49e070763698f8ec6911e3270c5599ba4e512cdd5",
+      "red": "7 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "only App owns the threat-router subscription across a real layout init"
+      ],
+      "assertion": "error: 'layout must not leak an unowned shared router lease'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual: |-\n    import type { AppContext, AppModule } from '@/app/app-context';\n    import type { RelatedAsset } from '@/types';\n    import type { TheaterPostureSummary } from '@/services/military-surge';\n    import {\n      MapContainer,\n      NewsPanel,\n      MarketPanel,\n      HeatmapPanel,\n      CommoditiesPanel,\n      CryptoPanel",
+      "restoredSha256": "0c58d0f29c4f9d313f07a9b0a57ca7cacff2a7cf69503ddaa6d587dc503093ac",
+      "restoredClean": true
+    },
+    {
+      "id": "ENTRY01",
+      "behavior": "Open external eligibility only after the interactive prerequisite resolves",
+      "file": "src/app/workspace-startup.ts",
+      "suite": "workspace-startup",
+      "diff": "diff --git a/src/app/workspace-startup.ts b/src/app/workspace-startup.ts\nindex 7aa7ca8c4..935466a29 100644\n--- a/src/app/workspace-startup.ts\n+++ b/src/app/workspace-startup.ts\n@@ -17,3 +17,3 @@ export async function startWorkspace(\n     if (showIntro && !await showIntro(ready)) return false;\n-    const result = await outcome;\n+    const result = { ok: true };\n     if (!result.ok) throw result.error;\n",
+      "appliedDiffSha256": "079185754271c044a5a8d1d32a6328d9b6dc88b6745d74e5054540cf50687329",
+      "mutantSha256": "c3ac3d3b5ad07651b68a3c6eadcdf1b8b40f673ba4c87579051b580c66dc6a21",
+      "red": "9 pass / 4 fail",
+      "exit": 1,
+      "failingTests": [
+        "web waits for usable UI before activating the workspace",
+        "desktop retains eligibility until both interactive init and dismissal (intro first)",
+        "early desktop rejection remains observable after intro dismissal and never activates",
+        "a cleanup error cannot replace the initialization error after partial startup"
+      ],
+      "assertion": "error: 'Missing expected rejection.'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'",
+      "restoredSha256": "f7193781ecf1d7113f9b5375de14a191242086da8d181317de7d6bd68f1a40a3",
+      "restoredClean": true
+    },
+    {
+      "id": "ENTRY02",
+      "behavior": "Never enable outbound effects after an operator quits",
+      "file": "src/app/workspace-startup.ts",
+      "suite": "workspace-startup",
+      "diff": "diff --git a/src/app/workspace-startup.ts b/src/app/workspace-startup.ts\nindex 7aa7ca8c4..56aef0256 100644\n--- a/src/app/workspace-startup.ts\n+++ b/src/app/workspace-startup.ts\n@@ -16,3 +16,3 @@ export async function startWorkspace(\n     const outcome = ready.then(() => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error }));\n-    if (showIntro && !await showIntro(ready)) return false;\n+    if (showIntro) await showIntro(ready);\n     const result = await outcome;\n",
+      "appliedDiffSha256": "4f9821fc8db43f0839b9d780141b6c3889c7ad8066f2afae9bb1796077796c56",
+      "mutantSha256": "e92285e29fe25b9abd029c5656a511474d739003672d0dd0e9273a5e860f3fed",
+      "red": "12 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "quit disposes promptly while initialization is pending and never activates later"
+      ],
+      "assertion": "error: |-\n    quit settles before pending init\n    \n    false !== true\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: 'strictEqual'",
+      "restoredSha256": "f7193781ecf1d7113f9b5375de14a191242086da8d181317de7d6bd68f1a40a3",
+      "restoredClean": true
+    },
+    {
+      "id": "ENTRY03",
+      "behavior": "Do not open the workspace before the desktop overlay releases",
+      "file": "src/app/workspace-startup.ts",
+      "suite": "workspace-startup",
+      "diff": "diff --git a/src/app/workspace-startup.ts b/src/app/workspace-startup.ts\nindex 7aa7ca8c4..75bb31318 100644\n--- a/src/app/workspace-startup.ts\n+++ b/src/app/workspace-startup.ts\n@@ -16,3 +16,3 @@ export async function startWorkspace(\n     const outcome = ready.then(() => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error }));\n-    if (showIntro && !await showIntro(ready)) return false;\n+    if (showIntro) void showIntro(ready);\n     const result = await outcome;\n",
+      "appliedDiffSha256": "3c7ab4d1b109042f01ef98f175d11fcd1f81b58f41b728c892a628f8fae0662d",
+      "mutantSha256": "d8b934e0bbfd08e5192f33d9aac6668a4a7544d5bd1d111c0cea33173e574b20",
+      "red": "10 pass / 3 fail",
+      "exit": 1,
+      "failingTests": [
+        "desktop retains eligibility until both interactive init and dismissal (init first)",
+        "quit disposes promptly while initialization is pending and never activates later",
+        "early desktop rejection remains observable after intro dismissal and never activates"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'init',\n    +   'open'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'init'\n  actual:\n    0: 'init'\n    1: 'open'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "f7193781ecf1d7113f9b5375de14a191242086da8d181317de7d6bd68f1a40a3",
+      "restoredClean": true
+    },
+    {
+      "id": "ENTRY04",
+      "behavior": "Mark an interactive and dismissed workspace eligible",
+      "file": "src/app/workspace-startup.ts",
+      "suite": "workspace-startup",
+      "diff": "diff --git a/src/app/workspace-startup.ts b/src/app/workspace-startup.ts\nindex 7aa7ca8c4..f96d0086e 100644\n--- a/src/app/workspace-startup.ts\n+++ b/src/app/workspace-startup.ts\n@@ -19,3 +19,3 @@ export async function startWorkspace(\n     if (!result.ok) throw result.error;\n-    app.openWorkspace();\n+    void app;\n     opened = true;\n",
+      "appliedDiffSha256": "29583da99e856110728f49cfe579fe25d2efc13b08c354b4e07135286e40ecfa",
+      "mutantSha256": "23d2c37efc235f55852d89465c267af07530914e666471de257cf5f77a77732a",
+      "red": "10 pass / 3 fail",
+      "exit": 1,
+      "failingTests": [
+        "web waits for usable UI before activating the workspace",
+        "desktop retains eligibility until both interactive init and dismissal (intro first)",
+        "desktop retains eligibility until both interactive init and dismissal (init first)"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'init',\n    -   'open'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'init'\n    1: 'open'\n  actual:\n    0: 'init'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "f7193781ecf1d7113f9b5375de14a191242086da8d181317de7d6bd68f1a40a3",
+      "restoredClean": true
+    },
+    {
+      "id": "ENTRY05",
+      "behavior": "Propagate the original fatal failure",
+      "file": "src/app/workspace-startup.ts",
+      "suite": "workspace-startup",
+      "diff": "diff --git a/src/app/workspace-startup.ts b/src/app/workspace-startup.ts\nindex 7aa7ca8c4..65bd064c4 100644\n--- a/src/app/workspace-startup.ts\n+++ b/src/app/workspace-startup.ts\n@@ -18,3 +18,3 @@ export async function startWorkspace(\n     const result = await outcome;\n-    if (!result.ok) throw result.error;\n+    if (!result.ok) return false;\n     app.openWorkspace();\n",
+      "appliedDiffSha256": "63a860ffa9f01eb596b98156f102973474e734385e0c4522f3e48dedd2563022",
+      "mutantSha256": "aa2423e7431e756d1c5d4de18ed5a5126693f53867628b3f2a560437ab4fdce5",
+      "red": "11 pass / 2 fail",
+      "exit": 1,
+      "failingTests": [
+        "early desktop rejection remains observable after intro dismissal and never activates",
+        "a cleanup error cannot replace the initialization error after partial startup"
+      ],
+      "assertion": "error: 'Missing expected rejection.'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'",
+      "restoredSha256": "f7193781ecf1d7113f9b5375de14a191242086da8d181317de7d6bd68f1a40a3",
+      "restoredClean": true
+    },
+    {
+      "id": "ENTRY06",
+      "behavior": "Do not destroy an opened workspace",
+      "file": "src/app/workspace-startup.ts",
+      "suite": "workspace-startup",
+      "diff": "diff --git a/src/app/workspace-startup.ts b/src/app/workspace-startup.ts\nindex 7aa7ca8c4..950c722a2 100644\n--- a/src/app/workspace-startup.ts\n+++ b/src/app/workspace-startup.ts\n@@ -23,3 +23,3 @@ export async function startWorkspace(\n   } finally {\n-    if (!opened) {\n+    if (true) {\n       try { app.destroy(); }\n",
+      "appliedDiffSha256": "d3ad88d361e75a7a93abc78604eb0a6cdf57fa582400ac0e6914a80081e15cd0",
+      "mutantSha256": "4de1c23180db20dd96d32fff162a9ae6fe4fa4a1039ae970f5e467980ec3ee2a",
+      "red": "10 pass / 3 fail",
+      "exit": 1,
+      "failingTests": [
+        "web waits for usable UI before activating the workspace",
+        "desktop retains eligibility until both interactive init and dismissal (intro first)",
+        "desktop retains eligibility until both interactive init and dismissal (init first)"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'init',\n        'open',\n    +   'destroy'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'init'\n    1: 'open'\n  actual:\n    0: 'init'\n    1: 'open'\n    2: 'destroy'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "f7193781ecf1d7113f9b5375de14a191242086da8d181317de7d6bd68f1a40a3",
+      "restoredClean": true
+    },
+    {
+      "id": "ENTRY07",
+      "behavior": "Dispose canceled or failed launch",
+      "file": "src/app/workspace-startup.ts",
+      "suite": "workspace-startup",
+      "diff": "diff --git a/src/app/workspace-startup.ts b/src/app/workspace-startup.ts\nindex 7aa7ca8c4..d7b831cea 100644\n--- a/src/app/workspace-startup.ts\n+++ b/src/app/workspace-startup.ts\n@@ -24,3 +24,3 @@ export async function startWorkspace(\n     if (!opened) {\n-      try { app.destroy(); }\n+      try { void app; }\n       catch (error) { globalThis.reportError?.(error); }\n",
+      "appliedDiffSha256": "9ca1d4a7431edbd0c6c3520b2e2a335b9fa85d99450e66ea0d2311e33c92bcf6",
+      "mutantSha256": "78eda03e6e2a93121b7b885e0ff7bc50b8ddc735b6a0ca1bd2dccfdf0a5c13c9",
+      "red": "11 pass / 2 fail",
+      "exit": 1,
+      "failingTests": [
+        "quit disposes promptly while initialization is pending and never activates later",
+        "early desktop rejection remains observable after intro dismissal and never activates"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'init',\n    -   'destroy'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'init'\n    1: 'destroy'\n  actual:\n    0: 'init'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "f7193781ecf1d7113f9b5375de14a191242086da8d181317de7d6bd68f1a40a3",
+      "restoredClean": true
+    },
+    {
+      "id": "ENTRY08",
+      "behavior": "Provide one retry control on repeated failure",
+      "file": "src/app/workspace-startup.ts",
+      "suite": "workspace-startup",
+      "diff": "diff --git a/src/app/workspace-startup.ts b/src/app/workspace-startup.ts\nindex 7aa7ca8c4..7be1483c2 100644\n--- a/src/app/workspace-startup.ts\n+++ b/src/app/workspace-startup.ts\n@@ -31,3 +31,3 @@ export async function startWorkspace(\n export function showWorkspaceStartupFailure(doc: Document, reload: () => void): void {\n-  if (doc.getElementById('workspace-startup-failure')) return;\n+  \n   const notice = doc.createElement('section');\n",
+      "appliedDiffSha256": "e1b6490f6a38f542196af436947e0299c86bb244644c622a5dcf059d9fd2560a",
+      "mutantSha256": "7988ac0cf3f35ab372cbe308939a9725872b4c36b27d422a0975f4ef14a14a84",
+      "red": "12 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "fatal startup offers one keyboard retry, preserves existing focus and exposes no raw errors"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    2 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 2\n  operator: 'strictEqual'",
+      "restoredSha256": "f7193781ecf1d7113f9b5375de14a191242086da8d181317de7d6bd68f1a40a3",
+      "restoredClean": true
+    },
+    {
+      "id": "ENTRY09",
+      "behavior": "Allow the operator to trigger reload from the control",
+      "file": "src/app/workspace-startup.ts",
+      "suite": "workspace-startup",
+      "diff": "diff --git a/src/app/workspace-startup.ts b/src/app/workspace-startup.ts\nindex 7aa7ca8c4..aa42bb4ef 100644\n--- a/src/app/workspace-startup.ts\n+++ b/src/app/workspace-startup.ts\n@@ -46,3 +46,3 @@ export function showWorkspaceStartupFailure(doc: Document, reload: () => void):\n   retry.textContent = 'Reload workspace';\n-  retry.addEventListener('click', reload);\n+  void reload;\n   notice.append(message, retry);\n",
+      "appliedDiffSha256": "5b47020095bf8cc6f242143768c0ce8c0aa90693c82f86fabac528898cd6a472",
+      "mutantSha256": "481befe0f1f7a299300523f45cd557eb754bdf651d89c63c1fc86f25afce76d2",
+      "red": "12 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "fatal startup offers one keyboard retry, preserves existing focus and exposes no raw errors"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    0 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 0\n  operator: 'strictEqual'",
+      "restoredSha256": "f7193781ecf1d7113f9b5375de14a191242086da8d181317de7d6bd68f1a40a3",
+      "restoredClean": true
+    },
+    {
+      "id": "ENTRY10",
+      "behavior": "Focus retry when no other control owns focus",
+      "file": "src/app/workspace-startup.ts",
+      "suite": "workspace-startup",
+      "diff": "diff --git a/src/app/workspace-startup.ts b/src/app/workspace-startup.ts\nindex 7aa7ca8c4..b5de121e4 100644\n--- a/src/app/workspace-startup.ts\n+++ b/src/app/workspace-startup.ts\n@@ -49,3 +49,3 @@ export function showWorkspaceStartupFailure(doc: Document, reload: () => void):\n   doc.body.append(notice);\n-  if (doc.activeElement === doc.body) retry.focus();\n+  void retry;\n }\n",
+      "appliedDiffSha256": "7a0489db2e939aa50a80a32e7faaff5f050f4441d1370ba5cf5965100a7f51d9",
+      "mutantSha256": "193604ea41e8c8c3b72d632054323cf22560d827d9a52a906f555a58036df87a",
+      "red": "12 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "fatal startup offers one keyboard retry, preserves existing focus and exposes no raw errors"
+      ],
+      "assertion": "error: 'reload receives focus when nothing else owns it'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='",
+      "restoredSha256": "f7193781ecf1d7113f9b5375de14a191242086da8d181317de7d6bd68f1a40a3",
+      "restoredClean": true
+    },
+    {
+      "id": "ENTRY11",
+      "behavior": "First decorative label cannot claim readiness before prerequisites",
+      "file": "src/app/vault-intro.ts",
+      "suite": "workspace-startup",
+      "diff": "diff --git a/src/app/vault-intro.ts b/src/app/vault-intro.ts\nindex 50e1aeaf9..050b92c03 100644\n--- a/src/app/vault-intro.ts\n+++ b/src/app/vault-intro.ts\n@@ -755,3 +755,3 @@ function buildDoor(): DoorParts {\n   });\n-  statusText.textContent = 'STARTING WORKSPACE';\n+  statusText.textContent = 'STARTUP SEQUENCE READY';\n   svg.append(statusText);\n",
+      "appliedDiffSha256": "7280743d4d883c09d43e551632faf1db582e4d2488572047dbd6e838798b7db5",
+      "mutantSha256": "f884ab808b4b69ad52dd1e61673a771fd8bbcb846e016e03e95690930b6196c3",
+      "red": "10 pass / 3 fail",
+      "exit": 1,
+      "failingTests": [
+        "vault animation reports fulfilled accurately and releases overlay within its bound",
+        "vault animation reports pending accurately and releases overlay within its bound",
+        "vault animation reports failed accurately and releases overlay within its bound"
+      ],
+      "assertion": "error: |-\n    The input was expected to not match the regular expression /READY|private failure/i. Input:\n    \n    'STARTUP SEQUENCE READYQuit'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual: 'STARTUP SEQUENCE READYQuit'\n  operator: 'doesNotMatch'",
+      "restoredSha256": "1911c1640e6f09c1e513959a1dbd95c5ebde1592f059787f648e354289d8a00a",
+      "restoredClean": true
+    },
+    {
+      "id": "ENTRY12",
+      "behavior": "Scanner success cannot certify app readiness",
+      "file": "src/app/vault-intro.ts",
+      "suite": "workspace-startup",
+      "diff": "diff --git a/src/app/vault-intro.ts b/src/app/vault-intro.ts\nindex 50e1aeaf9..269ce97e0 100644\n--- a/src/app/vault-intro.ts\n+++ b/src/app/vault-intro.ts\n@@ -900,3 +900,3 @@ function setScannerSuccess(p: DoorParts): void {\n   p.statusText.setAttribute('fill', 'rgba(40,200,100,0.9)');\n-  p.statusText.textContent = 'OPENING VAULT';\n+  p.statusText.textContent = 'CRYSTAL BALL READY';\n   p.lockedLed.style.animation = '';\n",
+      "appliedDiffSha256": "5bfed7a83da9915772e11ae9875884c3cc6db68a869aa9ae716026cc33c09902",
+      "mutantSha256": "291c06cb7f7015df6962a9ec4b90d1a929f82848afe481eb33d4b91aaeca3dc9",
+      "red": "10 pass / 3 fail",
+      "exit": 1,
+      "failingTests": [
+        "vault animation reports fulfilled accurately and releases overlay within its bound",
+        "vault animation reports pending accurately and releases overlay within its bound",
+        "vault animation reports failed accurately and releases overlay within its bound"
+      ],
+      "assertion": "error: |-\n    The input was expected to not match the regular expression /READY|private failure/i. Input:\n    \n    'CRYSTAL BALL READYQuit'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual: 'CRYSTAL BALL READYQuit'\n  operator: 'doesNotMatch'",
+      "restoredSha256": "1911c1640e6f09c1e513959a1dbd95c5ebde1592f059787f648e354289d8a00a",
+      "restoredClean": true
+    },
+    {
+      "id": "ENTRY13",
+      "behavior": "The timeout must say pending",
+      "file": "src/app/vault-intro.ts",
+      "suite": "workspace-startup",
+      "diff": "diff --git a/src/app/vault-intro.ts b/src/app/vault-intro.ts\nindex 50e1aeaf9..380a12bbd 100644\n--- a/src/app/vault-intro.ts\n+++ b/src/app/vault-intro.ts\n@@ -931,3 +931,3 @@ async function playOpenSequence(\n  p.statusText.textContent = await Promise.race([\n-   workspaceStatus, sleep(1700).then(() => 'STILL INITIALIZING…'),\n+   workspaceStatus, sleep(1700).then(() => 'READY'),\n  ]);\n",
+      "appliedDiffSha256": "f1e066256d09e3998f02cd5b6622889ba0a896d515ecd85dda016a395120baac",
+      "mutantSha256": "48303822fc33a14180c1201ad9fb2d55bbff43ebd3b07096c9b92a041c5bad3f",
+      "red": "12 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "vault animation reports pending accurately and releases overlay within its bound"
+      ],
+      "assertion": "error: 'READYQuit'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='",
+      "restoredSha256": "1911c1640e6f09c1e513959a1dbd95c5ebde1592f059787f648e354289d8a00a",
+      "restoredClean": true
+    },
+    {
+      "id": "ENTRY14",
+      "behavior": "Rejection must not imply successful opening",
+      "file": "src/app/vault-intro.ts",
+      "suite": "workspace-startup",
+      "diff": "diff --git a/src/app/vault-intro.ts b/src/app/vault-intro.ts\nindex 50e1aeaf9..596f44b9c 100644\n--- a/src/app/vault-intro.ts\n+++ b/src/app/vault-intro.ts\n@@ -1018,3 +1018,3 @@ async function runIntroFlow(\n export async function runVaultIntro(appReady?: Promise<void>): Promise<boolean> {\n-  const workspaceStatus = appReady?.then(() => 'OPENING WORKSPACE', () => 'WORKSPACE UNAVAILABLE');\n+  const workspaceStatus = appReady?.then(() => 'OPENING WORKSPACE', () => 'OPENING WORKSPACE');\n   const refs = buildOverlay();\n",
+      "appliedDiffSha256": "d815e8a864cf3b3b455663c270f223c0ecc9a4ec09f59f3d81aa59aae8cb153c",
+      "mutantSha256": "460c479de3ec6c8c1e83c73df823b5b0648ee0a254a8c221c366f2e55ea45258",
+      "red": "12 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "vault animation reports failed accurately and releases overlay within its bound"
+      ],
+      "assertion": "error: 'OPENING WORKSPACEQuit'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='",
+      "restoredSha256": "1911c1640e6f09c1e513959a1dbd95c5ebde1592f059787f648e354289d8a00a",
+      "restoredClean": true
+    },
+    {
+      "id": "ENTRY15",
+      "behavior": "Only successful interactive initialization gets the opening label",
+      "file": "src/app/vault-intro.ts",
+      "suite": "workspace-startup",
+      "diff": "diff --git a/src/app/vault-intro.ts b/src/app/vault-intro.ts\nindex 50e1aeaf9..9bdfc1b14 100644\n--- a/src/app/vault-intro.ts\n+++ b/src/app/vault-intro.ts\n@@ -1018,3 +1018,3 @@ async function runIntroFlow(\n export async function runVaultIntro(appReady?: Promise<void>): Promise<boolean> {\n-  const workspaceStatus = appReady?.then(() => 'OPENING WORKSPACE', () => 'WORKSPACE UNAVAILABLE');\n+  const workspaceStatus = appReady?.then(() => 'STILL INITIALIZING…', () => 'WORKSPACE UNAVAILABLE');\n   const refs = buildOverlay();\n",
+      "appliedDiffSha256": "d2e7aaedb9c43955cd889a7c83022a0fd4c2f9fff2373b7073f408cfed690b61",
+      "mutantSha256": "fa5c87b6f70a4508c3f697c869d9eb42176c15f5f337a232ae1448576e4653b6",
+      "red": "12 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "vault animation reports fulfilled accurately and releases overlay within its bound"
+      ],
+      "assertion": "error: 'STILL INITIALIZING…Quit'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='",
+      "restoredSha256": "1911c1640e6f09c1e513959a1dbd95c5ebde1592f059787f648e354289d8a00a",
+      "restoredClean": true
+    },
+    {
+      "id": "ENTRY16",
+      "behavior": "The door remains cancellable throughout opening",
+      "file": "src/app/vault-intro.ts",
+      "suite": "workspace-startup",
+      "diff": "diff --git a/src/app/vault-intro.ts b/src/app/vault-intro.ts\nindex 50e1aeaf9..c4387e7ca 100644\n--- a/src/app/vault-intro.ts\n+++ b/src/app/vault-intro.ts\n@@ -1002,5 +1002,5 @@ async function runIntroFlow(\n \n- await playOpenSequence(refs, workspaceStatus);\n  if (settled) return;\n  settled = true;\n+ await playOpenSequence(refs, workspaceStatus);\n  resolveFlow(true);\n",
+      "appliedDiffSha256": "83c030740fde7ec54ff1715503487d3c5cdc5785f562133242fcfb342801eeb3",
+      "mutantSha256": "558cb6c72cb97d0f03256d03e83293757fa1af09664b529d8e01c502d36d1b12",
+      "red": "12 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "Quit during the door animation dismisses the intro without activating the workspace"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'",
+      "restoredSha256": "1911c1640e6f09c1e513959a1dbd95c5ebde1592f059787f648e354289d8a00a",
+      "restoredClean": true
+    },
+    {
+      "id": "ENTRY17",
+      "behavior": "Actual normal entry passes original readiness to the vault",
+      "file": "src/main.ts",
+      "suite": "workspace-startup",
+      "diff": "diff --git a/src/main.ts b/src/main.ts\nindex e140065d4..20355783c 100644\n--- a/src/main.ts\n+++ b/src/main.ts\n@@ -339,3 +339,3 @@ if (urlParams.get('settings') === '1') {\n         const { runVaultIntro } = await import('./app/vault-intro');\n-        return runVaultIntro(ready);\n+        return runVaultIntro();\n       }\n",
+      "appliedDiffSha256": "0170f7d36491dccf02b8323212564883cd7dd297a6392ed0ccd1eeb82f16251b",
+      "mutantSha256": "cff16492d32338352bc46a1e1103211f2091cf93a61674bc16b95c161a10fada",
+      "red": "12 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "normal web and desktop entry use the observable workspace gate"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /runVaultIntro\\(ready\\)/. Input:\n    \n    '/* eslint-disable no-console, @typescript-eslint/prefer-nullish-coalescing, sonarjs/no-nested-conditional, sonarjs/slow-regex, sonarjs/anchor-precedence, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-empty-function, unicorn/prefer-top-level-await */\\n' +\n      \"import './styles/base-layer.css';\\n\" +\n      \"import './styles/happy-the",
+      "restoredSha256": "9b1863e2c2c61915a1f46fdc31ad07e2c20efcee7d450eb7a49a9cf9a4e00ccb",
+      "restoredClean": true
+    },
+    {
+      "id": "ENTRY18",
+      "behavior": "Actual normal entry invokes the observable recovery surface",
+      "file": "src/main.ts",
+      "suite": "workspace-startup",
+      "diff": "diff --git a/src/main.ts b/src/main.ts\nindex e140065d4..de16ba082 100644\n--- a/src/main.ts\n+++ b/src/main.ts\n@@ -348,3 +348,3 @@ if (urlParams.get('settings') === '1') {\n     console.error('[boot] workspace startup failed:', error);\n-    showWorkspaceStartupFailure(document, () => window.location.reload());\n+    void document;\n   });\n",
+      "appliedDiffSha256": "94fa4e6e70ca2d51f486a98e479b2530165fceb6dee65255708cd8129dd78cf7",
+      "mutantSha256": "fc1900a5d850f0944fd9fcfc3ccd3c5b23e45f465a2b4885c649e97fb5995996",
+      "red": "12 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "normal web and desktop entry use the observable workspace gate"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /showWorkspaceStartupFailure\\(/. Input:\n    \n    '/* eslint-disable no-console, @typescript-eslint/prefer-nullish-coalescing, sonarjs/no-nested-conditional, sonarjs/slow-regex, sonarjs/anchor-precedence, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-empty-function, unicorn/prefer-top-level-await */\\n' +\n      \"import './styles/base-layer.css';\\n\" +\n      \"import './styles/ha",
+      "restoredSha256": "9b1863e2c2c61915a1f46fdc31ad07e2c20efcee7d450eb7a49a9cf9a4e00ccb",
+      "restoredClean": true
+    },
+    {
+      "id": "ENTRY19",
+      "behavior": "Cleanup cannot mask the initial failure",
+      "file": "src/app/workspace-startup.ts",
+      "suite": "workspace-startup",
+      "diff": "diff --git a/src/app/workspace-startup.ts b/src/app/workspace-startup.ts\nindex 7aa7ca8c4..3f154485a 100644\n--- a/src/app/workspace-startup.ts\n+++ b/src/app/workspace-startup.ts\n@@ -25,3 +25,3 @@ export async function startWorkspace(\n       try { app.destroy(); }\n-      catch (error) { globalThis.reportError?.(error); }\n+      catch (error) { throw error; }\n     }\n",
+      "appliedDiffSha256": "6a899f2cb41243d12b6b52150a1f33692ec2e3b3f1658640fb3a23563f3ef77d",
+      "mutantSha256": "3984e43cfff2504eb872b2840ea65cef5077c08945d757de6cad6522d68ab7c2",
+      "red": "12 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "a cleanup error cannot replace the initialization error after partial startup"
+      ],
+      "assertion": "error: |-\n    The validation function is expected to return \"true\". Received false\n    \n    Caught error:\n    \n    Error: partial cleanup\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'",
+      "restoredSha256": "f7193781ecf1d7113f9b5375de14a191242086da8d181317de7d6bd68f1a40a3",
+      "restoredClean": true
+    },
+    {
+      "id": "ENTRY20",
+      "behavior": "Rejected animation still releases the overlay",
+      "file": "src/app/vault-intro.ts",
+      "suite": "workspace-startup",
+      "diff": "diff --git a/src/app/vault-intro.ts b/src/app/vault-intro.ts\nindex 50e1aeaf9..8fb69aa0a 100644\n--- a/src/app/vault-intro.ts\n+++ b/src/app/vault-intro.ts\n@@ -1024,3 +1024,3 @@ export async function runVaultIntro(appReady?: Promise<void>): Promise<boolean>\n   try { completed = await runIntroFlow(refs, workspaceStatus); }\n-  finally { refs.overlay.remove(); }\n+  finally { /* orphaned overlay */ }\n   if (!completed) window.close();\n",
+      "appliedDiffSha256": "dd93f35be1ee57f5c7fe564e9ade0866a162bf8d324725b8d7e5be15ab157dd9",
+      "mutantSha256": "5be9f80536ddd363288411e9ade0d4cb40ed0e48a01194fdd20cf40a938080dd",
+      "red": "8 pass / 5 fail",
+      "exit": 1,
+      "failingTests": [
+        "vault animation reports fulfilled accurately and releases overlay within its bound",
+        "vault animation reports pending accurately and releases overlay within its bound",
+        "vault animation reports failed accurately and releases overlay within its bound",
+        "Quit during the door animation dismisses the intro without activating the workspace",
+        "a broken intro is removed and the original error propagates to startup recovery"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'",
+      "restoredSha256": "1911c1640e6f09c1e513959a1dbd95c5ebde1592f059787f648e354289d8a00a",
+      "restoredClean": true
+    },
+    {
+      "id": "ENTRY21",
+      "behavior": "An existing control keeps keyboard ownership on first failure notice",
+      "file": "src/app/workspace-startup.ts",
+      "suite": "workspace-startup",
+      "diff": "diff --git a/src/app/workspace-startup.ts b/src/app/workspace-startup.ts\nindex 7aa7ca8c4..6f8a56ccc 100644\n--- a/src/app/workspace-startup.ts\n+++ b/src/app/workspace-startup.ts\n@@ -49,3 +49,3 @@ export function showWorkspaceStartupFailure(doc: Document, reload: () => void):\n   doc.body.append(notice);\n-  if (doc.activeElement === doc.body) retry.focus();\n+  retry.focus();\n }\n",
+      "appliedDiffSha256": "44513189c2af2d06f4758c2a02955e785c310b988127b56e44e2d1f59b2f03ee",
+      "mutantSha256": "615a7bef51082010c3b1059a3a26ed2ccefa8189c38fc43c5afe5e37b8944cd1",
+      "red": "12 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "fatal startup offers one keyboard retry, preserves existing focus and exposes no raw errors"
+      ],
+      "assertion": "error: 'initial failure must preserve focused privacy controls'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='",
+      "restoredSha256": "f7193781ecf1d7113f9b5375de14a191242086da8d181317de7d6bd68f1a40a3",
+      "restoredClean": true
+    },
+    {
+      "id": "ENTRY22",
+      "behavior": "Fatal recovery uses an accessible live role",
+      "file": "src/app/workspace-startup.ts",
+      "suite": "workspace-startup",
+      "diff": "diff --git a/src/app/workspace-startup.ts b/src/app/workspace-startup.ts\nindex 7aa7ca8c4..bf61de319 100644\n--- a/src/app/workspace-startup.ts\n+++ b/src/app/workspace-startup.ts\n@@ -41,3 +41,3 @@ export function showWorkspaceStartupFailure(doc: Document, reload: () => void):\n   const message = doc.createElement('p');\n-  message.setAttribute('role', 'alert');\n+  message.setAttribute('role', 'none');\n   message.textContent = 'Crystal Ball could not open this workspace.';\n",
+      "appliedDiffSha256": "030df7f31b9f2c95ae9313d6f60832796ece869bd087474043ac38fe5e925e16",
+      "mutantSha256": "943131a4f4183d8534daee6f87ce62db0d350071d9ce1984a182bba3fd0e3fb5",
+      "red": "12 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "fatal startup offers one keyboard retry, preserves existing focus and exposes no raw errors"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /could not open/i. Input:\n    \n    ''\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual: ''\n  operator: 'match'",
+      "restoredSha256": "f7193781ecf1d7113f9b5375de14a191242086da8d181317de7d6bd68f1a40a3",
+      "restoredClean": true
+    },
+    {
+      "id": "ENTRY23",
+      "behavior": "Retain a bounded upper wait for a never-settled UI prerequisite",
+      "file": "src/app/vault-intro.ts",
+      "suite": "workspace-startup",
+      "diff": "diff --git a/src/app/vault-intro.ts b/src/app/vault-intro.ts\nindex 50e1aeaf9..50c9895c6 100644\n--- a/src/app/vault-intro.ts\n+++ b/src/app/vault-intro.ts\n@@ -931,3 +931,3 @@ async function playOpenSequence(\n  p.statusText.textContent = await Promise.race([\n-   workspaceStatus, sleep(1700).then(() => 'STILL INITIALIZING…'),\n+   workspaceStatus, sleep(60_000).then(() => 'STILL INITIALIZING…'),\n  ]);\n",
+      "appliedDiffSha256": "331892153e99f43b9c5cf1840220b8dee945f5cc5ecb9c93bb7c0c3daa7ba621",
+      "mutantSha256": "03d570ae13484c18e7274add9a59f6415223e45253132a6f765a4051fd421dca",
+      "red": "12 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "vault animation reports pending accurately and releases overlay within its bound"
+      ],
+      "assertion": "error: 'INITIALIZING…Quit'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='",
+      "restoredSha256": "1911c1640e6f09c1e513959a1dbd95c5ebde1592f059787f648e354289d8a00a",
+      "restoredClean": true
+    },
+    {
+      "id": "LOADER01",
+      "behavior": "Do not wait for news before admitting ShakeMap",
+      "file": "src/app/data-loader.ts",
+      "suite": "startup-acquisition",
+      "diff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex b55ee972f..870ef7f35 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -939,3 +939,3 @@ export class DataLoaderManager implements AppModule {\n  const CRITICAL = new Set([\n- 'news', 'markets', 'weather', 'nwsAlerts', 'shakeAlert', 'gdacsAlerts', 'intelligence',\n+ 'news', 'markets', 'weather', 'nwsAlerts', 'gdacsAlerts', 'intelligence',\n  'natural', 'cyberThreats', 'predictions', 'spaceWeather', 'firms',\n",
+      "appliedDiffSha256": "c71389d71844f54ecee961d2b2ba4439f2c3cd151ada2ffc7072177ca37ed0e3",
+      "mutantSha256": "6dae42b05059479c744684be82a1282d8e125e75edaf6f2c5428ab2c163f9418",
+      "red": "9 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "ShakeAlert and NWS start with news held, only for the full variant"
+      ],
+      "assertion": "error: |-\n    full\n    \n    false !== true\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: 'strictEqual'",
+      "restoredSha256": "fdd429f51168f40bdda4129fa081efb3446604759998aa758a5c04f54b6c4a9a",
+      "restoredClean": true
+    },
+    {
+      "id": "LOADER02",
+      "behavior": "Concurrent retries share the reserved full-wave promise",
+      "file": "src/app/data-loader.ts",
+      "suite": "startup-acquisition",
+      "diff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex b55ee972f..5690af692 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -750,3 +750,3 @@ export class DataLoaderManager implements AppModule {\n     // Reserve the shared promise before a provider can synchronously request a retry.\n-    this.activeDataWave ??= Promise.resolve().then(() => this.runDataWave()).finally(() => {\n+    this.activeDataWave = Promise.resolve().then(() => this.runDataWave()).finally(() => {\n       this.activeDataWave = null;\n",
+      "appliedDiffSha256": "e7d9302d62e4699931aad9289af234b6754a2f0d28ec002938ee818d8d81f6dc",
+      "mutantSha256": "6ba2d54e2b9ea01c1f305403cdcf3611c266c2a52f6ab463ee6b321bcce01e11",
+      "red": "9 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "a reentrant or concurrent refresh joins one complete wave and a later refresh runs again"
+      ],
+      "assertion": "error: |-\n    retry joined the current acquisition\n    + actual - expected\n    \n      Promise {\n        <pending>,\n    +   [Symbol(async_id_symbol)]: 1075,\n    +   [Symbol(trigger_async_id_symbol)]: 1074\n    -   [Symbol(async_id_symbol)]: 1072,\n    -   [Symbol(trigger_async_id_symbol)]: 1071\n      }\n    \n  code: 'ERR_TEST_FAILURE'\n  ...\n# Subtest: destroying an app during either wave prevents late search or refresh publication\nok 3 - destroying an app du",
+      "restoredSha256": "fdd429f51168f40bdda4129fa081efb3446604759998aa758a5c04f54b6c4a9a",
+      "restoredClean": true
+    },
+    {
+      "id": "LOADER03",
+      "behavior": "Reserve the wave before calling a synchronous first producer",
+      "file": "src/app/data-loader.ts",
+      "suite": "startup-acquisition",
+      "diff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex b55ee972f..25c870707 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -750,3 +750,3 @@ export class DataLoaderManager implements AppModule {\n     // Reserve the shared promise before a provider can synchronously request a retry.\n-    this.activeDataWave ??= Promise.resolve().then(() => this.runDataWave()).finally(() => {\n+    this.activeDataWave ??= this.runDataWave().finally(() => {\n       this.activeDataWave = null;\n",
+      "appliedDiffSha256": "a3aca7c85527cf880b9e2a1c14fe908912c9630aeb67feaa716d4c7576ffa84f",
+      "mutantSha256": "5d30f0a16ae2ea45970b8b4bf98e4f059e7dac8670079b0fcc53e03a2825c642",
+      "red": "9 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "a reentrant or concurrent refresh joins one complete wave and a later refresh runs again"
+      ],
+      "assertion": "error: |-\n    synchronous producer reentry joined the same acquisition\n    + actual - expected\n    \n      Promise {\n        <pending>,\n    +   [Symbol(async_id_symbol)]: 1133,\n    +   [Symbol(trigger_async_id_symbol)]: 1064\n    -   [Symbol(async_id_symbol)]: 1196,\n    -   [Symbol(trigger_async_id_symbol)]: 1058\n      }\n    \n  code: 'ERR_TEST_FAILURE'\n  ...\n# Subtest: destroying an app during either wave prevents late search or refresh publication\nok 3 -",
+      "restoredSha256": "fdd429f51168f40bdda4129fa081efb3446604759998aa758a5c04f54b6c4a9a",
+      "restoredClean": true
+    },
+    {
+      "id": "LOADER04",
+      "behavior": "A later wave is eligible after prior fulfillment or failure",
+      "file": "src/app/data-loader.ts",
+      "suite": "startup-acquisition",
+      "diff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex b55ee972f..13d08e1e7 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -751,3 +751,3 @@ export class DataLoaderManager implements AppModule {\n     this.activeDataWave ??= Promise.resolve().then(() => this.runDataWave()).finally(() => {\n-      this.activeDataWave = null;\n+      void this.activeDataWave;\n     });\n",
+      "appliedDiffSha256": "6d61f8c5eb6211da0c4e59f08d9b5b1a242073c5bdd70b02f7479231e43eaefa",
+      "mutantSha256": "d71cd45cb547b72ddbfe088041baa0a2b7abfe60bbf9774c18f13dc410ed63d9",
+      "red": "8 pass / 2 fail",
+      "exit": 1,
+      "failingTests": [
+        "a reentrant or concurrent refresh joins one complete wave and a later refresh runs again",
+        "an orchestration failure reaches all waiting callers and leaves a fresh attempt eligible"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 2\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 2\n  actual: 1\n  operator: 'strictEqual'",
+      "restoredSha256": "fdd429f51168f40bdda4129fa081efb3446604759998aa758a5c04f54b6c4a9a",
+      "restoredClean": true
+    },
+    {
+      "id": "LOADER05",
+      "behavior": "Keep the full-variant eligibility boundary around ShakeMap",
+      "file": "src/app/data-loader.ts",
+      "suite": "startup-acquisition",
+      "diff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex b55ee972f..e0db05704 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -878,3 +878,3 @@ export class DataLoaderManager implements AppModule {\n  if (SITE_VARIANT === 'full') tasks.push({ name: 'severeWeather', task: () => runGuarded('severeWeather', () => this.loadSevereWeather()) });\n- if (SITE_VARIANT === 'full') tasks.push({ name: 'shakeAlert', task: () => runGuarded('shakeAlert', () => this.loadShakeAlert()) });\n+ if (SITE_VARIANT !== 'happy') tasks.push({ name: 'shakeAlert', task: () => runGuarded('shakeAlert', () => this.loadShakeAlert()) });\n  if (SITE_VARIANT === 'full') tasks.push({ name: 'nwsAlerts', task: () => runGuarded('nwsAlerts', () => this.loadNWSAlerts()) });\n",
+      "appliedDiffSha256": "dafbc2e5ccd013c919ae76894b5239b969b5f18d8c2ea2aeade9dd87088dcf70",
+      "mutantSha256": "07af582267d10b12402bf88320436a04c797a172a78ae74299ba09ceead26ea3",
+      "red": "9 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "ShakeAlert and NWS start with news held, only for the full variant"
+      ],
+      "assertion": "error: |-\n    tech\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'",
+      "restoredSha256": "fdd429f51168f40bdda4129fa081efb3446604759998aa758a5c04f54b6c4a9a",
+      "restoredClean": true
+    },
+    {
+      "id": "LOADER06",
+      "behavior": "Require a live app when the final wave publishes",
+      "file": "src/app/data-loader.ts",
+      "suite": "startup-acquisition",
+      "diff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex b55ee972f..c383a9371 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -960,3 +960,2 @@ export class DataLoaderManager implements AppModule {\n \n- if (this.ctx.isDestroyed) return;\n  this.updateSearchIndex();\n",
+      "appliedDiffSha256": "bc6d32f05a7638cc243efab73a735560361d4045342f90d3d9972d4c1f8f59cf",
+      "mutantSha256": "fa26da45b8014460b70d8ae4b9214e50e5260376ec5875d8c0e667a5b5c40569",
+      "red": "9 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "destroying an app during either wave prevents late search or refresh publication"
+      ],
+      "assertion": "error: |-\n    deferred\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'",
+      "restoredSha256": "fdd429f51168f40bdda4129fa081efb3446604759998aa758a5c04f54b6c4a9a",
+      "restoredClean": true
+    },
+    {
+      "id": "LOADER07",
+      "behavior": "Do not enqueue the deferred wave after destruction",
+      "file": "src/app/data-loader.ts",
+      "suite": "startup-acquisition",
+      "diff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex b55ee972f..49f0ca993 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -952,3 +952,2 @@ export class DataLoaderManager implements AppModule {\n  });\n- if (this.ctx.isDestroyed) return;\n  const wave2 = await limiter.mapSettled(deferred, t => t.task());\n",
+      "appliedDiffSha256": "3cfc747e7d391ed8d746069e354d221e8a73c495d70a949317e56aef8fe16b46",
+      "mutantSha256": "69d93b16b4d056f57d0f02a816599c3d61b594ed48bfcc2362d393abe3c8d4f6",
+      "red": "9 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "destroying an app during either wave prevents late search or refresh publication"
+      ],
+      "assertion": "error: |-\n    teardown cannot queue another wave\n    \n    2 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 2\n  operator: 'strictEqual'",
+      "restoredSha256": "fdd429f51168f40bdda4129fa081efb3446604759998aa758a5c04f54b6c4a9a",
+      "restoredClean": true
+    },
+    {
+      "id": "LOADER08",
+      "behavior": "Preserve the twelve-slot cap under retries and promoted ShakeMap",
+      "file": "src/app/data-loader.ts",
+      "suite": "startup-acquisition",
+      "diff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex b55ee972f..250417fbb 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -945,3 +945,3 @@ export class DataLoaderManager implements AppModule {\n \n- const limiter = createConcurrencyLimiter(12);\n+ const limiter = createConcurrencyLimiter(13);\n  const wave1 = await limiter.mapSettled(critical, t => t.task());\n",
+      "appliedDiffSha256": "668f02eaccda0810e5f8018785ce137634cb52139ec0179fa55fb6c31eed002a",
+      "mutantSha256": "5a9e354786330bb92bae843087179fbca7da20a0c68b243e3fc993edc4a5e3d2",
+      "red": "9 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "ShakeAlert and NWS start with news held, only for the full variant"
+      ],
+      "assertion": "error: 'at most twelve simultaneous task slots'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='",
+      "restoredSha256": "fdd429f51168f40bdda4129fa081efb3446604759998aa758a5c04f54b6c4a9a",
+      "restoredClean": true
+    },
+    {
+      "id": "LOADER09",
+      "behavior": "Do not publish late provider results into a later app",
+      "file": "src/app/data-loader.ts",
+      "suite": "startup-acquisition",
+      "diff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex b55ee972f..2cb912893 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -3357,3 +3357,2 @@ export class DataLoaderManager implements AppModule {\n  ]);\n- if (this.ctx.isDestroyed) return;\n  const alertsSnapshot = alertsResult.status === 'fulfilled' ? alertsResult.value : undefined;\n",
+      "appliedDiffSha256": "1fdd00766d414c7812e9d53c8cdcb5a5c404f708dfb14491ab420d42bda94503",
+      "mutantSha256": "3110aa7fdbda1bf136dcac9f827abad01f9ea2ab5cb5cdbfee95be7ecaa3356d",
+      "red": "9 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "late NWS acquisition cannot publish to the next app after destroy"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + [\n    +   'panel',\n    +   'store',\n    +   'prediction'\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0: 'panel'\n    1: 'store'\n    2: 'prediction'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "fdd429f51168f40bdda4129fa081efb3446604759998aa758a5c04f54b6c4a9a",
+      "restoredClean": true
+    },
+    {
+      "id": "LOADER10",
+      "behavior": "Do not use late zone lookups to publish stale storm evidence",
+      "file": "src/app/data-loader.ts",
+      "suite": "startup-acquisition",
+      "diff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex b55ee972f..5edaaf9c3 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -3391,3 +3391,2 @@ export class DataLoaderManager implements AppModule {\n  const placeZonesById = await resolveSavedPlaceZones(places);\n- if (this.ctx.isDestroyed) return;\n  const weatherPlaces = places.map(p => toMatcherPlace(p, placeZonesById.get(p.id)));\n",
+      "appliedDiffSha256": "a3b7e30f045e62e780c6cc9a107f10fecf6b3f296a771a4eff781a199c99ce44",
+      "mutantSha256": "cead6d47321b0f398671c07fb21298046335f1b508d0795e0bab2936a4210c48",
+      "red": "9 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "destroy during saved-place resolution preserves earlier NWS evidence without any late storm state"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'panel',\n        'store',\n        'prediction',\n    +   'storm event'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'panel'\n    1: 'store'\n    2: 'prediction'\n  actual:\n    0: 'panel'\n    1: 'store'\n    2: 'prediction'\n    3: 'storm event'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "fdd429f51168f40bdda4129fa081efb3446604759998aa758a5c04f54b6c4a9a",
+      "restoredClean": true
+    },
+    {
+      "id": "LOADER11",
+      "behavior": "No queued prewarm of a destroyed or replaced app",
+      "file": "src/app/data-loader.ts",
+      "suite": "startup-acquisition",
+      "diff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex b55ee972f..0562419ae 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -3412,3 +3412,2 @@ export class DataLoaderManager implements AppModule {\n  .then(({ lifelinePrewarmCoordinator }) => {\n-   if (this.ctx.isDestroyed) return;\n    for (const place of places.filter((candidate) => (\n",
+      "appliedDiffSha256": "73751035a9e6c7437d332cc5a5b835a3d4db31c7ca540337c0a3a0482ca010f1",
+      "mutantSha256": "f1a97ec2fbf7c6c13c81cd807834d1001995c337a6490026d4850ced5b8ee530",
+      "red": "9 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "disposal from a storm event cannot queue a late prewarm or publish context"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'panel',\n        'store',\n        'prediction',\n        'storm event',\n    +   'prewarm'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'panel'\n    1: 'store'\n    2: 'prediction'\n    3: 'storm event'\n  actual:\n    0: 'panel'\n    1: 'store'\n    2: 'prediction'\n    3: 'storm event'\n    4: 'prewarm'\n  operator: 'deepStrictE",
+      "restoredSha256": "fdd429f51168f40bdda4129fa081efb3446604759998aa758a5c04f54b6c4a9a",
+      "restoredClean": true
+    },
+    {
+      "id": "LOADER12",
+      "behavior": "Do not publish global context after a listener destroys the owner",
+      "file": "src/app/data-loader.ts",
+      "suite": "startup-acquisition",
+      "diff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex b55ee972f..fca1cb33a 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -3423,3 +3423,2 @@ export class DataLoaderManager implements AppModule {\n \n- if (this.ctx.isDestroyed) return;\n  updateStormPreparednessContext({\n",
+      "appliedDiffSha256": "cc2b46455c4059489b3ae0ae2c7a57a8d82f65562849c5e965f809d492a0a9f6",
+      "mutantSha256": "116e06faa8209458facc02267375368dda862e614052961c6c5dae77ec975891",
+      "red": "9 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "disposal from a storm event cannot queue a late prewarm or publish context"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'panel',\n        'store',\n        'prediction',\n        'storm event',\n    +   'storm context'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'panel'\n    1: 'store'\n    2: 'prediction'\n    3: 'storm event'\n  actual:\n    0: 'panel'\n    1: 'store'\n    2: 'prediction'\n    3: 'storm event'\n    4: 'storm context'\n  operator:",
+      "restoredSha256": "fdd429f51168f40bdda4129fa081efb3446604759998aa758a5c04f54b6c4a9a",
+      "restoredClean": true
+    },
+    {
+      "id": "LOADER13",
+      "behavior": "A disposed warning fetch failure cannot reset current panels",
+      "file": "src/app/data-loader.ts",
+      "suite": "startup-acquisition",
+      "diff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex b55ee972f..dca1d361b 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -3432,3 +3432,2 @@ export class DataLoaderManager implements AppModule {\n  } catch (error) {\n- if (this.ctx.isDestroyed) return;\n  console.warn('[nws-alerts] fetch failed', error);\n",
+      "appliedDiffSha256": "682a0cbe4ee389e4055aa50269a419882e175a1a1055297fa7771e32b00da9fb",
+      "mutantSha256": "cff1701ce2dcdee7dff06922306f1d354b9a415adc436106a04325f94740f948",
+      "red": "9 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "a disposed NWS owner never resets the panel through its failure fallback"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'panel',\n    +   'panel'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'panel'\n  actual:\n    0: 'panel'\n    1: 'panel'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "fdd429f51168f40bdda4129fa081efb3446604759998aa758a5c04f54b6c4a9a",
+      "restoredClean": true
+    },
+    {
+      "id": "LOADER14",
+      "behavior": "Promoted ShakeMap cannot update an obsolete panel",
+      "file": "src/app/loaders/cyber.ts",
+      "suite": "startup-acquisition",
+      "diff": "diff --git a/src/app/loaders/cyber.ts b/src/app/loaders/cyber.ts\nindex cc84c989b..b808b1fd3 100644\n--- a/src/app/loaders/cyber.ts\n+++ b/src/app/loaders/cyber.ts\n@@ -94,3 +94,2 @@ export async function loadShakeAlert(ctx: AppContext): Promise<void> {\n     const status = await fetchShakemapEvents();\n-    if (ctx.isDestroyed) return;\n     (ctx.panels.shakealert as ShakeAlertPanel | undefined)?.update(status);\n",
+      "appliedDiffSha256": "b682cbaa731814f716197420c6e1c2e38d9dea096a65f4f3a7014c848a7621ea",
+      "mutantSha256": "45bf8d9515ca1b00366f0d988eac3ef159f91502849ace95b3a86c476adda6d8",
+      "red": "9 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "ShakeMap updates its panel only if the owner survives acquisition"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + [\n    +   {\n    +     marker: 1\n    +   }\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0:\n      marker: 1\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "7cf39caa15d93d346baa44f94e0fc1983e07435ea24e7d5b19d3892a9ed08e4b",
+      "restoredClean": true
+    },
+    {
+      "id": "NOTIFY01",
+      "behavior": "The listener must be passive until interaction and intro complete",
+      "file": "src/app/desktop-notifications.ts",
+      "suite": "desktop-imessage",
+      "diff": "diff --git a/src/app/desktop-notifications.ts b/src/app/desktop-notifications.ts\nindex 3efa81cda..0f64c188b 100644\n--- a/src/app/desktop-notifications.ts\n+++ b/src/app/desktop-notifications.ts\n@@ -56,3 +56,3 @@ export class DesktopNotifications implements AppModule {\n   private canRoute(): boolean {\n-    if (!this.workspaceOpen || this.ctx.isDestroyed || isGhostMode()) return false;\n+    if (this.ctx.isDestroyed || isGhostMode()) return false;\n     if (!this.sourcesReady) {\n",
+      "appliedDiffSha256": "5281369b9c03486a7afef5d2fc0af80518ec73a6638663f26ce8f95421efa090",
+      "mutantSha256": "eed315fd440caf0095b3f1f66a94ad0837657ee38b14ec77e17ebd265367f47f",
+      "red": "9 pass / 3 fail",
+      "exit": 1,
+      "failingTests": [
+        "passive registration withholds sends until opening, with no queued replay or early relay",
+        "destroy prevents a pending web permission from sending or a late desktop hydration notice",
+        "completed acquisition waits for the desktop intro before native settings hydration"
+      ],
+      "assertion": "error: |-\n    registration has no outward effects\n    + actual - expected\n    \n    + [\n    +   [\n    +     'send_notification',\n    +     {\n    +       body: '[CRITICAL] Event — Source',\n    +       priority: 'high',\n    +       sound: 'Basso',\n    +       title: 'Crystal Ball Alert'\n    +     }\n    +   ]\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0:\n      0: 'send_notification'\n      1:\n        title",
+      "restoredSha256": "59828e585fb85a6e930792aae26e4e3286d3f3a9b1dd1cd35fe2be5e8490c7d7",
+      "restoredClean": true
+    },
+    {
+      "id": "NOTIFY02",
+      "behavior": "Suppress a saved Ghost selection during early eligibility",
+      "file": "src/app/desktop-notifications.ts",
+      "suite": "desktop-imessage",
+      "diff": "diff --git a/src/app/desktop-notifications.ts b/src/app/desktop-notifications.ts\nindex 3efa81cda..23dbac31d 100644\n--- a/src/app/desktop-notifications.ts\n+++ b/src/app/desktop-notifications.ts\n@@ -60,3 +60,3 @@ export class DesktopNotifications implements AppModule {\n         const mode = localStorage.getItem('wm-app-mode');\n-        if (mode !== null && mode !== 'gods-vision') return false;\n+        if (mode === 'unsupported') return false;\n         if (localStorage.getItem('cb:onboarding-complete') !== 'true') return false;\n",
+      "appliedDiffSha256": "4b2a711aaba782c1fecd1a9f8a85107e088a671510d00a30ffeeef60e2f4510d",
+      "mutantSha256": "59a7924e0bef4088a8b79ff0d304bc8a3087ac5e4f4cafb5bd4e53986a56cfe0",
+      "red": "11 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "early alerts require completed onboarding and a known non-Ghost preference"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + [\n    +   [\n    +     'send_notification',\n    +     {\n    +       body: '[CRITICAL] Event — Source',\n    +       priority: 'high',\n    +       sound: 'Basso',\n    +       title: 'Crystal Ball Alert'\n    +     }\n    +   ],\n    +   [\n    +     'send_notification',\n    +     {\n    +       body: '[CRITICAL] Event — Source',\n    +       priority: 'high',\n    +       s",
+      "restoredSha256": "59828e585fb85a6e930792aae26e4e3286d3f3a9b1dd1cd35fe2be5e8490c7d7",
+      "restoredClean": true
+    },
+    {
+      "id": "NOTIFY03",
+      "behavior": "Before data settlement the operator must have completed onboarding",
+      "file": "src/app/desktop-notifications.ts",
+      "suite": "desktop-imessage",
+      "diff": "diff --git a/src/app/desktop-notifications.ts b/src/app/desktop-notifications.ts\nindex 3efa81cda..5f2cb45a8 100644\n--- a/src/app/desktop-notifications.ts\n+++ b/src/app/desktop-notifications.ts\n@@ -61,3 +61,3 @@ export class DesktopNotifications implements AppModule {\n         if (mode !== null && mode !== 'gods-vision') return false;\n-        if (localStorage.getItem('cb:onboarding-complete') !== 'true') return false;\n+        /* omit onboarding prerequisite */\n       } catch { return false; }\n",
+      "appliedDiffSha256": "e9883ae69b46ba781c779c090e668e2e8727b8452ec06ff5fbccc0b6ecaa89a1",
+      "mutantSha256": "639ee97e97dd6ad6a2a237d391b12d3120131de83e80125c5cace56a1259dc34",
+      "red": "11 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "early alerts require completed onboarding and a known non-Ghost preference"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + [\n    +   [\n    +     'send_notification',\n    +     {\n    +       body: '[CRITICAL] Event — Source',\n    +       priority: 'high',\n    +       sound: 'Basso',\n    +       title: 'Crystal Ball Alert'\n    +     }\n    +   ]\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0:\n      0: 'send_notification'\n      1:",
+      "restoredSha256": "59828e585fb85a6e930792aae26e4e3286d3f3a9b1dd1cd35fe2be5e8490c7d7",
+      "restoredClean": true
+    },
+    {
+      "id": "NOTIFY04",
+      "behavior": "Unreadable privacy state holds early breaking alerts",
+      "file": "src/app/desktop-notifications.ts",
+      "suite": "desktop-imessage",
+      "diff": "diff --git a/src/app/desktop-notifications.ts b/src/app/desktop-notifications.ts\nindex 3efa81cda..fd933d268 100644\n--- a/src/app/desktop-notifications.ts\n+++ b/src/app/desktop-notifications.ts\n@@ -62,3 +62,3 @@ export class DesktopNotifications implements AppModule {\n         if (localStorage.getItem('cb:onboarding-complete') !== 'true') return false;\n-      } catch { return false; }\n+      } catch { return true; }\n     }\n",
+      "appliedDiffSha256": "04fd393872394c3ac742bb33ae847cbade8b0329eaee790c22b7d0dd61bc9bf8",
+      "mutantSha256": "09d7d83fa2a8fd769c7585facbc056e88faafa796ec1c7afd03fddcad90554f5",
+      "red": "11 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "early alerts require completed onboarding and a known non-Ghost preference"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + [\n    +   [\n    +     'send_notification',\n    +     {\n    +       body: '[CRITICAL] Event — Source',\n    +       priority: 'high',\n    +       sound: 'Basso',\n    +       title: 'Crystal Ball Alert'\n    +     }\n    +   ]\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0:\n      0: 'send_notification'\n      1:",
+      "restoredSha256": "59828e585fb85a6e930792aae26e4e3286d3f3a9b1dd1cd35fe2be5e8490c7d7",
+      "restoredClean": true
+    },
+    {
+      "id": "NOTIFY05",
+      "behavior": "Web registration cannot auto-prompt before data settlement",
+      "file": "src/app/desktop-notifications.ts",
+      "suite": "desktop-imessage",
+      "diff": "diff --git a/src/app/desktop-notifications.ts b/src/app/desktop-notifications.ts\nindex 3efa81cda..dedc908fa 100644\n--- a/src/app/desktop-notifications.ts\n+++ b/src/app/desktop-notifications.ts\n@@ -108,3 +108,3 @@ export class DesktopNotifications implements AppModule {\n       let permission = Notification.permission;\n-      if (permission === 'default' && this.sourcesReady) permission = await Notification.requestPermission();\n+      if (permission === 'default') permission = await Notification.requestPermission();\n       if (permission === 'granted' && this.canRoute()) new Notification('Crystal Ball Alert', { body });\n",
+      "appliedDiffSha256": "28088602b7b68ca04c1d13cfd1bb09a8a613b5517582a150a20a6ffe4e62baa8",
+      "mutantSha256": "9c4a80afb4fc71337c840039ce061382d5f29e33e23926f03c408cd4b52832bf",
+      "red": "11 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "early web breaking alerts cannot prompt; granted users may receive a current alert"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + [\n    +   [\n    +     'prompt'\n    +   ],\n    +   [\n    +     'banner'\n    +   ]\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0:\n      0: 'prompt'\n    1:\n      0: 'banner'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "59828e585fb85a6e930792aae26e4e3286d3f3a9b1dd1cd35fe2be5e8490c7d7",
+      "restoredClean": true
+    },
+    {
+      "id": "NOTIFY06",
+      "behavior": "Web transport requires granted permission",
+      "file": "src/app/desktop-notifications.ts",
+      "suite": "desktop-imessage",
+      "diff": "diff --git a/src/app/desktop-notifications.ts b/src/app/desktop-notifications.ts\nindex 3efa81cda..ee1e30a3a 100644\n--- a/src/app/desktop-notifications.ts\n+++ b/src/app/desktop-notifications.ts\n@@ -109,3 +109,3 @@ export class DesktopNotifications implements AppModule {\n       if (permission === 'default' && this.sourcesReady) permission = await Notification.requestPermission();\n-      if (permission === 'granted' && this.canRoute()) new Notification('Crystal Ball Alert', { body });\n+      if (this.canRoute()) new Notification('Crystal Ball Alert', { body });\n     } catch {\n",
+      "appliedDiffSha256": "8d08b7f562d5ec6e00fc81fd7eb306a74ce79e13ab566981899cadf97a9a5cc4",
+      "mutantSha256": "08552482f6ad6f3d0bab716b53ae0b9b3debe0bb39e6e4cb004c8c13339322a0",
+      "red": "11 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "early web breaking alerts cannot prompt; granted users may receive a current alert"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + [\n    +   [\n    +     'banner'\n    +   ]\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0:\n      0: 'banner'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "59828e585fb85a6e930792aae26e4e3286d3f3a9b1dd1cd35fe2be5e8490c7d7",
+      "restoredClean": true
+    },
+    {
+      "id": "NOTIFY07",
+      "behavior": "Recheck route eligibility after asynchronous permission grant",
+      "file": "src/app/desktop-notifications.ts",
+      "suite": "desktop-imessage",
+      "diff": "diff --git a/src/app/desktop-notifications.ts b/src/app/desktop-notifications.ts\nindex 3efa81cda..a71718fc6 100644\n--- a/src/app/desktop-notifications.ts\n+++ b/src/app/desktop-notifications.ts\n@@ -109,3 +109,3 @@ export class DesktopNotifications implements AppModule {\n       if (permission === 'default' && this.sourcesReady) permission = await Notification.requestPermission();\n-      if (permission === 'granted' && this.canRoute()) new Notification('Crystal Ball Alert', { body });\n+      if (permission === 'granted') new Notification('Crystal Ball Alert', { body });\n     } catch {\n",
+      "appliedDiffSha256": "ffd1b1f90c3fde4d10c5fc563176555341abbc677297cff31bdaa1cd91625a63",
+      "mutantSha256": "9ff8f0bf4788b56df3cff9bd8c345cff799ee6d805dd2e653db9fa30814e726f",
+      "red": "10 pass / 2 fail",
+      "exit": 1,
+      "failingTests": [
+        "destroy prevents a pending web permission from sending or a late desktop hydration notice",
+        "permission and native send continuations honor revoked eligibility"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + [\n    +   [\n    +     'banner'\n    +   ]\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0:\n      0: 'banner'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "59828e585fb85a6e930792aae26e4e3286d3f3a9b1dd1cd35fe2be5e8490c7d7",
+      "restoredClean": true
+    },
+    {
+      "id": "NOTIFY08",
+      "behavior": "Do not relay an early alert even if native banner is permitted",
+      "file": "src/app/desktop-notifications.ts",
+      "suite": "desktop-imessage",
+      "diff": "diff --git a/src/app/desktop-notifications.ts b/src/app/desktop-notifications.ts\nindex 3efa81cda..999c27f18 100644\n--- a/src/app/desktop-notifications.ts\n+++ b/src/app/desktop-notifications.ts\n@@ -75,3 +75,3 @@ export class DesktopNotifications implements AppModule {\n       await notifyNative({ title: 'Crystal Ball Alert', body, sound, priority: 'high' });\n-      if (allowRelay && this.canRoute()) await this.relayToImessage(alert, body);\n+      if (this.canRoute()) await this.relayToImessage(alert, body);\n       return;\n",
+      "appliedDiffSha256": "3949c6e1c6e83385924f906d7f4105e98e07d871e75b286aa80bab6d431be7a3",
+      "mutantSha256": "531553712e3dad686cab55e6c9a88d90189ea5933b42eaaff7468f437dd7d12b",
+      "red": "11 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "passive registration withholds sends until opening, with no queued replay or early relay"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'send_notification',\n    +   'paused-relay'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'send_notification'\n  actual:\n    0: 'send_notification'\n    1: 'paused-relay'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "59828e585fb85a6e930792aae26e4e3286d3f3a9b1dd1cd35fe2be5e8490c7d7",
+      "restoredClean": true
+    },
+    {
+      "id": "NOTIFY09",
+      "behavior": "Hydrate only after the source-dependent relay path resumes",
+      "file": "src/app/desktop-notifications.ts",
+      "suite": "desktop-imessage",
+      "diff": "diff --git a/src/app/desktop-notifications.ts b/src/app/desktop-notifications.ts\nindex 3efa81cda..6f138709f 100644\n--- a/src/app/desktop-notifications.ts\n+++ b/src/app/desktop-notifications.ts\n@@ -33,3 +33,3 @@ export class DesktopNotifications implements AppModule {\n     this.workspaceOpen = true;\n-    if (this.sourcesReady) this.hydrateRelay();\n+    this.hydrateRelay();\n   }\n",
+      "appliedDiffSha256": "b7d8044c8e1dd7740a296be2b4b3a06392e48a1fad4913baa64e6692dfe63052",
+      "mutantSha256": "a7e8c0bac48172ae58acb669114ab221d23fd7cd582aa54364c14fa2272b9ce7",
+      "red": "8 pass / 4 fail",
+      "exit": 1,
+      "failingTests": [
+        "startup tells the user once about a paused channel, after hydration",
+        "passive registration withholds sends until opening, with no queued replay or early relay",
+        "early alerts require completed onboarding and a known non-Ghost preference",
+        "destroy prevents a pending web permission from sending or a late desktop hydration notice"
+      ],
+      "assertion": "error: |-\n    opening does not replay\n    + actual - expected\n    \n    + [\n    +   [\n    +     'hydrate'\n    +   ]\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0:\n      0: 'hydrate'\n    1:\n      0: 'paused-notice'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "59828e585fb85a6e930792aae26e4e3286d3f3a9b1dd1cd35fe2be5e8490c7d7",
+      "restoredClean": true
+    },
+    {
+      "id": "NOTIFY10",
+      "behavior": "Hydrate only once on repeated data settlement",
+      "file": "src/app/desktop-notifications.ts",
+      "suite": "desktop-imessage",
+      "diff": "diff --git a/src/app/desktop-notifications.ts b/src/app/desktop-notifications.ts\nindex 3efa81cda..b4ac60870 100644\n--- a/src/app/desktop-notifications.ts\n+++ b/src/app/desktop-notifications.ts\n@@ -37,3 +37,3 @@ export class DesktopNotifications implements AppModule {\n   sourcesSettled(): void {\n-    if (this.sourcesReady || this.ctx.isDestroyed) return;\n+    if (this.ctx.isDestroyed) return;\n     this.sourcesReady = true;\n",
+      "appliedDiffSha256": "83c3e46aa6c7b499288764c294f8d8eae998b30f6909a081a2fc716066ccd1f3",
+      "mutantSha256": "384c39f28dda8c3b282365d2cdf8bb4cba1cf0773f0a2386ce90d5a704f67e50",
+      "red": "11 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "passive registration withholds sends until opening, with no queued replay or early relay"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'send_notification',\n        'hydrate',\n    +   'hydrate',\n        'paused-notice',\n    +   'paused-notice'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'send_notification'\n    1: 'hydrate'\n    2: 'paused-notice'\n  actual:\n    0: 'send_notification'\n    1: 'hydrate'\n    2: 'hydrate'\n    3: 'paused-notice'\n    4: 'pause",
+      "restoredSha256": "59828e585fb85a6e930792aae26e4e3286d3f3a9b1dd1cd35fe2be5e8490c7d7",
+      "restoredClean": true
+    },
+    {
+      "id": "NOTIFY11",
+      "behavior": "Destruction drops pending paused notices",
+      "file": "src/app/desktop-notifications.ts",
+      "suite": "desktop-imessage",
+      "diff": "diff --git a/src/app/desktop-notifications.ts b/src/app/desktop-notifications.ts\nindex 3efa81cda..6f6bc71c5 100644\n--- a/src/app/desktop-notifications.ts\n+++ b/src/app/desktop-notifications.ts\n@@ -45,3 +45,3 @@ export class DesktopNotifications implements AppModule {\n       void refreshImessageSettings().then(() => {\n-        if (this.workspaceOpen && !this.ctx.isDestroyed) return notifyImessagePausedOnce();\n+        return notifyImessagePausedOnce();\n       }).catch(() => undefined);\n",
+      "appliedDiffSha256": "ac97f80cda714b4294fe6ba74789805a693f8feb181732d7234aeeb05e3cd31a",
+      "mutantSha256": "a11d2ab8e35d9eaaf351307f57cd86c48207d104d24b798a2e76d90c4855c154",
+      "red": "11 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "destroy prevents a pending web permission from sending or a late desktop hydration notice"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'hydrate',\n    +   'paused-notice'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'hydrate'\n  actual:\n    0: 'hydrate'\n    1: 'paused-notice'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "59828e585fb85a6e930792aae26e4e3286d3f3a9b1dd1cd35fe2be5e8490c7d7",
+      "restoredClean": true
+    },
+    {
+      "id": "NOTIFY12",
+      "behavior": "Destroy immediately disables the window delivery path",
+      "file": "src/app/desktop-notifications.ts",
+      "suite": "desktop-imessage",
+      "diff": "diff --git a/src/app/desktop-notifications.ts b/src/app/desktop-notifications.ts\nindex 3efa81cda..51842a034 100644\n--- a/src/app/desktop-notifications.ts\n+++ b/src/app/desktop-notifications.ts\n@@ -51,3 +51,3 @@ export class DesktopNotifications implements AppModule {\n   destroy(): void {\n-    this.workspaceOpen = false;\n+    void this.workspaceOpen;\n     document.removeEventListener('wm:breaking-news', this.boundHandler);\n",
+      "appliedDiffSha256": "af24b0ac6c2bdd9c6e0d432a88c7af0d340dab2e05361db40b4c4c67448af4ad",
+      "mutantSha256": "60e25a42171386b515c23ca2822c24ac43f0e5f58868b614e85c62f93e24240d",
+      "red": "11 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "destroy prevents a pending web permission from sending or a late desktop hydration notice"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + [\n    +   [\n    +     'banner'\n    +   ]\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0:\n      0: 'banner'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "59828e585fb85a6e930792aae26e4e3286d3f3a9b1dd1cd35fe2be5e8490c7d7",
+      "restoredClean": true
+    },
+    {
+      "id": "NOTIFY13",
+      "behavior": "Do not accept unknown saved modes during early readiness",
+      "file": "src/app/desktop-notifications.ts",
+      "suite": "desktop-imessage",
+      "diff": "diff --git a/src/app/desktop-notifications.ts b/src/app/desktop-notifications.ts\nindex 3efa81cda..679935103 100644\n--- a/src/app/desktop-notifications.ts\n+++ b/src/app/desktop-notifications.ts\n@@ -60,3 +60,3 @@ export class DesktopNotifications implements AppModule {\n         const mode = localStorage.getItem('wm-app-mode');\n-        if (mode !== null && mode !== 'gods-vision') return false;\n+        if (mode === 'ghost') return false;\n         if (localStorage.getItem('cb:onboarding-complete') !== 'true') return false;\n",
+      "appliedDiffSha256": "73904079a392ad57ecc2beed672fd83ac1432c64cd0739bceed57c890d138c2b",
+      "mutantSha256": "3af8ebd1003f5bc2be9af0655c59803228e310134dde81df8951916db1c59065",
+      "red": "11 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "early alerts require completed onboarding and a known non-Ghost preference"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + [\n    +   [\n    +     'send_notification',\n    +     {\n    +       body: '[CRITICAL] Event — Source',\n    +       priority: 'high',\n    +       sound: 'Basso',\n    +       title: 'Crystal Ball Alert'\n    +     }\n    +   ]\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0:\n      0: 'send_notification'\n      1:",
+      "restoredSha256": "59828e585fb85a6e930792aae26e4e3286d3f3a9b1dd1cd35fe2be5e8490c7d7",
+      "restoredClean": true
+    },
+    {
+      "id": "NOTIFY14",
+      "behavior": "Reverse-order readiness cannot hydrate before the workspace opens",
+      "file": "src/app/desktop-notifications.ts",
+      "suite": "desktop-imessage",
+      "diff": "diff --git a/src/app/desktop-notifications.ts b/src/app/desktop-notifications.ts\nindex 3efa81cda..be9d69a30 100644\n--- a/src/app/desktop-notifications.ts\n+++ b/src/app/desktop-notifications.ts\n@@ -39,3 +39,3 @@ export class DesktopNotifications implements AppModule {\n     this.sourcesReady = true;\n-    if (this.workspaceOpen) this.hydrateRelay();\n+    this.hydrateRelay();\n   }\n",
+      "appliedDiffSha256": "6fb6c4bf35ce3acc1dba585fee141b39258075c59f7042d5edc61bab28015592",
+      "mutantSha256": "844b476d87974a4587a81cdbd15a0d80854f1cb821252d6eeb55b5c36d1fa77e",
+      "red": "11 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "completed acquisition waits for the desktop intro before native settings hydration"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + [\n    +   [\n    +     'hydrate'\n    +   ]\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0:\n      0: 'hydrate'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "59828e585fb85a6e930792aae26e4e3286d3f3a9b1dd1cd35fe2be5e8490c7d7",
+      "restoredClean": true
+    },
+    {
+      "id": "NOTIFY15",
+      "behavior": "Repeated open does not rehydrate relay settings",
+      "file": "src/app/desktop-notifications.ts",
+      "suite": "desktop-imessage",
+      "diff": "diff --git a/src/app/desktop-notifications.ts b/src/app/desktop-notifications.ts\nindex 3efa81cda..9fb7be741 100644\n--- a/src/app/desktop-notifications.ts\n+++ b/src/app/desktop-notifications.ts\n@@ -31,3 +31,3 @@ export class DesktopNotifications implements AppModule {\n   openWorkspace(): void {\n-    if (this.workspaceOpen || this.ctx.isDestroyed) return;\n+    if (this.ctx.isDestroyed) return;\n     this.workspaceOpen = true;\n",
+      "appliedDiffSha256": "9692866cc958582e7ffa79286735eb5db96182276e29f88454ab561489b5fe01",
+      "mutantSha256": "5fd3fc8b40fc68b2db4857af9fde940141f36a24214fae3d9ee9b3401dd6c830",
+      "red": "11 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "completed acquisition waits for the desktop intro before native settings hydration"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'hydrate',\n        'paused-notice',\n    +   'hydrate'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'hydrate'\n    1: 'paused-notice'\n  actual:\n    0: 'hydrate'\n    1: 'paused-notice'\n    2: 'hydrate'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "59828e585fb85a6e930792aae26e4e3286d3f3a9b1dd1cd35fe2be5e8490c7d7",
+      "restoredClean": true
+    },
+    {
+      "id": "NOTIFY16",
+      "behavior": "A native send completion cannot relay after eligibility was revoked",
+      "file": "src/app/desktop-notifications.ts",
+      "suite": "desktop-imessage",
+      "diff": "diff --git a/src/app/desktop-notifications.ts b/src/app/desktop-notifications.ts\nindex 3efa81cda..c6e532d8d 100644\n--- a/src/app/desktop-notifications.ts\n+++ b/src/app/desktop-notifications.ts\n@@ -75,3 +75,3 @@ export class DesktopNotifications implements AppModule {\n       await notifyNative({ title: 'Crystal Ball Alert', body, sound, priority: 'high' });\n-      if (allowRelay && this.canRoute()) await this.relayToImessage(alert, body);\n+      if (allowRelay) await this.relayToImessage(alert, body);\n       return;\n",
+      "appliedDiffSha256": "6a1970f1713914561e64b1d46f318de69c656883def713a7c1f4ba1a5bed6b9c",
+      "mutantSha256": "9f6026a6feafa321b7722fc9115fc92fe76a08d05756c7d6eff1745e90b58e71",
+      "red": "11 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "permission and native send continuations honor revoked eligibility"
+      ],
+      "assertion": "error: |-\n    The expression evaluated to a falsy value:\n    \n      assert.ok(!native.calls.some(c => c[0] === 'imessage'))\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='",
+      "restoredSha256": "59828e585fb85a6e930792aae26e4e3286d3f3a9b1dd1cd35fe2be5e8490c7d7",
+      "restoredClean": true
+    },
+    {
+      "id": "ROUTER01",
+      "behavior": "Disposed pending router cannot install after asynchronous import",
+      "file": "src/services/notification-router.ts",
+      "suite": "router-fanout",
+      "diff": "diff --git a/src/services/notification-router.ts b/src/services/notification-router.ts\nindex 9892b0fb4..1055d3f2d 100644\n--- a/src/services/notification-router.ts\n+++ b/src/services/notification-router.ts\n@@ -494,3 +494,3 @@ export function startNotificationRouter(deps?: RouterDeps): () => void {\n     void import('./threat-reactor').then((mod) => {\n-      if (activeRouter === current) current.disconnect = mod.onAlert((alert) => deliver(alert, current));\n+      current.disconnect = mod.onAlert((alert) => deliver(alert, current));\n     }).catch(() => { /* threat-reactor unavailable */ });\n",
+      "appliedDiffSha256": "ff70eb717001743f8a0659c3015bbd03f7b532fdc9bea9e76b5be801834ee635",
+      "mutantSha256": "70b4a0fc374a757dc7fdd9654b0efa503c38db867ac42ea64d54e1ce55177d81",
+      "red": "17 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "pending imports attach only the current subscriber and final release removes it"
+      ],
+      "assertion": "error: |-\n    a stale import cannot register its callback\n    \n    2 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 2\n  operator: 'strictEqual'",
+      "restoredSha256": "0a36039125aca5f7b602f9458310316cf6a70a7463ac2504d8296a7e6c55f18c",
+      "restoredClean": true
+    },
+    {
+      "id": "ROUTER02",
+      "behavior": "Overlapping owners retain their shared subscription",
+      "file": "src/services/notification-router.ts",
+      "suite": "router-retry",
+      "diff": "diff --git a/src/services/notification-router.ts b/src/services/notification-router.ts\nindex 9892b0fb4..2e70433d4 100644\n--- a/src/services/notification-router.ts\n+++ b/src/services/notification-router.ts\n@@ -503,3 +503,3 @@ export function startNotificationRouter(deps?: RouterDeps): () => void {\n     released = true;\n-    if (--router.users === 0 && activeRouter === router) {\n+    if (activeRouter === router) {\n       activeRouter = null;\n",
+      "appliedDiffSha256": "eb7862e23ea04132bf05a64612a0f6a3ef711ab1ac2fca1c741764d66208916b",
+      "mutantSha256": "f4648cc2ddc583bf8a3d3377e8e830c4e93d2ea92e7290c94c06bdca071db91d",
+      "red": "8 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "a disposed pending router cannot subscribe later or disconnect its replacement"
+      ],
+      "assertion": "error: 'router never subscribed to the reactor'\n  code: 'ERR_TEST_FAILURE'",
+      "restoredSha256": "0a36039125aca5f7b602f9458310316cf6a70a7463ac2504d8296a7e6c55f18c",
+      "restoredClean": true
+    },
+    {
+      "id": "ROUTER03",
+      "behavior": "Releasing one owner twice cannot tear down another",
+      "file": "src/services/notification-router.ts",
+      "suite": "router-retry",
+      "diff": "diff --git a/src/services/notification-router.ts b/src/services/notification-router.ts\nindex 9892b0fb4..57d963137 100644\n--- a/src/services/notification-router.ts\n+++ b/src/services/notification-router.ts\n@@ -501,3 +501,3 @@ export function startNotificationRouter(deps?: RouterDeps): () => void {\n   return () => {\n-    if (released) return;\n+    \n     released = true;\n",
+      "appliedDiffSha256": "b9d516194512ba00937d813b4399cff192dd41ce2ad9d150d73982d87c56de1c",
+      "mutantSha256": "f2d6f2a684194c70d90fbf0ee97cf82bc2cfe75946d05dcb86478586af5cfc45",
+      "red": "8 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "a disposed pending router cannot subscribe later or disconnect its replacement"
+      ],
+      "assertion": "error: 'router never subscribed to the reactor'\n  code: 'ERR_TEST_FAILURE'",
+      "restoredSha256": "0a36039125aca5f7b602f9458310316cf6a70a7463ac2504d8296a7e6c55f18c",
+      "restoredClean": true
+    },
+    {
+      "id": "ROUTER04",
+      "behavior": "Last owner disconnects the real listener",
+      "file": "src/services/notification-router.ts",
+      "suite": "router-fanout",
+      "diff": "diff --git a/src/services/notification-router.ts b/src/services/notification-router.ts\nindex 9892b0fb4..81b996354 100644\n--- a/src/services/notification-router.ts\n+++ b/src/services/notification-router.ts\n@@ -506,3 +506,3 @@ export function startNotificationRouter(deps?: RouterDeps): () => void {\n       router.controller.abort();\n-      router.disconnect?.();\n+      void router.disconnect;\n     }\n",
+      "appliedDiffSha256": "2739395b43e787c38750caaaa568d4bc1c30d807802e0d3982e24b5e0b332402",
+      "mutantSha256": "41943c7a54bbdcce8c1b345a2d9dc180fafe2b13a7f4c7c9952e1e78488b4cb8",
+      "red": "17 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "pending imports attach only the current subscriber and final release removes it"
+      ],
+      "assertion": "error: |-\n    last owner physically removes the subscriber\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'",
+      "restoredSha256": "0a36039125aca5f7b602f9458310316cf6a70a7463ac2504d8296a7e6c55f18c",
+      "restoredClean": true
+    },
+    {
+      "id": "FANOUT01",
+      "behavior": "Last lease aborts unresolved work",
+      "file": "src/services/notification-router.ts",
+      "suite": "router-fanout",
+      "diff": "diff --git a/src/services/notification-router.ts b/src/services/notification-router.ts\nindex 9892b0fb4..fb7d1afa0 100644\n--- a/src/services/notification-router.ts\n+++ b/src/services/notification-router.ts\n@@ -505,3 +505,3 @@ export function startNotificationRouter(deps?: RouterDeps): () => void {\n       activeRouter = null;\n-      router.controller.abort();\n+      void router.controller;\n       router.disconnect?.();\n",
+      "appliedDiffSha256": "6e94dfb2ebabd9c24a6cb747ce4e7bf3c0507349a0b46bf024c5101874cab899",
+      "mutantSha256": "7d2058e90ab399f042f83895bc9ba78c864cac81c7751fb67ba648859243c262",
+      "red": "14 pass / 4 fail",
+      "exit": 1,
+      "failingTests": [
+        "releasing the last workspace stops every in-flight fanout after its current operation",
+        "default transports cancel lazy imports and release old map-marker timers",
+        "a synchronous toast or marker can release the last owner without arming further work",
+        "pending imports attach only the current subscriber and final release removes it"
+      ],
+      "assertion": "error: |-\n    read\n    + actual - expected\n    \n    + [\n    +   'read-mode',\n    +   'put',\n    +   'toast',\n    +   'native',\n    +   'marker'\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0: 'read-mode'\n    1: 'put'\n    2: 'toast'\n    3: 'native'\n    4: 'marker'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "0a36039125aca5f7b602f9458310316cf6a70a7463ac2504d8296a7e6c55f18c",
+      "restoredClean": true
+    },
+    {
+      "id": "FANOUT02",
+      "behavior": "No stale native result starts rate limit or trace",
+      "file": "src/services/notification-router.ts",
+      "suite": "router-fanout",
+      "diff": "diff --git a/src/services/notification-router.ts b/src/services/notification-router.ts\nindex 9892b0fb4..8ab31615d 100644\n--- a/src/services/notification-router.ts\n+++ b/src/services/notification-router.ts\n@@ -320,3 +320,3 @@ async function safeNative(\n   }\n-  if (router.controller.signal.aborted) return 'skipped';\n+  /* stale acknowledgment */\n   // Only a delivered notification counts: it starts the per-severity window\n",
+      "appliedDiffSha256": "b03fea8a2e3fc09b7e4c7a3baf0f5c42b2b7899bac1b7b591776ac0856d0365a",
+      "mutantSha256": "4f451c18ed8a4631c6939cd7830ba5d73d35aaa7e5101ac2b4da83709582e06d",
+      "red": "17 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "releasing the last workspace stops every in-flight fanout after its current operation"
+      ],
+      "assertion": "error: |-\n    native\n    \n    0 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 0\n  operator: 'strictEqual'",
+      "restoredSha256": "0a36039125aca5f7b602f9458310316cf6a70a7463ac2504d8296a7e6c55f18c",
+      "restoredClean": true
+    },
+    {
+      "id": "FANOUT03",
+      "behavior": "No later DB work after a disposed duplicate lookup",
+      "file": "src/services/notification-router.ts",
+      "suite": "router-fanout",
+      "diff": "diff --git a/src/services/notification-router.ts b/src/services/notification-router.ts\nindex 9892b0fb4..c457d00df 100644\n--- a/src/services/notification-router.ts\n+++ b/src/services/notification-router.ts\n@@ -369,3 +369,2 @@ async function deliver(alert: ReactorAlert, router: ActiveRouter): Promise<boole\n   const duplicate = await isDuplicate(alert, deps, nowMs);\n-  if (signal.aborted) return true;\n   if (duplicate) {\n",
+      "appliedDiffSha256": "e77758ff491a0844c4204086301e5406f0a5220f5c2f8fda011405abe75fd682",
+      "mutantSha256": "fd3608c66e1100a04bbdba53bc9c07d21d15d326098635aaa229047571ff5164",
+      "red": "17 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "releasing the last workspace stops every in-flight fanout after its current operation"
+      ],
+      "assertion": "error: |-\n    read\n    + actual - expected\n    \n    + [\n    +   'read-mode'\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0: 'read-mode'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "0a36039125aca5f7b602f9458310316cf6a70a7463ac2504d8296a7e6c55f18c",
+      "restoredClean": true
+    },
+    {
+      "id": "FANOUT04",
+      "behavior": "No stale inbox after Ghost resolution",
+      "file": "src/services/notification-router.ts",
+      "suite": "router-fanout",
+      "diff": "diff --git a/src/services/notification-router.ts b/src/services/notification-router.ts\nindex 9892b0fb4..75013377d 100644\n--- a/src/services/notification-router.ts\n+++ b/src/services/notification-router.ts\n@@ -375,3 +375,2 @@ async function deliver(alert: ReactorAlert, router: ActiveRouter): Promise<boole\n   const ghost = await safeIsGhost(deps);\n-  if (signal.aborted) return true;\n   await safePut(deps, alertToUnified(alert));\n",
+      "appliedDiffSha256": "970ea5cdea53d27e08ec0ade90202f9bff9b89ddb935e78cffff92cce5014cb2",
+      "mutantSha256": "8ae1335d5634c0a5faebbfad2f9cf26649fa655a16f206dc6ccb1e0ba71267a2",
+      "red": "17 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "releasing the last workspace stops every in-flight fanout after its current operation"
+      ],
+      "assertion": "error: |-\n    ghost\n    + actual - expected\n    \n      [\n        'read-mode',\n    +   'put'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'read-mode'\n  actual:\n    0: 'read-mode'\n    1: 'put'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "0a36039125aca5f7b602f9458310316cf6a70a7463ac2504d8296a7e6c55f18c",
+      "restoredClean": true
+    },
+    {
+      "id": "FANOUT05",
+      "behavior": "No stale toast after inbox persistence",
+      "file": "src/services/notification-router.ts",
+      "suite": "router-fanout",
+      "diff": "diff --git a/src/services/notification-router.ts b/src/services/notification-router.ts\nindex 9892b0fb4..ee16529fe 100644\n--- a/src/services/notification-router.ts\n+++ b/src/services/notification-router.ts\n@@ -377,3 +377,2 @@ async function deliver(alert: ReactorAlert, router: ActiveRouter): Promise<boole\n   await safePut(deps, alertToUnified(alert));\n-  if (signal.aborted) return true;\n   safeToast(deps, alert);\n",
+      "appliedDiffSha256": "b0e5ed59f5b332e9174cf83ed51b212210a1e9c7ed464c413ca2da4b68760dcb",
+      "mutantSha256": "b7c3079d26903e5aa4ed8997ec1a613038a7ccad93cafec3765a0b82bb1aa732",
+      "red": "17 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "releasing the last workspace stops every in-flight fanout after its current operation"
+      ],
+      "assertion": "error: |-\n    put\n    + actual - expected\n    \n      [\n        'read-mode',\n        'put',\n    +   'toast'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'read-mode'\n    1: 'put'\n  actual:\n    0: 'read-mode'\n    1: 'put'\n    2: 'toast'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "0a36039125aca5f7b602f9458310316cf6a70a7463ac2504d8296a7e6c55f18c",
+      "restoredClean": true
+    },
+    {
+      "id": "FANOUT06",
+      "behavior": "No stale marker after native send",
+      "file": "src/services/notification-router.ts",
+      "suite": "router-fanout",
+      "diff": "diff --git a/src/services/notification-router.ts b/src/services/notification-router.ts\nindex 9892b0fb4..5d8ee0375 100644\n--- a/src/services/notification-router.ts\n+++ b/src/services/notification-router.ts\n@@ -382,3 +382,2 @@ async function deliver(alert: ReactorAlert, router: ActiveRouter): Promise<boole\n   const attempt = await safeNative(router, alert, ghost, nowMs, trace);\n-  if (signal.aborted) return true;\n   safeMarker(deps, alert, ghost);\n",
+      "appliedDiffSha256": "fb32067dd88297ed274bf83e125c8eeee78733a0ee967d245a9ab618499b4df9",
+      "mutantSha256": "dc638427259ca4ddfa5c0ada72026899ea9c0588616fdec98069824e5806cf00",
+      "red": "17 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "releasing the last workspace stops every in-flight fanout after its current operation"
+      ],
+      "assertion": "error: |-\n    native\n    + actual - expected\n    \n      [\n        'read-mode',\n        'put',\n        'toast',\n        'native',\n    +   'marker'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'read-mode'\n    1: 'put'\n    2: 'toast'\n    3: 'native'\n  actual:\n    0: 'read-mode'\n    1: 'put'\n    2: 'toast'\n    3: 'native'\n    4: 'marker'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "0a36039125aca5f7b602f9458310316cf6a70a7463ac2504d8296a7e6c55f18c",
+      "restoredClean": true
+    },
+    {
+      "id": "FANOUT07",
+      "behavior": "Do not attempt a stale native retry after new mode resolution",
+      "file": "src/services/notification-router.ts",
+      "suite": "router-fanout",
+      "diff": "diff --git a/src/services/notification-router.ts b/src/services/notification-router.ts\nindex 9892b0fb4..d654f5894 100644\n--- a/src/services/notification-router.ts\n+++ b/src/services/notification-router.ts\n@@ -403,3 +403,2 @@ async function retryNative(\n   const ghost = await safeIsGhost(router.deps);\n-  if (router.controller.signal.aborted) return true;\n   const attempt = await safeNative(router, alert, ghost, nowMs, trace);\n",
+      "appliedDiffSha256": "61dc574bcc4f02400bc71bc36d67e8bb7d6b243cd6c01b26f9438d78e04206ac",
+      "mutantSha256": "3963f7d2283431e68a22ffa197f7722cdf33b945cfff438b55828dffd63e30fc",
+      "red": "17 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "releasing the last workspace stops every in-flight fanout after its current operation"
+      ],
+      "assertion": "error: |-\n    retry-ghost\n    + actual - expected\n    \n      [\n        'read-mode',\n        'put',\n        'toast',\n        'native',\n        'marker',\n        'read-mode',\n    +   'native'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'read-mode'\n    1: 'put'\n    2: 'toast'\n    3: 'native'\n    4: 'marker'\n    5: 'read-mode'\n  actual:\n    0: 'read-mode'\n    1: 'put'\n    2: 'toast'\n    3: 'native'\n    4: 'marker'\n    5:",
+      "restoredSha256": "0a36039125aca5f7b602f9458310316cf6a70a7463ac2504d8296a7e6c55f18c",
+      "restoredClean": true
+    },
+    {
+      "id": "FANOUT08",
+      "behavior": "Late successful retry cannot clear newer pending state",
+      "file": "src/services/notification-router.ts",
+      "suite": "router-fanout",
+      "diff": "diff --git a/src/services/notification-router.ts b/src/services/notification-router.ts\nindex 9892b0fb4..3c3ff2c1a 100644\n--- a/src/services/notification-router.ts\n+++ b/src/services/notification-router.ts\n@@ -405,3 +405,2 @@ async function retryNative(\n   const attempt = await safeNative(router, alert, ghost, nowMs, trace);\n-  if (router.controller.signal.aborted) return true;\n   if (attempt !== 'delivered') return false;\n",
+      "appliedDiffSha256": "92e3b618e6f68497c84e908e729bc2d1bcf6c317f575992ba421723f28cad3d5",
+      "mutantSha256": "700a2f42689ad6c83515a9b4cfbcbebc422ab14b4a2ec8e516e216f94f50afca",
+      "red": "17 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "pending imports attach only the current subscriber and final release removes it"
+      ],
+      "assertion": "error: |-\n    a retired retry cannot request another replay\n    \n    false !== true\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: 'strictEqual'",
+      "restoredSha256": "0a36039125aca5f7b602f9458310316cf6a70a7463ac2504d8296a7e6c55f18c",
+      "restoredClean": true
+    },
+    {
+      "id": "FANOUT09",
+      "behavior": "Lazy inbox read checks owner after chunk loads",
+      "file": "src/services/notification-router.ts",
+      "suite": "router-fanout",
+      "diff": "diff --git a/src/services/notification-router.ts b/src/services/notification-router.ts\nindex 9892b0fb4..e73bce29c 100644\n--- a/src/services/notification-router.ts\n+++ b/src/services/notification-router.ts\n@@ -134,3 +134,3 @@ async function defaultAlertDBGetAll(signal: AbortSignal, opts?: {\n   const mod = await import('./alert-store');\n-  return signal.aborted ? [] : mod.alertDB.getAll(opts);\n+  return mod.alertDB.getAll(opts);\n }\n",
+      "appliedDiffSha256": "d7dd14337c7b5b52968ba818a7037e7cc114154151c9f9d02da5ba2931eda28f",
+      "mutantSha256": "88f6dc2bc67eaa9ac2bd3fde3e6a6c39dfb9f32ba0133d34cf800f943be52cac",
+      "red": "17 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "default transports cancel lazy imports and release old map-marker timers"
+      ],
+      "assertion": "error: |-\n    get\n    + actual - expected\n    \n    + [\n    +   'read'\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0: 'read'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "0a36039125aca5f7b602f9458310316cf6a70a7463ac2504d8296a7e6c55f18c",
+      "restoredClean": true
+    },
+    {
+      "id": "FANOUT10",
+      "behavior": "Lazy inbox write checks owner after chunk loads",
+      "file": "src/services/notification-router.ts",
+      "suite": "router-fanout",
+      "diff": "diff --git a/src/services/notification-router.ts b/src/services/notification-router.ts\nindex 9892b0fb4..b21123979 100644\n--- a/src/services/notification-router.ts\n+++ b/src/services/notification-router.ts\n@@ -127,3 +127,3 @@ async function defaultAlertDBPut(a: UnifiedAlert, signal: AbortSignal): Promise<\n   const mod = await import('./alert-store');\n-  if (!signal.aborted) await mod.alertDB.put(a);\n+  await mod.alertDB.put(a);\n }\n",
+      "appliedDiffSha256": "336cbbafb2a2fb76a4ae324eb1c08cb8ea582459d93dee53ce400cbe497a81c7",
+      "mutantSha256": "b95a1a3aea9ed67f1498aa0ff8b1525e1d3e74bea1a3be74bec870896f2cd890",
+      "red": "17 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "default transports cancel lazy imports and release old map-marker timers"
+      ],
+      "assertion": "error: |-\n    put\n    + actual - expected\n    \n      [\n        'read',\n    +   'store'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'read'\n  actual:\n    0: 'read'\n    1: 'store'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "0a36039125aca5f7b602f9458310316cf6a70a7463ac2504d8296a7e6c55f18c",
+      "restoredClean": true
+    },
+    {
+      "id": "FANOUT11",
+      "behavior": "Lazy native send checks owner before invoking transport",
+      "file": "src/services/notification-router.ts",
+      "suite": "router-fanout",
+      "diff": "diff --git a/src/services/notification-router.ts b/src/services/notification-router.ts\nindex 9892b0fb4..b9cb09613 100644\n--- a/src/services/notification-router.ts\n+++ b/src/services/notification-router.ts\n@@ -145,3 +145,3 @@ async function defaultSendNativeNotification(\n     const mod = await import('./native-notify');\n-    if (signal.aborted) return 'unavailable';\n+    /* stale send */\n     return await mod.notifyNative({ title, body, priority });\n",
+      "appliedDiffSha256": "9c05d5bc00040d2d2226d609bff882439c5f986f52ca00c1421665ccc7ae1cc7",
+      "mutantSha256": "e3daf5a01099111e98cd555ef8e26659ddf31a561a360fb1ca28bc2dbd1a427e",
+      "red": "17 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "default transports cancel lazy imports and release old map-marker timers"
+      ],
+      "assertion": "error: |-\n    native\n    + actual - expected\n    \n      [\n        'read',\n        'store',\n    +   'send'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'read'\n    1: 'store'\n  actual:\n    0: 'read'\n    1: 'store'\n    2: 'send'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "0a36039125aca5f7b602f9458310316cf6a70a7463ac2504d8296a7e6c55f18c",
+      "restoredClean": true
+    },
+    {
+      "id": "FANOUT12",
+      "behavior": "Lazy map marker cannot start after widget disposes",
+      "file": "src/services/notification-router.ts",
+      "suite": "router-fanout",
+      "diff": "diff --git a/src/services/notification-router.ts b/src/services/notification-router.ts\nindex 9892b0fb4..1013cc615 100644\n--- a/src/services/notification-router.ts\n+++ b/src/services/notification-router.ts\n@@ -187,3 +187,3 @@ function defaultAddMapMarker(lat: number, lon: number, alertId: string, signal:\n  | undefined;\n- if (!signal.aborted && typeof add === 'function') {\n+ if (typeof add === 'function') {\n    add(MARKER_LAYER, lat, lon, alertId);\n",
+      "appliedDiffSha256": "e4c54dbd8351ef119017ec796a1696bf58377f83c8de80b2cc07f99a34187564",
+      "mutantSha256": "0d66cf1033882d2a86dd25e73376ed0670b3adfb0f015bf4a07623dae1d84a1f",
+      "red": "17 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "default transports cancel lazy imports and release old map-marker timers"
+      ],
+      "assertion": "error: |-\n    map\n    + actual - expected\n    \n      [\n        'read',\n        'store',\n        'send',\n    +   'mark',\n    +   'timer'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'read'\n    1: 'store'\n    2: 'send'\n  actual:\n    0: 'read'\n    1: 'store'\n    2: 'send'\n    3: 'mark'\n    4: 'timer'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "0a36039125aca5f7b602f9458310316cf6a70a7463ac2504d8296a7e6c55f18c",
+      "restoredClean": true
+    },
+    {
+      "id": "FANOUT13",
+      "behavior": "Last owner clears outstanding marker TTL",
+      "file": "src/services/notification-router.ts",
+      "suite": "router-fanout",
+      "diff": "diff --git a/src/services/notification-router.ts b/src/services/notification-router.ts\nindex 9892b0fb4..d10327f0b 100644\n--- a/src/services/notification-router.ts\n+++ b/src/services/notification-router.ts\n@@ -189,3 +189,3 @@ function defaultAddMapMarker(lat: number, lon: number, alertId: string, signal:\n    add(MARKER_LAYER, lat, lon, alertId);\n-   const cancel = () => clearTimeout(timer);\n+   const cancel = () => undefined;\n    const timer = setTimeout(() => {\n",
+      "appliedDiffSha256": "5a03b83ac5287e4cf133e40f7dbc1c31bcbba14bac747d305072dc3d5f86a42f",
+      "mutantSha256": "3ed4550c7fe33f0a15c9da0f7df06e092861205fa59ab58f0525319f176bd562",
+      "red": "17 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "default transports cancel lazy imports and release old map-marker timers"
+      ],
+      "assertion": "error: 'last owner releases the timer'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='",
+      "restoredSha256": "0a36039125aca5f7b602f9458310316cf6a70a7463ac2504d8296a7e6c55f18c",
+      "restoredClean": true
+    },
+    {
+      "id": "FANOUT14",
+      "behavior": "Even a queued marker cleanup cannot remove replacement map state",
+      "file": "src/services/notification-router.ts",
+      "suite": "router-fanout",
+      "diff": "diff --git a/src/services/notification-router.ts b/src/services/notification-router.ts\nindex 9892b0fb4..19db307a0 100644\n--- a/src/services/notification-router.ts\n+++ b/src/services/notification-router.ts\n@@ -192,3 +192,3 @@ function defaultAddMapMarker(lat: number, lon: number, alertId: string, signal:\n      signal.removeEventListener('abort', cancel);\n-     if (!signal.aborted) {\n+     if (true) {\n        try { remove?.(MARKER_LAYER, alertId); } catch { /* map already gone */ }\n",
+      "appliedDiffSha256": "2ec029f3afc000134530e7750bf8eb1a94463b420484ae5dc7849636f1064df3",
+      "mutantSha256": "b194b0cefd7736c7fcd5df5d39ed8e74fa836ed484c86b58d3fa7cab9cb17da4",
+      "red": "17 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "default transports cancel lazy imports and release old map-marker timers"
+      ],
+      "assertion": "error: 'expired old timer cannot remove a replacement marker'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='",
+      "restoredSha256": "0a36039125aca5f7b602f9458310316cf6a70a7463ac2504d8296a7e6c55f18c",
+      "restoredClean": true
+    },
+    {
+      "id": "FANOUT15",
+      "behavior": "A synchronous toast cannot continue native effects after tearing down its owner",
+      "file": "src/services/notification-router.ts",
+      "suite": "router-fanout",
+      "diff": "diff --git a/src/services/notification-router.ts b/src/services/notification-router.ts\nindex 9892b0fb4..4b040466d 100644\n--- a/src/services/notification-router.ts\n+++ b/src/services/notification-router.ts\n@@ -379,3 +379,2 @@ async function deliver(alert: ReactorAlert, router: ActiveRouter): Promise<boole\n   safeToast(deps, alert);\n-  if (signal.aborted) return true;\n   dispatchRouterTrace(trace, nowMs);\n",
+      "appliedDiffSha256": "99b59cd85fb4cfd4c7e353d850fdb942aa90ae7686776f634b25662328fa4bcc",
+      "mutantSha256": "eab45fa16ba30edb84f6ab1bd6de057422b4f7a649647736f37ea81d438883cc",
+      "red": "17 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "a synchronous toast or marker can release the last owner without arming further work"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'put',\n        'toast',\n    +   'native'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'put'\n    1: 'toast'\n  actual:\n    0: 'put'\n    1: 'toast'\n    2: 'native'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "0a36039125aca5f7b602f9458310316cf6a70a7463ac2504d8296a7e6c55f18c",
+      "restoredClean": true
+    },
+    {
+      "id": "FANOUT16",
+      "behavior": "Synchronous marker teardown cannot arm a retry in the replacement app",
+      "file": "src/services/notification-router.ts",
+      "suite": "router-fanout",
+      "diff": "diff --git a/src/services/notification-router.ts b/src/services/notification-router.ts\nindex 9892b0fb4..90a4dcf88 100644\n--- a/src/services/notification-router.ts\n+++ b/src/services/notification-router.ts\n@@ -384,3 +384,3 @@ async function deliver(alert: ReactorAlert, router: ActiveRouter): Promise<boole\n   safeMarker(deps, alert, ghost);\n-  if (signal.aborted || attempt !== 'not_delivered') return true;\n+  if (attempt !== 'not_delivered') return true;\n   pendingNative.set(alert.alertId, nowMs);\n",
+      "appliedDiffSha256": "d8ae6a19aff50f798043de952405b6c8260194ff3432de0b933a94be6375615a",
+      "mutantSha256": "cd6cd417181caa3c412de4fe899a92fc6f223ff492a08962e8026ccd77cc7c50",
+      "red": "17 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "a synchronous toast or marker can release the last owner without arming further work"
+      ],
+      "assertion": "error: |-\n    disposed marker cannot arm a stale retry\n    + actual - expected\n    \n      [\n    -   'put',\n    -   'toast',\n        'native',\n    -   'marker'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'put'\n    1: 'toast'\n    2: 'native'\n    3: 'marker'\n  actual:\n    0: 'native'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "0a36039125aca5f7b602f9458310316cf6a70a7463ac2504d8296a7e6c55f18c",
+      "restoredClean": true
+    },
+    {
+      "id": "FANOUT17",
+      "behavior": "A released callback cannot examine current app state after teardown",
+      "file": "src/services/notification-router.ts",
+      "suite": "router-fanout",
+      "diff": "diff --git a/src/services/notification-router.ts b/src/services/notification-router.ts\nindex 9892b0fb4..5c3ec8ad9 100644\n--- a/src/services/notification-router.ts\n+++ b/src/services/notification-router.ts\n@@ -359,3 +359,2 @@ async function deliver(alert: ReactorAlert, router: ActiveRouter): Promise<boole\n   const { deps, controller: { signal } } = router;\n-  if (signal.aborted) return true;\n   const nowMs = deps.now();\n",
+      "appliedDiffSha256": "ecc9f456b739226e7d9e7bbf8564ab9302919bc1e67ef07b8ea84324c51e4895",
+      "mutantSha256": "ed2115a1e9f072136a58049ce88e41e6d709ad3328d921643813a069bfaccd5a",
+      "red": "17 pass / 1 fail",
+      "exit": 1,
+      "failingTests": [
+        "pending imports attach only the current subscriber and final release removes it"
+      ],
+      "assertion": "error: |-\n    a stale callback cannot inspect the next workspace\n    \n    3 !== 2\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 2\n  actual: 3\n  operator: 'strictEqual'",
+      "restoredSha256": "0a36039125aca5f7b602f9458310316cf6a70a7463ac2504d8296a7e6c55f18c",
+      "restoredClean": true
+    },
+    {
+      "id": "FANOUT18",
+      "behavior": "The lazy import substitute must support live dependency resolution as well as stale cancellation",
+      "file": "src/services/__tests__/notification-router.test.mts",
+      "suite": "router-fanout",
+      "diff": "diff --git a/src/services/__tests__/notification-router.test.mts b/src/services/__tests__/notification-router.test.mts\nindex f9813b96e..10cafedf2 100644\n--- a/src/services/__tests__/notification-router.test.mts\n+++ b/src/services/__tests__/notification-router.test.mts\n@@ -362,3 +362,3 @@ async function compileRouterFixture(): Promise<string> {\n   fixtureModule = ts.transpileModule(source, {\n-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: false },\n+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true },\n   }).outputText;\n",
+      "appliedDiffSha256": "3e98953f2778a5355ed408e2f2f642b2ba3ed3c340a071ce19546ab9ea39797e",
+      "mutantSha256": "775f5346982e59f70e8527d97f3f69e07b613c68030a4005e93200ea984f0c74",
+      "red": "16 pass / 2 fail",
+      "exit": 1,
+      "failingTests": [
+        "default transports cancel lazy imports and release old map-marker timers",
+        "pending imports attach only the current subscriber and final release removes it"
+      ],
+      "assertion": "error: 'live get dependency must perform the real fixture effect'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='",
+      "restoredSha256": "3088ecc783946afe0573e9e6b35e67fdaf7222197db3e7f5b91d6ea1f46c74d3",
+      "restoredClean": true
+    }
+  ],
+  "results": {
+    "individuallyReversed": 106,
+    "killedByExpectedAssertion": 106,
+    "unresolved": 0
+  },
+  "reachableFixtureParity": {
+    "staged": "5489d654addfdb5612864ab392aaa49b92a32c60",
+    "reachable": "45d8ee421330d5de184a08bb0e86226a2ca27f0d",
+    "identicalTree": "7e268195898f728248a65a3e8fe6c16e6b78412e",
+    "gitDiffExitCode": 0
+  }
+}

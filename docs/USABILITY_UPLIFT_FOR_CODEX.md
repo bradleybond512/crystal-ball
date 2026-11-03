@@ -1097,8 +1097,9 @@ Acceptance: Define usable first-screen readiness separately from background acqu
 
 ### UX-054 — Cover subproject dependencies in security checks
 
-Status: NOT STARTED — HIGH ASSURANCE
+Status: IN PROGRESS — HIGH ASSURANCE
 Priority: S
+Claim: [Draft #1849](https://github.com/bradleybond512/crystal-ball/pull/1849)
 Source findings: PR1731 M10.
 
 Acceptance: Inventory all maintained lockfiles and exposed tools; add appropriately scoped audit coverage and resolve confirmed reachable issues without weakening thresholds.
@@ -1272,7 +1273,7 @@ Update the row in the same PR that does the work.
 | UX-051 | Align RSS request budgets across boundaries | NOT STARTED — HIGH ASSURANCE | — |
 | UX-052 | Restrain derived alert interruptions | NOT STARTED — HIGH ASSURANCE | — |
 | UX-053 | Finish boot without awaiting all data sources | NOT STARTED — HIGH ASSURANCE | — |
-| UX-054 | Cover subproject dependencies in security checks | NOT STARTED — HIGH ASSURANCE | — |
+| UX-054 | Cover subproject dependencies in security checks | IN PROGRESS — HIGH ASSURANCE | [Draft #1849](https://github.com/bradleybond512/crystal-ball/pull/1849) |
 | UX-055 | Surface stale credential validation honestly | NOT STARTED — HIGH ASSURANCE | — |
 | UX-056 | Bound retained storage without losing user evidence | NOT STARTED — HIGH ASSURANCE | — |
 | UX-057 | Persist panel state only when it changes | NOT STARTED | — |

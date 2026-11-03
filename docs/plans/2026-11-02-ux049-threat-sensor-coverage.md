@@ -1,6 +1,6 @@
 # UX-049 Threat Dashboard coverage
 
-Proposed for design approval on November 2, 2026. Base commit `cd459dfec`. The roadmap controller selected UX-049 at priority S after accounting for open main-target PRs. This branch prepares a draft claim.
+Approved on November 2, 2026. Base commit `cd459dfec`. The roadmap controller selected UX-049 at priority S after accounting for open main-target PRs. Draft PR #1845 claims the task.
 
 ## Defect and acceptance
 

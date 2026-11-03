@@ -66,7 +66,7 @@ function at(hhmm: string): Date {
 function settingsWith(start: string, end: string, overrides: Partial<NotificationSettings['global']> = {}): NotificationSettings {
   const domain = { enabled: true, threshold: 'medium' as const, channel: 'both' as const, quietHoursEnabled: false };
   const domains = Object.fromEntries(['earthquakes', 'wildfire', 'aviation', 'maritime', 'biosurveillance', 'space_weather',
-    'infrastructure', 'geopolitical', 'weather', 'cyber', 'supply'].map((d) => [d, { ...domain }])) as NotificationSettings['domains'];
+    'infrastructure', 'geopolitical', 'weather', 'cyber', 'supply', 'derived'].map((d) => [d, { ...domain }])) as NotificationSettings['domains'];
   domains.earthquakes.quietHoursEnabled = true;
   return { version: 1, global: { masterMute: false, quietHoursStart: start, quietHoursEnd: end, dailySummaryEnabled: false, ...overrides }, domains };
 }
@@ -250,7 +250,7 @@ test('migration carries the Preferences window into weather only, once', async (
   const s = svc.getSettings();
   assert.deepEqual([s.global.quietHoursStart, s.global.quietHoursEnd], ['21:00', '06:00']);
   assert.equal(s.domains.weather.quietHoursEnabled, true);
-  assert.deepEqual(Object.entries(s.domains).filter(([, d]) => d.quietHoursEnabled).map(([k]) => k), ['weather'], 'no other domain gains silence');
+  assert.deepEqual(Object.entries(s.domains).filter(([, d]) => d.quietHoursEnabled).map(([k]) => k), ['weather', 'derived'], 'weather migration preserves the independent derived default');
   assert.equal(localStorage.getItem(MIGRATION_KEY), '1');
   assert.equal(JSON.parse(localStorage.getItem(SETTINGS_KEY)!).domains.weather.quietHoursEnabled, true);
 
@@ -288,4 +288,54 @@ test('the unwritten legacy quiet-hours stores have no readers left', () => {
   const loader = read('../../../app/data-loader.ts');
   assert.match(loader, /ladderQuietHours\('weather'\)/);
   assert.doesNotMatch(loader, /isQuietHour\(|quietHoursOverride/);
+});
+
+test('fresh derived defaults honor critical quiet hours and mute independently of NWS', async () => {
+  const svc = await freshService({});
+  assert.deepEqual(svc.getSettings().domains.derived, { enabled: true, threshold: 'high', channel: 'both', quietHoursEnabled: true });
+  assert.equal(svc.evaluateNotificationPreference('derived', 'critical', at('23:00')).reason, 'domain-quiet-hours');
+  assert.equal(svc.evaluateNotificationPreference('derived', 'high', at('12:00')).reason, 'allowed');
+  svc.updateGlobalSettings({ masterMute: true });
+  assert.equal(svc.evaluateNotificationPreference('derived', 'critical', at('12:00')).reason, 'master-mute');
+  assert.equal(svc.evaluateNotificationPreference('weather', 'critical', at('12:00')).reason, 'allowed');
+});
+
+test('legacy Cyber restrictions become a one-time independent derived preference', async () => {
+  for (const channel of ['in_app', 'native'] as const) {
+    const legacy = settingsWith('22:00', '07:00');
+    Reflect.deleteProperty(legacy.domains, 'derived');
+    legacy.domains.cyber = { enabled: false, threshold: 'critical', channel, quietHoursEnabled: false };
+    const svc = await freshService({ [SETTINGS_KEY]: JSON.stringify(legacy), [MIGRATION_KEY]: '1' });
+    const expected = { enabled: false, threshold: 'critical', channel, quietHoursEnabled: true };
+    assert.deepEqual(JSON.parse(localStorage.getItem(SETTINGS_KEY)!).domains.derived, expected, 'initialized on upgrade');
+    svc.updateDomainSettings('cyber', { enabled: true, threshold: 'low', channel: 'both' });
+    const again = await freshService({ [SETTINGS_KEY]: localStorage.getItem(SETTINGS_KEY)!, [MIGRATION_KEY]: '1' });
+    assert.deepEqual(again.getSettings().domains.derived, expected);
+  }
+});
+
+test('malformed or unsupported saved policy holds derived and preserves stored bytes', async () => {
+  const valid = settingsWith('22:00', '07:00');
+  for (const raw of ['', '{', 'null', '{"version":2}', '{"version":1}', JSON.stringify({ ...valid, global: {} }),
+    JSON.stringify({ ...valid, global: { ...valid.global, masterMute: 'false' } }),
+    JSON.stringify({ ...valid, domains: { ...valid.domains, derived: { enabled: 'true' } } }),
+    JSON.stringify({ ...valid, domains: { ...valid.domains, cyber: { ...valid.domains.cyber, channel: 'wrong' } } }),
+    JSON.stringify(settingsWith('25:00', '07:00'))]) {
+    const svc = await freshService({ [SETTINGS_KEY]: raw });
+    assert.equal(svc.evaluateNotificationPreference('derived', 'critical', at('12:00')).reason, 'preferences-unavailable');
+    svc.updateGlobalSettings({ masterMute: true });
+    svc.updateDomainSettings('derived', { enabled: true });
+    svc.resetSettings();
+    assert.equal(localStorage.getItem(SETTINGS_KEY), raw);
+    assert.equal(svc.evaluateNotificationPreference('derived', 'critical', at('12:00')).allowed, false);
+  }
+});
+
+test('settings read error holds derived without trying to write even after an edit', async () => {
+  const writes: string[] = [];
+  Object.assign(globalThis, { localStorage: { getItem() { throw new Error('read blocked'); }, setItem(k: string) { writes.push(k); } } });
+  const svc = await import(new URL('../notification-settings-service.ts', import.meta.url).href + '?unreadable');
+  svc.updateDomainSettings('cyber', { enabled: false });
+  assert.equal(svc.evaluateNotificationPreference('derived', 'critical', at('12:00')).reason, 'preferences-unavailable');
+  assert.deepEqual(writes, []);
 });

@@ -11,23 +11,23 @@ import {
   type NotificationSeverity,
 } from '../notification-settings-service.js';
 
-// ── 1. Default settings have all 11 domains enabled ──────────────────────────
-test('default settings have all 11 domains enabled', () => {
+// ── 1. Default settings have all 12 domains enabled ──────────────────────────
+test('default settings have all 12 domains enabled', () => {
   resetSettings();
   const { domains } = getSettings();
   const domainKeys = Object.keys(domains) as NotificationDomain[];
-  assert.equal(domainKeys.length, 11);
+  assert.equal(domainKeys.length, 12);
   for (const key of domainKeys) {
     assert.equal(domains[key].enabled, true, `${key} should be enabled by default`);
   }
 });
 
 // ── 2. Default threshold is 'medium' ─────────────────────────────────────────
-test('default threshold is medium for every domain', () => {
+test('derived defaults to high while other domains default to medium', () => {
   resetSettings();
   const { domains } = getSettings();
   for (const key of Object.keys(domains) as NotificationDomain[]) {
-    assert.equal(domains[key].threshold, 'medium', `${key} threshold should default to medium`);
+    assert.equal(domains[key].threshold, key === 'derived' ? 'high' : 'medium', key);
   }
 });
 

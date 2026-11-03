@@ -22,6 +22,7 @@ export const SETTINGS_DOMAIN_LABELS: Record<NotificationDomain, string> = {
   weather: 'Weather (NWS)',
   cyber: 'Cyber / HIBP',
   supply: 'Supply / Shortages',
+  derived: 'Derived alerts',
 };
 
 export const SETTINGS_DOMAINS: readonly NotificationDomain[] = [
@@ -36,6 +37,7 @@ export const SETTINGS_DOMAINS: readonly NotificationDomain[] = [
   'weather',
   'cyber',
   'supply',
+  'derived',
 ];
 
 /**
@@ -56,6 +58,7 @@ export const HISTORY_DOMAIN_FOR_SETTINGS: Record<NotificationDomain, HistoryDoma
   weather: 'cap',
   cyber: 'cyber',
   supply: 'unknown',
+  derived: 'unknown',
 };
 
 /** History severity is a strict subset of settings severity (drops 'info'). */

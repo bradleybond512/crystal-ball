@@ -1,6 +1,6 @@
 # UX-054 — Audit subproject dependencies
 
-Proposed November 3, 2026 against main `cd459dfec`. The roadmap selected UX-054 at priority S with no blockers. This is a high-assurance change to the repository's security checks.
+Approved by the operator November 3, 2026 against main `cd459dfec`. The roadmap selected UX-054 at priority S with no blockers. This is a high-assurance change to the repository's security checks.
 
 ## Reproduced gap
 
@@ -19,7 +19,7 @@ Counts are per affected package as reported by npm. The regular checkout reporte
 
 The marketing lock pins Undici 7.29.1 through both Miniflare versions and Zod 4.4.3 through lint tooling. Miniflare uses Undici for local development/preview. The ESLint plugin invokes Zod on compiler configuration. Neither path demonstrated an exploit through a public Worker request. GitHub's four open high Dependabot alerts refer to advisories for the same marketing Undici package. [Undici advisory](https://github.com/advisories/GHSA-xjj6-f33q-929c). [Zod advisory](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5).
 
-## Proposed policy
+## Approved policy
 
 1. Keep `npm-audit` as one required check. Report each locked project separately. High or critical findings fail the check, as do absent, malformed or incomplete results and registry failures. Low and moderate findings stay visible for reachability triage. A project with missing evidence cannot pass as clean. [npm audit severity and reporting](https://docs.npmjs.com/cli/v10/commands/npm-audit/).
 2. Scan tracked regular Git blobs. Classify all six lock roots, their two parent-owned vendored manifests and the dependency-free sidecar marker. A newly introduced unclassified lock or independently installable dependency graph requires an explicit policy update. Keep Cargo under its existing audit/deny controls. Inventory hash-pinned zizmor, Buf schemas, skills and external MCP tool definitions separately from npm advisory coverage. Draft #1781 already owns floating external MCP pins.
@@ -35,4 +35,4 @@ The marketing lock pins Undici 7.29.1 through both Miniflare versions and Zod 4.
 * **Verification owner** — run focused suites and repository validation, mutate each policy guard, and obtain independent code and SHA-pinned reviews. Exercise the bootstrap and steady-state paths. Preserve operator control over the existing dependency-change approval label.
 * **Rollback** — revert the workflow and checker together, including their ownership entries. The marketing dependency fixes can be retained if independently valid. No change to installed app data or running services is required.
 
-Draft claim publication and local implementation follow operator design approval. Installation of the app, auto-merge and delivery remain paused.
+The operator approved the draft claim and local implementation on November 3. Installation of the app, auto-merge and delivery remain paused.

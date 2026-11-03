@@ -305,7 +305,7 @@ test('releasing the last workspace stops every in-flight fanout after its curren
     const pause = async (stage: string) => { if (holding && held.endsWith(stage)) { enter(); await gate; } };
     const deps = {
       ...original,
-      isGhostMode: async () => { await pause('ghost'); return false; },
+      isGhostMode: async () => { rec.fanoutOrder.push('read-mode'); await pause('ghost'); return false; },
       alertDB: {
         getAll: async () => { await pause('read'); return []; },
         put: async (alert: UnifiedAlert) => { await original.alertDB.put(alert); await pause('put'); },
@@ -350,14 +350,28 @@ test('an in-flight delivery continues while another workspace still owns the rou
   second();
 });
 
-test('default transports cancel lazy imports and release old map-marker timers', async () => {
+type RouterModule = typeof import('../notification-router.ts');
+let fixtureModule: string | undefined;
+async function compileRouterFixture(): Promise<string> {
+  if (fixtureModule) return fixtureModule;
   const { readFileSync } = await import('node:fs');
   const { default: ts } = await import('typescript');
   const source = readFileSync(new URL('../notification-router.ts', import.meta.url), 'utf8');
-  const compiled = ts.transpileModule(source, {
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+  // Preserve the controlled import promise; wrapping it in a synthetic module
+  // namespace makes the dependency appear missing even to a live owner.
+  fixtureModule = ts.transpileModule(source, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: false },
   }).outputText;
-  for (const held of ['get', 'put', 'native', 'map', 'ttl']) {
+  return fixtureModule;
+}
+
+test('default transports cancel lazy imports and release old map-marker timers', async () => {
+  const compiled = await compileRouterFixture();
+  const effects = { get: 'read', put: 'store', native: 'send', map: 'mark' } as const;
+  for (const [held, dispose] of [
+    ...Object.keys(effects).flatMap(kind => [[kind, false], [kind, true]] as const),
+    ['ttl', true] as const,
+  ]) {
     const calls: string[] = [];
     let ttl: (() => void) | undefined;
     const timer = (fn: () => void) => { ttl = fn; calls.push('timer'); return 1; };
@@ -400,10 +414,12 @@ test('default transports cancel lazy imports and release old map-marker timers',
       replacement();
     } else {
       await reached; const started = [...calls];
-      stop(); const replacement = exports.startNotificationRouter();
+      if (dispose) stop();
+      const replacement = dispose ? exports.startNotificationRouter() : undefined;
       resume(); await work; await new Promise(ok => setImmediate(ok));
-      assert.deepEqual(calls, started, held);
-      replacement();
+      if (dispose) assert.deepEqual(calls, started, held);
+      else assert.ok(calls.includes(effects[held as keyof typeof effects]), `live ${held} dependency must perform the real fixture effect`);
+      replacement?.(); stop();
     }
   }
 });
@@ -432,4 +448,51 @@ test('a synchronous toast or marker can release the last owner without arming fu
     assert.deepEqual(replacement.fanoutOrder, ['put', 'toast', 'native', 'marker'], 'disposed marker cannot arm a stale retry');
     release();
   }
+});
+
+test('pending imports attach only the current subscriber and final release removes it', async () => {
+  type Callback = (alert: ReactorAlert) => Promise<boolean>;
+  const live = new Set<Callback>();
+  const reactor = { onAlert(handler: Callback) { live.add(handler); return () => live.delete(handler); } };
+  const imported = Promise.withResolvers<typeof reactor>();
+  const mod = {} as RouterModule;
+  new Function('require', 'exports', await compileRouterFixture())(
+    (id: string) => id === './threat-reactor' ? imported.promise : {}, mod,
+  );
+  const rec = makeRecorder();
+  let clockReads = 0;
+  const started = Promise.withResolvers<void>();
+  const native = Promise.withResolvers<'delivered'>();
+  let retry = false;
+  const deps = {
+    ...makeDeps(rec),
+    now: () => { clockReads++; return rec.now; },
+    sendNativeNotification: async () => {
+      if (!retry) return 'failed' as const;
+      started.resolve();
+      return native.promise;
+    },
+  };
+  const stale = mod.startNotificationRouter(deps);
+  stale();
+  const current = mod.startNotificationRouter(deps);
+  const second = mod.startNotificationRouter(deps);
+  imported.resolve(reactor);
+  await new Promise<void>(done => setImmediate(done));
+  assert.equal(live.size, 1, 'a stale import cannot register its callback');
+  const [handler] = live;
+  current();
+  assert.equal(live.size, 1, 'second workspace still owns this subscription');
+  const alert = makeAlert({severity: 'critical'});
+  assert.equal(await handler(alert), false, 'an undelivered alert requests a retry');
+  retry = true;
+  const pending = handler(alert);
+  await started.promise;
+  second();
+  assert.equal(live.size, 0, 'last owner physically removes the subscriber');
+  native.resolve('delivered');
+  assert.equal(await pending, true, 'a retired retry cannot request another replay');
+  const previousReads = clockReads;
+  assert.equal(await handler(alert), true);
+  assert.equal(clockReads, previousReads, 'a stale callback cannot inspect the next workspace');
 });

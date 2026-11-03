@@ -1,0 +1,186 @@
+{
+  "scope": "Only independent marketing-site manifest and lock. Tests used an ephemeral development worktree; the app and site were not deployed or installed.",
+  "base": "cd459dfec514c80e2fcc3f0d7965ea6ef76a7b6a",
+  "environment": {
+    "platform": "Darwin arm64",
+    "node": "v22.23.1",
+    "npm": "10.9.8"
+  },
+  "files": {
+    "marketing-site/package.json": {
+      "originalSha256": "9041e3ee60d49194100ce281317a07b84cf393645616aca18041990a1559c983",
+      "candidateSha256": "ae22421663b88098d80c2daa8098ab913b7b6e6565a393aabbc90ab65a3e5628"
+    },
+    "marketing-site/package-lock.json": {
+      "originalSha256": "fdac4dc7a5e1642f32c70fe9f8a413bb2cc307a8a0bf1f39d2e47bd204ffbe6e",
+      "candidateSha256": "e981f0710a0912e11068ba27fe6227dab1b5f101dcdb9241a0dd33b8f46b7480"
+    }
+  },
+  "publicRegistryResponse": [
+    {
+      "name": "undici",
+      "version": "7.30.1",
+      "integrity": "sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==",
+      "tarball": "https://registry.npmjs.org/undici/-/undici-7.30.1.tgz",
+      "engines": {
+        "node": ">=20.18.1"
+      },
+      "dependencies": {},
+      "license": "MIT",
+      "funding": null
+    },
+    {
+      "name": "zod",
+      "version": "4.6.6",
+      "integrity": "sha512-4UmzQUF5fxvfcYHlbjBmejU+w+hbDnWFx4aS8kBx7nPBHcO2SqPbpAG8snbdg+Xse4pRefR98hgjFgIMCI/UhA==",
+      "tarball": "https://registry.npmjs.org/zod/-/zod-4.6.6.tgz",
+      "engines": {},
+      "dependencies": {},
+      "license": "MIT",
+      "funding": "https://github.com/sponsors/colinhacks"
+    }
+  ],
+  "baseline": {
+    "version": 2,
+    "dependencies": {
+      "prod": 20,
+      "dev": 572,
+      "optional": 145,
+      "peer": 42,
+      "peerOptional": 0,
+      "total": 626
+    },
+    "advisoryPackageCounts": {
+      "info": 0,
+      "low": 0,
+      "moderate": 23,
+      "high": 2,
+      "critical": 0,
+      "total": 25
+    },
+    "highPackages": {
+      "undici": [
+        {
+          "url": "https://github.com/advisories/GHSA-4qv8-2p9j-2685",
+          "range": ">=7.0.0 <7.30.1"
+        },
+        {
+          "url": "https://github.com/advisories/GHSA-f72v-6w45-q472",
+          "range": ">=7.15.0 <7.30.1"
+        },
+        {
+          "url": "https://github.com/advisories/GHSA-xjj6-f33q-929c",
+          "range": ">=7.18.0 <7.30.1"
+        },
+        {
+          "url": "https://github.com/advisories/GHSA-4w7w-5xrc-9h26",
+          "range": ">=7.0.0 <7.30.1"
+        },
+        {
+          "url": "https://github.com/advisories/GHSA-2m5v-pch6-74hx",
+          "range": ">=7.0.0 <7.30.1"
+        },
+        {
+          "url": "https://github.com/advisories/GHSA-qrxm-fqhp-jwvm",
+          "range": ">=7.0.0 <7.30.1"
+        },
+        {
+          "url": "https://github.com/advisories/GHSA-9fm3-97px-rjf6",
+          "range": ">=7.0.0 <7.30.1"
+        },
+        {
+          "url": "https://github.com/advisories/GHSA-55wc-3pg8-jfw6",
+          "range": ">=7.15.0 <7.30.1"
+        }
+      ],
+      "zod": [
+        {
+          "url": "https://github.com/advisories/GHSA-mrhx-c7xc-m3w5",
+          "range": "<4.6.6"
+        }
+      ]
+    }
+  },
+  "candidate": {
+    "version": 2,
+    "dependencies": {
+      "prod": 20,
+      "dev": 572,
+      "optional": 145,
+      "peer": 42,
+      "peerOptional": 0,
+      "total": 626
+    },
+    "advisoryPackageCounts": {
+      "info": 0,
+      "low": 0,
+      "moderate": 20,
+      "high": 0,
+      "critical": 0,
+      "total": 20
+    },
+    "highPackages": {}
+  },
+  "residualModerates": [
+    "@eslint-community/eslint-utils",
+    "@eslint/config-array",
+    "@eslint/eslintrc",
+    "@next/eslint-plugin-next",
+    "@typescript-eslint/eslint-plugin",
+    "@typescript-eslint/parser",
+    "@typescript-eslint/type-utils",
+    "@typescript-eslint/typescript-estree",
+    "@typescript-eslint/utils",
+    "@vercel/og",
+    "eslint",
+    "eslint-config-next",
+    "eslint-plugin-import",
+    "eslint-plugin-jsx-a11y",
+    "eslint-plugin-react",
+    "fast-uri",
+    "minimatch",
+    "satori",
+    "typescript-eslint",
+    "vinext"
+  ],
+  "validated": {
+    "baselineFullLockAuditExit": 1,
+    "candidateFullLockAuditExit": 0,
+    "cleanInstall": "added 493 packages in 14s",
+    "marketingNpmTest": "# tests 42 / # pass 42 / # fail 0",
+    "marketingNpmTestExit": 0,
+    "marketingLintExit": 0,
+    "marketingTypecheckExit": 0,
+    "dependencyTree": [
+      "\u251c\u2500\u252c @cloudflare/vite-plugin@1.64.0",
+      "\u2502 \u2514\u2500\u252c miniflare@5.20261012.0-beta overridden",
+      "\u2502   \u2514\u2500\u2500 undici@7.30.1 overridden",
+      "\u251c\u2500\u252c eslint-config-next@16.4.2",
+      "\u2502 \u2514\u2500\u252c eslint-plugin-react-hooks@7.1.1",
+      "\u2502   \u251c\u2500\u252c zod-validation-error@4.0.2",
+      "\u2502   \u2502 \u2514\u2500\u2500 zod@4.6.6 deduped",
+      "\u2502   \u2514\u2500\u2500 zod@4.6.6",
+      "\u2514\u2500\u252c wrangler@4.151.1",
+      "  \u2514\u2500\u252c miniflare@5.20261012.1-beta overridden",
+      "    \u2514\u2500\u2500 undici@7.30.1 deduped",
+      ""
+    ]
+  },
+  "rawArtifactsSha256": {
+    "baseline-audit.json": "9cc139b15238accd61fbd523e1e9bf07f9d8889a1d85a38321409e4a221dfbc3",
+    "repaired-audit.json": "0c032aca45baa1caae062dda286eafa9068731c6c07d89425aa9717c81262bae",
+    "dependency-tree.txt": "a3be67c0cc167e7eb73c163b7eedde434ebb825c19676f23cbd597f448565a9f",
+    "npm-ci.log": "12d4f8df48b9f534a94cbcbbebfc207061a1df17172f5e7c1db22c5f66bea288",
+    "registry.json": "6540be3c888a6a21acda243a15e655d5f4496ebf42d122bf873a6ea26a517143",
+    "marketing-test.log": "b760ce75164dfaca1cea7a7f2364d284100d96f84e3138c849382b4b28f0b775",
+    "marketing-lint.log": "579787cd8e2de235939b6ba0effbd4f513131a0d0b0a29409f88a09fc21333f4",
+    "marketing-typecheck.log": "6ec014a95c70bee2fdbb59b54c97bb653a6fa660377fa3b5a9e8e16c7afab09e",
+    "minimal.patch": "45f8235a8394cf831fa04fa473146d27b91bc9a85663cdcc588a478fc1fa7070"
+  },
+  "reachability": [
+    "The scoped Miniflare override applies to both @cloudflare/vite-plugin and Wrangler dev/preview tooling; verified by clean installed dependency tree.",
+    "Zod is used by eslint-plugin-react-hooks and its zod-validation-error peer; the existing declared version ranges admit this patch without a new top-level dependency.",
+    "No public Worker request path to either vulnerable operation was established. Remaining advisories group in eslint/schema/URI/glob or vinext \u2192 @vercel/og \u2192 satori paths. The site serves a static /og.png; report findings without inferring a public exploit."
+  ],
+  "rollback": "Reverting both marketing files restores the previous dependency graph and the two witnessed high findings."
+}

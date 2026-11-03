@@ -3170,6 +3170,15 @@ const SIDECAR_TAURI_PATTERNS = [
 // the port against SIDECAR_DEV_PORTS rather than letting any port through.
 const SIDECAR_LOCALHOST_RE = /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::(\d+))?$/;
 
+export const SIDECAR_PORT_FALLBACK_SPAN = 10;
+
+export function sidecarCandidatePorts(basePort) {
+  const base = Number(basePort);
+  if (!Number.isInteger(base) || base <= 0 || base > 65_535) return [];
+  const last = Math.min(base + SIDECAR_PORT_FALLBACK_SPAN, 65_535);
+  return Array.from({ length: last - base + 1 }, (_, offset) => base + offset);
+}
+
 export function isSidecarOriginAllowed(origin) {
   if (!origin) return false;
   for (const p of SIDECAR_TAURI_PATTERNS) {
@@ -22323,17 +22332,26 @@ export async function createLocalApiServer(options = {}) {
  server.listen(port, '127.0.0.1');
  });
 
- try {
- await tryListen(context.port);
- } catch (error) {
- if (error?.code === 'EADDRINUSE') {
- // Never kill arbitrary listeners on occupied ports. Instead, bind to a
- // random OS-assigned port and publish it through service-status/port file.
- context.logger.log(`[local-api] port ${context.port} already in use; falling back to OS-assigned port`);
- await tryListen(0);
- } else {
- throw error;
+ const candidatePorts = sidecarCandidatePorts(context.port);
+ let bound = false;
+ for (const port of candidatePorts) {
+   try {
+     await tryListen(port);
+     bound = true;
+     break;
+   } catch (error) {
+     if (error?.code !== 'EADDRINUSE') throw error;
+     context.logger.log(`[local-api] port ${port} already in use; trying the next`);
+   }
  }
+ if (!bound) {
+   if (candidatePorts.length > 0) {
+     context.logger.warn(`[local-api] ports ${candidatePorts[0]}-${candidatePorts.at(-1)} all in use; choosing an OS-assigned port for native health only. The desktop webview cannot reach it.`);
+     await tryListen(0);
+   } else {
+     // Explicit zero requests OS allocation. Node rejects invalid configured ports.
+     await tryListen(context.port);
+   }
  }
 
  const boundPort = await publishSidecarPort(server, process.env.LOCAL_API_PORT_FILE, context.logger);

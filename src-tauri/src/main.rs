@@ -4142,7 +4142,7 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  // Stop a listener on the canonical port only when it is provably this
  // install's own orphaned sidecar. Anything else (another app such as the
  // legacy World Monitor, a dev build, an unrelated tool) is left alone and
- // our sidecar binds an OS-assigned port instead (R4-BUG-004).
+ // our sidecar tries its fallback ports instead (R4-BUG-004).
  #[cfg(unix)]
  reap_own_orphan_sidecar(app, &node_binary.to_string_lossy(), &sanitize_path_for_node(&script));
 
@@ -4820,7 +4820,7 @@ fn reap_own_orphan_sidecar(app: &AppHandle, node_bin: &str, script: &str) {
                 app,
                 "WARN",
                 &format!(
-                    "port {DEFAULT_LOCAL_API_PORT} is held by pid={pid}, which is not this app's sidecar; leaving it alone (sidecar will use an OS-assigned port)"
+                    "port {DEFAULT_LOCAL_API_PORT} is held by pid={pid}, which is not this app's sidecar; leaving it alone (sidecar will try its fallback ports)"
                 ),
             );
             continue;

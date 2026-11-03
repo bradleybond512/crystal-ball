@@ -373,7 +373,8 @@
     "test:sidecar-ci",
     "test:health-contract",
     "test:domain-retirement",
-    "test:ux047"
+    "test:ux047",
+    "test:sidecar-fallback"
   ],
   "src/services/keychain.ts": [
     "test:secret-boundary",
@@ -400,7 +401,8 @@
     "test:secret-boundary",
     "test:domain-retirement",
     "test:desktop-identity",
-    "test:ux047"
+    "test:ux047",
+    "test:sidecar-fallback"
   ],
   "src-tauri/src/vault_coordinator.rs": [
     "test:vault-writer"
@@ -846,7 +848,8 @@
   ],
   "vite.config.ts": [
     "test:pwa-deployment",
-    "test:domain-retirement"
+    "test:domain-retirement",
+    "test:sidecar-fallback"
   ],
   "index.html": [
     "test:pwa-deployment",
@@ -1280,5 +1283,8 @@
   ],
   "src/services/alert-reactions.ts": [
     "test:ux047"
+  ],
+  "src/config/csp-policy.ts": [
+    "test:sidecar-fallback"
   ]
 }

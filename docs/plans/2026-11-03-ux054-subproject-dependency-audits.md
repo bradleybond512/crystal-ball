@@ -4,7 +4,7 @@ Approved by the operator November 3, 2026 against main `cd459dfec`. The roadmap 
 
 ## Reproduced gap
 
-The required `npm-audit` job installs and audits the repository root, including a separate registry-signature check. It does not audit the five independent subproject locks. A lockfile-only scan on Node 22.23.1 / npm 10.9.8, including dev, optional and peer dependencies, found the following on main. Each project was also scanned in isolation with a fixed public registry and fresh npm configuration.
+The `npm-audit` job installs and audits the repository root, including a separate registry-signature check. It does not audit the five independent subproject locks. A lockfile-only scan on Node 22.23.1 / npm 10.9.8, including dev, optional and peer dependencies, found the following on main. Each project was also scanned in isolation with a fixed public registry and fresh npm configuration.
 
 | Locked project | Dependencies reported | Low | Moderate | High | Critical |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -21,7 +21,7 @@ The marketing lock pins Undici 7.29.1 through both Miniflare versions and Zod 4.
 
 ## Approved policy
 
-1. Keep `npm-audit` as one required check. Report each locked project separately. High or critical findings fail the check, as do absent, malformed or incomplete results and registry failures. Low and moderate findings stay visible for reachability triage. A project with missing evidence cannot pass as clean. [npm audit severity and reporting](https://docs.npmjs.com/cli/v10/commands/npm-audit/).
+1. Keep the existing `npm-audit` check name and report a failing job when policy fails. On November 3 the live branch-protection configuration listed seven required checks and did not include `npm-audit`. This change does not edit those settings. Report each locked project separately. High or critical findings fail the check, as do absent, malformed or incomplete results and registry failures. Low and moderate findings stay visible for reachability triage. A project with missing evidence cannot pass as clean. [npm audit severity and reporting](https://docs.npmjs.com/cli/v10/commands/npm-audit/).
 2. Scan tracked regular Git blobs. Classify all six lock roots, their two parent-owned vendored manifests and the dependency-free sidecar marker. A newly introduced unclassified lock or independently installable dependency graph requires an explicit policy update. Keep Cargo under its existing audit/deny controls. Inventory hash-pinned zizmor, Buf schemas, skills and external MCP tool definitions separately from npm advisory coverage. Draft #1781 already owns floating external MCP pins.
 3. Include fork PRs **only for the lockfile advisory scan**. Use ordinary read-only PR events, hosted runners, isolated temporary inputs, a fixed public npm registry and known CLI. Ignore candidate npm configuration and scripts. Do not pass registry credentials, workflow secrets, user npm configuration or inherited Node options to this scan. Preserve the existing trusted-event boundary for root installation and signature verification. Protect the checker through CODEOWNERS and the existing dependency-change review policy.
 4. Use the exact trusted event base for checker policy on PRs. For its first introduction, use an explicitly reviewed, digest-pinned bootstrap for the identified rollout base. A missing or mismatched evaluator must fail closed. Cover main pushes and merge groups as well. Avoid executing an arbitrary checker from the candidate, or returning success when the base checker is missing.

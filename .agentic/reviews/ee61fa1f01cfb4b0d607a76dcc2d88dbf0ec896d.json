@@ -1,0 +1,9 @@
+{
+  "reviewedSha": "ee61fa1f01cfb4b0d607a76dcc2d88dbf0ec896d",
+  "reviewer": "claude",
+  "model": "claude-sonnet-4-6",
+  "verdict": "approve",
+  "blockingFindings": 0,
+  "reviewedAt": "2026-11-03T07:15:54.666Z",
+  "evidence": "## Conclusion\n\n**Reviewed SHA:** `ee61fa1f01cfb4b0d607a76dcc2d88dbf0ec896d`\n**Model:** claude-sonnet-4-6\n**Blocking findings: 0**\n\nThe fix correctly eliminates the top-level await from `src/entry.ts` without changing any observable runtime behavior. The entry sequence, privacy-mode notice gate, startup ordering, all three error-propagation paths, keyboard/notice scope, and the exported `entryStartup` promise contract are preserved and individually mutation-tested. The budget check is now integrated inline in `test:ux050` so the regression cannot re-enter undetected. Both web and native builds pass the 500-entry cap (468 entries) with all 330 Cesium assets intact. 13 repair mutations were killed. 93/93 checks per engine in both renderers. No cache rules, Workbox config, or budget thresholds were weakened. Limitations noted above are documentation-only (SHA gap, no independent build execution); none are logic findings."
+}

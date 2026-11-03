@@ -1055,6 +1055,8 @@ Status: NOT STARTED — HIGH ASSURANCE
 Priority: S
 Source findings: PR1731 H21.
 
+[Proposed coverage design and reproduced failure](plans/2026-11-02-ux049-threat-sensor-coverage.md). Draft claim and implementation await approval.
+
 Acceptance: Carry real observation/fetch age and coverage into threat summaries. A failed or stale domain cannot become a freshly checked quiet sensor because aggregation ran. Check all-domain reassurance and partial coverage.
 
 ### UX-050 — Make Ghost Mode suppression unmistakable
@@ -1261,7 +1263,7 @@ Update the row in the same PR that does the work.
 | UX-046 | Preserve alert priorities at capacity | DONE — HIGH ASSURANCE | #1734 |
 | UX-047 | Keep national weather warnings current | NOT STARTED — HIGH ASSURANCE | — |
 | UX-048 | Restore verified GDACS ingestion | DONE — HIGH ASSURANCE | #1740 — approved five-feed repair; [validation](validation/UX-048-GDACS.md) and [alert burst performance evidence](validation/UX-048-PERFORMANCE.md); final review/CI govern delivery |
-| UX-049 | Distinguish quiet sensors from missing observations | NOT STARTED — HIGH ASSURANCE | — |
+| UX-049 | Distinguish quiet sensors from missing observations | NOT STARTED — HIGH ASSURANCE | [Design prepared](plans/2026-11-02-ux049-threat-sensor-coverage.md) |
 | UX-050 | Make Ghost Mode suppression unmistakable | NOT STARTED — HIGH ASSURANCE | — |
 | UX-051 | Align RSS request budgets across boundaries | NOT STARTED — HIGH ASSURANCE | — |
 | UX-052 | Restrain derived alert interruptions | NOT STARTED — HIGH ASSURANCE | — |

@@ -1,0 +1,591 @@
+{
+  "schemaVersion": 1,
+  "followup": "UX-050 production precache and entry timing",
+  "verifiedAt": "55dfd847f104df125c629a12b5301640e379a239",
+  "countsAre": [
+    "passed",
+    "failed"
+  ],
+  "budgetCheck": {
+    "existingCommand": "node scripts/check-precache-budget.mjs",
+    "requiredEntryCap": 500,
+    "requiredByteCapMiB": 25,
+    "includedInUx050": true
+  },
+  "previousCertificate": {
+    "file": "docs/validation/UX-050-MUTATIONS.json",
+    "sha256": "4d600b961c453962b6876e9ff74617e5fcc15c926287a36935102956f8726d5e",
+    "unchangedDirectFilesCases": [
+      "B01",
+      "B02",
+      "B03",
+      "D01",
+      "D02",
+      "D03",
+      "D04",
+      "D05",
+      "D06",
+      "D07",
+      "D08",
+      "D09",
+      "D10",
+      "D11",
+      "D12",
+      "D13",
+      "D14",
+      "D15",
+      "D16",
+      "D17",
+      "D18",
+      "D19",
+      "D20",
+      "D21",
+      "E06",
+      "S01",
+      "S02",
+      "S03",
+      "S04",
+      "S05",
+      "S06",
+      "S07",
+      "S08",
+      "S09",
+      "S10",
+      "S11",
+      "S12",
+      "S13",
+      "S14",
+      "S15",
+      "S16",
+      "S17",
+      "S18",
+      "S19",
+      "S20",
+      "S21",
+      "S22",
+      "S23",
+      "S24",
+      "S25",
+      "S26",
+      "S27",
+      "S28",
+      "S29",
+      "S30",
+      "S31",
+      "S32",
+      "S33",
+      "S34",
+      "U01",
+      "U02",
+      "U03",
+      "U04",
+      "U05",
+      "U06",
+      "U07",
+      "U08",
+      "U09",
+      "U10",
+      "U11",
+      "U12",
+      "U13",
+      "U14",
+      "U15",
+      "U16",
+      "U17",
+      "U18",
+      "U19",
+      "U20",
+      "U21",
+      "U22",
+      "U23",
+      "U24",
+      "U25",
+      "U26",
+      "U27",
+      "U28",
+      "U29",
+      "U30",
+      "U31",
+      "U32",
+      "U33",
+      "U34"
+    ],
+    "retainedCasesWithoutRerun": [
+      "D01",
+      "D02",
+      "D03",
+      "D04",
+      "D05",
+      "D06",
+      "D07",
+      "D08",
+      "D09",
+      "D10",
+      "D11",
+      "D12",
+      "D13",
+      "D14",
+      "D15",
+      "D16",
+      "D17",
+      "D18",
+      "D19",
+      "D20",
+      "D21",
+      "E06",
+      "S01",
+      "S02",
+      "S03",
+      "S04",
+      "S05",
+      "S06",
+      "S07",
+      "S08",
+      "S09",
+      "S10",
+      "S11",
+      "S12",
+      "S13",
+      "S14",
+      "S15",
+      "S16",
+      "S17",
+      "S18",
+      "S19",
+      "S20",
+      "S21",
+      "S22",
+      "S23",
+      "S24",
+      "S25",
+      "S26",
+      "S27",
+      "S28",
+      "S29",
+      "S30",
+      "S31",
+      "S32",
+      "S33",
+      "S34",
+      "U01",
+      "U02",
+      "U03",
+      "U04",
+      "U05",
+      "U06",
+      "U07",
+      "U08",
+      "U09",
+      "U10",
+      "U11",
+      "U12",
+      "U13",
+      "U14",
+      "U15",
+      "U16",
+      "U17",
+      "U18",
+      "U19",
+      "U20",
+      "U21",
+      "U22",
+      "U23",
+      "U24",
+      "U25",
+      "U26",
+      "U27",
+      "U28",
+      "U29",
+      "U30",
+      "U31",
+      "U32",
+      "U33",
+      "U34"
+    ],
+    "replayedGraphControls": [
+      "B01",
+      "B02",
+      "B03"
+    ],
+    "supersededCases": [
+      "E01",
+      "E02",
+      "E03",
+      "E04",
+      "E05",
+      "E07",
+      "E08"
+    ]
+  },
+  "followupMutationsKilled": 13,
+  "compiledGraphControls": [
+    {
+      "id": "followup-B01",
+      "behavior": "Keep the shared Vite preload helper out of eager application chunks",
+      "source": "vite.config.ts",
+      "checkpoint": "6ec7044a2b2313860a9a9ef0cefe2389beef8220",
+      "beforeSha256": "41db9b90054b2632a90e5c5347cba05ee9b9b410dc12628dc511850c3c2968c8",
+      "restoredSha256": "41db9b90054b2632a90e5c5347cba05ee9b9b410dc12628dc511850c3c2968c8",
+      "appliedDiff": "diff --git a/vite.config.ts b/vite.config.ts\nindex 9797b764c..46af77423 100644\n--- a/vite.config.ts\n+++ b/vite.config.ts\n@@ -1029,3 +1029,3 @@ export default defineConfig({\n      // deck-stack claims it transitively. The mode check must run first.\n-     { name: 'preload-helper', test: /vite\\/preload-helper\\.js$/, priority: 1 },\n+\n      { name(id) {\n",
+      "suite": "bundle",
+      "mutationCounts": [
+        0,
+        2
+      ],
+      "failingTest": "not ok 1 - the built document can check mode before loading application dependencies",
+      "assertion": "error: 'main-DUSzE_6A.js eagerly imports deck-stack-BVIOm3k-.js before the mode choice'",
+      "testSha256": {
+        "tests/ghost-mode-bundle.test.mjs": "969c9b8961adf0e5482c51a2097c5bdfe93a2fbd8581bac9197401756d8e2857"
+      },
+      "previousId": "B01",
+      "status": "killed"
+    },
+    {
+      "id": "followup-B02",
+      "behavior": "Isolate synchronized mode state from the full application on cold storage denial",
+      "source": "vite.config.ts",
+      "checkpoint": "6ec7044a2b2313860a9a9ef0cefe2389beef8220",
+      "beforeSha256": "41db9b90054b2632a90e5c5347cba05ee9b9b410dc12628dc511850c3c2968c8",
+      "restoredSha256": "41db9b90054b2632a90e5c5347cba05ee9b9b410dc12628dc511850c3c2968c8",
+      "appliedDiff": "diff --git a/vite.config.ts b/vite.config.ts\nindex 9797b764c..17b7ae038 100644\n--- a/vite.config.ts\n+++ b/vite.config.ts\n@@ -1031,3 +1031,3 @@ export default defineConfig({\n      { name(id) {\n- if (id.endsWith('/src/services/mode-manager.ts')) return 'mode-preference';\n+\n  if (id.endsWith('/src/bootstrap/ghost-notice-en.json')) return 'ghost-notice-copy';\n",
+      "suite": "bundle",
+      "mutationCounts": [
+        0,
+        2
+      ],
+      "failingTest": "not ok 1 - the built document can check mode before loading application dependencies",
+      "assertion": "error: 'main-DW64lBP7.js eagerly imports panels-GKtSKh30.js before the mode choice'",
+      "testSha256": {
+        "tests/ghost-mode-bundle.test.mjs": "969c9b8961adf0e5482c51a2097c5bdfe93a2fbd8581bac9197401756d8e2857"
+      },
+      "previousId": "B02",
+      "status": "killed"
+    },
+    {
+      "id": "followup-B03",
+      "behavior": "Make the recovery notice’s English strings available without eagerly importing app panels",
+      "source": "vite.config.ts",
+      "checkpoint": "6ec7044a2b2313860a9a9ef0cefe2389beef8220",
+      "beforeSha256": "41db9b90054b2632a90e5c5347cba05ee9b9b410dc12628dc511850c3c2968c8",
+      "restoredSha256": "41db9b90054b2632a90e5c5347cba05ee9b9b410dc12628dc511850c3c2968c8",
+      "appliedDiff": "diff --git a/vite.config.ts b/vite.config.ts\nindex 9797b764c..09c3766e9 100644\n--- a/vite.config.ts\n+++ b/vite.config.ts\n@@ -1032,3 +1032,3 @@ export default defineConfig({\n  if (id.endsWith('/src/services/mode-manager.ts')) return 'mode-preference';\n- if (id.endsWith('/src/bootstrap/ghost-notice-en.json')) return 'ghost-notice-copy';\n+\n  if (id.includes('node_modules')) {\n",
+      "suite": "bundle",
+      "mutationCounts": [
+        1,
+        1
+      ],
+      "failingTest": "not ok 2 - the built recovery notice can load before storage-dependent panels",
+      "assertion": "error: 'ghost-mode-notice-DR8HYbzu.js eagerly imports panels-Ba3LOL6C.js before the mode choice'",
+      "testSha256": {
+        "tests/ghost-mode-bundle.test.mjs": "969c9b8961adf0e5482c51a2097c5bdfe93a2fbd8581bac9197401756d8e2857"
+      },
+      "previousId": "B03",
+      "status": "killed"
+    }
+  ],
+  "currentSourceAndTestSha256": {
+    "src/entry.ts": "4151971770935166c70c52d9cc8097cffdbb6752ec12ad88d4e4425e2cdf4465",
+    "tests/ghost-mode-entry.test.mts": "9b10b9fe5e21e794c88439cac5ea33c5f94f6bcd1c6fc561f29fe6f296d3a436",
+    "vite.config.ts": "41db9b90054b2632a90e5c5347cba05ee9b9b410dc12628dc511850c3c2968c8",
+    "tests/ghost-mode-bundle.test.mjs": "969c9b8961adf0e5482c51a2097c5bdfe93a2fbd8581bac9197401756d8e2857",
+    "scripts/check-precache-budget.mjs": "c978ae25517bd6a4749e75e10d2c6e44b648b7498be3bcb14273b634fcb9ffc4",
+    "package.json": "f897a9d151f02c5ea9bd4fbe25d5ea9cbdf4cabb3a2293f3e21073b1232ba6f5"
+  },
+  "suites": {
+    "entry": {
+      "command": [
+        "./node_modules/.bin/tsx",
+        "--test",
+        "tests/ghost-mode-entry.test.mts"
+      ],
+      "baseline": [
+        4,
+        0
+      ],
+      "restored": [
+        4,
+        0
+      ]
+    },
+    "budget": {
+      "command": [
+        "bash",
+        "-c",
+        "unset VITE_VARIANT; node node_modules/vite/bin/vite.js build > /dev/null && node --input-type=module -e \"$1\"",
+        "full-default-build",
+        "import {execFileSync,spawnSync} from 'node:child_process'; import {readFileSync,readdirSync} from 'node:fs'; import test from 'node:test'; import assert from 'node:assert/strict'; const {extractPrecacheUrls}=await import('./scripts/check-precache-budget.mjs'); const urls=extractPrecacheUrls(readFileSync('dist/sw.js','utf8')); const counts=Object.fromEntries(['Assets','Workers','Widgets','ThirdParty'].map(dir=>[dir,urls.filter(url=>url.startsWith('cesium/'+dir+'/')).length])); console.log('Manifest diagnostics',JSON.stringify({entries:urls.length,cesium:counts,rendererJs:readdirSync('dist/assets').filter(x=>x.endsWith('.js')).length})); test('built manifest includes the real Cesium assets, workers, widgets and third-party files',()=>{assert.ok(Object.values(counts).every(n=>n>0),'Missing production Cesium precache');}); test('production build passes the unmodified npm precache budget',()=>{const p=spawnSync('npm',['run','pwa:budget'],{encoding:'utf8'}); console.log(p.stdout); assert.equal(p.status,0,(p.stdout+p.stderr).match(/Error: [^\\n]+/)?.[0]??p.stderr);});"
+      ],
+      "baseline": [
+        2,
+        0
+      ],
+      "restored": [
+        2,
+        0
+      ],
+      "baselineManifest": {
+        "entries": 468,
+        "cesium": {
+          "Assets": 151,
+          "Workers": 110,
+          "Widgets": 66,
+          "ThirdParty": 3
+        },
+        "rendererJs": 122,
+        "manifestMiB": "21.90"
+      },
+      "restoredManifest": {
+        "entries": 468,
+        "cesium": {
+          "Assets": 151,
+          "Workers": 110,
+          "Widgets": 66,
+          "ThirdParty": 3
+        },
+        "rendererJs": 122,
+        "manifestMiB": "21.90"
+      }
+    },
+    "bundle": {
+      "command": [
+        "node",
+        "--experimental-vm-modules",
+        "--test",
+        "tests/ghost-mode-bundle.test.mjs"
+      ],
+      "baseline": [
+        2,
+        0
+      ],
+      "restored": [
+        2,
+        0
+      ],
+      "baselineBuild": {
+        "checkpoint": "6ec7044a2b2313860a9a9ef0cefe2389beef8220",
+        "reused": "The clean restored default production build from the preceding budget proof in the same worktree",
+        "files": {
+          "dist/index.html": "5ee01830f48e4ed458d13f1d6e167dc4eb68631c6d77aa5bbfbc7d217677b6c8",
+          "dist/sw.js": "421372e7ca5e5ae347f78fdb9cddc7a3a3f272c19c66e4afeaac7479fee86456"
+        }
+      },
+      "rebuildAndVerifyCommand": [
+        "bash",
+        "-c",
+        "node node_modules/vite/bin/vite.js build > /dev/null && node --experimental-vm-modules --test \"$@\"",
+        "rebuild-then-test",
+        "tests/ghost-mode-bundle.test.mjs"
+      ]
+    }
+  },
+  "cases": [
+    {
+      "id": "followup-E01",
+      "behavior": "Recover before the full graph when persisted mode cannot be read",
+      "source": "src/entry.ts",
+      "checkpoint": "6ec7044a2b2313860a9a9ef0cefe2389beef8220",
+      "beforeSha256": "4151971770935166c70c52d9cc8097cffdbb6752ec12ad88d4e4425e2cdf4465",
+      "restoredSha256": "4151971770935166c70c52d9cc8097cffdbb6752ec12ad88d4e4425e2cdf4465",
+      "appliedDiff": "diff --git a/src/entry.ts b/src/entry.ts\nindex 703676f40..650e2aa67 100644\n--- a/src/entry.ts\n+++ b/src/entry.ts\n@@ -31,3 +31,3 @@ async function startMain(notice?: BootNotice): Promise<void> {\n function startApplication(): Promise<void> {\n-  if (getGhostModeState().preference === 'unknown') return loadBootNotice().then(startMain);\n+  if (getGhostModeState().preference === 'saved') return loadBootNotice().then(startMain);\n   return startMain();\n",
+      "suite": "entry",
+      "mutationCounts": [
+        0,
+        4
+      ],
+      "failingTest": "not ok 2 - unavailable storage mounts choices before main and propagates the original module error",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'wm-app-mode',\n    -   'notice',\n        'main',\n    -   'failure'\n      ]",
+      "testSha256": {
+        "tests/ghost-mode-entry.test.mts": "9b10b9fe5e21e794c88439cac5ea33c5f94f6bcd1c6fc561f29fe6f296d3a436"
+      }
+    },
+    {
+      "id": "followup-E02",
+      "behavior": "Expose the original main module error after updating the independent notice",
+      "source": "src/entry.ts",
+      "checkpoint": "6ec7044a2b2313860a9a9ef0cefe2389beef8220",
+      "beforeSha256": "4151971770935166c70c52d9cc8097cffdbb6752ec12ad88d4e4425e2cdf4465",
+      "restoredSha256": "4151971770935166c70c52d9cc8097cffdbb6752ec12ad88d4e4425e2cdf4465",
+      "appliedDiff": "diff --git a/src/entry.ts b/src/entry.ts\nindex 703676f40..298b34407 100644\n--- a/src/entry.ts\n+++ b/src/entry.ts\n@@ -24,3 +24,3 @@ async function startMain(notice?: BootNotice): Promise<void> {\n     notice?.showStartupFailure();\n-    throw error;\n+\n   }\n",
+      "suite": "entry",
+      "mutationCounts": [
+        3,
+        1
+      ],
+      "failingTest": "not ok 2 - unavailable storage mounts choices before main and propagates the original module error",
+      "assertion": "error: 'Missing expected rejection.'",
+      "testSha256": {
+        "tests/ghost-mode-entry.test.mts": "9b10b9fe5e21e794c88439cac5ea33c5f94f6bcd1c6fc561f29fe6f296d3a436"
+      }
+    },
+    {
+      "id": "followup-E03",
+      "behavior": "Keep a visible explanation when the full module cannot load",
+      "source": "src/entry.ts",
+      "checkpoint": "6ec7044a2b2313860a9a9ef0cefe2389beef8220",
+      "beforeSha256": "4151971770935166c70c52d9cc8097cffdbb6752ec12ad88d4e4425e2cdf4465",
+      "restoredSha256": "4151971770935166c70c52d9cc8097cffdbb6752ec12ad88d4e4425e2cdf4465",
+      "appliedDiff": "diff --git a/src/entry.ts b/src/entry.ts\nindex 703676f40..700209051 100644\n--- a/src/entry.ts\n+++ b/src/entry.ts\n@@ -23,3 +23,3 @@ async function startMain(notice?: BootNotice): Promise<void> {\n   } catch (error) {\n-    notice?.showStartupFailure();\n+\n     throw error;\n",
+      "suite": "entry",
+      "mutationCounts": [
+        3,
+        1
+      ],
+      "failingTest": "not ok 2 - unavailable storage mounts choices before main and propagates the original module error",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'wm-app-mode',\n        'notice',\n        'main',\n    -   'failure'\n      ]",
+      "testSha256": {
+        "tests/ghost-mode-entry.test.mts": "9b10b9fe5e21e794c88439cac5ea33c5f94f6bcd1c6fc561f29fe6f296d3a436"
+      }
+    },
+    {
+      "id": "followup-E04",
+      "behavior": "Report a late App.init rejection without blocking initial module registration",
+      "source": "src/entry.ts",
+      "checkpoint": "6ec7044a2b2313860a9a9ef0cefe2389beef8220",
+      "beforeSha256": "4151971770935166c70c52d9cc8097cffdbb6752ec12ad88d4e4425e2cdf4465",
+      "restoredSha256": "4151971770935166c70c52d9cc8097cffdbb6752ec12ad88d4e4425e2cdf4465",
+      "appliedDiff": "diff --git a/src/entry.ts b/src/entry.ts\nindex 703676f40..f76b40053 100644\n--- a/src/entry.ts\n+++ b/src/entry.ts\n@@ -21,3 +21,3 @@ async function startMain(notice?: BootNotice): Promise<void> {\n     const { appStartup } = await import('./main');\n-    if (notice) void appStartup.catch(() => notice.showStartupFailure());\n+    if (notice) void appStartup.catch(() => {});\n   } catch (error) {\n",
+      "suite": "entry",
+      "mutationCounts": [
+        3,
+        1
+      ],
+      "failingTest": "not ok 3 - unavailable storage keeps choices informed if application initialization later fails",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'wm-app-mode',\n        'notice',\n        'main',\n    -   'failure'\n      ]",
+      "testSha256": {
+        "tests/ghost-mode-entry.test.mts": "9b10b9fe5e21e794c88439cac5ea33c5f94f6bcd1c6fc561f29fe6f296d3a436"
+      }
+    },
+    {
+      "id": "followup-E05",
+      "behavior": "The optional notice chunk can fail while application bootstrap continues",
+      "source": "src/entry.ts",
+      "checkpoint": "6ec7044a2b2313860a9a9ef0cefe2389beef8220",
+      "beforeSha256": "4151971770935166c70c52d9cc8097cffdbb6752ec12ad88d4e4425e2cdf4465",
+      "restoredSha256": "4151971770935166c70c52d9cc8097cffdbb6752ec12ad88d4e4425e2cdf4465",
+      "appliedDiff": "diff --git a/src/entry.ts b/src/entry.ts\nindex 703676f40..1083d47f8 100644\n--- a/src/entry.ts\n+++ b/src/entry.ts\n@@ -14,3 +14,3 @@ async function loadBootNotice(): Promise<BootNotice | undefined> {\n   } catch (error) {\n-    globalThis.reportError?.(error);\n+    globalThis.reportError?.(error); throw error;\n   }\n",
+      "suite": "entry",
+      "mutationCounts": [
+        3,
+        1
+      ],
+      "failingTest": "not ok 4 - an unavailable notice chunk cannot prevent loading main",
+      "assertion": "error: 'notice failed'",
+      "testSha256": {
+        "tests/ghost-mode-entry.test.mts": "9b10b9fe5e21e794c88439cac5ea33c5f94f6bcd1c6fc561f29fe6f296d3a436"
+      }
+    },
+    {
+      "id": "followup-E06",
+      "behavior": "Healthy startup avoids optional recovery resources",
+      "source": "src/entry.ts",
+      "checkpoint": "6ec7044a2b2313860a9a9ef0cefe2389beef8220",
+      "beforeSha256": "4151971770935166c70c52d9cc8097cffdbb6752ec12ad88d4e4425e2cdf4465",
+      "restoredSha256": "4151971770935166c70c52d9cc8097cffdbb6752ec12ad88d4e4425e2cdf4465",
+      "appliedDiff": "diff --git a/src/entry.ts b/src/entry.ts\nindex 703676f40..a4ee5d1cd 100644\n--- a/src/entry.ts\n+++ b/src/entry.ts\n@@ -31,3 +31,3 @@ async function startMain(notice?: BootNotice): Promise<void> {\n function startApplication(): Promise<void> {\n-  if (getGhostModeState().preference === 'unknown') return loadBootNotice().then(startMain);\n+  if (getGhostModeState().preference !== 'window-only') return loadBootNotice().then(startMain);\n   return startMain();\n",
+      "suite": "entry",
+      "mutationCounts": [
+        3,
+        1
+      ],
+      "failingTest": "not ok 1 - healthy entry reads only mode then starts main without loading an early notice",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        './services/mode-manager',\n    +   './bootstrap/ghost-mode-notice',\n    +   './bootstrap/ghost-mode-notice.css',\n        './main'\n      ]",
+      "testSha256": {
+        "tests/ghost-mode-entry.test.mts": "9b10b9fe5e21e794c88439cac5ea33c5f94f6bcd1c6fc561f29fe6f296d3a436"
+      }
+    },
+    {
+      "id": "followup-E07",
+      "behavior": "Recovery styling is requested on denied startup",
+      "source": "src/entry.ts",
+      "checkpoint": "6ec7044a2b2313860a9a9ef0cefe2389beef8220",
+      "beforeSha256": "4151971770935166c70c52d9cc8097cffdbb6752ec12ad88d4e4425e2cdf4465",
+      "restoredSha256": "4151971770935166c70c52d9cc8097cffdbb6752ec12ad88d4e4425e2cdf4465",
+      "appliedDiff": "diff --git a/src/entry.ts b/src/entry.ts\nindex 703676f40..e96be21a4 100644\n--- a/src/entry.ts\n+++ b/src/entry.ts\n@@ -10,3 +10,3 @@ async function loadBootNotice(): Promise<BootNotice | undefined> {\n       import('./bootstrap/ghost-mode-notice'),\n-      import('./bootstrap/ghost-mode-notice.css'),\n+\n     ]);\n",
+      "suite": "entry",
+      "mutationCounts": [
+        3,
+        1
+      ],
+      "failingTest": "not ok 2 - unavailable storage mounts choices before main and propagates the original module error",
+      "assertion": "error: |-\n    The expression evaluated to a falsy value:\n    \n      assert.ok(fixture.requested.includes('./bootstrap/ghost-mode-notice.css'))",
+      "testSha256": {
+        "tests/ghost-mode-entry.test.mts": "9b10b9fe5e21e794c88439cac5ea33c5f94f6bcd1c6fc561f29fe6f296d3a436"
+      }
+    },
+    {
+      "id": "followup-E08",
+      "behavior": "Import exposes a promise for the already-started bootstrap",
+      "source": "src/entry.ts",
+      "checkpoint": "6ec7044a2b2313860a9a9ef0cefe2389beef8220",
+      "beforeSha256": "4151971770935166c70c52d9cc8097cffdbb6752ec12ad88d4e4425e2cdf4465",
+      "restoredSha256": "4151971770935166c70c52d9cc8097cffdbb6752ec12ad88d4e4425e2cdf4465",
+      "appliedDiff": "diff --git a/src/entry.ts b/src/entry.ts\nindex 703676f40..4fd5167b9 100644\n--- a/src/entry.ts\n+++ b/src/entry.ts\n@@ -35,2 +35,2 @@ function startApplication(): Promise<void> {\n \n-export const entryStartup = startApplication();\n+export const entryStartup = startApplication;\n",
+      "suite": "entry",
+      "mutationCounts": [
+        0,
+        4
+      ],
+      "failingTest": "not ok 1 - healthy entry reads only mode then starts main without loading an early notice",
+      "assertion": "error: 'entry publishes its immediately started boot promise'",
+      "testSha256": {
+        "tests/ghost-mode-entry.test.mts": "9b10b9fe5e21e794c88439cac5ea33c5f94f6bcd1c6fc561f29fe6f296d3a436"
+      }
+    },
+    {
+      "id": "followup-P01",
+      "behavior": "Production Workbox precache stays within 500 entries including the actual Cesium assets; reintroducing the prior top-level-await entry exceeds the unchanged budget.",
+      "source": "src/entry.ts",
+      "checkpoint": "6ec7044a2b2313860a9a9ef0cefe2389beef8220",
+      "beforeSha256": "4151971770935166c70c52d9cc8097cffdbb6752ec12ad88d4e4425e2cdf4465",
+      "restoredSha256": "4151971770935166c70c52d9cc8097cffdbb6752ec12ad88d4e4425e2cdf4465",
+      "appliedDiff": "diff --git a/src/entry.ts b/src/entry.ts\nindex 703676f40..a5cb8792f 100644\n--- a/src/entry.ts\n+++ b/src/entry.ts\n@@ -2,7 +2,4 @@ import { getGhostModeState } from './services/mode-manager';\n \n-interface BootNotice {\n-  showStartupFailure(): void;\n-}\n-\n-async function loadBootNotice(): Promise<BootNotice | undefined> {\n+let notice: { showStartupFailure(): void } | undefined;\n+if (getGhostModeState().preference === 'unknown') {\n   try {\n@@ -12,3 +9,3 @@ async function loadBootNotice(): Promise<BootNotice | undefined> {\n     ]);\n-    return mountGhostBootNotice();\n+    notice = mountGhostBootNotice();\n   } catch (error) {\n@@ -18,19 +15,12 @@ async function loadBootNotice(): Promise<BootNotice | undefined> {\n \n-async function startMain(notice?: BootNotice): Promise<void> {\n-  try {\n-    const { appStartup } = await import('./main');\n-    if (notice) void appStartup.catch(() => notice.showStartupFailure());\n-  } catch (error) {\n-    notice?.showStartupFailure();\n-    throw error;\n-  }\n+function watchStartup(startup: Promise<void>, fallback: { showStartupFailure(): void }): void {\n+  void startup.catch(() => fallback.showStartupFailure());\n }\n \n-// Keeping the entry module synchronous lets the bundler reuse shared chunks\n-// without generating a separate forwarding module for every lazy import.\n-function startApplication(): Promise<void> {\n-  if (getGhostModeState().preference === 'unknown') return loadBootNotice().then(startMain);\n-  return startMain();\n+try {\n+  const { appStartup } = await import('./main');\n+  if (notice) watchStartup(appStartup, notice);\n+} catch (error) {\n+  notice?.showStartupFailure();\n+  throw error;\n }\n-\n-export const entryStartup = startApplication();\n",
+      "suite": "budget",
+      "mutationCounts": [
+        1,
+        1
+      ],
+      "failingTest": "not ok 2 - production build passes the unmodified npm precache budget",
+      "assertion": "error: |-\n    Error: 607 entries exceeds budget 500\n    \n    1 !== 0",
+      "testSha256": {},
+      "mutatedManifest": {
+        "entries": 607,
+        "cesium": {
+          "Assets": 151,
+          "Workers": 110,
+          "Widgets": 66,
+          "ThirdParty": 3
+        },
+        "rendererJs": 261,
+        "manifestMiB": "21.91"
+      }
+    },
+    {
+      "id": "followup-P02",
+      "behavior": "A single top-level await of the same active promise pushes the otherwise identical product build past the existing precache limit.",
+      "source": "src/entry.ts",
+      "checkpoint": "6ec7044a2b2313860a9a9ef0cefe2389beef8220",
+      "beforeSha256": "4151971770935166c70c52d9cc8097cffdbb6752ec12ad88d4e4425e2cdf4465",
+      "restoredSha256": "4151971770935166c70c52d9cc8097cffdbb6752ec12ad88d4e4425e2cdf4465",
+      "appliedDiff": "diff --git a/src/entry.ts b/src/entry.ts\nindex 703676f40..9d18209cb 100644\n--- a/src/entry.ts\n+++ b/src/entry.ts\n@@ -36 +36,2 @@ function startApplication(): Promise<void> {\n export const entryStartup = startApplication();\n+await entryStartup;\n",
+      "suite": "budget",
+      "mutationCounts": [
+        1,
+        1
+      ],
+      "failingTest": "not ok 2 - production build passes the unmodified npm precache budget",
+      "assertion": "error: |-\n    Error: 607 entries exceeds budget 500\n    \n    1 !== 0",
+      "testSha256": {},
+      "mutatedManifest": {
+        "entries": 607,
+        "cesium": {
+          "Assets": 151,
+          "Workers": 110,
+          "Widgets": 66,
+          "ThirdParty": 3
+        },
+        "rendererJs": 261,
+        "manifestMiB": "21.91"
+      }
+    }
+  ]
+}

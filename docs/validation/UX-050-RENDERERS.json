@@ -1,0 +1,1131 @@
+{
+  "verifiedCommit": "d641f0c0f7d3cb619f8233610f9390883966f4d7",
+  "baseline": "cd459dfec514c80e2fcc3f0d7965ea6ef76a7b6a",
+  "priorBootCandidate": "1f93dad207755f3532ad95959c0b5957b207de24",
+  "totals": {
+    "components": {
+      "chromium": 54,
+      "tauri": 54
+    },
+    "builtProduct": {
+      "chromium": 39,
+      "tauri": 39
+    },
+    "failed": 0
+  },
+  "bootBaseline": {
+    "all-read": [
+      {
+        "raw": "product/baseline-all-read-chromium.json",
+        "sha256": "40739c9107948fcf1f066162a9f02cbf6203342d0172dd1796fa240f41e5fe87",
+        "pass": 2,
+        "fail": 4,
+        "failedChecks": [
+          "preference unreadable exposes two genuine operator choices",
+          "unreadable preference mounts early outside hidden app root",
+          "failed full bootstrap remains disclosed while controls stay active",
+          "at most one visible notice across bootstrap and regular mounts"
+        ],
+        "checks": [
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ],
+        "firstNoticeAt": null,
+        "earlySeen": false,
+        "normalSeen": false,
+        "visiblePeak": 0,
+        "denied": [
+          "crystalball-theme",
+          "crystalball-beta-mode"
+        ],
+        "blockedCalls": {},
+        "phase": [
+          {
+            "phase": "first visible",
+            "earlySeen": false,
+            "normalSeen": false,
+            "visible": 0,
+            "app": 1
+          }
+        ],
+        "scenario": "all-read",
+        "indexSHA256": "2c2d600ea9f7e973b44ebbe6b390dadf4da4d6c62086666543490e8ffb91d256",
+        "externalResourceRequestsAborted": {
+          "https:": 1
+        },
+        "externalForwarded": 0
+      },
+      {
+        "raw": "product/baseline-all-read-native.json",
+        "sha256": "71dc74ea163324b030d43a5a054a6d55378d6aaf479eb8af4018d22769865180",
+        "pass": 2,
+        "fail": 4,
+        "failedChecks": [
+          "preference unreadable exposes two genuine operator choices",
+          "unreadable preference mounts early outside hidden app root",
+          "failed full bootstrap remains disclosed while controls stay active",
+          "at most one visible notice across bootstrap and regular mounts"
+        ],
+        "checks": [
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ],
+        "firstNoticeAt": null,
+        "earlySeen": false,
+        "normalSeen": false,
+        "visiblePeak": 0,
+        "denied": [
+          "crystalball-theme",
+          "crystalball-beta-mode"
+        ],
+        "blockedCalls": {},
+        "phase": [
+          {
+            "app": 1,
+            "earlySeen": false,
+            "normalSeen": false,
+            "phase": "first visible",
+            "visible": 0
+          }
+        ],
+        "scenario": "all-read",
+        "hostSHA256": "160a48a97fbc55f7baf8bd73ecd94a75c2a78e4d2e46312068edf59cee03c089",
+        "hostExit": 0,
+        "websiteDataStore": "nonpersistent WKWebView",
+        "indexSHA256": "2c2d600ea9f7e973b44ebbe6b390dadf4da4d6c62086666543490e8ffb91d256"
+      }
+    ]
+  },
+  "savedModeBaseline": {
+    "saved": [
+      {
+        "raw": "base-saved-chromium.json",
+        "sha256": "7bda7f29fb28c06c08d111251049e0f0a16550469ed6a88ef2b06cfe5e273cdc",
+        "pass": 2,
+        "fail": 2,
+        "failedChecks": [
+          "saved Ghost is available synchronously to the first mode read",
+          "saved Ghost selects five-times polling cadence"
+        ],
+        "checks": [
+          "critical site notification is withheld at startup",
+          "trace records the actual Ghost gate"
+        ],
+        "states": {
+          "startup": {
+            "saved": "ghost",
+            "mode": null,
+            "ghost": false,
+            "cadence": 1
+          },
+          "baselineNotice": "baseline dispatch and first-read modules only"
+        },
+        "scenario": "saved",
+        "width": 360
+      },
+      {
+        "raw": "base-saved-native.json",
+        "sha256": "c4fca3f5b7301bc278d114ea4d7198b490a83a3977c1b546da78eb77cff0925c",
+        "pass": 2,
+        "fail": 2,
+        "failedChecks": [
+          "saved Ghost is available synchronously to the first mode read",
+          "saved Ghost selects five-times polling cadence"
+        ],
+        "checks": [
+          "critical site notification is withheld at startup",
+          "trace records the actual Ghost gate"
+        ],
+        "states": {
+          "baselineNotice": "baseline dispatch and first-read modules only",
+          "startup": {
+            "cadence": 1,
+            "ghost": false,
+            "mode": null,
+            "saved": "ghost"
+          }
+        },
+        "scenario": "saved",
+        "width": 1100,
+        "hostSha256": "44bd3e41c8d8b39031b6857d7d33aa63215130570d792573c548d402a781c96d",
+        "hostExit": 0,
+        "productionCspMatched": true,
+        "websiteDataStore": "nonpersistent WKWebView"
+      }
+    ]
+  },
+  "preChunkRepair": {
+    "all-read": [
+      {
+        "raw": "product/candidate-all-read-chromium.json",
+        "sha256": "ea613d8e5294439a6841c3e92303ef69a618877f67a0c510f984d3dbf46e5fe9",
+        "pass": 2,
+        "fail": 4,
+        "failedChecks": [
+          "preference unreadable exposes two genuine operator choices",
+          "unreadable preference mounts early outside hidden app root",
+          "failed full bootstrap remains disclosed while controls stay active",
+          "at most one visible notice across bootstrap and regular mounts"
+        ],
+        "checks": [
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ],
+        "firstNoticeAt": null,
+        "earlySeen": false,
+        "normalSeen": false,
+        "visiblePeak": 0,
+        "denied": [
+          "crystalball-theme",
+          "crystalball-runtime-feature-toggles",
+          "crystalball-beta-mode"
+        ],
+        "blockedCalls": {},
+        "phase": [
+          {
+            "phase": "first visible",
+            "earlySeen": false,
+            "normalSeen": false,
+            "visible": 0,
+            "app": 1
+          }
+        ],
+        "scenario": "all-read",
+        "indexSHA256": "6d9e4db9be3d63b3e6b60679e90d9faa450088657e5dea5631ebf08f69db64c3",
+        "externalResourceRequestsAborted": {
+          "https:": 1
+        },
+        "externalForwarded": 0
+      },
+      {
+        "raw": "product/candidate-all-read-native.json",
+        "sha256": "ce7507c872c0ba8e618b7be21cb646a23f003d6c30f7da733ed664dd4916a52f",
+        "pass": 2,
+        "fail": 4,
+        "failedChecks": [
+          "preference unreadable exposes two genuine operator choices",
+          "unreadable preference mounts early outside hidden app root",
+          "failed full bootstrap remains disclosed while controls stay active",
+          "at most one visible notice across bootstrap and regular mounts"
+        ],
+        "checks": [
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ],
+        "firstNoticeAt": null,
+        "earlySeen": false,
+        "normalSeen": false,
+        "visiblePeak": 0,
+        "denied": [
+          "crystalball-theme",
+          "crystalball-runtime-feature-toggles",
+          "crystalball-beta-mode"
+        ],
+        "blockedCalls": {},
+        "phase": [
+          {
+            "app": 1,
+            "earlySeen": false,
+            "normalSeen": false,
+            "phase": "first visible",
+            "visible": 0
+          }
+        ],
+        "scenario": "all-read",
+        "hostSHA256": "160a48a97fbc55f7baf8bd73ecd94a75c2a78e4d2e46312068edf59cee03c089",
+        "hostExit": 0,
+        "websiteDataStore": "nonpersistent WKWebView",
+        "indexSHA256": "6ab72ea5d91c133d29e7f7d61a541c77fc4b2a2ae326c0b590f6276b5024b27b"
+      }
+    ],
+    "getter": [
+      {
+        "raw": "product/candidate-getter-chromium.json",
+        "sha256": "080854ad7a035918f8fcbb946e719bcb9847133056cde6faf0ead87ad2d21a25",
+        "pass": 2,
+        "fail": 4,
+        "failedChecks": [
+          "preference unreadable exposes two genuine operator choices",
+          "unreadable preference mounts early outside hidden app root",
+          "failed full bootstrap remains disclosed while controls stay active",
+          "at most one visible notice across bootstrap and regular mounts"
+        ],
+        "checks": [
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ],
+        "firstNoticeAt": null,
+        "earlySeen": false,
+        "normalSeen": false,
+        "visiblePeak": 0,
+        "denied": [
+          "[localStorage getter]"
+        ],
+        "blockedCalls": {},
+        "phase": [
+          {
+            "phase": "first visible",
+            "earlySeen": false,
+            "normalSeen": false,
+            "visible": 0,
+            "app": 1
+          }
+        ],
+        "scenario": "getter",
+        "indexSHA256": "6d9e4db9be3d63b3e6b60679e90d9faa450088657e5dea5631ebf08f69db64c3",
+        "externalResourceRequestsAborted": {
+          "https:": 1
+        },
+        "externalForwarded": 0
+      },
+      {
+        "raw": "product/candidate-getter-native.json",
+        "sha256": "551573143c0d9878b19033227011fe71fc5bbccbfc8eb1f41b7ab460cea7ac10",
+        "pass": 2,
+        "fail": 4,
+        "failedChecks": [
+          "preference unreadable exposes two genuine operator choices",
+          "unreadable preference mounts early outside hidden app root",
+          "failed full bootstrap remains disclosed while controls stay active",
+          "at most one visible notice across bootstrap and regular mounts"
+        ],
+        "checks": [
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ],
+        "firstNoticeAt": null,
+        "earlySeen": false,
+        "normalSeen": false,
+        "visiblePeak": 0,
+        "denied": [
+          "[localStorage getter]"
+        ],
+        "blockedCalls": {},
+        "phase": [
+          {
+            "app": 1,
+            "earlySeen": false,
+            "normalSeen": false,
+            "phase": "first visible",
+            "visible": 0
+          }
+        ],
+        "scenario": "getter",
+        "hostSHA256": "160a48a97fbc55f7baf8bd73ecd94a75c2a78e4d2e46312068edf59cee03c089",
+        "hostExit": 0,
+        "websiteDataStore": "nonpersistent WKWebView",
+        "indexSHA256": "6ab72ea5d91c133d29e7f7d61a541c77fc4b2a2ae326c0b590f6276b5024b27b"
+      }
+    ]
+  },
+  "preFocusRepair": {
+    "raw": "focus-browser.json",
+    "sha256": "82ac6e3423e8d975b2165b8fd6eacf10a7a38223988e654693b98e82c42bc071",
+    "pass": 30,
+    "fail": 1,
+    "failedChecks": [
+      "keyboard focus follows an active Ghost control on Home takeover"
+    ],
+    "checks": [
+      "saved Ghost is available synchronously to the first mode read",
+      "saved Ghost selects five-times polling cadence",
+      "extreme warning at a synthetic saved site reaches actionable ladder decision",
+      "critical site notification is withheld at startup",
+      "trace records the actual Ghost gate",
+      "classic view has critical scope disclosure",
+      "one terminal critical attempt is counted once",
+      "noncritical request counts once and silent does not count",
+      "eligible analyst batch counts once, duplicate and visible HUD do not",
+      "suppressed dispatcher and analyst attempts produce no localStorage writes",
+      "count is visible outside the live status",
+      "private alert contents do not appear in notice or persistent writes",
+      "real HomeShellOverlay shows the same Ghost session",
+      "classic notice is hidden under Home",
+      "notice fits the actual viewport",
+      "Home exposes a single exit button while visible",
+      "classic notice returns without adding suppressions",
+      "exit is an enabled focusable button",
+      "operator can focus the exit control",
+      "exit returns the window to standard mode",
+      "focus returns to the active classic toolbar on exit",
+      "leaving Ghost resets the session count",
+      "a standard critical request can reach permission boundary",
+      "pending permission cannot replay across enter and exit",
+      "legitimate fresh standard notification still invokes guarded constructor",
+      "manual Ghost exit restores prior God\u2019s Vision",
+      "cross-window preference changes reach installed UI state",
+      "cross-window Ghost starts new local session",
+      "classic teardown removes its notice",
+      "fixture never contacted providers or external channels"
+    ],
+    "states": {
+      "startup": {
+        "saved": "ghost",
+        "mode": "ghost",
+        "ghost": true,
+        "cadence": 5
+      },
+      "ladder": {
+        "exposure": 100,
+        "rung": "critical",
+        "dispatched": true
+      },
+      "takeoverFocus": {
+        "element": "BODY",
+        "surface": "outside"
+      },
+      "finalCounts": {
+        "muted": 1,
+        "critical": 1
+      }
+    },
+    "scenario": "saved",
+    "width": 360
+  },
+  "components": {
+    "saved": [
+      {
+        "raw": "reachable-saved-chromium.json",
+        "sha256": "7459c9da8b80a8dbc5cea4cfa2dc9e7e99ef7581f89bf4d5ef66b7a16677b7d4",
+        "pass": 32,
+        "fail": 0,
+        "failedChecks": [],
+        "checks": [
+          "saved Ghost is available synchronously to the first mode read",
+          "saved Ghost selects five-times polling cadence",
+          "extreme warning at a synthetic saved site reaches actionable ladder decision",
+          "critical site notification is withheld at startup",
+          "trace records the actual Ghost gate",
+          "classic view has critical scope disclosure",
+          "one terminal critical attempt is counted once",
+          "noncritical request counts once and silent does not count",
+          "eligible analyst batch counts once, duplicate and visible HUD do not",
+          "suppressed dispatcher and analyst attempts produce no localStorage writes",
+          "count is visible outside the live status",
+          "private alert contents do not appear in notice or persistent writes",
+          "keyboard focus follows an active Ghost control on Home takeover",
+          "real HomeShellOverlay shows the same Ghost session",
+          "classic notice is hidden under Home",
+          "notice fits the actual viewport",
+          "Home exposes a single exit button while visible",
+          "keyboard focus follows the active Ghost control back to classic",
+          "classic notice returns without adding suppressions",
+          "exit is an enabled focusable button",
+          "operator can focus the exit control",
+          "exit returns the window to standard mode",
+          "focus returns to the active classic toolbar on exit",
+          "leaving Ghost resets the session count",
+          "a standard critical request can reach permission boundary",
+          "pending permission cannot replay across enter and exit",
+          "legitimate fresh standard notification still invokes guarded constructor",
+          "manual Ghost exit restores prior God\u2019s Vision",
+          "cross-window preference changes reach installed UI state",
+          "cross-window Ghost starts new local session",
+          "classic teardown removes its notice",
+          "fixture never contacted providers or external channels"
+        ],
+        "states": {
+          "startup": {
+            "saved": "ghost",
+            "mode": "ghost",
+            "ghost": true,
+            "cadence": 5
+          },
+          "ladder": {
+            "exposure": 100,
+            "rung": "critical",
+            "dispatched": true
+          },
+          "takeoverFocus": {
+            "element": "BUTTON",
+            "action": "exit-ghost",
+            "surface": "home"
+          },
+          "finalCounts": {
+            "muted": 1,
+            "critical": 1
+          }
+        },
+        "scenario": "saved",
+        "width": 360
+      },
+      {
+        "raw": "reachable-saved-native.json",
+        "sha256": "98724f3c4c2275d301c99cca838012354bb7654acd8d55f9f8432737aaef7af8",
+        "pass": 32,
+        "fail": 0,
+        "failedChecks": [],
+        "checks": [
+          "saved Ghost is available synchronously to the first mode read",
+          "saved Ghost selects five-times polling cadence",
+          "extreme warning at a synthetic saved site reaches actionable ladder decision",
+          "critical site notification is withheld at startup",
+          "trace records the actual Ghost gate",
+          "classic view has critical scope disclosure",
+          "one terminal critical attempt is counted once",
+          "noncritical request counts once and silent does not count",
+          "eligible analyst batch counts once, duplicate and visible HUD do not",
+          "suppressed dispatcher and analyst attempts produce no localStorage writes",
+          "count is visible outside the live status",
+          "private alert contents do not appear in notice or persistent writes",
+          "keyboard focus follows an active Ghost control on Home takeover",
+          "real HomeShellOverlay shows the same Ghost session",
+          "classic notice is hidden under Home",
+          "notice fits the actual viewport",
+          "Home exposes a single exit button while visible",
+          "keyboard focus follows the active Ghost control back to classic",
+          "classic notice returns without adding suppressions",
+          "exit is an enabled focusable button",
+          "operator can focus the exit control",
+          "exit returns the window to standard mode",
+          "focus returns to the active classic toolbar on exit",
+          "leaving Ghost resets the session count",
+          "a standard critical request can reach permission boundary",
+          "pending permission cannot replay across enter and exit",
+          "legitimate fresh standard notification still invokes guarded constructor",
+          "manual Ghost exit restores prior God\u2019s Vision",
+          "cross-window preference changes reach installed UI state",
+          "cross-window Ghost starts new local session",
+          "classic teardown removes its notice",
+          "fixture never contacted providers or external channels"
+        ],
+        "states": {
+          "finalCounts": {
+            "critical": 1,
+            "muted": 1
+          },
+          "ladder": {
+            "dispatched": true,
+            "exposure": 100,
+            "rung": "critical"
+          },
+          "startup": {
+            "cadence": 5,
+            "ghost": true,
+            "mode": "ghost",
+            "saved": "ghost"
+          },
+          "takeoverFocus": {
+            "action": "exit-ghost",
+            "element": "BUTTON",
+            "surface": "home"
+          }
+        },
+        "scenario": "saved",
+        "width": 1100,
+        "hostSha256": "44bd3e41c8d8b39031b6857d7d33aa63215130570d792573c548d402a781c96d",
+        "hostExit": 0,
+        "productionCspMatched": true,
+        "websiteDataStore": "nonpersistent WKWebView"
+      }
+    ],
+    "unknown": [
+      {
+        "raw": "reachable-unknown-chromium.json",
+        "sha256": "dda2ae22403559ac9b5c3101d79281ce25fb994d5ccd4a836bf025f7bba4b93d",
+        "pass": 11,
+        "fail": 0,
+        "failedChecks": [],
+        "checks": [
+          "storage read failure holds a distinct unknown preference",
+          "unknown preference holds external critical delivery without requesting permission",
+          "unknown hold does not count as confirmed Ghost suppression",
+          "Home shell can present the unknown-mode choice",
+          "unknown preference has visible mode choices",
+          "unsaved operator choice controls the current window",
+          "unsaved Ghost blocks and accounts",
+          "receipt remains private in renderer",
+          "unsaved choice is advertised",
+          "retry persists the operator\u2019s choice",
+          "fixtures made zero external requests and sends"
+        ],
+        "states": {},
+        "scenario": "unknown",
+        "width": 360
+      },
+      {
+        "raw": "reachable-unknown-native.json",
+        "sha256": "77f4ff462414ec244d92c53777a38fef11392830b17fb544f7ebb8135aab93ae",
+        "pass": 11,
+        "fail": 0,
+        "failedChecks": [],
+        "checks": [
+          "storage read failure holds a distinct unknown preference",
+          "unknown preference holds external critical delivery without requesting permission",
+          "unknown hold does not count as confirmed Ghost suppression",
+          "Home shell can present the unknown-mode choice",
+          "unknown preference has visible mode choices",
+          "unsaved operator choice controls the current window",
+          "unsaved Ghost blocks and accounts",
+          "receipt remains private in renderer",
+          "unsaved choice is advertised",
+          "retry persists the operator\u2019s choice",
+          "fixtures made zero external requests and sends"
+        ],
+        "states": {},
+        "scenario": "unknown",
+        "width": 1100,
+        "hostSha256": "44bd3e41c8d8b39031b6857d7d33aa63215130570d792573c548d402a781c96d",
+        "hostExit": 0,
+        "productionCspMatched": true,
+        "websiteDataStore": "nonpersistent WKWebView"
+      }
+    ],
+    "unknown-mount-all": [
+      {
+        "raw": "reachable-unknown-mount-all-chromium.json",
+        "sha256": "d57f7617855e5eb8e168a8c17ed6e60bdb80ead126730cebda57f80a963e9646",
+        "pass": 11,
+        "fail": 0,
+        "failedChecks": [],
+        "checks": [
+          "storage read failure holds a distinct unknown preference",
+          "unknown preference holds external critical delivery without requesting permission",
+          "unknown hold does not count as confirmed Ghost suppression",
+          "Home shell can present the unknown-mode choice",
+          "unknown preference has visible mode choices",
+          "unsaved operator choice controls the current window",
+          "unsaved Ghost blocks and accounts",
+          "receipt remains private in renderer",
+          "unsaved choice is advertised",
+          "retry persists the operator\u2019s choice",
+          "fixtures made zero external requests and sends"
+        ],
+        "states": {},
+        "scenario": "unknown-mount-all",
+        "width": 360
+      },
+      {
+        "raw": "reachable-unknown-mount-all-native.json",
+        "sha256": "9c5e3894f7657aca8d10a4d875a665f0502f909ca9a32c3189813f19ad3d8586",
+        "pass": 11,
+        "fail": 0,
+        "failedChecks": [],
+        "checks": [
+          "storage read failure holds a distinct unknown preference",
+          "unknown preference holds external critical delivery without requesting permission",
+          "unknown hold does not count as confirmed Ghost suppression",
+          "Home shell can present the unknown-mode choice",
+          "unknown preference has visible mode choices",
+          "unsaved operator choice controls the current window",
+          "unsaved Ghost blocks and accounts",
+          "receipt remains private in renderer",
+          "unsaved choice is advertised",
+          "retry persists the operator\u2019s choice",
+          "fixtures made zero external requests and sends"
+        ],
+        "states": {},
+        "scenario": "unknown-mount-all",
+        "width": 1100,
+        "hostSha256": "44bd3e41c8d8b39031b6857d7d33aa63215130570d792573c548d402a781c96d",
+        "hostExit": 0,
+        "productionCspMatched": true,
+        "websiteDataStore": "nonpersistent WKWebView"
+      }
+    ]
+  },
+  "builtProduct": {
+    "all-read": [
+      {
+        "raw": "product/reachable-all-read-chromium.json",
+        "sha256": "4bf0b92ae003770187986bd2b674384878b32b342ef1f5afe8ec8be869507992",
+        "pass": 8,
+        "fail": 0,
+        "failedChecks": [],
+        "checks": [
+          "preference unreadable exposes two genuine operator choices",
+          "unreadable preference mounts early outside hidden app root",
+          "failed full bootstrap remains disclosed while controls stay active",
+          "local Ghost choice survives failed startup and rejected write",
+          "local standard choice remains usable without storage",
+          "at most one visible notice across bootstrap and regular mounts",
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ],
+        "firstNoticeAt": 128,
+        "earlySeen": true,
+        "normalSeen": false,
+        "visiblePeak": 1,
+        "denied": [
+          "crystalball-theme",
+          "wm-app-mode",
+          "crystalball-runtime-feature-toggles",
+          "crystalball-beta-mode"
+        ],
+        "blockedCalls": {},
+        "phase": [
+          {
+            "phase": "first visible",
+            "earlySeen": true,
+            "normalSeen": false,
+            "visible": 1,
+            "app": 1
+          }
+        ],
+        "scenario": "all-read",
+        "appContainerRemoved": false,
+        "lateStartupError": false,
+        "indexSHA256": "790a2fc7b0b94c0b96ead3cfcaaaaffd7eea59dbd845c796438898156cce411c",
+        "externalResourceRequestsAborted": {
+          "https:": 1
+        },
+        "externalForwarded": 0
+      },
+      {
+        "raw": "product/reachable-all-read-native.json",
+        "sha256": "10d9a54cb51d982b078c91d684643622c403b1f997d89b6e0d85dbba0ac9925d",
+        "pass": 8,
+        "fail": 0,
+        "failedChecks": [],
+        "checks": [
+          "preference unreadable exposes two genuine operator choices",
+          "unreadable preference mounts early outside hidden app root",
+          "failed full bootstrap remains disclosed while controls stay active",
+          "local Ghost choice survives failed startup and rejected write",
+          "local standard choice remains usable without storage",
+          "at most one visible notice across bootstrap and regular mounts",
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ],
+        "firstNoticeAt": 110,
+        "earlySeen": true,
+        "normalSeen": false,
+        "visiblePeak": 1,
+        "denied": [
+          "crystalball-theme",
+          "wm-app-mode",
+          "crystalball-runtime-feature-toggles",
+          "crystalball-beta-mode"
+        ],
+        "blockedCalls": {},
+        "phase": [
+          {
+            "app": 1,
+            "earlySeen": true,
+            "normalSeen": false,
+            "phase": "first visible",
+            "visible": 1
+          }
+        ],
+        "scenario": "all-read",
+        "appContainerRemoved": false,
+        "lateStartupError": false,
+        "hostSHA256": "160a48a97fbc55f7baf8bd73ecd94a75c2a78e4d2e46312068edf59cee03c089",
+        "hostExit": 0,
+        "websiteDataStore": "nonpersistent WKWebView",
+        "indexSHA256": "3528224d0d8d7b39e96ece12bbf50bb5876509339224fed0e17ea331ecff8224"
+      }
+    ],
+    "getter": [
+      {
+        "raw": "product/reachable-getter-chromium.json",
+        "sha256": "6043a3054543813c25dbb468d9638b7e1e78eb9fd42d624a137b612592f584c6",
+        "pass": 8,
+        "fail": 0,
+        "failedChecks": [],
+        "checks": [
+          "preference unreadable exposes two genuine operator choices",
+          "unreadable preference mounts early outside hidden app root",
+          "failed full bootstrap remains disclosed while controls stay active",
+          "local Ghost choice survives failed startup and rejected write",
+          "local standard choice remains usable without storage",
+          "at most one visible notice across bootstrap and regular mounts",
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ],
+        "firstNoticeAt": 92,
+        "earlySeen": true,
+        "normalSeen": false,
+        "visiblePeak": 1,
+        "denied": [
+          "[localStorage getter]"
+        ],
+        "blockedCalls": {},
+        "phase": [
+          {
+            "phase": "first visible",
+            "earlySeen": true,
+            "normalSeen": false,
+            "visible": 1,
+            "app": 1
+          }
+        ],
+        "scenario": "getter",
+        "appContainerRemoved": false,
+        "lateStartupError": false,
+        "indexSHA256": "790a2fc7b0b94c0b96ead3cfcaaaaffd7eea59dbd845c796438898156cce411c",
+        "externalResourceRequestsAborted": {
+          "https:": 1
+        },
+        "externalForwarded": 0
+      },
+      {
+        "raw": "product/reachable-getter-native.json",
+        "sha256": "6e69ad2432e50739921c8d2183f4d33fcdb260e82a8ae4c0e3f18ab2a6ef28c7",
+        "pass": 8,
+        "fail": 0,
+        "failedChecks": [],
+        "checks": [
+          "preference unreadable exposes two genuine operator choices",
+          "unreadable preference mounts early outside hidden app root",
+          "failed full bootstrap remains disclosed while controls stay active",
+          "local Ghost choice survives failed startup and rejected write",
+          "local standard choice remains usable without storage",
+          "at most one visible notice across bootstrap and regular mounts",
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ],
+        "firstNoticeAt": 32,
+        "earlySeen": true,
+        "normalSeen": false,
+        "visiblePeak": 1,
+        "denied": [
+          "[localStorage getter]"
+        ],
+        "blockedCalls": {},
+        "phase": [
+          {
+            "app": 1,
+            "earlySeen": true,
+            "normalSeen": false,
+            "phase": "first visible",
+            "visible": 1
+          }
+        ],
+        "scenario": "getter",
+        "appContainerRemoved": false,
+        "lateStartupError": false,
+        "hostSHA256": "160a48a97fbc55f7baf8bd73ecd94a75c2a78e4d2e46312068edf59cee03c089",
+        "hostExit": 0,
+        "websiteDataStore": "nonpersistent WKWebView",
+        "indexSHA256": "3528224d0d8d7b39e96ece12bbf50bb5876509339224fed0e17ea331ecff8224"
+      }
+    ],
+    "mode-key": [
+      {
+        "raw": "product/reachable-mode-key-chromium.json",
+        "sha256": "c87da25ac474b0383f64e831abe58bcb23b7a2d541ad6488d9a6713ac08bb8db",
+        "pass": 9,
+        "fail": 0,
+        "failedChecks": [],
+        "checks": [
+          "preference unreadable exposes two genuine operator choices",
+          "unreadable preference mounts early outside hidden app root",
+          "regular classic or Home surface can own the notice after app startup",
+          "handoff retains the unresolved operator choice",
+          "no duplicate classic notice node at handoff",
+          "real product accepts a window-only choice after mode-key denial",
+          "at most one visible notice across bootstrap and regular mounts",
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ],
+        "firstNoticeAt": 94,
+        "earlySeen": true,
+        "normalSeen": true,
+        "visiblePeak": 1,
+        "denied": [
+          "wm-app-mode"
+        ],
+        "blockedCalls": {
+          "fetch http:": 1
+        },
+        "phase": [
+          {
+            "phase": "first visible",
+            "earlySeen": true,
+            "normalSeen": false,
+            "visible": 1,
+            "app": 1
+          },
+          {
+            "phase": "regular surface",
+            "earlySeen": true,
+            "normalSeen": true,
+            "visible": 1,
+            "app": 1
+          }
+        ],
+        "scenario": "mode-key",
+        "appContainerRemoved": false,
+        "lateStartupError": false,
+        "indexSHA256": "790a2fc7b0b94c0b96ead3cfcaaaaffd7eea59dbd845c796438898156cce411c",
+        "externalResourceRequestsAborted": {
+          "https:": 1
+        },
+        "externalForwarded": 0
+      },
+      {
+        "raw": "product/reachable-mode-key-native.json",
+        "sha256": "1118ead301fabada2e0a8b8646c98723a4e8db28fca74297a35a03800bade772",
+        "pass": 9,
+        "fail": 0,
+        "failedChecks": [],
+        "checks": [
+          "preference unreadable exposes two genuine operator choices",
+          "unreadable preference mounts early outside hidden app root",
+          "regular classic or Home surface can own the notice after app startup",
+          "handoff retains the unresolved operator choice",
+          "no duplicate classic notice node at handoff",
+          "real product accepts a window-only choice after mode-key denial",
+          "at most one visible notice across bootstrap and regular mounts",
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ],
+        "firstNoticeAt": 39,
+        "earlySeen": true,
+        "normalSeen": true,
+        "visiblePeak": 1,
+        "denied": [
+          "wm-app-mode"
+        ],
+        "blockedCalls": {
+          "fetch ipc:": 11
+        },
+        "phase": [
+          {
+            "app": 1,
+            "earlySeen": true,
+            "normalSeen": false,
+            "phase": "first visible",
+            "visible": 1
+          },
+          {
+            "app": 1,
+            "earlySeen": true,
+            "normalSeen": true,
+            "phase": "regular surface",
+            "visible": 1
+          }
+        ],
+        "scenario": "mode-key",
+        "appContainerRemoved": false,
+        "lateStartupError": false,
+        "hostSHA256": "160a48a97fbc55f7baf8bd73ecd94a75c2a78e4d2e46312068edf59cee03c089",
+        "hostExit": 0,
+        "websiteDataStore": "nonpersistent WKWebView",
+        "indexSHA256": "3528224d0d8d7b39e96ece12bbf50bb5876509339224fed0e17ea331ecff8224"
+      }
+    ],
+    "saved": [
+      {
+        "raw": "product/reachable-saved-chromium.json",
+        "sha256": "2d4de18224c6fe699fec69cc35ffd5dac147c30dab2f4314b5a3774caa0a57c4",
+        "pass": 5,
+        "fail": 0,
+        "failedChecks": [],
+        "checks": [
+          "saved Ghost is visible on product shell",
+          "regular classic or Home surface can own the notice after app startup",
+          "at most one visible notice across bootstrap and regular mounts",
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ],
+        "firstNoticeAt": 1666,
+        "earlySeen": false,
+        "normalSeen": true,
+        "visiblePeak": 1,
+        "denied": [],
+        "blockedCalls": {
+          "fetch http:": 165,
+          "fetch https:": 25
+        },
+        "phase": [
+          {
+            "phase": "first visible",
+            "earlySeen": false,
+            "normalSeen": true,
+            "visible": 1,
+            "app": 2
+          },
+          {
+            "phase": "regular surface",
+            "earlySeen": false,
+            "normalSeen": true,
+            "visible": 1,
+            "app": 2
+          }
+        ],
+        "scenario": "saved",
+        "appContainerRemoved": false,
+        "lateStartupError": false,
+        "indexSHA256": "790a2fc7b0b94c0b96ead3cfcaaaaffd7eea59dbd845c796438898156cce411c",
+        "externalResourceRequestsAborted": {
+          "https:": 1
+        },
+        "externalForwarded": 0
+      },
+      {
+        "raw": "product/reachable-saved-native.json",
+        "sha256": "2e9a133fd4d0c0dc4d03565844032c9a6b756e65b88046ec1b1ae243de9883af",
+        "pass": 5,
+        "fail": 0,
+        "failedChecks": [],
+        "checks": [
+          "saved Ghost is visible on product shell",
+          "regular classic or Home surface can own the notice after app startup",
+          "at most one visible notice across bootstrap and regular mounts",
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ],
+        "firstNoticeAt": 6970,
+        "earlySeen": false,
+        "normalSeen": true,
+        "visiblePeak": 1,
+        "denied": [],
+        "blockedCalls": {
+          "fetch https:": 60,
+          "fetch ipc:": 145,
+          "fetch tauri:": 1
+        },
+        "phase": [
+          {
+            "app": 2,
+            "earlySeen": false,
+            "normalSeen": true,
+            "phase": "first visible",
+            "visible": 2
+          },
+          {
+            "app": 2,
+            "earlySeen": false,
+            "normalSeen": true,
+            "phase": "regular surface",
+            "visible": 2
+          }
+        ],
+        "scenario": "saved",
+        "appContainerRemoved": false,
+        "lateStartupError": false,
+        "hostSHA256": "160a48a97fbc55f7baf8bd73ecd94a75c2a78e4d2e46312068edf59cee03c089",
+        "hostExit": 0,
+        "websiteDataStore": "nonpersistent WKWebView",
+        "indexSHA256": "3528224d0d8d7b39e96ece12bbf50bb5876509339224fed0e17ea331ecff8224"
+      }
+    ],
+    "late": [
+      {
+        "raw": "product/reachable-late-chromium.json",
+        "sha256": "ab03d054aba9595821b5226b6c838f4ff88b28dd1a4ab80de9350808dfc25b20",
+        "pass": 9,
+        "fail": 0,
+        "failedChecks": [],
+        "checks": [
+          "preference unreadable exposes two genuine operator choices",
+          "unreadable preference mounts early outside hidden app root",
+          "failed full bootstrap remains disclosed while controls stay active",
+          "late appStartup rejection reported after the main module loaded",
+          "local Ghost choice survives failed startup and rejected write",
+          "local standard choice remains usable without storage",
+          "at most one visible notice across bootstrap and regular mounts",
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ],
+        "firstNoticeAt": 105,
+        "earlySeen": true,
+        "normalSeen": false,
+        "visiblePeak": 1,
+        "denied": [
+          "wm-app-mode"
+        ],
+        "blockedCalls": {},
+        "phase": [
+          {
+            "phase": "first visible",
+            "earlySeen": true,
+            "normalSeen": false,
+            "visible": 1,
+            "app": 0
+          }
+        ],
+        "scenario": "late",
+        "appContainerRemoved": true,
+        "lateStartupError": true,
+        "indexSHA256": "790a2fc7b0b94c0b96ead3cfcaaaaffd7eea59dbd845c796438898156cce411c",
+        "externalResourceRequestsAborted": {
+          "https:": 1
+        },
+        "externalForwarded": 0
+      },
+      {
+        "raw": "product/reachable-late-native.json",
+        "sha256": "9f9cd48649dacc047eccce65624b84a338b0930ce6903880a227206a1ac124f1",
+        "pass": 9,
+        "fail": 0,
+        "failedChecks": [],
+        "checks": [
+          "preference unreadable exposes two genuine operator choices",
+          "unreadable preference mounts early outside hidden app root",
+          "failed full bootstrap remains disclosed while controls stay active",
+          "late appStartup rejection reported after the main module loaded",
+          "local Ghost choice survives failed startup and rejected write",
+          "local standard choice remains usable without storage",
+          "at most one visible notice across bootstrap and regular mounts",
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ],
+        "firstNoticeAt": 153,
+        "earlySeen": true,
+        "normalSeen": false,
+        "visiblePeak": 1,
+        "denied": [
+          "wm-app-mode"
+        ],
+        "blockedCalls": {
+          "fetch ipc:": 4
+        },
+        "phase": [
+          {
+            "app": 0,
+            "earlySeen": true,
+            "normalSeen": false,
+            "phase": "first visible",
+            "visible": 1
+          }
+        ],
+        "scenario": "late",
+        "appContainerRemoved": true,
+        "lateStartupError": true,
+        "hostSHA256": "160a48a97fbc55f7baf8bd73ecd94a75c2a78e4d2e46312068edf59cee03c089",
+        "hostExit": 0,
+        "websiteDataStore": "nonpersistent WKWebView",
+        "indexSHA256": "3528224d0d8d7b39e96ece12bbf50bb5876509339224fed0e17ea331ecff8224"
+      }
+    ]
+  },
+  "assetIntegrity": {
+    "componentInputs": {
+      "saved": {
+        "guard.js": "2efeeaad749c1bffb9dc89f34f894d3b11131ac6f59a3445e8104501b4308133",
+        "index.html": "81a3871927bf108bc48b22859a04eb1aed3d80a92a96c9336f9a6f308f9e068f",
+        "renderer.js": "5a6101207f60c0bd9b54833d58e6e3ebc80c0b5a6d5e5746a85575fb9842c24c",
+        "assets/contextual-deck-view-dbbrq9iG.js": "af2d63bea3d4ddf5e3603ed23531e6f17fde4a4e0a0852905138c313db98d416",
+        "assets/fixed-entry-C1KHjrA9.css": "ab1f7f699b58ed8ec7a0b7f3ccc816f9a16e8d2a8aaa0cb74d84333eafe43850",
+        "assets/i18next-Tb_ISqez.js": "08032e75c9c68627353c6dd934d3afb2d6f68083a114f7d270fcc09ba45871e4"
+      },
+      "unknown": {
+        "guard.js": "12468c63c6bc8760d5bb1a32647db5bcfdae792f79f56cced7990dddf86fb22b",
+        "index.html": "81a3871927bf108bc48b22859a04eb1aed3d80a92a96c9336f9a6f308f9e068f",
+        "renderer.js": "5a6101207f60c0bd9b54833d58e6e3ebc80c0b5a6d5e5746a85575fb9842c24c",
+        "assets/contextual-deck-view-dbbrq9iG.js": "af2d63bea3d4ddf5e3603ed23531e6f17fde4a4e0a0852905138c313db98d416",
+        "assets/fixed-entry-C1KHjrA9.css": "ab1f7f699b58ed8ec7a0b7f3ccc816f9a16e8d2a8aaa0cb74d84333eafe43850",
+        "assets/i18next-Tb_ISqez.js": "08032e75c9c68627353c6dd934d3afb2d6f68083a114f7d270fcc09ba45871e4"
+      },
+      "unknown-mount-all": {
+        "guard.js": "1bb3522db2bae930f86e5a8db1751a028cae830cdae909eb008f458821730fca",
+        "index.html": "81a3871927bf108bc48b22859a04eb1aed3d80a92a96c9336f9a6f308f9e068f",
+        "renderer.js": "5a6101207f60c0bd9b54833d58e6e3ebc80c0b5a6d5e5746a85575fb9842c24c",
+        "assets/contextual-deck-view-dbbrq9iG.js": "af2d63bea3d4ddf5e3603ed23531e6f17fde4a4e0a0852905138c313db98d416",
+        "assets/fixed-entry-C1KHjrA9.css": "ab1f7f699b58ed8ec7a0b7f3ccc816f9a16e8d2a8aaa0cb74d84333eafe43850",
+        "assets/i18next-Tb_ISqez.js": "08032e75c9c68627353c6dd934d3afb2d6f68083a114f7d270fcc09ba45871e4"
+      }
+    },
+    "realWebIndex": "790a2fc7b0b94c0b96ead3cfcaaaaffd7eea59dbd845c796438898156cce411c",
+    "realDesktopIndex": "3528224d0d8d7b39e96ece12bbf50bb5876509339224fed0e17ea331ecff8224"
+  },
+  "verificationScope": [
+    "The component harness bundles the real mode service, projection, weather exposure/detector/ladder, dispatcher, analyst batching, classic notice mount and HomeShellOverlay. The real data-loader weather fetch loop is outside this fixture.",
+    "The Chromium component run uses a physical Enter key at 360x700. Native uses semantic button activation in an uninstalled Tauri diagnostic host with the unchanged production CSP and a nonpersistent WebKit profile.",
+    "The product-index runs load the real HTML and hashed assets generated by the checked-out Vite web and desktop builds, with a guard injected by the host or test browser before document bootstrap. Native retains the production base CSP with a second, more restrictive QA-only network policy. Chromium denies outgoing remote requests and service workers. Product attempts may be blocked; none are forwarded. No real OS notification constructor is called.",
+    "The late case removes only the app container after the early notice is visible. A real App constructor failure rejects the exported appStartup promise after main module evaluation. Both the captured Container app not found error and the visible failure disclosure are required. When all storage reads fail, the pre-existing main application may not initialize. The repaired early notice is usable outside #app and separately discloses failed startup. When only the preference is inaccessible, the notice transfers to the regular shell."
+  ]
+}

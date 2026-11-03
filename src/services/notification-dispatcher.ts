@@ -13,6 +13,7 @@ import type { Anomaly } from './anomaly-detection';
 import { getNotificationModeState, recordGhostSuppression } from './mode-manager';
 import {
   evaluateNotificationPreference,
+  getSettings,
   type NotificationDomain,
 } from './notifications/notification-settings-service';
 import { getNotificationTraceRegistry } from './diagnostics/diagnostics-state';
@@ -43,6 +44,9 @@ const RATE_LIMIT_MS = 2 * 60 * 1000; // 2 minutes
  *  location cell + this window collapses repeats of the same convergence. */
 const CONVERGENCE_COALESCE_MS = 30 * 60 * 1000; // 30 minutes
 
+const DERIVED_TITLE_WINDOW_MS = 30 * 60 * 1000;
+const MAX_DERIVED_GROUPS = 16;
+
 let nextTraceId = 1;
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -62,6 +66,15 @@ export function holdNotificationForMode(critical: boolean, state = getNotificati
   if (state.mode !== 'ghost') return undefined;
   recordGhostSuppression(critical);
   return 'ghost-mode';
+}
+
+function permittedBannerApi(): typeof Notification | undefined {
+  try {
+    const api = window.Notification;
+    return api?.permission === 'granted' ? api : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Detect Tauri runtime (desktop app context). */
@@ -106,8 +119,9 @@ function alertSourceToDomain(source: AlertSource): NotificationDomain {
     case 'cyber':
     case 'local-ids':
     case 'radiation':
-    case 'air-quality':
-    case 'correlation': { return 'cyber';
+    case 'air-quality': { return 'cyber';
+    }
+    case 'correlation': { return 'derived';
     }
     default: { return 'geopolitical';
     }
@@ -116,6 +130,7 @@ function alertSourceToDomain(source: AlertSource): NotificationDomain {
 
 function traceDomainFor(domain: NotificationDomain): Parameters<NotificationTraceRegistry['byDomain']>[0] {
   switch (domain) {
+    case 'derived': { return 'reasoning'; }
     case 'weather': { return 'weather'; }
     case 'cyber': { return 'cyber'; }
     case 'geopolitical': { return 'conflict'; }
@@ -165,7 +180,7 @@ function createDispatchTrace(
       urgency: urgencyForSeverity(alert.severity),
       confidence: normalizedTraceScore(alert.relevanceScore),
       userRelevance: normalizedTraceScore(alert.relevanceScore),
-      safetyCritical: alert.severity === 'critical',
+      safetyCritical: domain !== 'derived' && alert.severity === 'critical',
       createdAt: Date.now(),
       headline: alert.title,
     });
@@ -211,6 +226,10 @@ function recordNativeResult(
 class NotificationDispatcher {
   /** source → last notification timestamp */
   private rateLimitMap = new Map<string, number>();
+  private derivedTitles = new Map<string, number>();
+  private lastDerivedAttempt = -Infinity;
+  private derivedTagPrefix?: string;
+  private derivedTagSlot = 0;
 
   /**
  * Dispatch a notification for the given alert.
@@ -243,6 +262,11 @@ class NotificationDispatcher {
  return;
  }
 
+ if (domain === 'derived') {
+ this.dispatchDerived(alert, action, trace);
+ return;
+ }
+
  // ── Badge-only — no visible notification ──
  if (action === 'badge') {
  dispatchTrace(trace, action, false);
@@ -262,6 +286,57 @@ class NotificationDispatcher {
 
  // ── Send notification (sound+banner or banner) ──
  void this.sendWebNotification(alert, action, mode.generation, trace);
+  }
+
+  private dispatchDerived(alert: UnifiedAlert, action: NotificationAction, trace?: DispatchTrace): void {
+    if (getSettings().domains.derived.channel === 'in_app' || action === 'badge') {
+      suppressTrace(trace, action === 'badge' ? 'badge-only' : 'in-app-only');
+      return;
+    }
+
+    // Bound input work as well as retained keys. An ungroupable candidate
+    // stays visible on its existing in-app surface.
+    const title = alert.title.length <= 1024
+      ? alert.title.normalize('NFC').trim().replace(/\s+/gu, ' ').toLowerCase()
+      : '';
+    if (!title) {
+      suppressTrace(trace, 'derived-title-unavailable');
+      return;
+    }
+
+    const Banner = permittedBannerApi();
+    if (!Banner) {
+      suppressTrace(trace, 'permission-unavailable');
+      return;
+    }
+
+    const now = performance.now();
+    for (const [key, admitted] of this.derivedTitles) {
+      if (now - admitted >= DERIVED_TITLE_WINDOW_MS) this.derivedTitles.delete(key);
+    }
+    if (this.derivedTitles.has(title)) {
+      suppressTrace(trace, 'derived-duplicate-title');
+      return;
+    }
+    if (now - this.lastDerivedAttempt < RATE_LIMIT_MS || this.derivedTitles.size >= MAX_DERIVED_GROUPS) {
+      suppressTrace(trace, 'derived-cooldown');
+      return;
+    }
+
+    // Reserve before the synchronous constructor. Even a failed attempt
+    // must not unleash a retry storm.
+    this.lastDerivedAttempt = now;
+    this.derivedTitles.set(title, now);
+    dispatchTrace(trace, 'banner', false);
+    try {
+      this.derivedTagPrefix ??= crypto.randomUUID();
+      const tag = `wm-derived-${this.derivedTagPrefix}-${this.derivedTagSlot}`;
+      this.derivedTagSlot = (this.derivedTagSlot + 1) % MAX_DERIVED_GROUPS;
+      new Banner(alert.title, { body: alert.body, tag, silent: true, requireInteraction: false });
+      recordNativeResult(trace, { delivered: true, surface: 'banner' });
+    } catch {
+      recordNativeResult(trace, { delivered: false, surface: 'failed', error: 'notification-delivery-failed' });
+    }
   }
 
   /**

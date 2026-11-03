@@ -21,11 +21,11 @@ const rendered = () => new Promise((resolve) => setTimeout(resolve, 200));
 
 beforeEach(() => { settings.resetSettings(); });
 
-test('the mute control says critical alerts still come through', async (t) => {
+test('the mute control distinguishes authoritative critical warnings from derived alerts', async (t) => {
   const panel = new NotificationSettingsPanel();
   t.after(() => panel.destroy());
   await rendered();
-  assert.match(panel.getContentElement().textContent ?? '', /Mute notifications \(critical alerts still come through\)/);
+  assert.match(panel.getContentElement().textContent ?? '', /critical authoritative alerts still come through/i);
 });
 
 test('the quiet window saves as a pair; a refused draft stays with its reason', async (t) => {
@@ -60,7 +60,7 @@ test('the Preferences panel shows the one window read-only and links to it', asy
   t.after(() => { if (!destroyed) panel.destroy(); });
   await rendered();
   const root = panel.getContentElement();
-  assert.equal(root.querySelector('#np-qh-summary')?.textContent, 'Quiet hours 21:00–06:00 · on for 1 domain');
+  assert.equal(root.querySelector('#np-qh-summary')?.textContent, 'Quiet hours 21:00–06:00 · on for 2 domains');
   for (const selector of ['#np-qh-enabled', '#np-qh-start', '#np-qh-end', '[data-field="quietHoursOverride"]']) {
     assert.equal(root.querySelector(selector), null, `${selector} is gone`);
   }
@@ -73,7 +73,32 @@ test('the Preferences panel shows the one window read-only and links to it', asy
 
   settings.updateGlobalSettings({ quietHoursStart: '23:00' });
   await rendered();
-  assert.equal(panel.getContentElement().querySelector('#np-qh-summary')?.textContent, 'Quiet hours 23:00–06:00 · on for 1 domain');
+  assert.equal(panel.getContentElement().querySelector('#np-qh-summary')?.textContent, 'Quiet hours 23:00–06:00 · on for 2 domains');
   panel.destroy(); destroyed = true;
   settings.updateGlobalSettings({ quietHoursStart: '20:00' }); // no listener left to re-render a destroyed panel
+});
+
+test('changing the Derived alerts channel updates only that settings row', async (t) => {
+  const panel = new NotificationSettingsPanel();
+  t.after(() => panel.destroy());
+  await rendered();
+  document.body.append(panel.getElement());
+  const root = panel.getContentElement();
+  const channel = root.querySelector<HTMLSelectElement>('select[data-domain="derived"][data-field="channel"]');
+  assert.ok(channel, 'Derived alerts has its own delivery control');
+  assert.equal(channel.getAttribute('aria-label'), 'Derived alerts delivery channel');
+  Object.assign(globalThis, { HTMLInputElement: window.HTMLInputElement, HTMLSelectElement: window.HTMLSelectElement });
+  channel.focus();
+  channel.value = 'in_app';
+  channel.dispatchEvent(new Event('change', { bubbles: true }));
+  assert.equal(settings.getSettings().domains.derived.channel, 'in_app');
+  assert.equal(settings.getSettings().domains.cyber.channel, 'both');
+  await rendered();
+  assert.equal(document.activeElement?.getAttribute('aria-label'), 'Derived alerts delivery channel', 'keyboard focus stays on the edited control');
+  const nextChannel = root.querySelector<HTMLSelectElement>('select[data-domain="derived"][data-field="channel"]')!;
+  nextChannel.value = 'native';
+  nextChannel.dispatchEvent(new Event('change', { bubbles: true }));
+  root.querySelector<HTMLInputElement>('input[data-domain="derived"][data-field="quietHoursEnabled"]')!.focus();
+  await rendered();
+  assert.equal(document.activeElement?.getAttribute('aria-label'), 'Derived alerts quiet hours', 'a tab move before refresh is respected');
 });

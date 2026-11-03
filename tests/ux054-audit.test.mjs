@@ -131,7 +131,7 @@ test('inventory rejects unclassified graphs, missing locks, and nonregular files
     r => put(r, 'pnpm-lock.yaml', 'lockfileVersion: 9'),
     r => rmSync(join(r, 'scripts/package-lock.json')),
     r => { const f = join(r, 'scripts/package-lock.json'); rmSync(f); symlinkSync('../package-lock.json', f); },
-    r => put(r, 'src-tauri/sidecar/package.json', { name:'sidecar', dependencies:{ x:'1' } }),
+    r => put(r, 'src-tauri/sidecar/package.json', { ...read(r, 'src-tauri/sidecar/package.json'), dependencies:{ x:'1' } }),
   ]) {
     const repo = fixture(t, change);
     let calls = 0;
@@ -214,4 +214,58 @@ test('validates the actual public bulk advisory response and matches installed v
   }
   assert.equal(await run(repo, clean, [], async () => Response.json({tool:[{...advisory,vulnerable_versions:'<1'}]})), true);
   assert.equal(await run(repo, clean, [], async () => Response.json({}, {status: 503})), false);
+});
+
+test('checks unselected nested override destinations before contacting the registry', async t => {
+  for (const [spec, allowed] of [['1.2.3', true], ['https://evil.invalid/pkg.tgz', false]]) {
+    const repo = fixture(t, r => {
+      const manifest = read(r, 'scripts/package.json');
+      manifest.overrides = { unused: { child: spec } };
+      put(r, 'scripts/package.json', manifest);
+    });
+    let inspected = false;
+    const passed = await run(repo, (_bin, _args, {cwd}) => {
+      if (read(cwd, 'package.json').name === 'project-3') inspected = true;
+      return {status:0,stdout:JSON.stringify(response(cwd))};
+    });
+    assert.equal(inspected, allowed, 'a foreign override must never reach npm');
+    assert.equal(passed, allowed);
+  }
+});
+
+test('bulk reads have a bounded deadline and size even when excess bytes are valid JSON whitespace', async t => {
+  const repo = fixture(t);
+  const timeout = AbortSignal.timeout.bind(AbortSignal);
+  const bounded = new WeakSet();
+  t.mock.method(AbortSignal, 'timeout', ms => {
+    const signal = timeout(ms);
+    if (ms > 0 && ms <= 120_000) bounded.add(signal);
+    return signal;
+  });
+  let requested = 0, scans = 0;
+  const lines = [];
+  const ok = await run(repo, (_bin, _args, {cwd}) => {
+    scans++;
+    return {status:0, stdout:JSON.stringify(response(cwd))};
+  }, lines, async (_url, {signal}) => {
+    assert.ok(bounded.has(signal), 'each bulk request must have a time-bounded abort signal');
+    requested++;
+    return requested === 1 ? new Response(' '.repeat(8 * 1024 * 1024) + '{}') : Response.json({});
+  });
+  assert.equal(ok, false);
+  assert.equal(requested, 6);
+  assert.equal(scans, 5, 'oversized reply fails before npm');
+  assert.match(lines[0], /bulk advisory response too large/);
+});
+
+test('preserves the strongest matching advisory when npm reports a downgraded finding', async t => {
+  const repo = fixture(t);
+  const rows = ['high','low'].map((severity, i) => ({
+    id: i + 1, severity, title: 'test risk', vulnerable_versions: '>=1 <2',
+  }));
+  const lines = [];
+  const ok = await run(repo, (_bin, _args, {cwd}) => ({status:0, stdout:JSON.stringify(response(cwd, 'moderate'))}),
+    lines, async () => Response.json({tool:rows}));
+  assert.equal(ok, false, 'a moderate npm report cannot lower a matching high advisory');
+  assert.match(lines[0], /bulk finding tool:high/);
 });

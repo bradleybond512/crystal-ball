@@ -1,6 +1,6 @@
 # UX-053 — Finish boot while sources continue loading
 
-Proposed November 3, 2026 against canonical main `cd459dfec`. The roadmap controller selected UX-053 at priority S with no blocking findings. Changing application startup and the timing of warning listeners is high assurance.
+Approved by the operator November 3, 2026 against canonical main `cd459dfec`. The roadmap controller selected UX-053 at priority S with no blocking findings. Changing application startup and the timing of warning listeners is high assurance.
 
 ## What currently waits
 
@@ -10,7 +10,7 @@ Holding acquisition for 120 ms in an isolated test of the current startup method
 
 A second probe exercised the production full web entry, real keyboard search and the real loader scheduler in Chromium, with provider calls replaced by controlled promises. Search worked in both fresh and reused storage while news was held. Ten critical tasks began, including NWS. ShakeAlert began only after news was released. Refresh registration and the end of initialization still waited for ShakeAlert. No page errors were observed. This establishes the ordering, not an end-user latency distribution. HTTP cache was disabled in both runs. The baseline receipt has SHA-256 `d11407862ff06f96b71361aeff70c05619395a4a8857074f92f19c060c9f13dc`.
 
-## Proposed operator experience
+## Approved operator experience
 
 * Treat the first screen as ready when the intended workspace or first-run control accepts input. On desktop, account for the intro overlay and keyboard focus. A pending or failed boot must not display “READY” merely because the animation timer expired. Use neutral opening copy while pending and retain an actionable startup error if initialization fails.
 * Let sources continue in the background once the interactive prerequisites succeed. Indicate loading or degraded status using the existing source surfaces. Completing a fetch wave, registering a listener or displaying a cached panel cannot certify current warnings or an all-clear.
@@ -36,4 +36,4 @@ A second probe exercised the production full web entry, real keyboard search and
 
 Use at least three cold and three warm samples per renderer for the controlled measurement. Report the range, median and any failed runs. Pass when the first screen accepts input and an eligible injected warning is handled before the unrelated source releases. Keep a negative control for denied permissions and Ghost Mode. Confirm that an authoritative clear requires valid source evidence. A later whole-wave failure remains observable. Reversing each new guard must fail the corresponding test. Attach exact suite results, identified fixture limits and manual reproduction steps.
 
-Rollback reverts startup orchestration to waiting for the initial wave. There is no persistent migration. Publishing the draft claim and starting production implementation require operator approval. Installation, auto-merge and delivery are paused.
+Rollback reverts startup orchestration to waiting for the initial wave. There is no persistent migration. The operator approved the draft claim and local implementation on November 3. Installation, auto-merge and delivery are paused.

@@ -1073,9 +1073,11 @@ Acceptance: Carry real observation/fetch age and coverage into threat summaries.
 
 ### UX-050 — Make Ghost Mode suppression unmistakable
 
-Status: NOT STARTED — HIGH ASSURANCE
+Status: IN PROGRESS — HIGH ASSURANCE
 Priority: S
 Source findings: PR1731 H20.
+
+Claim: #1846. Bradley approved the [critical-notification policy and implementation design](plans/2026-11-02-ux050-ghost-suppression.md) on November 2, 2026.
 
 Acceptance: Approve explicit policy for critical alerts versus privacy/silence preferences; show persistent mode and suppression accounting. Do not silently bypass an existing user-selected privacy mode.
 
@@ -1277,7 +1279,7 @@ Update the row in the same PR that does the work.
 | UX-047 | Keep national weather warnings current | MONITOR — HIGH ASSURANCE | #1844 candidate evidence; [local validation](validation/UX-047-NATIONAL-WARNINGS.md) and [historical isolated native receipts](validation/UX-047-FALLBACK-PORTS.md). Integrated packaged acceptance remains open; installation/release/deployment paused. |
 | UX-048 | Restore verified GDACS ingestion | DONE — HIGH ASSURANCE | #1740 — approved five-feed repair; [validation](validation/UX-048-GDACS.md) and [alert burst performance evidence](validation/UX-048-PERFORMANCE.md); final review/CI govern delivery |
 | UX-049 | Distinguish quiet sensors from missing observations | NOT STARTED — HIGH ASSURANCE | — |
-| UX-050 | Make Ghost Mode suppression unmistakable | NOT STARTED — HIGH ASSURANCE | — |
+| UX-050 | Make Ghost Mode suppression unmistakable | IN PROGRESS — HIGH ASSURANCE | #1846 — [Approved policy](plans/2026-11-02-ux050-ghost-suppression.md) |
 | UX-051 | Align RSS request budgets across boundaries | NOT STARTED — HIGH ASSURANCE | — |
 | UX-052 | Restrain derived alert interruptions | NOT STARTED — HIGH ASSURANCE | — |
 | UX-053 | Finish boot without awaiting all data sources | NOT STARTED — HIGH ASSURANCE | — |

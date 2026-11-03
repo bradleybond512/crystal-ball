@@ -1,6 +1,6 @@
 # UX-050 Ghost Mode and critical notifications
 
-Proposed on November 2, 2026 against `cd459dfec`. The roadmap controller selected UX-050 at priority S after reconciling 28 open main-target PRs. This high-assurance design needs operator approval before the draft claim and implementation.
+Approved on November 2, 2026 against `cd459dfec`. The roadmap controller selected UX-050 at priority S after reconciling 28 open main-target PRs. Draft PR #1846 claims the approved work.
 
 ## Observed behavior
 
@@ -8,7 +8,7 @@ With Ghost saved before startup, an isolated run of the production modules suppr
 
 ## Decision for the operator
 
-Under the proposed policy, Ghost mutes standard alert notifications through the shared dispatcher, including critical warnings for the operator’s own site. Eligible batched analyst nudges also stay muted. A standing notice in both Home and classic views makes that choice visible and offers a keyboard-accessible “Exit Ghost Mode” action. Suggested text:
+Under the approved policy, Ghost mutes standard alert notifications through the shared dispatcher, including critical warnings for the operator’s own site. Eligible batched analyst nudges also stay muted. A standing notice in both Home and classic views makes that choice visible and offers a keyboard-accessible “Exit Ghost Mode” action. Suggested text:
 
 > Ghost Mode is on. Standard alert notifications and analyst nudges are muted, including critical site warnings. Other channels can still alert.
 

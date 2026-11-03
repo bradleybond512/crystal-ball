@@ -5,7 +5,7 @@ Status: Bradley approved this high-assurance design and implementation on
 approval. Branch: `codex/ux047-warning-freshness-nov1`. Draft claim #1844 preceded
 implementation. Local implementation passed the integrated gate, 57 mutation
 proofs and independent review. [Validation evidence](../validation/UX-047-NATIONAL-WARNINGS.md)
-records results and rollback. Native WKWebView acceptance remains a delivery gate.
+records results and rollback. The [native port-collision follow-up](../validation/UX-047-FALLBACK-PORTS.md) records the original failure, approved repair and packaged verification.
 
 ## Objective and constraints
 

@@ -4,6 +4,8 @@ Risk tier: High. Initial checkpoint: `437ae954165402a1e938dead647e88cf5a2edabf`.
 Reviewed repair checkpoint: `3a0e4df42e3f33c22cd455acaa966551bbff7d3d`.
 Draft claim: #1844. Human design/implementation approval: November 2, 2026 UTC.
 
+This report records the initial lifecycle checkpoint. The [native follow-up](UX-047-FALLBACK-PORTS.md) records the subsequent port-collision repair and acceptance results.
+
 ## User-visible behavior and architecture
 
 National NWS snapshots refresh every five minutes in the full variant even when

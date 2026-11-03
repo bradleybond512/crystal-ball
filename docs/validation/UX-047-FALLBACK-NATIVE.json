@@ -1,0 +1,608 @@
+{
+  "schemaVersion": 1,
+  "reviewedCommit": "2a255738ecc0fcd34635210314f808013de477d4",
+  "result": "PASS_BOUNDED_CONFIRMED_FALLBACK_AND_INTENTIONAL_RANGE_EXHAUSTION",
+  "assertionsPassed": 46,
+  "assertionsFailed": 0,
+  "signedQaBinarySHA256": "91253377f0e49bb2e58126382a41042cd61a9532de3d1be44d6b3b1f25245c98",
+  "desktopMetaSHA256": "ba99f58b852905de1f90997ecac0707a3da6306477bf4f7cd0e37203a5c1edf9",
+  "nativeCspSHA256": "ea05554f53e1427fd7a325b016280a0a5797241da82964bcf0e4b51274bd3ebc",
+  "originalProductionCspMatchesQa": true,
+  "phases": {
+    "exhaustion": {
+      "nativePID": 30245,
+      "profile": "f1c8d20b-741e-47be-9f97-51a5c568f476",
+      "profilePresentBefore": false,
+      "nativeOrigin": "tauri://localhost",
+      "confirmedPort": 58672,
+      "publication": {
+        "controlMatches": true,
+        "mode": "0600",
+        "publishedPort": 58672,
+        "sha256": "00b6b7be75f16fb3ee17ccbc3ee6b410501459d754b107bbd4b0b80757f83488",
+        "size": 5,
+        "source": "bound-port"
+      },
+      "portCommandCalls": 2,
+      "tokenCommandCalls": 1,
+      "recordedForwardToWKFetchAttempts": {
+        "http://127.0.0.1:58672": 4
+      },
+      "rejectedByIsolationGuardBeforeSend": [],
+      "NwsEnforcedCspBlocks": 8,
+      "upstreamCallsBefore": 0,
+      "upstreamCallsAfter": 0,
+      "checks": [
+        {
+          "actual": "tauri:",
+          "expected": "tauri:",
+          "name": "real Tauri custom protocol",
+          "pass": true
+        },
+        {
+          "actual": "localhost",
+          "expected": "localhost",
+          "name": "main Tauri host",
+          "pass": true
+        },
+        {
+          "actual": "function",
+          "expected": "function",
+          "name": "actual Tauri bridge available",
+          "pass": true
+        },
+        {
+          "actual": true,
+          "expected": true,
+          "name": "reviewed desktop detection",
+          "pass": true
+        },
+        {
+          "actual": 58672,
+          "expected": 58672,
+          "name": "reviewed confirmed port resolution",
+          "pass": true
+        },
+        {
+          "actual": true,
+          "expected": true,
+          "name": "reviewed fetch patch installed",
+          "pass": true
+        },
+        {
+          "actual": true,
+          "expected": true,
+          "name": "native-health-only fallback lies outside approved renderer range",
+          "pass": true
+        },
+        {
+          "actual": null,
+          "expected": null,
+          "name": "exhausted fallback creates no national watermark",
+          "pass": true
+        },
+        {
+          "actual": false,
+          "expected": false,
+          "name": "exhausted fallback does not claim national all-clear",
+          "pass": true
+        },
+        {
+          "actual": true,
+          "expected": true,
+          "name": "unlisted confirmed port is denied by enforced connect-src",
+          "pass": true
+        },
+        {
+          "actual": false,
+          "expected": false,
+          "name": "no HTTP attempted against occupied canonical port",
+          "pass": true
+        },
+        {
+          "actual": [
+            "http://127.0.0.1:58672"
+          ],
+          "expected": [
+            "http://127.0.0.1:58672"
+          ],
+          "name": "only confirmed HTTP origin forwarded",
+          "pass": true
+        }
+      ],
+      "details": {
+        "confirmedPort": 58672,
+        "deniedHttp": [],
+        "forwardedHttp": {
+          "http://127.0.0.1:58672": 4
+        },
+        "metaLoopbackConnect": [
+          "http://127.0.0.1:46123",
+          "http://127.0.0.1:46124",
+          "http://127.0.0.1:46125",
+          "http://127.0.0.1:46126",
+          "http://127.0.0.1:46127",
+          "http://127.0.0.1:46128",
+          "http://127.0.0.1:46129",
+          "http://127.0.0.1:46130",
+          "http://127.0.0.1:46131",
+          "http://127.0.0.1:46132",
+          "http://127.0.0.1:46133",
+          "http://127.0.0.1:11434",
+          "http://127.0.0.1:1234"
+        ],
+        "metaLoopbackFrame": [
+          "http://127.0.0.1:46123",
+          "http://127.0.0.1:46124",
+          "http://127.0.0.1:46125",
+          "http://127.0.0.1:46126",
+          "http://127.0.0.1:46127",
+          "http://127.0.0.1:46128",
+          "http://127.0.0.1:46129",
+          "http://127.0.0.1:46130",
+          "http://127.0.0.1:46131",
+          "http://127.0.0.1:46132",
+          "http://127.0.0.1:46133"
+        ],
+        "metaSHA256": "ba99f58b852905de1f90997ecac0707a3da6306477bf4f7cd0e37203a5c1edf9",
+        "panelStatus": "NWS warning coverage unavailable.",
+        "resourceOrigins": [],
+        "transport": "intended-native-health-only"
+      },
+      "receipt": "runs/exhaustion-f1c8d20b-741e-47be-9f97-51a5c568f476/receipt.json"
+    },
+    "restart": {
+      "nativePID": 29894,
+      "profile": "51c23690-15bf-4169-b20c-de7002acb85c",
+      "profilePresentBefore": true,
+      "nativeOrigin": "tauri://localhost",
+      "confirmedPort": 46126,
+      "publication": {
+        "controlMatches": true,
+        "mode": "0600",
+        "publishedPort": 46126,
+        "sha256": "830b4ae8a28548675cd6b7660a902ef6c48795d480d00fafc42643c2b816fcb3",
+        "size": 5,
+        "source": "bound-port"
+      },
+      "portCommandCalls": 2,
+      "tokenCommandCalls": 1,
+      "recordedForwardToWKFetchAttempts": {
+        "http://127.0.0.1:46126": 2
+      },
+      "rejectedByIsolationGuardBeforeSend": [],
+      "NwsEnforcedCspBlocks": 0,
+      "upstreamCallsBefore": 0,
+      "upstreamCallsAfter": 2,
+      "checks": [
+        {
+          "actual": "tauri:",
+          "expected": "tauri:",
+          "name": "real Tauri custom protocol",
+          "pass": true
+        },
+        {
+          "actual": "localhost",
+          "expected": "localhost",
+          "name": "main Tauri host",
+          "pass": true
+        },
+        {
+          "actual": "function",
+          "expected": "function",
+          "name": "actual Tauri bridge available",
+          "pass": true
+        },
+        {
+          "actual": true,
+          "expected": true,
+          "name": "reviewed desktop detection",
+          "pass": true
+        },
+        {
+          "actual": 46126,
+          "expected": 46126,
+          "name": "reviewed confirmed port resolution",
+          "pass": true
+        },
+        {
+          "actual": true,
+          "expected": true,
+          "name": "reviewed fetch patch installed",
+          "pass": true
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "name": "restart hydration write count",
+          "pass": true
+        },
+        {
+          "actual": "59ccfbeed99ba9e6adb093fd864aa70be9aa3c24dff3133b51ec5d664c17bdda",
+          "expected": "59ccfbeed99ba9e6adb093fd864aa70be9aa3c24dff3133b51ec5d664c17bdda",
+          "name": "same persisted bytes after host process termination",
+          "pass": true
+        },
+        {
+          "actual": 1793668507960,
+          "expected": 1793668507960,
+          "name": "restart watermark",
+          "pass": true
+        },
+        {
+          "actual": [
+            true,
+            true,
+            1793668628443
+          ],
+          "expected": [
+            true,
+            true,
+            1793668628443
+          ],
+          "name": "pinned acknowledged snoozed history preserved",
+          "pass": true
+        },
+        {
+          "actual": [
+            "offline-cache",
+            1793668507960,
+            1793668507960
+          ],
+          "expected": [
+            "offline-cache",
+            1793668507960,
+            1793668507960
+          ],
+          "name": "offline replay preserves origin and age",
+          "pass": true
+        },
+        {
+          "actual": 599,
+          "expected": 599,
+          "name": "restart still excludes expired sentinel",
+          "pass": true
+        },
+        {
+          "actual": "older",
+          "expected": "older",
+          "name": "older empty cannot clear national authority",
+          "pass": true
+        },
+        {
+          "actual": false,
+          "expected": false,
+          "name": "generic replay cannot reintroduce expired sentinel",
+          "pass": true
+        },
+        {
+          "actual": 1793668507960,
+          "expected": 1793668507960,
+          "name": "offline replay cannot renew watermark",
+          "pass": true
+        },
+        {
+          "actual": false,
+          "expected": false,
+          "name": "no HTTP attempted against occupied canonical port",
+          "pass": true
+        },
+        {
+          "actual": [
+            "http://127.0.0.1:46126"
+          ],
+          "expected": [
+            "http://127.0.0.1:46126"
+          ],
+          "name": "only confirmed HTTP origin forwarded",
+          "pass": true
+        }
+      ],
+      "details": {
+        "confirmedPort": 46126,
+        "deniedHttp": [],
+        "forwardedHttp": {
+          "http://127.0.0.1:46126": 2
+        },
+        "metaLoopbackConnect": [
+          "http://127.0.0.1:46123",
+          "http://127.0.0.1:46124",
+          "http://127.0.0.1:46125",
+          "http://127.0.0.1:46126",
+          "http://127.0.0.1:46127",
+          "http://127.0.0.1:46128",
+          "http://127.0.0.1:46129",
+          "http://127.0.0.1:46130",
+          "http://127.0.0.1:46131",
+          "http://127.0.0.1:46132",
+          "http://127.0.0.1:46133",
+          "http://127.0.0.1:11434",
+          "http://127.0.0.1:1234"
+        ],
+        "metaLoopbackFrame": [
+          "http://127.0.0.1:46123",
+          "http://127.0.0.1:46124",
+          "http://127.0.0.1:46125",
+          "http://127.0.0.1:46126",
+          "http://127.0.0.1:46127",
+          "http://127.0.0.1:46128",
+          "http://127.0.0.1:46129",
+          "http://127.0.0.1:46130",
+          "http://127.0.0.1:46131",
+          "http://127.0.0.1:46132",
+          "http://127.0.0.1:46133"
+        ],
+        "metaSHA256": "ba99f58b852905de1f90997ecac0707a3da6306477bf4f7cd0e37203a5c1edf9",
+        "resourceOrigins": [
+          "http://127.0.0.1:46126"
+        ]
+      },
+      "receipt": "runs/restart-51c23690-15bf-4169-b20c-de7002acb85c/receipt.json"
+    },
+    "seed": {
+      "nativePID": 29428,
+      "profile": "51c23690-15bf-4169-b20c-de7002acb85c",
+      "profilePresentBefore": false,
+      "nativeOrigin": "tauri://localhost",
+      "confirmedPort": 46125,
+      "publication": {
+        "controlMatches": true,
+        "mode": "0600",
+        "publishedPort": 46125,
+        "sha256": "e66ff994b78cd9da29df14a297ab2359958e9a1e1ecfae9761a39ddaa9ca8c00",
+        "size": 5,
+        "source": "bound-port"
+      },
+      "portCommandCalls": 2,
+      "tokenCommandCalls": 1,
+      "recordedForwardToWKFetchAttempts": {
+        "http://127.0.0.1:46125": 1
+      },
+      "rejectedByIsolationGuardBeforeSend": [],
+      "NwsEnforcedCspBlocks": 0,
+      "upstreamCallsBefore": 0,
+      "upstreamCallsAfter": 1,
+      "checks": [
+        {
+          "actual": "tauri:",
+          "expected": "tauri:",
+          "name": "real Tauri custom protocol",
+          "pass": true
+        },
+        {
+          "actual": "localhost",
+          "expected": "localhost",
+          "name": "main Tauri host",
+          "pass": true
+        },
+        {
+          "actual": "function",
+          "expected": "function",
+          "name": "actual Tauri bridge available",
+          "pass": true
+        },
+        {
+          "actual": true,
+          "expected": true,
+          "name": "reviewed desktop detection",
+          "pass": true
+        },
+        {
+          "actual": 46125,
+          "expected": 46125,
+          "name": "reviewed confirmed port resolution",
+          "pass": true
+        },
+        {
+          "actual": true,
+          "expected": true,
+          "name": "reviewed fetch patch installed",
+          "pass": true
+        },
+        {
+          "actual": true,
+          "expected": true,
+          "name": "actual confirmed fallback is inside bounded range",
+          "pass": true
+        },
+        {
+          "actual": null,
+          "expected": null,
+          "name": "fresh isolated profile",
+          "pass": true
+        },
+        {
+          "actual": 600,
+          "expected": 600,
+          "name": "actual upstream membership",
+          "pass": true
+        },
+        {
+          "actual": 500,
+          "expected": 500,
+          "name": "retained history capacity",
+          "pass": true
+        },
+        {
+          "actual": 600,
+          "expected": 600,
+          "name": "durable full membership",
+          "pass": true
+        },
+        {
+          "actual": "600",
+          "expected": "600",
+          "name": "panel national count",
+          "pass": true
+        },
+        {
+          "actual": true,
+          "expected": true,
+          "name": "sentinel initially live",
+          "pass": true
+        },
+        {
+          "actual": false,
+          "expected": false,
+          "name": "expired sentinel removed",
+          "pass": true
+        },
+        {
+          "actual": "59ccfbeed99ba9e6adb093fd864aa70be9aa3c24dff3133b51ec5d664c17bdda",
+          "expected": "59ccfbeed99ba9e6adb093fd864aa70be9aa3c24dff3133b51ec5d664c17bdda",
+          "name": "expiry preserves user storage bytes",
+          "pass": true
+        },
+        {
+          "actual": false,
+          "expected": false,
+          "name": "no HTTP attempted against occupied canonical port",
+          "pass": true
+        },
+        {
+          "actual": [
+            "http://127.0.0.1:46125"
+          ],
+          "expected": [
+            "http://127.0.0.1:46125"
+          ],
+          "name": "only confirmed HTTP origin forwarded",
+          "pass": true
+        }
+      ],
+      "details": {
+        "confirmedPort": 46125,
+        "deniedHttp": [],
+        "forwardedHttp": {
+          "http://127.0.0.1:46125": 1
+        },
+        "metaLoopbackConnect": [
+          "http://127.0.0.1:46123",
+          "http://127.0.0.1:46124",
+          "http://127.0.0.1:46125",
+          "http://127.0.0.1:46126",
+          "http://127.0.0.1:46127",
+          "http://127.0.0.1:46128",
+          "http://127.0.0.1:46129",
+          "http://127.0.0.1:46130",
+          "http://127.0.0.1:46131",
+          "http://127.0.0.1:46132",
+          "http://127.0.0.1:46133",
+          "http://127.0.0.1:11434",
+          "http://127.0.0.1:1234"
+        ],
+        "metaLoopbackFrame": [
+          "http://127.0.0.1:46123",
+          "http://127.0.0.1:46124",
+          "http://127.0.0.1:46125",
+          "http://127.0.0.1:46126",
+          "http://127.0.0.1:46127",
+          "http://127.0.0.1:46128",
+          "http://127.0.0.1:46129",
+          "http://127.0.0.1:46130",
+          "http://127.0.0.1:46131",
+          "http://127.0.0.1:46132",
+          "http://127.0.0.1:46133"
+        ],
+        "metaSHA256": "ba99f58b852905de1f90997ecac0707a3da6306477bf4f7cd0e37203a5c1edf9",
+        "persisted": {
+          "at": 1793668507960,
+          "hash": "59ccfbeed99ba9e6adb093fd864aa70be9aa3c24dff3133b51ec5d664c17bdda",
+          "snoozedUntil": 1793668628443
+        },
+        "resourceOrigins": [
+          "http://127.0.0.1:46125"
+        ]
+      },
+      "receipt": "runs/seed-51c23690-15bf-4169-b20c-de7002acb85c/receipt.json"
+    }
+  },
+  "profileCleanup": {
+    "51c23690-15bf-4169-b20c-de7002acb85c": {
+      "presentBeforeDeletion": true,
+      "presentAfterDeletion": false,
+      "evidence": "cleanup/51c23690-15bf-4169-b20c-de7002acb85c.json"
+    },
+    "f1c8d20b-741e-47be-9f97-51a5c568f476": {
+      "presentBeforeDeletion": true,
+      "presentAfterDeletion": false,
+      "evidence": "cleanup/f1c8d20b-741e-47be-9f97-51a5c568f476.json"
+    }
+  },
+  "reviewedInputs": {
+    "productionCspSHA256": "ea05554f53e1427fd7a325b016280a0a5797241da82964bcf0e4b51274bd3ebc",
+    "qaCspSHA256": "ea05554f53e1427fd7a325b016280a0a5797241da82964bcf0e4b51274bd3ebc",
+    "unchangedRustItemsSHA256": [
+      {
+        "name": [
+          "struct LocalApiState {",
+          " child: Mutex<Option<Child>>,"
+        ],
+        "sha256": "fa44066666d3b9c99535060d80897e6a3ca1d0d65520278773f9b3b8eb7e13d6"
+      },
+      {
+        "name": [
+          "impl Default for LocalApiState {",
+          " fn default() -> Self {"
+        ],
+        "sha256": "c1a4a4d62130895155e641ec58738c5a58ad700be3147cd5de9c74aa3db6d52b"
+      },
+      {
+        "name": [
+          "fn require_trusted_window(label: &str) -> Result<(), String> {",
+          " if TRUSTED_WINDOWS.contains(&label) {"
+        ],
+        "sha256": "eebcf01c38fd2f3f0fff399512e0ec301a78977e11a4bdb5a1d9a20d93f123a3"
+      },
+      {
+        "name": [
+          "#[tauri::command]",
+          "fn get_local_api_token(webview: Webview, state: tauri::State<'_, LocalApiState>) -> Result<String, String> {"
+        ],
+        "sha256": "2255cb8ed56137093903f31b9841ce37d5bc0e4020e11f6831f6af690e305a19"
+      },
+      {
+        "name": [
+          "#[tauri::command]",
+          "fn get_local_api_port(webview: Webview, state: tauri::State<'_, LocalApiState>) -> Result<u16, String> {"
+        ],
+        "sha256": "ad287458a2159cc098dd455c542996a95232f42be586ce4248a2f754ad4485bf"
+      },
+      {
+        "name": [
+          "fn is_main_window_navigation(url: &Url) -> bool {",
+          " if url.scheme() == \"tauri\" {"
+        ],
+        "sha256": "898540d9999b37ce1093ab2297e9fcfc4fa64bedd9c2eb265d95ef5ee65a2f29"
+      },
+      {
+        "name": [
+          "fn parse_port_file(path: &Path) -> Option<u16> {",
+          "    let port = fs::read_to_string(path).ok()?.trim().parse::<u16>().ok()?;"
+        ],
+        "sha256": "e4eb002b89e9ab2e530dc3a1fed274b00c30b64b982916e3035f32cea2cfb50a"
+      }
+    ]
+  },
+  "limitations": [
+    "Separate release-mode Tauri QA bundle and named test profiles, with reviewed production renderer, IPC handlers and navigation guard. Rust reads the actual private published bound-port using the reviewed parser and verifies agreement with fixture control before populating QA State. Normal product vault, updater, native child spawn, installation and delivery are outside this host.",
+    "The parent-owned packaged sidecar runs real bind selection and port-file publication against synthetic NWS upstream. Canonical port 46123 was occupied and excluded from QA HTTP transport. WebKit CSP and the QA transport guard remain separate, with enforced CSP events required for the unlisted negative."
+  ],
+  "realProductParity": {
+    "productionBundleExecutableSHA256": "9811e3a43ead942955bc5a16a665b13b269063f8be37bf77dc19f46ef96f11a9",
+    "productionSidecarSHA256": "37fea01f1ac57d3e7e286a6569a82a092fc4e7763ae6eef17353b1fbd70e5a4e",
+    "productionNodeSHA256": "e2d4915d03eda6a2f00a09920e7eeb7a04ad123f9aaad61b1481179fe1bf50e0",
+    "productionBinaryContainsExactNativeCsp": true,
+    "qaMainMetaMatchesActualProductionDist": true,
+    "packageReceiptSHA256": "aaf6057a96f118546ca5d590ca3fe01aa80dfe19758b7ab39212496fb1c9525a"
+  },
+  "ownedSocketEvidence": {
+    "socketReceiptSHA256": "95e39c85a527cb8a6a7ffa7a21ac7d9a9644911f47ea218db68e88e34d20359a",
+    "ownedIncumbentCount": 10,
+    "totalConnectionsToOwnedIncumbents": 0,
+    "totalRequestsWithAuthorizationToOwnedIncumbents": 0,
+    "exhaustedNativeHealthHttpStatus": 200,
+    "healthOnlyWarningOnlyAfterExhaustion": true,
+    "fixtureCredentialsRemoved": true
+  }
+}

@@ -1,0 +1,536 @@
+{
+  "schemaVersion": 1,
+  "checkpoint": "2a255738ecc0fcd34635210314f808013de477d4",
+  "command": "npm run test:sidecar-fallback",
+  "nodeVersion": "v22.23.3",
+  "baseline": {
+    "tests": 24,
+    "pass": 24,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0
+  },
+  "cases": [
+    {
+      "id": "B01",
+      "behavior": "Choose first free candidate in ascending order",
+      "path": "src-tauri/sidecar/local-api-server.mjs",
+      "beforeSHA256": "37fea01f1ac57d3e7e286a6569a82a092fc4e7763ae6eef17353b1fbd70e5a4e",
+      "restoredSHA256": "37fea01f1ac57d3e7e286a6569a82a092fc4e7763ae6eef17353b1fbd70e5a4e",
+      "cleanBefore": true,
+      "cleanAfter": true,
+      "appliedDiff": "diff --git a/src-tauri/sidecar/local-api-server.mjs b/src-tauri/sidecar/local-api-server.mjs\nindex a5d307d6b..ec38d25b4 100644\n--- a/src-tauri/sidecar/local-api-server.mjs\n+++ b/src-tauri/sidecar/local-api-server.mjs\n@@ -22337 +22337 @@ export async function createLocalApiServer(options = {}) {\n- for (const port of candidatePorts) {\n+ for (const port of [...candidatePorts].reverse()) {\n",
+      "baselineCounts": {
+        "tests": 24,
+        "pass": 24,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "counts": {
+        "tests": 24,
+        "pass": 18,
+        "fail": 6,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "exitCode": 1,
+      "failedTests": [
+        "startup publishes only the actual bind after first choice free",
+        "startup publishes only the actual bind after one busy port",
+        "startup publishes only the actual bind after two busy ports",
+        "startup publishes only the actual bind after bounded range exhausted",
+        "startup publishes only the actual bind after upper port boundary",
+        "a non-collision listen error stops at that candidate and cannot publish a port"
+      ],
+      "assertionExcerpts": [
+        "not ok 16 - startup publishes only the actual bind after first choice free\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n    +   46133\n    -   46123\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 46123\n  actual:\n    0: 46133\n  operator: 'deepStrictEqual'\n  stack: |-\n    file:///private/tmp/cb-fallback-mutants.RRf2UP/repo/tests/sidecar-port-range.test.mjs:68:14",
+        "not ok 17 - startup publishes only the actual bind after one busy port\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n    +   46133\n    -   46123,\n    -   46124\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 46123\n    1: 46124\n  actual:\n    0: 46133\n  operator: 'deepStrictEqual'"
+      ]
+    },
+    {
+      "id": "B02",
+      "behavior": "Continue beyond first busy preferred port",
+      "path": "src-tauri/sidecar/local-api-server.mjs",
+      "beforeSHA256": "37fea01f1ac57d3e7e286a6569a82a092fc4e7763ae6eef17353b1fbd70e5a4e",
+      "restoredSHA256": "37fea01f1ac57d3e7e286a6569a82a092fc4e7763ae6eef17353b1fbd70e5a4e",
+      "cleanBefore": true,
+      "cleanAfter": true,
+      "appliedDiff": "diff --git a/src-tauri/sidecar/local-api-server.mjs b/src-tauri/sidecar/local-api-server.mjs\nindex a5d307d6b..e7be3f1e2 100644\n--- a/src-tauri/sidecar/local-api-server.mjs\n+++ b/src-tauri/sidecar/local-api-server.mjs\n@@ -22337 +22337 @@ export async function createLocalApiServer(options = {}) {\n- for (const port of candidatePorts) {\n+ for (const port of candidatePorts.slice(0, 1)) {\n",
+      "baselineCounts": {
+        "tests": 24,
+        "pass": 24,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "counts": {
+        "tests": 24,
+        "pass": 19,
+        "fail": 5,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "exitCode": 1,
+      "failedTests": [
+        "startup publishes only the actual bind after one busy port",
+        "startup publishes only the actual bind after two busy ports",
+        "startup publishes only the actual bind after bounded range exhausted",
+        "startup publishes only the actual bind after upper port boundary",
+        "a non-collision listen error stops at that candidate and cannot publish a port"
+      ],
+      "assertionExcerpts": [
+        "not ok 17 - startup publishes only the actual bind after one busy port\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        46123,\n    +   0\n    -   46124\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 46123\n    1: 46124\n  actual:\n    0: 46123\n    1: 0",
+        "not ok 18 - startup publishes only the actual bind after two busy ports\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        46123,\n    +   0\n    -   46124,\n    -   46125\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 46123\n    1: 46124\n    2: 46125\n  actual:"
+      ]
+    },
+    {
+      "id": "B03",
+      "behavior": "Try all eleven approved choices",
+      "path": "src-tauri/sidecar/local-api-server.mjs",
+      "beforeSHA256": "37fea01f1ac57d3e7e286a6569a82a092fc4e7763ae6eef17353b1fbd70e5a4e",
+      "restoredSHA256": "37fea01f1ac57d3e7e286a6569a82a092fc4e7763ae6eef17353b1fbd70e5a4e",
+      "cleanBefore": true,
+      "cleanAfter": true,
+      "appliedDiff": "diff --git a/src-tauri/sidecar/local-api-server.mjs b/src-tauri/sidecar/local-api-server.mjs\nindex a5d307d6b..bd1a4cc9d 100644\n--- a/src-tauri/sidecar/local-api-server.mjs\n+++ b/src-tauri/sidecar/local-api-server.mjs\n@@ -3173 +3173 @@ const SIDECAR_LOCALHOST_RE = /^https?:\\/\\/(?:localhost|127\\.0\\.0\\.1)(?::(\\d+))?$\n-export const SIDECAR_PORT_FALLBACK_SPAN = 10;\n+export const SIDECAR_PORT_FALLBACK_SPAN = 9;\n",
+      "baselineCounts": {
+        "tests": 24,
+        "pass": 24,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "counts": {
+        "tests": 24,
+        "pass": 23,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "exitCode": 1,
+      "failedTests": [
+        "startup publishes only the actual bind after bounded range exhausted"
+      ],
+      "assertionExcerpts": [
+        "not ok 19 - startup publishes only the actual bind after bounded range exhausted\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    ... Skipped lines\n    \n      [\n        46123,\n        46124,\n        46125,\n        46126,\n    ...\n        46132,\n    -   46133,\n        0\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'"
+      ]
+    },
+    {
+      "id": "B04",
+      "behavior": "Cap candidate attempts at valid maximum port",
+      "path": "src-tauri/sidecar/local-api-server.mjs",
+      "beforeSHA256": "37fea01f1ac57d3e7e286a6569a82a092fc4e7763ae6eef17353b1fbd70e5a4e",
+      "restoredSHA256": "37fea01f1ac57d3e7e286a6569a82a092fc4e7763ae6eef17353b1fbd70e5a4e",
+      "cleanBefore": true,
+      "cleanAfter": true,
+      "appliedDiff": "diff --git a/src-tauri/sidecar/local-api-server.mjs b/src-tauri/sidecar/local-api-server.mjs\nindex a5d307d6b..be6f9aa77 100644\n--- a/src-tauri/sidecar/local-api-server.mjs\n+++ b/src-tauri/sidecar/local-api-server.mjs\n@@ -3178 +3178 @@ export function sidecarCandidatePorts(basePort) {\n-  const last = Math.min(base + SIDECAR_PORT_FALLBACK_SPAN, 65_535);\n+  const last = base + SIDECAR_PORT_FALLBACK_SPAN;\n",
+      "baselineCounts": {
+        "tests": 24,
+        "pass": 24,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "counts": {
+        "tests": 24,
+        "pass": 23,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "exitCode": 1,
+      "failedTests": [
+        "startup publishes only the actual bind after upper port boundary"
+      ],
+      "assertionExcerpts": [
+        "not ok 20 - startup publishes only the actual bind after upper port boundary\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        65534,\n        65535,\n    +   65536\n    -   0\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 65534\n    1: 65535\n    2: 0\n  actual:"
+      ]
+    },
+    {
+      "id": "B05",
+      "behavior": "Propagate errors other than EADDRINUSE",
+      "path": "src-tauri/sidecar/local-api-server.mjs",
+      "beforeSHA256": "37fea01f1ac57d3e7e286a6569a82a092fc4e7763ae6eef17353b1fbd70e5a4e",
+      "restoredSHA256": "37fea01f1ac57d3e7e286a6569a82a092fc4e7763ae6eef17353b1fbd70e5a4e",
+      "cleanBefore": true,
+      "cleanAfter": true,
+      "appliedDiff": "diff --git a/src-tauri/sidecar/local-api-server.mjs b/src-tauri/sidecar/local-api-server.mjs\nindex a5d307d6b..1ac8317b1 100644\n--- a/src-tauri/sidecar/local-api-server.mjs\n+++ b/src-tauri/sidecar/local-api-server.mjs\n@@ -22343 +22343 @@ export async function createLocalApiServer(options = {}) {\n-     if (error?.code !== 'EADDRINUSE') throw error;\n+     if (error?.code !== 'EADDRINUSE') continue;\n",
+      "baselineCounts": {
+        "tests": 24,
+        "pass": 24,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "counts": {
+        "tests": 24,
+        "pass": 23,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "exitCode": 1,
+      "failedTests": [
+        "a non-collision listen error stops at that candidate and cannot publish a port"
+      ],
+      "assertionExcerpts": [
+        "not ok 22 - a non-collision listen error stops at that candidate and cannot publish a port\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        46123,\n        46124,\n    +   46125,\n    +   46126,\n    +   46127,\n    +   46128,\n    +   46129,\n    +   46130,\n    +   46131,\n    +   46132,\n    +   46133,\n    +   0\n      ]"
+      ]
+    },
+    {
+      "id": "B06",
+      "behavior": "Respect explicit OS allocation",
+      "path": "src-tauri/sidecar/local-api-server.mjs",
+      "beforeSHA256": "37fea01f1ac57d3e7e286a6569a82a092fc4e7763ae6eef17353b1fbd70e5a4e",
+      "restoredSHA256": "37fea01f1ac57d3e7e286a6569a82a092fc4e7763ae6eef17353b1fbd70e5a4e",
+      "cleanBefore": true,
+      "cleanAfter": true,
+      "appliedDiff": "diff --git a/src-tauri/sidecar/local-api-server.mjs b/src-tauri/sidecar/local-api-server.mjs\nindex a5d307d6b..b7a0960f6 100644\n--- a/src-tauri/sidecar/local-api-server.mjs\n+++ b/src-tauri/sidecar/local-api-server.mjs\n@@ -3176 +3176 @@ export function sidecarCandidatePorts(basePort) {\n-  const base = Number(basePort);\n+  const base = Number(basePort) || 46123;\n",
+      "baselineCounts": {
+        "tests": 24,
+        "pass": 24,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "counts": {
+        "tests": 24,
+        "pass": 23,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "exitCode": 1,
+      "failedTests": [
+        "startup publishes only the actual bind after explicit OS allocation"
+      ],
+      "assertionExcerpts": [
+        "not ok 21 - startup publishes only the actual bind after explicit OS allocation\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n    +   46123\n    -   0\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 0\n  actual:\n    0: 46123\n  operator: 'deepStrictEqual'\n  stack: |-\n    file:///private/tmp/cb-fallback-mutants.RRf2UP/repo/tests/sidecar-port-range.test.mjs:68:14"
+      ]
+    },
+    {
+      "id": "B07",
+      "behavior": "Reject invalid input instead of silently allocating a port",
+      "path": "src-tauri/sidecar/local-api-server.mjs",
+      "beforeSHA256": "37fea01f1ac57d3e7e286a6569a82a092fc4e7763ae6eef17353b1fbd70e5a4e",
+      "restoredSHA256": "37fea01f1ac57d3e7e286a6569a82a092fc4e7763ae6eef17353b1fbd70e5a4e",
+      "cleanBefore": true,
+      "cleanAfter": true,
+      "appliedDiff": "diff --git a/src-tauri/sidecar/local-api-server.mjs b/src-tauri/sidecar/local-api-server.mjs\nindex a5d307d6b..175af01d8 100644\n--- a/src-tauri/sidecar/local-api-server.mjs\n+++ b/src-tauri/sidecar/local-api-server.mjs\n@@ -22353 +22353 @@ export async function createLocalApiServer(options = {}) {\n-     await tryListen(context.port);\n+     await tryListen(0);\n",
+      "baselineCounts": {
+        "tests": 24,
+        "pass": 24,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "counts": {
+        "tests": 24,
+        "pass": 22,
+        "fail": 2,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "exitCode": 1,
+      "failedTests": [
+        "invalid preferred port -1 rejects without publishing or retrying with zero",
+        "invalid preferred port 65536 rejects without publishing or retrying with zero"
+      ],
+      "assertionExcerpts": [
+        "not ok 23 - invalid preferred port -1 rejects without publishing or retrying with zero\n  error: 'Missing expected rejection.'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    code: 'ERR_SOCKET_BAD_PORT'\n  operator: 'rejects'\n  stack: |-\n    process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    async file:///private/tmp/cb-fallback-mutants.RRf2UP/repo/tests/sidecar-port-range.test.mjs:98:7\n    async withServer (file:///private/tmp/cb-fallback-mutants.RRf2UP/repo/tests/sidecar-port-range.test.mjs:26:5)\n    async TestContext.<anonymous> (file:///private/tmp/cb-fallback-mutants.RRf2UP/repo/tests/sidecar-port-range.test.mjs:97:5)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...",
+        "not ok 24 - invalid preferred port 65536 rejects without publishing or retrying with zero\n  error: 'Missing expected rejection.'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    code: 'ERR_SOCKET_BAD_PORT'\n  operator: 'rejects'\n  stack: |-\n    process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    async file:///private/tmp/cb-fallback-mutants.RRf2UP/repo/tests/sidecar-port-range.test.mjs:98:7\n    async withServer (file:///private/tmp/cb-fallback-mutants.RRf2UP/repo/tests/sidecar-port-range.test.mjs:26:5)\n    async TestContext.<anonymous> (file:///private/tmp/cb-fallback-mutants.RRf2UP/repo/tests/sidecar-port-range.test.mjs:97:5)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ..."
+      ]
+    },
+    {
+      "id": "B08",
+      "behavior": "Use OS allocation only after exhausting all candidates",
+      "path": "src-tauri/sidecar/local-api-server.mjs",
+      "beforeSHA256": "37fea01f1ac57d3e7e286a6569a82a092fc4e7763ae6eef17353b1fbd70e5a4e",
+      "restoredSHA256": "37fea01f1ac57d3e7e286a6569a82a092fc4e7763ae6eef17353b1fbd70e5a4e",
+      "cleanBefore": true,
+      "cleanAfter": true,
+      "appliedDiff": "diff --git a/src-tauri/sidecar/local-api-server.mjs b/src-tauri/sidecar/local-api-server.mjs\nindex a5d307d6b..852c8d2b3 100644\n--- a/src-tauri/sidecar/local-api-server.mjs\n+++ b/src-tauri/sidecar/local-api-server.mjs\n@@ -22350 +22350 @@ export async function createLocalApiServer(options = {}) {\n-     await tryListen(0);\n+     await tryListen(candidatePorts.at(-1) + 1);\n",
+      "baselineCounts": {
+        "tests": 24,
+        "pass": 24,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "counts": {
+        "tests": 24,
+        "pass": 22,
+        "fail": 2,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "exitCode": 1,
+      "failedTests": [
+        "startup publishes only the actual bind after bounded range exhausted",
+        "startup publishes only the actual bind after upper port boundary"
+      ],
+      "assertionExcerpts": [
+        "not ok 19 - startup publishes only the actual bind after bounded range exhausted\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    ... Skipped lines\n    \n      [\n        46123,\n        46124,\n        46125,\n        46126,\n    ...\n        46133,\n    +   46134\n    -   0\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'",
+        "not ok 20 - startup publishes only the actual bind after upper port boundary\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        65534,\n        65535,\n    +   65536\n    -   0\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 65534\n    1: 65535\n    2: 0\n  actual:"
+      ]
+    },
+    {
+      "id": "B09",
+      "behavior": "Emit explicit native-health-only exhaustion warning",
+      "path": "src-tauri/sidecar/local-api-server.mjs",
+      "beforeSHA256": "37fea01f1ac57d3e7e286a6569a82a092fc4e7763ae6eef17353b1fbd70e5a4e",
+      "restoredSHA256": "37fea01f1ac57d3e7e286a6569a82a092fc4e7763ae6eef17353b1fbd70e5a4e",
+      "cleanBefore": true,
+      "cleanAfter": true,
+      "appliedDiff": "diff --git a/src-tauri/sidecar/local-api-server.mjs b/src-tauri/sidecar/local-api-server.mjs\nindex a5d307d6b..c6418b746 100644\n--- a/src-tauri/sidecar/local-api-server.mjs\n+++ b/src-tauri/sidecar/local-api-server.mjs\n@@ -22349 +22349 @@ export async function createLocalApiServer(options = {}) {\n-     context.logger.warn(`[local-api] ports ${candidatePorts[0]}-${candidatePorts.at(-1)} all in use; choosing an OS-assigned port for native health only. The desktop webview cannot reach it.`);\n+     context.logger.log(`[local-api] ports ${candidatePorts[0]}-${candidatePorts.at(-1)} all in use; choosing an OS-assigned port for native health only. The desktop webview cannot reach it.`);\n",
+      "baselineCounts": {
+        "tests": 24,
+        "pass": 24,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "counts": {
+        "tests": 24,
+        "pass": 22,
+        "fail": 2,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "exitCode": 1,
+      "failedTests": [
+        "startup publishes only the actual bind after bounded range exhausted",
+        "startup publishes only the actual bind after upper port boundary"
+      ],
+      "assertionExcerpts": [
+        "not ok 19 - startup publishes only the actual bind after bounded range exhausted\n  error: |-\n    Expected values to be strictly equal:\n    \n    0 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 0\n  operator: 'strictEqual'\n  stack: |-\n    file:///private/tmp/cb-fallback-mutants.RRf2UP/repo/tests/sidecar-port-range.test.mjs:71:16\n    process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    async withServer (file:///private/tmp/cb-fallback-mutants.RRf2UP/repo/tests/sidecar-port-range.test.mjs:26:5)\n    async TestContext.<anonymous> (file:///private/tmp/cb-fallback-mutants.RRf2UP/repo/tests/sidecar-port-range.test.mjs:65:5)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...",
+        "not ok 20 - startup publishes only the actual bind after upper port boundary\n  error: |-\n    Expected values to be strictly equal:\n    \n    0 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 0\n  operator: 'strictEqual'\n  stack: |-\n    file:///private/tmp/cb-fallback-mutants.RRf2UP/repo/tests/sidecar-port-range.test.mjs:71:16\n    process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    async withServer (file:///private/tmp/cb-fallback-mutants.RRf2UP/repo/tests/sidecar-port-range.test.mjs:26:5)\n    async TestContext.<anonymous> (file:///private/tmp/cb-fallback-mutants.RRf2UP/repo/tests/sidecar-port-range.test.mjs:65:5)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ..."
+      ]
+    },
+    {
+      "id": "C01",
+      "behavior": "Include permitted alternate in native connect policy",
+      "path": "src-tauri/tauri.conf.json",
+      "beforeSHA256": "c26ab0109ce90cadf91acd9613d1b1aae336ac45915d7245378196a329a5ad30",
+      "restoredSHA256": "c26ab0109ce90cadf91acd9613d1b1aae336ac45915d7245378196a329a5ad30",
+      "cleanBefore": true,
+      "cleanAfter": true,
+      "appliedDiff": "diff --git a/src-tauri/tauri.conf.json b/src-tauri/tauri.conf.json\nindex 515fb23bf..a39e62033 100644\n--- a/src-tauri/tauri.conf.json\n+++ b/src-tauri/tauri.conf.json\n@@ -16 +16 @@\n-      \"csp\": \"default-src 'self'; connect-src 'self' http://127.0.0.1:46123 http://127.0.0.1:46124 http://127.0.0.1:46125 http://127.0.0.1:46126 http://127.0.0.1:46127 http://127.0.0.1:46128 http://127.0.0.1:46129 http://127.0.0.1:46130 http://127.0.0.1:46131 http://127.0.0.1:46132 http://127.0.0.1:46133 http://127.0.0.1:11434 http://127.0.0.1:1234 https://*.open-meteo.com https://*.rainviewer.com https://*.basemaps.cartocdn.com https://*.tile.opentopomap.org https://*.arcgisonline.com https://*.nesdis.noaa.gov https://*.mapbox.com https://*.cesium.com https://*.virtualearth.net https://*.posthog.com https://api.weather.gov https://api.avalanche.org https://api.bgpview.io https://api.reliefweb.int https://api.safecast.org https://api.spaceflightnewsapi.net https://api.tidesandcurrents.noaa.gov https://api.unhcr.org https://api.usaspending.gov https://api.worldbank.org https://api.maptiler.com https://api.anthropic.com https://api.groq.com https://aviationweather.gov https://banks.data.fdic.gov https://cdn.jsdelivr.net https://celestrak.org https://disease.sh https://droughtmonitor.unl.edu https://earthquake.usgs.gov https://emergency.copernicus.eu https://eonet.gsfc.nasa.gov https://gamma-api.polymarket.com https://geo.weather.gc.ca https://gibs.earthdata.nasa.gov https://github.com https://api.github.com https://*.githubusercontent.com https://habsos.noaa.gov https://incidentnews.noaa.gov https://ioda.inetintel.cc.gatech.edu https://ll.thespacedevs.com https://map.blitzortung.org https://maps.googleapis.com https://mesonet.agron.iastate.edu https://msi.nga.mil https://nominatim.openstreetmap.org https://openrouter.ai https://router.project-osrm.org https://services.faa.gov https://services.swpc.noaa.gov https://tile.googleapis.com https://tile.openstreetmap.org https://tile.openweathermap.org https://valhalla1.openstreetmap.de https://waterwatch.usgs.gov https://www.cloudflarestatus.com https://www.fastlystatus.com https://www.federalregister.gov https://www.fema.gov https://www.gdacs.org https://www.ipcinfo.org https://www.ndbc.noaa.gov https://www.nhc.noaa.gov https://www.spc.noaa.gov https://www.who.int https://www.wpc.ncep.noaa.gov https://en.wikipedia.org https://restcountries.com wss://stream.aisstream.io; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; worker-src 'self' blob:; font-src 'self' data: https:; media-src 'self' data: blob: https:; frame-src 'self' http://127.0.0.1:46123 http://127.0.0.1:46124 http://127.0.0.1:46125 http://127.0.0.1:46126 http://127.0.0.1:46127 http://127.0.0.1:46128 http://127.0.0.1:46129 http://127.0.0.1:46130 http://127.0.0.1:46131 http://127.0.0.1:46132 http://127.0.0.1:46133 https://www.youtube.com https://www.youtube-nocookie.com; object-src 'none'; base-uri 'self'; form-action 'self';\"\n+      \"csp\": \"default-src 'self'; connect-src 'self' http://127.0.0.1:46123 http://127.0.0.1:46125 http://127.0.0.1:46126 http://127.0.0.1:46127 http://127.0.0.1:46128 http://127.0.0.1:46129 http://127.0.0.1:46130 http://127.0.0.1:46131 http://127.0.0.1:46132 http://127.0.0.1:46133 http://127.0.0.1:11434 http://127.0.0.1:1234 https://*.open-meteo.com https://*.rainviewer.com https://*.basemaps.cartocdn.com https://*.tile.opentopomap.org https://*.arcgisonline.com https://*.nesdis.noaa.gov https://*.mapbox.com https://*.cesium.com https://*.virtualearth.net https://*.posthog.com https://api.weather.gov https://api.avalanche.org https://api.bgpview.io https://api.reliefweb.int https://api.safecast.org https://api.spaceflightnewsapi.net https://api.tidesandcurrents.noaa.gov https://api.unhcr.org https://api.usaspending.gov https://api.worldbank.org https://api.maptiler.com https://api.anthropic.com https://api.groq.com https://aviationweather.gov https://banks.data.fdic.gov https://cdn.jsdelivr.net https://celestrak.org https://disease.sh https://droughtmonitor.unl.edu https://earthquake.usgs.gov https://emergency.copernicus.eu https://eonet.gsfc.nasa.gov https://gamma-api.polymarket.com https://geo.weather.gc.ca https://gibs.earthdata.nasa.gov https://github.com https://api.github.com https://*.githubusercontent.com https://habsos.noaa.gov https://incidentnews.noaa.gov https://ioda.inetintel.cc.gatech.edu https://ll.thespacedevs.com https://map.blitzortung.org https://maps.googleapis.com https://mesonet.agron.iastate.edu https://msi.nga.mil https://nominatim.openstreetmap.org https://openrouter.ai https://router.project-osrm.org https://services.faa.gov https://services.swpc.noaa.gov https://tile.googleapis.com https://tile.openstreetmap.org https://tile.openweathermap.org https://valhalla1.openstreetmap.de https://waterwatch.usgs.gov https://www.cloudflarestatus.com https://www.fastlystatus.com https://www.federalregister.gov https://www.fema.gov https://www.gdacs.org https://www.ipcinfo.org https://www.ndbc.noaa.gov https://www.nhc.noaa.gov https://www.spc.noaa.gov https://www.who.int https://www.wpc.ncep.noaa.gov https://en.wikipedia.org https://restcountries.com wss://stream.aisstream.io; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; worker-src 'self' blob:; font-src 'self' data: https:; media-src 'self' data: blob: https:; frame-src 'self' http://127.0.0.1:46123 http://127.0.0.1:46124 http://127.0.0.1:46125 http://127.0.0.1:46126 http://127.0.0.1:46127 http://127.0.0.1:46128 http://127.0.0.1:46129 http://127.0.0.1:46130 http://127.0.0.1:46131 http://127.0.0.1:46132 http://127.0.0.1:46133 https://www.youtube.com https://www.youtube-nocookie.com; object-src 'none'; base-uri 'self'; form-action 'self';\"\n",
+      "baselineCounts": {
+        "tests": 24,
+        "pass": 24,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "counts": {
+        "tests": 24,
+        "pass": 23,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "exitCode": 1,
+      "failedTests": [
+        "native connect-src permits exactly the bounded sidecar range and relevant local models"
+      ],
+      "assertionExcerpts": [
+        "not ok 12 - native connect-src permits exactly the bounded sidecar range and relevant local models\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'http://127.0.0.1:11434',\n        'http://127.0.0.1:1234',\n        'http://127.0.0.1:46123',\n    -   'http://127.0.0.1:46124',\n        'http://127.0.0.1:46125',\n        'http://127.0.0.1:46126',\n        'http://127.0.0.1:46127',\n        'http://127.0.0.1:46128',\n        'http://127.0.0.1:46129',\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:"
+      ]
+    },
+    {
+      "id": "C02",
+      "behavior": "Exclude local models from native frame permission",
+      "path": "src-tauri/tauri.conf.json",
+      "beforeSHA256": "c26ab0109ce90cadf91acd9613d1b1aae336ac45915d7245378196a329a5ad30",
+      "restoredSHA256": "c26ab0109ce90cadf91acd9613d1b1aae336ac45915d7245378196a329a5ad30",
+      "cleanBefore": true,
+      "cleanAfter": true,
+      "appliedDiff": "diff --git a/src-tauri/tauri.conf.json b/src-tauri/tauri.conf.json\nindex 515fb23bf..dd751e3cf 100644\n--- a/src-tauri/tauri.conf.json\n+++ b/src-tauri/tauri.conf.json\n@@ -16 +16 @@\n-      \"csp\": \"default-src 'self'; connect-src 'self' http://127.0.0.1:46123 http://127.0.0.1:46124 http://127.0.0.1:46125 http://127.0.0.1:46126 http://127.0.0.1:46127 http://127.0.0.1:46128 http://127.0.0.1:46129 http://127.0.0.1:46130 http://127.0.0.1:46131 http://127.0.0.1:46132 http://127.0.0.1:46133 http://127.0.0.1:11434 http://127.0.0.1:1234 https://*.open-meteo.com https://*.rainviewer.com https://*.basemaps.cartocdn.com https://*.tile.opentopomap.org https://*.arcgisonline.com https://*.nesdis.noaa.gov https://*.mapbox.com https://*.cesium.com https://*.virtualearth.net https://*.posthog.com https://api.weather.gov https://api.avalanche.org https://api.bgpview.io https://api.reliefweb.int https://api.safecast.org https://api.spaceflightnewsapi.net https://api.tidesandcurrents.noaa.gov https://api.unhcr.org https://api.usaspending.gov https://api.worldbank.org https://api.maptiler.com https://api.anthropic.com https://api.groq.com https://aviationweather.gov https://banks.data.fdic.gov https://cdn.jsdelivr.net https://celestrak.org https://disease.sh https://droughtmonitor.unl.edu https://earthquake.usgs.gov https://emergency.copernicus.eu https://eonet.gsfc.nasa.gov https://gamma-api.polymarket.com https://geo.weather.gc.ca https://gibs.earthdata.nasa.gov https://github.com https://api.github.com https://*.githubusercontent.com https://habsos.noaa.gov https://incidentnews.noaa.gov https://ioda.inetintel.cc.gatech.edu https://ll.thespacedevs.com https://map.blitzortung.org https://maps.googleapis.com https://mesonet.agron.iastate.edu https://msi.nga.mil https://nominatim.openstreetmap.org https://openrouter.ai https://router.project-osrm.org https://services.faa.gov https://services.swpc.noaa.gov https://tile.googleapis.com https://tile.openstreetmap.org https://tile.openweathermap.org https://valhalla1.openstreetmap.de https://waterwatch.usgs.gov https://www.cloudflarestatus.com https://www.fastlystatus.com https://www.federalregister.gov https://www.fema.gov https://www.gdacs.org https://www.ipcinfo.org https://www.ndbc.noaa.gov https://www.nhc.noaa.gov https://www.spc.noaa.gov https://www.who.int https://www.wpc.ncep.noaa.gov https://en.wikipedia.org https://restcountries.com wss://stream.aisstream.io; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; worker-src 'self' blob:; font-src 'self' data: https:; media-src 'self' data: blob: https:; frame-src 'self' http://127.0.0.1:46123 http://127.0.0.1:46124 http://127.0.0.1:46125 http://127.0.0.1:46126 http://127.0.0.1:46127 http://127.0.0.1:46128 http://127.0.0.1:46129 http://127.0.0.1:46130 http://127.0.0.1:46131 http://127.0.0.1:46132 http://127.0.0.1:46133 https://www.youtube.com https://www.youtube-nocookie.com; object-src 'none'; base-uri 'self'; form-action 'self';\"\n+      \"csp\": \"default-src 'self'; connect-src 'self' http://127.0.0.1:46123 http://127.0.0.1:46124 http://127.0.0.1:46125 http://127.0.0.1:46126 http://127.0.0.1:46127 http://127.0.0.1:46128 http://127.0.0.1:46129 http://127.0.0.1:46130 http://127.0.0.1:46131 http://127.0.0.1:46132 http://127.0.0.1:46133 http://127.0.0.1:11434 http://127.0.0.1:1234 https://*.open-meteo.com https://*.rainviewer.com https://*.basemaps.cartocdn.com https://*.tile.opentopomap.org https://*.arcgisonline.com https://*.nesdis.noaa.gov https://*.mapbox.com https://*.cesium.com https://*.virtualearth.net https://*.posthog.com https://api.weather.gov https://api.avalanche.org https://api.bgpview.io https://api.reliefweb.int https://api.safecast.org https://api.spaceflightnewsapi.net https://api.tidesandcurrents.noaa.gov https://api.unhcr.org https://api.usaspending.gov https://api.worldbank.org https://api.maptiler.com https://api.anthropic.com https://api.groq.com https://aviationweather.gov https://banks.data.fdic.gov https://cdn.jsdelivr.net https://celestrak.org https://disease.sh https://droughtmonitor.unl.edu https://earthquake.usgs.gov https://emergency.copernicus.eu https://eonet.gsfc.nasa.gov https://gamma-api.polymarket.com https://geo.weather.gc.ca https://gibs.earthdata.nasa.gov https://github.com https://api.github.com https://*.githubusercontent.com https://habsos.noaa.gov https://incidentnews.noaa.gov https://ioda.inetintel.cc.gatech.edu https://ll.thespacedevs.com https://map.blitzortung.org https://maps.googleapis.com https://mesonet.agron.iastate.edu https://msi.nga.mil https://nominatim.openstreetmap.org https://openrouter.ai https://router.project-osrm.org https://services.faa.gov https://services.swpc.noaa.gov https://tile.googleapis.com https://tile.openstreetmap.org https://tile.openweathermap.org https://valhalla1.openstreetmap.de https://waterwatch.usgs.gov https://www.cloudflarestatus.com https://www.fastlystatus.com https://www.federalregister.gov https://www.fema.gov https://www.gdacs.org https://www.ipcinfo.org https://www.ndbc.noaa.gov https://www.nhc.noaa.gov https://www.spc.noaa.gov https://www.who.int https://www.wpc.ncep.noaa.gov https://en.wikipedia.org https://restcountries.com wss://stream.aisstream.io; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; worker-src 'self' blob:; font-src 'self' data: https:; media-src 'self' data: blob: https:; frame-src 'self' http://127.0.0.1:11434 http://127.0.0.1:46123 http://127.0.0.1:46124 http://127.0.0.1:46125 http://127.0.0.1:46126 http://127.0.0.1:46127 http://127.0.0.1:46128 http://127.0.0.1:46129 http://127.0.0.1:46130 http://127.0.0.1:46131 http://127.0.0.1:46132 http://127.0.0.1:46133 https://www.youtube.com https://www.youtube-nocookie.com; object-src 'none'; base-uri 'self'; form-action 'self';\"\n",
+      "baselineCounts": {
+        "tests": 24,
+        "pass": 24,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "counts": {
+        "tests": 24,
+        "pass": 23,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "exitCode": 1,
+      "failedTests": [
+        "native frame-src permits exactly the bounded sidecar range and relevant local models"
+      ],
+      "assertionExcerpts": [
+        "not ok 13 - native frame-src permits exactly the bounded sidecar range and relevant local models\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n    +   'http://127.0.0.1:11434',\n        'http://127.0.0.1:46123',\n        'http://127.0.0.1:46124',\n        'http://127.0.0.1:46125',\n        'http://127.0.0.1:46126',\n        'http://127.0.0.1:46127',\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'http://127.0.0.1:46123'\n    1: 'http://127.0.0.1:46124'\n    2: 'http://127.0.0.1:46125'"
+      ]
+    },
+    {
+      "id": "C03",
+      "behavior": "Prevent desktop meta policy granting an out-of-range origin",
+      "path": "src/config/csp-policy.ts",
+      "beforeSHA256": "ec71fd611db74819596181963ad39db2d48c1b0c03b778c72604380945fdb17a",
+      "restoredSHA256": "ec71fd611db74819596181963ad39db2d48c1b0c03b778c72604380945fdb17a",
+      "cleanBefore": true,
+      "cleanAfter": true,
+      "appliedDiff": "diff --git a/src/config/csp-policy.ts b/src/config/csp-policy.ts\nindex 7560f4683..98359a6af 100644\n--- a/src/config/csp-policy.ts\n+++ b/src/config/csp-policy.ts\n@@ -8 +8 @@ export function removeWebLoopbackCspSources(html: string): string {\n-export const SIDECAR_PORT_RANGE = Object.freeze({ first: 46_123, last: 46_133 });\n+export const SIDECAR_PORT_RANGE = Object.freeze({ first: 46_123, last: 46_134 });\n",
+      "baselineCounts": {
+        "tests": 24,
+        "pass": 24,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "counts": {
+        "tests": 24,
+        "pass": 23,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "exitCode": 1,
+      "failedTests": [
+        "production desktop HTML transform gives the main window the exact connect and frame origins"
+      ],
+      "assertionExcerpts": [
+        "not ok 14 - production desktop HTML transform gives the main window the exact connect and frame origins\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    ... Skipped lines\n    \n      [\n        'http://127.0.0.1:11434',\n        'http://127.0.0.1:1234',\n        'http://127.0.0.1:46123',\n        'http://127.0.0.1:46124',\n    ...\n        'http://127.0.0.1:46133',\n    +   'http://127.0.0.1:46134'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:"
+      ]
+    },
+    {
+      "id": "C04",
+      "behavior": "Retain the two existing local-model connection permissions",
+      "path": "vite.config.ts",
+      "beforeSHA256": "855f97cb7550af00d3a1c2f0c5c22857456f3c35821f1c5944450d6172e091d4",
+      "restoredSHA256": "855f97cb7550af00d3a1c2f0c5c22857456f3c35821f1c5944450d6172e091d4",
+      "cleanBefore": true,
+      "cleanAfter": true,
+      "appliedDiff": "diff --git a/vite.config.ts b/vite.config.ts\nindex 712697a01..dde3100ef 100644\n--- a/vite.config.ts\n+++ b/vite.config.ts\n@@ -199 +199 @@ function htmlVariantPlugin(): Plugin {\n- const loopbackConnect = [...SIDECAR_CSP_ORIGINS, ...LOCAL_MODEL_CSP_ORIGINS].join(' ');\n+ const loopbackConnect = [...SIDECAR_CSP_ORIGINS].join(' ');\n",
+      "baselineCounts": {
+        "tests": 24,
+        "pass": 24,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "counts": {
+        "tests": 24,
+        "pass": 23,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "exitCode": 1,
+      "failedTests": [
+        "production desktop HTML transform gives the main window the exact connect and frame origins"
+      ],
+      "assertionExcerpts": [
+        "not ok 14 - production desktop HTML transform gives the main window the exact connect and frame origins\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n    -   'http://127.0.0.1:11434',\n    -   'http://127.0.0.1:1234',\n        'http://127.0.0.1:46123',\n        'http://127.0.0.1:46124',\n        'http://127.0.0.1:46125',\n        'http://127.0.0.1:46126',\n        'http://127.0.0.1:46127',\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'http://127.0.0.1:11434'\n    1: 'http://127.0.0.1:1234'"
+      ]
+    },
+    {
+      "id": "C05",
+      "behavior": "Keep frame sources restricted to listed sidecar ports",
+      "path": "vite.config.ts",
+      "beforeSHA256": "855f97cb7550af00d3a1c2f0c5c22857456f3c35821f1c5944450d6172e091d4",
+      "restoredSHA256": "855f97cb7550af00d3a1c2f0c5c22857456f3c35821f1c5944450d6172e091d4",
+      "cleanBefore": true,
+      "cleanAfter": true,
+      "appliedDiff": "diff --git a/vite.config.ts b/vite.config.ts\nindex 712697a01..0ae8ec4e8 100644\n--- a/vite.config.ts\n+++ b/vite.config.ts\n@@ -207 +207 @@ function htmlVariantPlugin(): Plugin {\n- `frame-src 'self' ${SIDECAR_CSP_ORIGINS.join(' ')}`\n+ \"frame-src 'self' http://127.0.0.1:*\"\n",
+      "baselineCounts": {
+        "tests": 24,
+        "pass": 24,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "counts": {
+        "tests": 24,
+        "pass": 23,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "exitCode": 1,
+      "failedTests": [
+        "production desktop HTML transform gives the main window the exact connect and frame origins"
+      ],
+      "assertionExcerpts": [
+        "not ok 14 - production desktop HTML transform gives the main window the exact connect and frame origins\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n    +   'http://127.0.0.1:*'\n    -   'http://127.0.0.1:46123',\n    -   'http://127.0.0.1:46124',\n    -   'http://127.0.0.1:46125',\n    -   'http://127.0.0.1:46126',\n    -   'http://127.0.0.1:46127',\n    -   'http://127.0.0.1:46128',\n    -   'http://127.0.0.1:46129',\n    -   'http://127.0.0.1:46130',\n    -   'http://127.0.0.1:46131',\n    -   'http://127.0.0.1:46132',\n    -   'http://127.0.0.1:46133'\n      ]"
+      ]
+    },
+    {
+      "id": "C06",
+      "behavior": "Remove legacy development/duplicate origins before adding desktop grants",
+      "path": "vite.config.ts",
+      "beforeSHA256": "855f97cb7550af00d3a1c2f0c5c22857456f3c35821f1c5944450d6172e091d4",
+      "restoredSHA256": "855f97cb7550af00d3a1c2f0c5c22857456f3c35821f1c5944450d6172e091d4",
+      "cleanBefore": true,
+      "cleanAfter": true,
+      "appliedDiff": "diff --git a/vite.config.ts b/vite.config.ts\nindex 712697a01..7f065f3cc 100644\n--- a/vite.config.ts\n+++ b/vite.config.ts\n@@ -175 +175 @@ function htmlVariantPlugin(): Plugin {\n- let result = removeWebLoopbackCspSources(html)\n+ let result = (isDesktopBuild ? html : removeWebLoopbackCspSources(html))\n",
+      "baselineCounts": {
+        "tests": 24,
+        "pass": 24,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "counts": {
+        "tests": 24,
+        "pass": 23,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "exitCode": 1,
+      "failedTests": [
+        "production desktop HTML transform gives the main window the exact connect and frame origins"
+      ],
+      "assertionExcerpts": [
+        "not ok 14 - production desktop HTML transform gives the main window the exact connect and frame origins\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    ... Skipped lines\n    \n      [\n    +   'http://127.0.0.1:1420',\n    +   'http://127.0.0.1:3000',\n        'http://127.0.0.1:46123',\n    +   'http://127.0.0.1:46123',\n        'http://127.0.0.1:46124',\n        'http://127.0.0.1:46125',\n        'http://127.0.0.1:46126',\n        'http://127.0.0.1:46127',\n        'http://127.0.0.1:46128',\n    ...\n        'http://127.0.0.1:46133',\n    +   'http://127.0.0.1:5173',"
+      ]
+    },
+    {
+      "id": "C07",
+      "behavior": "Keep desktop grants out of production web transform",
+      "path": "vite.config.ts",
+      "beforeSHA256": "855f97cb7550af00d3a1c2f0c5c22857456f3c35821f1c5944450d6172e091d4",
+      "restoredSHA256": "855f97cb7550af00d3a1c2f0c5c22857456f3c35821f1c5944450d6172e091d4",
+      "cleanBefore": true,
+      "cleanAfter": true,
+      "appliedDiff": "diff --git a/vite.config.ts b/vite.config.ts\nindex 712697a01..03f1ac9f3 100644\n--- a/vite.config.ts\n+++ b/vite.config.ts\n@@ -198 +198 @@ function htmlVariantPlugin(): Plugin {\n- if (isDesktopBuild) {\n+ if (true) {\n",
+      "baselineCounts": {
+        "tests": 24,
+        "pass": 24,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "counts": {
+        "tests": 24,
+        "pass": 23,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "exitCode": 1,
+      "failedTests": [
+        "production web pages gain no local services and retain auxiliary window restrictions"
+      ],
+      "assertionExcerpts": [
+        "not ok 15 - production web pages gain no local services and retain auxiliary window restrictions\n  error: |-\n    The input was expected to not match the regular expression /(?:[\\w+.-]+):\\/\\/(?:127\\.0\\.0\\.1|localhost|\\[::1\\])/i. Input:\n    \n    \"default-src 'self'; connect-src 'self' blob: data: http://127.0.0.1:46123 http://127.0.0.1:46124 http://127.0.0.1:46125 http://127.0.0.1:46126 http://127.0.0.1:46127 http://127.0.0.1:46128 http://127.0.0.1:46129 http://127.0.0.1:46130 http://127.0.0.1:46131 http://127.0.0.1:46132 http://127.0.0.1:46133 http://127.0.0.1:11434 http://127.0.0.1:1234 https://*.open-meteo.com https://*.rainviewer.com https://*.basemaps.cartocdn.com https://*.tile.opentopomap.org https://*.arcgisonline.com https://*.nesdis.noaa.gov https://*.mapbox.com https://*.cesium.com https://*.virtualearth.net https://*.posthog.com https://api.weather.gov https://api.avalanche.org https://api.bgpview.io https://api.reliefweb.int https://api.safecast.org https://api.spaceflightnewsapi.net https://api.tidesandcurrents.noaa.gov https://api.unhcr.org https://api.usaspending.gov https://api.worldbank.org https://api.maptiler.com https://api.anthropic.com https://api.groq.com https://aviationweather.gov https://banks.data.fdic.gov https://cdn.jsdelivr.net https://celestrak.org https://disease.sh https://droughtmonitor.unl.edu https://earthquake.usgs.gov https://emergency.copernicus.eu https://eonet.gsfc.nasa.gov https://gamma-api.polymarket.com https://geo.weather.gc.ca https://gibs.earthdata.nasa.gov https://github.com https://api.github.com https://*.githubusercontent.com https://habsos.noaa.gov https://incidentnews.noaa.gov https://ioda.inetintel.cc.gatech.edu https://ll.thespacedevs.com https://map.blitzortung.org https://maps.googleapis.com https://mesonet.agron.iastate.edu https://msi.nga.mil https://nominatim.openstreetmap.org https://openrouter.ai https://router.project-osrm.org https://services.faa.gov https://services.swpc.noaa.gov https://tile.googleapis.com https://tile.openstreetmap.org https://tile.openweathermap.org https://valhalla1.openstreetmap.de https://waterwatch.usgs.gov https://www.cloudflarestatus.com https://www.fastlystatus.com https://www.federalregister.gov https://www.fema.gov https://www.gdacs.org https://www.ipcinfo.org https://www.ndbc.noaa.gov https://www.nhc.noaa.gov https://www.spc.noaa.gov https://www.who.int https://www.wpc.ncep.noaa.gov https://en.wikipedia.org https://restcountries.com wss://stream.aisstream.io https://static.cloudflareinsights.com https://cloudflareinsights.com https://vercel.live wss://vercel.live https://*.sentry.io; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'sha256-CEQjAz+RfGVMlmAv8C9h16vbduoug7nuW41coE/SDtM=' 'unsafe-eval' 'wasm-unsafe-eval' https://www.youtube.com https://static.cloudflareinsights.com https://vercel.live https://us-assets.i.posthog.com; worker-src 'self' blob:; font-src 'self' data: https:; media-src 'self' data: blob: https:; frame-src 'self' http://127.0.0.1:46123 http://127.0.0.1:46124 http://127.0.0.1:46125 http://127.0.0.1:46126 http://127.0.0.1:46127 http://127.0.0.1:46128 http://127.0.0.1:46129 http://127.0.0.1:46130 http://127.0.0.1:46131 http://127.0.0.1:46132 http://127.0.0.1:46133 https://www.youtube.com https://www.youtube-nocookie.com; object-src 'none'; base-uri 'self'; form-action 'self';\"\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual: \"default-src 'self'; connect-src 'self' blob: data: http://127.0.0.1:46123 http://127.0.0.1:46124 http://127.0.0.1:46125 http://127.0.0.1:46126 http://127.0.0.1:46127 http://127.0.0.1:46128 http://127.0.0.1:46129 http://127.0.0.1:46130 http://127.0.0.1:46131 http://127.0.0.1:46132 http://127.0.0.1:46133 http://127.0.0.1:11434 http://127.0.0.1:1234 https://*.open-meteo.com https://*.rainviewer.com https://*.basemaps.cartocdn.com https://*.tile.opentopomap.org https://*.arcgisonline.com https://*.nesdis.noaa.gov https://*.mapbox.com https://*.cesium.com https://*.virtualearth.net https://*.posthog.com https://api.weather.gov https://api.avalanche.org https://api.bgpview.io https://api.reliefweb.int https://api.safecast.org https://api.spaceflightnewsapi.net https://api.tidesandcurrents.noaa.gov https://api.unhcr.org https://api.usaspending.gov https://api.worldbank.org https://api.maptiler.com https://api.anthropic.com https://api.groq.com https://aviationweather.gov https://banks.data.fdic.gov https://cdn.jsdelivr.net https://celestrak.org https://disease.sh https://droughtmonitor.unl.edu https://earthquake.usgs.gov https://emergency.copernicus.eu https://eonet.gsfc.nasa.gov https://gamma-api.polymarket.com https://geo.weather.gc.ca https://gibs.earthdata.nasa.gov https://github.com https://api.github.com https://*.githubusercontent.com https://habsos.noaa.gov https://incidentnews.noaa.gov https://ioda.inetintel.cc.gatech.edu https://ll.thespacedevs.com https://map.blitzortung.org https://maps.googleapis.com https://mesonet.agron.iastate.edu https://msi.nga.mil https://nominatim.openstreetmap.org https://openrouter.ai https://router.project-osrm.org https://services.faa.gov https://services.swpc.noaa.gov https://tile.googleapis.com https://tile.openstreetmap.org https://tile.openweathermap.org https://valhalla1.openstreetmap.de https://waterwatch.usgs.gov https://www.cloudflarestatus.com https://www.fastlystatus.com https://www.federalregister.gov https://www.fema.gov https://www.gdacs.org https://www.ipcinfo.org https://www.ndbc.noaa.gov https://www.nhc.noaa.gov https://www.spc.noaa.gov https://www.who.int https://www.wpc.ncep.noaa.gov https://en.wikipedia.org https://restcountries.com wss://stream.aisstream.io https://static.cloudflareinsights.com https://cloudflareinsights.com https://vercel.live wss://vercel.live https://*.sentry.io; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'sha256-CEQjAz+RfGVMlmAv8C9h16vbduoug7nuW41coE/SDtM=' 'unsafe-eval' 'wasm-unsafe-eval' https://www.youtube.com https://static.cloudflareinsights.com https://vercel.live https://us-assets.i.posthog.com; worker-src 'self' blob:; font-src 'self' data: https:; media-src 'self' data: blob: https:; frame-src 'self' http://127.0.0.1:46123 http://127.0.0.1:46124 http://127.0.0.1:46125 http://127.0.0.1:46126 http://127.0.0.1:46127 http://127.0.0.1:46128 http://127.0.0.1:46129 http://127.0.0.1:46130 http://127.0.0.1:46131 http://127.0.0.1:46132 http://127.0.0.1:46133 https://www.youtube.com https://www.youtube-nocookie.com; object-src 'none'; base-uri 'self'; form-action 'self';\"\n  operator: 'doesNotMatch'\n  stack: |-\n    TestContext.<anonymous> (file:///private/tmp/cb-fallback-mutants.RRf2UP/repo/tests/csp-allowlist.test.mjs:190:12)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ..."
+      ]
+    }
+  ],
+  "restored": {
+    "tests": 24,
+    "pass": 24,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0
+  },
+  "restoredGitStatus": ""
+}

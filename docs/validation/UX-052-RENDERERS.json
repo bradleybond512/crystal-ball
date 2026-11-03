@@ -1,0 +1,1348 @@
+{
+  "task": "UX-052",
+  "implementation": "92259e7f2f415c551ffb05751c934d47c23ce871",
+  "baseline": "cd459dfec514c80e2fcc3f0d7965ea6ef76a7b6a",
+  "scope": "Real dispatcher, convergence helper, Notification Settings panel, alert store, reactions and trace registry bundled as a renderer fixture. Synchronous capture replaces the OS constructor. Fixture clocks set elapsed time and run scheduled critical reminders. Test profiles are temporary. No full installed-app or Notification Center presentation was exercised.",
+  "surfaces": {
+    "baseline": {
+      "web": {
+        "passed": 2,
+        "failed": 1,
+        "metrics": {
+          "baselineCalls": 100
+        },
+        "checks": [
+          {
+            "name": "restored Ghost holds a real derived candidate",
+            "pass": true,
+            "actual": 0,
+            "expected": 0
+          },
+          {
+            "name": "Ghost is accounted as sole reason",
+            "pass": true,
+            "actual": 1,
+            "expected": 1
+          },
+          {
+            "name": "one silent banner per admitted hundred",
+            "pass": false,
+            "actual": 100,
+            "expected": 1
+          }
+        ],
+        "engine": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/147.0.7727.15 Safari/537.36"
+      },
+      "native": {
+        "passed": 2,
+        "failed": 1,
+        "metrics": {
+          "baselineCalls": 100
+        },
+        "checks": [
+          {
+            "actual": 0,
+            "expected": 0,
+            "name": "restored Ghost holds a real derived candidate",
+            "pass": true
+          },
+          {
+            "actual": 1,
+            "expected": 1,
+            "name": "Ghost is accounted as sole reason",
+            "pass": true
+          },
+          {
+            "actual": 100,
+            "expected": 1,
+            "name": "one silent banner per admitted hundred",
+            "pass": false
+          }
+        ],
+        "engine": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+        "hostSha256": "44bd3e41c8d8b39031b6857d7d33aa63215130570d792573c548d402a781c96d",
+        "dataStore": "nonpersistent WKWebView",
+        "productionCspMatched": true,
+        "hostExit": 0
+      }
+    },
+    "reachable": {
+      "web": {
+        "passed": 33,
+        "failed": 0,
+        "metrics": {
+          "sourceCounts": {
+            "direct": 100,
+            "fixtureTransportCalls": 9,
+            "stored": 3
+          },
+          "reasons": {
+            "ghost-mode": 1,
+            "domain-disabled": 1,
+            "domain-quiet-hours": 1,
+            "master-mute": 1,
+            "in-app-only": 1,
+            "permission-unavailable": 2,
+            "derived-duplicate-title": 100,
+            "derived-cooldown": 1
+          },
+          "ghost": null
+        },
+        "checks": [
+          {
+            "name": "restored Ghost holds a real derived candidate",
+            "pass": true,
+            "actual": 0,
+            "expected": 0
+          },
+          {
+            "name": "Ghost is accounted as sole reason",
+            "pass": true,
+            "actual": 1,
+            "expected": 1
+          },
+          {
+            "name": "settings show a separately labelled enabled Derived group",
+            "pass": true,
+            "actual": [
+              true,
+              "Derived alerts delivery channel"
+            ],
+            "expected": [
+              true,
+              "Derived alerts delivery channel"
+            ]
+          },
+          {
+            "name": "fresh operator policy is high, both channels, quiet enabled",
+            "pass": true,
+            "actual": [
+              "high",
+              "both",
+              true
+            ],
+            "expected": [
+              "high",
+              "both",
+              true
+            ]
+          },
+          {
+            "name": "actual settings control mutes a derived candidate",
+            "pass": true,
+            "actual": 1,
+            "expected": 1
+          },
+          {
+            "name": "derived setting toggles independently of Cyber",
+            "pass": true,
+            "actual": true,
+            "expected": true
+          },
+          {
+            "name": "critical derived obeys shared overnight-capable quiet window",
+            "pass": true,
+            "actual": 1,
+            "expected": 1
+          },
+          {
+            "name": "quiet critical NWS still presents sticky warning",
+            "pass": true,
+            "actual": [
+              1,
+              true
+            ],
+            "expected": [
+              1,
+              true
+            ]
+          },
+          {
+            "name": "critical derived honors master mute",
+            "pass": true,
+            "actual": 1,
+            "expected": 1
+          },
+          {
+            "name": "in-app-only suppresses outward transport",
+            "pass": true,
+            "actual": 1,
+            "expected": 1
+          },
+          {
+            "name": "permission transitions trigger no prompt and replay",
+            "pass": true,
+            "actual": [
+              0,
+              1
+            ],
+            "expected": [
+              0,
+              1
+            ]
+          },
+          {
+            "name": "both unavailable permission attempts are reported",
+            "pass": true,
+            "actual": 2,
+            "expected": 2
+          },
+          {
+            "name": "100 distinct convergence locations produce one banner",
+            "pass": true,
+            "actual": 1,
+            "expected": 1
+          },
+          {
+            "name": "99 candidates have exact duplicate-title reason",
+            "pass": true,
+            "actual": 99,
+            "expected": 99
+          },
+          {
+            "name": "banner options are silent and nonsticky",
+            "pass": true,
+            "actual": [
+              true,
+              false
+            ],
+            "expected": [
+              true,
+              false
+            ]
+          },
+          {
+            "name": "opaque tag excludes input text, source ids and coordinates",
+            "pass": true,
+            "actual": true,
+            "expected": true
+          },
+          {
+            "name": "100 unique incoming locations retain separate trace identities",
+            "pass": true,
+            "actual": 100,
+            "expected": 100
+          },
+          {
+            "name": "inferred critical severity retained without safety-critical attribution",
+            "pass": true,
+            "actual": 100,
+            "expected": 100
+          },
+          {
+            "name": "one trace has successful banner delivery",
+            "pass": true,
+            "actual": 1,
+            "expected": 1
+          },
+          {
+            "name": "critical official candidate bypasses active derived pacing",
+            "pass": true,
+            "actual": "Authoritative during burst",
+            "expected": "Authoritative during burst"
+          },
+          {
+            "name": "new title held before 2 minutes",
+            "pass": true,
+            "actual": 1,
+            "expected": 1
+          },
+          {
+            "name": "different title admitted at 2 min",
+            "pass": true,
+            "actual": "Synthetic zone 9",
+            "expected": "Synthetic zone 9"
+          },
+          {
+            "name": "normalized repeat held through final millisecond",
+            "pass": true,
+            "actual": 100,
+            "expected": 100
+          },
+          {
+            "name": "fixed 30 min window does not slide after repeats",
+            "pass": true,
+            "actual": "Weather-Threat Convergence",
+            "expected": "Weather-Threat Convergence"
+          },
+          {
+            "name": "OS constructor failure reports an attempted but failed banner",
+            "pass": true,
+            "actual": [
+              "banner",
+              false
+            ],
+            "expected": [
+              "banner",
+              false
+            ]
+          },
+          {
+            "name": "direct producer created no false inbox records",
+            "pass": true,
+            "actual": 0,
+            "expected": 0
+          },
+          {
+            "name": "store-admitted derived stays visible at original severity",
+            "pass": true,
+            "actual": "critical",
+            "expected": "critical"
+          },
+          {
+            "name": "derived store writes do not flash, sound or arm reminder",
+            "pass": true,
+            "actual": [
+              false,
+              false,
+              0,
+              0
+            ],
+            "expected": [
+              false,
+              false,
+              0,
+              0
+            ]
+          },
+          {
+            "name": "mixed batch provides a stronger derived candidate",
+            "pass": true,
+            "actual": true,
+            "expected": true
+          },
+          {
+            "name": "official panel still flashes in mixed batch",
+            "pass": true,
+            "actual": true,
+            "expected": true
+          },
+          {
+            "name": "official warning still arms exactly one reminder",
+            "pass": true,
+            "actual": 1,
+            "expected": 1
+          },
+          {
+            "name": "five-minute callback reacts for unacknowledged official warning",
+            "pass": true,
+            "actual": [
+              true,
+              true
+            ],
+            "expected": [
+              true,
+              true
+            ]
+          },
+          {
+            "name": "no real permissions or network calls",
+            "pass": true,
+            "actual": [
+              0,
+              0
+            ],
+            "expected": [
+              0,
+              0
+            ]
+          }
+        ],
+        "engine": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/147.0.7727.15 Safari/537.36"
+      },
+      "native": {
+        "passed": 33,
+        "failed": 0,
+        "metrics": {
+          "ghost": null,
+          "reasons": {
+            "derived-cooldown": 1,
+            "derived-duplicate-title": 100,
+            "domain-disabled": 1,
+            "domain-quiet-hours": 1,
+            "ghost-mode": 1,
+            "in-app-only": 1,
+            "master-mute": 1,
+            "permission-unavailable": 2
+          },
+          "sourceCounts": {
+            "direct": 100,
+            "fixtureTransportCalls": 9,
+            "stored": 3
+          }
+        },
+        "checks": [
+          {
+            "actual": 0,
+            "expected": 0,
+            "name": "restored Ghost holds a real derived candidate",
+            "pass": true
+          },
+          {
+            "actual": 1,
+            "expected": 1,
+            "name": "Ghost is accounted as sole reason",
+            "pass": true
+          },
+          {
+            "actual": [
+              true,
+              "Derived alerts delivery channel"
+            ],
+            "expected": [
+              true,
+              "Derived alerts delivery channel"
+            ],
+            "name": "settings show a separately labelled enabled Derived group",
+            "pass": true
+          },
+          {
+            "actual": [
+              "high",
+              "both",
+              true
+            ],
+            "expected": [
+              "high",
+              "both",
+              true
+            ],
+            "name": "fresh operator policy is high, both channels, quiet enabled",
+            "pass": true
+          },
+          {
+            "actual": 1,
+            "expected": 1,
+            "name": "actual settings control mutes a derived candidate",
+            "pass": true
+          },
+          {
+            "actual": true,
+            "expected": true,
+            "name": "derived setting toggles independently of Cyber",
+            "pass": true
+          },
+          {
+            "actual": 1,
+            "expected": 1,
+            "name": "critical derived obeys shared overnight-capable quiet window",
+            "pass": true
+          },
+          {
+            "actual": [
+              1,
+              true
+            ],
+            "expected": [
+              1,
+              true
+            ],
+            "name": "quiet critical NWS still presents sticky warning",
+            "pass": true
+          },
+          {
+            "actual": 1,
+            "expected": 1,
+            "name": "critical derived honors master mute",
+            "pass": true
+          },
+          {
+            "actual": 1,
+            "expected": 1,
+            "name": "in-app-only suppresses outward transport",
+            "pass": true
+          },
+          {
+            "actual": [
+              0,
+              1
+            ],
+            "expected": [
+              0,
+              1
+            ],
+            "name": "permission transitions trigger no prompt and replay",
+            "pass": true
+          },
+          {
+            "actual": 2,
+            "expected": 2,
+            "name": "both unavailable permission attempts are reported",
+            "pass": true
+          },
+          {
+            "actual": 1,
+            "expected": 1,
+            "name": "100 distinct convergence locations produce one banner",
+            "pass": true
+          },
+          {
+            "actual": 99,
+            "expected": 99,
+            "name": "99 candidates have exact duplicate-title reason",
+            "pass": true
+          },
+          {
+            "actual": [
+              true,
+              false
+            ],
+            "expected": [
+              true,
+              false
+            ],
+            "name": "banner options are silent and nonsticky",
+            "pass": true
+          },
+          {
+            "actual": true,
+            "expected": true,
+            "name": "opaque tag excludes input text, source ids and coordinates",
+            "pass": true
+          },
+          {
+            "actual": 100,
+            "expected": 100,
+            "name": "100 unique incoming locations retain separate trace identities",
+            "pass": true
+          },
+          {
+            "actual": 100,
+            "expected": 100,
+            "name": "inferred critical severity retained without safety-critical attribution",
+            "pass": true
+          },
+          {
+            "actual": 1,
+            "expected": 1,
+            "name": "one trace has successful banner delivery",
+            "pass": true
+          },
+          {
+            "actual": "Authoritative during burst",
+            "expected": "Authoritative during burst",
+            "name": "critical official candidate bypasses active derived pacing",
+            "pass": true
+          },
+          {
+            "actual": 1,
+            "expected": 1,
+            "name": "new title held before 2 minutes",
+            "pass": true
+          },
+          {
+            "actual": "Synthetic zone 9",
+            "expected": "Synthetic zone 9",
+            "name": "different title admitted at 2 min",
+            "pass": true
+          },
+          {
+            "actual": 100,
+            "expected": 100,
+            "name": "normalized repeat held through final millisecond",
+            "pass": true
+          },
+          {
+            "actual": "Weather-Threat Convergence",
+            "expected": "Weather-Threat Convergence",
+            "name": "fixed 30 min window does not slide after repeats",
+            "pass": true
+          },
+          {
+            "actual": [
+              "banner",
+              false
+            ],
+            "expected": [
+              "banner",
+              false
+            ],
+            "name": "OS constructor failure reports an attempted but failed banner",
+            "pass": true
+          },
+          {
+            "actual": 0,
+            "expected": 0,
+            "name": "direct producer created no false inbox records",
+            "pass": true
+          },
+          {
+            "actual": "critical",
+            "expected": "critical",
+            "name": "store-admitted derived stays visible at original severity",
+            "pass": true
+          },
+          {
+            "actual": [
+              false,
+              false,
+              0,
+              0
+            ],
+            "expected": [
+              false,
+              false,
+              0,
+              0
+            ],
+            "name": "derived store writes do not flash, sound or arm reminder",
+            "pass": true
+          },
+          {
+            "actual": true,
+            "expected": true,
+            "name": "mixed batch provides a stronger derived candidate",
+            "pass": true
+          },
+          {
+            "actual": true,
+            "expected": true,
+            "name": "official panel still flashes in mixed batch",
+            "pass": true
+          },
+          {
+            "actual": 1,
+            "expected": 1,
+            "name": "official warning still arms exactly one reminder",
+            "pass": true
+          },
+          {
+            "actual": [
+              true,
+              true
+            ],
+            "expected": [
+              true,
+              true
+            ],
+            "name": "five-minute callback reacts for unacknowledged official warning",
+            "pass": true
+          },
+          {
+            "actual": [
+              0,
+              0
+            ],
+            "expected": [
+              0,
+              0
+            ],
+            "name": "no real permissions or network calls",
+            "pass": true
+          }
+        ],
+        "engine": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+        "hostSha256": "44bd3e41c8d8b39031b6857d7d33aa63215130570d792573c548d402a781c96d",
+        "dataStore": "nonpersistent WKWebView",
+        "productionCspMatched": true,
+        "hostExit": 0
+      }
+    },
+    "combined": {
+      "web": {
+        "passed": 36,
+        "failed": 0,
+        "metrics": {
+          "sourceCounts": {
+            "direct": 100,
+            "fixtureTransportCalls": 9,
+            "stored": 3
+          },
+          "reasons": {
+            "ghost-mode": 1,
+            "domain-disabled": 1,
+            "domain-quiet-hours": 1,
+            "master-mute": 1,
+            "in-app-only": 1,
+            "permission-unavailable": 2,
+            "derived-duplicate-title": 100,
+            "derived-cooldown": 1
+          },
+          "ghost": {
+            "muted": 1,
+            "critical": 1
+          }
+        },
+        "checks": [
+          {
+            "name": "restored Ghost holds a real derived candidate",
+            "pass": true,
+            "actual": 0,
+            "expected": 0
+          },
+          {
+            "name": "Ghost is accounted as sole reason",
+            "pass": true,
+            "actual": 1,
+            "expected": 1
+          },
+          {
+            "name": "restored Ghost session counts exactly one held candidate",
+            "pass": true,
+            "actual": 1,
+            "expected": 1
+          },
+          {
+            "name": "settings show a separately labelled enabled Derived group",
+            "pass": true,
+            "actual": [
+              true,
+              "Derived alerts delivery channel"
+            ],
+            "expected": [
+              true,
+              "Derived alerts delivery channel"
+            ]
+          },
+          {
+            "name": "fresh operator policy is high, both channels, quiet enabled",
+            "pass": true,
+            "actual": [
+              "high",
+              "both",
+              true
+            ],
+            "expected": [
+              "high",
+              "both",
+              true
+            ]
+          },
+          {
+            "name": "actual settings control mutes a derived candidate",
+            "pass": true,
+            "actual": 1,
+            "expected": 1
+          },
+          {
+            "name": "derived setting toggles independently of Cyber",
+            "pass": true,
+            "actual": true,
+            "expected": true
+          },
+          {
+            "name": "critical derived obeys shared overnight-capable quiet window",
+            "pass": true,
+            "actual": 1,
+            "expected": 1
+          },
+          {
+            "name": "quiet critical NWS still presents sticky warning",
+            "pass": true,
+            "actual": [
+              1,
+              true
+            ],
+            "expected": [
+              1,
+              true
+            ]
+          },
+          {
+            "name": "critical derived honors master mute",
+            "pass": true,
+            "actual": 1,
+            "expected": 1
+          },
+          {
+            "name": "in-app-only suppresses outward transport",
+            "pass": true,
+            "actual": 1,
+            "expected": 1
+          },
+          {
+            "name": "permission transitions trigger no prompt and replay",
+            "pass": true,
+            "actual": [
+              0,
+              1
+            ],
+            "expected": [
+              0,
+              1
+            ]
+          },
+          {
+            "name": "both unavailable permission attempts are reported",
+            "pass": true,
+            "actual": 2,
+            "expected": 2
+          },
+          {
+            "name": "100 distinct convergence locations produce one banner",
+            "pass": true,
+            "actual": 1,
+            "expected": 1
+          },
+          {
+            "name": "99 candidates have exact duplicate-title reason",
+            "pass": true,
+            "actual": 99,
+            "expected": 99
+          },
+          {
+            "name": "banner options are silent and nonsticky",
+            "pass": true,
+            "actual": [
+              true,
+              false
+            ],
+            "expected": [
+              true,
+              false
+            ]
+          },
+          {
+            "name": "opaque tag excludes input text, source ids and coordinates",
+            "pass": true,
+            "actual": true,
+            "expected": true
+          },
+          {
+            "name": "100 unique incoming locations retain separate trace identities",
+            "pass": true,
+            "actual": 100,
+            "expected": 100
+          },
+          {
+            "name": "inferred critical severity retained without safety-critical attribution",
+            "pass": true,
+            "actual": 100,
+            "expected": 100
+          },
+          {
+            "name": "one trace has successful banner delivery",
+            "pass": true,
+            "actual": 1,
+            "expected": 1
+          },
+          {
+            "name": "critical official candidate bypasses active derived pacing",
+            "pass": true,
+            "actual": "Authoritative during burst",
+            "expected": "Authoritative during burst"
+          },
+          {
+            "name": "new title held before 2 minutes",
+            "pass": true,
+            "actual": 1,
+            "expected": 1
+          },
+          {
+            "name": "different title admitted at 2 min",
+            "pass": true,
+            "actual": "Synthetic zone 9",
+            "expected": "Synthetic zone 9"
+          },
+          {
+            "name": "normalized repeat held through final millisecond",
+            "pass": true,
+            "actual": 100,
+            "expected": 100
+          },
+          {
+            "name": "fixed 30 min window does not slide after repeats",
+            "pass": true,
+            "actual": "Weather-Threat Convergence",
+            "expected": "Weather-Threat Convergence"
+          },
+          {
+            "name": "OS constructor failure reports an attempted but failed banner",
+            "pass": true,
+            "actual": [
+              "banner",
+              false
+            ],
+            "expected": [
+              "banner",
+              false
+            ]
+          },
+          {
+            "name": "direct producer created no false inbox records",
+            "pass": true,
+            "actual": 0,
+            "expected": 0
+          },
+          {
+            "name": "store-admitted derived stays visible at original severity",
+            "pass": true,
+            "actual": "critical",
+            "expected": "critical"
+          },
+          {
+            "name": "derived store writes do not flash, sound or arm reminder",
+            "pass": true,
+            "actual": [
+              false,
+              false,
+              0,
+              0
+            ],
+            "expected": [
+              false,
+              false,
+              0,
+              0
+            ]
+          },
+          {
+            "name": "mixed batch provides a stronger derived candidate",
+            "pass": true,
+            "actual": true,
+            "expected": true
+          },
+          {
+            "name": "official panel still flashes in mixed batch",
+            "pass": true,
+            "actual": true,
+            "expected": true
+          },
+          {
+            "name": "official warning still arms exactly one reminder",
+            "pass": true,
+            "actual": 1,
+            "expected": 1
+          },
+          {
+            "name": "five-minute callback reacts for unacknowledged official warning",
+            "pass": true,
+            "actual": [
+              true,
+              true
+            ],
+            "expected": [
+              true,
+              true
+            ]
+          },
+          {
+            "name": "verified empty national snapshot retires the existing warning",
+            "pass": true,
+            "actual": [
+              "applied",
+              false
+            ],
+            "expected": [
+              "applied",
+              false
+            ]
+          },
+          {
+            "name": "retired NWS is retained as history and cannot re-fire a pending reminder",
+            "pass": true,
+            "actual": [
+              true,
+              false,
+              false,
+              0
+            ],
+            "expected": [
+              true,
+              false,
+              false,
+              0
+            ]
+          },
+          {
+            "name": "no real permissions or network calls",
+            "pass": true,
+            "actual": [
+              0,
+              0
+            ],
+            "expected": [
+              0,
+              0
+            ]
+          }
+        ],
+        "engine": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/147.0.7727.15 Safari/537.36"
+      },
+      "native": {
+        "passed": 36,
+        "failed": 0,
+        "metrics": {
+          "ghost": {
+            "critical": 1,
+            "muted": 1
+          },
+          "reasons": {
+            "derived-cooldown": 1,
+            "derived-duplicate-title": 100,
+            "domain-disabled": 1,
+            "domain-quiet-hours": 1,
+            "ghost-mode": 1,
+            "in-app-only": 1,
+            "master-mute": 1,
+            "permission-unavailable": 2
+          },
+          "sourceCounts": {
+            "direct": 100,
+            "fixtureTransportCalls": 9,
+            "stored": 3
+          }
+        },
+        "checks": [
+          {
+            "actual": 0,
+            "expected": 0,
+            "name": "restored Ghost holds a real derived candidate",
+            "pass": true
+          },
+          {
+            "actual": 1,
+            "expected": 1,
+            "name": "Ghost is accounted as sole reason",
+            "pass": true
+          },
+          {
+            "actual": 1,
+            "expected": 1,
+            "name": "restored Ghost session counts exactly one held candidate",
+            "pass": true
+          },
+          {
+            "actual": [
+              true,
+              "Derived alerts delivery channel"
+            ],
+            "expected": [
+              true,
+              "Derived alerts delivery channel"
+            ],
+            "name": "settings show a separately labelled enabled Derived group",
+            "pass": true
+          },
+          {
+            "actual": [
+              "high",
+              "both",
+              true
+            ],
+            "expected": [
+              "high",
+              "both",
+              true
+            ],
+            "name": "fresh operator policy is high, both channels, quiet enabled",
+            "pass": true
+          },
+          {
+            "actual": 1,
+            "expected": 1,
+            "name": "actual settings control mutes a derived candidate",
+            "pass": true
+          },
+          {
+            "actual": true,
+            "expected": true,
+            "name": "derived setting toggles independently of Cyber",
+            "pass": true
+          },
+          {
+            "actual": 1,
+            "expected": 1,
+            "name": "critical derived obeys shared overnight-capable quiet window",
+            "pass": true
+          },
+          {
+            "actual": [
+              1,
+              true
+            ],
+            "expected": [
+              1,
+              true
+            ],
+            "name": "quiet critical NWS still presents sticky warning",
+            "pass": true
+          },
+          {
+            "actual": 1,
+            "expected": 1,
+            "name": "critical derived honors master mute",
+            "pass": true
+          },
+          {
+            "actual": 1,
+            "expected": 1,
+            "name": "in-app-only suppresses outward transport",
+            "pass": true
+          },
+          {
+            "actual": [
+              0,
+              1
+            ],
+            "expected": [
+              0,
+              1
+            ],
+            "name": "permission transitions trigger no prompt and replay",
+            "pass": true
+          },
+          {
+            "actual": 2,
+            "expected": 2,
+            "name": "both unavailable permission attempts are reported",
+            "pass": true
+          },
+          {
+            "actual": 1,
+            "expected": 1,
+            "name": "100 distinct convergence locations produce one banner",
+            "pass": true
+          },
+          {
+            "actual": 99,
+            "expected": 99,
+            "name": "99 candidates have exact duplicate-title reason",
+            "pass": true
+          },
+          {
+            "actual": [
+              true,
+              false
+            ],
+            "expected": [
+              true,
+              false
+            ],
+            "name": "banner options are silent and nonsticky",
+            "pass": true
+          },
+          {
+            "actual": true,
+            "expected": true,
+            "name": "opaque tag excludes input text, source ids and coordinates",
+            "pass": true
+          },
+          {
+            "actual": 100,
+            "expected": 100,
+            "name": "100 unique incoming locations retain separate trace identities",
+            "pass": true
+          },
+          {
+            "actual": 100,
+            "expected": 100,
+            "name": "inferred critical severity retained without safety-critical attribution",
+            "pass": true
+          },
+          {
+            "actual": 1,
+            "expected": 1,
+            "name": "one trace has successful banner delivery",
+            "pass": true
+          },
+          {
+            "actual": "Authoritative during burst",
+            "expected": "Authoritative during burst",
+            "name": "critical official candidate bypasses active derived pacing",
+            "pass": true
+          },
+          {
+            "actual": 1,
+            "expected": 1,
+            "name": "new title held before 2 minutes",
+            "pass": true
+          },
+          {
+            "actual": "Synthetic zone 9",
+            "expected": "Synthetic zone 9",
+            "name": "different title admitted at 2 min",
+            "pass": true
+          },
+          {
+            "actual": 100,
+            "expected": 100,
+            "name": "normalized repeat held through final millisecond",
+            "pass": true
+          },
+          {
+            "actual": "Weather-Threat Convergence",
+            "expected": "Weather-Threat Convergence",
+            "name": "fixed 30 min window does not slide after repeats",
+            "pass": true
+          },
+          {
+            "actual": [
+              "banner",
+              false
+            ],
+            "expected": [
+              "banner",
+              false
+            ],
+            "name": "OS constructor failure reports an attempted but failed banner",
+            "pass": true
+          },
+          {
+            "actual": 0,
+            "expected": 0,
+            "name": "direct producer created no false inbox records",
+            "pass": true
+          },
+          {
+            "actual": "critical",
+            "expected": "critical",
+            "name": "store-admitted derived stays visible at original severity",
+            "pass": true
+          },
+          {
+            "actual": [
+              false,
+              false,
+              0,
+              0
+            ],
+            "expected": [
+              false,
+              false,
+              0,
+              0
+            ],
+            "name": "derived store writes do not flash, sound or arm reminder",
+            "pass": true
+          },
+          {
+            "actual": true,
+            "expected": true,
+            "name": "mixed batch provides a stronger derived candidate",
+            "pass": true
+          },
+          {
+            "actual": true,
+            "expected": true,
+            "name": "official panel still flashes in mixed batch",
+            "pass": true
+          },
+          {
+            "actual": 1,
+            "expected": 1,
+            "name": "official warning still arms exactly one reminder",
+            "pass": true
+          },
+          {
+            "actual": [
+              true,
+              true
+            ],
+            "expected": [
+              true,
+              true
+            ],
+            "name": "five-minute callback reacts for unacknowledged official warning",
+            "pass": true
+          },
+          {
+            "actual": [
+              "applied",
+              false
+            ],
+            "expected": [
+              "applied",
+              false
+            ],
+            "name": "verified empty national snapshot retires the existing warning",
+            "pass": true
+          },
+          {
+            "actual": [
+              true,
+              false,
+              false,
+              0
+            ],
+            "expected": [
+              true,
+              false,
+              false,
+              0
+            ],
+            "name": "retired NWS is retained as history and cannot re-fire a pending reminder",
+            "pass": true
+          },
+          {
+            "actual": [
+              0,
+              0
+            ],
+            "expected": [
+              0,
+              0
+            ],
+            "name": "no real permissions or network calls",
+            "pass": true
+          }
+        ],
+        "engine": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+        "hostSha256": "b9b4dbf11ce4e04f6e726272bbffcc39da082e05583549739389d06cd023de15",
+        "dataStore": "nonpersistent WKWebView",
+        "productionCspMatched": true,
+        "hostExit": 0
+      }
+    }
+  },
+  "rawReceiptSha256": {
+    "final-baseline-web.json": "6b129924b003e7a32f83e56af2b1e4e96ef1637d32018cff3c9b59d3a922457a",
+    "final-baseline-native.json": "09a90cf7898a7fec5677a10c694cb1e0a0c3a6c5fe029b48137190b3789aedc2",
+    "final-baseline-inputs.json": "cab89ae0b2ee3f36bad26923f66bccaba79c60711625774872e8d8bdceb86bf8",
+    "reachable-web.json": "0c05fa0bb724c63c22f09cc3eaeec3f3b08f8444fd84a4935eae2e30884afb63",
+    "reachable-native.json": "d98b7981438182e4020c98036a980680a808530d1b2950a0d4eb222d4c9278a1",
+    "reachable-inputs.json": "06b7445d1ee094d64b3ff99da23efde6f1a144e8fb8763a2f4b98f1c3269f5a0",
+    "combined-web.json": "44b1b8f82e05fd52ad95d65d2a5f5c50a656ca9b4bed28e1c52a7c83371788f0",
+    "combined-native.json": "86d281d56c5935668d09cdd7afdd2957afaa3c3f443763c901b08183f397284c",
+    "combined-inputs.json": "cc80e9f169eea3eed9e27499a7e1bb3a646b82a3d1f2a6e816862aa2146c6ccc"
+  },
+  "fixtureSha256": {
+    "bundle.mjs": "6630998e3bcd0ba7902e286aaf5778cda098b1875b12238bcd81f11fa02817f4",
+    "certificate.py": "eef78662ded27d7a9109c5387811b877c6078ed132fe5df37f0c185acb847ce0",
+    "chromium.mjs": "1b8aaa9640f030d5b73baaacb252d7b0999e6c58f68cf7a6cba3f7f19348def2",
+    "fixed-entry.ts": "9fb0f57b25b03470f93e0f9ab73a632834d6e771496f5613989d7614ad44c122",
+    "fixture-isolation.py": "2896a271aab9ce52a34254ba073a8a32531d8bf6f52f1716795e02735fcd19ae",
+    "guard.js": "818513162d895e9f24c71cd58cd929200abe00a571791805a06ff3a20090ebdb",
+    "index.html": "54856da54f1bb2ed6b3cb2428d967dd0c80c90829cf5e67c5fb6e9b184abb00a",
+    "native.py": "7893eb737c199115639987c51155e081d914fed7ff0034908a5b3202824b8228",
+    "resolve.py": "3371642cbbba3f80e670eb006cccfe5b2b139c89eb44f3da9d54455d2f6ec120"
+  },
+  "combined": {
+    "UX047": "2416345f69c0f42eedc78d309744666a331a9ccf",
+    "UX050": "55dfd847f104df125c629a12b5301640e379a239",
+    "UX052": "92259e7f2f415c551ffb05751c934d47c23ce871",
+    "heldBranchesMergeClean": true,
+    "heldBranchesCombinedTree": "7e25a3e7459a73385889bf5a7eb09b78e3de53c3",
+    "UX052ConflictedFiles": [
+      "src/services/alert-reactions.ts",
+      "src/services/notification-dispatcher.ts"
+    ],
+    "unresolvedMergeTree": "0547ed05a34277b180a669ae909237a1fd1c1b2e",
+    "reconciledTree": "627859649ee53c0e62344062af45f6bd2f39ef6d",
+    "resolutionPatchSha256": "b817dff77144a56f68c72b879d192e455c6a5ecbaa5f78ae0c8807a0a809bdaa",
+    "preconditionFiles": [
+      "src/services/__tests__/derived-notification-policy.test.mts",
+      "src/services/__tests__/ghost-notification-policy.test.mts"
+    ],
+    "targetedCommand": "node_modules/.bin/tsx --test src/services/__tests__/{derived-alert-reactions,derived-notification-policy,ghost-mode-state,ghost-notification-policy,notification-dispatcher-trace,nws-alert-lifecycle}.test.mts tests/ux047/operational-consumers.test.mts",
+    "originalFixtures": [
+      "# tests 91",
+      "# pass 89",
+      "# fail 2",
+      "# skipped 0"
+    ],
+    "isolatedFixtures": [
+      "# tests 91",
+      "# pass 91",
+      "# fail 0",
+      "# skipped 0"
+    ],
+    "typecheck": {
+      "command": "npm run typecheck:all",
+      "output": "> crystal-ball@2.25.147 typecheck:all\n> tsc --noEmit && tsc --noEmit -p tsconfig.api.json",
+      "exit": 0
+    },
+    "nativeHost": "Separate disposable Tauri fixture rebuilt offline with the exact combined production CSP including the expanded local port range. Signed ad hoc and verified strictly. The only native QA command saves the receipt."
+  },
+  "delivery": "Held draft pull requests remain separate. Reconcile on the future integration head and rerun before delivery."
+}

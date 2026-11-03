@@ -52,7 +52,14 @@ test('AIS uses the newest receipt per MMSI and expires individual positions on t
 });
 
 test('AIS envelope generation, empty samples and invalid timestamps never certify coverage', () => {
-  for (const body of [{ asOf: new Date(now).toISOString(), sampleSize: 10, vessels: [] }, { sampleSize: 0, vessels: [ais] }, { sampleSize: 2, vessels: [{ ...ais, observedAt: now - 15 * minute }, { ...ais, observedAt: null }] }, { sampleSize: 1, vessels: 'bad' }, null]) {
+  const asOf = new Date(now).toISOString();
+  for (const body of [
+    { asOf, sampleSize: 10, vessels: [] },
+    { asOf, sampleSize: 0, vessels: [ais] },
+    { asOf, sampleSize: 2, vessels: [{ ...ais, observedAt: now - 15 * minute }, { ...ais, observedAt: null }] },
+    { asOf, sampleSize: 1, vessels: 'bad' },
+    null,
+  ]) {
     assert.equal(aisReceipt(body, now), null);
   }
 });

@@ -1051,7 +1051,7 @@ Evidence: #1740 — [live contract, regression and mutation results](validation/
 
 ### UX-049 — Distinguish quiet sensors from missing observations
 
-Status: IN PROGRESS — HIGH ASSURANCE
+Status: DONE — HIGH ASSURANCE
 Priority: S
 Source findings: PR1731 H21.
 
@@ -1060,6 +1060,8 @@ Claim: #1845 (`codex/ux049-sensor-coverage`).
 [Approved coverage design and reproduced failure](plans/2026-11-02-ux049-threat-sensor-coverage.md). Bradley approved the four-source implementation on November 2, 2026.
 
 Acceptance: Carry real observation/fetch age and coverage into threat summaries. A failed or stale domain cannot become a freshly checked quiet sensor because aggregation ran. Check all-domain reassurance and partial coverage.
+
+Evidence: #1845 — [verification, source coverage and live probe limits](validation/UX-049-THREAT-COVERAGE.md). Local implementation and validation cover the approved four sources. Final review and required CI govern delivery.
 
 ### UX-050 — Make Ghost Mode suppression unmistakable
 
@@ -1265,7 +1267,7 @@ Update the row in the same PR that does the work.
 | UX-046 | Preserve alert priorities at capacity | DONE — HIGH ASSURANCE | #1734 |
 | UX-047 | Keep national weather warnings current | NOT STARTED — HIGH ASSURANCE | — |
 | UX-048 | Restore verified GDACS ingestion | DONE — HIGH ASSURANCE | #1740 — approved five-feed repair; [validation](validation/UX-048-GDACS.md) and [alert burst performance evidence](validation/UX-048-PERFORMANCE.md); final review/CI govern delivery |
-| UX-049 | Distinguish quiet sensors from missing observations | IN PROGRESS — HIGH ASSURANCE | #1845 — [Approved design](plans/2026-11-02-ux049-threat-sensor-coverage.md) |
+| UX-049 | Distinguish quiet sensors from missing observations | DONE — HIGH ASSURANCE | #1845 — [Evidence and verified scope](validation/UX-049-THREAT-COVERAGE.md) |
 | UX-050 | Make Ghost Mode suppression unmistakable | NOT STARTED — HIGH ASSURANCE | — |
 | UX-051 | Align RSS request budgets across boundaries | NOT STARTED — HIGH ASSURANCE | — |
 | UX-052 | Restrain derived alert interruptions | NOT STARTED — HIGH ASSURANCE | — |

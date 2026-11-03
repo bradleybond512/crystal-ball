@@ -1095,8 +1095,9 @@ Acceptance: Bound total sidecar redirect/request time below the renderer budget 
 
 ### UX-052 — Restrain derived alert interruptions
 
-Status: NOT STARTED — HIGH ASSURANCE
+Status: IN PROGRESS — HIGH ASSURANCE
 Priority: S
+Claim: [Draft PR #1847](https://github.com/bradleybond512/crystal-ball/pull/1847)
 Source findings: PR1731 H15 remainder.
 
 Acceptance: Separate derived-notification policy from authoritative warnings; define domain, cooldown, quiet-hour and burst accounting rules. Coordinate with ACC-509; do not change inference severity to mask delivery defects.
@@ -1285,7 +1286,7 @@ Update the row in the same PR that does the work.
 | UX-049 | Distinguish quiet sensors from missing observations | NOT STARTED — HIGH ASSURANCE | — |
 | UX-050 | Make Ghost Mode suppression unmistakable | MONITOR — HIGH ASSURANCE | #1846 candidate evidence — [Verification and coverage](validation/UX-050-GHOST-MODE.md). Final integrated packaged acceptance remains open; installation/release/deployment paused. |
 | UX-051 | Align RSS request budgets across boundaries | NOT STARTED — HIGH ASSURANCE | — |
-| UX-052 | Restrain derived alert interruptions | NOT STARTED — HIGH ASSURANCE | — |
+| UX-052 | Restrain derived alert interruptions | IN PROGRESS — HIGH ASSURANCE | [Draft #1847](https://github.com/bradleybond512/crystal-ball/pull/1847) |
 | UX-053 | Finish boot without awaiting all data sources | NOT STARTED — HIGH ASSURANCE | — |
 | UX-054 | Cover subproject dependencies in security checks | DONE — HIGH ASSURANCE | #1849; [audit coverage and evidence](validation/UX-054-DEPENDENCY-AUDIT.md). Six npm locks covered; high-severity marketing fixes verified. External MCP pins remain separate. |
 | UX-055 | Surface stale credential validation honestly | NOT STARTED — HIGH ASSURANCE | — |

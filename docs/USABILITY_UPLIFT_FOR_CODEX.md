@@ -1106,8 +1106,9 @@ Acceptance: Separate derived-notification policy from authoritative warnings; de
 
 ### UX-053 — Finish boot without awaiting all data sources
 
-Status: NOT STARTED — HIGH ASSURANCE
+Status: IN PROGRESS — HIGH ASSURANCE
 Priority: S
+Claim: [Draft #1848](https://github.com/bradleybond512/crystal-ball/pull/1848)
 Source findings: PR1731 P0.
 
 Acceptance: Define usable first-screen readiness separately from background acquisition; preserve initialization dependencies and failure visibility. Measure cold/warm boot and warning readiness, not only completion of one promise.
@@ -1289,7 +1290,7 @@ Update the row in the same PR that does the work.
 | UX-050 | Make Ghost Mode suppression unmistakable | MONITOR — HIGH ASSURANCE | #1846 candidate evidence — [Verification and coverage](validation/UX-050-GHOST-MODE.md). Final integrated packaged acceptance remains open; installation/release/deployment paused. |
 | UX-051 | Align RSS request budgets across boundaries | NOT STARTED — HIGH ASSURANCE | — |
 | UX-052 | Restrain derived alert interruptions | MONITOR — HIGH ASSURANCE | #1847 candidate evidence; [validation and integration evidence](validation/UX-052-DERIVED-ALERTS.md). Final integrated packaged acceptance open; installation/release/deployment paused. |
-| UX-053 | Finish boot without awaiting all data sources | NOT STARTED — HIGH ASSURANCE | — |
+| UX-053 | Finish boot without awaiting all data sources | IN PROGRESS — HIGH ASSURANCE | [Draft #1848](https://github.com/bradleybond512/crystal-ball/pull/1848) |
 | UX-054 | Cover subproject dependencies in security checks | DONE — HIGH ASSURANCE | #1849; [audit coverage and evidence](validation/UX-054-DEPENDENCY-AUDIT.md). Six npm locks covered; high-severity marketing fixes verified. External MCP pins remain separate. |
 | UX-055 | Surface stale credential validation honestly | NOT STARTED — HIGH ASSURANCE | — |
 | UX-056 | Bound retained storage without losing user evidence | NOT STARTED — HIGH ASSURANCE | — |

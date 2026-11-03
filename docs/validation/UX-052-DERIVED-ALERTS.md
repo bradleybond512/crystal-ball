@@ -47,3 +47,7 @@ The repository gate ran the focused suites, lint, type checks, secret scan, road
 Agentic validation gate passed.
 Tests run: test:ux052 test:acc509 test:notifications test:quiet-hours test:native-notify
 ```
+
+## CI timing controls
+
+The broad suite selection exposed two existing fixed waits in the logistics-panel tests. Under a controlled 110 ms scheduling delay, both unmodified tests failed on canonical main and the UX-052 implementation. The tests now wait for the actual radius selection, queued status and hotel card with the existing bounded DOM helper. All original assertions remain. The corrected Lifelines suite reported 155 pass / 0 fail and 183 pass / 0 fail. Reversing each test-only change under the same delay gave 1 pass / 0 fail → 0 pass / 1 fail → 1 pass / 0 fail. [Applied diffs, scheduling traces and restored file checksums](UX-052-CI-TIMING.json).

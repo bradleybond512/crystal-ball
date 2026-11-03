@@ -123,25 +123,27 @@ async function defaultIsGhostMode(): Promise<boolean> {
   }
 }
 
-async function defaultAlertDBPut(a: UnifiedAlert): Promise<void> {
+async function defaultAlertDBPut(a: UnifiedAlert, signal: AbortSignal): Promise<void> {
   const mod = await import('./alert-store');
-  await mod.alertDB.put(a);
+  if (!signal.aborted) await mod.alertDB.put(a);
 }
 
-async function defaultAlertDBGetAll(opts?: {
+async function defaultAlertDBGetAll(signal: AbortSignal, opts?: {
   since?: number;
 }): Promise<UnifiedAlert[]> {
   const mod = await import('./alert-store');
-  return mod.alertDB.getAll(opts);
+  return signal.aborted ? [] : mod.alertDB.getAll(opts);
 }
 
 async function defaultSendNativeNotification(
   title: string,
   body: string,
   priority: NativePriority,
+  signal: AbortSignal,
 ): Promise<NativeNotifyOutcome> {
   try {
     const mod = await import('./native-notify');
+    if (signal.aborted) return 'unavailable';
     return await mod.notifyNative({ title, body, priority });
   } catch {
     return 'failed';
@@ -170,7 +172,7 @@ function defaultShowToast(title: string): void {
   }
 }
 
-function defaultAddMapMarker(lat: number, lon: number, alertId: string): void {
+function defaultAddMapMarker(lat: number, lon: number, alertId: string, signal: AbortSignal): void {
   void (async () => {
  try {
  const mod = (await import('../components/DeckGLMap')) as Record<
@@ -183,15 +185,16 @@ function defaultAddMapMarker(lat: number, lon: number, alertId: string): void {
  const remove = mod.removeCyberReactorMarker as
  | ((layer: string, id: string) => void)
  | undefined;
- if (typeof add === 'function') {
- add(MARKER_LAYER, lat, lon, alertId);
- setTimeout(() => {
- try {
- remove?.(MARKER_LAYER, alertId);
- } catch {
- // ignore
- }
- }, MARKER_TTL_MS);
+ if (!signal.aborted && typeof add === 'function') {
+   add(MARKER_LAYER, lat, lon, alertId);
+   const cancel = () => clearTimeout(timer);
+   const timer = setTimeout(() => {
+     signal.removeEventListener('abort', cancel);
+     if (!signal.aborted) {
+       try { remove?.(MARKER_LAYER, alertId); } catch { /* map already gone */ }
+     }
+   }, MARKER_TTL_MS);
+   signal.addEventListener('abort', cancel, { once: true });
  }
  } catch {
  // map module not initialized — swallow
@@ -199,12 +202,12 @@ function defaultAddMapMarker(lat: number, lon: number, alertId: string): void {
   })();
 }
 
-function defaultDeps(): RouterDeps {
+function defaultDeps(signal: AbortSignal): RouterDeps {
   return {
- alertDB: { put: defaultAlertDBPut, getAll: defaultAlertDBGetAll },
- sendNativeNotification: defaultSendNativeNotification,
+ alertDB: { put: (alert) => defaultAlertDBPut(alert, signal), getAll: (opts) => defaultAlertDBGetAll(signal, opts) },
+ sendNativeNotification: (title, body, priority) => defaultSendNativeNotification(title, body, priority, signal),
  showToast: defaultShowToast,
- addMapMarker: defaultAddMapMarker,
+ addMapMarker: (lat, lon, id) => defaultAddMapMarker(lat, lon, id, signal),
  isGhostMode: defaultIsGhostMode,
  now: () => Date.now(),
   };
@@ -212,8 +215,14 @@ function defaultDeps(): RouterDeps {
 
 // ── Core delivery ──────────────────────────────────────────────────────
 
-let activeDeps: RouterDeps | null = null;
-let routerStarted = false;
+interface ActiveRouter {
+  controller: AbortController;
+  deps: RouterDeps;
+  users: number;
+  disconnect?: () => void;
+}
+
+let activeRouter: ActiveRouter | null = null;
 
 function alertToUnified(alert: ReactorAlert): UnifiedAlert {
   const { threat, relevance, alertId, createdAt } = alert;
@@ -282,7 +291,7 @@ function safeToast(deps: RouterDeps, alert: ReactorAlert): void {
 type NativeAttempt = 'delivered' | 'not_delivered' | 'skipped';
 
 async function safeNative(
-  deps: RouterDeps,
+  router: ActiveRouter,
   alert: ReactorAlert,
   ghost: boolean,
   nowMs: number,
@@ -305,10 +314,11 @@ async function safeNative(
   }
   let outcome: NativeNotifyOutcome;
   try {
- outcome = await deps.sendNativeNotification(alert.threat.title, alert.threat.body, routerNativePriority(sev));
+ outcome = await router.deps.sendNativeNotification(alert.threat.title, alert.threat.body, routerNativePriority(sev));
   } catch {
  outcome = 'failed';
   }
+  if (router.controller.signal.aborted) return 'skipped';
   // Only a delivered notification counts: it starts the per-severity window
   // and settles the alert. Any other outcome is traced as not delivered and
   // leaves the alert pending for the next reactor ingest (R4-BUG-002).
@@ -345,7 +355,9 @@ function safeMarker(deps: RouterDeps, alert: ReactorAlert, ghost: boolean): void
  * undelivered, so the reactor offers the alert again on its next ingest
  * (R4-BUG-002). The inbox row, toast and marker are one-time.
  */
-async function deliver(alert: ReactorAlert, deps: RouterDeps): Promise<boolean> {
+async function deliver(alert: ReactorAlert, router: ActiveRouter): Promise<boolean> {
+  const { deps, controller: { signal } } = router;
+  if (signal.aborted) return true;
   const nowMs = deps.now();
   prunePendingNative(nowMs);
   const trace = createRouterTrace(alert, nowMs);
@@ -353,18 +365,24 @@ async function deliver(alert: ReactorAlert, deps: RouterDeps): Promise<boolean> 
     suppressRouterTrace(trace, 'below-min-severity');
     return true;
   }
-  if (pendingNative.has(alert.alertId)) return retryNative(alert, deps, nowMs, trace);
-  if (await isDuplicate(alert, deps, nowMs)) {
+  if (pendingNative.has(alert.alertId)) return retryNative(alert, router, nowMs, trace);
+  const duplicate = await isDuplicate(alert, deps, nowMs);
+  if (signal.aborted) return true;
+  if (duplicate) {
     suppressRouterTrace(trace, 'duplicate-within-window');
     return true;
   }
   const ghost = await safeIsGhost(deps);
+  if (signal.aborted) return true;
   await safePut(deps, alertToUnified(alert));
+  if (signal.aborted) return true;
   safeToast(deps, alert);
+  if (signal.aborted) return true;
   dispatchRouterTrace(trace, nowMs);
-  const attempt = await safeNative(deps, alert, ghost, nowMs, trace);
+  const attempt = await safeNative(router, alert, ghost, nowMs, trace);
+  if (signal.aborted) return true;
   safeMarker(deps, alert, ghost);
-  if (attempt !== 'not_delivered') return true;
+  if (signal.aborted || attempt !== 'not_delivered') return true;
   pendingNative.set(alert.alertId, nowMs);
   return false;
 }
@@ -376,14 +394,17 @@ async function deliver(alert: ReactorAlert, deps: RouterDeps): Promise<boolean> 
  */
 async function retryNative(
   alert: ReactorAlert,
-  deps: RouterDeps,
+  router: ActiveRouter,
   nowMs: number,
   trace: RouterTrace | undefined,
 ): Promise<boolean> {
   recordRouterEvent(trace, 'Native retry after an undelivered send; inbox, toast and map are not repeated.');
   dispatchRouterTrace(trace, nowMs);
-  const ghost = await safeIsGhost(deps);
-  if ((await safeNative(deps, alert, ghost, nowMs, trace)) !== 'delivered') return false;
+  const ghost = await safeIsGhost(router.deps);
+  if (router.controller.signal.aborted) return true;
+  const attempt = await safeNative(router, alert, ghost, nowMs, trace);
+  if (router.controller.signal.aborted) return true;
+  if (attempt !== 'delivered') return false;
   pendingNative.delete(alert.alertId);
   return true;
 }
@@ -465,41 +486,33 @@ function recordRouterNativeResult(
   } catch { /* diagnostics must not block delivery */ }
 }
 
-const NOOP = (): void => {
-  // no-op
-};
-
 export function startNotificationRouter(deps?: RouterDeps): () => void {
-  if (routerStarted) return NOOP;
-  routerStarted = true;
-  const resolved = deps ?? defaultDeps();
-  activeDeps = resolved;
-
-  let unsubscribe: () => void = NOOP;
-  void (async () => {
- try {
- const mod = await import('./threat-reactor');
- // deliver() resolves false while a native send is undelivered; the
- // reactor then offers the same alert again on its next ingest.
- unsubscribe = mod.onAlert((alert) => deliver(alert, resolved));
- } catch {
- // threat-reactor not available — router is inert
- }
-  })();
-
+  if (!activeRouter) {
+    const controller = new AbortController();
+    const current: ActiveRouter = { controller, deps: deps ?? defaultDeps(controller.signal), users: 0 };
+    activeRouter = current;
+    void import('./threat-reactor').then((mod) => {
+      if (activeRouter === current) current.disconnect = mod.onAlert((alert) => deliver(alert, current));
+    }).catch(() => { /* threat-reactor unavailable */ });
+  }
+  const router = activeRouter;
+  router.users++;
+  let released = false;
   return () => {
- try {
- unsubscribe();
- } finally {
- if (activeDeps === resolved) activeDeps = null;
- }
+    if (released) return;
+    released = true;
+    if (--router.users === 0 && activeRouter === router) {
+      activeRouter = null;
+      router.controller.abort();
+      router.disconnect?.();
+    }
   };
 }
 
 /** Test hook: deliver an alert directly through the active deps. */
 export async function __deliverForTesting(alert: ReactorAlert): Promise<void> {
-  if (!activeDeps) throw new Error('router not started');
-  await deliver(alert, activeDeps);
+  if (!activeRouter) throw new Error('router not started');
+  await deliver(alert, activeRouter);
 }
 
 /** Test hook: reset module state. */
@@ -508,6 +521,7 @@ export function __resetForTesting(): void {
   pendingNative.clear();
   nextTraceId = 1;
   config = { ...DEFAULT_CONFIG };
-  activeDeps = null;
-  routerStarted = false;
+  activeRouter?.controller.abort();
+  activeRouter?.disconnect?.();
+  activeRouter = null;
 }

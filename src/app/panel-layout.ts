@@ -126,7 +126,6 @@ import {
   wireModeForecastCalibration,
   settleCalibrationBridges,
 } from '@/services/intelligence/calibration-bridge-wiring';
-import { startNotificationRouter } from '@/services/notification-router';
 import { startSilenceDetector } from '@/services/silence-detector';
 import { startSourceFeedback } from '@/services/source-feedback';
 import { startCorrelationFeedback } from '@/services/correlation-feedback';
@@ -1372,7 +1371,6 @@ export class PanelLayoutManager implements AppModule {
  schedule: (cb) => { setTimeout(cb, 0); },
  });
  startEpistemicBridge();
- startNotificationRouter();
  startSilenceDetector();
  startSourceFeedback();
  startCorrelationFeedback();

@@ -14,9 +14,8 @@ import { notifyImessagePausedOnce, recordPausedImessageRelay } from '@/services/
 export class DesktopNotifications implements AppModule {
   private ctx: AppContext;
   private readonly boundHandler: (e: Event) => void;
-  // Remember permission across calls so we don't spam requestPermission().
-  // Possible values per spec: 'default' | 'granted' | 'denied'.
-  private webPermission: NotificationPermission | 'unsupported' = 'default';
+  private workspaceOpen = false;
+  private sourcesReady = false;
 
   constructor(ctx: AppContext) {
  this.ctx = ctx;
@@ -26,41 +25,58 @@ export class DesktopNotifications implements AppModule {
   }
 
   init(): void {
- // Hydrate native iMessage state, then tell the user once if relays are paused (R4-BUG-001).
- if (this.ctx.isDesktopApp) void refreshImessageSettings().then(() => notifyImessagePausedOnce()).catch(() => undefined);
- if (!this.ctx.isDesktopApp && typeof Notification === 'undefined') {
- this.webPermission = 'unsupported';
- }
- if (!this.ctx.isDesktopApp && typeof Notification !== 'undefined') {
- this.webPermission = Notification.permission;
- }
- document.addEventListener('wm:breaking-news', this.boundHandler);
+    document.addEventListener('wm:breaking-news', this.boundHandler);
+  }
+
+  openWorkspace(): void {
+    if (this.workspaceOpen || this.ctx.isDestroyed) return;
+    this.workspaceOpen = true;
+    if (this.sourcesReady) this.hydrateRelay();
+  }
+
+  sourcesSettled(): void {
+    if (this.sourcesReady || this.ctx.isDestroyed) return;
+    this.sourcesReady = true;
+    if (this.workspaceOpen) this.hydrateRelay();
+  }
+
+  private hydrateRelay(): void {
+    if (this.ctx.isDesktopApp) {
+      void refreshImessageSettings().then(() => {
+        if (this.workspaceOpen && !this.ctx.isDestroyed) return notifyImessagePausedOnce();
+      }).catch(() => undefined);
+    }
   }
 
   destroy(): void {
- document.removeEventListener('wm:breaking-news', this.boundHandler);
+    this.workspaceOpen = false;
+    document.removeEventListener('wm:breaking-news', this.boundHandler);
+  }
+
+  private canRoute(): boolean {
+    if (!this.workspaceOpen || this.ctx.isDestroyed || isGhostMode()) return false;
+    if (!this.sourcesReady) {
+      try {
+        const mode = localStorage.getItem('wm-app-mode');
+        if (mode !== null && mode !== 'gods-vision') return false;
+        if (localStorage.getItem('cb:onboarding-complete') !== 'true') return false;
+      } catch { return false; }
+    }
+    const settings = getAlertSettings();
+    return settings.enabled && settings.desktopNotificationsEnabled;
   }
 
   private async onBreakingNews(alert: BreakingAlert): Promise<void> {
- if (isGhostMode()) return;  // Ghost Mode: notifications suppressed
- const settings = getAlertSettings();
- if (!settings.enabled || !settings.desktopNotificationsEnabled) return;
-
- const body = `[${alert.threatLevel.toUpperCase()}] ${alert.headline} — ${alert.source}`;
-
- if (this.ctx.isDesktopApp) {
- const sound = alert.threatLevel === 'critical' ? 'Basso' : 'Ping';
- await notifyNative({
- title: 'Crystal Ball Alert',
- body,
- sound,
- priority: 'high',
- });
- await this.relayToImessage(alert, body);
- return;
- }
-
- await this.showWebNotification(body);
+    if (!this.canRoute()) return;
+    const body = `[${alert.threatLevel.toUpperCase()}] ${alert.headline} — ${alert.source}`;
+    const allowRelay = this.sourcesReady;
+    if (this.ctx.isDesktopApp) {
+      const sound = alert.threatLevel === 'critical' ? 'Basso' : 'Ping';
+      await notifyNative({ title: 'Crystal Ball Alert', body, sound, priority: 'high' });
+      if (allowRelay && this.canRoute()) await this.relayToImessage(alert, body);
+      return;
+    }
+    await this.showWebNotification(body);
   }
 
   /**
@@ -87,26 +103,13 @@ export class DesktopNotifications implements AppModule {
   }
 
   private async showWebNotification(body: string): Promise<void> {
- if (this.webPermission === 'unsupported' || typeof Notification === 'undefined') return;
- // Re-sync with the browser each time so a user who flipped the site
- // lock-icon setting from denied → allowed without us seeing a
- // requestPermission round-trip is picked up automatically.
- if (this.webPermission !== Notification.permission) {
- this.webPermission = Notification.permission;
- }
- if (this.webPermission === 'default') {
- try {
- this.webPermission = await Notification.requestPermission();
- } catch {
- this.webPermission = 'denied';
- }
- }
- if (this.webPermission !== 'granted') return;
- try {
- new Notification('Crystal Ball Alert', { body });
- } catch {
- // Some browsers throw if Notification is called outside a user gesture;
- // fail silent rather than spamming the console on every alert.
- }
+    if (typeof Notification === 'undefined') return;
+    try {
+      let permission = Notification.permission;
+      if (permission === 'default' && this.sourcesReady) permission = await Notification.requestPermission();
+      if (permission === 'granted' && this.canRoute()) new Notification('Crystal Ball Alert', { body });
+    } catch {
+      // Some browsers require a user gesture.
+    }
   }
 }

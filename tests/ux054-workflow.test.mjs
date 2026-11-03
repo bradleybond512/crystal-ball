@@ -96,19 +96,24 @@ test('only the rollout base and matching bootstrap bytes can run; missing or mal
   const bootstrap = h.run({ PR_BASE_SHA: h.introduction });
   assert.equal(bootstrap.status, 0, bootstrap.stderr);
   assert.match(bootstrap.stdout, /candidate candidate contents clean/);
+  const topicPush = h.run({ GITHUB_EVENT_NAME: 'push', GITHUB_REF: 'refs/heads/topic' });
+  assert.notEqual(topicPush.status, 0, 'a topic push must not execute its valid checker');
+  assert.doesNotMatch(topicPush.stdout, /candidate contents clean/);
+
   rmSync(h.path); const missing = h.commit();
-  symlinkSync('marker', h.path); const symlink = h.commit();
+  const symlinkBody = 'console.log("SYMLINK_RAN")';
+  symlinkSync(symlinkBody, h.path); const symlink = h.commit();
   for (const env of [
-    { PR_BASE_SHA: h.introduction, GITHUB_SHA: symlink, ROLLOUT_SHA256: sha256('marker') },
+    { PR_BASE_SHA: h.introduction, GITHUB_SHA: symlink, ROLLOUT_SHA256: sha256(symlinkBody) },
     { PR_BASE_SHA: h.base, GITHUB_SHA: h.head },
     { PR_BASE_SHA: missing }, { PR_BASE_SHA: symlink }, { PR_BASE_SHA: 'HEAD~2' }, { PR_BASE_SHA: h.baseTree },
     { PR_BASE_SHA: '--help' }, { PR_BASE_SHA: '' },
     { PR_BASE_SHA: 'a'.repeat(40) }, { GITHUB_EVENT_NAME: 'merge_group', MERGE_BASE_SHA: '' },
-    { GITHUB_EVENT_NAME: 'push', GITHUB_REF: 'refs/heads/topic' }, { GITHUB_EVENT_NAME: 'pull_request_target' },
+    { GITHUB_EVENT_NAME: 'pull_request_target' },
   ]) {
     const result = h.run({ GITHUB_SHA: symlink, ...env });
     assert.notEqual(result.status, 0, JSON.stringify(env));
-    assert.doesNotMatch(result.stdout, /candidate contents clean/);
+    assert.doesNotMatch(result.stdout, /candidate contents clean|SYMLINK_RAN/);
   }
   writeFileSync(join(h.work, 'marker'), 'other'); rmSync(h.path); writeFileSync(h.path, 'console.log("TAMPERED")');
   const changed = h.commit();

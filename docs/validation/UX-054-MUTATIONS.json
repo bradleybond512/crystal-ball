@@ -1,0 +1,1788 @@
+{
+  "task": "UX-054",
+  "product": {
+    "commit": "aae7d345f45ecef1adc398641e4ef6d22d1b0d46",
+    "tree": "9c8e81566411c852473d3edd8bef2552d32e86ee"
+  },
+  "finalFixture": {
+    "commit": "991b6dc7600f7ebd267f709c5173062fadd8b0fc",
+    "tree": "ac725c28a58c75fd6c081913f5089befc84c4096"
+  },
+  "method": "Each case began in a clean detached Git worktree. The applied diff was read and recorded, restored, then applied identically and verified before executing the named Node test. A recorded red requires a failing assertion in the expected test; process and syntax failures alone cannot count. All restored source/test bytes below match the reachable commits. Full focused suites were green before and after each lane. Marketing uses actual registry audit responses and the full 626-package lock.",
+  "suites": {
+    "engine": {
+      "command": "node --test tests/ux054-audit.test.mjs",
+      "greenBefore": 11,
+      "greenAfter": 11,
+      "failures": 0
+    },
+    "workflow": {
+      "command": "node --test tests/ux054-workflow.test.mjs",
+      "greenBefore": 5,
+      "greenAfter": 5,
+      "failures": 0
+    }
+  },
+  "sourceAndTestHashes": {
+    "scripts/audit-npm-locks.mjs": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+    "tests/ux054-audit.test.mjs": "778a2a28cf2501b8a21595e4a7a1ec7d3514d11fb213b98c2e8d711b2584997c",
+    ".github/workflows/security-audit.yml": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+    "tests/ux054-workflow.test.mjs": "11d0e8b95ef7eaf85d4014a7bc169dacd16ad71a79592d074919051793f2af97",
+    "scripts/dependency-change-policy.mjs": "9666d61d67a7e161fc79c3a7dfef082493deb552bc4e8c3cebfe126487d62813",
+    ".github/CODEOWNERS": "db60edc8965312c80208c970696d8af6c956b8fed15adfcfee71bbf400b4f303",
+    "marketing-site/package.json": "ae22421663b88098d80c2daa8098ab913b7b6e6565a393aabbc90ab65a3e5628",
+    "marketing-site/package-lock.json": "e981f0710a0912e11068ba27fe6227dab1b5f101dcdb9241a0dd33b8f46b7480"
+  },
+  "checkpoints": {
+    "core1": {
+      "commit": "2e501571e5891403c787f99de661a4a2b1ece1af",
+      "tree": "49a34b0f3847e663142ccf07c852015bb582fed9"
+    },
+    "core2": {
+      "commit": "2e501571e5891403c787f99de661a4a2b1ece1af",
+      "tree": "49a34b0f3847e663142ccf07c852015bb582fed9"
+    },
+    "bulk": {
+      "commit": "2e501571e5891403c787f99de661a4a2b1ece1af",
+      "tree": "49a34b0f3847e663142ccf07c852015bb582fed9"
+    },
+    "flow-final": {
+      "commit": "406cc7ff655503a5bf9835fc1e0bc479898ce9b3",
+      "tree": "ac725c28a58c75fd6c081913f5089befc84c4096"
+    }
+  },
+  "reversals": [
+    {
+      "id": "AUDIT01",
+      "behavior": "Execute fixed npm rather than user PATH lookup",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "scans all six committed locks",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "scans all six committed locks separately with isolated public-registry commands"
+      ],
+      "assertion": "error: |-\n    [npm-audit] .: unavailable — cannot validate lockfile or registry response\n    [npm-audit] .github/tools/codex: unavailable — cannot validate lockfile or registry response\n    [npm-audit] marketing-site: unavailable — cannot validate lockfile or registry response\n    [npm-audit] scripts: unavailable — cannot validate lockfile or registry response\n    [npm-audit] tools/cb-control: unavailable — cannot validate lockfile or registry response",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..34582f8fa 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -250,3 +250,3 @@ export async function auditLocks(repo, runNpm = spawnSync, log = console.log, re\n         const direct = await directFindings(versions, registryFetch);\n-        const result = runNpm(npmBin, [\n+        const result = runNpm('npm', [\n           'audit', '--package-lock-only', '--ignore-scripts', '--include=dev', '--include=optional', '--include=peer',\n",
+      "diffSha256": "a2a7841d7415c84eccef1fe9103a6843d48d39d0c7cb3e4b3f9e46d1dd81a2b9",
+      "mutatedSha256": "ec94cfa3d2f706773e4876f0f49e07b80e431dda6e056fefb4bdb6c0794ac1d1",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT02",
+      "behavior": "Retain enforced npm argument --ignore-scripts",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "scans all six committed locks",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "scans all six committed locks separately with isolated public-registry commands"
+      ],
+      "assertion": "error: |-\n    [npm-audit] .: unavailable — cannot validate lockfile or registry response\n    [npm-audit] .github/tools/codex: unavailable — cannot validate lockfile or registry response\n    [npm-audit] marketing-site: unavailable — cannot validate lockfile or registry response\n    [npm-audit] scripts: unavailable — cannot validate lockfile or registry response\n    [npm-audit] tools/cb-control: unavailable — cannot validate lockfile or registry response",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..b77ebbf01 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -251,3 +251,3 @@ export async function auditLocks(repo, runNpm = spawnSync, log = console.log, re\n         const result = runNpm(npmBin, [\n-          'audit', '--package-lock-only', '--ignore-scripts', '--include=dev', '--include=optional', '--include=peer',\n+          'audit', '--package-lock-only',  '--include=dev', '--include=optional', '--include=peer',\n           '--audit-level=high', '--json', '--registry=' + registry, '--userconfig=' + userconfig, '--globalconfig=' + globalconfig,\n",
+      "diffSha256": "5ce8457fcc487fcd6d72166042cda8df6c6b22995295b047f0e899d34876f62d",
+      "mutatedSha256": "654bdf7eadb2a70db5673c759860adca214234ace8869a882bd810bffa881629",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT03",
+      "behavior": "Retain enforced npm argument --package-lock-only",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "scans all six committed locks",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "scans all six committed locks separately with isolated public-registry commands"
+      ],
+      "assertion": "error: |-\n    [npm-audit] .: unavailable — cannot validate lockfile or registry response\n    [npm-audit] .github/tools/codex: unavailable — cannot validate lockfile or registry response\n    [npm-audit] marketing-site: unavailable — cannot validate lockfile or registry response\n    [npm-audit] scripts: unavailable — cannot validate lockfile or registry response\n    [npm-audit] tools/cb-control: unavailable — cannot validate lockfile or registry response",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..3a350dde3 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -251,3 +251,3 @@ export async function auditLocks(repo, runNpm = spawnSync, log = console.log, re\n         const result = runNpm(npmBin, [\n-          'audit', '--package-lock-only', '--ignore-scripts', '--include=dev', '--include=optional', '--include=peer',\n+          'audit',  '--ignore-scripts', '--include=dev', '--include=optional', '--include=peer',\n           '--audit-level=high', '--json', '--registry=' + registry, '--userconfig=' + userconfig, '--globalconfig=' + globalconfig,\n",
+      "diffSha256": "3da041507dbe70afd1a687b69800d2b46e94834a0c69ca080cd8b35349835e48",
+      "mutatedSha256": "df34a0ef887f06784ab9d57a27407f6100163fe1f0570659ca7acc6023511d40",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT04",
+      "behavior": "Retain enforced npm argument --include=dev",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "scans all six committed locks",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "scans all six committed locks separately with isolated public-registry commands"
+      ],
+      "assertion": "error: |-\n    [npm-audit] .: unavailable — cannot validate lockfile or registry response\n    [npm-audit] .github/tools/codex: unavailable — cannot validate lockfile or registry response\n    [npm-audit] marketing-site: unavailable — cannot validate lockfile or registry response\n    [npm-audit] scripts: unavailable — cannot validate lockfile or registry response\n    [npm-audit] tools/cb-control: unavailable — cannot validate lockfile or registry response",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..b3a475804 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -251,3 +251,3 @@ export async function auditLocks(repo, runNpm = spawnSync, log = console.log, re\n         const result = runNpm(npmBin, [\n-          'audit', '--package-lock-only', '--ignore-scripts', '--include=dev', '--include=optional', '--include=peer',\n+          'audit', '--package-lock-only', '--ignore-scripts',  '--include=optional', '--include=peer',\n           '--audit-level=high', '--json', '--registry=' + registry, '--userconfig=' + userconfig, '--globalconfig=' + globalconfig,\n",
+      "diffSha256": "87b34a0f36fee6b1e1b26c07d242f26a6d7a1b83f1d4fd3b901b7ce57d94a9f5",
+      "mutatedSha256": "dea64be62caaca49208bef105f295c60d6d047a38510ea328dbd852963ee2a58",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT05",
+      "behavior": "Retain enforced npm argument --include=peer",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "scans all six committed locks",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "scans all six committed locks separately with isolated public-registry commands"
+      ],
+      "assertion": "error: |-\n    [npm-audit] .: unavailable — cannot validate lockfile or registry response\n    [npm-audit] .github/tools/codex: unavailable — cannot validate lockfile or registry response\n    [npm-audit] marketing-site: unavailable — cannot validate lockfile or registry response\n    [npm-audit] scripts: unavailable — cannot validate lockfile or registry response\n    [npm-audit] tools/cb-control: unavailable — cannot validate lockfile or registry response",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..135db58e0 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -251,3 +251,3 @@ export async function auditLocks(repo, runNpm = spawnSync, log = console.log, re\n         const result = runNpm(npmBin, [\n-          'audit', '--package-lock-only', '--ignore-scripts', '--include=dev', '--include=optional', '--include=peer',\n+          'audit', '--package-lock-only', '--ignore-scripts', '--include=dev', '--include=optional', \n           '--audit-level=high', '--json', '--registry=' + registry, '--userconfig=' + userconfig, '--globalconfig=' + globalconfig,\n",
+      "diffSha256": "9ef99217845e657f6e018e9cfbb5711a7156176693aa42727e0dd2cd2beb2b7a",
+      "mutatedSha256": "76d1e703f4af38e75004572c991d05e6b54fcf27fe241dcc8a9e104ffc365d5b",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT06",
+      "behavior": "Retain enforced npm argument --include=optional",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "scans all six committed locks",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "scans all six committed locks separately with isolated public-registry commands"
+      ],
+      "assertion": "error: |-\n    [npm-audit] .: unavailable — cannot validate lockfile or registry response\n    [npm-audit] .github/tools/codex: unavailable — cannot validate lockfile or registry response\n    [npm-audit] marketing-site: unavailable — cannot validate lockfile or registry response\n    [npm-audit] scripts: unavailable — cannot validate lockfile or registry response\n    [npm-audit] tools/cb-control: unavailable — cannot validate lockfile or registry response",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..8c3e88d7d 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -251,3 +251,3 @@ export async function auditLocks(repo, runNpm = spawnSync, log = console.log, re\n         const result = runNpm(npmBin, [\n-          'audit', '--package-lock-only', '--ignore-scripts', '--include=dev', '--include=optional', '--include=peer',\n+          'audit', '--package-lock-only', '--ignore-scripts', '--include=dev',  '--include=peer',\n           '--audit-level=high', '--json', '--registry=' + registry, '--userconfig=' + userconfig, '--globalconfig=' + globalconfig,\n",
+      "diffSha256": "acc01d464706f2ffc9cbc8e116049eadf82aa8e63b17f8baa890e8e0497420ac",
+      "mutatedSha256": "9b809380afa08ceabdff483db5fc6c104e13d818b85e8c1ac5f644da811cf6b6",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT07",
+      "behavior": "Retain enforced npm argument --audit-level=high",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "scans all six committed locks",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "scans all six committed locks separately with isolated public-registry commands"
+      ],
+      "assertion": "error: |-\n    [npm-audit] .: unavailable — cannot validate lockfile or registry response\n    [npm-audit] .github/tools/codex: unavailable — cannot validate lockfile or registry response\n    [npm-audit] marketing-site: unavailable — cannot validate lockfile or registry response\n    [npm-audit] scripts: unavailable — cannot validate lockfile or registry response\n    [npm-audit] tools/cb-control: unavailable — cannot validate lockfile or registry response",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..844df3247 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -252,3 +252,3 @@ export async function auditLocks(repo, runNpm = spawnSync, log = console.log, re\n           'audit', '--package-lock-only', '--ignore-scripts', '--include=dev', '--include=optional', '--include=peer',\n-          '--audit-level=high', '--json', '--registry=' + registry, '--userconfig=' + userconfig, '--globalconfig=' + globalconfig,\n+           '--json', '--registry=' + registry, '--userconfig=' + userconfig, '--globalconfig=' + globalconfig,\n         ], { cwd: dir, env: { PATH: path.dirname(process.execPath) + ':/usr/bin:/bin', HOME: temp },\n",
+      "diffSha256": "63e8274e751094a9035eaac0aa6bed3bc3b8139f7df2ca3f31e631f73038ba48",
+      "mutatedSha256": "1a2ce790eba7d22b215df55cb4091bab8f22f164f43cc7b47bfdbe5605a5c8c7",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT08",
+      "behavior": "Retain enforced npm argument --json",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "scans all six committed locks",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "scans all six committed locks separately with isolated public-registry commands"
+      ],
+      "assertion": "error: |-\n    [npm-audit] .: unavailable — cannot validate lockfile or registry response\n    [npm-audit] .github/tools/codex: unavailable — cannot validate lockfile or registry response\n    [npm-audit] marketing-site: unavailable — cannot validate lockfile or registry response\n    [npm-audit] scripts: unavailable — cannot validate lockfile or registry response\n    [npm-audit] tools/cb-control: unavailable — cannot validate lockfile or registry response",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..3d48a660b 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -252,3 +252,3 @@ export async function auditLocks(repo, runNpm = spawnSync, log = console.log, re\n           'audit', '--package-lock-only', '--ignore-scripts', '--include=dev', '--include=optional', '--include=peer',\n-          '--audit-level=high', '--json', '--registry=' + registry, '--userconfig=' + userconfig, '--globalconfig=' + globalconfig,\n+          '--audit-level=high',  '--registry=' + registry, '--userconfig=' + userconfig, '--globalconfig=' + globalconfig,\n         ], { cwd: dir, env: { PATH: path.dirname(process.execPath) + ':/usr/bin:/bin', HOME: temp },\n",
+      "diffSha256": "ed269758b8d30ff597b8989add2699a62bdb22648543d7bb4f3e64f641d30619",
+      "mutatedSha256": "2ba5add0fd945c473a5ebf22ed307c695284a5f8aba37d3c19f14a9219bedd4e",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT09",
+      "behavior": "Do not use provider registry from repository config",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "scans all six committed locks",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "scans all six committed locks separately with isolated public-registry commands"
+      ],
+      "assertion": "error: |-\n    [npm-audit] .: unavailable — cannot validate lockfile or registry response\n    [npm-audit] .github/tools/codex: unavailable — cannot validate lockfile or registry response\n    [npm-audit] marketing-site: unavailable — cannot validate lockfile or registry response\n    [npm-audit] scripts: unavailable — cannot validate lockfile or registry response\n    [npm-audit] tools/cb-control: unavailable — cannot validate lockfile or registry response",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..faed932f2 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -252,3 +252,3 @@ export async function auditLocks(repo, runNpm = spawnSync, log = console.log, re\n           'audit', '--package-lock-only', '--ignore-scripts', '--include=dev', '--include=optional', '--include=peer',\n-          '--audit-level=high', '--json', '--registry=' + registry, '--userconfig=' + userconfig, '--globalconfig=' + globalconfig,\n+          '--audit-level=high', '--json', '--registry=https://untrusted.invalid', '--userconfig=' + userconfig, '--globalconfig=' + globalconfig,\n         ], { cwd: dir, env: { PATH: path.dirname(process.execPath) + ':/usr/bin:/bin', HOME: temp },\n",
+      "diffSha256": "8bac6c1281f0452a1dd290940c532026fce92630e29e9a30ff1873594236e59c",
+      "mutatedSha256": "d066b9491fcd2b276754487fa8ebd3d329a64ad5ca2e948716fd77ac42de8a43",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT10",
+      "behavior": "Prevent npm command running against candidate checkout files",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "scans all six committed locks",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "scans all six committed locks separately with isolated public-registry commands"
+      ],
+      "assertion": "error: |-\n    [npm-audit] .: unavailable — cannot validate lockfile or registry response\n    [npm-audit] .github/tools/codex: unavailable — cannot validate lockfile or registry response\n    [npm-audit] marketing-site: unavailable — cannot validate lockfile or registry response\n    [npm-audit] scripts: unavailable — cannot validate lockfile or registry response\n    [npm-audit] tools/cb-control: unavailable — cannot validate lockfile or registry response",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..8dd757300 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -253,3 +253,3 @@ export async function auditLocks(repo, runNpm = spawnSync, log = console.log, re\n           '--audit-level=high', '--json', '--registry=' + registry, '--userconfig=' + userconfig, '--globalconfig=' + globalconfig,\n-        ], { cwd: dir, env: { PATH: path.dirname(process.execPath) + ':/usr/bin:/bin', HOME: temp },\n+        ], { cwd: repo, env: { PATH: path.dirname(process.execPath) + ':/usr/bin:/bin', HOME: temp },\n           timeout: 120_000, maxBuffer: maxBytes, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });\n",
+      "diffSha256": "e82f86eea61d38b97a3c669f2c2d74a9792ec757d0dc0796ebefc397beff47c0",
+      "mutatedSha256": "f42637afae0e531eb6446735353af04aeac7cd20850cd6b01b98e7452f830c24",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT11",
+      "behavior": "Keep user npm config and cache out of the subprocess",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "scans all six committed locks",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "scans all six committed locks separately with isolated public-registry commands"
+      ],
+      "assertion": "error: |-\n    [npm-audit] .: unavailable — cannot validate lockfile or registry response\n    [npm-audit] .github/tools/codex: unavailable — cannot validate lockfile or registry response\n    [npm-audit] marketing-site: unavailable — cannot validate lockfile or registry response\n    [npm-audit] scripts: unavailable — cannot validate lockfile or registry response\n    [npm-audit] tools/cb-control: unavailable — cannot validate lockfile or registry response",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..72ea3fe8d 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -253,3 +253,3 @@ export async function auditLocks(repo, runNpm = spawnSync, log = console.log, re\n           '--audit-level=high', '--json', '--registry=' + registry, '--userconfig=' + userconfig, '--globalconfig=' + globalconfig,\n-        ], { cwd: dir, env: { PATH: path.dirname(process.execPath) + ':/usr/bin:/bin', HOME: temp },\n+        ], { cwd: dir, env: { PATH: path.dirname(process.execPath) + ':/usr/bin:/bin', HOME: process.env.HOME },\n           timeout: 120_000, maxBuffer: maxBytes, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });\n",
+      "diffSha256": "b3ae41ceee2b3f718125df3043dbb64f15d89a903369ae54a519bd8260c19688",
+      "mutatedSha256": "1cb201333248922fcdcf94362258d1ceb54072e3120df68897c93b9e8336eea7",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT12",
+      "behavior": "Never forward credentials or node preloads to npm",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "scans all six committed locks",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "scans all six committed locks separately with isolated public-registry commands"
+      ],
+      "assertion": "error: |-\n    [npm-audit] .: unavailable — cannot validate lockfile or registry response\n    [npm-audit] .github/tools/codex: unavailable — cannot validate lockfile or registry response\n    [npm-audit] marketing-site: unavailable — cannot validate lockfile or registry response\n    [npm-audit] scripts: unavailable — cannot validate lockfile or registry response\n    [npm-audit] tools/cb-control: unavailable — cannot validate lockfile or registry response",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..7434fb04e 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -253,3 +253,3 @@ export async function auditLocks(repo, runNpm = spawnSync, log = console.log, re\n           '--audit-level=high', '--json', '--registry=' + registry, '--userconfig=' + userconfig, '--globalconfig=' + globalconfig,\n-        ], { cwd: dir, env: { PATH: path.dirname(process.execPath) + ':/usr/bin:/bin', HOME: temp },\n+        ], { cwd: dir, env: { ...process.env, NODE_OPTIONS: process.env.NODE_OPTIONS, PATH: path.dirname(process.execPath) + ':/usr/bin:/bin', HOME: temp },\n           timeout: 120_000, maxBuffer: maxBytes, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });\n",
+      "diffSha256": "8af5d349a2ce0718ed8811869af005fb8f02f04d07b374ba06a3d4314eaca75d",
+      "mutatedSha256": "002583d2330ed8f5ea4784f047be93cf0c793382dd0cdae3fe11bb455c89c7a9",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT13",
+      "behavior": "Bound network subprocess lifetime",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "scans all six committed locks",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "scans all six committed locks separately with isolated public-registry commands"
+      ],
+      "assertion": "error: |-\n    [npm-audit] .: unavailable — cannot validate lockfile or registry response\n    [npm-audit] .github/tools/codex: unavailable — cannot validate lockfile or registry response\n    [npm-audit] marketing-site: unavailable — cannot validate lockfile or registry response\n    [npm-audit] scripts: unavailable — cannot validate lockfile or registry response\n    [npm-audit] tools/cb-control: unavailable — cannot validate lockfile or registry response",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..9ab410ef6 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -254,3 +254,3 @@ export async function auditLocks(repo, runNpm = spawnSync, log = console.log, re\n         ], { cwd: dir, env: { PATH: path.dirname(process.execPath) + ':/usr/bin:/bin', HOME: temp },\n-          timeout: 120_000, maxBuffer: maxBytes, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });\n+          timeout: 0, maxBuffer: maxBytes, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });\n         const { blocked, counts, records } = findings(result, packages, direct);\n",
+      "diffSha256": "1ef47bf2d2f6ab239ba82eb4ca08647a749760c13e35406fe44fd74cf057a74d",
+      "mutatedSha256": "db89fef43f6446d9f21985faad3b70202b21e8a18abddbf41733554c12620068",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT14",
+      "behavior": "Bound captured registry output length",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "scans all six committed locks",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "scans all six committed locks separately with isolated public-registry commands"
+      ],
+      "assertion": "error: |-\n    [npm-audit] .: unavailable — cannot validate lockfile or registry response\n    [npm-audit] .github/tools/codex: unavailable — cannot validate lockfile or registry response\n    [npm-audit] marketing-site: unavailable — cannot validate lockfile or registry response\n    [npm-audit] scripts: unavailable — cannot validate lockfile or registry response\n    [npm-audit] tools/cb-control: unavailable — cannot validate lockfile or registry response",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..1e5023cef 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -254,3 +254,3 @@ export async function auditLocks(repo, runNpm = spawnSync, log = console.log, re\n         ], { cwd: dir, env: { PATH: path.dirname(process.execPath) + ':/usr/bin:/bin', HOME: temp },\n-          timeout: 120_000, maxBuffer: maxBytes, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });\n+          timeout: 120_000, maxBuffer: 0, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });\n         const { blocked, counts, records } = findings(result, packages, direct);\n",
+      "diffSha256": "5fc917c6e509ffa0d318b5eeac18353c6f4ea8aadec0e146b987bc565e6ab1fa",
+      "mutatedSha256": "ed766c0767e295ce70abf59c6e41a59afbf9117915e90e1f4af1b9910951650e",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT15",
+      "behavior": "Read immutable Git blobs, not tampered checked-out manifests",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "scans all six committed locks",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "scans all six committed locks separately with isolated public-registry commands"
+      ],
+      "assertion": "error: |-\n    [npm-audit] .: 3 dependencies; 0 info, 0 low, 1 moderate, 0 high, 0 critical (tool:moderate)\n    [npm-audit] .github/tools/codex: 1 dependencies; 0 info, 0 low, 1 moderate, 0 high, 0 critical (tool:moderate)\n    [npm-audit] marketing-site: 3 dependencies; 0 info, 0 low, 1 moderate, 0 high, 0 critical (tool:moderate)\n    [npm-audit] scripts: unavailable — cannot validate lockfile or registry response\n    [npm-audit] tools/cb-control: 1 depen",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..ee4e0d6df 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -60,3 +60,3 @@ function inventory(repo) {\n   check(blobs.size === expected.size, 'required manifest or lockfile is missing');\n-  return file => JSON.parse(git(repo, ['cat-file', 'blob', blobs.get(file)]));\n+  return file => JSON.parse(git(repo, ['hash-object', '-w', '--', file]) && git(repo, ['cat-file', 'blob', git(repo, ['hash-object', '--', file]).trim()]));\n }\n",
+      "diffSha256": "e33e81c439de80b7687b18cd77b992d5a8878f109589920d16937ae0a0e0a596",
+      "mutatedSha256": "d386d94e315af73f129fdfec50e595a5f4eaed3148c015e8a1788e3c3f27d790",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT16",
+      "behavior": "Report every project, continue after a high finding",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "one non-root high",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "one non-root high or critical fails without hiding later project results"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    3 !== 6\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 6\n  actual: 3\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..99044e2d2 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -259,3 +259,3 @@ export async function auditLocks(repo, runNpm = spawnSync, log = console.log, re\n           (records.length ? ' (' + records.map(([name, v]) => name + ':' + v.severity).join(', ') + ')' : ''));\n-        if (blocked) ok = false;\n+        if (blocked) return false;\n       } catch (error) {\n",
+      "diffSha256": "662cb256cfcb78428b87e28f55ee111959b26f058d08caa236112bb8201957f3",
+      "mutatedSha256": "5865d3adc63508c307240d827ce09e60ec3eba3f7ff0a25e62d74726da461edc",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT17",
+      "behavior": "High/critical advisory causes gate failure",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "one non-root high",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "one non-root high or critical fails without hiding later project results"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..9ff36155e 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -259,3 +259,3 @@ export async function auditLocks(repo, runNpm = spawnSync, log = console.log, re\n           (records.length ? ' (' + records.map(([name, v]) => name + ':' + v.severity).join(', ') + ')' : ''));\n-        if (blocked) ok = false;\n+        if (blocked) ok = true;\n       } catch (error) {\n",
+      "diffSha256": "aa11d4047403a3331cc06d0311a49edbeaacb9dbcf20a2a1eaa4691d9b35a5b1",
+      "mutatedSha256": "0703ce03682c20cf7e9dbdd6de3d359570adc490273f326a977e903b15b757d5",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT18",
+      "behavior": "Inventory rejects unknown project or lock before inspecting packages",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "inventory rejects unclassified",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "inventory rejects unclassified graphs, missing locks, and nonregular files before npm"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    6 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 6\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..d7be0a1c3 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -54,3 +54,3 @@ function inventory(repo) {\n     if (!/^(?:package(?:-lock)?\\.json|npm-shrinkwrap\\.json|yarn\\.lock|pnpm-lock\\.yaml|bun\\.lockb?)$/i.test(path.basename(file))) continue;\n-    check(expected.has(file), 'unclassified manifest or lockfile');\n+    if (!expected.has(file)) continue;\n     const [mode, type, sha] = entry.slice(0, tab).split(' ');\n",
+      "diffSha256": "affef286a5f1f89efc8872539af529175750101da5f9f82447ecbb4ae06a4e94",
+      "mutatedSha256": "a911c28568a89f8712946cb3619824be8032c193024cc8ceadd729e40bb1532e",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT19",
+      "behavior": "A missing lock invalidates inventory before npm starts",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "inventory rejects unclassified",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "inventory rejects unclassified graphs, missing locks, and nonregular files before npm"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    5 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 5\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..e82b5cf92 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -59,3 +59,3 @@ function inventory(repo) {\n   }\n-  check(blobs.size === expected.size, 'required manifest or lockfile is missing');\n+\n   return file => JSON.parse(git(repo, ['cat-file', 'blob', blobs.get(file)]));\n",
+      "diffSha256": "65f9af6eb1a48f29a7f48e21dfafdb695c6a146c4bc2b68d39cc86df1cdd29be",
+      "mutatedSha256": "2bb1b285b5d051adae5be73535663e667306b005b27ed90611c489bc52ac3c49",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT20",
+      "behavior": "A symlink or submodule cannot masquerade as a tracked lockfile",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "inventory rejects unclassified",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "inventory rejects unclassified graphs, missing locks, and nonregular files before npm"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    5 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 5\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..aa9c2b65e 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -56,3 +56,3 @@ function inventory(repo) {\n     const [mode, type, sha] = entry.slice(0, tab).split(' ');\n-    check(type === 'blob' && (mode === '100644' || mode === '100755'), 'manifest or lockfile is not a regular Git blob');\n+\n     blobs.set(file, sha);\n",
+      "diffSha256": "3faec3345325d264fbb41600741c80a98f726eac29bcbd8ade63f4c35060cf16",
+      "mutatedSha256": "86c7eee58864c284d6c999763da3a4e06560ada7d2983b9b45c7a9ef716593eb",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT21",
+      "behavior": "A dependency-bearing sidecar is not exempt",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "inventory rejects unclassified",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "inventory rejects unclassified graphs, missing locks, and nonregular files before npm"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    6 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 6\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..8f994ef6c 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -241,3 +241,3 @@ export async function auditLocks(repo, runNpm = spawnSync, log = console.log, re\n       && typeof marker.version === 'string' && semver.valid(marker.version) === marker.version\n-      && Object.keys(marker).every(key => ['name', 'version', 'type'].includes(key)), 'sidecar is no longer a marker-only manifest');\n+      && true, 'sidecar is no longer a marker-only manifest');\n     const userconfig = path.join(temp, 'user.npmrc'), globalconfig = path.join(temp, 'global.npmrc');\n",
+      "diffSha256": "f1da1a0f2605127e73b3fb45ee94cafe5d99ef916b57c169ae197e54ff6e4808",
+      "mutatedSha256": "472395b7b68861f60c6d56abd45ff3d6385602b81b41826182f2448964a5dbe0",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT22",
+      "behavior": "Require schema-version 3 lock",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "unsafe package inputs",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "unsafe package inputs, mismatched manifests, absent packages and unexpected links cannot pass"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..620a2959e 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -130,3 +130,3 @@ async function prepare(project, read, dir) {\n   const vendor = vendors.get(project);\n-  check(lock.lockfileVersion === 3 && object(lock.packages) && lock.name === manifest.name\n+  check(true && object(lock.packages) && lock.name === manifest.name\n     && lock.version === manifest.version && lock.packages['']?.name === manifest.name, 'unsupported or inconsistent npm lockfile');\n",
+      "diffSha256": "443f4907a56263e1cffa679bf033df1cbe1979fa0204c7f08f798e5b70a218d6",
+      "mutatedSha256": "e677fb12c37cd1783a4d5e91eaa37e185ae20d1bec1fc870a402e49dbe744bd5",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT23",
+      "behavior": "Manifest and lock dependency ranges must match",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "unsafe package inputs",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "unsafe package inputs, mismatched manifests, absent packages and unexpected links cannot pass"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..ab2358680 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -78,3 +78,3 @@ function validateManifest(manifest, locked, vendor) {\n   for (const field of dependencyFields) {\n-    check(isDeepStrictEqual(manifest[field] ?? {}, locked[field] ?? {}), 'manifest dependency declarations differ from lock');\n+\n     for (const [name, spec] of Object.entries(manifest[field] ?? {})) validateSpec(name, spec, vendor);\n",
+      "diffSha256": "6e229d96af0934347759a7a45916a504a1732a4b631b828bf3fd5492d54d64fc",
+      "mutatedSha256": "b4f80402e7e7f647c112049d1ecda16dcce73a852e5f706517147657da38cdf7",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT24",
+      "behavior": "Registry tarball must match locked name and version",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "unsafe package inputs",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "unsafe package inputs, mismatched manifests, absent packages and unexpected links cannot pass"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..88c138466 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -116,3 +116,3 @@ function validateEntry(location, pkg, vendor) {\n   const tarball = registry + name + '/-/' + path.basename(name) + '-' + pkg.version + '.tgz';\n-  check(pkg.resolved === tarball || (pkg.inBundle === true && !pkg.resolved && location.includes('/node_modules/')),\n+  check(true || (pkg.inBundle === true && !pkg.resolved && location.includes('/node_modules/')),\n     'package tarball does not match registry identity');\n",
+      "diffSha256": "7571660b8d405f8e4013ff8e46fa495b98ca3d6a425b75f831d8b1924ea1a345",
+      "mutatedSha256": "b084f7ab6288968a9a209738d21bf508097b41e630b6682874e59845863d68cd",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT25",
+      "behavior": "Unsafe registry and filesystem deps rejected at boundary",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "checks unselected nested override",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "checks unselected nested override destinations before contacting the registry"
+      ],
+      "assertion": "error: |-\n    a foreign override must never reach npm\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..e10dc6670 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -67,3 +67,3 @@ function validateSpec(name, spec, vendor) {\n   const parsed = npa.resolve(name, spec);\n-  check(parsed.registry && (parsed.type !== 'alias' || (parsed.subSpec?.registry && packageName.test(parsed.subSpec.name))),\n+  check(true || (parsed.type !== 'alias' || (parsed.subSpec?.registry && packageName.test(parsed.subSpec.name))),\n     'nonregistry dependency spec');\n",
+      "diffSha256": "6a74eec800488d674b7621118ca49457b65a6ceb98e00b755c3fdaafa4578145",
+      "mutatedSha256": "494f4b35b6824cf53d83c2c99d88aeb29a2c4f66779f9d2d114c304fec6fe94e",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT26",
+      "behavior": "Required dependency must exist and satisfy actual incoming edge",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "unsafe package inputs",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "unsafe package inputs, mismatched manifests, absent packages and unexpected links cannot pass"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..455163dbb 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -161,3 +161,3 @@ async function prepare(project, read, dir) {\n     for (const edge of node.edgesOut.values()) {\n-      check(!edge.error && (edge.to || edge.type === 'peerOptional'), 'missing or inconsistent dependency edge');\n+\n     }\n",
+      "diffSha256": "7121f3fee36a27a477a766cc001ff1c753d46432ed8e32ff6cbe3b0692923e08",
+      "mutatedSha256": "675b19934273718d9f1a320fbee65f24fbeb8c23c24efd5ef5208f9cad9304e9",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT27",
+      "behavior": "Alias identity has to match all real incoming references",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "unsafe package inputs",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "unsafe package inputs, mismatched manifests, absent packages and unexpected links cannot pass"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..9428b8083 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -157,3 +157,3 @@ async function prepare(project, read, dir) {\n       const edges = [...node.edgesIn];\n-      check(edges.length > 0 && edges.every(edge => npa.resolve(edge.name, edge.spec).subSpec?.name === node.packageName),\n+      check(true || edges.every(edge => npa.resolve(edge.name, edge.spec).subSpec?.name === node.packageName),\n         'uncorroborated package alias');\n",
+      "diffSha256": "a6409d8e0d2185299ded77f62b96883109bd331d7301fd99468c26c6f3fd613b",
+      "mutatedSha256": "e408a644614a14808983e4c00ea1be5c2908e40edfb8de5fc0759372bad5feed",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT28",
+      "behavior": "Full dependency census must match actual locked node count",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "malformed/partial/contradictory reports",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "registry, subprocess and malformed/partial/contradictory reports cannot pass"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..b28682b73 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -209,3 +209,3 @@ function findings(result, packages, direct) {\n     'invalid npm audit report');\n-  check(report.metadata.dependencies?.total === Object.keys(packages).length - 1, 'incomplete npm dependency census');\n+  check(true, 'incomplete npm dependency census');\n   const census = report.metadata.dependencies;\n",
+      "diffSha256": "cc1a3deadb251a4b9d34a89805a696bfd17d27aa0dc7de569930a86b48193b45",
+      "mutatedSha256": "c975f025abae77c3a1d6a732b5520a35192be2b5a21f89547375a7e7080818c6",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT29",
+      "behavior": "Total vulnerability count equals reported package records",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "malformed/partial/contradictory reports",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "registry, subprocess and malformed/partial/contradictory reports cannot pass"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..f5e73e9fb 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -224,3 +224,3 @@ function findings(result, packages, direct) {\n   }\n-  check(counts.total === records.length, 'inconsistent vulnerability total');\n+  check(true, 'inconsistent vulnerability total');\n   for (const [name, rank] of direct) {\n",
+      "diffSha256": "a1439cdb8405007b7a07ea6e12eb5478b9f2143df38bc2677651dff16c809af9",
+      "mutatedSha256": "dfd6931c1be46d16b55c8f00826a11c9ee6837f2bcf40345126225e19e7f0242",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT30",
+      "behavior": "Severity counts agree with the package-level report",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "malformed/partial/contradictory reports",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "registry, subprocess and malformed/partial/contradictory reports cannot pass"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..2f0f5442b 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -222,3 +222,3 @@ function findings(result, packages, direct) {\n   for (const severity of severities) {\n-    check(counts[severity] === records.filter(([, detail]) => detail.severity === severity).length, 'inconsistent severity counts');\n+    check(true || counts[severity] === records.filter(([, detail]) => detail.severity === severity).length, 'inconsistent severity counts');\n   }\n",
+      "diffSha256": "efbce86c10d39265cbb30213566614a0dc62552de361bfb3beddbea7906df3fc",
+      "mutatedSha256": "380430bb1a61effda3895e561247e3acb340be7922f5539404169594e1026f45",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT31",
+      "behavior": "A nonzero npm failure cannot be downgraded to clean",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "malformed/partial/contradictory reports",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "registry, subprocess and malformed/partial/contradictory reports cannot pass"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..19c2d49e0 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -230,3 +230,3 @@ function findings(result, packages, direct) {\n   const blocked = counts.high + counts.critical > 0;\n-  check(result.status === Number(blocked), 'npm exit status contradicts advisory report');\n+  check(true, 'npm exit status contradicts advisory report');\n   return { blocked, counts, records };\n",
+      "diffSha256": "b0d873db040135d98aa017592a0e7070ced1a09bf364268361e074645523cd07",
+      "mutatedSha256": "bacc107e3031aa49d0198997b0087cfab8acee898aece4c86ce1bdd01a9259d3",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT32",
+      "behavior": "CLI must propagate failure exit on incomplete evidence",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "CLI exits nonzero",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "CLI exits nonzero for an incomplete checked out Git inventory"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    0 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 0\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..ff3ec2b8b 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -275,3 +275,3 @@ export async function auditLocks(repo, runNpm = spawnSync, log = console.log, re\n if (process.argv[1] && pathToFileURL(realpathSync(process.argv[1])).href === import.meta.url) {\n-  process.exitCode = await auditLocks(process.cwd()) ? 0 : 1;\n+  process.exitCode = await auditLocks(process.cwd()) ? 0 : 0;\n }\n",
+      "diffSha256": "fd4f791b17aa12074040ee2f8877bad6f4816ce5ea274201970658b2abb7d4bb",
+      "mutatedSha256": "f05ea8680540295324f32f894a2da46f3a31a852467cc26aa9a77fbb58025ba3",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT33",
+      "behavior": "Missing canonical root package name is invalid",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "missing root name",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "a missing root name cannot masquerade as a valid registry name"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..b827d4791 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -72,3 +72,3 @@ function validateSpec(name, spec, vendor) {\n function validateManifest(manifest, locked, vendor) {\n-  check(object(manifest) && object(locked) && typeof manifest.name === 'string' && packageName.test(manifest.name)\n+  check(object(manifest) && object(locked) && packageName.test(manifest.name)\n     && (!Object.hasOwn(locked, 'name') || locked.name === manifest.name)\n",
+      "diffSha256": "fc410700ec4078e657b913d1568130865dc8eaa698c3a838cf7051e2a342b01e",
+      "mutatedSha256": "ab84a72df3d63ce3252e84a6d5a5e90c8460b2bea33024e947ea5ee9da7ad263",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT34",
+      "behavior": "Explicit optional dependencies cannot be omitted from lock evidence",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "unsafe package inputs",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "unsafe package inputs, mismatched manifests, absent packages and unexpected links cannot pass"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..383511439 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -161,3 +161,3 @@ async function prepare(project, read, dir) {\n     for (const edge of node.edgesOut.values()) {\n-      check(!edge.error && (edge.to || edge.type === 'peerOptional'), 'missing or inconsistent dependency edge');\n+      check(!edge.error && (edge.to || edge.optional), 'missing or inconsistent dependency edge');\n     }\n",
+      "diffSha256": "4ca6cf342d5bc29121c542642e42b8e608133522310e82a043ba6f96f357966b",
+      "mutatedSha256": "c2265ec3a1129df4a40eceb93b1928cc22953627b67bfe7d62c1cc924134dd4a",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT35",
+      "behavior": "An alternate path to the checker must execute the CLI",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "CLI exits nonzero",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "CLI exits nonzero for an incomplete checked out Git inventory"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    0 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 0\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..1dbaac8a8 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -274,3 +274,3 @@ export async function auditLocks(repo, runNpm = spawnSync, log = console.log, re\n \n-if (process.argv[1] && pathToFileURL(realpathSync(process.argv[1])).href === import.meta.url) {\n+if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {\n   process.exitCode = await auditLocks(process.cwd()) ? 0 : 1;\n",
+      "diffSha256": "06014f5be2b9c7c419878b4a3c2ca7cb27bc0d0235fb29f9cfc327324bcdb682",
+      "mutatedSha256": "ed16842211a21671e6b638c1548e40cb7e8403dbd6059eaa9343bfe9c9ebeb26",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT36",
+      "behavior": "Registry HTTP response must succeed",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "validates the actual public bulk advisory response",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "validates the actual public bulk advisory response and matches installed versions before trusting npm counts"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..b60ac39b1 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -176,3 +176,3 @@ async function directFindings(versions, registryFetch) {\n   });\n-  check(response.status === 200 && response.body, 'bulk advisory service unavailable');\n+  check(response.body, 'bulk advisory service unavailable');\n   let size = 0;\n",
+      "diffSha256": "afff8bb420285665c7b0c923297a1f4a15646ae0ad45a5164a2e8190612adec1",
+      "mutatedSha256": "25c17f611fb6ef4484cdf42763651bc713d15b1c6e1819c01a371cfc4d85fb6d",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT37",
+      "behavior": "Raw bulk body must be an object, even when CLI returns clean",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "validates the actual public bulk advisory response",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "validates the actual public bulk advisory response and matches installed versions before trusting npm counts"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    6 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 6\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..74b60d031 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -185,3 +185,3 @@ async function directFindings(versions, registryFetch) {\n   const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));\n-  check(object(body), 'invalid bulk advisory response');\n+  \n   const matches = new Map();\n",
+      "diffSha256": "44b69a32e1c0a84d01e4e93cc66852effe7bf5d91554c2710d93ac8decce8967",
+      "mutatedSha256": "2717b2df1f6c52148ecec990db2a07712a4441fc9e8ec6ed0bcde78ec67696d8",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT38",
+      "behavior": "Registry advisory entries must refer to known locked packages",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "validates the actual public bulk advisory response",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "validates the actual public bulk advisory response and matches installed versions before trusting npm counts"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    6 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 6\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..705049715 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -189,3 +189,3 @@ async function directFindings(versions, registryFetch) {\n     const installed = versions.get(name);\n-    check(installed && Array.isArray(advisories) && advisories.length > 0, 'unexpected bulk advisory entry');\n+    check(true, 'unexpected bulk advisory entry');\n     for (const item of advisories) {\n",
+      "diffSha256": "436456c89ae281b5652fcd27fdd5a4b76277415d3d3edfd0098989d7bf437905",
+      "mutatedSha256": "88624d43b2af9e194994f120f0de1c61dd1daa6d4173755506070f8376bdb4c5",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT39",
+      "behavior": "Invalid advisory ranges and fields fail during raw report validation",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "validates the actual public bulk advisory response",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "validates the actual public bulk advisory response and matches installed versions before trusting npm counts"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    6 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 6\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..78e72a577 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -191,3 +191,3 @@ async function directFindings(versions, registryFetch) {\n     for (const item of advisories) {\n-      check(Number.isSafeInteger(item?.id) && item.id > 0 && typeof item.title === 'string' && item.title.length > 0\n+      check(true || Number.isSafeInteger(item?.id) && item.id > 0 && typeof item.title === 'string' && item.title.length > 0\n         && severities.includes(item.severity) && typeof item.vulnerable_versions === 'string'\n",
+      "diffSha256": "50c3e6be71d6499ef5ac8ebe01a37555b8ee31874d983a4fb0c8717d68ea2506",
+      "mutatedSha256": "dbea6fd577418f09a0b8a7a863a8a568099fdecc571757f55fa5489277df1122",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT40",
+      "behavior": "Registry advisories apply only to installed versions",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "validates the actual public bulk advisory response",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "validates the actual public bulk advisory response and matches installed versions before trusting npm counts"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    false !== true\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..f5aa41e32 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -194,3 +194,3 @@ async function directFindings(versions, registryFetch) {\n         && item.vulnerable_versions.length > 0 && semver.validRange(item.vulnerable_versions), 'malformed bulk advisory');\n-      if ([...installed].some(version => semver.satisfies(version, item.vulnerable_versions, { includePrerelease: true }))) {\n+      if (true) {\n         const rank = severities.indexOf(item.severity);\n",
+      "diffSha256": "0e3cea9eed7bb6ed74e485fd585d787ca5624fc2499adf661d585002d42229d0",
+      "mutatedSha256": "2c93a0b11ede7a321b881ae7934e87e355ffdf4fd1234e97ae5cf24879303fc5",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT41",
+      "behavior": "npm computed results must not hide direct registry findings",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "validates the actual public bulk advisory response",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "validates the actual public bulk advisory response and matches installed versions before trusting npm counts"
+      ],
+      "assertion": "error: |-\n    npm cannot conceal a direct advisory\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..49d2238e9 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -227,3 +227,3 @@ function findings(result, packages, direct) {\n     const npmRank = severities.indexOf(report.vulnerabilities[name]?.severity);\n-    check(npmRank >= rank, 'npm omitted or downgraded direct bulk finding ' + name + ':' + severities[rank]);\n+    check(true, 'npm omitted or downgraded direct bulk finding ' + name + ':' + severities[rank]);\n   }\n",
+      "diffSha256": "4c356a897a88b4ca44971d26af66d45f5f7ad9e22baaf16cb1ebee84abac3f82",
+      "mutatedSha256": "35d7ef5c94fd702fcb293bebe27ab0cc5e9bc760b2d046c38270d9613718094a",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT42",
+      "behavior": "Advisory API must reject redirects",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "validates the actual public bulk advisory response",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "validates the actual public bulk advisory response and matches installed versions before trusting npm counts"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /bulk.*npm|npm.*bulk/i. Input:\n    \n    '[npm-audit] .: unavailable — cannot validate lockfile or registry response\\n' +\n      '[npm-audit] .github/tools/codex: unavailable — cannot validate lockfile or registry response\\n' +\n      '[npm-audit] marketing-site: unavailable — cannot validate lockfile or registry response\\n' +\n      '[npm-audit] scripts: unavailable — cannot validate lockfile or r",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..8e1cb7ad0 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -174,3 +174,3 @@ async function directFindings(versions, registryFetch) {\n     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),\n-    redirect: 'error', signal: AbortSignal.timeout(60_000),\n+    redirect: 'follow', signal: AbortSignal.timeout(60_000),\n   });\n",
+      "diffSha256": "1ab2bea6293a63450ddd2504e1a9d4b48d0d31ba94def8cbf45081e0403cdb32",
+      "mutatedSha256": "fa0e8d89323c8ac4a15dbf27deec8412ed01666b79253d7e0a51f5818c95cec4",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT43",
+      "behavior": "Raw direct lookup uses POST",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "validates the actual public bulk advisory response",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "validates the actual public bulk advisory response and matches installed versions before trusting npm counts"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /bulk.*npm|npm.*bulk/i. Input:\n    \n    '[npm-audit] .: unavailable — cannot validate lockfile or registry response\\n' +\n      '[npm-audit] .github/tools/codex: unavailable — cannot validate lockfile or registry response\\n' +\n      '[npm-audit] marketing-site: unavailable — cannot validate lockfile or registry response\\n' +\n      '[npm-audit] scripts: unavailable — cannot validate lockfile or r",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..efd30ae35 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -173,3 +173,3 @@ async function directFindings(versions, registryFetch) {\n   const response = await registryFetch(registry + '-/npm/v1/security/advisories/bulk', {\n-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),\n+    method: 'GET', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),\n     redirect: 'error', signal: AbortSignal.timeout(60_000),\n",
+      "diffSha256": "10cf2cf7f1c9ea2b59cea487e6ecb691417ceebf4d198c1f0baee25e9f6b2a2b",
+      "mutatedSha256": "dd34cff94d7a0261649f2126c6ddca0d94172b1b192790f959d2d79e6044c1de",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT44",
+      "behavior": "Only locked versions are sent to direct registry lookup",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "validates the actual public bulk advisory response",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "validates the actual public bulk advisory response and matches installed versions before trusting npm counts"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /bulk.*npm|npm.*bulk/i. Input:\n    \n    '[npm-audit] .: unavailable — cannot validate lockfile or registry response\\n' +\n      '[npm-audit] .github/tools/codex: unavailable — cannot validate lockfile or registry response\\n' +\n      '[npm-audit] marketing-site: unavailable — cannot validate lockfile or registry response\\n' +\n      '[npm-audit] scripts: unavailable — cannot validate lockfile or r",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..b917e6e94 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -173,3 +173,3 @@ async function directFindings(versions, registryFetch) {\n   const response = await registryFetch(registry + '-/npm/v1/security/advisories/bulk', {\n-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),\n+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({}),\n     redirect: 'error', signal: AbortSignal.timeout(60_000),\n",
+      "diffSha256": "0c0dbef665bb21df80b9cba6aa8ce6a38ee46b88b2843ae4237242569278c0cb",
+      "mutatedSha256": "3b0c48a6879c6345dd29a75260880a11c07e52cdd448d2016cf86d3ff12b4322",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT45",
+      "behavior": "Every dependency class in CLI census must be valid",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "malformed/partial/contradictory reports",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "registry, subprocess and malformed/partial/contradictory reports cannot pass"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..78893975c 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -212,3 +212,3 @@ function findings(result, packages, direct) {\n   for (const group of ['prod', 'dev', 'optional', 'peer', 'peerOptional']) {\n-    check(Number.isSafeInteger(census[group]) && census[group] >= 0 && census[group] <= census.total + 1,\n+    check(true || Number.isSafeInteger(census[group]) && census[group] >= 0 && census[group] <= census.total + 1,\n       'invalid dependency class counts');\n",
+      "diffSha256": "0b699612759e890d6be3f90b55d60c4009e108eab62eb0a67fb53e2ce1aa44d1",
+      "mutatedSha256": "3c2fed7b5b9d8917c1102763c28bf3bcea1354617ea74c89dfad6e40ca453598",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT46",
+      "behavior": "Do not accept oversized bulk API bodies",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "bulk reads have a bounded deadline",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "bulk reads have a bounded deadline and size even when excess bytes are valid JSON whitespace"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..826be4fa0 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -181,3 +181,3 @@ async function directFindings(versions, registryFetch) {\n     size += chunk.byteLength;\n-    check(size <= maxBytes, 'bulk advisory response too large');\n+    check(true, 'bulk advisory response too large');\n     chunks.push(chunk);\n",
+      "diffSha256": "1974a828fd11039e01fe88271ffb4c66f4948d50392ef39685afd2e537d5721d",
+      "mutatedSha256": "00275a63189ff9c607ca0d9563a6fac6c367919ceb16b7c2e5d793e1fea7ccd6",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT47",
+      "behavior": "Direct registry request has a bounded wait",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "bulk reads have a bounded deadline",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "bulk reads have a bounded deadline and size even when excess bytes are valid JSON whitespace"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    0 !== 6\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 6\n  actual: 0\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..b07cb5f45 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -174,3 +174,3 @@ async function directFindings(versions, registryFetch) {\n     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),\n-    redirect: 'error', signal: AbortSignal.timeout(60_000),\n+    redirect: 'error', signal: undefined,\n   });\n",
+      "diffSha256": "c0a8c303b3f9e813837e40e7785c3ac65e124da7749addf768d5b48bca3ba381",
+      "mutatedSha256": "66390ac3b6c933bf8f43073f540d5ef03d81af9f7e07ead1bf8a4dfefec64bc3",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "AUDIT48",
+      "behavior": "Use strongest matching direct advisory rank for each package",
+      "file": "scripts/audit-npm-locks.mjs",
+      "test": "tests/ux054-audit.test.mjs",
+      "testNamePattern": "preserves the strongest matching advisory",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "preserves the strongest matching advisory when npm reports a downgraded finding"
+      ],
+      "assertion": "error: |-\n    a moderate npm report cannot lower a matching high advisory\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/audit-npm-locks.mjs b/scripts/audit-npm-locks.mjs\nindex 382c8f930..b24f71ce8 100644\n--- a/scripts/audit-npm-locks.mjs\n+++ b/scripts/audit-npm-locks.mjs\n@@ -196,3 +196,3 @@ async function directFindings(versions, registryFetch) {\n         const rank = severities.indexOf(item.severity);\n-        matches.set(name, Math.max(matches.get(name) ?? -1, rank));\n+        matches.set(name, rank);\n       }\n",
+      "diffSha256": "265acb5e8dd43a730e8036fcfd4a231641209751745a8a04e94ca30124a1d276",
+      "mutatedSha256": "240d3499795360d3a87415937d0f515a405b9aa6646d4269951d79772d661b1d",
+      "restoredSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW01",
+      "behavior": "Fork PRs reach the named audit job",
+      "file": ".github/workflows/security-audit.yml",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "forks get the isolated audit",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "forks get the isolated audit while installation and signature verification retain the trusted event guard"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + \"github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository\"\n    - undefined\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  actual: \"github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository\"\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/.github/workflows/security-audit.yml b/.github/workflows/security-audit.yml\nindex 36d3ae087..671a7fe90 100644\n--- a/.github/workflows/security-audit.yml\n+++ b/.github/workflows/security-audit.yml\n@@ -14,2 +14,3 @@ jobs:\n   npm-audit:\n+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository\n     runs-on: ubuntu-latest\n",
+      "diffSha256": "be18f035eae1083b16c2ad028f72d549db3147d6f9faebd7802e1914a13eff64",
+      "mutatedSha256": "fb31fc144611ae06ad86e5efa64d9d0743c4d794557f952246fd446d44cca2be",
+      "restoredSha256": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW02",
+      "behavior": "No candidate install on fork requests",
+      "file": ".github/workflows/security-audit.yml",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "forks get the isolated audit",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "forks get the isolated audit while installation and signature verification retain the trusted event guard"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + undefined\n    - \"!cancelled() && (steps.advisories.outcome == 'success' || steps.advisories.outcome == 'failure') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)\"\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: \"!cancelled() && (steps.advisories.outcome == 'success' || steps.advisories.out",
+      "diff": "diff --git a/.github/workflows/security-audit.yml b/.github/workflows/security-audit.yml\nindex 36d3ae087..65b196471 100644\n--- a/.github/workflows/security-audit.yml\n+++ b/.github/workflows/security-audit.yml\n@@ -64,5 +64,2 @@ jobs:\n         id: root_install\n-        if: >-\n-          !cancelled() && (steps.advisories.outcome == 'success' || steps.advisories.outcome == 'failure') &&\n-          (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)\n       - name: npm audit signatures\n",
+      "diffSha256": "1ceffcc9481c910fba59322f5af22f915748f76a9555c35cefdf288d7dc976c7",
+      "mutatedSha256": "2884a36b0d5c6f9165b88cca11822281a117d7f1e51ea8fda720e178b8c49d81",
+      "restoredSha256": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW03",
+      "behavior": "No registry signature job on fork requests",
+      "file": ".github/workflows/security-audit.yml",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "forks get the isolated audit",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "forks get the isolated audit while installation and signature verification retain the trusted event guard"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + undefined\n    - \"!cancelled() && steps.root_install.outcome == 'success' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)\"\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: \"!cancelled() && steps.root_install.outcome == 'success' && (github.event_name != 'pull_request' || github.event.pull_re",
+      "diff": "diff --git a/.github/workflows/security-audit.yml b/.github/workflows/security-audit.yml\nindex 36d3ae087..a79fc3ae3 100644\n--- a/.github/workflows/security-audit.yml\n+++ b/.github/workflows/security-audit.yml\n@@ -68,5 +68,2 @@ jobs:\n       - name: npm audit signatures\n-        if: >-\n-          !cancelled() && steps.root_install.outcome == 'success' &&\n-          (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)\n         run: npm audit signatures\n",
+      "diffSha256": "b511482169738a7ba558e0f1047a434f8826f4f296bda9c22a2d42633a8d41f2",
+      "mutatedSha256": "cd18d5092785783ac697aa30e6eede5b8c8d5197574877315da0dd33a2186fd7",
+      "restoredSha256": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW04",
+      "behavior": "Current trusted installed root is signature checked",
+      "file": ".github/workflows/security-audit.yml",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "forks get the isolated audit",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "forks get the isolated audit while installation and signature verification retain the trusted event guard"
+      ],
+      "assertion": "error: 'audit and signature failures must count'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  operator: '=='\n",
+      "diff": "diff --git a/.github/workflows/security-audit.yml b/.github/workflows/security-audit.yml\nindex 36d3ae087..a677a5212 100644\n--- a/.github/workflows/security-audit.yml\n+++ b/.github/workflows/security-audit.yml\n@@ -71,3 +71,3 @@ jobs:\n           (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)\n-        run: npm audit signatures\n+        run: echo signatures-skipped\n \n",
+      "diffSha256": "3a2c40d2c01393a9b72d9e216a73c6333c0c7bfdfadc0d418c62e29f4e77097d",
+      "mutatedSha256": "3efd51cdb730b5036fa5856f19fe3b7100e4326940a5e06941451071cc04e87a",
+      "restoredSha256": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW05",
+      "behavior": "The advisory check is unconditional even for fork PRs",
+      "file": ".github/workflows/security-audit.yml",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "forks get the isolated audit",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "forks get the isolated audit while installation and signature verification retain the trusted event guard"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + \"github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository\"\n    - undefined\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  actual: \"github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository\"\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/.github/workflows/security-audit.yml b/.github/workflows/security-audit.yml\nindex 36d3ae087..bf606ca67 100644\n--- a/.github/workflows/security-audit.yml\n+++ b/.github/workflows/security-audit.yml\n@@ -26,2 +26,3 @@ jobs:\n       - name: Audit all npm lockfiles\n+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository\n         id: advisories\n",
+      "diffSha256": "87ed5bb65b905b50d09f3b1e9091a9dd4a2687bd502ad0ffa6201073e0e4523e",
+      "mutatedSha256": "4e09d20892ea7e003f5aa005362d3a68f63a9601eca9b47d4ad17030d65d1343",
+      "restoredSha256": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW06",
+      "behavior": "Advisory workflow has read-only permissions",
+      "file": ".github/workflows/security-audit.yml",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "forks get the isolated audit",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "forks get the isolated audit while installation and signature verification retain the trusted event guard"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   contents: 'write'\n    -   contents: 'read'\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    contents: 'read'\n  actual:\n    contents: 'write'\n  operator: 'deepStrictEqual'\n",
+      "diff": "diff --git a/.github/workflows/security-audit.yml b/.github/workflows/security-audit.yml\nindex 36d3ae087..2059d0679 100644\n--- a/.github/workflows/security-audit.yml\n+++ b/.github/workflows/security-audit.yml\n@@ -10,3 +10,3 @@ on:\n permissions:\n-  contents: read\n+  contents: write\n \n",
+      "diffSha256": "dd88d184fbeb49b710eaf574a5565cbc5c980eb04bcae7304a2b04efd8c939e2",
+      "mutatedSha256": "fd4df9c48f4f3c24e5bba11b94673e40867177a88a900a7320eb4e63370a596f",
+      "restoredSha256": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW07",
+      "behavior": "The advisory workflow uses ordinary pull_request",
+      "file": ".github/workflows/security-audit.yml",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "forks get the isolated audit",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "forks get the isolated audit while installation and signature verification retain the trusted event guard"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'merge_group',\n    +   'pull_request_target',\n    -   'pull_request',\n        'push'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'merge_group'\n    1: 'pull_request'\n    2: 'push'\n  actual:\n    0: 'merge_group'\n    1: 'pull_request_target'\n    2: 'push'\n  operator: 'deepStrictEqual'\n",
+      "diff": "diff --git a/.github/workflows/security-audit.yml b/.github/workflows/security-audit.yml\nindex 36d3ae087..002261d9e 100644\n--- a/.github/workflows/security-audit.yml\n+++ b/.github/workflows/security-audit.yml\n@@ -3,3 +3,3 @@ name: Security Audit\n on:\n-  pull_request:\n+  pull_request_target:\n   push:\n",
+      "diffSha256": "27268142a38743e7d7eb3d443d87fc9f8bb7f2de9143503ce9c747dbf10fc523",
+      "mutatedSha256": "1467a3f3a5298586748a00829f846c7ba2b3935e55765b485ad2572c2cf612c3",
+      "restoredSha256": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW08",
+      "behavior": "The fork path has no candidate package-manager caching",
+      "file": ".github/workflows/security-audit.yml",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "forks get the isolated audit",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "forks get the isolated audit while installation and signature verification retain the trusted event guard"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/.github/workflows/security-audit.yml b/.github/workflows/security-audit.yml\nindex 36d3ae087..7db539dab 100644\n--- a/.github/workflows/security-audit.yml\n+++ b/.github/workflows/security-audit.yml\n@@ -24,3 +24,3 @@ jobs:\n           node-version: '22'\n-          package-manager-cache: false\n+          package-manager-cache: true\n       - name: Audit all npm lockfiles\n",
+      "diffSha256": "5f9fb48f750c541e04c0c10b21653f86797f402df3ba3f474ef9e12d2ed6aa0b",
+      "mutatedSha256": "81d2d048849498a1f822f60163a1c4f39ab8796f0f1cab8f830f5e1df4397dc4",
+      "restoredSha256": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW09",
+      "behavior": "Untrusted event checkout has no shallow base omission",
+      "file": ".github/workflows/security-audit.yml",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "forks get the isolated audit",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "forks get the isolated audit while installation and signature verification retain the trusted event guard"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/.github/workflows/security-audit.yml b/.github/workflows/security-audit.yml\nindex 36d3ae087..7a8a6e6e8 100644\n--- a/.github/workflows/security-audit.yml\n+++ b/.github/workflows/security-audit.yml\n@@ -19,3 +19,3 @@ jobs:\n         with:\n-          fetch-depth: 0\n+          fetch-depth: 1\n           persist-credentials: false\n",
+      "diffSha256": "f705b9ec80147af5e7d5bac32bf706e7567b6153e8f30b5a76e59f7e7d000b16",
+      "mutatedSha256": "18a62303e88a1a925b5c7bbd10d08c2db995b39dc4301ef77523d01c730750a0",
+      "restoredSha256": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW10",
+      "behavior": "User npm credential and Node flags never reach the auditor process",
+      "file": ".github/workflows/security-audit.yml",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "ordinary PR and merge group",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "ordinary PR and merge group execute their exact trusted base in candidate context; main push uses its reviewed tree"
+      ],
+      "assertion": "error: |-\n    node:internal/modules/cjs/loader:1433\n      throw err;\n      ^\n    \n    Error: Cannot find module '/absent-ux054-preload'\n    Require stack:\n    - internal/preload\n        at Module._resolveFilename (node:internal/modules/cjs/loader:1430:15)\n        at defaultResolveImpl (node:internal/modules/cjs/loader:1040:19)\n        at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1045:22)\n        at Module._load (node:internal/modules/cjs/l",
+      "diff": "diff --git a/.github/workflows/security-audit.yml b/.github/workflows/security-audit.yml\nindex 36d3ae087..f70f066d3 100644\n--- a/.github/workflows/security-audit.yml\n+++ b/.github/workflows/security-audit.yml\n@@ -59,3 +59,3 @@ jobs:\n           fi\n-          env -i PATH=\"$(dirname \"$(command -v node)\"):/usr/bin:/bin\" node \"$runner\"\n+          env PATH=\"$(dirname \"$(command -v node)\"):/usr/bin:/bin\" node \"$runner\"\n       # Keep the existing root signature check on its trusted events. Forks\n",
+      "diffSha256": "ce36256a2f008ba320e55ecb7ce245cf4e39ad9c7f5bad4b81ead7035d093fc1",
+      "mutatedSha256": "e79456c435a2882ac52df28fbdad52477d846996acf77a7a4689ba0d0b5089b8",
+      "restoredSha256": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW11",
+      "behavior": "Candidate checkout identity must equal event SHA",
+      "file": ".github/workflows/security-audit.yml",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "only the rollout base",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "only the rollout base and matching bootstrap bytes can run; missing or malformed inputs fail closed"
+      ],
+      "assertion": "error: '{\"PR_BASE_SHA\":\"abdee26979989545f823b192cbab8f9f685e0ce5\",\"GITHUB_SHA\":\"18893bf3d3f95b69087c070c9a1d7039619c6207\"}'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 0\n  operator: 'notStrictEqual'\n",
+      "diff": "diff --git a/.github/workflows/security-audit.yml b/.github/workflows/security-audit.yml\nindex 36d3ae087..c5636bdff 100644\n--- a/.github/workflows/security-audit.yml\n+++ b/.github/workflows/security-audit.yml\n@@ -35,3 +35,3 @@ jobs:\n           set -euo pipefail\n-          [[ \"$(git rev-parse HEAD)\" == \"$GITHUB_SHA\" ]] || exit 1\n+          true || exit 1\n           case \"$GITHUB_EVENT_NAME\" in\n",
+      "diffSha256": "ac955a50a7989ab851b19993f5c07222a436f2214d59239713647e1ea59dfca2",
+      "mutatedSha256": "c05b7d328d81b204e0c480418fe88c64f3b75fb23a2579d0c5f88663cecb634e",
+      "restoredSha256": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW12",
+      "behavior": "PR selects its exact event base, not executing candidate code",
+      "file": ".github/workflows/security-audit.yml",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "ordinary PR and merge group",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "ordinary PR and merge group execute their exact trusted base in candidate context; main push uses its reviewed tree"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /^base candidate contents clean$/m. Input:\n    \n    'candidate candidate contents clean\\n'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual: |-\n    candidate candidate contents clean\n    \n  operator: 'match'\n",
+      "diff": "diff --git a/.github/workflows/security-audit.yml b/.github/workflows/security-audit.yml\nindex 36d3ae087..dd2508d23 100644\n--- a/.github/workflows/security-audit.yml\n+++ b/.github/workflows/security-audit.yml\n@@ -37,3 +37,3 @@ jobs:\n           case \"$GITHUB_EVENT_NAME\" in\n-            pull_request) policy=\"$PR_BASE_SHA\" ;;\n+            pull_request) policy=\"$GITHUB_SHA\" ;;\n             merge_group) policy=\"$MERGE_BASE_SHA\" ;;\n",
+      "diffSha256": "b1cdb8342d208ff048ee1f5855107016bc2e3ab37850478e3a9e4fd4d7286395",
+      "mutatedSha256": "448a1cca8ca1c01b0c71cdd0e04528dbeae6969203cc70aa40bf0dd9ea24e049",
+      "restoredSha256": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW13",
+      "behavior": "Merge queues select trusted merge-group base",
+      "file": ".github/workflows/security-audit.yml",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "ordinary PR and merge group",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "ordinary PR and merge group execute their exact trusted base in candidate context; main push uses its reviewed tree"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /^base candidate contents clean$/m. Input:\n    \n    'candidate candidate contents clean\\n'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual: |-\n    candidate candidate contents clean\n    \n  operator: 'match'\n",
+      "diff": "diff --git a/.github/workflows/security-audit.yml b/.github/workflows/security-audit.yml\nindex 36d3ae087..230ad9dc3 100644\n--- a/.github/workflows/security-audit.yml\n+++ b/.github/workflows/security-audit.yml\n@@ -38,3 +38,3 @@ jobs:\n             pull_request) policy=\"$PR_BASE_SHA\" ;;\n-            merge_group) policy=\"$MERGE_BASE_SHA\" ;;\n+            merge_group) policy=\"$GITHUB_SHA\" ;;\n             push) [[ \"$GITHUB_REF\" == refs/heads/main ]] || exit 1; policy=\"$GITHUB_SHA\" ;;\n",
+      "diffSha256": "af867de09243ab49de6268aba700a490ad213c54cf3cad315c929065781d889f",
+      "mutatedSha256": "8c8f678e17193e064679b56eb9949abae54a38e95ab7f54dfabe69ced026f1a7",
+      "restoredSha256": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW14",
+      "behavior": "Push audit permits only reviewed main pushes",
+      "file": ".github/workflows/security-audit.yml",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "only the rollout base",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "only the rollout base and matching bootstrap bytes can run; missing or malformed inputs fail closed"
+      ],
+      "assertion": "error: 'a topic push must not execute its valid checker'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 0\n  operator: 'notStrictEqual'\n",
+      "diff": "diff --git a/.github/workflows/security-audit.yml b/.github/workflows/security-audit.yml\nindex 36d3ae087..2b9e8c691 100644\n--- a/.github/workflows/security-audit.yml\n+++ b/.github/workflows/security-audit.yml\n@@ -39,3 +39,3 @@ jobs:\n             merge_group) policy=\"$MERGE_BASE_SHA\" ;;\n-            push) [[ \"$GITHUB_REF\" == refs/heads/main ]] || exit 1; policy=\"$GITHUB_SHA\" ;;\n+            push) policy=\"$GITHUB_SHA\" ;;\n             *) exit 1 ;;\n",
+      "diffSha256": "5690bf81ecf5745aeaeb04115a115ccef4e7354a451f3c71c913c58bbba9fad6",
+      "mutatedSha256": "1bf14789518a89dbd70a8e3bf910879164a5dab54f19203d76552533bdfd0de0",
+      "restoredSha256": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW15",
+      "behavior": "Unknown or privileged workflow events fail closed",
+      "file": ".github/workflows/security-audit.yml",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "only the rollout base",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "only the rollout base and matching bootstrap bytes can run; missing or malformed inputs fail closed"
+      ],
+      "assertion": "error: '{\"GITHUB_EVENT_NAME\":\"pull_request_target\"}'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 0\n  operator: 'notStrictEqual'\n",
+      "diff": "diff --git a/.github/workflows/security-audit.yml b/.github/workflows/security-audit.yml\nindex 36d3ae087..b9c413edf 100644\n--- a/.github/workflows/security-audit.yml\n+++ b/.github/workflows/security-audit.yml\n@@ -40,3 +40,3 @@ jobs:\n             push) [[ \"$GITHUB_REF\" == refs/heads/main ]] || exit 1; policy=\"$GITHUB_SHA\" ;;\n-            *) exit 1 ;;\n+            *) policy=\"$PR_BASE_SHA\" ;;\n           esac\n",
+      "diffSha256": "c7d84bb04f9f400965db8097daf8062dc324cf8fa3cafb96fec476f15b0ed127",
+      "mutatedSha256": "e856b8fccb104e18ba5ff6f1192a007f17e1a60b7f7775e2120ec63e47d7e3e4",
+      "restoredSha256": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW16",
+      "behavior": "Rollout digest detects substituted auditor bytes",
+      "file": ".github/workflows/security-audit.yml",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "only the rollout base",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "only the rollout base and matching bootstrap bytes can run; missing or malformed inputs fail closed"
+      ],
+      "assertion": "error: 'Expected \"actual\" to be strictly unequal to: 0'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 0\n  operator: 'notStrictEqual'\n",
+      "diff": "diff --git a/.github/workflows/security-audit.yml b/.github/workflows/security-audit.yml\nindex 36d3ae087..b49df3832 100644\n--- a/.github/workflows/security-audit.yml\n+++ b/.github/workflows/security-audit.yml\n@@ -57,3 +57,3 @@ jobs:\n           if [[ \"$policy\" == \"$ROLLOUT_BASE\" ]]; then\n-            [[ \"$(sha256sum < \"$runner\" | cut -d' ' -f1)\" == \"$ROLLOUT_SHA256\" ]] || exit 1\n+            true || exit 1\n           fi\n",
+      "diffSha256": "182046f496827274e6d96d80de7be0a23dabe2a14c15b64e897140a574fd55c1",
+      "mutatedSha256": "3249ef6c56d5cb12b91d33671c031cefbdd0df08a8ea8d3f80ac7ee9d08040ba",
+      "restoredSha256": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW17",
+      "behavior": "Symlink checker forbidden even for bootstrap pinned contents",
+      "file": ".github/workflows/security-audit.yml",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "only the rollout base",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "only the rollout base and matching bootstrap bytes can run; missing or malformed inputs fail closed"
+      ],
+      "assertion": "error: '{\"PR_BASE_SHA\":\"af259df4c2c34b280f65019cdef8d69ebe2d178b\",\"GITHUB_SHA\":\"71dac6e7d68cd4f00285c8148f8cc7d2b56e0482\",\"ROLLOUT_SHA256\":\"68110fe235ea27b4bbc3ac4a6d842af6ab3f14c452dac2270392d99bcb78a0ff\"}'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 0\n  operator: 'notStrictEqual'\n",
+      "diff": "diff --git a/.github/workflows/security-audit.yml b/.github/workflows/security-audit.yml\nindex 36d3ae087..ff5245c0d 100644\n--- a/.github/workflows/security-audit.yml\n+++ b/.github/workflows/security-audit.yml\n@@ -51,3 +51,3 @@ jobs:\n           mode=$(git ls-tree \"$source\" -- \"$checker\" | cut -d' ' -f1)\n-          [[ \"$mode\" == 100644 || \"$mode\" == 100755 ]] || exit 1\n+          [[ \"$mode\" != \"\" ]] || exit 1\n           scratch=$(mktemp -d \"$RUNNER_TEMP/ux054.XXXXXX\")\n",
+      "diffSha256": "04098d441a0a1ea2608bcb056c20236ab4a6f25b9938f98095974c7d18c5da81",
+      "mutatedSha256": "81344b52254adae924989c2fdc95eef3c210d22e863756f8c16e8ad1a238d6ec",
+      "restoredSha256": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW18",
+      "behavior": "Protected helper path requires existing approval label",
+      "file": "scripts/dependency-change-policy.mjs",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "changing the independent",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "changing the independent auditor requires the supply-chain approval label and code owner"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + undefined\n    - 'supply-chain gate'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'supply-chain gate'\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/scripts/dependency-change-policy.mjs b/scripts/dependency-change-policy.mjs\nindex fb195d9ce..2243309bc 100644\n--- a/scripts/dependency-change-policy.mjs\n+++ b/scripts/dependency-change-policy.mjs\n@@ -37,3 +37,3 @@ export const SENSITIVE_PATTERNS = Object.freeze([\n   { re: /^\\.github\\/mcp\\.json$/, why: 'agent MCP server pins' },\n-  { re: /^scripts\\/audit-npm-locks\\.mjs$/, why: 'supply-chain gate' },\n+  { re: /^scripts\\/unrelated-auditor\\.mjs$/, why: 'supply-chain gate' },\n   { re: /^scripts\\/check-install-script-drift\\.mjs$/, why: 'supply-chain gate' },\n",
+      "diffSha256": "9d3fa42caafca4f6fcfe40a22d956b4f8fd193dea062ab6c62ef319fa829c4b5",
+      "mutatedSha256": "abbf3a50c0ea1e45784a314f77dec67af4dd3a7996b105713b25cbf47328994b",
+      "restoredSha256": "9666d61d67a7e161fc79c3a7dfef082493deb552bc4e8c3cebfe126487d62813",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW19",
+      "behavior": "Protected helper path requires existing code ownership",
+      "file": ".github/CODEOWNERS",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "changing the independent",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "changing the independent auditor requires the supply-chain approval label and code owner"
+      ],
+      "assertion": "error: |-\n    The expression evaluated to a falsy value:\n    \n      assert.ok(readFileSync(new URL('../.github/CODEOWNERS', import.meta.url), 'utf8')\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='\n",
+      "diff": "diff --git a/.github/CODEOWNERS b/.github/CODEOWNERS\nindex 05ae7d206..0fcaa500b 100644\n--- a/.github/CODEOWNERS\n+++ b/.github/CODEOWNERS\n@@ -23,2 +23,2 @@\n /scripts/dependency-change-policy.mjs @bradleybond512\n-/scripts/audit-npm-locks.mjs @bradleybond512\n+/scripts/unrelated-auditor.mjs @bradleybond512\n",
+      "diffSha256": "537fe74b01cdebae1ee36ca837daaffa96e4ac9341efdafe76df71e5de1b1fad",
+      "mutatedSha256": "d41af9ff32c7dbc669f322e9fc2bf61f44e49412593fff98b69d5c8d21c09d01",
+      "restoredSha256": "db60edc8965312c80208c970696d8af6c956b8fed15adfcfee71bbf400b4f303",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW20",
+      "behavior": "Fixed SHA value for introducing base is covered by regression",
+      "file": ".github/workflows/security-audit.yml",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "forks get the isolated audit",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "forks get the isolated audit while installation and signature verification retain the trusted event guard"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'ad459dfec514c80e2fcc3f0d7965ea6ef76a7b6a'\n    - 'cd459dfec514c80e2fcc3f0d7965ea6ef76a7b6a'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'cd459dfec514c80e2fcc3f0d7965ea6ef76a7b6a'\n  actual: 'ad459dfec514c80e2fcc3f0d7965ea6ef76a7b6a'\n  operator: 'strictEqual'\n",
+      "diff": "diff --git a/.github/workflows/security-audit.yml b/.github/workflows/security-audit.yml\nindex 36d3ae087..0c1d33590 100644\n--- a/.github/workflows/security-audit.yml\n+++ b/.github/workflows/security-audit.yml\n@@ -30,3 +30,3 @@ jobs:\n           MERGE_BASE_SHA: ${{ github.event.merge_group.base_sha }}\n-          ROLLOUT_BASE: cd459dfec514c80e2fcc3f0d7965ea6ef76a7b6a\n+          ROLLOUT_BASE: ad459dfec514c80e2fcc3f0d7965ea6ef76a7b6a\n           ROLLOUT_SHA256: '040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd'\n",
+      "diffSha256": "70ba8c2cb782d74a0fedbbc3d89746bc064083569860fcffed8782c0544ec9c0",
+      "mutatedSha256": "1a9cfb469179d61ce7ecc38007370750b0a50b1ecc985fd9429fb5caa5518601",
+      "restoredSha256": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW22",
+      "behavior": "Read-only exact commit selector, not revision expressions",
+      "file": ".github/workflows/security-audit.yml",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "only the rollout base",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "only the rollout base and matching bootstrap bytes can run; missing or malformed inputs fail closed"
+      ],
+      "assertion": "error: '{\"PR_BASE_SHA\":\"HEAD~2\"}'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 0\n  operator: 'notStrictEqual'\n",
+      "diff": "diff --git a/.github/workflows/security-audit.yml b/.github/workflows/security-audit.yml\nindex 36d3ae087..26eeb9c7d 100644\n--- a/.github/workflows/security-audit.yml\n+++ b/.github/workflows/security-audit.yml\n@@ -42,3 +42,3 @@ jobs:\n           esac\n-          [[ \"$policy\" =~ ^[0-9a-f]{40}$ ]] || exit 1\n+          true\n           git cat-file -e \"$policy^{commit}\"\n",
+      "diffSha256": "385397b395e958dc0fb8087838d4516ad9b1404b7f4271cb07c37a7c00bc5803",
+      "mutatedSha256": "ef4a64e31d8224a08aa833ff13a802124088b1447ed1d66029d410126ab1ebfd",
+      "restoredSha256": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW23",
+      "behavior": "Exact base must identify a commit (tree object is insufficient)",
+      "file": ".github/workflows/security-audit.yml",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "only the rollout base",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "only the rollout base and matching bootstrap bytes can run; missing or malformed inputs fail closed"
+      ],
+      "assertion": "error: '{\"PR_BASE_SHA\":\"ed5d2ec8dbf44615652427b0a5b20d3ab0b36c22\"}'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 0\n  operator: 'notStrictEqual'\n",
+      "diff": "diff --git a/.github/workflows/security-audit.yml b/.github/workflows/security-audit.yml\nindex 36d3ae087..9b7e0c724 100644\n--- a/.github/workflows/security-audit.yml\n+++ b/.github/workflows/security-audit.yml\n@@ -43,3 +43,3 @@ jobs:\n           [[ \"$policy\" =~ ^[0-9a-f]{40}$ ]] || exit 1\n-          git cat-file -e \"$policy^{commit}\"\n+          true\n \n",
+      "diffSha256": "769c42f9b9d7e71b96694a38291156e32f764b5b9d4883b7e088e0adfe788ca2",
+      "mutatedSha256": "797a6099f8826b8b0ac1791e18dcca31d064f10853b3ec9e4aab199a32c28188",
+      "restoredSha256": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW25",
+      "behavior": "Advisory scanner cannot continue on error",
+      "file": ".github/workflows/security-audit.yml",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "forks get the isolated audit",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "forks get the isolated audit while installation and signature verification retain the trusted event guard"
+      ],
+      "assertion": "error: 'audit and signature failures must count'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='\n",
+      "diff": "diff --git a/.github/workflows/security-audit.yml b/.github/workflows/security-audit.yml\nindex 36d3ae087..357f68703 100644\n--- a/.github/workflows/security-audit.yml\n+++ b/.github/workflows/security-audit.yml\n@@ -27,2 +27,3 @@ jobs:\n         id: advisories\n+        continue-on-error: true\n         env:\n",
+      "diffSha256": "a6fbde9a96a743a3e55cd3ca8b2e0ebeb85ac4376ebf21c8ab8d196795c319fb",
+      "mutatedSha256": "90181daa61c0d304f2d9ef4c9cf3d921591ddd66197c1e910f7cde50fd1a9e9f",
+      "restoredSha256": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW24",
+      "behavior": "Root signatures still run on trusted advisory failures",
+      "file": ".github/workflows/security-audit.yml",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "forks get the isolated audit",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "forks get the isolated audit while installation and signature verification retain the trusted event guard"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + \"!cancelled() && (steps.advisories.outcome == 'success') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)\"\n    - \"!cancelled() && (steps.advisories.outcome == 'success' || steps.advisories.outcome == 'failure') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github",
+      "diff": "diff --git a/.github/workflows/security-audit.yml b/.github/workflows/security-audit.yml\nindex 36d3ae087..010de24e2 100644\n--- a/.github/workflows/security-audit.yml\n+++ b/.github/workflows/security-audit.yml\n@@ -65,3 +65,3 @@ jobs:\n         if: >-\n-          !cancelled() && (steps.advisories.outcome == 'success' || steps.advisories.outcome == 'failure') &&\n+          !cancelled() && (steps.advisories.outcome == 'success') &&\n           (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)\n",
+      "diffSha256": "8516e2462e2617facb517815f4c2bd57d51837b5ff556993aade3002540d1e51",
+      "mutatedSha256": "6ad76dc3361c1fcb2aa5979b784390161c6292b18f7fc679671b5c1de820a119",
+      "restoredSha256": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "FLOW21",
+      "behavior": "Auditor bytes and workflow bootstrap pin agree",
+      "file": ".github/workflows/security-audit.yml",
+      "test": "tests/ux054-workflow.test.mjs",
+      "testNamePattern": "checked-in auditor matches",
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "redExit": 1,
+      "failingTests": [
+        "the checked-in auditor matches the rollout digest"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + '040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd'\n    - 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'\n  actual: '040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd'\n  operator: 'strictEq",
+      "diff": "diff --git a/.github/workflows/security-audit.yml b/.github/workflows/security-audit.yml\nindex 36d3ae087..482da9d82 100644\n--- a/.github/workflows/security-audit.yml\n+++ b/.github/workflows/security-audit.yml\n@@ -31,3 +31,3 @@ jobs:\n           ROLLOUT_BASE: cd459dfec514c80e2fcc3f0d7965ea6ef76a7b6a\n-          ROLLOUT_SHA256: '040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd'\n+          ROLLOUT_SHA256: 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'\n         shell: bash\n",
+      "diffSha256": "596a8e39ae4aabcb21db1920b13ea208e9ec8aa6f5ebc86968c5dddf8ba498c1",
+      "mutatedSha256": "9a3cf1621a9afb0677b55232790e68f815202bdf0b293b4dc155287300bfcbe9",
+      "restoredSha256": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+      "cleanAfterRestore": true
+    }
+  ],
+  "superseded": [
+    {
+      "id": "FLOW14",
+      "initialObservation": "1 pass / 0 fail",
+      "correction": "Non-main push guard originally tested with an independently invalid symlink HEAD.",
+      "initialDiffSha256": "c7d87064fb7d9e29e54243f5bcad52dc0d76975c5441f151024e1f1586cbbf5d",
+      "finalDiffSha256": "5690bf81ecf5745aeaeb04115a115ccef4e7354a451f3c71c913c58bbba9fad6"
+    },
+    {
+      "id": "FLOW17",
+      "initialObservation": "1 pass / 0 fail",
+      "correction": "The original symlink contents were invalid JS, hiding execution.",
+      "initialDiffSha256": "f7ce81830d5495852ff965c651cd2e92d7097f29352032b526b0778a109ff51c",
+      "finalDiffSha256": "04098d441a0a1ea2608bcb056c20236ab4a6f25b9938f98095974c7d18c5da81"
+    },
+    {
+      "id": "AUDIT21",
+      "initialObservation": "1 pass / 0 fail",
+      "correction": "Original sidecar fixture omitted required type, concealing dependency-allowlist removal.",
+      "initialDiffSha256": "2f84a988f2772286a53294df30179233100e0e099ec5a9c33a98a9dd20617751",
+      "finalDiffSha256": "f1da1a0f2605127e73b3fb45ee94cafe5d99ef916b57c169ae197e54ff6e4808"
+    },
+    {
+      "id": "AUDIT25",
+      "initialObservation": "1 pass / 0 fail",
+      "correction": "Untrusted URL was also unresolved in the graph; use inactive nested override as a separate reachable behavior.",
+      "initialDiffSha256": "b8a5a7bd9abfa4fded3a3fcb996e169fdff545f7a665c04bd6a4b497286440df",
+      "finalDiffSha256": "6a74eec800488d674b7621118ca49457b65a6ceb98e00b755c3fdaafa4578145"
+    }
+  ],
+  "lockfileReversals": {
+    "snapshot": "e8d8575cd0e29b622027188f2412b01f0bf26de5",
+    "suites": [
+      {
+        "id": "LOCK-undici",
+        "baseline": {
+          "testedAt": "2026-11-03T23:17:53.546749+00:00",
+          "registry": "https://registry.npmjs.org",
+          "npmExit": 0,
+          "packages": 626,
+          "counts": {
+            "info": 0,
+            "low": 0,
+            "moderate": 20,
+            "high": 0,
+            "critical": 0,
+            "total": 20
+          },
+          "highPackages": [],
+          "testPass": 1,
+          "testFail": 0,
+          "assertion": "expected zero high or critical packages; actual []",
+          "reportSha256": "06df4f96c9b18a1f0908465709f2b72b3dc96c68c6db67bc31d81994449b4554"
+        },
+        "red": {
+          "testedAt": "2026-11-03T23:18:01.876845+00:00",
+          "registry": "https://registry.npmjs.org",
+          "npmExit": 1,
+          "packages": 626,
+          "counts": {
+            "info": 0,
+            "low": 0,
+            "moderate": 23,
+            "high": 1,
+            "critical": 0,
+            "total": 24
+          },
+          "highPackages": [
+            "undici"
+          ],
+          "testPass": 0,
+          "testFail": 1,
+          "assertion": "expected zero high or critical packages; actual ['undici']",
+          "reportSha256": "99ef078670caa718104add0ba8476bf6d3ac396f3c80328c5bf2490cef98abe2"
+        },
+        "restored": {
+          "testedAt": "2026-11-03T23:18:04.261012+00:00",
+          "registry": "https://registry.npmjs.org",
+          "npmExit": 0,
+          "packages": 626,
+          "counts": {
+            "info": 0,
+            "low": 0,
+            "moderate": 20,
+            "high": 0,
+            "critical": 0,
+            "total": 20
+          },
+          "highPackages": [],
+          "testPass": 1,
+          "testFail": 0,
+          "assertion": "expected zero high or critical packages; actual []",
+          "reportSha256": "b4e3da88ea596d7b338818786bc9fad035c47b0ffc02aaf8556dec12391b441f"
+        },
+        "appliedDiffSha256": "1dd303c103f515c7951e90f83ed07db54b4a9e2e747817093b80e145709938f6",
+        "diff": "diff --git a/marketing-site/package-lock.json b/marketing-site/package-lock.json\nindex 788055d00..186cadc03 100644\n--- a/marketing-site/package-lock.json\n+++ b/marketing-site/package-lock.json\n@@ -8710,5 +8710,5 @@\n     \"node_modules/undici\": {\n-      \"version\": \"7.30.1\",\n-      \"resolved\": \"https://registry.npmjs.org/undici/-/undici-7.30.1.tgz\",\n-      \"integrity\": \"sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==\",\n+      \"version\": \"7.29.1\",\n+      \"resolved\": \"https://registry.npmjs.org/undici/-/undici-7.29.1.tgz\",\n+      \"integrity\": \"sha512-RYONW2MeafgYlkVOKYKkA/Ag7BmXqgIWCa8t1m0JcxrQg9pI9lEqRhAOruOBCbAohOa/gkCF+iPi9hrgvTzu6Q==\",\n       \"dev\": true,\ndiff --git a/marketing-site/package.json b/marketing-site/package.json\nindex dd8b81bba..e8df772f5 100644\n--- a/marketing-site/package.json\n+++ b/marketing-site/package.json\n@@ -48,5 +48,2 @@\n     },\n-    \"miniflare\": {\n-      \"undici\": \"7.30.1\"\n-    },\n     \"braces\": \"$braces\"\n",
+        "original": {
+          "marketing-site/package.json": "ae22421663b88098d80c2daa8098ab913b7b6e6565a393aabbc90ab65a3e5628",
+          "marketing-site/package-lock.json": "e981f0710a0912e11068ba27fe6227dab1b5f101dcdb9241a0dd33b8f46b7480"
+        },
+        "mutated": {
+          "marketing-site/package.json": "9041e3ee60d49194100ce281317a07b84cf393645616aca18041990a1559c983",
+          "marketing-site/package-lock.json": "adf372554a9bb638edaded712a125ebe0662f4ebe973570766e9fc8e171e88f7"
+        },
+        "restoredHashes": {
+          "marketing-site/package.json": "ae22421663b88098d80c2daa8098ab913b7b6e6565a393aabbc90ab65a3e5628",
+          "marketing-site/package-lock.json": "e981f0710a0912e11068ba27fe6227dab1b5f101dcdb9241a0dd33b8f46b7480"
+        },
+        "cleanBefore": true,
+        "cleanAfter": true
+      },
+      {
+        "id": "LOCK-zod",
+        "baseline": {
+          "testedAt": "2026-11-03T23:17:53.546749+00:00",
+          "registry": "https://registry.npmjs.org",
+          "npmExit": 0,
+          "packages": 626,
+          "counts": {
+            "info": 0,
+            "low": 0,
+            "moderate": 20,
+            "high": 0,
+            "critical": 0,
+            "total": 20
+          },
+          "highPackages": [],
+          "testPass": 1,
+          "testFail": 0,
+          "assertion": "expected zero high or critical packages; actual []",
+          "reportSha256": "06df4f96c9b18a1f0908465709f2b72b3dc96c68c6db67bc31d81994449b4554"
+        },
+        "red": {
+          "testedAt": "2026-11-03T23:18:07.091269+00:00",
+          "registry": "https://registry.npmjs.org",
+          "npmExit": 1,
+          "packages": 626,
+          "counts": {
+            "info": 0,
+            "low": 0,
+            "moderate": 20,
+            "high": 1,
+            "critical": 0,
+            "total": 21
+          },
+          "highPackages": [
+            "zod"
+          ],
+          "testPass": 0,
+          "testFail": 1,
+          "assertion": "expected zero high or critical packages; actual ['zod']",
+          "reportSha256": "33bd0f6c9226d2169e13200d90cdb66a9bfb90b43457f40b948a580ca5f8edf4"
+        },
+        "restored": {
+          "testedAt": "2026-11-03T23:18:28.970561+00:00",
+          "registry": "https://registry.npmjs.org",
+          "npmExit": 0,
+          "packages": 626,
+          "counts": {
+            "info": 0,
+            "low": 0,
+            "moderate": 20,
+            "high": 0,
+            "critical": 0,
+            "total": 20
+          },
+          "highPackages": [],
+          "testPass": 1,
+          "testFail": 0,
+          "assertion": "expected zero high or critical packages; actual []",
+          "reportSha256": "c44fc59314487c0fefd9d6b7c5884e9ccb0a258ec6a5cf865ab7752fe5da3f13"
+        },
+        "appliedDiffSha256": "778fcd9b0a977e62891cf7e85ba199202a445844c72a4e837551dfe55b48b49b",
+        "diff": "diff --git a/marketing-site/package-lock.json b/marketing-site/package-lock.json\nindex 788055d00..e1d2f1ab8 100644\n--- a/marketing-site/package-lock.json\n+++ b/marketing-site/package-lock.json\n@@ -9719,5 +9719,5 @@\n     \"node_modules/zod\": {\n-      \"version\": \"4.6.6\",\n-      \"resolved\": \"https://registry.npmjs.org/zod/-/zod-4.6.6.tgz\",\n-      \"integrity\": \"sha512-4UmzQUF5fxvfcYHlbjBmejU+w+hbDnWFx4aS8kBx7nPBHcO2SqPbpAG8snbdg+Xse4pRefR98hgjFgIMCI/UhA==\",\n+      \"version\": \"4.4.3\",\n+      \"resolved\": \"https://registry.npmjs.org/zod/-/zod-4.4.3.tgz\",\n+      \"integrity\": \"sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==\",\n       \"dev\": true,\n",
+        "original": {
+          "marketing-site/package.json": "ae22421663b88098d80c2daa8098ab913b7b6e6565a393aabbc90ab65a3e5628",
+          "marketing-site/package-lock.json": "e981f0710a0912e11068ba27fe6227dab1b5f101dcdb9241a0dd33b8f46b7480"
+        },
+        "mutated": {
+          "marketing-site/package.json": "ae22421663b88098d80c2daa8098ab913b7b6e6565a393aabbc90ab65a3e5628",
+          "marketing-site/package-lock.json": "dd8a143edeabc59b9808b68c5f6a0b339bea3a2e8d9dc6bf54339a7460131226"
+        },
+        "restoredHashes": {
+          "marketing-site/package.json": "ae22421663b88098d80c2daa8098ab913b7b6e6565a393aabbc90ab65a3e5628",
+          "marketing-site/package-lock.json": "e981f0710a0912e11068ba27fe6227dab1b5f101dcdb9241a0dd33b8f46b7480"
+        },
+        "cleanBefore": true,
+        "cleanAfter": true
+      }
+    ],
+    "command": "npm audit --package-lock-only --ignore-scripts --include=dev --include=optional --include=peer --audit-level=high --registry=https://registry.npmjs.org --userconfig=<empty user config> --globalconfig=<different empty global config> --json",
+    "workingTreeClean": true
+  },
+  "summary": {
+    "checkerAndWorkflowReversals": 73,
+    "liveLockfileReversals": 2,
+    "killedByExpectedFailure": 75,
+    "unresolved": 0
+  }
+}

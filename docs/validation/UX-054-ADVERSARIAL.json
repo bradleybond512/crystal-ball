@@ -1,0 +1,566 @@
+{
+  "candidate": "bad6b257df07e1a44aa895153d5054fb93d35a57",
+  "reachableImplementation": "aae7d345f45ecef1adc398641e4ef6d22d1b0d46",
+  "testedTree": "9c8e81566411c852473d3edd8bef2552d32e86ee",
+  "checkedBlobs": {
+    "scripts/audit-npm-locks.mjs": "382c8f9308a8a9f7dae92f8dfe1fad8c3e05f439",
+    ".github/workflows/security-audit.yml": "36d3ae0871318049d82d285c80bccda726f8f568",
+    "marketing-site/package.json": "dd8b81bba8ff9c3b136a5f03ebc695b982cbd87c",
+    "marketing-site/package-lock.json": "788055d00824d81fa32079afc5b24ffcbaba26e3"
+  },
+  "npm": "10.9.8",
+  "node": "22.23.1",
+  "fixture": "Real Git objects/Arborist/CLI in private disposable fixtures. Registry responses intercepted; no OS child/socket effects from npm were allowed. CI script extracted from the actual workflow and run with synthetic fork/reviewed-main/merge-group contexts. Does not verify GitHub-hosted event permissions, existing signature checks, command provenance beyond the configured toolchain, or advisory database truth/completeness.",
+  "earlyDisclosures": [
+    "Raw npm alone counted a dependency with no version but omitted it from the actual upstream submission.",
+    "Raw npm metavuln package lookup on a forged HTTPS or Git package name attempted a non-registry socket or Git subprocess; stopped in the probe before effect.",
+    "Raw npm can normalize null/false/number/array bulk responses to a clean report; compare independently validated bulk response.",
+    "Initial checker silently skipped CLI execution via a symlinked directory; fixed CLI must see six calls even through that alias.",
+    "The early graph accepted an absent ordinary optional package node; the corrected guard rejects it while preserving intentionally absent optional peers.",
+    "An overlapping scratch-run harness was discarded. These receipts use an independent scratch suite and the pinned composite candidate."
+  ],
+  "cleanNameVersionPairCounts": {
+    "crystal-ball": 1021,
+    "crystal-ball-ci-codex": 7,
+    "crystal-ball-site": 618,
+    "crystalball-railway-relay": 47,
+    "cb-control": 41,
+    "crystalball-mcp": 93
+  },
+  "controls": [
+    {
+      "case": "all-six-live-clean",
+      "exit": 0,
+      "candidateCodeRan": false,
+      "rootsInvoked": 6,
+      "bulkRequests": 6,
+      "matchingBulkPayloads": true,
+      "rawRequests": 6,
+      "registryOrigins": [
+        "https://registry.npmjs.org/"
+      ],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "d8c9fffd7b27c93b3928f347d8c4bd45971c31a6c19d9fb2ac55897a568ddcf9",
+      "statusLogSha256": "84130e98f84e1bbe2e9668f8d1312bcfd1a094ef2bd14fc0b75f92452204ba6d"
+    },
+    {
+      "case": "cli-realpath-positive",
+      "exit": 0,
+      "candidateCodeRan": false,
+      "rootsInvoked": 6,
+      "bulkRequests": 6,
+      "matchingBulkPayloads": true,
+      "rawRequests": 6,
+      "registryOrigins": [
+        "https://registry.npmjs.org/"
+      ],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "cb02970a16acc864676bba243bfde44a8bd9ba89712a36f869223f590385bab7",
+      "statusLogSha256": "84130e98f84e1bbe2e9668f8d1312bcfd1a094ef2bd14fc0b75f92452204ba6d"
+    },
+    {
+      "case": "outage-is-failure",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 6,
+      "bulkRequests": 12,
+      "matchingBulkPayloads": true,
+      "rawRequests": 6,
+      "registryOrigins": [
+        "https://registry.npmjs.org/"
+      ],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "4d2632d712eed328df83d419d791d304867171953f4ee0c9f59c98bfb315dff6",
+      "statusLogSha256": "1a65b66951825d0a701324162407afc432082618f9de9480ac52e167878089bc"
+    },
+    {
+      "case": "marketing-high-regression",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 6,
+      "bulkRequests": 6,
+      "matchingBulkPayloads": true,
+      "rawRequests": 6,
+      "registryOrigins": [
+        "https://registry.npmjs.org/"
+      ],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "524040007c14480cdaf1eb6c9684f932ed7309a3e6542a86d635fc6f8f2ebaac",
+      "statusLogSha256": "80f838c34c84283578906a3bac60c5fb3953f2bfb4efa2fd177cfce6589e7e2c"
+    },
+    {
+      "case": "corroboration-high-cli-clean",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 6,
+      "bulkRequests": 6,
+      "matchingBulkPayloads": true,
+      "rawRequests": 6,
+      "registryOrigins": [
+        "https://registry.npmjs.org/"
+      ],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "46c826be438d9266e528e5a535fc9545e458535bdedc094e91fdcfa6d086837f",
+      "statusLogSha256": "9a038e21edb078ffb4d5ed5d698ee94607a17bf43401a11c46e710407f2a96c8"
+    },
+    {
+      "case": "corroboration-null",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 0,
+      "bulkRequests": 0,
+      "matchingBulkPayloads": false,
+      "rawRequests": 6,
+      "registryOrigins": [],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "eb7f0aee7fcd55ec07b9675a9ab8935df1de09094e554c708b1b88bc90976ccf",
+      "statusLogSha256": "b603f73e93fced9dcc3ced999f78b6ac3d52ffb234400e9f02400bef422097f3"
+    },
+    {
+      "case": "corroboration-array",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 0,
+      "bulkRequests": 0,
+      "matchingBulkPayloads": false,
+      "rawRequests": 6,
+      "registryOrigins": [],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "eb7f0aee7fcd55ec07b9675a9ab8935df1de09094e554c708b1b88bc90976ccf",
+      "statusLogSha256": "b603f73e93fced9dcc3ced999f78b6ac3d52ffb234400e9f02400bef422097f3"
+    },
+    {
+      "case": "corroboration-false",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 0,
+      "bulkRequests": 0,
+      "matchingBulkPayloads": false,
+      "rawRequests": 6,
+      "registryOrigins": [],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "eb7f0aee7fcd55ec07b9675a9ab8935df1de09094e554c708b1b88bc90976ccf",
+      "statusLogSha256": "b603f73e93fced9dcc3ced999f78b6ac3d52ffb234400e9f02400bef422097f3"
+    },
+    {
+      "case": "corroboration-foreign",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 0,
+      "bulkRequests": 0,
+      "matchingBulkPayloads": false,
+      "rawRequests": 6,
+      "registryOrigins": [],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "eb7f0aee7fcd55ec07b9675a9ab8935df1de09094e554c708b1b88bc90976ccf",
+      "statusLogSha256": "248a12b40ce2917c85a82a025678bcdd0480eda20e74bd134485111003685747"
+    },
+    {
+      "case": "corroboration-wrong-detail",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 0,
+      "bulkRequests": 0,
+      "matchingBulkPayloads": false,
+      "rawRequests": 6,
+      "registryOrigins": [],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "eb7f0aee7fcd55ec07b9675a9ab8935df1de09094e554c708b1b88bc90976ccf",
+      "statusLogSha256": "0416a40cf5a6667ac26f799970869fd6d199e6a28cee341e12ae9ff090e796f8"
+    },
+    {
+      "case": "corroboration-outage",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 0,
+      "bulkRequests": 0,
+      "matchingBulkPayloads": false,
+      "rawRequests": 6,
+      "registryOrigins": [],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "eb7f0aee7fcd55ec07b9675a9ab8935df1de09094e554c708b1b88bc90976ccf",
+      "statusLogSha256": "80658e32394b6ed588f5e4e883ab14b509ec8217a01c32624e452346890376d6"
+    },
+    {
+      "case": "missing-version",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 5,
+      "bulkRequests": 5,
+      "matchingBulkPayloads": true,
+      "rawRequests": 5,
+      "registryOrigins": [
+        "https://registry.npmjs.org/"
+      ],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "320e056bae106c4db20f5240c01999fc6537e49e4981a434178f3444c0bca039",
+      "statusLogSha256": "ef9209dba2ddce0381fd7f36e4ebb66720f199b3b44bc4854723e110d4f2ee0f"
+    },
+    {
+      "case": "invalid-version",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 5,
+      "bulkRequests": 5,
+      "matchingBulkPayloads": true,
+      "rawRequests": 5,
+      "registryOrigins": [
+        "https://registry.npmjs.org/"
+      ],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "8c76c2c84636559f66ff46990349cb188410dc5ffb90715b8daba0126cfc34fd",
+      "statusLogSha256": "ef9209dba2ddce0381fd7f36e4ebb66720f199b3b44bc4854723e110d4f2ee0f"
+    },
+    {
+      "case": "https-name",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 5,
+      "bulkRequests": 5,
+      "matchingBulkPayloads": true,
+      "rawRequests": 5,
+      "registryOrigins": [
+        "https://registry.npmjs.org/"
+      ],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "9be36f6dd69a713be6ba26fea8d50d92e2e4bd73f9b37233c93b4511d35aa0a4",
+      "statusLogSha256": "ef9209dba2ddce0381fd7f36e4ebb66720f199b3b44bc4854723e110d4f2ee0f"
+    },
+    {
+      "case": "git-name",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 5,
+      "bulkRequests": 5,
+      "matchingBulkPayloads": true,
+      "rawRequests": 5,
+      "registryOrigins": [
+        "https://registry.npmjs.org/"
+      ],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "c45b2d96fa254ba31cf8214759567570b4e07a7c1ce690ba16055403d0c8ac4e",
+      "statusLogSha256": "ef9209dba2ddce0381fd7f36e4ebb66720f199b3b44bc4854723e110d4f2ee0f"
+    },
+    {
+      "case": "forged-npm-name",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 5,
+      "bulkRequests": 5,
+      "matchingBulkPayloads": true,
+      "rawRequests": 5,
+      "registryOrigins": [
+        "https://registry.npmjs.org/"
+      ],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "60df234c40f25ade5a3589d22cf064c66bde4fa0d761d04dde0726eedcb4a423",
+      "statusLogSha256": "40d106de1d3f70d7bf9d96f43f55fafc8e51ed44ea8bf08b3b28dca88df097da"
+    },
+    {
+      "case": "remote-artifact",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 5,
+      "bulkRequests": 5,
+      "matchingBulkPayloads": true,
+      "rawRequests": 5,
+      "registryOrigins": [
+        "https://registry.npmjs.org/"
+      ],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "34fb8fd68382f60e530d072cc85847b74e16e2723e52918040aff82f41a7c1a6",
+      "statusLogSha256": "40d106de1d3f70d7bf9d96f43f55fafc8e51ed44ea8bf08b3b28dca88df097da"
+    },
+    {
+      "case": "external-link",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 5,
+      "bulkRequests": 5,
+      "matchingBulkPayloads": true,
+      "rawRequests": 5,
+      "registryOrigins": [
+        "https://registry.npmjs.org/"
+      ],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "4dc5afc9cfa8c6f53921c5fd3bbb3c7241238e59b035fc2c8bf8bfeb0923639f",
+      "statusLogSha256": "43bc548e20be8fe91fc961db40c6739394e1f834ed6fd9ce3581ec601d04c3b5"
+    },
+    {
+      "case": "workspace-escape",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 5,
+      "bulkRequests": 5,
+      "matchingBulkPayloads": true,
+      "rawRequests": 5,
+      "registryOrigins": [
+        "https://registry.npmjs.org/"
+      ],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "a2ed962fad58bc2d9d4ad182abcb94833814f6ddbd954222eb547adf500ed7f7",
+      "statusLogSha256": "ad766742d273a79aa811ab5cde0f9bcb254931e9d66059c69170e2c9fd056d0c"
+    },
+    {
+      "case": "missing-optional-edge",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 5,
+      "bulkRequests": 5,
+      "matchingBulkPayloads": true,
+      "rawRequests": 5,
+      "registryOrigins": [
+        "https://registry.npmjs.org/"
+      ],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "5e59573562701cd1cdb5273f24f51c92d4e6749670769de514fa930a2e7f9dc0",
+      "statusLogSha256": "d60addb330afb84f976f5635e068e6ab91afc16cbeea7c938e60bdccd40addc5"
+    },
+    {
+      "case": "manifest-mismatch",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 5,
+      "bulkRequests": 5,
+      "matchingBulkPayloads": true,
+      "rawRequests": 5,
+      "registryOrigins": [
+        "https://registry.npmjs.org/"
+      ],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "e92efc074c7949d80261ffbbf64a34c80bf41af93973a017e258e0ea09fb39c0",
+      "statusLogSha256": "e4f4e90b2af95353743cac1a350e534b96c8369d13fddba8654171ccb6870191"
+    },
+    {
+      "case": "missing-edge",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 5,
+      "bulkRequests": 5,
+      "matchingBulkPayloads": true,
+      "rawRequests": 5,
+      "registryOrigins": [
+        "https://registry.npmjs.org/"
+      ],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "517aa285de7ff78e3ecc319d984d1ee832814e9b1835e201acf0aca0aae33811",
+      "statusLogSha256": "d60addb330afb84f976f5635e068e6ab91afc16cbeea7c938e60bdccd40addc5"
+    },
+    {
+      "case": "symlink-lock",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 0,
+      "bulkRequests": 0,
+      "matchingBulkPayloads": true,
+      "rawRequests": 0,
+      "registryOrigins": [],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "statusLogSha256": "545363ffa9f544ff4d041856af47d8bf1cb946717356c50221cb61a1753245f7"
+    },
+    {
+      "case": "new-manifest",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 0,
+      "bulkRequests": 0,
+      "matchingBulkPayloads": true,
+      "rawRequests": 0,
+      "registryOrigins": [],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "statusLogSha256": "cd4ac07b2f4b75a810b7e64a2761442d0fe642b8ea1a8e86c857af49847d4776"
+    },
+    {
+      "case": "hidden-shrinkwrap",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 0,
+      "bulkRequests": 0,
+      "matchingBulkPayloads": true,
+      "rawRequests": 0,
+      "registryOrigins": [],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "statusLogSha256": "cd4ac07b2f4b75a810b7e64a2761442d0fe642b8ea1a8e86c857af49847d4776"
+    },
+    {
+      "case": "unclassified-yarn",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 0,
+      "bulkRequests": 0,
+      "matchingBulkPayloads": true,
+      "rawRequests": 0,
+      "registryOrigins": [],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "statusLogSha256": "cd4ac07b2f4b75a810b7e64a2761442d0fe642b8ea1a8e86c857af49847d4776"
+    },
+    {
+      "case": "workflow-bootstrap-digest",
+      "exit": 0,
+      "candidateCodeRan": false,
+      "rootsInvoked": 6,
+      "bulkRequests": 6,
+      "matchingBulkPayloads": true,
+      "rawRequests": 6,
+      "registryOrigins": [
+        "https://registry.npmjs.org/"
+      ],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "54ef925c0f48a0208e7af6595983e6e5210529832701d514cbf265d08edc5144",
+      "statusLogSha256": "84130e98f84e1bbe2e9668f8d1312bcfd1a094ef2bd14fc0b75f92452204ba6d"
+    },
+    {
+      "case": "workflow-reviewed-main",
+      "exit": 0,
+      "candidateCodeRan": false,
+      "rootsInvoked": 6,
+      "bulkRequests": 6,
+      "matchingBulkPayloads": true,
+      "rawRequests": 6,
+      "registryOrigins": [
+        "https://registry.npmjs.org/"
+      ],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "831b366d250d4cf252fcd6410e243a6f105360eae5ddb2071fd48525a9cfe88c",
+      "statusLogSha256": "84130e98f84e1bbe2e9668f8d1312bcfd1a094ef2bd14fc0b75f92452204ba6d"
+    },
+    {
+      "case": "workflow-reject-bootstrap-substitution",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 0,
+      "bulkRequests": 0,
+      "matchingBulkPayloads": true,
+      "rawRequests": 0,
+      "registryOrigins": [],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "statusLogSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "case": "workflow-fork-trusted-base",
+      "exit": 0,
+      "candidateCodeRan": false,
+      "rootsInvoked": 6,
+      "bulkRequests": 6,
+      "matchingBulkPayloads": true,
+      "rawRequests": 6,
+      "registryOrigins": [
+        "https://registry.npmjs.org/"
+      ],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "ed4944d958cc0e6565126023d5fbd8bb815f1aabd6339da94f609cf6305a5de7",
+      "statusLogSha256": "84130e98f84e1bbe2e9668f8d1312bcfd1a094ef2bd14fc0b75f92452204ba6d"
+    },
+    {
+      "case": "workflow-merge-group-base",
+      "exit": 0,
+      "candidateCodeRan": false,
+      "rootsInvoked": 6,
+      "bulkRequests": 6,
+      "matchingBulkPayloads": true,
+      "rawRequests": 6,
+      "registryOrigins": [
+        "https://registry.npmjs.org/"
+      ],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "7ebf50129babbb668edcca460506efcabb527c2bb905e5343d2f4bc9f6ca52e2",
+      "statusLogSha256": "84130e98f84e1bbe2e9668f8d1312bcfd1a094ef2bd14fc0b75f92452204ba6d"
+    },
+    {
+      "case": "workflow-reject-missing-base",
+      "exit": 1,
+      "candidateCodeRan": false,
+      "rootsInvoked": 0,
+      "bulkRequests": 0,
+      "matchingBulkPayloads": true,
+      "rawRequests": 0,
+      "registryOrigins": [],
+      "offPolicyConnections": [],
+      "isolatedChildren": true,
+      "passed": true,
+      "rawTraceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "statusLogSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    }
+  ],
+  "total": 32,
+  "passed": 32,
+  "evidenceHashes": {
+    "raw-meta.log": "97d94baf3a9d498493d52b58413d360bf1ccabd0359022934548d8453076d546",
+    "raw-npm.json": "08687d26050068909cbcfafe623392664c51dc8deb3670d2a9dffa107cd20b97",
+    "raw-response.json": "8777f2befa3b6fcd612cc87f8b7368d1b5c94931d774c278dac64e415b2c28c1",
+    "initial-cli-alias-failure.log": "31913bba17be68c893244c924adc494d1571a6b31903950d8e08a65b9b613fdf",
+    "canonical-prior/optional-dependency-missing-lock-node.log": "84130e98f84e1bbe2e9668f8d1312bcfd1a094ef2bd14fc0b75f92452204ba6d",
+    "final-candidate/test-adversarial.py": "74341e008e54f0679501938b46adab98048c28b7a78b9ebdf2d39ae6fde64c38",
+    "final-candidate/hook.cjs": "2f2cc0f9165a88dcc8cc65651695b1ab21703d4a8669db79b84cb82e0a2ce3d8",
+    "final-candidate/npm-intercept.cjs": "3e3711284670b344a072bb7020d1d137794b131a7c54d74de99a006c47b9edb4",
+    "README.md": "8d2d0634e52f7f5b555804f1793a3455af2637a3e6606ebfbf7e866548d8fe0f",
+    "final-candidate/acceptance.json": "33f0f23816196c6304cf921aa6db6cad693c702432bfe4c67675ad55b05e2922"
+  }
+}

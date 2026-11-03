@@ -1,0 +1,139 @@
+{
+  "task": "UX-054",
+  "product": "aae7d345f45ecef1adc398641e4ef6d22d1b0d46",
+  "fixture": "991b6dc7600f7ebd267f709c5173062fadd8b0fc",
+  "candidatePolicyAndLockSha256": {
+    ".github/workflows/security-audit.yml": "2f6f9cd2be7bd1e4800d23fdff6fa57b04f0c8b82c047663d99ae59cc62d4510",
+    "scripts/audit-npm-locks.mjs": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+    "marketing-site/package.json": "ae22421663b88098d80c2daa8098ab913b7b6e6565a393aabbc90ab65a3e5628",
+    "marketing-site/package-lock.json": "e981f0710a0912e11068ba27fe6227dab1b5f101dcdb9241a0dd33b8f46b7480"
+  },
+  "baseRollout": "cd459dfec514c80e2fcc3f0d7965ea6ef76a7b6a",
+  "method": "Actual workflow advisory-step shell extracted from Git and run in an isolated detached synthetic checkout. Source checkout and workflow file are trusted as on the candidate; base SHA and event variables simulate ordinary fork PR events, with no GitHub-hosted fork run or push. Inputs included malicious candidate root, marketing, MCP and Codex .npmrc files, a harmless marker-producing preinstall hook and inherited NODE_OPTIONS, GH_TOKEN and GITHUB_TOKEN canaries. The steady-state candidate also replaced its own checker with a script that would write a marker and exit 0. In the vulnerable fixture, the original marketing manifest/lock were restored at the synthetic child, so that project\u2019s inactive sentinel script is absent. The real npm CLI and independent HTTPS bulk endpoint were contacted. This solely exercises the isolated advisory step; root signature conditional coverage is in the workflow tests and mutation receipts.",
+  "results": [
+    {
+      "case": "bootstrap",
+      "simulatedEvent": "locally simulated fork pull_request",
+      "time": "2026-11-03T23:30:59.272336+00:00",
+      "baseObject": "cd459dfec514c80e2fcc3f0d7965ea6ef76a7b6a",
+      "syntheticHead": "efd31f4b4deeb63a912a1c3b07fb6dd5614190c4",
+      "syntheticTree": "f5c82749a66a0288ae151349921f546b76cdf541",
+      "modifiedPaths": [
+        ".github/tools/codex/.npmrc",
+        ".npmrc",
+        "marketing-site/.npmrc",
+        "marketing-site/package.json",
+        "tools/mcp-server/.npmrc"
+      ],
+      "output": [
+        "[npm-audit] .: 1041 dependencies; 0 info, 2 low, 19 moderate, 0 high, 0 critical (@eslint-community/eslint-utils:moderate, @eslint/config-array:moderate, @rollup/plugin-node-resolve:low, @trickfilm400/rollup-plugin-off-main-thread:moderate, @typescript-eslint/eslint-plugin:moderate, @typescript-eslint/parser:moderate, @typescript-eslint/type-utils:moderate, @typescript-eslint/typescript-estree:moderate, @typescript-eslint/utils:moderate, deepmerge:low, ejs:moderate, eslint:moderate, eslint-plugin-sonarjs:moderate, eslint-plugin-unicorn:moderate, filelist:moderate, glob:moderate, jake:moderate, minimatch:moderate, typescript-eslint:moderate, vite-plugin-pwa:moderate, workbox-build:moderate)",
+        "[npm-audit] .github/tools/codex: 7 dependencies; 0 info, 0 low, 0 moderate, 0 high, 0 critical",
+        "[npm-audit] marketing-site: 626 dependencies; 0 info, 0 low, 20 moderate, 0 high, 0 critical (@eslint-community/eslint-utils:moderate, @eslint/config-array:moderate, @eslint/eslintrc:moderate, @next/eslint-plugin-next:moderate, @typescript-eslint/eslint-plugin:moderate, @typescript-eslint/parser:moderate, @typescript-eslint/type-utils:moderate, @typescript-eslint/typescript-estree:moderate, @typescript-eslint/utils:moderate, @vercel/og:moderate, eslint:moderate, eslint-config-next:moderate, eslint-plugin-import:moderate, eslint-plugin-jsx-a11y:moderate, eslint-plugin-react:moderate, fast-uri:moderate, minimatch:moderate, satori:moderate, typescript-eslint:moderate, vinext:moderate)",
+        "[npm-audit] scripts: 47 dependencies; 0 info, 0 low, 1 moderate, 0 high, 0 critical (ip-address:moderate)",
+        "[npm-audit] tools/cb-control: 41 dependencies; 0 info, 0 low, 0 moderate, 0 high, 0 critical",
+        "[npm-audit] tools/mcp-server: 93 dependencies; 0 info, 0 low, 0 moderate, 0 high, 0 critical"
+      ],
+      "advisoryExit": 0,
+      "sentinelExecuted": false,
+      "cleanAfter": true,
+      "expectedBehaviorObserved": true,
+      "rawReceiptSha256": "00c02224ff53d7de7882a77a731bfd5e7c29cf644c69ce14535753c1005e3cf5"
+    },
+    {
+      "case": "steady",
+      "simulatedEvent": "locally simulated fork pull_request",
+      "time": "2026-11-03T23:26:42.137505+00:00",
+      "baseObject": "bad6b257df07e1a44aa895153d5054fb93d35a57",
+      "syntheticHead": "10852bbfb98b2e22f643662d8ad7b3b10fae6000",
+      "syntheticTree": "c849ed86c4f5b1cf2c401fec0c29a460be2f5752",
+      "modifiedPaths": [
+        ".github/tools/codex/.npmrc",
+        ".npmrc",
+        "marketing-site/.npmrc",
+        "marketing-site/package.json",
+        "scripts/audit-npm-locks.mjs",
+        "tools/mcp-server/.npmrc"
+      ],
+      "output": [
+        "[npm-audit] .: 1041 dependencies; 0 info, 2 low, 19 moderate, 0 high, 0 critical (@eslint-community/eslint-utils:moderate, @eslint/config-array:moderate, @rollup/plugin-node-resolve:low, @trickfilm400/rollup-plugin-off-main-thread:moderate, @typescript-eslint/eslint-plugin:moderate, @typescript-eslint/parser:moderate, @typescript-eslint/type-utils:moderate, @typescript-eslint/typescript-estree:moderate, @typescript-eslint/utils:moderate, deepmerge:low, ejs:moderate, eslint:moderate, eslint-plugin-sonarjs:moderate, eslint-plugin-unicorn:moderate, filelist:moderate, glob:moderate, jake:moderate, minimatch:moderate, typescript-eslint:moderate, vite-plugin-pwa:moderate, workbox-build:moderate)",
+        "[npm-audit] .github/tools/codex: 7 dependencies; 0 info, 0 low, 0 moderate, 0 high, 0 critical",
+        "[npm-audit] marketing-site: 626 dependencies; 0 info, 0 low, 20 moderate, 0 high, 0 critical (@eslint-community/eslint-utils:moderate, @eslint/config-array:moderate, @eslint/eslintrc:moderate, @next/eslint-plugin-next:moderate, @typescript-eslint/eslint-plugin:moderate, @typescript-eslint/parser:moderate, @typescript-eslint/type-utils:moderate, @typescript-eslint/typescript-estree:moderate, @typescript-eslint/utils:moderate, @vercel/og:moderate, eslint:moderate, eslint-config-next:moderate, eslint-plugin-import:moderate, eslint-plugin-jsx-a11y:moderate, eslint-plugin-react:moderate, fast-uri:moderate, minimatch:moderate, satori:moderate, typescript-eslint:moderate, vinext:moderate)",
+        "[npm-audit] scripts: 47 dependencies; 0 info, 0 low, 1 moderate, 0 high, 0 critical (ip-address:moderate)",
+        "[npm-audit] tools/cb-control: 41 dependencies; 0 info, 0 low, 0 moderate, 0 high, 0 critical",
+        "[npm-audit] tools/mcp-server: 93 dependencies; 0 info, 0 low, 0 moderate, 0 high, 0 critical"
+      ],
+      "advisoryExit": 0,
+      "sentinelExecuted": false,
+      "cleanAfter": true,
+      "expectedBehaviorObserved": true,
+      "rawReceiptSha256": "125c913da65369f313058e93a36aac58cc758045990f599d18cc7a8aac455fed"
+    },
+    {
+      "case": "vulnerable",
+      "simulatedEvent": "locally simulated fork pull_request",
+      "time": "2026-11-03T23:26:42.137540+00:00",
+      "baseObject": "bad6b257df07e1a44aa895153d5054fb93d35a57",
+      "syntheticHead": "acf22e912fb56cf4b06823782299530c595fb318",
+      "syntheticTree": "2b31d6b80d0ae9741f348aeb514e1caed2644a75",
+      "modifiedPaths": [
+        ".github/tools/codex/.npmrc",
+        ".npmrc",
+        "marketing-site/.npmrc",
+        "marketing-site/package-lock.json",
+        "marketing-site/package.json",
+        "tools/mcp-server/.npmrc"
+      ],
+      "output": [
+        "[npm-audit] .: 1041 dependencies; 0 info, 2 low, 19 moderate, 0 high, 0 critical (@eslint-community/eslint-utils:moderate, @eslint/config-array:moderate, @rollup/plugin-node-resolve:low, @trickfilm400/rollup-plugin-off-main-thread:moderate, @typescript-eslint/eslint-plugin:moderate, @typescript-eslint/parser:moderate, @typescript-eslint/type-utils:moderate, @typescript-eslint/typescript-estree:moderate, @typescript-eslint/utils:moderate, deepmerge:low, ejs:moderate, eslint:moderate, eslint-plugin-sonarjs:moderate, eslint-plugin-unicorn:moderate, filelist:moderate, glob:moderate, jake:moderate, minimatch:moderate, typescript-eslint:moderate, vite-plugin-pwa:moderate, workbox-build:moderate)",
+        "[npm-audit] .github/tools/codex: 7 dependencies; 0 info, 0 low, 0 moderate, 0 high, 0 critical",
+        "[npm-audit] marketing-site: 626 dependencies; 0 info, 0 low, 23 moderate, 2 high, 0 critical (@cloudflare/vite-plugin:moderate, @eslint-community/eslint-utils:moderate, @eslint/config-array:moderate, @eslint/eslintrc:moderate, @next/eslint-plugin-next:moderate, @typescript-eslint/eslint-plugin:moderate, @typescript-eslint/parser:moderate, @typescript-eslint/type-utils:moderate, @typescript-eslint/typescript-estree:moderate, @typescript-eslint/utils:moderate, @vercel/og:moderate, eslint:moderate, eslint-config-next:moderate, eslint-plugin-import:moderate, eslint-plugin-jsx-a11y:moderate, eslint-plugin-react:moderate, fast-uri:moderate, miniflare:moderate, minimatch:moderate, satori:moderate, typescript-eslint:moderate, undici:high, vinext:moderate, wrangler:moderate, zod:high)",
+        "[npm-audit] scripts: 47 dependencies; 0 info, 0 low, 1 moderate, 0 high, 0 critical (ip-address:moderate)",
+        "[npm-audit] tools/cb-control: 41 dependencies; 0 info, 0 low, 0 moderate, 0 high, 0 critical",
+        "[npm-audit] tools/mcp-server: 93 dependencies; 0 info, 0 low, 0 moderate, 0 high, 0 critical"
+      ],
+      "advisoryExit": 1,
+      "sentinelExecuted": false,
+      "cleanAfter": true,
+      "expectedBehaviorObserved": true,
+      "rawReceiptSha256": "32c9b76134ba8333823b7ae5ee1d334aa420488a76dd4e6a7c5a2d6966c330bb"
+    },
+    {
+      "case": "tampered-bootstrap",
+      "simulatedEvent": "locally simulated fork pull_request",
+      "time": "2026-11-03T23:26:42.145314+00:00",
+      "baseObject": "cd459dfec514c80e2fcc3f0d7965ea6ef76a7b6a",
+      "syntheticHead": "54e343d26404ac77a7cd9d9624ce0b1f265d04c4",
+      "syntheticTree": "0c2dcb70e2db159b90f229aaab72f7d1de67814a",
+      "modifiedPaths": [
+        ".github/tools/codex/.npmrc",
+        ".npmrc",
+        "marketing-site/.npmrc",
+        "marketing-site/package.json",
+        "scripts/audit-npm-locks.mjs",
+        "tools/mcp-server/.npmrc"
+      ],
+      "output": [],
+      "advisoryExit": 1,
+      "sentinelExecuted": false,
+      "cleanAfter": true,
+      "expectedBehaviorObserved": true,
+      "rawReceiptSha256": "f8ec59cec45b1f623e2245ee6ac7d1051367236977a056c1d3a90246d5e35a7e"
+    }
+  ],
+  "rejectedRuns": [
+    {
+      "case": "bootstrap",
+      "time": "2026-11-03T23:26:42.135542+00:00",
+      "result": "Marketing returned npm audit unavailable during simultaneous local scans. The check failed closed, so the run was excluded from the four completed scenarios and rerun in isolation. No sentinel executed.",
+      "output": [
+        "[npm-audit] .: 1041 dependencies; 0 info, 2 low, 19 moderate, 0 high, 0 critical (@eslint-community/eslint-utils:moderate, @eslint/config-array:moderate, @rollup/plugin-node-resolve:low, @trickfilm400/rollup-plugin-off-main-thread:moderate, @typescript-eslint/eslint-plugin:moderate, @typescript-eslint/parser:moderate, @typescript-eslint/type-utils:moderate, @typescript-eslint/typescript-estree:moderate, @typescript-eslint/utils:moderate, deepmerge:low, ejs:moderate, eslint:moderate, eslint-plugin-sonarjs:moderate, eslint-plugin-unicorn:moderate, filelist:moderate, glob:moderate, jake:moderate, minimatch:moderate, typescript-eslint:moderate, vite-plugin-pwa:moderate, workbox-build:moderate)",
+        "[npm-audit] .github/tools/codex: 7 dependencies; 0 info, 0 low, 0 moderate, 0 high, 0 critical",
+        "[npm-audit] marketing-site: unavailable \u2014 npm audit unavailable",
+        "[npm-audit] scripts: 47 dependencies; 0 info, 0 low, 1 moderate, 0 high, 0 critical (ip-address:moderate)",
+        "[npm-audit] tools/cb-control: 41 dependencies; 0 info, 0 low, 0 moderate, 0 high, 0 critical",
+        "[npm-audit] tools/mcp-server: 93 dependencies; 0 info, 0 low, 0 moderate, 0 high, 0 critical"
+      ],
+      "rawReceiptSha256": "f67e8e31fbdeb1e35420c62ced605d573b156d46257f52dbb39d7ef5298e95a7"
+    }
+  ]
+}

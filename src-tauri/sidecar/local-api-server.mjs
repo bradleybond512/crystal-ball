@@ -4270,8 +4270,9 @@ async function loadSpacewxSubfeed(id, url, normalize, usable) {
   // enough that keying off the raw response counts a broken payload as a
   // healthy subfeed — it would earn the full TTL and report ok while the
   // consumer sees no points and fails the voter for the whole window.
+  const fetchedAt = Date.now();
   const value = normalize(await fetchJsonSidecar(url));
-  const entry = { value, ok: usable(value) };
+  const entry = { value, ok: usable(value), fetchedAt };
   setCached(cacheKey, entry, spacewxSubfeedTtlMs(entry.ok));
   return entry;
 }
@@ -4351,6 +4352,7 @@ export async function fetchSpaceweatherStatusSidecar() {
   // "this product is QUIET" — an empty kpPoints means very different things in
   // those two cases, and they were previously indistinguishable.
   status.subfeeds = { xray: xray.ok, kp: kp.ok, cme: cme.ok };
+  status.kpFetchedAt = kp.ok ? kp.fetchedAt : null;
   // `degraded` stays reserved for a TOTAL outage. fetchSwpcKp reads it as
   // "don't trust this payload at all", so raising it for a CME-only failure
   // would take the Kp voter down over an unrelated product's outage.

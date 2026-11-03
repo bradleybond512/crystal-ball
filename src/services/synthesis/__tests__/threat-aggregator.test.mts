@@ -16,6 +16,8 @@ import {
   computeWildfireThreat,
   emptyAggregatedThreats,
   startThreatAggregator,
+  ThreatEvidenceStore,
+  type ThreatReceipt,
   type ThreatLevelsEventDetail,
 } from '../threat-aggregator';
 
@@ -502,47 +504,309 @@ describe('aggregateThreats', () => {
   });
 });
 
-describe('emptyAggregatedThreats', () => {
-  it('seeds all domains at NONE with the supplied timestamp', () => {
-    const out = emptyAggregatedThreats(T0);
-    for (const v of Object.values(out)) {
-      assert.equal(v.level, 'NONE');
-      assert.equal(v.lastUpdatedMs, T0);
+const seismicReceipt = (evidenceAtMs = T0, magnitude = 0): ThreatReceipt => ({
+  evidenceAtMs,
+  expiresAtMs: evidenceAtMs + ONE_HOUR,
+  scope: 'complete',
+  ageKind: 'fetched',
+  evaluate: (nowMs) => computeSeismicThreat({
+    quakes: magnitude ? [{ magnitude, timeMs: evidenceAtMs }] : [],
+    nowMs,
+  }),
+});
+
+describe('threat evidence', () => {
+  it('starts with eleven unknown domains and no observation clocks', () => {
+    const rows = Object.values(emptyAggregatedThreats());
+    assert.equal(rows.length, 11);
+    for (const row of rows) {
+      assert.equal(row.coverage, 'unknown');
+      assert.equal(row.lastUpdatedMs, 0);
+      assert.deepEqual(row.sources, []);
     }
+  });
+
+  it('keeps the original observation and validity when a receipt is replayed', () => {
+    let now = T0;
+    const store = new ThreatEvidenceStore(() => now);
+    store.begin('seismic', 'USGS').report(seismicReceipt(T0, 7));
+    now += ONE_HOUR;
+    store.begin('seismic', 'USGS').report({
+      ...seismicReceipt(T0), expiresAtMs: now + ONE_HOUR,
+    });
+    const row = store.sample(now).seismic;
+    assert.equal(row.coverage, 'stale');
+    assert.equal(row.lastUpdatedMs, T0);
+    assert.equal(row.level, 'NONE');
+    assert.equal(row.sources[0]!.reporting, false);
+  });
+
+  it('accepts a worse coverage report for a replay without renewing or replacing the signal', () => {
+    const store = new ThreatEvidenceStore(() => T0);
+    store.begin('seismic', 'USGS').report(seismicReceipt(T0, 7));
+    store.begin('seismic', 'USGS').report({
+      ...seismicReceipt(), degraded: true, expiresAtMs: T0 + 2 * ONE_HOUR,
+    });
+    const row = store.sample(T0).seismic;
+    assert.equal(row.level, 'CRITICAL');
+    assert.equal(row.coverage, 'partial');
+    assert.equal(row.sources[0]!.state, 'degraded');
+    store.begin('seismic', 'USGS').report(seismicReceipt());
+    assert.equal(store.sample(T0).seismic.coverage, 'partial');
+    assert.equal(store.sample(T0 + ONE_HOUR).seismic.level, 'NONE');
+  });
+
+  it('keeps a failed source last-known, withholds reassurance, and expires it offline', () => {
+    const store = new ThreatEvidenceStore(() => T0);
+    store.begin('seismic', 'USGS').report(seismicReceipt(T0, 7));
+    const refresh = store.begin('seismic', 'USGS');
+    assert.equal(store.sample(T0).seismic.coverage, 'complete');
+    refresh.fail();
+    const degraded = store.sample(T0 + 10).seismic;
+    assert.equal(degraded.coverage, 'unavailable');
+    assert.equal(degraded.lastKnown, true);
+    assert.equal(degraded.level, 'CRITICAL');
+    assert.equal(degraded.signalSource, 'USGS');
+    assert.equal(degraded.sources[0]!.reporting, false);
+    assert.equal(store.sample(T0 + ONE_HOUR).seismic.level, 'NONE');
+  });
+
+  it('requires strictly newer evidence to recover from a failed refresh', () => {
+    let now = T0;
+    const store = new ThreatEvidenceStore(() => now);
+    store.begin('seismic', 'USGS').report(seismicReceipt());
+    store.begin('seismic', 'USGS').fail();
+    now++;
+    store.begin('seismic', 'USGS').report(seismicReceipt());
+    const replay = store.sample(now).seismic;
+    assert.equal(replay.coverage, 'unavailable');
+    assert.equal(replay.sources[0]!.reporting, false);
+    assert.equal(replay.lastUpdatedMs, T0);
+    store.begin('seismic', 'USGS').report(seismicReceipt(now));
+    assert.equal(store.sample(now).seismic.coverage, 'complete');
+  });
+
+  it('accepts an ordered change within one observation including a decrease, without renewing its age', () => {
+    let now = T0 + 200;
+    const store = new ThreatEvidenceStore(() => now);
+    const send = (magnitude: number, rev: number, end: number) => store.begin('seismic', 'Sensor').report({
+      ...seismicReceipt(T0, magnitude), revisionAtMs: rev, revisionKey: String(magnitude), expiresAtMs: end,
+    });
+    send(2, T0, T0 + 500);
+    store.begin('seismic', 'Sensor').fail();
+    send(2, T0 + 50, T0 + 1000);
+    assert.equal(store.sample().seismic.coverage, 'unavailable');
+    send(7, T0 + 100, T0 + 900);
+    assert.equal(store.sample().seismic.level, 'CRITICAL');
+    assert.equal(store.sample().seismic.lastUpdatedMs, T0);
+    assert.equal(store.sample().seismic.lastKnown, false);
+    send(5, T0 + 150, T0 + 450);
+    assert.equal(store.sample().seismic.level, 'ELEVATED');
+    assert.equal(store.sample(T0 + 449).seismic.coverage, 'complete');
+    now = T0 + 450;
+    send(8, now, T0 + 1000);
+    assert.equal(store.sample().seismic.coverage, 'stale');
+    assert.equal(store.sample().seismic.level, 'NONE');
+  });
+
+  it('retains a positive as last-known when different content cannot be ordered', () => {
+    const store = new ThreatEvidenceStore(() => T0 + 200);
+    const send = (magnitude: number, rev?: number) => store.begin('seismic', 'Sensor').report({
+      ...seismicReceipt(T0, magnitude), revisionAtMs: rev, revisionKey: String(magnitude),
+    });
+    send(7, T0);
+    send(7, T0 + 100);
+    for (const rev of [T0 + 50, T0 + 100, undefined]) {
+      send(0, rev);
+      const row = store.sample().seismic;
+      assert.equal(row.coverage, 'unavailable');
+      assert.equal(row.level, 'CRITICAL');
+      assert.equal(row.lastKnown, true);
+    }
+  });
+
+  it('rejects invalid revision clocks and unlabeled revisions before admission', () => {
+    const store = new ThreatEvidenceStore(() => T0 + 100);
+    for (const [clock, key] of [[T0 - 1, 'a'], [T0 + 101, 'a'], [NaN, 'a'], [T0, undefined], [T0, '']] as const) {
+      store.begin('seismic', 'Sensor').report({ ...seismicReceipt(), revisionAtMs: clock, revisionKey: key });
+      assert.equal(store.sample().seismic.coverage, 'unavailable');
+      assert.equal(store.sample().seismic.lastUpdatedMs, 0);
+    }
+  });
+
+  it('does not extend the original validity window on a newer revision', () => {
+    const store = new ThreatEvidenceStore(() => T0 + 100);
+    store.begin('seismic', 'Sensor').report({
+      ...seismicReceipt(T0, 2), revisionAtMs: T0, revisionKey: '2', expiresAtMs: T0 + 500,
+    });
+    store.begin('seismic', 'Sensor').report({
+      ...seismicReceipt(T0, 7), revisionAtMs: T0 + 100, revisionKey: '7', expiresAtMs: T0 + 900,
+    });
+    assert.equal(store.sample(T0 + 499).seismic.level, 'CRITICAL');
+    assert.equal(store.sample(T0 + 500).seismic.coverage, 'stale');
+  });
+
+  it('accepts an ordered membership removal even when the latest remaining item is older', () => {
+    const store = new ThreatEvidenceStore(() => T0 + 50);
+    const send = (age: number, clock: number, magnitude: number, key: string) => store.begin('seismic', 'Sample').report({
+      ...seismicReceipt(age, magnitude), revisionAtMs: clock, revisionKey: key, snapshotMembership: true,
+    });
+    send(T0, T0 + 10, 7, 'six');
+    send(T0 - 50, T0 + 20, 5, 'five');
+    const revised = store.sample().seismic;
+    assert.equal(revised.level, 'ELEVATED');
+    assert.equal(revised.lastUpdatedMs, T0 - 50);
+    assert.equal(revised.lastKnown, false);
+    send(T0, T0 + 10, 7, 'six');
+    assert.equal(store.sample().seismic.level, 'ELEVATED');
+    assert.equal(store.sample().seismic.lastKnown, true);
+    send(T0 + 25, T0 + 30, 7, 'seven');
+    assert.equal(store.sample().seismic.level, 'CRITICAL');
+    assert.equal(store.sample().seismic.lastUpdatedMs, T0 + 25);
+    assert.equal(store.sample(T0 + ONE_HOUR + 24).seismic.level, 'CRITICAL');
+  });
+
+  it('never replaces an observation with an older bin even when its publication clock increases', () => {
+    const store = new ThreatEvidenceStore(() => T0 + 50);
+    store.begin('seismic', 'Mutable bin').report({ ...seismicReceipt(T0, 7), revisionAtMs: T0, revisionKey: '7' });
+    store.begin('seismic', 'Mutable bin').report({ ...seismicReceipt(T0 - 50, 5), revisionAtMs: T0 + 20, revisionKey: '5' });
+    assert.equal(store.sample().seismic.level, 'CRITICAL');
+    assert.equal(store.sample().seismic.lastUpdatedMs, T0);
+    assert.equal(store.sample().seismic.lastKnown, true);
+  });
+
+  it('prefers a current signal at equal severity, then the newest, then a stable source', () => {
+    const store = new ThreatEvidenceStore(() => T0);
+    for (const [source, stamp] of [['B', T0], ['A', T0], ['Old', T0 - 10]] as const) {
+      store.begin('seismic', source).report(seismicReceipt(stamp, 7));
+      store.begin('seismic', source).fail();
+    }
+    assert.equal(store.sample(T0).seismic.signalSource, 'A');
+    store.begin('seismic', 'Older but reporting').report(seismicReceipt(T0 - 20, 7));
+    assert.equal(store.sample(T0).seismic.signalSource, 'Older but reporting');
+    assert.equal(store.sample(T0).seismic.lastKnown, false);
+  });
+
+  it('keeps a partially successful leg reporting when its sibling fails', () => {
+    const store = new ThreatEvidenceStore(() => T0);
+    const stop = store.begin('aviation', 'FAA');
+    stop.report({
+      ...seismicReceipt(), scope: 'partial', degraded: true,
+      evaluate: (nowMs) => computeAviationThreat({ groundStops: [{ airport: 'JFK' }], sigmets: [], nowMs }),
+    });
+    store.begin('aviation', 'SIGMET').fail();
+    const row = store.sample(T0).aviation;
+    assert.equal(row.coverage, 'partial');
+    assert.equal(row.level, 'HIGH');
+    assert.equal(row.lastKnown, false);
+    assert.deepEqual(row.sources.map(s => [s.source, s.state, s.reporting]), [
+      ['FAA', 'degraded', true], ['SIGMET', 'unavailable', false],
+    ]);
+  });
+
+  it('leads with the reporting hazard and preserves the stronger last-known sibling', () => {
+    const store = new ThreatEvidenceStore(() => T0);
+    store.begin('aviation', 'FAA').report({
+      ...seismicReceipt(), scope: 'partial',
+      evaluate: nowMs => computeAviationThreat({ sigmets: [], groundStops: [{ airport: 'JFK' }], nowMs }),
+    });
+    store.begin('aviation', 'FAA').fail();
+    store.begin('aviation', 'SIGMET').report({
+      ...seismicReceipt(), scope: 'partial',
+      evaluate: nowMs => computeAviationThreat({ sigmets: [{ hazard: 'icing' }], groundStops: [], nowMs }),
+    });
+    const row = store.sample(T0).aviation;
+    assert.equal(row.level, 'ELEVATED');
+    assert.equal(row.lastKnown, false);
+    assert.equal(row.signalSource, 'SIGMET');
+    assert.deepEqual(row.sources[0]!.signal, { level: 'HIGH', topAlert: 'JFK ground stop' });
+    assert.equal(row.sources[0]!.reporting, false);
+    assert.deepEqual(row.sources[1]!.signal, { level: 'ELEVATED', topAlert: '1 SIGMET' });
+  });
+
+  it('uses the oldest complete receipt and withholds a whole-domain claim for partial evidence', () => {
+    const store = new ThreatEvidenceStore(() => T0);
+    store.begin('seismic', 'Older').report(seismicReceipt(T0 - 100));
+    store.begin('seismic', 'Newer').report(seismicReceipt(T0));
+    assert.equal(store.sample(T0).seismic.coverage, 'complete');
+    assert.equal(store.sample(T0).seismic.lastUpdatedMs, T0 - 100);
+    store.begin('seismic', 'Partial').report({ ...seismicReceipt(), scope: 'partial' });
+    assert.equal(store.sample(T0).seismic.coverage, 'partial');
+  });
+
+  it('ignores superseded and cancelled attempts, including repeated settlements', () => {
+    const store = new ThreatEvidenceStore(() => T0);
+    const first = store.begin('seismic', 'USGS');
+    assert.equal(first.isCurrent(), true);
+    const second = store.begin('seismic', 'USGS');
+    assert.equal(first.isCurrent(), false);
+    assert.equal(second.isCurrent(), true);
+    second.report(seismicReceipt(T0, 7));
+    assert.equal(second.isCurrent(), false);
+    first.fail();
+    second.fail();
+    const retired = store.begin('seismic', 'USGS');
+    retired.cancel();
+    retired.fail();
+    assert.equal(store.sample(T0).seismic.level, 'CRITICAL');
+    assert.equal(store.sample(T0).seismic.coverage, 'complete');
+    const neverAdmitted = store.begin('maritime', 'AIS');
+    neverAdmitted.cancel();
+    neverAdmitted.report(seismicReceipt());
+    assert.equal(store.sample(T0).maritime.coverage, 'unknown');
+  });
+
+  it('rejects time travel, invalid horizons, and regressions without replacing a newer hazard', () => {
+    const store = new ThreatEvidenceStore(() => T0);
+    for (const receipt of [
+      seismicReceipt(T0 + 1), seismicReceipt(NaN), { ...seismicReceipt(), expiresAtMs: T0 },
+      { ...seismicReceipt(), expiresAtMs: Infinity },
+    ]) {
+      store.begin('seismic', 'USGS').report(receipt);
+      assert.equal(store.sample(T0).seismic.coverage, 'unavailable');
+    }
+    store.begin('seismic', 'USGS').report(seismicReceipt(T0, 7));
+    store.begin('seismic', 'USGS').report(seismicReceipt(T0 - 1));
+    const row = store.sample(T0).seismic;
+    assert.equal(row.level, 'CRITICAL');
+    assert.equal(row.lastUpdatedMs, T0);
+    assert.notEqual(row.coverage, 'complete');
+  });
+
+  it('re-evaluates event validity before the source receipt expires', () => {
+    const store = new ThreatEvidenceStore(() => T0);
+    store.begin('aviation', 'FAA').report({
+      ...seismicReceipt(), scope: 'partial',
+      evaluate: nowMs => computeAviationThreat({ sigmets: [], groundStops: nowMs < T0 + 10 ? [{ airport: 'JFK' }] : [], nowMs }),
+    });
+    assert.equal(store.sample(T0).aviation.level, 'HIGH');
+    assert.equal(store.sample(T0 + 10).aviation.level, 'NONE');
+    assert.equal(store.sample(T0 + 10).aviation.coverage, 'partial');
   });
 });
 
 describe('startThreatAggregator', () => {
-  it('emits a wm:threat-levels-updated detail on first poll', async () => {
+  it('publishes admitted readings, preserves their clock across ticks and stops publishing on teardown', async () => {
+    let now = T0;
+    const store = new ThreatEvidenceStore(() => now);
     const events: ThreatLevelsEventDetail[] = [];
-    const handle = startThreatAggregator({
-      intervalMs: 1_000_000,
-      now: () => T0,
-      emit: (d) => events.push(d),
-      fetchSeismic: async () => ({
-        quakes: [{ magnitude: 7.2, place: 'Test', timeMs: T0 }],
-        nowMs: T0,
-      }),
-    });
+    const handle = startThreatAggregator({ store, now: () => now, emit: d => events.push(d) });
+    try {
+      assert.equal(events[0]!.threats.seismic.coverage, 'unknown');
+      store.begin('seismic', 'USGS').report(seismicReceipt(T0, 7));
+      now += 30_000;
+      await handle.pollNow();
+      assert.equal(events.at(-1)!.threats.seismic.level, 'CRITICAL');
+      assert.equal(events.at(-1)!.threats.seismic.lastUpdatedMs, T0);
+      store.begin('cyber', 'OTX').fail();
+      await handle.pollNow();
+      assert.equal(events.at(-1)!.threats.cyber.coverage, 'unavailable');
+      assert.equal(events.at(-1)!.threats.cyber.lastUpdatedMs, 0);
+    } finally {
+      handle.stop();
+    }
+    const count = events.length;
     await handle.pollNow();
-    handle.stop();
-    assert.ok(events.length >= 1);
-    assert.equal(events[0]!.threats.seismic.level, 'CRITICAL');
-  });
-
-  it('survives a fetcher that throws', async () => {
-    const events: ThreatLevelsEventDetail[] = [];
-    const handle = startThreatAggregator({
-      intervalMs: 1_000_000,
-      now: () => T0,
-      emit: (d) => events.push(d),
-      fetchCyber: async () => {
-        throw new Error('boom');
-      },
-    });
-    await handle.pollNow();
-    handle.stop();
-    // Cyber falls back to default snapshot, so its level is NONE.
-    assert.equal(events.at(-1)!.threats.cyber.level, 'NONE');
+    assert.equal(events.length, count);
   });
 });

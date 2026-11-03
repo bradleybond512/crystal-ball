@@ -233,6 +233,7 @@ test('fetchSwpcKp fails closed on non-2xx, degraded, malformed, and empty payloa
   for (const [label, payload, status] of [
     ['non-2xx', { kpPoints: [{ time_tag: freshTag(0), kp: 2 }] }, 502],
     ['degraded flag', { degraded: true, kpPoints: [{ time_tag: freshTag(0), kp: 2 }] }, 200],
+    ['Kp subfeed failed', { subfeeds: { kp: false }, kpPoints: [{ time_tag: freshTag(0), kp: 9 }] }, 200],
     ['kpPoints missing', { geomag: null }, 200],
     ['kpPoints not an array', { kpPoints: { kp: 2 } }, 200],
     ['no usable rows', { kpPoints: [{ time_tag: 'not-a-date', kp: 2 }, { time_tag: freshTag(0), kp: null }] }, 200],
@@ -256,6 +257,7 @@ test('fetchGfzKp fails closed on non-2xx, degraded, malformed, and empty payload
   for (const [label, payload, status] of [
     ['non-2xx', { samples: [{ observedAt: fresh, kp: 1 }] }, 502],
     ['degraded flag', { degraded: true, samples: [{ observedAt: fresh, kp: 1 }] }, 200],
+    ['unrepresentable future epoch', { samples: [{ observedAt: 1e30, kp: 9 }] }, 200],
     ['samples missing', {}, 200],
     ['samples not an array', { samples: { kp: 1 } }, 200],
     ['no usable rows', { samples: [{ observedAt: 'x', kp: 1 }, { observedAt: fresh, kp: null }] }, 200],

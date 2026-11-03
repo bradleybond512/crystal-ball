@@ -12,12 +12,11 @@
  * ambient awareness, not a historical log.
  */
 
-import { notificationDispatcher } from './notification-dispatcher';
+import { holdNotificationForMode, notificationDispatcher } from './notification-dispatcher';
 import { logDebug } from './reasoning-debug';
 import type { UnifiedAlert } from './unified-alerts';
 import type { AnalystSnapshot, Hypothesis } from './analyst-loop';
 import { signatureFor } from './hypothesis-feedback';
-import { isGhostMode } from './mode-manager';
 
 const NOTIFY_WINDOW_MS = 60 * 60 * 1000; // Don't re-notify the same signature within an hour.
 
@@ -60,7 +59,7 @@ function handleSnapshot(snapshot: AnalystSnapshot): void {
     fresh.push(h);
   }
   if (fresh.length === 0) return;
-  if (isGhostMode()) return; // Ghost Mode: signatures recorded above, but no banner
+  if (holdNotificationForMode(true)) return;
 
   // Pick the highest-confidence fresh hypothesis as the notification headline.
   const lead = [...fresh].sort((a, b) => b.confidence - a.confidence)[0];

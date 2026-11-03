@@ -43,12 +43,12 @@ import { dataFreshness } from '@/services/data-freshness';
 
 const REFRESH_MS = 60 * 1000;
 
-const ALL_NOTIFICATION_DOMAINS: NotificationDomain[] = [
+const ALL_NOTIFICATION_DOMAINS: Exclude<NotificationDomain, 'derived'>[] = [
   'earthquakes', 'wildfire', 'aviation', 'maritime', 'biosurveillance',
   'space_weather', 'infrastructure', 'geopolitical', 'weather', 'cyber', 'supply',
 ];
 
-const DOMAIN_LABEL: Record<NotificationDomain, string> = {
+const DOMAIN_LABEL: Record<(typeof ALL_NOTIFICATION_DOMAINS)[number], string> = {
   earthquakes: 'Earthquakes',
   wildfire: 'Wildfire',
   aviation: 'Aviation',
@@ -353,6 +353,7 @@ export class OperatorModePanel extends Panel {
     }).join('');
     return `<div style="padding:10px 12px;border-bottom:1px solid var(--border-subtle,#222);">
       <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-secondary,#888);margin-bottom:4px;">Mute by domain</div>
+      <div style="font-size:11px;color:var(--text-secondary,#888);">Manage Derived alerts in Notification Settings.</div>
       <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:0;">${rows}</ul>
     </div>`;
   }

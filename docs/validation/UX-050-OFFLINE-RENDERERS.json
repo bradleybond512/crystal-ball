@@ -1,0 +1,484 @@
+{
+  "verifiedCode": "55dfd847f104df125c629a12b5301640e379a239",
+  "originalVerifiedCode": "d641f0c0f7d3cb619f8233610f9390883966f4d7",
+  "productTotals": {
+    "chromium": 39,
+    "native": 39
+  },
+  "componentTotals": {
+    "chromium": 54,
+    "native": 54
+  },
+  "totalPass": {
+    "chromium": 93,
+    "native": 93
+  },
+  "totalFail": 0,
+  "build": {
+    "web": {
+      "budgetOutput": "[pwa:budget] 468 entries, 21.90 MiB",
+      "ciBudgetEntries": 500,
+      "ciBudgetMiB": 25,
+      "index": "4065a43932d1a3587bbe7b8f7ac93e8d5fec4d7e4c3a7e657e9ad619db2eb924",
+      "sw": "a555988e9771539e26caa30199fe49adbb852d631a7fa1ca5e1c12de38c5375c",
+      "cesiumDirectoryIncluded": true
+    },
+    "desktop": {
+      "budgetOutput": "[pwa:budget] 468 entries, 21.90 MiB",
+      "ciBudgetEntries": 500,
+      "ciBudgetMiB": 25,
+      "index": "debca79e703efcd3b798db38d5430387a2639410b682219b4cf185fc803dd22a",
+      "sw": "524f0f14a6dfe469bbca04b90ec4f176e69137bc978d520cb15bde3a0a6c22f1",
+      "cesiumDirectoryIncluded": true
+    }
+  },
+  "product": {
+    "chromium": [
+      {
+        "file": "precache-repair-final/all-read-chromium.json",
+        "sha256": "04ba9742d7fdd6de55793a8b9436bf7b2ea8910c8931e598152a56aafd554af2",
+        "pass": 8,
+        "fail": 0,
+        "indexSha256": "4065a43932d1a3587bbe7b8f7ac93e8d5fec4d7e4c3a7e657e9ad619db2eb924",
+        "hostSha256": null,
+        "case": "all-read",
+        "checks": [
+          "preference unreadable exposes two genuine operator choices",
+          "unreadable preference mounts early outside hidden app root",
+          "failed full bootstrap remains disclosed while controls stay active",
+          "local Ghost choice survives failed startup and rejected write",
+          "local standard choice remains usable without storage",
+          "at most one visible notice across bootstrap and regular mounts",
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ]
+      },
+      {
+        "file": "precache-repair-final/getter-chromium.json",
+        "sha256": "4fa751bab3cf467536a6768fd9b7fa429f2ba2596f2c2b44dba812d6e41986a0",
+        "pass": 8,
+        "fail": 0,
+        "indexSha256": "4065a43932d1a3587bbe7b8f7ac93e8d5fec4d7e4c3a7e657e9ad619db2eb924",
+        "hostSha256": null,
+        "case": "getter",
+        "checks": [
+          "preference unreadable exposes two genuine operator choices",
+          "unreadable preference mounts early outside hidden app root",
+          "failed full bootstrap remains disclosed while controls stay active",
+          "local Ghost choice survives failed startup and rejected write",
+          "local standard choice remains usable without storage",
+          "at most one visible notice across bootstrap and regular mounts",
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ]
+      },
+      {
+        "file": "precache-repair-final/mode-key-chromium.json",
+        "sha256": "f63e6126612854ff3fc6848f38691c648be3f782a61972a935c9df652befbac0",
+        "pass": 9,
+        "fail": 0,
+        "indexSha256": "4065a43932d1a3587bbe7b8f7ac93e8d5fec4d7e4c3a7e657e9ad619db2eb924",
+        "hostSha256": null,
+        "case": "mode-key",
+        "checks": [
+          "preference unreadable exposes two genuine operator choices",
+          "unreadable preference mounts early outside hidden app root",
+          "regular classic or Home surface can own the notice after app startup",
+          "handoff retains the unresolved operator choice",
+          "no duplicate classic notice node at handoff",
+          "real product accepts a window-only choice after mode-key denial",
+          "at most one visible notice across bootstrap and regular mounts",
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ]
+      },
+      {
+        "file": "precache-repair-final/saved-chromium.json",
+        "sha256": "31a8e60689220e0ca4c3202410994715b8ac55b3a39acb60c7bbf72e617238c9",
+        "pass": 5,
+        "fail": 0,
+        "indexSha256": "4065a43932d1a3587bbe7b8f7ac93e8d5fec4d7e4c3a7e657e9ad619db2eb924",
+        "hostSha256": null,
+        "case": "saved",
+        "checks": [
+          "saved Ghost is visible on product shell",
+          "regular classic or Home surface can own the notice after app startup",
+          "at most one visible notice across bootstrap and regular mounts",
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ]
+      },
+      {
+        "file": "precache-repair-final/late-chromium.json",
+        "sha256": "d6a742cd2be2545e5ce421ccb5d505d013768bd74c3221362a1ecf85b1b849cc",
+        "pass": 9,
+        "fail": 0,
+        "indexSha256": "4065a43932d1a3587bbe7b8f7ac93e8d5fec4d7e4c3a7e657e9ad619db2eb924",
+        "hostSha256": null,
+        "case": "late",
+        "checks": [
+          "preference unreadable exposes two genuine operator choices",
+          "unreadable preference mounts early outside hidden app root",
+          "failed full bootstrap remains disclosed while controls stay active",
+          "late appStartup rejection reported after the main module loaded",
+          "local Ghost choice survives failed startup and rejected write",
+          "local standard choice remains usable without storage",
+          "at most one visible notice across bootstrap and regular mounts",
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ]
+      }
+    ],
+    "native": [
+      {
+        "file": "precache-repair-final/all-read-native.json",
+        "sha256": "8d07085bf5213e78d0ef83a486cf93d2ca84c67829347c3d2bfe128830805acc",
+        "pass": 8,
+        "fail": 0,
+        "indexSha256": "debca79e703efcd3b798db38d5430387a2639410b682219b4cf185fc803dd22a",
+        "hostSha256": "160a48a97fbc55f7baf8bd73ecd94a75c2a78e4d2e46312068edf59cee03c089",
+        "case": "all-read",
+        "checks": [
+          "preference unreadable exposes two genuine operator choices",
+          "unreadable preference mounts early outside hidden app root",
+          "failed full bootstrap remains disclosed while controls stay active",
+          "local Ghost choice survives failed startup and rejected write",
+          "local standard choice remains usable without storage",
+          "at most one visible notice across bootstrap and regular mounts",
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ]
+      },
+      {
+        "file": "precache-repair-final/getter-native.json",
+        "sha256": "cf02cfab3e54c3474da9c330d0be14315229594f8fc226d38cc55e4ebd651ba4",
+        "pass": 8,
+        "fail": 0,
+        "indexSha256": "debca79e703efcd3b798db38d5430387a2639410b682219b4cf185fc803dd22a",
+        "hostSha256": "160a48a97fbc55f7baf8bd73ecd94a75c2a78e4d2e46312068edf59cee03c089",
+        "case": "getter",
+        "checks": [
+          "preference unreadable exposes two genuine operator choices",
+          "unreadable preference mounts early outside hidden app root",
+          "failed full bootstrap remains disclosed while controls stay active",
+          "local Ghost choice survives failed startup and rejected write",
+          "local standard choice remains usable without storage",
+          "at most one visible notice across bootstrap and regular mounts",
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ]
+      },
+      {
+        "file": "precache-repair-final/mode-key-native.json",
+        "sha256": "26626a325879755ec3db73b8e8067bd52f6eade82ddb8add354a8c5c9ee97730",
+        "pass": 9,
+        "fail": 0,
+        "indexSha256": "debca79e703efcd3b798db38d5430387a2639410b682219b4cf185fc803dd22a",
+        "hostSha256": "160a48a97fbc55f7baf8bd73ecd94a75c2a78e4d2e46312068edf59cee03c089",
+        "case": "mode-key",
+        "checks": [
+          "preference unreadable exposes two genuine operator choices",
+          "unreadable preference mounts early outside hidden app root",
+          "regular classic or Home surface can own the notice after app startup",
+          "handoff retains the unresolved operator choice",
+          "no duplicate classic notice node at handoff",
+          "real product accepts a window-only choice after mode-key denial",
+          "at most one visible notice across bootstrap and regular mounts",
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ]
+      },
+      {
+        "file": "precache-repair-final/saved-native.json",
+        "sha256": "4e3d4dc6f0d151d35c832c2fcfb2eab350e9e25cde778f6f8cfb83bfe2786cbe",
+        "pass": 5,
+        "fail": 0,
+        "indexSha256": "debca79e703efcd3b798db38d5430387a2639410b682219b4cf185fc803dd22a",
+        "hostSha256": "160a48a97fbc55f7baf8bd73ecd94a75c2a78e4d2e46312068edf59cee03c089",
+        "case": "saved",
+        "checks": [
+          "saved Ghost is visible on product shell",
+          "regular classic or Home surface can own the notice after app startup",
+          "at most one visible notice across bootstrap and regular mounts",
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ]
+      },
+      {
+        "file": "precache-repair-final/late-native.json",
+        "sha256": "bbb490789e0a81ef16722208eb7fbabeb9310749c0bc3519d0441ef764a6d6fe",
+        "pass": 9,
+        "fail": 0,
+        "indexSha256": "debca79e703efcd3b798db38d5430387a2639410b682219b4cf185fc803dd22a",
+        "hostSha256": "160a48a97fbc55f7baf8bd73ecd94a75c2a78e4d2e46312068edf59cee03c089",
+        "case": "late",
+        "checks": [
+          "preference unreadable exposes two genuine operator choices",
+          "unreadable preference mounts early outside hidden app root",
+          "failed full bootstrap remains disclosed while controls stay active",
+          "late appStartup rejection reported after the main module loaded",
+          "local Ghost choice survives failed startup and rejected write",
+          "local standard choice remains usable without storage",
+          "at most one visible notice across bootstrap and regular mounts",
+          "fixture sent no real or attempted OS notifications",
+          "saved-place storage was not written"
+        ]
+      }
+    ]
+  },
+  "components": {
+    "chromium": [
+      {
+        "file": "precache-final-saved-chromium.json",
+        "sha256": "b904ae590485038a40dfe84648d7e36634beb5032604156d38dfd908fc2ca0c8",
+        "pass": 32,
+        "fail": 0,
+        "indexSha256": null,
+        "hostSha256": null,
+        "case": "saved",
+        "checks": [
+          "saved Ghost is available synchronously to the first mode read",
+          "saved Ghost selects five-times polling cadence",
+          "extreme warning at a synthetic saved site reaches actionable ladder decision",
+          "critical site notification is withheld at startup",
+          "trace records the actual Ghost gate",
+          "classic view has critical scope disclosure",
+          "one terminal critical attempt is counted once",
+          "noncritical request counts once and silent does not count",
+          "eligible analyst batch counts once, duplicate and visible HUD do not",
+          "suppressed dispatcher and analyst attempts produce no localStorage writes",
+          "count is visible outside the live status",
+          "private alert contents do not appear in notice or persistent writes",
+          "keyboard focus follows an active Ghost control on Home takeover",
+          "real HomeShellOverlay shows the same Ghost session",
+          "classic notice is hidden under Home",
+          "notice fits the actual viewport",
+          "Home exposes a single exit button while visible",
+          "keyboard focus follows the active Ghost control back to classic",
+          "classic notice returns without adding suppressions",
+          "exit is an enabled focusable button",
+          "operator can focus the exit control",
+          "exit returns the window to standard mode",
+          "focus returns to the active classic toolbar on exit",
+          "leaving Ghost resets the session count",
+          "a standard critical request can reach permission boundary",
+          "pending permission cannot replay across enter and exit",
+          "legitimate fresh standard notification still invokes guarded constructor",
+          "manual Ghost exit restores prior God\u2019s Vision",
+          "cross-window preference changes reach installed UI state",
+          "cross-window Ghost starts new local session",
+          "classic teardown removes its notice",
+          "fixture never contacted providers or external channels"
+        ]
+      },
+      {
+        "file": "precache-final-unknown-chromium.json",
+        "sha256": "0abe1ecb42c8b24dad0961f26c87e4e04e0c56323a2d75544e59fe3c4cb3e0b8",
+        "pass": 11,
+        "fail": 0,
+        "indexSha256": null,
+        "hostSha256": null,
+        "case": "unknown",
+        "checks": [
+          "storage read failure holds a distinct unknown preference",
+          "unknown preference holds external critical delivery without requesting permission",
+          "unknown hold does not count as confirmed Ghost suppression",
+          "Home shell can present the unknown-mode choice",
+          "unknown preference has visible mode choices",
+          "unsaved operator choice controls the current window",
+          "unsaved Ghost blocks and accounts",
+          "receipt remains private in renderer",
+          "unsaved choice is advertised",
+          "retry persists the operator\u2019s choice",
+          "fixtures made zero external requests and sends"
+        ]
+      },
+      {
+        "file": "precache-final-unknown-mount-all-chromium.json",
+        "sha256": "626a2b5c43150a3a3c377d508bc92dc6114fd88c3641b324b404a84a0b841d2f",
+        "pass": 11,
+        "fail": 0,
+        "indexSha256": null,
+        "hostSha256": null,
+        "case": "unknown-mount-all",
+        "checks": [
+          "storage read failure holds a distinct unknown preference",
+          "unknown preference holds external critical delivery without requesting permission",
+          "unknown hold does not count as confirmed Ghost suppression",
+          "Home shell can present the unknown-mode choice",
+          "unknown preference has visible mode choices",
+          "unsaved operator choice controls the current window",
+          "unsaved Ghost blocks and accounts",
+          "receipt remains private in renderer",
+          "unsaved choice is advertised",
+          "retry persists the operator\u2019s choice",
+          "fixtures made zero external requests and sends"
+        ]
+      }
+    ],
+    "native": [
+      {
+        "file": "precache-final-saved-native.json",
+        "sha256": "b04ba2ca9c1f90777b9d8636c7acf90050cbe3bb943f7b5bffc33b12c7f0d4a7",
+        "pass": 32,
+        "fail": 0,
+        "indexSha256": null,
+        "hostSha256": "44bd3e41c8d8b39031b6857d7d33aa63215130570d792573c548d402a781c96d",
+        "case": "saved",
+        "checks": [
+          "saved Ghost is available synchronously to the first mode read",
+          "saved Ghost selects five-times polling cadence",
+          "extreme warning at a synthetic saved site reaches actionable ladder decision",
+          "critical site notification is withheld at startup",
+          "trace records the actual Ghost gate",
+          "classic view has critical scope disclosure",
+          "one terminal critical attempt is counted once",
+          "noncritical request counts once and silent does not count",
+          "eligible analyst batch counts once, duplicate and visible HUD do not",
+          "suppressed dispatcher and analyst attempts produce no localStorage writes",
+          "count is visible outside the live status",
+          "private alert contents do not appear in notice or persistent writes",
+          "keyboard focus follows an active Ghost control on Home takeover",
+          "real HomeShellOverlay shows the same Ghost session",
+          "classic notice is hidden under Home",
+          "notice fits the actual viewport",
+          "Home exposes a single exit button while visible",
+          "keyboard focus follows the active Ghost control back to classic",
+          "classic notice returns without adding suppressions",
+          "exit is an enabled focusable button",
+          "operator can focus the exit control",
+          "exit returns the window to standard mode",
+          "focus returns to the active classic toolbar on exit",
+          "leaving Ghost resets the session count",
+          "a standard critical request can reach permission boundary",
+          "pending permission cannot replay across enter and exit",
+          "legitimate fresh standard notification still invokes guarded constructor",
+          "manual Ghost exit restores prior God\u2019s Vision",
+          "cross-window preference changes reach installed UI state",
+          "cross-window Ghost starts new local session",
+          "classic teardown removes its notice",
+          "fixture never contacted providers or external channels"
+        ]
+      },
+      {
+        "file": "precache-final-unknown-native.json",
+        "sha256": "ede8f906b2db20b617671b07c3b202d6f3e2074ecb97673c1b994f4e67e27509",
+        "pass": 11,
+        "fail": 0,
+        "indexSha256": null,
+        "hostSha256": "44bd3e41c8d8b39031b6857d7d33aa63215130570d792573c548d402a781c96d",
+        "case": "unknown",
+        "checks": [
+          "storage read failure holds a distinct unknown preference",
+          "unknown preference holds external critical delivery without requesting permission",
+          "unknown hold does not count as confirmed Ghost suppression",
+          "Home shell can present the unknown-mode choice",
+          "unknown preference has visible mode choices",
+          "unsaved operator choice controls the current window",
+          "unsaved Ghost blocks and accounts",
+          "receipt remains private in renderer",
+          "unsaved choice is advertised",
+          "retry persists the operator\u2019s choice",
+          "fixtures made zero external requests and sends"
+        ]
+      },
+      {
+        "file": "precache-final-unknown-mount-all-native.json",
+        "sha256": "d7ebe80f8c3837d74b5030ec15802bdb99c07c578ef38a5a90430368ed1edd8a",
+        "pass": 11,
+        "fail": 0,
+        "indexSha256": null,
+        "hostSha256": "44bd3e41c8d8b39031b6857d7d33aa63215130570d792573c548d402a781c96d",
+        "case": "unknown-mount-all",
+        "checks": [
+          "storage read failure holds a distinct unknown preference",
+          "unknown preference holds external critical delivery without requesting permission",
+          "unknown hold does not count as confirmed Ghost suppression",
+          "Home shell can present the unknown-mode choice",
+          "unknown preference has visible mode choices",
+          "unsaved operator choice controls the current window",
+          "unsaved Ghost blocks and accounts",
+          "receipt remains private in renderer",
+          "unsaved choice is advertised",
+          "retry persists the operator\u2019s choice",
+          "fixtures made zero external requests and sends"
+        ]
+      }
+    ]
+  },
+  "priorComponentAssetComparison": {
+    "saved": {
+      "equal": false,
+      "filesCompared": 6,
+      "changed": [
+        "assets/contextual-deck-view-SeHUm0CN.js",
+        "assets/contextual-deck-view-dbbrq9iG.js",
+        "renderer.js"
+      ],
+      "normalizedJavaScriptSha256": {
+        "renderer.js": "1bee08a3b4afe21f7fbe0abd63b94d656a8ceec38af504eb6acb80f3aead2d1f",
+        "assets/contextual-deck-view.js": "f8bd8fe25e43dccc09b81dd480ed3f9871672bd2e9880f5076907735358c892b"
+      },
+      "normalization": "Only archive path in generated source-region comments and the resulting contextual lazy chunk filename are canonicalized. All six asset hashes were compared, and all runtime assertions were rerun."
+    },
+    "unknown": {
+      "equal": false,
+      "filesCompared": 6,
+      "changed": [
+        "assets/contextual-deck-view-SeHUm0CN.js",
+        "assets/contextual-deck-view-dbbrq9iG.js",
+        "renderer.js"
+      ],
+      "normalizedJavaScriptSha256": {
+        "renderer.js": "1bee08a3b4afe21f7fbe0abd63b94d656a8ceec38af504eb6acb80f3aead2d1f",
+        "assets/contextual-deck-view.js": "f8bd8fe25e43dccc09b81dd480ed3f9871672bd2e9880f5076907735358c892b"
+      },
+      "normalization": "Only archive path in generated source-region comments and the resulting contextual lazy chunk filename are canonicalized. All six asset hashes were compared, and all runtime assertions were rerun."
+    },
+    "unknown-mount-all": {
+      "equal": false,
+      "filesCompared": 6,
+      "changed": [
+        "assets/contextual-deck-view-SeHUm0CN.js",
+        "assets/contextual-deck-view-dbbrq9iG.js",
+        "renderer.js"
+      ],
+      "normalizedJavaScriptSha256": {
+        "renderer.js": "1bee08a3b4afe21f7fbe0abd63b94d656a8ceec38af504eb6acb80f3aead2d1f",
+        "assets/contextual-deck-view.js": "f8bd8fe25e43dccc09b81dd480ed3f9871672bd2e9880f5076907735358c892b"
+      },
+      "normalization": "Only archive path in generated source-region comments and the resulting contextual lazy chunk filename are canonicalized. All six asset hashes were compared, and all runtime assertions were rerun."
+    }
+  },
+  "scope": [
+    "Both variants build in canonical dist with bundled Cesium resources, then execute the repository precache-budget gate. No cache-rule or service-worker filtering is applied by this harness.",
+    "The product-index fixture opens the real generated index in isolated Chromium and nonpersistent macOS Tauri/WKWebView and guards storage, outbound networking, and OS notifications prior to startup. The native product test intersects the shipping CSP with a QA-only offline policy.",
+    "Late failure removes the synthetic app container after early notice mount, provoking an authentic rejected appStartup promise. Global storage denial keeps mode choices actionable; full-app initialization can remain degraded.",
+    "Component fixtures rerun the normal service and shell entry points with guarded sends at the same code SHA; source module prefetch/boot-budget measurements come from the product index, not these harness bundles."
+  ],
+  "buildComparison": {
+    "priorCode": "db969d09dd29d08368bcd1d0e9abf31feeb29361",
+    "codeTypeChange": "BootNotice type alias becomes an interface; emitted entry JS unchanged.",
+    "buildTimestampsUTC": {
+      "web": "2026-11-03T06:52:34.260Z",
+      "desktop": "2026-11-03T06:54:30.277Z"
+    },
+    "manifestFormat": "Sort regular file paths lexicographically; serialize [path, sha256] pairs as compact UTF-8 JSON with no newline and hash with SHA-256. Manifest files reside beside the raw receipts.",
+    "web": {
+      "oldFiles": 672,
+      "newFiles": 672,
+      "checkpointManifestSha256": "5b925689e9a4a9f33aa3857546bc044cb7e5fc5b70f77ab935df283171627eba",
+      "reachableManifestSha256": "5b925689e9a4a9f33aa3857546bc044cb7e5fc5b70f77ab935df283171627eba",
+      "byteIdentical": true,
+      "changed": {}
+    },
+    "desktop": {
+      "oldFiles": 672,
+      "newFiles": 672,
+      "checkpointManifestSha256": "ce5955cb1470e60fc3dfe2ba0564b950182b27cbeeab8397444ccd74efe32495",
+      "reachableManifestSha256": "ce5955cb1470e60fc3dfe2ba0564b950182b27cbeeab8397444ccd74efe32495",
+      "byteIdentical": true,
+      "changed": {}
+    }
+  }
+}

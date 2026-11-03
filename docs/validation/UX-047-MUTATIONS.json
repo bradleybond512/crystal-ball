@@ -1,0 +1,2052 @@
+{
+  "schemaVersion": 1,
+  "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+  "mutationCount": 57,
+  "method": "Serial exact-match mutants; actual git diff inspected before test; before/after SHA256 verified; clean git status required before and after every mutation. No test assertions weakened.",
+  "limitations": [
+    "Chromium runtime-harness does not certify packaged WKWebView. Native payload behavior uses isolated test harnesses; installed application and production storage were not accessed."
+  ],
+  "cases": [
+    {
+      "id": "P01",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Complete national membership on web and desktop",
+      "sources": [
+        {
+          "path": "src-tauri/sidecar/nws-alert-snapshot.mjs",
+          "beforeSHA256": "b510f5fa353df7ded760ad362e872dd680f4a4be19b376e8e82d7aa6b4885489",
+          "restoredSHA256": "b510f5fa353df7ded760ad362e872dd680f4a4be19b376e8e82d7aa6b4885489"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/nws-provider-snapshot.test.mjs"
+      ],
+      "baseline": {
+        "pass": 25,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 22,
+        "fail": 3,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ web NWS provider returns every national row in one normalized complete snapshot (22.169542ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  100 !== 201\n    actual: 100,\n    expected: 201,\n✖ web NWS rejects oversized lifecycle identity metadata instead of caching an authoritative all-clear (18.281041ms)\n  200 !== 503\n    actual: 200,\n    expected: 503,\n✖ desktop HTTP transport matches the complete national web snapshot without truncating 201 rows (217.094375ms)",
+      "appliedDiff": "diff --git a/src-tauri/sidecar/nws-alert-snapshot.mjs b/src-tauri/sidecar/nws-alert-snapshot.mjs\nindex b5bd09767..1aecb4521 100644\n--- a/src-tauri/sidecar/nws-alert-snapshot.mjs\n+++ b/src-tauri/sidecar/nws-alert-snapshot.mjs\n@@ -190,7 +190,7 @@ export function normalizeNwsActiveCollection(value, observedAt) {\n     || value.features.length > MAX_NWS_SNAPSHOT_ALERTS\n     || !Object.keys(value).every((key) => COLLECTION_KEYS.has(key))) return null;\n   const alerts = [];\n-  for (const feature of value.features) {\n+  for (const feature of value.features.slice(0, 100)) {\n     if (!feature || feature.type !== 'Feature' || !('geometry' in feature)) return null;\n     const p = feature.properties;\n     if (!p || typeof p !== 'object' || Array.isArray(p)\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "P02",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Reject continuation and partial metadata",
+      "sources": [
+        {
+          "path": "src-tauri/sidecar/nws-alert-snapshot.mjs",
+          "beforeSHA256": "b510f5fa353df7ded760ad362e872dd680f4a4be19b376e8e82d7aa6b4885489",
+          "restoredSHA256": "b510f5fa353df7ded760ad362e872dd680f4a4be19b376e8e82d7aa6b4885489"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/nws-provider-snapshot.test.mjs"
+      ],
+      "baseline": {
+        "pass": 25,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 22,
+        "fail": 3,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ web NWS rejects continuation instead of caching an authoritative all-clear (1.787042ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  200 !== 503\n    actual: 200,\n    expected: 503,\n✖ web NWS rejects partial metadata instead of caching an authoritative all-clear (0.985166ms)\n✖ desktop HTTP transport rejects partial evidence instead of a successful all-clear (11.995792ms)",
+      "appliedDiff": "diff --git a/src-tauri/sidecar/nws-alert-snapshot.mjs b/src-tauri/sidecar/nws-alert-snapshot.mjs\nindex b5bd09767..8756367f4 100644\n--- a/src-tauri/sidecar/nws-alert-snapshot.mjs\n+++ b/src-tauri/sidecar/nws-alert-snapshot.mjs\n@@ -188,7 +188,7 @@ export function normalizeNwsActiveCollection(value, observedAt) {\n   if (!value || typeof value !== 'object' || Array.isArray(value)\n     || value.type !== 'FeatureCollection' || !Array.isArray(value.features)\n     || value.features.length > MAX_NWS_SNAPSHOT_ALERTS\n-    || !Object.keys(value).every((key) => COLLECTION_KEYS.has(key))) return null;\n+    || false) return null;\n   const alerts = [];\n   for (const feature of value.features) {\n     if (!feature || feature.type !== 'Feature' || !('geometry' in feature)) return null;\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "P03",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Reject over-cap complete national membership",
+      "sources": [
+        {
+          "path": "src-tauri/sidecar/nws-alert-snapshot.mjs",
+          "beforeSHA256": "b510f5fa353df7ded760ad362e872dd680f4a4be19b376e8e82d7aa6b4885489",
+          "restoredSHA256": "b510f5fa353df7ded760ad362e872dd680f4a4be19b376e8e82d7aa6b4885489"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/nws-provider-snapshot.test.mjs"
+      ],
+      "baseline": {
+        "pass": 25,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 24,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ web NWS rejects row cap exceeded instead of caching an authoritative all-clear (17.207667ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  200 !== 503\n    actual: 200,\n    expected: 503,",
+      "appliedDiff": "diff --git a/src-tauri/sidecar/nws-alert-snapshot.mjs b/src-tauri/sidecar/nws-alert-snapshot.mjs\nindex b5bd09767..a2667accd 100644\n--- a/src-tauri/sidecar/nws-alert-snapshot.mjs\n+++ b/src-tauri/sidecar/nws-alert-snapshot.mjs\n@@ -1,4 +1,4 @@\n-export const MAX_NWS_SNAPSHOT_ALERTS = 2000;\n+export const MAX_NWS_SNAPSHOT_ALERTS = 3000;\n const MAX_FEATURE_POLYGONS = 256;\n const MAX_FEATURE_RINGS = 1024;\n const MAX_FEATURE_VERTICES = 50_000;\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "P04",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Malformed normalized enum cannot populate healthy success cache",
+      "sources": [
+        {
+          "path": "src-tauri/sidecar/nws-alert-snapshot.mjs",
+          "beforeSHA256": "b510f5fa353df7ded760ad362e872dd680f4a4be19b376e8e82d7aa6b4885489",
+          "restoredSHA256": "b510f5fa353df7ded760ad362e872dd680f4a4be19b376e8e82d7aa6b4885489"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/nws-provider-snapshot.test.mjs"
+      ],
+      "baseline": {
+        "pass": 25,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 24,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ web NWS rejects unknown severity instead of caching an authoritative all-clear (1.268792ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  200 !== 503\n    actual: 200,\n    expected: 503,",
+      "appliedDiff": "diff --git a/src-tauri/sidecar/nws-alert-snapshot.mjs b/src-tauri/sidecar/nws-alert-snapshot.mjs\nindex b5bd09767..a23c42708 100644\n--- a/src-tauri/sidecar/nws-alert-snapshot.mjs\n+++ b/src-tauri/sidecar/nws-alert-snapshot.mjs\n@@ -105,7 +105,7 @@ function normalizeNwsAlert(value, responseBudget) {\n         && typeof alert.event === 'string'\n         && typeof alert.headline === 'string'\n         && typeof alert.description === 'string'\n-        && SEVERITIES.has(alert.severity)\n+        && true\n         && URGENCIES.has(alert.urgency)\n         && typeof alert.areaDesc === 'string'\n         && isTimestamp(alert.sent)\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "P05",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Provider cache preserves acquisition timestamp",
+      "sources": [
+        {
+          "path": "src-tauri/sidecar/nws-alert-snapshot.mjs",
+          "beforeSHA256": "b510f5fa353df7ded760ad362e872dd680f4a4be19b376e8e82d7aa6b4885489",
+          "restoredSHA256": "b510f5fa353df7ded760ad362e872dd680f4a4be19b376e8e82d7aa6b4885489"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/nws-provider-snapshot.test.mjs"
+      ],
+      "baseline": {
+        "pass": 25,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 23,
+        "fail": 2,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ web NWS caches the successful acquisition time without restamping a cache hit (1.748166ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  ... Skipped lines\n    {\n      alerts: [\n        {\n          areaDesc: 'Synthetic area',\n          centroid: null,\n    actual: { schemaVersion: 1, scope: 'national-active', completeness: 'complete', observedAt: 1793590230000, alerts: [ [Object] ] },\n    expected: { schemaVersion: 1, scope: 'national-active', completeness: 'complete', observedAt: 1793590200000, alerts: [ [Object] ] },\n✖ desktop health and cache preserve the original successful acquisition time (12.928292ms)",
+      "appliedDiff": "diff --git a/src-tauri/sidecar/nws-alert-snapshot.mjs b/src-tauri/sidecar/nws-alert-snapshot.mjs\nindex b5bd09767..33d94783a 100644\n--- a/src-tauri/sidecar/nws-alert-snapshot.mjs\n+++ b/src-tauri/sidecar/nws-alert-snapshot.mjs\n@@ -236,7 +236,7 @@ export function createNwsSnapshotProvider({ fetchFn, readJson, clock = Date.now\n   }\n   return {\n     get() {\n-      if (cached && clock() - cached.observedAt < CACHE_TTL_MS) return Promise.resolve(cached);\n+      if (cached && clock() - cached.observedAt < CACHE_TTL_MS) return Promise.resolve({ ...cached, observedAt: clock() });\n       if (clock() < retryAt) return Promise.reject(new Error('NWS source rate limited'));\n       if (!inflight) inflight = acquire().finally(() => { inflight = null; });\n       return inflight;\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "P06",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Retry-After suppresses premature retries",
+      "sources": [
+        {
+          "path": "src-tauri/sidecar/nws-alert-snapshot.mjs",
+          "beforeSHA256": "b510f5fa353df7ded760ad362e872dd680f4a4be19b376e8e82d7aa6b4885489",
+          "restoredSHA256": "b510f5fa353df7ded760ad362e872dd680f4a4be19b376e8e82d7aa6b4885489"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/nws-provider-snapshot.test.mjs"
+      ],
+      "baseline": {
+        "pass": 25,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 24,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ web NWS respects Retry-After without converting rate limiting into success (1.166917ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  2 !== 1\n    actual: 2,\n    expected: 1,",
+      "appliedDiff": "diff --git a/src-tauri/sidecar/nws-alert-snapshot.mjs b/src-tauri/sidecar/nws-alert-snapshot.mjs\nindex b5bd09767..c5af8acec 100644\n--- a/src-tauri/sidecar/nws-alert-snapshot.mjs\n+++ b/src-tauri/sidecar/nws-alert-snapshot.mjs\n@@ -237,7 +237,7 @@ export function createNwsSnapshotProvider({ fetchFn, readJson, clock = Date.now\n   return {\n     get() {\n       if (cached && clock() - cached.observedAt < CACHE_TTL_MS) return Promise.resolve(cached);\n-      if (clock() < retryAt) return Promise.reject(new Error('NWS source rate limited'));\n+      if (false) return Promise.reject(new Error('NWS source rate limited'));\n       if (!inflight) inflight = acquire().finally(() => { inflight = null; });\n       return inflight;\n     },\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "P07",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Bounded provider deadline contract and recovery",
+      "sources": [
+        {
+          "path": "src-tauri/sidecar/nws-alert-snapshot.mjs",
+          "beforeSHA256": "b510f5fa353df7ded760ad362e872dd680f4a4be19b376e8e82d7aa6b4885489",
+          "restoredSHA256": "b510f5fa353df7ded760ad362e872dd680f4a4be19b376e8e82d7aa6b4885489"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/nws-provider-snapshot.test.mjs"
+      ],
+      "baseline": {
+        "pass": 25,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 24,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ web NWS abort deadline fails closed and clears in-flight work for recovery (1.38075ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  503 !== 200\n    actual: 503,\n    expected: 200,",
+      "appliedDiff": "diff --git a/src-tauri/sidecar/nws-alert-snapshot.mjs b/src-tauri/sidecar/nws-alert-snapshot.mjs\nindex b5bd09767..7422b7983 100644\n--- a/src-tauri/sidecar/nws-alert-snapshot.mjs\n+++ b/src-tauri/sidecar/nws-alert-snapshot.mjs\n@@ -224,7 +224,7 @@ export function createNwsSnapshotProvider({ fetchFn, readJson, clock = Date.now\n   async function acquire() {\n     const response = await fetchFn(NWS_ACTIVE_URL, {\n       headers: { Accept: 'application/geo+json', 'User-Agent': 'CrystalBall-NWS/1.0 (https://github.com/bradleybond512/crystal-ball)' },\n-      signal: AbortSignal.timeout(12_000), maxResponseBytes: NWS_MAX_RESPONSE_BYTES,\n+      signal: AbortSignal.timeout(6_000), maxResponseBytes: NWS_MAX_RESPONSE_BYTES,\n     }, 12_000);\n     if (response.status === 429) retryAt = clock() + retryDelay(response, clock());\n     if (!response.ok) throw new Error('NWS source unavailable');\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "P08",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Desktop health reflects successful acquisition rather than cached delivery",
+      "sources": [
+        {
+          "path": "src-tauri/sidecar/local-api-server.mjs",
+          "beforeSHA256": "a036614b69031c9068a72694711cd65d449cd5e215c38873d4098edb4a6e8be0",
+          "restoredSHA256": "a036614b69031c9068a72694711cd65d449cd5e215c38873d4098edb4a6e8be0"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/nws-provider-snapshot.test.mjs"
+      ],
+      "baseline": {
+        "pass": 25,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 24,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ desktop health and cache preserve the original successful acquisition time (15.014917ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  + 1793590230000\n  - 1793590200000\n            ^\n    actual: 1793590230000,\n    expected: 1793590200000,",
+      "appliedDiff": "diff --git a/src-tauri/sidecar/local-api-server.mjs b/src-tauri/sidecar/local-api-server.mjs\nindex 4ab612d18..4db501beb 100644\n--- a/src-tauri/sidecar/local-api-server.mjs\n+++ b/src-tauri/sidecar/local-api-server.mjs\n@@ -11043,7 +11043,7 @@ function legacyNewsItems(items) {\n     try {\n       const snapshot = await nwsSnapshotProvider.get();\n       // A validated complete empty national inventory is a real healthy observation.\n-      trackSuccess('nws-alerts', 'primary', snapshot.observedAt);\n+      trackSuccess('nws-alerts', 'primary', Date.now());\n       return json(snapshot);\n     } catch (error) {\n       trackFailure('nws-alerts', error);\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "P08b",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Desktop health uses recognized primary source rather than unrecognized national scope",
+      "sources": [
+        {
+          "path": "src-tauri/sidecar/local-api-server.mjs",
+          "beforeSHA256": "a036614b69031c9068a72694711cd65d449cd5e215c38873d4098edb4a6e8be0",
+          "restoredSHA256": "a036614b69031c9068a72694711cd65d449cd5e215c38873d4098edb4a6e8be0"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/nws-provider-snapshot.test.mjs"
+      ],
+      "baseline": {
+        "pass": 25,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 23,
+        "fail": 2,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ desktop health and cache preserve the original successful acquisition time (15.3395ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  'degraded' !== 'up'\n    actual: 'degraded',\n    expected: 'up',\n✖ desktop rejects incoherent chronology before health/cache and recovers on the next response (13.042666ms)",
+      "appliedDiff": "diff --git a/src-tauri/sidecar/local-api-server.mjs b/src-tauri/sidecar/local-api-server.mjs\nindex 4ab612d18..027177b88 100644\n--- a/src-tauri/sidecar/local-api-server.mjs\n+++ b/src-tauri/sidecar/local-api-server.mjs\n@@ -11043,7 +11043,7 @@ function legacyNewsItems(items) {\n     try {\n       const snapshot = await nwsSnapshotProvider.get();\n       // A validated complete empty national inventory is a real healthy observation.\n-      trackSuccess('nws-alerts', 'primary', snapshot.observedAt);\n+      trackSuccess('nws-alerts', 'national-active', snapshot.observedAt);\n       return json(snapshot);\n     } catch (error) {\n       trackFailure('nws-alerts', error);\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "P09",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Provider temporal validity: sent, acquisition and expiry",
+      "sources": [
+        {
+          "path": "src-tauri/sidecar/nws-alert-snapshot.mjs",
+          "beforeSHA256": "b510f5fa353df7ded760ad362e872dd680f4a4be19b376e8e82d7aa6b4885489",
+          "restoredSHA256": "b510f5fa353df7ded760ad362e872dd680f4a4be19b376e8e82d7aa6b4885489"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/nws-provider-snapshot.test.mjs"
+      ],
+      "baseline": {
+        "pass": 25,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 20,
+        "fail": 5,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ web NWS rejects expiry before issuance instead of caching an authoritative all-clear (2.344125ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  200 !== 503\n    actual: 200,\n    expected: 503,\n✖ web NWS rejects expiry equals issuance instead of caching an authoritative all-clear (1.490458ms)\n✖ web NWS rejects issuance after acquisition instead of caching an authoritative all-clear (0.962417ms)\n✖ web NWS rejects negative issuance epoch instead of caching an authoritative all-clear (2.263166ms)\n✖ desktop rejects incoherent chronology before health/cache and recovers on the next response (11.234916ms)",
+      "appliedDiff": "diff --git a/src-tauri/sidecar/nws-alert-snapshot.mjs b/src-tauri/sidecar/nws-alert-snapshot.mjs\nindex b5bd09767..db47426d8 100644\n--- a/src-tauri/sidecar/nws-alert-snapshot.mjs\n+++ b/src-tauri/sidecar/nws-alert-snapshot.mjs\n@@ -150,7 +150,7 @@ export function validateNWSAlertSnapshot(value, now = Date.now()) {\n         if (!alert || ids.has(alert.id))\n             return null;\n         const sent = Date.parse(alert.sent);\n-        if (sent < 0 || sent > snapshot.observedAt || Date.parse(alert.expires) <= sent) return null;\n+        if (false) return null;\n         ids.add(alert.id);\n         alerts.push({ ...alert, retrievedAt: snapshot.observedAt });\n     }\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "P10a",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Provider identity bound",
+      "sources": [
+        {
+          "path": "src-tauri/sidecar/nws-alert-snapshot.mjs",
+          "beforeSHA256": "b510f5fa353df7ded760ad362e872dd680f4a4be19b376e8e82d7aa6b4885489",
+          "restoredSHA256": "b510f5fa353df7ded760ad362e872dd680f4a4be19b376e8e82d7aa6b4885489"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/nws-provider-snapshot.test.mjs"
+      ],
+      "baseline": {
+        "pass": 25,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 24,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ web NWS rejects oversized identity instead of caching an authoritative all-clear (2.600166ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  200 !== 503\n    actual: 200,\n    expected: 503,",
+      "appliedDiff": "diff --git a/src-tauri/sidecar/nws-alert-snapshot.mjs b/src-tauri/sidecar/nws-alert-snapshot.mjs\nindex b5bd09767..7cec72b79 100644\n--- a/src-tauri/sidecar/nws-alert-snapshot.mjs\n+++ b/src-tauri/sidecar/nws-alert-snapshot.mjs\n@@ -101,7 +101,7 @@ function normalizeNwsAlert(value, responseBudget) {\n         return null;\n     const alert = value;\n     const onset = typeof alert.onset === 'string' ? alert.onset.trim() : '';\n-    const valid = typeof alert.id === 'string' && alert.id.length > 0 && alert.id.length <= 1024\n+    const valid = typeof alert.id === 'string' && alert.id.length > 0 && true\n         && typeof alert.event === 'string'\n         && typeof alert.headline === 'string'\n         && typeof alert.description === 'string'\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "P10b",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Provider lifecycle metadata byte bound",
+      "sources": [
+        {
+          "path": "src-tauri/sidecar/nws-alert-snapshot.mjs",
+          "beforeSHA256": "b510f5fa353df7ded760ad362e872dd680f4a4be19b376e8e82d7aa6b4885489",
+          "restoredSHA256": "b510f5fa353df7ded760ad362e872dd680f4a4be19b376e8e82d7aa6b4885489"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/nws-provider-snapshot.test.mjs"
+      ],
+      "baseline": {
+        "pass": 25,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 24,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ web NWS rejects oversized lifecycle identity metadata instead of caching an authoritative all-clear (25.634708ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  200 !== 503\n    actual: 200,\n    expected: 503,",
+      "appliedDiff": "diff --git a/src-tauri/sidecar/nws-alert-snapshot.mjs b/src-tauri/sidecar/nws-alert-snapshot.mjs\nindex b5bd09767..cefc75491 100644\n--- a/src-tauri/sidecar/nws-alert-snapshot.mjs\n+++ b/src-tauri/sidecar/nws-alert-snapshot.mjs\n@@ -158,7 +158,7 @@ export function validateNWSAlertSnapshot(value, now = Date.now()) {\n         version: 1, observedAt: snapshot.observedAt,\n         members: alerts.map(alert => ({ id: `nws-${alert.id}`, issuedAt: Date.parse(alert.sent), expiresAt: Date.parse(alert.expires) })),\n     };\n-    if (new TextEncoder().encode(JSON.stringify(metadata)).byteLength > 2 * 1024 * 1024) return null;\n+    if (false) return null;\n     return {\n         schemaVersion: 1, scope: 'national-active', completeness: 'complete',\n         observedAt: snapshot.observedAt, alerts,\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "P11",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Renderer retrieval provenance is upstream acquisition time",
+      "sources": [
+        {
+          "path": "src/services/nws-alert-snapshot.ts",
+          "beforeSHA256": "3d5ddedf969588bb5d1511a88af809332e79b261714dadfe4c8d278c05379392",
+          "restoredSHA256": "3d5ddedf969588bb5d1511a88af809332e79b261714dadfe4c8d278c05379392"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "src/services/__tests__/nws-alert-retrieval-freshness.test.mts"
+      ],
+      "baseline": {
+        "pass": 41,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 39,
+        "fail": 2,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ snapshot acquisition preserves the upstream observation time instead of receive time (0.821416ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  + 1793592000000\n  - 1793591880000\n          ^\n    actual: 1793592000000,\n    expected: 1793591880000,\n✖ renderer admits only snapshots whose temporal and identity metadata can enter lifecycle storage (13.728208ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  ... Skipped lines\n    {\n      alerts: [\n        {\n          areaDesc: 'Test County',\n          centroid: [\n    actual: { schemaVersion: 1, scope: 'national-active', completeness: 'complete', observedAt: 1788436800000, alerts: [ [Object] ] },\n    expected: { schemaVersion: 1, scope: 'national-active', completeness: 'complete', observedAt: 1788436800000, alerts: [ [Object] ] },",
+      "appliedDiff": "diff --git a/src/services/nws-alert-snapshot.ts b/src/services/nws-alert-snapshot.ts\nindex cd138746a..68925cd16 100644\n--- a/src/services/nws-alert-snapshot.ts\n+++ b/src/services/nws-alert-snapshot.ts\n@@ -179,7 +179,7 @@ export function validateNWSAlertSnapshot(value: unknown, now = Date.now()): NWSA\n     const sent = Date.parse(alert.sent);\n     if (sent < 0 || sent > snapshot.observedAt || Date.parse(alert.expires) <= sent) return null;\n     ids.add(alert.id);\n-    alerts.push({ ...alert, retrievedAt: snapshot.observedAt });\n+    alerts.push({ ...alert, retrievedAt: Date.now() });\n   }\n   const metadata = {\n     version: 1, observedAt: snapshot.observedAt,\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "P12",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Renderer temporal validity matches lifecycle boundary",
+      "sources": [
+        {
+          "path": "src/services/nws-alert-snapshot.ts",
+          "beforeSHA256": "3d5ddedf969588bb5d1511a88af809332e79b261714dadfe4c8d278c05379392",
+          "restoredSHA256": "3d5ddedf969588bb5d1511a88af809332e79b261714dadfe4c8d278c05379392"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "src/services/__tests__/nws-alert-retrieval-freshness.test.mts"
+      ],
+      "baseline": {
+        "pass": 41,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 37,
+        "fail": 4,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ renderer rejects expiry before issuance without caching it and immediately recovers (0.426667ms)\n  AssertionError [ERR_ASSERTION]: Missing expected rejection.\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    expected: /malformed/i,\n    operator: 'rejects',\n✖ renderer rejects expiry equals issuance without caching it and immediately recovers (0.260416ms)\n✖ renderer rejects issuance after acquisition without caching it and immediately recovers (0.13775ms)\n✖ renderer rejects negative issuance epoch without caching it and immediately recovers (0.131083ms)",
+      "appliedDiff": "diff --git a/src/services/nws-alert-snapshot.ts b/src/services/nws-alert-snapshot.ts\nindex cd138746a..7fba26165 100644\n--- a/src/services/nws-alert-snapshot.ts\n+++ b/src/services/nws-alert-snapshot.ts\n@@ -177,7 +177,7 @@ export function validateNWSAlertSnapshot(value: unknown, now = Date.now()): NWSA\n     const alert = normalizeNwsAlert(row, responseBudget);\n     if (!alert || ids.has(alert.id)) return null;\n     const sent = Date.parse(alert.sent);\n-    if (sent < 0 || sent > snapshot.observedAt || Date.parse(alert.expires) <= sent) return null;\n+    if (false) return null;\n     ids.add(alert.id);\n     alerts.push({ ...alert, retrievedAt: snapshot.observedAt });\n   }\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "P13a",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Renderer identity bound",
+      "sources": [
+        {
+          "path": "src/services/nws-alert-snapshot.ts",
+          "beforeSHA256": "3d5ddedf969588bb5d1511a88af809332e79b261714dadfe4c8d278c05379392",
+          "restoredSHA256": "3d5ddedf969588bb5d1511a88af809332e79b261714dadfe4c8d278c05379392"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "src/services/__tests__/nws-alert-retrieval-freshness.test.mts"
+      ],
+      "baseline": {
+        "pass": 41,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 40,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ renderer rejects oversized identity without caching it and immediately recovers (0.449917ms)\n  AssertionError [ERR_ASSERTION]: Missing expected rejection.\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    expected: /malformed/i,\n    operator: 'rejects',",
+      "appliedDiff": "diff --git a/src/services/nws-alert-snapshot.ts b/src/services/nws-alert-snapshot.ts\nindex cd138746a..5f6ed0490 100644\n--- a/src/services/nws-alert-snapshot.ts\n+++ b/src/services/nws-alert-snapshot.ts\n@@ -124,7 +124,7 @@ function normalizeNwsAlert(value: unknown, responseBudget: GeometryBudget): NWSA\n   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;\n   const alert = value as Record<string, unknown>;\n   const onset = typeof alert.onset === 'string' ? alert.onset.trim() : '';\n-  const valid = typeof alert.id === 'string' && alert.id.length > 0 && alert.id.length <= 1024\n+  const valid = typeof alert.id === 'string' && alert.id.length > 0 && true\n     && typeof alert.event === 'string'\n     && typeof alert.headline === 'string'\n     && typeof alert.description === 'string'\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "P13b",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Renderer lifecycle metadata byte bound",
+      "sources": [
+        {
+          "path": "src/services/nws-alert-snapshot.ts",
+          "beforeSHA256": "3d5ddedf969588bb5d1511a88af809332e79b261714dadfe4c8d278c05379392",
+          "restoredSHA256": "3d5ddedf969588bb5d1511a88af809332e79b261714dadfe4c8d278c05379392"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "src/services/__tests__/nws-alert-retrieval-freshness.test.mts"
+      ],
+      "baseline": {
+        "pass": 41,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 40,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ renderer admits only snapshots whose temporal and identity metadata can enter lifecycle storage (844.66ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  + {\n  +   alerts: [\n  +     {\n  +       areaDesc: 'Test County',\n  +       centroid: [\n  +         -86.7,\n    actual: {\n    expected: null,",
+      "appliedDiff": "diff --git a/src/services/nws-alert-snapshot.ts b/src/services/nws-alert-snapshot.ts\nindex cd138746a..54eabece0 100644\n--- a/src/services/nws-alert-snapshot.ts\n+++ b/src/services/nws-alert-snapshot.ts\n@@ -185,7 +185,7 @@ export function validateNWSAlertSnapshot(value: unknown, now = Date.now()): NWSA\n     version: 1, observedAt: snapshot.observedAt,\n     members: alerts.map(alert => ({ id: `nws-${alert.id}`, issuedAt: Date.parse(alert.sent), expiresAt: Date.parse(alert.expires) })),\n   };\n-  if (new TextEncoder().encode(JSON.stringify(metadata)).byteLength > 2 * 1024 * 1024) return null;\n+  if (false) return null;\n   return {\n     schemaVersion: 1, scope: 'national-active', completeness: 'complete',\n     observedAt: snapshot.observedAt, alerts,\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "P14",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Renderer cannot admit future observations that lifecycle rejects",
+      "sources": [
+        {
+          "path": "src/services/nws-alert-snapshot.ts",
+          "beforeSHA256": "3d5ddedf969588bb5d1511a88af809332e79b261714dadfe4c8d278c05379392",
+          "restoredSHA256": "3d5ddedf969588bb5d1511a88af809332e79b261714dadfe4c8d278c05379392"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "src/services/__tests__/nws-alert-retrieval-freshness.test.mts"
+      ],
+      "baseline": {
+        "pass": 41,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 40,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ renderer admits only snapshots whose temporal and identity metadata can enter lifecycle storage (4.314292ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  + {\n  +   alerts: [],\n  +   completeness: 'complete',\n  +   observedAt: 1788436800001,\n  +   schemaVersion: 1,\n  +   scope: 'national-active'\n    actual: { schemaVersion: 1, scope: 'national-active', completeness: 'complete', observedAt: 1788436800001, alerts: [] },\n    expected: null,",
+      "appliedDiff": "diff --git a/src/services/nws-alert-snapshot.ts b/src/services/nws-alert-snapshot.ts\nindex cd138746a..a898c9e59 100644\n--- a/src/services/nws-alert-snapshot.ts\n+++ b/src/services/nws-alert-snapshot.ts\n@@ -168,7 +168,7 @@ export function validateNWSAlertSnapshot(value: unknown, now = Date.now()): NWSA\n   if (snapshot.schemaVersion !== 1 || snapshot.scope !== 'national-active'\n     || snapshot.completeness !== 'complete' || typeof snapshot.observedAt !== 'number'\n     || !Number.isSafeInteger(snapshot.observedAt) || snapshot.observedAt <= 0\n-    || snapshot.observedAt > 8_640_000_000_000_000 || snapshot.observedAt > now || !Array.isArray(snapshot.alerts)\n+    || snapshot.observedAt > 8_640_000_000_000_000 || snapshot.observedAt > now + 60_000 || !Array.isArray(snapshot.alerts)\n     || snapshot.alerts.length > MAX_NWS_SNAPSHOT_ALERTS) return null;\n   const responseBudget: GeometryBudget = { polygons: 0, rings: 0, vertices: 0 };\n   const alerts: NWSAlert[] = [];\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "P15a",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Renderer rejects finite declared oversized bodies",
+      "sources": [
+        {
+          "path": "src/services/nws-alerts.ts",
+          "beforeSHA256": "d6295f2d2756d4ed6eb7b98e51f09e9daf00101a134d209d43dc64625312386d",
+          "restoredSHA256": "d6295f2d2756d4ed6eb7b98e51f09e9daf00101a134d209d43dc64625312386d"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "src/services/__tests__/nws-alert-retrieval-freshness.test.mts"
+      ],
+      "baseline": {
+        "pass": 41,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 40,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ renderer rejects oversized declared length without caching it and recovers immediately (0.704375ms)\n  AssertionError [ERR_ASSERTION]: Missing expected rejection.\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    expected: /exceeded byte limit/i,\n    operator: 'rejects',",
+      "appliedDiff": "diff --git a/src/services/nws-alerts.ts b/src/services/nws-alerts.ts\nindex 881e303c9..8266ce00f 100644\n--- a/src/services/nws-alerts.ts\n+++ b/src/services/nws-alerts.ts\n@@ -29,7 +29,7 @@ export async function fetchNWSAlerts(): Promise<NWSAlert[]> {\n \n async function readNwsResponse(response: Response): Promise<unknown> {\n   const declared = response.headers.get('content-length');\n-  if (declared !== null && (!/^\\d+$/.test(declared) || Number(declared) > MAX_RESPONSE_BYTES)) {\n+  if (false) {\n     throw new Error('NWS alerts response exceeded byte limit');\n   }\n   if (!response.body) throw new Error('NWS alerts response body missing');\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "P15b",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Renderer rejects finite streamed oversized bodies and recovers",
+      "sources": [
+        {
+          "path": "src/services/nws-alerts.ts",
+          "beforeSHA256": "d6295f2d2756d4ed6eb7b98e51f09e9daf00101a134d209d43dc64625312386d",
+          "restoredSHA256": "d6295f2d2756d4ed6eb7b98e51f09e9daf00101a134d209d43dc64625312386d"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "src/services/__tests__/nws-alert-retrieval-freshness.test.mts"
+      ],
+      "baseline": {
+        "pass": 41,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 40,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ renderer rejects oversized finite stream without caching it and recovers immediately (10.326709ms)\n  AssertionError [ERR_ASSERTION]: Missing expected rejection.\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    expected: /exceeded byte limit/i,\n    operator: 'rejects',",
+      "appliedDiff": "diff --git a/src/services/nws-alerts.ts b/src/services/nws-alerts.ts\nindex 881e303c9..a251d6644 100644\n--- a/src/services/nws-alerts.ts\n+++ b/src/services/nws-alerts.ts\n@@ -41,7 +41,7 @@ async function readNwsResponse(response: Response): Promise<unknown> {\n       const { done, value } = await reader.read();\n       if (done) break;\n       total += value.byteLength;\n-      if (total > MAX_RESPONSE_BYTES) {\n+      if (false) {\n         await reader.cancel('NWS response exceeded byte limit');\n         throw new Error('NWS alerts response exceeded byte limit');\n       }\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "L01",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Persisted older-watermark rejection",
+      "sources": [
+        {
+          "path": "src/services/unified-alerts.ts",
+          "beforeSHA256": "e381c887db995ba883e9f30023626cc7f0b3461248220ac9dc08ea94f881b8bb",
+          "restoredSHA256": "e381c887db995ba883e9f30023626cc7f0b3461248220ac9dc08ea94f881b8bb"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "src/services/__tests__/nws-alert-lifecycle.test.mts"
+      ],
+      "baseline": {
+        "pass": 15,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 14,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ persisted watermark rejects old snapshots and generic replay after restart without boot writes or dispatch (2.809666ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  'applied' !== 'older'\n    generatedMessage: true,\n    actual: 'applied',\n    expected: 'older',",
+      "appliedDiff": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex c111110be..afb281c19 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -549,7 +549,7 @@ class UnifiedAlertStore {\n     const prepared = prepareNwsLifecycle(snapshot, now);\n     if (!prepared) return { disposition: 'invalid', activeCount: currentActiveCount() };\n     if (this.nwsLifecycle) {\n-      if (prepared.state.observedAt < this.nwsLifecycle.observedAt) {\n+      if (false) {\n         return { disposition: 'older', activeCount: currentActiveCount() };\n       }\n       if (prepared.state.observedAt === this.nwsLifecycle.observedAt) {\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "L02",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Equal membership is a silent idempotent no-op",
+      "sources": [
+        {
+          "path": "src/services/unified-alerts.ts",
+          "beforeSHA256": "e381c887db995ba883e9f30023626cc7f0b3461248220ac9dc08ea94f881b8bb",
+          "restoredSHA256": "e381c887db995ba883e9f30023626cc7f0b3461248220ac9dc08ea94f881b8bb"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "src/services/__tests__/nws-alert-lifecycle.test.mts"
+      ],
+      "baseline": {
+        "pass": 15,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 14,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ equal observation with identical membership is silent and conflicting membership is invalid (2.979541ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  + 'applied'\n  - 'unchanged'\n    actual: 'applied',\n    expected: 'unchanged',",
+      "appliedDiff": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex c111110be..26db039ba 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -552,7 +552,7 @@ class UnifiedAlertStore {\n       if (prepared.state.observedAt < this.nwsLifecycle.observedAt) {\n         return { disposition: 'older', activeCount: currentActiveCount() };\n       }\n-      if (prepared.state.observedAt === this.nwsLifecycle.observedAt) {\n+      if (false) {\n         return { disposition: JSON.stringify(prepared.state.members) === JSON.stringify(this.nwsLifecycle.members)\n           ? 'unchanged' : 'invalid', activeCount: currentActiveCount() };\n       }\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "L02b",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Equal observation with conflicting membership is rejected",
+      "sources": [
+        {
+          "path": "src/services/unified-alerts.ts",
+          "beforeSHA256": "e381c887db995ba883e9f30023626cc7f0b3461248220ac9dc08ea94f881b8bb",
+          "restoredSHA256": "e381c887db995ba883e9f30023626cc7f0b3461248220ac9dc08ea94f881b8bb"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "src/services/__tests__/nws-alert-lifecycle.test.mts"
+      ],
+      "baseline": {
+        "pass": 15,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 14,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ equal observation with identical membership is silent and conflicting membership is invalid (4.469625ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  + 'unchanged'\n  - 'invalid'\n    actual: 'unchanged',\n    expected: 'invalid',",
+      "appliedDiff": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex c111110be..0cbdf4e74 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -554,7 +554,7 @@ class UnifiedAlertStore {\n       }\n       if (prepared.state.observedAt === this.nwsLifecycle.observedAt) {\n         return { disposition: JSON.stringify(prepared.state.members) === JSON.stringify(this.nwsLifecycle.members)\n-          ? 'unchanged' : 'invalid', activeCount: currentActiveCount() };\n+          ? 'unchanged' : 'unchanged', activeCount: currentActiveCount() };\n       }\n     }\n     this.setNwsLifecycle(prepared.state);\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "L03",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Durable national retirement watermark",
+      "sources": [
+        {
+          "path": "src/services/unified-alerts.ts",
+          "beforeSHA256": "e381c887db995ba883e9f30023626cc7f0b3461248220ac9dc08ea94f881b8bb",
+          "restoredSHA256": "e381c887db995ba883e9f30023626cc7f0b3461248220ac9dc08ea94f881b8bb"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "src/services/__tests__/nws-alert-lifecycle.test.mts"
+      ],
+      "baseline": {
+        "pass": 15,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 13,
+        "fail": 2,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ persisted watermark rejects old snapshots and generic replay after restart without boot writes or dispatch (3.559875ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  'applied' !== 'older'\n    generatedMessage: true,\n    actual: 'applied',\n    expected: 'older',\n✖ full national membership and panel projection survive the 500 retained-row capacity (24.769625ms)",
+      "appliedDiff": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex c111110be..8a69b2b52 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -730,7 +730,7 @@ class UnifiedAlertStore {\n       this.identities.expire(Date.now());\n       const serialized = JSON.stringify({\n         version: 2, alerts: this.entriesForPersist(), identities: this.identities.snapshot(),\n-        ...(this.nwsLifecycle ? { nwsLifecycle: this.nwsLifecycle } : {}),\n+        ...{},\n       });\n       if (serialized === this.lastPersisted && !this.storageFailure) return;\n       localStorage.setItem(STORAGE_KEY, serialized);\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": "",
+      "notes": "Suite counts include downstream failures caused by missing lifecycle state/rows; the quoted behavioral assertions provide the mutation proof. No syntax/import/setup failure is claimed as proof."
+    },
+    {
+      "id": "L04",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Full national metadata survives retained-row cap",
+      "sources": [
+        {
+          "path": "src/services/unified-alerts.ts",
+          "beforeSHA256": "e381c887db995ba883e9f30023626cc7f0b3461248220ac9dc08ea94f881b8bb",
+          "restoredSHA256": "e381c887db995ba883e9f30023626cc7f0b3461248220ac9dc08ea94f881b8bb"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "src/services/__tests__/nws-alert-lifecycle.test.mts"
+      ],
+      "baseline": {
+        "pass": 15,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 14,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ full national membership and panel projection survive the 500 retained-row capacity (45.250875ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  500 !== 600\n    generatedMessage: true,\n    actual: 500,\n    expected: 600,",
+      "appliedDiff": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex c111110be..45211bcda 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -568,7 +568,7 @@ class UnifiedAlertStore {\n   }\n \n   private setNwsLifecycle(state: NwsLifecycleState): void {\n-    this.nwsLifecycle = state;\n+    this.nwsLifecycle = { ...state, members: state.members.slice(0, 500) };\n     this.nwsMembers = new Map(state.members.map(member => [member.id, member]));\n     this.refreshNwsExpiryDeadlines();\n   }\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "L05",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Offline expiry notifies real renderer and store subscribers",
+      "sources": [
+        {
+          "path": "src/services/unified-alerts.ts",
+          "beforeSHA256": "e381c887db995ba883e9f30023626cc7f0b3461248220ac9dc08ea94f881b8bb",
+          "restoredSHA256": "e381c887db995ba883e9f30023626cc7f0b3461248220ac9dc08ea94f881b8bb"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "node_modules/@playwright/test/cli.js",
+        "test",
+        "e2e/ux047-nws-lifecycle.spec.ts",
+        "--project=chromium"
+      ],
+      "baseline": {
+        "pass": 4,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 2,
+        "fail": 2,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "  1) [chromium] › e2e/ux047-nws-lifecycle.spec.ts:50:1 › offline expiry and actual reload preserve pinned history and reject stale replay without hydration writes \n    Error: expect(received).toEqual(expected) // deep equality\n    - Expected  - 1\n    + Received  + 1\n      Object {\n        \"count\": 0,\n    -   \"invalidations\": 1,\n    +   \"invalidations\": 0,\n      77 |     return { count: state.ux047Store.getOperationalAlerts().length, invalidations: state.ux047Invalidations };\n    > 78 |   })).toEqual({ count: 0, invalidations: 1 });\n  2) [chromium] › e2e/ux047-nws-lifecycle.spec.ts:186:1 › provider outage after reload uses persisted snapshot age and cannot display expired cached warnings as current \n    Error: expect(locator).toHaveCount(expected) failed\n    Locator:  locator('tbody tr')\n    Expected: 0\n    Received: 1\n    Timeout:  30000ms\n    Call log:\n      - Expect \"toHaveCount\" with timeout 30000ms",
+      "appliedDiff": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex c111110be..b97d878e6 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -595,7 +595,7 @@ class UnifiedAlertStore {\n \n   private checkNwsExpiry(): void {\n     if (!this.nwsLifecycleRunning) return;\n-    if (this.advanceNwsExpiry(Date.now())) this.scheduleNotify();\n+    this.advanceNwsExpiry(Date.now());\n     this.armNwsExpiry();\n   }\n \n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "L06",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Expired and retired NWS replay cannot be newly dispatched",
+      "sources": [
+        {
+          "path": "src/services/unified-alerts.ts",
+          "beforeSHA256": "e381c887db995ba883e9f30023626cc7f0b3461248220ac9dc08ea94f881b8bb",
+          "restoredSHA256": "e381c887db995ba883e9f30023626cc7f0b3461248220ac9dc08ea94f881b8bb"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "src/services/__tests__/nws-alert-lifecycle.test.mts"
+      ],
+      "baseline": {
+        "pass": 15,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 14,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ already-expired rows in a complete upstream response never dispatch as new live warnings (2.492125ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  1 !== 0\n    generatedMessage: true,\n    actual: 1,\n    expected: 0,",
+      "appliedDiff": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex c111110be..fffc9a181 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -417,7 +417,7 @@ class UnifiedAlertStore {\n     const admittedAlerts: UnifiedAlert[] = [];\n     this.identities.withProtectedAdmissions(now, protectedKeys, (admit) => {\n       for (const alert of incoming) {\n-        if (alert.source === 'nws' && this.nwsMembers && this.getNwsOperationalState(alert, now) !== 'active') continue;\n+        if (false) continue;\n         admittedAlerts.push(alert);\n         const live = this.alerts.get(alert.id);\n         const existing = live?.source === alert.source ? live : undefined;\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "L07",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Issued chronology uses sent independently of future onset",
+      "sources": [
+        {
+          "path": "src/services/alert-normalizer.ts",
+          "beforeSHA256": "769a7b52e53e267823e753715c0aa7c93d4b01ad4d7504cfca3096e75193dd43",
+          "restoredSHA256": "769a7b52e53e267823e753715c0aa7c93d4b01ad4d7504cfca3096e75193dd43"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "src/services/__tests__/nws-alert-lifecycle.test.mts"
+      ],
+      "baseline": {
+        "pass": 15,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 7,
+        "fail": 8,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ new complete snapshots retire only NWS operational membership while preserving history and user state (4.200042ms)\n✖ partial, malformed, future and duplicate-member snapshots cannot certify empty membership (3.211375ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  + []\n  - [\n  -   'nws-warning'\n  - ]\n    actual: [],\n    expected: [ 'nws-warning' ],\n✖ full national membership and panel projection survive the 500 retained-row capacity (4.709958ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  0 !== 500\n    generatedMessage: true,\n    actual: 0,\n    expected: 500,\n✖ expiry invalidates subscribers offline without deleting pinned history or dispatching again (0.389041ms)\n  + undefined\n  - true\n    actual: undefined,\n    expected: true,\n✖ invalid or oversized persisted lifecycle metadata cannot create trusted membership or boot writes (1.13875ms)\n✖ storage failure/readback failure is reported without changing source warning dispatch policy (0.558166ms)\n  0 !== 1\n    expected: 1,\n✖ issued time uses sent while future onset stays available separately (0.151916ms)\n  + 1790000005000\n  - 1789999999000\n    actual: 1790000005000,\n    expected: 1789999999000,\n✖ verified refresh replaces legacy future-onset chronology with sent without losing user state (0.852416ms)\n  AssertionError [ERR_ASSERTION]: verified sent chronology must replace legacy onset timestamp\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',",
+      "appliedDiff": "diff --git a/src/services/alert-normalizer.ts b/src/services/alert-normalizer.ts\nindex a117725dc..1a3c2c714 100644\n--- a/src/services/alert-normalizer.ts\n+++ b/src/services/alert-normalizer.ts\n@@ -142,7 +142,7 @@ export function normalizeNWSAlert(alert: NWSAlert, context: AlertObservationCont\n  severity: NWS_SEVERITY_MAP[alert.severity] ?? 'info',\n  title: alert.event,\n  body: alert.headline,\n- timestamp: new Date(alert.sent).getTime(),\n+ timestamp: new Date(alert.onset ?? alert.sent).getTime(),\n  location: alert.centroid\n  ? { lat: alert.centroid[1], lon: alert.centroid[0], label: alert.areaDesc }\n  : undefined,\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": "",
+      "notes": "Suite counts include downstream failures caused by missing lifecycle state/rows; the quoted behavioral assertions provide the mutation proof. No syntax/import/setup failure is claimed as proof."
+    },
+    {
+      "id": "L08",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Verified sent chronology replaces old onset-based chronology",
+      "sources": [
+        {
+          "path": "src/services/unified-alerts.ts",
+          "beforeSHA256": "e381c887db995ba883e9f30023626cc7f0b3461248220ac9dc08ea94f881b8bb",
+          "restoredSHA256": "e381c887db995ba883e9f30023626cc7f0b3461248220ac9dc08ea94f881b8bb"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "src/services/__tests__/nws-alert-lifecycle.test.mts"
+      ],
+      "baseline": {
+        "pass": 15,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 14,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ verified refresh replaces legacy future-onset chronology with sent without losing user state (2.390875ms)\n  AssertionError [ERR_ASSERTION]: verified sent chronology must replace legacy onset timestamp\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    expected: true,",
+      "appliedDiff": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex c111110be..c17da81e7 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -430,7 +430,7 @@ class UnifiedAlertStore {\n           && incomingEvidence.expiresAt === member?.expiresAt;\n         const olderIssuance = previousEvidence?.kind === 'nws-expiry' && incomingEvidence?.kind === 'nws-expiry'\n           && incomingEvidence.issuedAt < previousEvidence.issuedAt;\n-        const keepExisting = existing && ((!currentNwsEvidence && alert.timestamp < existing.timestamp) || olderIssuance);\n+        const keepExisting = existing && ((alert.timestamp < existing.timestamp) || olderIssuance);\n         const report = keepExisting ? existing : alert;\n         let materialUnchanged = false;\n         if (existing && previousEvidence && !incomingEvidence) {\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "L09",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Legacy trusted expiry still drives local invalidation",
+      "sources": [
+        {
+          "path": "src/services/unified-alerts.ts",
+          "beforeSHA256": "e381c887db995ba883e9f30023626cc7f0b3461248220ac9dc08ea94f881b8bb",
+          "restoredSHA256": "e381c887db995ba883e9f30023626cc7f0b3461248220ac9dc08ea94f881b8bb"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "src/services/__tests__/nws-alert-lifecycle.test.mts"
+      ],
+      "baseline": {
+        "pass": 15,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 14,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ legacy trusted expiry also invalidates offline views without a national watermark (2.340333ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  0 !== 1\n    generatedMessage: true,\n    actual: 0,\n    expected: 1,",
+      "appliedDiff": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex c111110be..994536285 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -578,7 +578,7 @@ class UnifiedAlertStore {\n     const expiries = this.nwsLifecycle ? this.nwsLifecycle.members.map(member => member.expiresAt)\n       : [...this.alerts.values()].flatMap(alert => {\n         const evidence = validateAlertRetentionEvidence(alert.source, alert.retentionEvidence, now);\n-        return alert.source === 'nws' && evidence?.kind === 'nws-expiry' ? [evidence.expiresAt] : [];\n+        return [];\n       });\n     this.nwsExpiryDeadlines = [...new Set(expiries)].sort((a, b) => a - b);\n     this.nwsExpiryCursor = 0;\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "L10",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Lifecycle teardown and resume cannot lose expiry delivery",
+      "sources": [
+        {
+          "path": "src/services/unified-alerts.ts",
+          "beforeSHA256": "e381c887db995ba883e9f30023626cc7f0b3461248220ac9dc08ea94f881b8bb",
+          "restoredSHA256": "e381c887db995ba883e9f30023626cc7f0b3461248220ac9dc08ea94f881b8bb"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "src/services/__tests__/nws-alert-lifecycle.test.mts"
+      ],
+      "baseline": {
+        "pass": 15,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 14,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ lifecycle teardown stops expiry delivery and resume rechecks the current clock (1.995459ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  0 !== 1\n    generatedMessage: true,\n    actual: 0,\n    expected: 1,",
+      "appliedDiff": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex c111110be..3ebc56656 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -624,7 +624,7 @@ class UnifiedAlertStore {\n   }\n \n   stopNwsLifecycle(): void {\n-    this.nwsLifecycleRunning = false;\n+    this.nwsLifecycleRunning = true;\n     if (this.nwsExpiryTimer !== null) clearTimeout(this.nwsExpiryTimer);\n     this.nwsExpiryTimer = null;\n     if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "L11",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Oversized persisted metadata cannot create trusted membership",
+      "sources": [
+        {
+          "path": "src/services/nws-alert-lifecycle.ts",
+          "beforeSHA256": "a284ba4998d053e687ce8bed3a6e6b5e28fb6ffb5c089ea8be0f4917ff79491d",
+          "restoredSHA256": "a284ba4998d053e687ce8bed3a6e6b5e28fb6ffb5c089ea8be0f4917ff79491d"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "src/services/__tests__/nws-alert-lifecycle.test.mts"
+      ],
+      "baseline": {
+        "pass": 15,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 14,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ invalid or oversized persisted lifecycle metadata cannot create trusted membership or boot writes (5.785167ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  + 'inactive'\n  - 'unverified'\n    actual: 'inactive',\n    expected: 'unverified',",
+      "appliedDiff": "diff --git a/src/services/nws-alert-lifecycle.ts b/src/services/nws-alert-lifecycle.ts\nindex 03f608b15..81780262b 100644\n--- a/src/services/nws-alert-lifecycle.ts\n+++ b/src/services/nws-alert-lifecycle.ts\n@@ -27,7 +27,7 @@ export function validateNwsLifecycleState(value: unknown, now = Date.now()): Nws\n   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;\n   const state = value as Record<string, unknown>;\n   if (state.version !== 1 || !timestamp(state.observedAt) || state.observedAt > now\n-    || !Array.isArray(state.members) || state.members.length > MAX_NWS_SNAPSHOT_ALERTS) return null;\n+    || !Array.isArray(state.members) || state.members.length > 3000) return null;\n   const ids = new Set<string>();\n   const members: NwsLifecycleMember[] = [];\n   for (const value of state.members) {\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "L12",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Verified refresh preserves no-repeat dispatch identity",
+      "sources": [
+        {
+          "path": "src/services/unified-alerts.ts",
+          "beforeSHA256": "e381c887db995ba883e9f30023626cc7f0b3461248220ac9dc08ea94f881b8bb",
+          "restoredSHA256": "e381c887db995ba883e9f30023626cc7f0b3461248220ac9dc08ea94f881b8bb"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "src/services/__tests__/nws-alert-lifecycle.test.mts"
+      ],
+      "baseline": {
+        "pass": 15,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 14,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ verified refresh replaces legacy future-onset chronology with sent without losing user state (2.14125ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  2 !== 1\n    generatedMessage: true,\n    actual: 2,\n    expected: 1,",
+      "appliedDiff": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex c111110be..23be4d978 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -466,7 +466,7 @@ class UnifiedAlertStore {\n         } else {\n           this.invalidIdentities++;\n         }\n-        if (!existing && !considered) newAlerts.push(restored);\n+        if (alert.source === 'nws' || (!existing && !considered)) newAlerts.push(restored);\n       }\n     });\n     if (changed) {\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "U01",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Backend/cache hits cannot renew acquisition age",
+      "sources": [
+        {
+          "path": "src/services/nws-alert-snapshot-cache.ts",
+          "beforeSHA256": "3a7aa76b08e4718d1ee5d8576ed7e5da7fd78f443b38980c4078b9a9aa8b1f7b",
+          "restoredSHA256": "3a7aa76b08e4718d1ee5d8576ed7e5da7fd78f443b38980c4078b9a9aa8b1f7b"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/ux047/nws-ui-loader.test.mts",
+        "tests/ux047/nws-snapshot-cache.test.mts",
+        "tests/ux047/nws-panel.test.mts"
+      ],
+      "baseline": {
+        "pass": 20,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 19,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ a backend cache hit cannot promote an old acquisition to fresh (5.3535ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  false !== true\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: false,\n    expected: true,",
+      "appliedDiff": "diff --git a/src/services/nws-alert-snapshot-cache.ts b/src/services/nws-alert-snapshot-cache.ts\nindex 364f23539..666904d4b 100644\n--- a/src/services/nws-alert-snapshot-cache.ts\n+++ b/src/services/nws-alert-snapshot-cache.ts\n@@ -14,7 +14,7 @@ export async function fetchCachedNwsSnapshot(): Promise<CachedSnapshot<NWSAlertS\n   }, NWS_SNAPSHOT_CACHE_MS);\n   const data = validateNWSAlertSnapshot(result.data);\n   if (!data) throw new Error('Invalid cached national NWS snapshot');\n-  const age = Math.max(0, Date.now() - data.observedAt);\n+  const age = Math.max(0, Date.now() - result.cachedAt);\n   return {\n     ...result,\n     data,\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "U02a",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "National envelope cache has separate legacy namespace",
+      "sources": [
+        {
+          "path": "src/services/nws-alert-snapshot-cache.ts",
+          "beforeSHA256": "3a7aa76b08e4718d1ee5d8576ed7e5da7fd78f443b38980c4078b9a9aa8b1f7b",
+          "restoredSHA256": "3a7aa76b08e4718d1ee5d8576ed7e5da7fd78f443b38980c4078b9a9aa8b1f7b"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/ux047/nws-ui-loader.test.mts",
+        "tests/ux047/nws-snapshot-cache.test.mts",
+        "tests/ux047/nws-panel.test.mts"
+      ],
+      "baseline": {
+        "pass": 20,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 19,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ new cache namespace preserves the upstream observation time rather than cache write time (35.301125ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n    [\n  +   'nws-alerts'\n  -   'nws-alerts-snapshot-v1'\n    ]\n    actual: [ 'nws-alerts' ],\n    expected: [ 'nws-alerts-snapshot-v1' ],",
+      "appliedDiff": "diff --git a/src/services/nws-alert-snapshot-cache.ts b/src/services/nws-alert-snapshot-cache.ts\nindex 364f23539..553bfcd49 100644\n--- a/src/services/nws-alert-snapshot-cache.ts\n+++ b/src/services/nws-alert-snapshot-cache.ts\n@@ -3,7 +3,7 @@ import { validateNWSAlertSnapshot, type NWSAlertSnapshot } from './nws-alert-sna\n import { withOfflineCache, type CachedSnapshot } from './offline-alert-cache';\n \n export const NWS_SNAPSHOT_FRESH_MS = 5 * 60_000;\n-const NWS_SNAPSHOT_CACHE_KEY = 'nws-alerts-snapshot-v1';\n+const NWS_SNAPSHOT_CACHE_KEY = 'nws-alerts';\n const NWS_SNAPSHOT_CACHE_MS = 60 * 60_000;\n \n export async function fetchCachedNwsSnapshot(): Promise<CachedSnapshot<NWSAlertSnapshot>> {\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "U02b",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Critical offline status tracks versioned national cache",
+      "sources": [
+        {
+          "path": "src/services/offline-alert-cache.ts",
+          "beforeSHA256": "db4fcff6f62546a303286cab7c2325129277eb4a0a5f65089cd4262b46987e04",
+          "restoredSHA256": "db4fcff6f62546a303286cab7c2325129277eb4a0a5f65089cd4262b46987e04"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/ux047/nws-ui-loader.test.mts",
+        "tests/ux047/nws-snapshot-cache.test.mts",
+        "tests/ux047/nws-panel.test.mts"
+      ],
+      "baseline": {
+        "pass": 20,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 19,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ critical offline status tracks only the versioned national snapshot key (9.351333ms)\n  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n    assert.ok(CRITICAL_SOURCE_KEYS.some(key => key === 'nws-alerts-snapshot-v1'))\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: false,\n    expected: true,",
+      "appliedDiff": "diff --git a/src/services/offline-alert-cache.ts b/src/services/offline-alert-cache.ts\nindex 06728e394..15fe1a477 100644\n--- a/src/services/offline-alert-cache.ts\n+++ b/src/services/offline-alert-cache.ts\n@@ -276,7 +276,7 @@ export function getOfflineCacheStatus(serviceIds: string[]): OfflineCacheStatus[\n  */\n export const CRITICAL_SOURCE_KEYS = [\n   'gdacs-events',\n-  'nws-alerts-snapshot-v1',\n+  'nws-alerts',\n   'tsunami-alerts',\n   'weather-alerts',\n   'news-rss:breaking',\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "U03",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Offline snapshots never reconcile national authority",
+      "sources": [
+        {
+          "path": "src/app/data-loader.ts",
+          "beforeSHA256": "0d6fd7fa414b753bc0927f0a7af7c40ddba6d852c82f28c72fc70c6cbd218c6c",
+          "restoredSHA256": "0d6fd7fa414b753bc0927f0a7af7c40ddba6d852c82f28c72fc70c6cbd218c6c"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/ux047/nws-ui-loader.test.mts",
+        "tests/ux047/nws-snapshot-cache.test.mts",
+        "tests/ux047/nws-panel.test.mts"
+      ],
+      "baseline": {
+        "pass": 20,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 19,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ offline replay never reconciles or upgrades an older empty snapshot to a national all-clear (18.479167ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  1 !== 0\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 1,\n    expected: 0,",
+      "appliedDiff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex 1b0e15722..8a977de9f 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -3377,7 +3377,7 @@ export class DataLoaderManager implements AppModule {\n       const snapshot = await fetchCachedNwsSnapshot();\n       if (this.ctx.isDestroyed) return;\n       this.nwsAcquisitionFailed = snapshot.isStale;\n-      if (snapshot.source === 'network' && !snapshot.isStale) {\n+      if (true) {\n         const result = unifiedAlertStore.reconcileNwsSnapshot(snapshot.data);\n         if (result.disposition === 'invalid') {\n           this.nwsAcquisitionFailed = true;\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "U04",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Older snapshots cannot clear newer storm context",
+      "sources": [
+        {
+          "path": "src/app/data-loader.ts",
+          "beforeSHA256": "0d6fd7fa414b753bc0927f0a7af7c40ddba6d852c82f28c72fc70c6cbd218c6c",
+          "restoredSHA256": "0d6fd7fa414b753bc0927f0a7af7c40ddba6d852c82f28c72fc70c6cbd218c6c"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/ux047/nws-ui-loader.test.mts",
+        "tests/ux047/nws-snapshot-cache.test.mts",
+        "tests/ux047/nws-panel.test.mts"
+      ],
+      "baseline": {
+        "pass": 20,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 18,
+        "fail": 2,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ offline replay never reconciles or upgrades an older empty snapshot to a national all-clear (12.296208ms)\n  AssertionError [ERR_ASSERTION]: older cache must not clear newer storm context\n  1 !== 0\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: 1,\n    expected: 0,\n✖ a backend snapshot older than persisted lifecycle watermark is not current despite network success (9.833958ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n    generatedMessage: true,",
+      "appliedDiff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex 1b0e15722..39808901b 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -3363,7 +3363,7 @@ export class DataLoaderManager implements AppModule {\n       || Date.now() - snapshot.data.observedAt >= NWS_SNAPSHOT_FRESH_MS\n       || alerts.length !== snapshot.data.alerts.length;\n     panel?.updateSnapshot({ alerts, state: stale ? 'stale' : 'current', observedAt: snapshot.data.observedAt });\n-    if (!older && (this.lastNwsContextSnapshot !== snapshot.data\n+    if (true && (this.lastNwsContextSnapshot !== snapshot.data\n       || this.lastNwsProjection?.length !== alerts.length\n       || alerts.some((alert, index) => this.lastNwsProjection?.[index]?.id !== alert.id))) {\n       this.lastNwsContextSnapshot = snapshot.data;\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "U05",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Older persisted cache cannot overwrite newer in-memory snapshot",
+      "sources": [
+        {
+          "path": "src/app/data-loader.ts",
+          "beforeSHA256": "0d6fd7fa414b753bc0927f0a7af7c40ddba6d852c82f28c72fc70c6cbd218c6c",
+          "restoredSHA256": "0d6fd7fa414b753bc0927f0a7af7c40ddba6d852c82f28c72fc70c6cbd218c6c"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/ux047/nws-ui-loader.test.mts",
+        "tests/ux047/nws-snapshot-cache.test.mts",
+        "tests/ux047/nws-panel.test.mts"
+      ],
+      "baseline": {
+        "pass": 20,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 19,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ an older cache cannot replace a newer in-memory snapshot after offline-cache persistence failure (10.50975ms)\n  AssertionError [ERR_ASSERTION]: Expected \"actual\" to be reference-equal to \"expected\":\n  + actual - expected\n    {\n  +   cachedAt: 1793593039062,\n  -   cachedAt: 1793593048062,\n      data: {\n  +     alerts: [],\n  -     alerts: [\n    actual: { data: { schemaVersion: 1, scope: 'national-active', completeness: 'complete', observedAt: 1793593039062, alerts: [] }, source: 'offline-cache', cachedAt: 1793593039062, expiresAt: 1793596639062, isStale: true, staleDurationMs: 10000 },\n    expected: { data: { schemaVersion: 1, scope: 'national-active', completeness: 'complete', observedAt: 1793593048062, alerts: [Array] }, source: 'network', cachedAt: 1793593048062, expiresAt: 1793596648062, isStale: false, staleDurationMs: 1000 },",
+      "appliedDiff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex 1b0e15722..e996288cf 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -3386,7 +3386,7 @@ export class DataLoaderManager implements AppModule {\n         }\n         if (result.disposition === 'older') this.nwsAcquisitionFailed = true;\n       }\n-      if (!this.lastNwsSnapshot || snapshot.data.observedAt >= this.lastNwsSnapshot.data.observedAt) {\n+      if (true) {\n         this.lastNwsSnapshot = snapshot;\n       } else {\n         this.nwsAcquisitionFailed = true;\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "U06a",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Failed acquisition degrades existing warning display",
+      "sources": [
+        {
+          "path": "src/app/data-loader.ts",
+          "beforeSHA256": "0d6fd7fa414b753bc0927f0a7af7c40ddba6d852c82f28c72fc70c6cbd218c6c",
+          "restoredSHA256": "0d6fd7fa414b753bc0927f0a7af7c40ddba6d852c82f28c72fc70c6cbd218c6c"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/ux047/nws-ui-loader.test.mts",
+        "tests/ux047/nws-snapshot-cache.test.mts",
+        "tests/ux047/nws-panel.test.mts"
+      ],
+      "baseline": {
+        "pass": 20,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 17,
+        "fail": 3,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ failed acquisition preserves newer known alerts and degrades the panel (10.371667ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  'current' !== 'stale'\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 'current',\n    expected: 'stale',\n✖ an older cache cannot replace a newer in-memory snapshot after offline-cache persistence failure (9.056208ms)\n✖ invalid reconciliation preserves the last known snapshot and destroyed loaders do not publish (8.420375ms)",
+      "appliedDiff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex 1b0e15722..4bd2a8cd2 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -3359,7 +3359,7 @@ export class DataLoaderManager implements AppModule {\n     const watermark = unifiedAlertStore.getNwsObservedAt();\n     const older = watermark !== null && snapshot.data.observedAt < watermark;\n     const alerts = unifiedAlertStore.getOperationalNwsAlerts(snapshot.data);\n-    const stale = this.nwsAcquisitionFailed || snapshot.isStale || older\n+    const stale = snapshot.isStale || older\n       || Date.now() - snapshot.data.observedAt >= NWS_SNAPSHOT_FRESH_MS\n       || alerts.length !== snapshot.data.alerts.length;\n     panel?.updateSnapshot({ alerts, state: stale ? 'stale' : 'current', observedAt: snapshot.data.observedAt });\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "U06b",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Expiry cannot certify a fresh complete empty national snapshot",
+      "sources": [
+        {
+          "path": "src/app/data-loader.ts",
+          "beforeSHA256": "0d6fd7fa414b753bc0927f0a7af7c40ddba6d852c82f28c72fc70c6cbd218c6c",
+          "restoredSHA256": "0d6fd7fa414b753bc0927f0a7af7c40ddba6d852c82f28c72fc70c6cbd218c6c"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/ux047/nws-ui-loader.test.mts",
+        "tests/ux047/nws-snapshot-cache.test.mts",
+        "tests/ux047/nws-panel.test.mts"
+      ],
+      "baseline": {
+        "pass": 20,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 19,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ expiry subscription projection removes expired rows without asserting a new complete empty acquisition (10.51375ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  'current' !== 'stale'\n    actual: 'current',\n    expected: 'stale',",
+      "appliedDiff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex 1b0e15722..d2a3ff18b 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -3361,7 +3361,7 @@ export class DataLoaderManager implements AppModule {\n     const alerts = unifiedAlertStore.getOperationalNwsAlerts(snapshot.data);\n     const stale = this.nwsAcquisitionFailed || snapshot.isStale || older\n       || Date.now() - snapshot.data.observedAt >= NWS_SNAPSHOT_FRESH_MS\n-      || alerts.length !== snapshot.data.alerts.length;\n+      || false;\n     panel?.updateSnapshot({ alerts, state: stale ? 'stale' : 'current', observedAt: snapshot.data.observedAt });\n     if (!older && (this.lastNwsContextSnapshot !== snapshot.data\n       || this.lastNwsProjection?.length !== alerts.length\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "U07",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Async ancillary completion cannot restore retired warnings",
+      "sources": [
+        {
+          "path": "src/app/data-loader.ts",
+          "beforeSHA256": "0d6fd7fa414b753bc0927f0a7af7c40ddba6d852c82f28c72fc70c6cbd218c6c",
+          "restoredSHA256": "0d6fd7fa414b753bc0927f0a7af7c40ddba6d852c82f28c72fc70c6cbd218c6c"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/ux047/nws-ui-loader.test.mts",
+        "tests/ux047/nws-snapshot-cache.test.mts",
+        "tests/ux047/nws-panel.test.mts"
+      ],
+      "baseline": {
+        "pass": 20,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 19,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ boot ancillary completion cannot restore warnings retired while its saved-place work awaited (33.637458ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  + [\n  +   {\n  +     areaDesc: 'Test',\n  +     event: 'Flood Warning',\n  +     expires: '2026-11-02T04:18:51.568Z',\n  +     headline: 'Flooding',\n    actual: [ { id: 'one', event: 'Flood Warning', severity: 'Severe', headline: 'Flooding', areaDesc: 'Test', sent: '2026-11-02T04:17:21.568Z', expires: '2026-11-02T04:18:51.568Z' } ],\n    expected: [],",
+      "appliedDiff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex 1b0e15722..5880890c6 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -3465,6 +3465,7 @@ export class DataLoaderManager implements AppModule {\n  } catch { /* saved-places unavailable — non-fatal */ }\n \n  updateStormPreparednessContext({\n+ nwsAlerts: alerts,\n  spcSummary,\n  excessiveRainfallOutlooks,\n  winterWeatherOutlooks,\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "U08",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Actual five-minute scheduler remains independent of panel presence",
+      "sources": [
+        {
+          "path": "src/App.ts",
+          "beforeSHA256": "f34a6604b1dcb5c5fd1365f0ad4d87b0c8280006c98bfc9c7e41fe328d6fc4a1",
+          "restoredSHA256": "f34a6604b1dcb5c5fd1365f0ad4d87b0c8280006c98bfc9c7e41fe328d6fc4a1"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "node_modules/@playwright/test/cli.js",
+        "test",
+        "e2e/ux047-nws-lifecycle.spec.ts",
+        "--project=chromium"
+      ],
+      "baseline": {
+        "pass": 4,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 3,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "  1) [chromium] › e2e/ux047-nws-lifecycle.spec.ts:150:1 › actual App registration and scheduler refresh the real NWS loader with no warning panel mounted \n    Error: expect(received).toBe(expected) // Object.is equality\n    Expected: 1\n    Received: 0\n    Call Log:\n    - Timeout 30000ms exceeded while waiting on the predicate\n      175 |   // Jump to the due refresh without consuming its fetch timeout while the fixture crosses processes.",
+      "appliedDiff": "diff --git a/src/App.ts b/src/App.ts\nindex f8e323aaf..9a21f173f 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -726,7 +726,7 @@ export class App {\n  // Safety-critical: drives the status chip + storm posture, so it must keep\n  // refreshing even when the weather map layer is toggled off.\n  { name: 'weather', fn: () => this.dataLoader.loadWeatherAlerts(), intervalMs: 10 * 60 * 1000 },\n- { name: 'nwsAlerts', fn: () => this.dataLoader.refreshNWSAlerts(), intervalMs: 5 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },\n+ { name: 'nwsAlerts', fn: () => this.dataLoader.refreshNWSAlerts(), intervalMs: 5 * 60 * 1000, condition: () => SITE_VARIANT === 'full' && !!this.state.panels['nws-alerts'] },\n  { name: 'fred', fn: () => this.dataLoader.loadFredData(), intervalMs: 30 * 60 * 1000 },\n  { name: 'oil', fn: () => this.dataLoader.loadOilAnalytics(), intervalMs: 30 * 60 * 1000 },\n  { name: 'spending', fn: () => this.dataLoader.loadGovernmentSpending(), intervalMs: 60 * 60 * 1000 },\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "U09",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Only current complete empty can claim all-clear",
+      "sources": [
+        {
+          "path": "src/components/NWSAlertsPanel.ts",
+          "beforeSHA256": "0ecca510a21aeb730cb0459b1cc6b44c6608d5e30c73d8f8726d8b9526f8637d",
+          "restoredSHA256": "0ecca510a21aeb730cb0459b1cc6b44c6608d5e30c73d8f8726d8b9526f8637d"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/ux047/nws-ui-loader.test.mts",
+        "tests/ux047/nws-snapshot-cache.test.mts",
+        "tests/ux047/nws-panel.test.mts"
+      ],
+      "baseline": {
+        "pass": 20,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 19,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ only a current complete empty snapshot claims no active warnings (260.324208ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  true !== false\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: true,\n    expected: false,",
+      "appliedDiff": "diff --git a/src/components/NWSAlertsPanel.ts b/src/components/NWSAlertsPanel.ts\nindex 1bfb72a43..bd89e7a1f 100644\n--- a/src/components/NWSAlertsPanel.ts\n+++ b/src/components/NWSAlertsPanel.ts\n@@ -38,7 +38,7 @@ export class NWSAlertsPanel extends Panel {\n     }[state];\n     const status = `<div class=\"panel-status\" role=\"status\" aria-live=\"polite\">${label}${observation}</div>`;\n     if (alerts.length === 0) {\n-      this.setContent(`${status}<div class=\"panel-empty\">${state === 'current'\n+      this.setContent(`${status}<div class=\"panel-empty\">${true\n         ? 'No active NWS hazard alerts.' : 'No current warning list available. Check NOAA National Weather Service for current warnings.'}</div>`);\n       return;\n     }\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "U10",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Issued and Starts columns remain distinct",
+      "sources": [
+        {
+          "path": "src/components/NWSAlertsPanel.ts",
+          "beforeSHA256": "0ecca510a21aeb730cb0459b1cc6b44c6608d5e30c73d8f8726d8b9526f8637d",
+          "restoredSHA256": "0ecca510a21aeb730cb0459b1cc6b44c6608d5e30c73d8f8726d8b9526f8637d"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/ux047/nws-ui-loader.test.mts",
+        "tests/ux047/nws-snapshot-cache.test.mts",
+        "tests/ux047/nws-panel.test.mts"
+      ],
+      "baseline": {
+        "pass": 20,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 18,
+        "fail": 2,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ national count is independent of bounded rendering, with distinct issued and starts times (241.204792ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  + '2026-11-01T14:00:00Z'\n  - '2026-10-31T12:00:00Z'\n           ^\n    actual: '2026-11-01T14:00:00Z',\n    expected: '2026-10-31T12:00:00Z',\n✖ degraded update preserves external keyboard focus and tolerates missing onset in narrow layout (230.556833ms)\n  0 !== 1\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 0,\n    expected: 1,",
+      "appliedDiff": "diff --git a/src/components/NWSAlertsPanel.ts b/src/components/NWSAlertsPanel.ts\nindex 1bfb72a43..68509af77 100644\n--- a/src/components/NWSAlertsPanel.ts\n+++ b/src/components/NWSAlertsPanel.ts\n@@ -48,7 +48,7 @@ export class NWSAlertsPanel extends Panel {\n         <td><span class=\"sev-badge\">${escapeHtml(a.severity)}</span></td>\n         <td>${escapeHtml(a.event)}</td>\n         <td>${escapeHtml(area)}</td>\n-        <td>${formatTime(a.sent)}</td>\n+        <td>${formatTime(a.onset)}</td>\n         <td>${formatTime(a.onset)}</td>\n       </tr>`;\n     }).join('');\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "C01",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "src/components/TriageBar.ts excludes retired warning history",
+      "sources": [
+        {
+          "path": "src/components/TriageBar.ts",
+          "beforeSHA256": "c9f2ad2923bf693285320bac977043387d839a9b5fb562bd2760cc4484a38ea1",
+          "restoredSHA256": "c9f2ad2923bf693285320bac977043387d839a9b5fb562bd2760cc4484a38ea1"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/ux047/operational-consumers.test.mts"
+      ],
+      "baseline": {
+        "pass": 17,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 16,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ TriageBar ranks operational warnings while preserving ordinary alerts (92.529625ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n    [\n  +   'retired-nws',\n      'ordinary-cyber',\n      'active-nws'\n    ]\n    actual: [ 'retired-nws', 'ordinary-cyber', 'active-nws' ],\n    expected: [ 'ordinary-cyber', 'active-nws' ],",
+      "appliedDiff": "diff --git a/src/components/TriageBar.ts b/src/components/TriageBar.ts\nindex 4b9b1eaf1..db8bb66aa 100644\n--- a/src/components/TriageBar.ts\n+++ b/src/components/TriageBar.ts\n@@ -112,7 +112,7 @@ export class TriageBar {\n     // Any open preset popover belongs to the DOM we're about to replace —\n     // close it first so its document-level listeners don't leak.\n     this.presetMenuCleanup?.();\n-    const all = rankAlerts(unifiedAlertStore.getOperationalAlerts());\n+    const all = rankAlerts(unifiedAlertStore.getAll());\n     const ranked = this.facet === 'all'\n       ? all\n       : all.filter(a => SOURCE_DOMAIN[a.source] === this.facet || a.source === 'correlation');\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "C02",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "src/components/SummaryStrip.ts excludes retired warning history",
+      "sources": [
+        {
+          "path": "src/components/SummaryStrip.ts",
+          "beforeSHA256": "c3422ef3ca360f018328a862dbe350f3a8316fd0e1978d45d7902a4e0e6d6a26",
+          "restoredSHA256": "c3422ef3ca360f018328a862dbe350f3a8316fd0e1978d45d7902a4e0e6d6a26"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/ux047/operational-consumers.test.mts"
+      ],
+      "baseline": {
+        "pass": 17,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 16,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ SummaryStrip excludes retired NWS alerts from current severity counts (29.136333ms)\n  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /^2 unacknowledged alerts/. Input:\n  '3 unacknowledged alerts — open Alert Inbox'\n    actual: '3 unacknowledged alerts — open Alert Inbox',\n    expected: /^2 unacknowledged alerts/,",
+      "appliedDiff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 49ac014bf..327c4c4f5 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -202,7 +202,7 @@ export class SummaryStrip {\n   }\n \n   private alertsSegHtml(): string {\n-    const unacked = unifiedAlertStore.getOperationalAlerts().filter((a) => !a.acknowledged);\n+    const unacked = unifiedAlertStore.getAll().filter((a) => !a.acknowledged);\n     const parts: string[] = [];\n     for (const sev of ['critical', 'high', 'medium'] as const) {\n       const n = unacked.filter((a) => a.severity === sev).length;\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "C03",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "src/services/sidebar-heat.ts excludes retired warning history",
+      "sources": [
+        {
+          "path": "src/services/sidebar-heat.ts",
+          "beforeSHA256": "c617016e4acb12e48d78772b9cef2e136529816622619b2d7c4819d2307ee488",
+          "restoredSHA256": "c617016e4acb12e48d78772b9cef2e136529816622619b2d7c4819d2307ee488"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/ux047/operational-consumers.test.mts"
+      ],
+      "baseline": {
+        "pass": 17,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 16,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ sidebar heat projects current operational warnings, not retained expired history (9.8845ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n    [\n  +   'retired-nws',\n      'ordinary-cyber',\n      'active-nws'\n    ]\n    actual: [ 'retired-nws', 'ordinary-cyber', 'active-nws' ],\n    expected: [ 'ordinary-cyber', 'active-nws' ],",
+      "appliedDiff": "diff --git a/src/services/sidebar-heat.ts b/src/services/sidebar-heat.ts\nindex 8b31309bc..b3ee911d2 100644\n--- a/src/services/sidebar-heat.ts\n+++ b/src/services/sidebar-heat.ts\n@@ -77,7 +77,7 @@ export function startSidebarHeat(\n   const controller: SidebarHeatController = {\n     refresh(): void {\n       if (destroyed) return;\n-      snapshot = projectPanelAttention(unifiedAlertStore.getOperationalAlerts(), {\n+      snapshot = projectPanelAttention(unifiedAlertStore.getAll(), {\n         score: scoreAlert,\n         route: panelForAlert,\n         reviewed,\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "C04",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "src/services/native/menubar-status.ts excludes retired warning history",
+      "sources": [
+        {
+          "path": "src/services/native/menubar-status.ts",
+          "beforeSHA256": "6e408fc6b822518aa9e8203f23d8f6efc48819ecf4f057446ce9cfa5065df998",
+          "restoredSHA256": "6e408fc6b822518aa9e8203f23d8f6efc48819ecf4f057446ce9cfa5065df998"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/ux047/operational-consumers.test.mts"
+      ],
+      "baseline": {
+        "pass": 17,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 15,
+        "fail": 2,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ menubar status ignores retired NWS critical rows while retaining ordinary high alerts (7.931625ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  'red' !== 'yellow'\n    actual: 'red',\n    expected: 'yellow',\n✖ menubar expiry refresh completes without an animation frame or visibility return (13.997958ms)\n  1 !== 2\n    actual: 1,\n    expected: 2,",
+      "appliedDiff": "diff --git a/src/services/native/menubar-status.ts b/src/services/native/menubar-status.ts\nindex 2b13ddd8f..fbed02a71 100644\n--- a/src/services/native/menubar-status.ts\n+++ b/src/services/native/menubar-status.ts\n@@ -56,7 +56,7 @@ export function startMenubarStatus(): void {\n       cancel();\n       cancelScheduled = null;\n       let alerts: UnifiedAlert[] = [];\n-      try { alerts = unifiedAlertStore.getOperationalAlerts(); } catch { return; }\n+      try { alerts = unifiedAlertStore.getAll(); } catch { return; }\n       const level = computeThreatLevel(alerts);\n       if (level === lastSent) return;\n       lastSent = level;\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "C05",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "src/services/native/dock-badge.ts excludes retired warning history",
+      "sources": [
+        {
+          "path": "src/services/native/dock-badge.ts",
+          "beforeSHA256": "39ff5732e46f052842d9121e2af81f64d22c5e656191dad1ee8b9c1e2c0bac02",
+          "restoredSHA256": "39ff5732e46f052842d9121e2af81f64d22c5e656191dad1ee8b9c1e2c0bac02"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/ux047/operational-consumers.test.mts"
+      ],
+      "baseline": {
+        "pass": 17,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 16,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ dock badge excludes retired warnings and acknowledged rows while retaining ordinary alerts (7.531083ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  3 !== 1\n    actual: 3,\n    expected: 1,",
+      "appliedDiff": "diff --git a/src/services/native/dock-badge.ts b/src/services/native/dock-badge.ts\nindex b69d38ac0..5992a8d8e 100644\n--- a/src/services/native/dock-badge.ts\n+++ b/src/services/native/dock-badge.ts\n@@ -20,7 +20,7 @@ export function startDockBadge(): void {\n \n   const push = () => {\n     let count = 0;\n-    try { count = unifiedAlertStore.getOperationalAlerts().filter((alert) => !alert.acknowledged).length; } catch { return; }\n+    try { count = unifiedAlertStore.getAll().filter((alert) => !alert.acknowledged).length; } catch { return; }\n     if (count === lastSent) return;\n     lastSent = count;\n     void tryInvokeTauri('set_dock_badge', { count });\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "C06",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "src/services/notification-digest.ts excludes retired warning history",
+      "sources": [
+        {
+          "path": "src/services/notification-digest.ts",
+          "beforeSHA256": "c0d2a13c92c5ce99d4e6537c86c49fed552776b25da37108a03590e3527e0b5a",
+          "restoredSHA256": "c0d2a13c92c5ce99d4e6537c86c49fed552776b25da37108a03590e3527e0b5a"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/ux047/operational-consumers.test.mts"
+      ],
+      "baseline": {
+        "pass": 17,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 15,
+        "fail": 2,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ notification digest subscribes only to operational warnings (20.829792ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  3 !== 2\n    actual: 3,\n    expected: 2,\n✖ notification digest drops retired queued warnings when lifecycle subscribers refresh (8.066375ms)",
+      "appliedDiff": "diff --git a/src/services/notification-digest.ts b/src/services/notification-digest.ts\nindex 48c7ec9af..51a082071 100644\n--- a/src/services/notification-digest.ts\n+++ b/src/services/notification-digest.ts\n@@ -268,7 +268,7 @@ export function initNotificationDigest(): void {\n \n   alertStoreUnsub = unifiedAlertStore.subscribe(() => {\n  pendingAlerts = pendingAlerts.filter(alert => alert.source !== 'nws' || unifiedAlertStore.isOperationalAlert(alert));\n- const alerts = unifiedAlertStore.getOperationalAlerts();\n+ const alerts = unifiedAlertStore.getAll();\n  const newAlerts = alerts.filter(a => a.timestamp > lastDigestTime);\n  for (const alert of newAlerts) {\n  if (!pendingAlerts.some(p => p.id === alert.id)) {\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "C07",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Hidden menubar updates without animation frame",
+      "sources": [
+        {
+          "path": "src/services/native/menubar-status.ts",
+          "beforeSHA256": "6e408fc6b822518aa9e8203f23d8f6efc48819ecf4f057446ce9cfa5065df998",
+          "restoredSHA256": "6e408fc6b822518aa9e8203f23d8f6efc48819ecf4f057446ce9cfa5065df998"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/ux047/operational-consumers.test.mts"
+      ],
+      "baseline": {
+        "pass": 17,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 15,
+        "fail": 2,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ menubar expiry refresh completes without an animation frame or visibility return (11.133625ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  1 !== 2\n    actual: 1,\n    expected: 2,\n✖ menubar stop cancels queued updates and stale callbacks cannot affect a restarted service (4.160583ms)\n  0 !== 1\n    actual: 0,\n    expected: 1,",
+      "appliedDiff": "diff --git a/src/services/native/menubar-status.ts b/src/services/native/menubar-status.ts\nindex 2b13ddd8f..553bba543 100644\n--- a/src/services/native/menubar-status.ts\n+++ b/src/services/native/menubar-status.ts\n@@ -64,7 +64,7 @@ export function startMenubarStatus(): void {\n     };\n     cancelScheduled = cancel;\n     const frame = requestAnimationFrame(run);\n-    const timer = setTimeout(run, 100);\n+    const timer = setTimeout(() => {}, 100);\n   };\n \n   push();\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "C08",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Stale menubar callbacks cannot affect stopped/restarted service",
+      "sources": [
+        {
+          "path": "src/services/native/menubar-status.ts",
+          "beforeSHA256": "6e408fc6b822518aa9e8203f23d8f6efc48819ecf4f057446ce9cfa5065df998",
+          "restoredSHA256": "6e408fc6b822518aa9e8203f23d8f6efc48819ecf4f057446ce9cfa5065df998"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/ux047/operational-consumers.test.mts"
+      ],
+      "baseline": {
+        "pass": 17,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 16,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ menubar stop cancels queued updates and stale callbacks cannot affect a restarted service (10.516542ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  1 !== 0\n    actual: 1,\n    expected: 0,",
+      "appliedDiff": "diff --git a/src/services/native/menubar-status.ts b/src/services/native/menubar-status.ts\nindex 2b13ddd8f..b771510d1 100644\n--- a/src/services/native/menubar-status.ts\n+++ b/src/services/native/menubar-status.ts\n@@ -52,7 +52,7 @@ export function startMenubarStatus(): void {\n       clearTimeout(timer);\n     };\n     const run = () => {\n-      if (cancelled) return;\n+      if (false) return;\n       cancel();\n       cancelScheduled = null;\n       let alerts: UnifiedAlert[] = [];\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "C09",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Digest removes queued retired warnings before summary",
+      "sources": [
+        {
+          "path": "src/services/notification-digest.ts",
+          "beforeSHA256": "c0d2a13c92c5ce99d4e6537c86c49fed552776b25da37108a03590e3527e0b5a",
+          "restoredSHA256": "c0d2a13c92c5ce99d4e6537c86c49fed552776b25da37108a03590e3527e0b5a"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/ux047/operational-consumers.test.mts"
+      ],
+      "baseline": {
+        "pass": 17,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 16,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ notification digest emits nothing when every queued warning retires before delivery (15.148708ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  1 !== 0\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 1,\n    expected: 0,",
+      "appliedDiff": "diff --git a/src/services/notification-digest.ts b/src/services/notification-digest.ts\nindex 48c7ec9af..ad54e741a 100644\n--- a/src/services/notification-digest.ts\n+++ b/src/services/notification-digest.ts\n@@ -184,7 +184,7 @@ async function buildAIDigest(alerts: UnifiedAlert[], windowStart: number): Promi\n // ── Core digest generation ────────────────────────────────────────────────────\n \n export async function generateDigest(): Promise<NotificationDigest | null> {\n-  const alerts = pendingAlerts.filter(alert => alert.source !== 'nws' || unifiedAlertStore.isOperationalAlert(alert));\n+  const alerts = [...pendingAlerts];\n   const windowStart = lastDigestTime;\n \n   pendingAlerts = [];\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "C10",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Digest rechecks retirement after async summary before delivery",
+      "sources": [
+        {
+          "path": "src/services/notification-digest.ts",
+          "beforeSHA256": "c0d2a13c92c5ce99d4e6537c86c49fed552776b25da37108a03590e3527e0b5a",
+          "restoredSHA256": "c0d2a13c92c5ce99d4e6537c86c49fed552776b25da37108a03590e3527e0b5a"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/ux047/operational-consumers.test.mts"
+      ],
+      "baseline": {
+        "pass": 17,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 15,
+        "fail": 2,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ notification digest removes warnings retired during asynchronous summarization (9.90225ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  3 !== 2\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 3,\n    expected: 2,\n✖ notification digest emits nothing when every queued warning retires before delivery (19.5315ms)\n  + actual - expected\n  + {\n  +   generatedAt: 1793593210428,\n  +   groups: [\n  +     {\n  +       alerts: [\n  +         {\n    actual: { id: 'digest-1793593210428', generatedAt: 1793593210428, windowStart: 1793593210428, windowEnd: 1793593210428, totalAlerts: 1, groups: [ [Object] ], headline: 'Retired warning remains critical', provider: 'ollama' },\n    expected: null,",
+      "appliedDiff": "diff --git a/src/services/notification-digest.ts b/src/services/notification-digest.ts\nindex 48c7ec9af..af1db10d7 100644\n--- a/src/services/notification-digest.ts\n+++ b/src/services/notification-digest.ts\n@@ -193,7 +193,7 @@ export async function generateDigest(): Promise<NotificationDigest | null> {\n   if (alerts.length === 0) return null;\n \n   let digest = await buildAIDigest(alerts, windowStart);\n-  const deliverable = alerts.filter(alert => alert.source !== 'nws' || unifiedAlertStore.isOperationalAlert(alert));\n+  const deliverable = alerts;\n   if (deliverable.length === 0) return null;\n   if (deliverable.length !== alerts.length) digest = buildRuleBasedDigest(deliverable, windowStart);\n \n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "C11",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Lifecycle refresh prunes retired pending digest warnings",
+      "sources": [
+        {
+          "path": "src/services/notification-digest.ts",
+          "beforeSHA256": "c0d2a13c92c5ce99d4e6537c86c49fed552776b25da37108a03590e3527e0b5a",
+          "restoredSHA256": "c0d2a13c92c5ce99d4e6537c86c49fed552776b25da37108a03590e3527e0b5a"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/ux047/operational-consumers.test.mts"
+      ],
+      "baseline": {
+        "pass": 17,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 16,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ notification digest drops retired queued warnings when lifecycle subscribers refresh (9.461666ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  3 !== 2\n    actual: 3,\n    expected: 2,",
+      "appliedDiff": "diff --git a/src/services/notification-digest.ts b/src/services/notification-digest.ts\nindex 48c7ec9af..041db2805 100644\n--- a/src/services/notification-digest.ts\n+++ b/src/services/notification-digest.ts\n@@ -267,7 +267,7 @@ export function initNotificationDigest(): void {\n   }\n \n   alertStoreUnsub = unifiedAlertStore.subscribe(() => {\n- pendingAlerts = pendingAlerts.filter(alert => alert.source !== 'nws' || unifiedAlertStore.isOperationalAlert(alert));\n+ pendingAlerts = pendingAlerts;\n  const alerts = unifiedAlertStore.getOperationalAlerts();\n  const newAlerts = alerts.filter(a => a.timestamp > lastDigestTime);\n  for (const alert of newAlerts) {\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "C12",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Initial alert-reaction subscription excludes already-retired warnings",
+      "sources": [
+        {
+          "path": "src/services/alert-reactions.ts",
+          "beforeSHA256": "a6dd5a4e0686064217e6bc6515f056eeaa637a12395a0c71399e3eb2f14e17c0",
+          "restoredSHA256": "a6dd5a4e0686064217e6bc6515f056eeaa637a12395a0c71399e3eb2f14e17c0"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/ux047/operational-consumers.test.mts"
+      ],
+      "baseline": {
+        "pass": 17,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 16,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ alert reactions suppress warnings retired before the coalesced subscriber runs and preserve history seen semantics (27.898459ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  + [\n  +   'critical'\n  + ]\n  - []\n    actual: [ 'critical' ],\n    expected: [],",
+      "appliedDiff": "diff --git a/src/services/alert-reactions.ts b/src/services/alert-reactions.ts\nindex 11162eb40..b8d4690f6 100644\n--- a/src/services/alert-reactions.ts\n+++ b/src/services/alert-reactions.ts\n@@ -109,7 +109,7 @@ export function startAlertReactions(): void {\n     for (const a of unifiedAlertStore.getAll()) {\n       if (seen.has(a.id)) continue;\n       seen.add(a.id);\n-      if (!unifiedAlertStore.isOperationalAlert(a)) continue;\n+      if (false) continue;\n       fresh.push(a);\n     }\n     if (fresh.length === 0) return;\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    },
+    {
+      "id": "C13",
+      "checkpoint": "3a0e4df42e3f33c22cd455acaa966551bbff7d3d",
+      "behavior": "Five-minute delayed re-escalation rechecks operational eligibility",
+      "sources": [
+        {
+          "path": "src/services/alert-reactions.ts",
+          "beforeSHA256": "a6dd5a4e0686064217e6bc6515f056eeaa637a12395a0c71399e3eb2f14e17c0",
+          "restoredSHA256": "a6dd5a4e0686064217e6bc6515f056eeaa637a12395a0c71399e3eb2f14e17c0"
+        }
+      ],
+      "command": [
+        "/Users/bradleybond/Documents/Codex/2026-10-04/task/dependency-repair-oct27/runtime/bin/node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=spec",
+        "tests/ux047/operational-consumers.test.mts"
+      ],
+      "baseline": {
+        "pass": 17,
+        "fail": 0
+      },
+      "mutated": {
+        "pass": 16,
+        "fail": 1,
+        "exitCode": 1
+      },
+      "assertionExcerpt": "✖ critical NWS reminders recheck retirement at execution after five minutes (9.986916ms)\n  AssertionError [ERR_ASSERTION]: retired warning cannot sound a second time\n  + actual - expected\n    [\n      'critical',\n  +   'critical'\n    ]\n    actual: [ 'critical', 'critical' ],\n    expected: [ 'critical' ],",
+      "appliedDiff": "diff --git a/src/services/alert-reactions.ts b/src/services/alert-reactions.ts\nindex 11162eb40..4aada3d15 100644\n--- a/src/services/alert-reactions.ts\n+++ b/src/services/alert-reactions.ts\n@@ -159,7 +159,7 @@ export function startAlertReactions(): void {\n     if (top.severity === 'critical') {\n       window.setTimeout(() => {\n         const still = unifiedAlertStore.getAll().find(a => a.id === top.id);\n-        if (still && !still.acknowledged && unifiedAlertStore.isOperationalAlert(still)) {\n+        if (still && !still.acknowledged) {\n           const ch2 = isGhostMode() ? { sound: false, borderFlash: false } : getChannels();\n           if (ch.panelFlash) flashPanel(panelId);\n           if (ch2.borderFlash) flashWindowBorder();\n",
+      "cleanBefore": true,
+      "cleanAfterRestore": true,
+      "gitStatusBefore": "",
+      "gitStatusAfterRestore": ""
+    }
+  ],
+  "restoredValidation": [
+    {
+      "command": "npm run test:ux047",
+      "exitCode": 0,
+      "output": "# tests 124\n# pass 124\n# fail 0\n# cancelled 0\n# skipped 0"
+    },
+    {
+      "command": "E2E_PORT=4197 VITE_VARIANT=full npm run test:ux047-browser",
+      "exitCode": 0,
+      "output": "4 passed (13.4s)"
+    },
+    {
+      "command": "npm run typecheck:all",
+      "exitCode": 0,
+      "output": "> crystal-ball@2.25.147 typecheck:all\n> tsc --noEmit && tsc --noEmit -p tsconfig.api.json"
+    },
+    {
+      "command": "node --import tsx --test --test-reporter=spec tests/nws-provider-snapshot.test.mjs",
+      "exitCode": 0,
+      "output": "pass 25\nfail 0",
+      "note": "Restored check after final P08b health-source mutation; earlier full checks apply to the identical restored source bytes."
+    }
+  ],
+  "finalGitStatus": ""
+}

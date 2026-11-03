@@ -33,6 +33,7 @@ function baseSettings(): NotificationSettings {
       geopolitical: { enabled: true, threshold: 'medium', channel: 'both', quietHoursEnabled: false },
       weather:     { enabled: true, threshold: 'medium', channel: 'both', quietHoursEnabled: false },
       cyber:       { enabled: true, threshold: 'medium', channel: 'both', quietHoursEnabled: false },
+      derived:     { enabled: true, threshold: 'high', channel: 'both', quietHoursEnabled: true },
       supply:      { enabled: true, threshold: 'medium', channel: 'both', quietHoursEnabled: false },
     },
   };

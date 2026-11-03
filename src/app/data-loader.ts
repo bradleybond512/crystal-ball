@@ -178,7 +178,8 @@ import { fetchInciwebIncidents } from '@/services/inciweb';
 import { fetchHazmatIncidents } from '@/services/hazmat-incidents';
 import { classifyNewsItem } from '@/services/positive-classifier';
 import { fetchGivingSummary } from '@/services/giving';
-import { fetchNWSAlerts, type NWSAlert } from '@/services/nws-alerts';
+import type { NWSAlert, NWSAlertSnapshot } from '@/services/nws-alerts';
+import { fetchCachedNwsSnapshot, NWS_SNAPSHOT_FRESH_MS } from '@/services/nws-alert-snapshot-cache';
 import { routeWeatherAlert } from '@/services/weather/weather-warning-router';
 import { deliveryPriorityRank } from '@/services/weather/weather-urgency';
 import type { NwsAlertMinimal, AlertPolygon } from '@/services/weather/weather-threat-types';
@@ -211,7 +212,7 @@ import { fetchAllPositiveTopicIntelligence } from '@/services/gdelt-intel';
 import { fetchPositiveGeoEvents, geocodePositiveNewsItems } from '@/services/positive-events-geo';
 import { fetchKindnessData } from '@/services/kindness-data';
 import { getPersistentCache, setPersistentCache } from '@/services/persistent-cache';
-import { withOfflineCache, registerCriticalSources, feedFreshnessFromSnapshot } from '@/services/offline-alert-cache';
+import { withOfflineCache, registerCriticalSources, feedFreshnessFromSnapshot, type CachedSnapshot } from '@/services/offline-alert-cache';
 import {
   getEarthquakeSuccessfulUpdate,
   getFredSuccessfulUpdate,
@@ -303,7 +304,6 @@ import { unifiedAlertStore } from '@/services/unified-alerts';
 import { ingestEarthquakesUnified, ingestCyberThreatsUnified } from '@/services/unified-ingestors';
 import {
   normalizeBreakingAlert,
-  normalizeNWSAlert,
   normalizeGDACSEvent,
   normalizeTsunamiAlert,
   normalizeResourceAlert,
@@ -543,6 +543,11 @@ export class DataLoaderManager implements AppModule {
   private ctx: AppContext;
   private callbacks: DataLoaderCallbacks;
   private unsubscribeNewsRuntimeConfig: (() => void) | null = null;
+  private unsubscribeNwsLifecycle: (() => void) | null = null;
+  private lastNwsSnapshot: CachedSnapshot<NWSAlertSnapshot> | null = null;
+  private lastNwsContextSnapshot: NWSAlertSnapshot | null = null;
+  private lastNwsProjection: NWSAlert[] | null = null;
+  private nwsAcquisitionFailed = false;
 
   private mapFlashCache = new Map<string, number>();
   private readonly dedupeConflictObservations =
@@ -617,6 +622,10 @@ export class DataLoaderManager implements AppModule {
  this.callbacks = callbacks;
  this.ctx.newsSnapshot.bindScope(() => this.newsSnapshotConfiguration());
  this.unsubscribeNewsRuntimeConfig = subscribeRuntimeConfig(() => { this.ctx.newsSnapshot.getSnapshot(); });
+ if (SITE_VARIANT === 'full') {
+   unifiedAlertStore.startNwsLifecycle();
+   this.unsubscribeNwsLifecycle = unifiedAlertStore.subscribe(() => this.publishNwsSnapshot());
+ }
   }
 
   init(): void {
@@ -659,10 +668,10 @@ export class DataLoaderManager implements AppModule {
  try {
  const [raw, nwsResult, gdacsResult] = await Promise.all([
  fetchFAACameras(),
- withOfflineCache('nws-alerts', () => fetchNWSAlerts(), 1 * 60 * 60 * 1000),
+ fetchCachedNwsSnapshot(),
  withOfflineCache('gdacs-events', () => this.fetchVerifiedGDACSEvents(), 1 * 60 * 60 * 1000),
  ]);
- const proximate = getDisasterProximateCameras(raw, nwsResult.data, gdacsResult.data);
+ const proximate = getDisasterProximateCameras(raw, nwsResult.data.alerts, gdacsResult.data);
  // Panel-side disaster badge only — map keeps the full set.
  (this.ctx.panels['faa-weather-cams'] as FAAWeatherCamsPanel | undefined)?.setDisasterMode(true, proximate);
  } catch { /* non-critical */ }
@@ -672,6 +681,9 @@ export class DataLoaderManager implements AppModule {
   destroy(): void {
  this.unsubscribeNewsRuntimeConfig?.();
  this.unsubscribeNewsRuntimeConfig = null;
+ this.unsubscribeNwsLifecycle?.();
+ this.unsubscribeNwsLifecycle = null;
+ if (SITE_VARIANT === 'full') unifiedAlertStore.stopNwsLifecycle();
  if (this.compoundThreatTimer !== null) {
  clearTimeout(this.compoundThreatTimer);
  this.compoundThreatTimer = null;
@@ -3334,18 +3346,69 @@ export class DataLoaderManager implements AppModule {
   async loadSevereWeather(): Promise<void> { return cyberLoaders.loadSevereWeather(this.ctx); }
   async loadShakeAlert(): Promise<void> { return cyberLoaders.loadShakeAlert(this.ctx); }
 
+  private publishNwsSnapshot(): void {
+    if (this.ctx.isDestroyed) return;
+    const panel = this.ctx.panels['nws-alerts'] as NWSAlertsPanel | undefined;
+    const snapshot = this.lastNwsSnapshot;
+    if (!snapshot) {
+      if (this.nwsAcquisitionFailed) {
+        panel?.updateSnapshot({ alerts: [], state: 'unavailable', observedAt: null });
+      }
+      return;
+    }
+    const watermark = unifiedAlertStore.getNwsObservedAt();
+    const older = watermark !== null && snapshot.data.observedAt < watermark;
+    const alerts = unifiedAlertStore.getOperationalNwsAlerts(snapshot.data);
+    const stale = this.nwsAcquisitionFailed || snapshot.isStale || older
+      || Date.now() - snapshot.data.observedAt >= NWS_SNAPSHOT_FRESH_MS
+      || alerts.length !== snapshot.data.alerts.length;
+    panel?.updateSnapshot({ alerts, state: stale ? 'stale' : 'current', observedAt: snapshot.data.observedAt });
+    if (!older && (this.lastNwsContextSnapshot !== snapshot.data
+      || this.lastNwsProjection?.length !== alerts.length
+      || alerts.some((alert, index) => this.lastNwsProjection?.[index]?.id !== alert.id))) {
+      this.lastNwsContextSnapshot = snapshot.data;
+      this.lastNwsProjection = alerts;
+      updateStormPreparednessContext({ nwsAlerts: alerts });
+    }
+  }
+
+  async refreshNWSAlerts(): Promise<void> {
+    try {
+      const snapshot = await fetchCachedNwsSnapshot();
+      if (this.ctx.isDestroyed) return;
+      this.nwsAcquisitionFailed = snapshot.isStale;
+      if (snapshot.source === 'network' && !snapshot.isStale) {
+        const result = unifiedAlertStore.reconcileNwsSnapshot(snapshot.data);
+        if (result.disposition === 'invalid') {
+          this.nwsAcquisitionFailed = true;
+          this.publishNwsSnapshot();
+          return;
+        }
+        if (result.disposition === 'older') this.nwsAcquisitionFailed = true;
+      }
+      if (!this.lastNwsSnapshot || snapshot.data.observedAt >= this.lastNwsSnapshot.data.observedAt) {
+        this.lastNwsSnapshot = snapshot;
+      } else {
+        this.nwsAcquisitionFailed = true;
+      }
+      this.publishNwsSnapshot();
+    } catch {
+      this.nwsAcquisitionFailed = true;
+      this.publishNwsSnapshot();
+    }
+  }
+
   async loadNWSAlerts(): Promise<void> {
  try {
  const stormContext = getStormPreparednessContext();
- const [alertsResult, spcResult, marineResult, rainfallResult, winterResult] = await Promise.allSettled([
- withOfflineCache('nws-alerts', () => fetchNWSAlerts(), 1 * 60 * 60 * 1000),
+ const [, spcResult, marineResult, rainfallResult, winterResult] = await Promise.allSettled([
+ this.refreshNWSAlerts(),
  fetchSpcSummary(),
  fetchMarineHazards(),
  fetchExcessiveRainfallOutlooks(),
  fetchWinterWeatherOutlooks(),
  ]);
- const alertsSnapshot = alertsResult.status === 'fulfilled' ? alertsResult.value : undefined;
- const alerts = alertsSnapshot ? alertsSnapshot.data : stormContext.nwsAlerts;
+ const alerts = getStormPreparednessContext().nwsAlerts;
  const spcSummary = spcResult.status === 'fulfilled' ? spcResult.value : stormContext.spcSummary;
  const marineHazards = marineResult.status === 'fulfilled' ? marineResult.value : stormContext.marineHazards;
  const excessiveRainfallOutlooks = rainfallResult.status === 'fulfilled'
@@ -3355,12 +3418,6 @@ export class DataLoaderManager implements AppModule {
  ? winterResult.value
  : stormContext.winterWeatherOutlooks;
  const minimalAlerts = alerts.map(nwsAlertMinimal);
- (this.ctx.panels['nws-alerts'] as NWSAlertsPanel)?.update(alerts);
- unifiedAlertStore.ingest(alerts.map(alert => normalizeNWSAlert(alert,
-   alertsSnapshot?.source === 'network' && alert.retrievedAt !== undefined
-     ? { kind: 'verified-response', observedAt: alert.retrievedAt }
-     : { kind: 'replay' },
- )));
  recordWarningPredictions(minimalAlerts);
 
  // Route alerts through Personal Storm Mode — find the highest-priority
@@ -3408,7 +3465,6 @@ export class DataLoaderManager implements AppModule {
  } catch { /* saved-places unavailable — non-fatal */ }
 
  updateStormPreparednessContext({
- nwsAlerts: alerts,
  spcSummary,
  excessiveRainfallOutlooks,
  winterWeatherOutlooks,
@@ -3416,7 +3472,6 @@ export class DataLoaderManager implements AppModule {
  });
  } catch (error) {
  console.warn('[nws-alerts] fetch failed', error);
- (this.ctx.panels['nws-alerts'] as NWSAlertsPanel)?.update([]);
  }
   }
 
@@ -4443,10 +4498,10 @@ export class DataLoaderManager implements AppModule {
  try {
  const [raw, nwsResult, gdacsResult] = await Promise.all([
  fetchFAACameras(),
- withOfflineCache('nws-alerts', () => fetchNWSAlerts(), 1 * 60 * 60 * 1000),
+ fetchCachedNwsSnapshot(),
  withOfflineCache('gdacs-events', () => this.fetchVerifiedGDACSEvents(), 1 * 60 * 60 * 1000),
  ]);
- const scored = scoreCamerasAgainstAlerts(raw, nwsResult.data, gdacsResult.data);
+ const scored = scoreCamerasAgainstAlerts(raw, nwsResult.data.alerts, gdacsResult.data);
  this.ctx.map?.setFAACameras(scored);
  (this.ctx.panels['faa-weather-cams'] as FAAWeatherCamsPanel | undefined)?.refresh();
  const alertCams = scored.filter(c => c.alertProximityMi !== null);

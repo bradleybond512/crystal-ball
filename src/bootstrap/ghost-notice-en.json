@@ -1,0 +1,13 @@
+{
+  "active": "Ghost Mode is on. Standard alert notifications and analyst nudges are muted, including critical site warnings. Other channels can still alert.",
+  "unknown": "Could not read your alert mode. Standard alert notifications and analyst nudges are on hold until you choose a mode. Other channels can still alert.",
+  "standard": "Standard mode is on.",
+  "vision": "God’s Vision mode is on.",
+  "unsaved": "Your choice applies only in this window. It could not be saved.",
+  "counts": "{{muted}} muted attempts · {{critical}} critical. Counted in this window since entering Ghost Mode or reopening.",
+  "exit": "Exit Ghost Mode",
+  "useStandard": "Use standard mode",
+  "useGhost": "Use Ghost Mode",
+  "retry": "Retry saving",
+  "startupFailed": "Crystal Ball could not finish starting. Reload this window to try again."
+}

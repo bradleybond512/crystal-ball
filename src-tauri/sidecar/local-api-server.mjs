@@ -36,6 +36,7 @@ import {
   ACLED_REFRESH_TOKEN_WARN_DAYS,
 } from './acled-token-helpers.mjs';
 import { fetchWithFallback } from './feed-resilience.mjs';
+import { createNwsSnapshotProvider } from './nws-alert-snapshot.mjs';
 import { fetchEnviroflashCap, alertMatchesArea } from './enviroflash-cap.mjs';
 import { normalizeAirnowForecast, peakForecastAqi } from './airnow-forecast.mjs';
 import { trackSuccess, trackFailure, getAllFeedStatuses, getFeedStatus } from './feed-health-tracker.mjs';
@@ -3169,6 +3170,15 @@ const SIDECAR_TAURI_PATTERNS = [
 // the port against SIDECAR_DEV_PORTS rather than letting any port through.
 const SIDECAR_LOCALHOST_RE = /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::(\d+))?$/;
 
+export const SIDECAR_PORT_FALLBACK_SPAN = 10;
+
+export function sidecarCandidatePorts(basePort) {
+  const base = Number(basePort);
+  if (!Number.isInteger(base) || base <= 0 || base > 65_535) return [];
+  const last = Math.min(base + SIDECAR_PORT_FALLBACK_SPAN, 65_535);
+  return Array.from({ length: last - base + 1 }, (_, offset) => base + offset);
+}
+
 export function isSidecarOriginAllowed(origin) {
   if (!origin) return false;
   for (const p of SIDECAR_TAURI_PATTERNS) {
@@ -5786,6 +5796,7 @@ export function odinRequestCanStart(inFlight, cacheKey, maximum = ODIN_IN_FLIGHT
 // Test-only: clear every TTL-cache entry so route tests can cross cache
 // boundaries without sleeping (same convention as _resetSecurityCaches).
 export function _resetSidecarCacheForTests() {
+  nwsSnapshotProvider.reset();
   _sidecarCache.clear();
   _odinInFlight.clear();
   resetInfrastructureBgpCredentialState();
@@ -7119,6 +7130,12 @@ function parseSeaIceForSidecar(csv) {
     isRecordLow: min !== undefined && Math.abs(latest.extent - min) < 0.005,
   };
 }
+
+const nwsSnapshotProvider = createNwsSnapshotProvider({
+  fetchFn: fetchWithTimeout,
+  readJson: (response) => response.json(),
+  clock: () => Date.now(),
+});
 
 function extractAlertCentroid(feature) {
   const geom = feature?.geometry;
@@ -11032,54 +11049,15 @@ function legacyNewsItems(items) {
 
   // ── NOAA NWS All-Hazards alerts ──────────────────────────────────────────
   if (requestUrl.pathname === '/api/nws-alerts') {
- try {
- const NWS_PRIMARY = 'https://api.weather.gov/alerts/active?status=actual&message_type=alert,update&urgency=Immediate,Expected&severity=Extreme,Severe,Moderate';
- const NWS_FALLBACK = 'https://api.weather.gov/alerts/active?status=actual&message_type=alert,update';
- let result;
- try {
-   result = await fetchWithFallback(NWS_PRIMARY, [NWS_FALLBACK], {
-     cacheKey: 'nws-alerts-last-good',
-     timeoutMs: 12_000,
-     headers: { Accept: 'application/geo+json', 'User-Agent': 'CrystalBall-NWS/1.0 (https://github.com/bradleybond512/crystal-ball)' },
-   });
- } catch (error) {
-   // Total upstream failure — never report an outage as a fresh all-clear.
-   trackFailure('nws-alerts', error);
-   return json({ error: 'nws-alerts upstream unavailable', stale: true }, 503);
- }
- // A stale last-good cache hit (`source: 'cached'`) is NOT a fresh fetch — surface
- // it as a failure so dataFreshness doesn't advance and downstream guards keep posture.
- if (result.source === 'cached') {
-   trackFailure('nws-alerts', new Error('nws-alerts upstream unavailable; served stale cache'));
-   return json({ error: 'nws-alerts upstream unavailable', stale: true }, 503);
- }
- trackSuccess('nws-alerts', result.source);
- const data = result.data;
- const features = Array.isArray(data?.features) ? data.features : [];
- const alerts = features.slice(0, 100).map((f, i) => {
- const p = f.properties ?? {};
- return {
- id: p.id ?? `nws-${i}`,
- event: p.event ?? '',
- headline: p.headline ?? '',
- description: String(p.description ?? '').slice(0, 300),
- severity: p.severity ?? 'Unknown',
- urgency: p.urgency ?? 'Unknown',
- areaDesc: p.areaDesc ?? '',
- sent: p.sent ?? p.onset ?? '',
- onset: p.onset ?? '',
- expires: p.expires ?? '',
- status: p.status ?? '',
- messageType: p.messageType ?? null,
- centroid: extractAlertCentroid(f),
- geometry: f?.geometry ?? null,
- };
- });
- return json(alerts);
- } catch (error) {
- trackFailure('nws-alerts', error);
- return json({ error: 'nws-alerts upstream unavailable', stale: true }, 503);
- }
+    try {
+      const snapshot = await nwsSnapshotProvider.get();
+      // A validated complete empty national inventory is a real healthy observation.
+      trackSuccess('nws-alerts', 'primary', snapshot.observedAt);
+      return json(snapshot);
+    } catch (error) {
+      trackFailure('nws-alerts', error);
+      return json({ error: 'NWS national snapshot unavailable', stale: true }, 503);
+    }
   }
 
   // ── Weather hazards: severity-filtered NWS alerts (PR 1) ─────────────────
@@ -22354,17 +22332,26 @@ export async function createLocalApiServer(options = {}) {
  server.listen(port, '127.0.0.1');
  });
 
- try {
- await tryListen(context.port);
- } catch (error) {
- if (error?.code === 'EADDRINUSE') {
- // Never kill arbitrary listeners on occupied ports. Instead, bind to a
- // random OS-assigned port and publish it through service-status/port file.
- context.logger.log(`[local-api] port ${context.port} already in use; falling back to OS-assigned port`);
- await tryListen(0);
- } else {
- throw error;
+ const candidatePorts = sidecarCandidatePorts(context.port);
+ let bound = false;
+ for (const port of candidatePorts) {
+   try {
+     await tryListen(port);
+     bound = true;
+     break;
+   } catch (error) {
+     if (error?.code !== 'EADDRINUSE') throw error;
+     context.logger.log(`[local-api] port ${port} already in use; trying the next`);
+   }
  }
+ if (!bound) {
+   if (candidatePorts.length > 0) {
+     context.logger.warn(`[local-api] ports ${candidatePorts[0]}-${candidatePorts.at(-1)} all in use; choosing an OS-assigned port for native health only. The desktop webview cannot reach it.`);
+     await tryListen(0);
+   } else {
+     // Explicit zero requests OS allocation. Node rejects invalid configured ports.
+     await tryListen(context.port);
+   }
  }
 
  const boundPort = await publishSidecarPort(server, process.env.LOCAL_API_PORT_FILE, context.logger);

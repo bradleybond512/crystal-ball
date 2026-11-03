@@ -726,6 +726,7 @@ export class App {
  // Safety-critical: drives the status chip + storm posture, so it must keep
  // refreshing even when the weather map layer is toggled off.
  { name: 'weather', fn: () => this.dataLoader.loadWeatherAlerts(), intervalMs: 10 * 60 * 1000 },
+ { name: 'nwsAlerts', fn: () => this.dataLoader.refreshNWSAlerts(), intervalMs: 5 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'fred', fn: () => this.dataLoader.loadFredData(), intervalMs: 30 * 60 * 1000 },
  { name: 'oil', fn: () => this.dataLoader.loadOilAnalytics(), intervalMs: 30 * 60 * 1000 },
  { name: 'spending', fn: () => this.dataLoader.loadGovernmentSpending(), intervalMs: 60 * 60 * 1000 },

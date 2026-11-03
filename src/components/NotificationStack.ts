@@ -40,6 +40,7 @@ export class NotificationStack {
   }
 
   mount(parent: HTMLElement = document.body): void {
+    if (this.element.parentElement === parent && this.ro) return;
     parent.append(this.element);
     this.ro?.disconnect();
     this.ro = new ResizeObserver(() => {

@@ -137,3 +137,57 @@ test('web and desktop connect/frame policies grant no retired-domain permission'
     assert.doesNotMatch(metaDirective(name).join(' '), /crystalball[.]app/i, `web ${name}`);
   }
 });
+
+const expectedSidecarOrigins = Array.from({ length: 11 }, (_, offset) => `http://127.0.0.1:${46123 + offset}`);
+for (const [name, extra] of [['connect-src', ['http://127.0.0.1:11434', 'http://127.0.0.1:1234']], ['frame-src', []]]) {
+  test(`native ${name} permits exactly the bounded sidecar range and relevant local models`, () => {
+    const actual = directive(name).filter(source => /^https?:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::|$)/.test(source));
+    assert.deepEqual(actual.sort(), [...expectedSidecarOrigins, ...extra].sort());
+  });
+}
+
+async function productionPages(desktop) {
+  const { loadConfigFromFile } = await import('vite');
+  const root = fileURLToPath(new URL('../', import.meta.url));
+  const previous = process.env.VITE_DESKTOP_RUNTIME;
+  try {
+    process.env.VITE_DESKTOP_RUNTIME = desktop ? '1' : '0';
+    const loaded = await loadConfigFromFile({ command: 'build', mode: 'production' }, `${root}vite.config.ts`, root, 'silent');
+    const plugin = loaded?.config.plugins.flat(Infinity).find(entry => entry?.name === 'html-variant');
+    assert.ok(plugin, 'production HTML transform must run');
+    const transform = plugin.transformIndexHtml;
+    const pages = {};
+    for (const file of ['index.html', 'settings.html', 'live-channels.html']) {
+      const input = readFileSync(`${root}${file}`, 'utf8');
+      const output = await transform(input, { filename: `${root}${file}`, path: `/${file}` });
+      const extract = html => html.match(/<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]+)"/i)?.[1] ?? null;
+      pages[file] = { original: extract(input), built: extract(output) };
+    }
+    return pages;
+  } finally {
+    if (previous === undefined) delete process.env.VITE_DESKTOP_RUNTIME;
+    else process.env.VITE_DESKTOP_RUNTIME = previous;
+  }
+}
+
+function localOrigins(policy, name) {
+  const part = policy?.split(';').map(s => s.trim()).find(s => s.startsWith(`${name} `));
+  return (part ?? '').split(/\s+/).filter(s => /^https?:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::|$)/.test(s)).sort();
+}
+
+test('production desktop HTML transform gives the main window the exact connect and frame origins', async () => {
+  const pages = await productionPages(true);
+  assert.deepEqual(localOrigins(pages['index.html'].built, 'connect-src'),
+    [...expectedSidecarOrigins, 'http://127.0.0.1:1234', 'http://127.0.0.1:11434'].sort());
+  assert.deepEqual(localOrigins(pages['index.html'].built, 'frame-src'), [...expectedSidecarOrigins].sort());
+  for (const name of ['settings.html', 'live-channels.html']) assert.equal(pages[name].built, pages[name].original);
+});
+
+test('production web pages gain no local services and retain auxiliary window restrictions', async () => {
+  const pages = await productionPages(false);
+  assert.ok(pages['index.html'].built, 'main page must still ship a CSP');
+  for (const page of Object.values(pages)) {
+    assert.doesNotMatch(page.built ?? '', /(?:[\w+.-]+):\/\/(?:127\.0\.0\.1|localhost|\[::1\])/i);
+  }
+  for (const name of ['settings.html', 'live-channels.html']) assert.equal(pages[name].built, pages[name].original);
+});

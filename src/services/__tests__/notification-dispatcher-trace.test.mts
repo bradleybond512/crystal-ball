@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { beforeEach } from 'node:test';
 
+import { setMode } from '../mode-manager.ts';
 import type { UnifiedAlert } from '../unified-alerts.ts';
 import { getNotificationTraceRegistry, resetDiagnosticsState } from '../diagnostics/diagnostics-state.ts';
 import { resetSettings, updateDomainSettings, updateGlobalSettings } from '../notifications/notification-settings-service.ts';
@@ -56,6 +57,7 @@ beforeEach(() => {
     window: { Notification: NotificationStub },
     Notification: NotificationStub,
   });
+  setMode(null);
   NotificationStub.permission = 'granted';
   NotificationStub.calls = [];
   resetSettings();
@@ -72,7 +74,7 @@ test('distinct critical alerts from one source bypass the source rate limit', as
 });
 
 test('production dispatcher records a critical ghost-mode suppression', async () => {
-  localStorage.setItem('wm-app-mode', 'ghost');
+  setMode('ghost');
   const { notificationDispatcher } = await loadFresh();
 
   notificationDispatcher.dispatchNotification(alert('ghost-critical'), 'sound+banner');
@@ -176,7 +178,7 @@ for (const gate of ['ghost-mode', 'master-mute', 'domain-disabled', 'below-thres
   test(`badge delivery still respects ${gate} before the cooldown`, async (t) => {
     t.mock.method(Date.prototype, 'getHours', () => 23);
     t.mock.method(Date.prototype, 'getMinutes', () => 0);
-    if (gate === 'ghost-mode') localStorage.setItem('wm-app-mode', 'ghost');
+    if (gate === 'ghost-mode') setMode('ghost');
     if (gate === 'master-mute') updateGlobalSettings({ masterMute: true });
     if (gate === 'domain-disabled') updateDomainSettings('weather', { enabled: false });
     if (gate === 'below-threshold') updateDomainSettings('weather', { threshold: 'high' });
@@ -187,7 +189,7 @@ for (const gate of ['ghost-mode', 'master-mute', 'domain-disabled', 'below-thres
     assert.equal(getNotificationTraceRegistry().summary().dispatched, 0);
     assert.deepEqual(getNotificationTraceRegistry().summary().suppressedByReason, { [gate]: 1 });
 
-    localStorage.removeItem('wm-app-mode');
+    setMode(null);
     resetSettings();
     notificationDispatcher.dispatchNotification(alert('allowed-warning', 'high'), 'banner');
     assert.deepEqual(NotificationStub.calls.map(({ title }) => title), ['Alert allowed-warning']);

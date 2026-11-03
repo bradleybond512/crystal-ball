@@ -33,6 +33,10 @@ function validAlert(id = 'nws-1'): Record<string, unknown> {
   };
 }
 
+function envelope(alerts: unknown[], observedAt = Date.now()) {
+  return { schemaVersion: 1, scope: 'national-active', completeness: 'complete', observedAt, alerts };
+}
+
 class MemoryStorage {
   private readonly values = new Map<string, string>();
 
@@ -65,7 +69,7 @@ test('NWS retrieval evidence is stamped once and preserved by the client cache',
     Date.now = () => 1_788_437_600_000;
     globalThis.fetch = async () => {
       calls += 1;
-      return new Response(JSON.stringify([validAlert()]), { status: 200 });
+      return new Response(JSON.stringify(envelope([validAlert()])), { status: 200 });
     };
 
     const first = await nws.fetchNWSAlerts();
@@ -103,7 +107,7 @@ test('malformed HTTP-200 NWS rows are never cached as current evidence', async (
     globalThis.fetch = async () => {
       calls += 1;
       const body = calls === 1 ? [{ id: 'missing-required-fields' }] : [validAlert('valid-after-malformed')];
-      return new Response(JSON.stringify(body), { status: 200 });
+      return new Response(JSON.stringify(envelope(body)), { status: 200 });
     };
 
     await assert.rejects(
@@ -128,7 +132,7 @@ test('malformed HTTP-200 rows are not persisted as fresh offline-cache network d
   const storage = new MemoryStorage();
   const serviceId = 'nws-malformed-http-200-regression';
   try {
-    globalThis.fetch = async () => new Response(JSON.stringify([{ id: 'missing-required-fields' }]), { status: 200 });
+    globalThis.fetch = async () => new Response(JSON.stringify(envelope([{ id: 'missing-required-fields' }])), { status: 200 });
     await withLocalStorage(storage, async () => {
       const outcome = await withOfflineCache(serviceId, () => nws.fetchNWSAlerts(), 60 * 60_000)
         .then((snapshot) => ({ rejected: false, source: snapshot.source }))
@@ -195,7 +199,7 @@ test('malformed Polygon and MultiPolygon bodies reject without poisoning the suc
           const row = calls === 1
             ? { ...validAlert('bad-geometry'), geometry: item.geometry }
             : validAlert('valid-after-bad-geometry');
-          return new Response(JSON.stringify([row]), { status: 200 });
+          return new Response(JSON.stringify(envelope([row])), { status: 200 });
         };
 
         await assert.rejects(nws.fetchNWSAlerts(), /malformed/i);
@@ -222,7 +226,7 @@ test('missing or blank onset remains displayable from sent but cannot support a 
         const row = validAlert(`onset-${name}`);
         if (onset === undefined) delete row.onset;
         else row.onset = onset;
-        globalThis.fetch = async () => new Response(JSON.stringify([row]), { status: 200 });
+        globalThis.fetch = async () => new Response(JSON.stringify(envelope([row])), { status: 200 });
 
         const fetched = await nws.fetchNWSAlerts();
         assert.equal(fetched.length, 1, `${name} onset must not hide an otherwise valid alert`);
@@ -283,14 +287,15 @@ test('HTTP and network failures reject so the existing offline cache owns stale 
 });
 
 
-test('NWS normalization preserves onset as the ranking timestamp when present', async () => {
+test('NWS normalization ranks by issued time while preserving future onset separately', async () => {
   nws._resetNwsAlertsForTest?.();
   const originalFetch = globalThis.fetch;
   try {
     const row = validAlert();
-    globalThis.fetch = async () => new Response(JSON.stringify([row]));
+    globalThis.fetch = async () => new Response(JSON.stringify(envelope([row])));
     const [alert] = await nws.fetchNWSAlerts();
-    assert.equal(normalizeNWSAlert(alert!).timestamp, Date.parse(row.onset as string));
+    assert.equal(normalizeNWSAlert(alert!).timestamp, Date.parse(row.sent as string));
+    assert.equal(alert!.onset, row.onset);
   } finally {
     globalThis.fetch = originalFetch;
     nws._resetNwsAlertsForTest?.();
@@ -303,7 +308,7 @@ test('non-string onset is malformed rather than absent', async (t) => {
       nws._resetNwsAlertsForTest?.();
       const originalFetch = globalThis.fetch;
       try {
-        globalThis.fetch = async () => new Response(JSON.stringify([{ ...validAlert(), onset }]));
+        globalThis.fetch = async () => new Response(JSON.stringify(envelope([{ ...validAlert(), onset }])));
         await assert.rejects(nws.fetchNWSAlerts(), /malformed/i);
       } finally {
         globalThis.fetch = originalFetch;
@@ -357,8 +362,7 @@ test('geometry budgets reject before traversing over-budget coordinates', async 
       Object.defineProperty(watched, '0', { get() { reads += 1; return original; } });
       const body = [...item.prefix, geometry].map((shape, index) => ({ ...validAlert(`budget-${index}`), geometry: shape }));
       try {
-        globalThis.fetch = async () => ({ ok: true, json: async () => body }) as Response;
-        await assert.rejects(nws.fetchNWSAlerts(), /malformed/i);
+        assert.equal(nws.validateNWSAlertSnapshot(envelope(body)), null);
         assert.equal(reads, 0, 'over-budget geometry must be rejected before visiting its entries');
       } finally {
         globalThis.fetch = originalFetch;
@@ -367,3 +371,127 @@ test('geometry budgets reject before traversing over-budget coordinates', async 
     });
   }
 });
+
+
+test('snapshot acquisition preserves the upstream observation time instead of receive time', async () => {
+  nws._resetNwsAlertsForTest?.();
+  const originalFetch = globalThis.fetch;
+  const originalNow = Date.now;
+  const now = Date.parse('2026-11-02T04:00:00Z');
+  try {
+    Date.now = () => now;
+    globalThis.fetch = async () => Response.json(envelope([validAlert()], now - 120_000));
+    const snapshot = await nws.fetchNWSAlertsSnapshot();
+    assert.equal(snapshot.observedAt, now - 120_000);
+    assert.equal(snapshot.alerts[0]?.retrievedAt, now - 120_000);
+    assert.deepEqual(await nws.fetchNWSAlerts(), snapshot.alerts);
+  } finally {
+    globalThis.fetch = originalFetch;
+    Date.now = originalNow;
+    nws._resetNwsAlertsForTest?.();
+  }
+});
+
+test('snapshot validator rejects incomplete, legacy, duplicate and future evidence without side effects', () => {
+  const now = Date.now();
+  const valid = envelope([validAlert()], now);
+  for (const input of [
+    [validAlert()], { ...valid, completeness: 'partial' }, { ...valid, scope: 'state' },
+    { ...valid, observedAt: now + 60_001 }, { ...valid, alerts: [validAlert(), validAlert()] },
+    { ...valid, alerts: Array.from({ length: 2001 }, (_, i) => validAlert(`limit-${i}`)) },
+  ]) assert.equal(nws.validateNWSAlertSnapshot(input, now), null);
+  assert.equal(nws.validateNWSAlertSnapshot(envelope([], now), now)?.alerts.length, 0);
+  assert.equal(nws.validateNWSAlertSnapshot(envelope([validAlert()], now - 86_400_000), now)?.observedAt, now - 86_400_000);
+});
+
+
+for (const [label, patch] of [
+  ['expiry before issuance', { expires: '2026-09-03T11:54:00Z' }],
+  ['expiry equals issuance', { expires: '2026-09-03T11:55:00Z' }],
+  ['issuance after acquisition', { sent: '2026-09-03T12:00:00.001Z' }],
+  ['negative issuance epoch', { sent: '1969-12-31T23:59:59Z' }],
+  ['oversized identity', { id: 'a'.repeat(1025) }],
+] as const) {
+  test(`renderer rejects ${label} without caching it and immediately recovers`, async () => {
+    const originalFetch = globalThis.fetch;
+    const originalNow = Date.now;
+    const now = Date.parse('2026-09-03T12:00:00Z');
+    let calls = 0;
+    nws._resetNwsAlertsForTest?.();
+    try {
+      Date.now = () => now;
+      globalThis.fetch = async () => Response.json(envelope([{ ...validAlert(), ...(calls++ === 0 ? patch : {}) }], now));
+      await assert.rejects(nws.fetchNWSAlertsSnapshot(), /malformed/i);
+      assert.equal((await nws.fetchNWSAlertsSnapshot()).alerts.length, 1);
+      assert.equal(calls, 2);
+    } finally {
+      globalThis.fetch = originalFetch;
+      Date.now = originalNow;
+      nws._resetNwsAlertsForTest?.();
+    }
+  });
+}
+
+test('renderer admits only snapshots whose temporal and identity metadata can enter lifecycle storage', async () => {
+  const { prepareNwsLifecycle } = await import('../nws-alert-lifecycle.ts');
+  const backend = await import('../../../src-tauri/sidecar/nws-alert-snapshot.mjs');
+  const now = Date.parse('2026-09-03T12:00:00Z');
+  assert.equal(nws.validateNWSAlertSnapshot(envelope([], now + 1), now), null);
+  assert.equal(backend.validateNWSAlertSnapshot(envelope([], now + 1), now), null);
+  assert.equal(nws.validateNWSAlertSnapshot(envelope([], 8_640_000_000_000_001), 9_000_000_000_000_000), null);
+  assert.equal(backend.validateNWSAlertSnapshot(envelope([], 8_640_000_000_000_001), 9_000_000_000_000_000), null);
+  const oversized = Array.from({ length: 700 }, (_, index) => ({
+    ...validAlert(`${index}-` + '界'.repeat(1020)), geometry: null,
+  }));
+  assert.equal(nws.validateNWSAlertSnapshot(envelope(oversized, now), now), null);
+  assert.equal(backend.validateNWSAlertSnapshot(envelope(oversized, now), now), null);
+  for (const alerts of [[], [validAlert('a'.repeat(1024))],
+    [{ ...validAlert(), sent: '1970-01-01T00:00:00Z', expires: '1970-01-02T00:00:00Z' }],
+    [{ ...validAlert(), sent: '2026-09-03T12:00:00Z', expires: '2026-09-03T12:00:00.001Z' }],
+  ]) {
+    const parsed = nws.validateNWSAlertSnapshot(envelope(alerts, now), now);
+    assert.ok(parsed);
+    assert.deepEqual(backend.validateNWSAlertSnapshot(envelope(alerts, now), now), parsed);
+    assert.ok(prepareNwsLifecycle(parsed, now), 'every admitted boundary case must be usable by lifecycle');
+  }
+});
+
+
+for (const mode of ['declared length', 'finite stream'] as const) {
+  test(`renderer rejects oversized ${mode} without caching it and recovers immediately`, async () => {
+    const originalFetch = globalThis.fetch;
+    const originalNow = Date.now;
+    const now = Date.parse('2026-09-03T12:00:00Z');
+    const limit = 8 * 1024 * 1024;
+    let calls = 0;
+    nws._resetNwsAlertsForTest?.();
+    try {
+      Date.now = () => now;
+      const data = envelope([validAlert()], now);
+      globalThis.fetch = async () => {
+        calls += 1;
+        if (calls > 1) return Response.json(data);
+        if (mode === 'declared length') {
+          return new Response(JSON.stringify(data), { headers: { 'content-length': String(limit + 1) } });
+        }
+        const bytes = new Uint8Array(limit + 1).fill(32);
+        bytes.set(new TextEncoder().encode(JSON.stringify(data)));
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(bytes.subarray(0, limit));
+            controller.enqueue(bytes.subarray(limit));
+            controller.close();
+          },
+        });
+        return new Response(stream);
+      };
+      await assert.rejects(nws.fetchNWSAlertsSnapshot(), /exceeded byte limit/i);
+      assert.equal((await nws.fetchNWSAlertsSnapshot()).alerts.length, 1);
+      assert.equal(calls, 2);
+    } finally {
+      globalThis.fetch = originalFetch;
+      Date.now = originalNow;
+      nws._resetNwsAlertsForTest?.();
+    }
+  });
+}

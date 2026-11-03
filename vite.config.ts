@@ -8,7 +8,7 @@ import { brotliCompress } from 'zlib';
 import { promisify } from 'util';
 import pkg from './package.json';
 import { isSafetyFeedPath } from './src/utils/sw-safety-feeds';
-import { removeWebLoopbackCspSources } from './src/config/csp-policy';
+import { LOCAL_MODEL_CSP_ORIGINS, removeWebLoopbackCspSources, SIDECAR_CSP_ORIGINS } from './src/config/csp-policy';
 import { deploymentAssetUrl, normalizeDeploymentBase } from './src/utils/deployment-base';
 import { createPwaManifestPaths } from './src/config/pwa-manifest';
 
@@ -172,7 +172,7 @@ function htmlVariantPlugin(): Plugin {
  return html;
  }
 
- let result = (isDesktopBuild ? html : removeWebLoopbackCspSources(html))
+ let result = removeWebLoopbackCspSources(html)
  .replace(/<title>.*?<\/title>/, `<title>${activeMeta.title}</title>`)
  .replace(/<meta name="title" content=".*?" \/>/, `<meta name="title" content="${activeMeta.title}" />`)
  .replace(/<meta name="description" content=".*?" \/>/, `<meta name="description" content="${activeMeta.description}" />`)
@@ -193,20 +193,18 @@ function htmlVariantPlugin(): Plugin {
  .replace(/"description": "[^"]*"/, `"description": "${activeMeta.description}"`)
  .replace(/"featureList": \[[\s\S]*?\]/, `"featureList": ${JSON.stringify(activeMeta.features, null, 8).replace(/\n/g, '\n ')}`);
 
- // Desktop CSP: inject loopback wildcard for the dynamic sidecar port so the
- // index.html meta-CSP (which intersects with the authoritative tauri.conf.json
- // CSP) cannot block 127.0.0.1:<port>. The production *web* allowlist
- // intentionally excludes localhost to avoid exposing the user's local services
- // as attack surface from a hijacked page.
+ // The desktop meta policy intersects with Tauri's response header. Keep the
+ // two loopback lists in sync; only connect-src also permits local models.
  if (isDesktopBuild) {
+ const loopbackConnect = [...SIDECAR_CSP_ORIGINS, ...LOCAL_MODEL_CSP_ORIGINS].join(' ');
  result = result
  .replace(
  /connect-src 'self' blob: data:/,
- "connect-src 'self' blob: data: http://127.0.0.1:* http://localhost:*"
+ `connect-src 'self' blob: data: ${loopbackConnect}`
  )
  .replace(
  /frame-src 'self'/,
- "frame-src 'self' http://127.0.0.1:*"
+ `frame-src 'self' ${SIDECAR_CSP_ORIGINS.join(' ')}`
  );
  }
 
@@ -1023,7 +1021,14 @@ export default defineConfig({
  liveChannels: resolve(__dirname, 'live-channels.html'),
  },
  output: {
- manualChunks(id) {
+ codeSplitting: {
+   groups: [
+     // Keep Vite's shared import helper out of application chunks, even when
+     // deck-stack claims it transitively. The mode check must run first.
+     { name: 'preload-helper', test: /vite\/preload-helper\.js$/, priority: 1 },
+     { name(id) {
+ if (id.endsWith('/src/services/mode-manager.ts')) return 'mode-preference';
+ if (id.endsWith('/src/bootstrap/ghost-notice-en.json')) return 'ghost-notice-copy';
  if (id.includes('node_modules')) {
  if (id.includes('/@xenova/transformers/')) {
  return 'transformers';
@@ -1295,6 +1300,8 @@ export default defineConfig({
  return `locale-${localeMatch[1]}`;
  }
  return undefined;
+     } },
+   ],
  },
  },
  },

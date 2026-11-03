@@ -1031,7 +1031,12 @@ Implementation, local gates and independent substantive review pass. Final integ
 
 ### UX-047 — Keep national weather warnings current
 
-Status: NOT STARTED — HIGH ASSURANCE
+Status: IN PROGRESS — HIGH ASSURANCE
+Owner: Codex (`codex/ux047-warning-freshness-nov1`); draft claim #1844.
+Approval: November 2 UTC; complete national snapshots, five-minute base refresh,
+offline/restart lifecycle and preserved history/user state.
+Design: [approved implementation plan](plans/2026-11-02-ux047-national-warning-lifecycle.md).
+Evidence: #1844 — [local validation, 57 mutation proofs and review](validation/UX-047-NATIONAL-WARNINGS.md). [Native port-collision repair and acceptance](validation/UX-047-FALLBACK-PORTS.md) cover acquisition, restart and range exhaustion on the repaired checkpoint.
 Priority: S
 Source findings: PR1731 H12/H13/H14.
 
@@ -1059,11 +1064,15 @@ Acceptance: Carry real observation/fetch age and coverage into threat summaries.
 
 ### UX-050 — Make Ghost Mode suppression unmistakable
 
-Status: NOT STARTED — HIGH ASSURANCE
+Status: DONE — HIGH ASSURANCE
 Priority: S
 Source findings: PR1731 H20.
 
+Claim: #1846. Bradley approved the [critical-notification policy and implementation design](plans/2026-11-02-ux050-ghost-suppression.md) on November 2, 2026.
+
 Acceptance: Approve explicit policy for critical alerts versus privacy/silence preferences; show persistent mode and suppression accounting. Do not silently bypass an existing user-selected privacy mode.
+
+Evidence: #1846 — [Ghost Mode behavior, verification and limitations](validation/UX-050-GHOST-MODE.md). Local acceptance covers the shared dispatcher, eligible analyst nudges and both shell notices. Final review and CI govern delivery.
 
 ### UX-051 — Align RSS request budgets across boundaries
 
@@ -1075,8 +1084,9 @@ Acceptance: Bound total sidecar redirect/request time below the renderer budget 
 
 ### UX-052 — Restrain derived alert interruptions
 
-Status: NOT STARTED — HIGH ASSURANCE
+Status: IN REVIEW — HIGH ASSURANCE
 Priority: S
+Claim: [Draft PR #1847](https://github.com/bradleybond512/crystal-ball/pull/1847)
 Source findings: PR1731 H15 remainder.
 
 Acceptance: Separate derived-notification policy from authoritative warnings; define domain, cooldown, quiet-hour and burst accounting rules. Coordinate with ACC-509; do not change inference severity to mask delivery defects.
@@ -1259,12 +1269,12 @@ Update the row in the same PR that does the work.
 | UX-044 | Announce critical UI changes accessibly | NOT STARTED | — |
 | UX-045 | Keep advisories from suppressing warnings | DONE | #1733 |
 | UX-046 | Preserve alert priorities at capacity | DONE — HIGH ASSURANCE | #1734 |
-| UX-047 | Keep national weather warnings current | NOT STARTED — HIGH ASSURANCE | — |
+| UX-047 | Keep national weather warnings current | IN PROGRESS — HIGH ASSURANCE | #1844 — [local implementation, validation and review](validation/UX-047-NATIONAL-WARNINGS.md); [native acceptance on the fixed branch](validation/UX-047-FALLBACK-PORTS.md) |
 | UX-048 | Restore verified GDACS ingestion | DONE — HIGH ASSURANCE | #1740 — approved five-feed repair; [validation](validation/UX-048-GDACS.md) and [alert burst performance evidence](validation/UX-048-PERFORMANCE.md); final review/CI govern delivery |
 | UX-049 | Distinguish quiet sensors from missing observations | NOT STARTED — HIGH ASSURANCE | — |
-| UX-050 | Make Ghost Mode suppression unmistakable | NOT STARTED — HIGH ASSURANCE | — |
+| UX-050 | Make Ghost Mode suppression unmistakable | DONE — HIGH ASSURANCE | #1846 — [Verification and coverage](validation/UX-050-GHOST-MODE.md) |
 | UX-051 | Align RSS request budgets across boundaries | NOT STARTED — HIGH ASSURANCE | — |
-| UX-052 | Restrain derived alert interruptions | NOT STARTED — HIGH ASSURANCE | — |
+| UX-052 | Restrain derived alert interruptions | IN REVIEW — HIGH ASSURANCE | [Draft #1847](https://github.com/bradleybond512/crystal-ball/pull/1847), [validation and integration evidence](validation/UX-052-DERIVED-ALERTS.md) |
 | UX-053 | Finish boot without awaiting all data sources | NOT STARTED — HIGH ASSURANCE | — |
 | UX-054 | Cover subproject dependencies in security checks | NOT STARTED — HIGH ASSURANCE | — |
 | UX-055 | Surface stale credential validation honestly | NOT STARTED — HIGH ASSURANCE | — |

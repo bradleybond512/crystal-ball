@@ -109,35 +109,23 @@ export function startAlertReactions(): void {
     for (const a of unifiedAlertStore.getAll()) {
       if (seen.has(a.id)) continue;
       seen.add(a.id);
+      if (!unifiedAlertStore.isOperationalAlert(a)) continue;
       fresh.push(a);
     }
     if (fresh.length === 0) return;
 
-    // React to the single highest-scoring fresh alert this tick.
-    let top: UnifiedAlert | null = null;
-    let topScore = 0;
-    for (const a of fresh) {
-      const s = scoreAlert(a, now);
-      if (s > topScore) { topScore = s; top = a; }
-    }
-    for (const a of fresh) {
-      logEvent({ kind: 'ingest', alertId: a.id, source: a.source, severity: a.severity, score: scoreAlert(a, now) });
-    }
-    if (!top || topScore < REACT_THRESHOLD) return;
-    logEvent({ kind: 'react', alertId: top.id, source: top.source, severity: top.severity, score: topScore });
-
-    const panelId = panelForAlert(top);
     // Ghost Mode forces silent regardless of preset.
     const ch = isGhostMode() ? { sound: false, borderFlash: false, desktopNotif: false, mapPulse: true, panelFlash: true } : getChannels();
-
-    if (ch.panelFlash) flashPanel(panelId);
-
-    // Add a map pulse for any fresh hot alert that has coordinates.
-    if (ch.mapPulse) {
-      for (const a of fresh) {
-        if (scoreAlert(a, now) < REACT_THRESHOLD) continue;
-        if (!a.location) continue;
-        pulses.push({
+    let top: UnifiedAlert | null = null;
+    let topScore = 0;
+    let publishMap = false;
+    for (const a of fresh) {
+      const score = scoreAlert(a, now);
+      logEvent({ kind: 'ingest', alertId: a.id, source: a.source, severity: a.severity, score });
+      if (score < REACT_THRESHOLD) continue;
+      if (ch.mapPulse) {
+        publishMap = true;
+        if (a.location) pulses.push({
           id: a.id,
           lat: a.location.lat,
           lon: a.location.lon,
@@ -145,9 +133,15 @@ export function startAlertReactions(): void {
           expiresAt: now + PULSE_TTL_MS,
         });
       }
-      publishPulses();
+      // Inferred alerts stay on the map; only source alerts compete for attention.
+      if (a.source !== 'correlation' && score > topScore) { topScore = score; top = a; }
     }
+    if (publishMap) publishPulses();
+    if (!top) return;
 
+    logEvent({ kind: 'react', alertId: top.id, source: top.source, severity: top.severity, score: topScore });
+    const panelId = panelForAlert(top);
+    if (ch.panelFlash) flashPanel(panelId);
     if (ch.borderFlash) flashWindowBorder();
     if (ch.sound) {
       if (top.severity === 'critical') playAlertPing();
@@ -158,7 +152,7 @@ export function startAlertReactions(): void {
     if (top.severity === 'critical') {
       window.setTimeout(() => {
         const still = unifiedAlertStore.getAll().find(a => a.id === top.id);
-        if (still && !still.acknowledged) {
+        if (still && !still.acknowledged && still.source !== 'correlation' && unifiedAlertStore.isOperationalAlert(still)) {
           const ch2 = isGhostMode() ? { sound: false, borderFlash: false } : getChannels();
           if (ch.panelFlash) flashPanel(panelId);
           if (ch2.borderFlash) flashWindowBorder();

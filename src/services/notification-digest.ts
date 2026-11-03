@@ -184,7 +184,7 @@ async function buildAIDigest(alerts: UnifiedAlert[], windowStart: number): Promi
 // ── Core digest generation ────────────────────────────────────────────────────
 
 export async function generateDigest(): Promise<NotificationDigest | null> {
-  const alerts = [...pendingAlerts];
+  const alerts = pendingAlerts.filter(alert => alert.source !== 'nws' || unifiedAlertStore.isOperationalAlert(alert));
   const windowStart = lastDigestTime;
 
   pendingAlerts = [];
@@ -192,7 +192,10 @@ export async function generateDigest(): Promise<NotificationDigest | null> {
 
   if (alerts.length === 0) return null;
 
-  const digest = await buildAIDigest(alerts, windowStart);
+  let digest = await buildAIDigest(alerts, windowStart);
+  const deliverable = alerts.filter(alert => alert.source !== 'nws' || unifiedAlertStore.isOperationalAlert(alert));
+  if (deliverable.length === 0) return null;
+  if (deliverable.length !== alerts.length) digest = buildRuleBasedDigest(deliverable, windowStart);
 
   const existing = loadDigests();
   existing.push(digest);
@@ -264,7 +267,8 @@ export function initNotificationDigest(): void {
   }
 
   alertStoreUnsub = unifiedAlertStore.subscribe(() => {
- const alerts = unifiedAlertStore.getAll();
+ pendingAlerts = pendingAlerts.filter(alert => alert.source !== 'nws' || unifiedAlertStore.isOperationalAlert(alert));
+ const alerts = unifiedAlertStore.getOperationalAlerts();
  const newAlerts = alerts.filter(a => a.timestamp > lastDigestTime);
  for (const alert of newAlerts) {
  if (!pendingAlerts.some(p => p.id === alert.id)) {

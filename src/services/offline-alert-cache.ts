@@ -276,7 +276,7 @@ export function getOfflineCacheStatus(serviceIds: string[]): OfflineCacheStatus[
  */
 export const CRITICAL_SOURCE_KEYS = [
   'gdacs-events',
-  'nws-alerts',
+  'nws-alerts-snapshot-v1',
   'tsunami-alerts',
   'weather-alerts',
   'news-rss:breaking',

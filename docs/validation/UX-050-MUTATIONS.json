@@ -1,0 +1,1809 @@
+{
+  "schemaVersion": 1,
+  "behaviorChangingMutationsKilled": 100,
+  "result": "Every listed mutation changed the specified source on a clean detached checkpoint, failed its expected behavioral assertion, restored the recorded checksum, and finished with empty git status. Counts are [passed, failed].",
+  "files": {
+    "src/services/mode-manager.ts@7e36990f794a": {
+      "path": "src/services/mode-manager.ts",
+      "beforeSha256": "7e36990f794a5c96e69d89a53a4a7bf22132565addce3c0972401e8dc99059cf",
+      "restoredSha256": "7e36990f794a5c96e69d89a53a4a7bf22132565addce3c0972401e8dc99059cf"
+    },
+    "index.html@71dab71f9f55": {
+      "path": "index.html",
+      "beforeSha256": "71dab71f9f55abe38f7cabe955f40f366afd24fc488751e8624d07b3301e7dba",
+      "restoredSha256": "71dab71f9f55abe38f7cabe955f40f366afd24fc488751e8624d07b3301e7dba"
+    },
+    "src/services/notification-dispatcher.ts@52217c0fa873": {
+      "path": "src/services/notification-dispatcher.ts",
+      "beforeSha256": "52217c0fa87371a2ca3e38f993f1c1b608cc11ad6ae7af2e0276dbb08e5b10ae",
+      "restoredSha256": "52217c0fa87371a2ca3e38f993f1c1b608cc11ad6ae7af2e0276dbb08e5b10ae"
+    },
+    "src/services/hypothesis-notifier.ts@1699a7cef9fb": {
+      "path": "src/services/hypothesis-notifier.ts",
+      "beforeSha256": "1699a7cef9fb949c24a19dd01a66afde5027df7e0dd95297b32e0251ed10c8b1",
+      "restoredSha256": "1699a7cef9fb949c24a19dd01a66afde5027df7e0dd95297b32e0251ed10c8b1"
+    },
+    "src/entry.ts@9530bfacb462": {
+      "path": "src/entry.ts",
+      "beforeSha256": "9530bfacb4629500761f0d009331ffc3d8af3336120e2bbdb94e07b27e5177ab",
+      "restoredSha256": "9530bfacb4629500761f0d009331ffc3d8af3336120e2bbdb94e07b27e5177ab"
+    },
+    "src/app/panel-layout.ts@67fbf0032f3e": {
+      "path": "src/app/panel-layout.ts",
+      "beforeSha256": "67fbf0032f3e781d5ef5d722d681b14867efe1373dd1a9c8009d3b9739c59303",
+      "restoredSha256": "67fbf0032f3e781d5ef5d722d681b14867efe1373dd1a9c8009d3b9739c59303"
+    },
+    "src/bootstrap/ghost-notice-en.json@36ce3c1c7628": {
+      "path": "src/bootstrap/ghost-notice-en.json",
+      "beforeSha256": "36ce3c1c762878d770a8a62f905beac6407493f4d647960ce24ed2a13d59cd37",
+      "restoredSha256": "36ce3c1c762878d770a8a62f905beac6407493f4d647960ce24ed2a13d59cd37"
+    },
+    "src/components/GhostModeNotice.ts@299af440c2c3": {
+      "path": "src/components/GhostModeNotice.ts",
+      "beforeSha256": "299af440c2c3550fc2b9c697c95e3d92c98b51e0783438f1329c25736aac8077",
+      "restoredSha256": "299af440c2c3550fc2b9c697c95e3d92c98b51e0783438f1329c25736aac8077"
+    },
+    "src/components/HomeShellOverlay.ts@42e1645247e6": {
+      "path": "src/components/HomeShellOverlay.ts",
+      "beforeSha256": "42e1645247e67ec22908a1c9087efd262830dba724ac8d16bc6ef2088a9e8350",
+      "restoredSha256": "42e1645247e67ec22908a1c9087efd262830dba724ac8d16bc6ef2088a9e8350"
+    },
+    "src/main.ts@dbe0f47ee4a2": {
+      "path": "src/main.ts",
+      "beforeSha256": "dbe0f47ee4a25641fafc84b019183ff8f556957cecd8193d0e1335d0236f4b2a",
+      "restoredSha256": "dbe0f47ee4a25641fafc84b019183ff8f556957cecd8193d0e1335d0236f4b2a"
+    },
+    "src/styles/alerts.css@11cb87b93cd5": {
+      "path": "src/styles/alerts.css",
+      "beforeSha256": "11cb87b93cd5ba9848f4b48a7d1e7bd4bf7054d352faf3e59735e79b9797fbbc",
+      "restoredSha256": "11cb87b93cd5ba9848f4b48a7d1e7bd4bf7054d352faf3e59735e79b9797fbbc"
+    },
+    "src/styles/home-shell.css@fb12dfc7f8fc": {
+      "path": "src/styles/home-shell.css",
+      "beforeSha256": "fb12dfc7f8fce1a5e80d342253a2255b92da4be91fb0a1928743a7182736b41a",
+      "restoredSha256": "fb12dfc7f8fce1a5e80d342253a2255b92da4be91fb0a1928743a7182736b41a"
+    },
+    "src/bootstrap/ghost-mode-notice.ts@843f5cce6bbd": {
+      "path": "src/bootstrap/ghost-mode-notice.ts",
+      "beforeSha256": "843f5cce6bbd0b65b9010623f446a30cdccb5b2f6eec90a6aab088e18ee87b6a",
+      "restoredSha256": "843f5cce6bbd0b65b9010623f446a30cdccb5b2f6eec90a6aab088e18ee87b6a"
+    },
+    "vite.config.ts@41db9b90054b": {
+      "path": "vite.config.ts",
+      "beforeSha256": "41db9b90054b2632a90e5c5347cba05ee9b9b410dc12628dc511850c3c2968c8",
+      "restoredSha256": "41db9b90054b2632a90e5c5347cba05ee9b9b410dc12628dc511850c3c2968c8"
+    }
+  },
+  "suites": {
+    "state@1f93dad207": {
+      "checkpoint": "1f93dad207755f3532ad95959c0b5957b207de24",
+      "command": [
+        "./node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/ghost-mode-state.test.mts"
+      ],
+      "baseline": [
+        17,
+        0
+      ],
+      "restored": [
+        17,
+        0
+      ],
+      "testSha256": {
+        "src/services/__tests__/ghost-mode-state.test.mts": "121b4b47ef73847f7ac719677958cd015aededf3ed8910e98fc9a0c71733ba3a"
+      }
+    },
+    "policy@e401bd4f7d": {
+      "checkpoint": "e401bd4f7d1e35866fb937861afeee849b393a58",
+      "command": [
+        "./node_modules/.bin/tsx",
+        "--test",
+        "src/services/__tests__/ghost-notification-policy.test.mts"
+      ],
+      "baseline": [
+        9,
+        0
+      ],
+      "restored": [
+        9,
+        0
+      ],
+      "testSha256": {
+        "src/services/__tests__/ghost-notification-policy.test.mts": "054d330c6ea01207db5a9b0617168dbacb55a5769b37d4701fc254361d43d9a9"
+      }
+    },
+    "entry@ac893c4a11": {
+      "checkpoint": "ac893c4a113da0a5b6ad109debd4a919021d0405",
+      "command": [
+        "./node_modules/.bin/tsx",
+        "--test",
+        "tests/ghost-mode-entry.test.mts"
+      ],
+      "baseline": [
+        4,
+        0
+      ],
+      "restored": [
+        4,
+        0
+      ],
+      "testSha256": {
+        "tests/ghost-mode-entry.test.mts": "e1de1d1be6fd5cb70ca95385b48fd2cba1e05cba2a181e9b116102aa64f81788"
+      }
+    },
+    "comms@ac893c4a11": {
+      "checkpoint": "ac893c4a113da0a5b6ad109debd4a919021d0405",
+      "command": [
+        "node",
+        "--test",
+        "tests/comms-panel.test.mjs"
+      ],
+      "baseline": [
+        4,
+        0
+      ],
+      "restored": [
+        4,
+        0
+      ],
+      "testSha256": {
+        "tests/comms-panel.test.mjs": "15c875b6794dd34d8c7318eb3da69e4b8e6d1e6f2177c261b6ddf470dd38d0a4"
+      }
+    },
+    "ui@7d4449df80": {
+      "checkpoint": "7d4449df80d0a468e3a43c18301e84090b29609c",
+      "command": [
+        "./node_modules/.bin/tsx",
+        "--test",
+        "src/components/__tests__/ghost-mode-notice.test.mts"
+      ],
+      "baseline": [
+        10,
+        0
+      ],
+      "restored": [
+        10,
+        0
+      ],
+      "testSha256": {
+        "src/components/__tests__/ghost-mode-notice.test.mts": "cde76aba1bf58df6724c3d4c51aff8c91efa201bfc3d1c6c2deeb69a0b2eb026"
+      }
+    },
+    "bundle@7d4449df80": {
+      "checkpoint": "7d4449df80d0a468e3a43c18301e84090b29609c",
+      "command": [
+        "bash",
+        "-c",
+        "node node_modules/vite/bin/vite.js build > /dev/null && node --experimental-vm-modules --test \"$@\"",
+        "rebuild-then-test",
+        "tests/ghost-mode-bundle.test.mjs"
+      ],
+      "baseline": [
+        2,
+        0
+      ],
+      "restored": [
+        2,
+        0
+      ],
+      "testSha256": {
+        "tests/ghost-mode-bundle.test.mjs": "969c9b8961adf0e5482c51a2097c5bdfe93a2fbd8581bac9197401756d8e2857"
+      }
+    }
+  },
+  "cases": [
+    {
+      "id": "B01",
+      "behavior": "Keep the shared Vite preload helper out of eager application chunks",
+      "fileKey": "vite.config.ts@41db9b90054b",
+      "diff": [
+        "-     { name: 'preload-helper', test: /vite\\/preload-helper\\.js$/, priority: 1 },",
+        "+"
+      ],
+      "suiteKey": "bundle@7d4449df80",
+      "red": [
+        0,
+        2
+      ],
+      "test": "the built document can check mode before loading application dependencies",
+      "assertion": "error: 'main-D-s5scSo.js eagerly imports deck-stack-DY8BOqh7.js before the mode choice'\n\n\n  expected: true\n  actual: false\n  operator: '=='\n\n    assertSafeImports (file://[workspace])"
+    },
+    {
+      "id": "B02",
+      "behavior": "Isolate synchronized mode state from the full application on cold storage denial",
+      "fileKey": "vite.config.ts@41db9b90054b",
+      "diff": [
+        "- if (id.endsWith('/src/services/mode-manager.ts')) return 'mode-preference';",
+        "+"
+      ],
+      "suiteKey": "bundle@7d4449df80",
+      "red": [
+        0,
+        2
+      ],
+      "test": "the built document can check mode before loading application dependencies",
+      "assertion": "error: 'main-WkINEIwJ.js eagerly imports panels-dwgLatlR.js before the mode choice'\n\n\n  expected: true\n  actual: false\n  operator: '=='\n\n    assertSafeImports (file://[workspace])"
+    },
+    {
+      "id": "B03",
+      "behavior": "Make the recovery notice’s English strings available without eagerly importing app panels",
+      "fileKey": "vite.config.ts@41db9b90054b",
+      "diff": [
+        "- if (id.endsWith('/src/bootstrap/ghost-notice-en.json')) return 'ghost-notice-copy';",
+        "+"
+      ],
+      "suiteKey": "bundle@7d4449df80",
+      "red": [
+        1,
+        1
+      ],
+      "test": "the built recovery notice can load before storage-dependent panels",
+      "assertion": "error: 'ghost-mode-notice-BGmWXGVr.js eagerly imports panels-ag3SIgzY.js before the mode choice'\n\n\n  expected: true\n  actual: false\n  operator: '=='\n\n    assertSafeImports (file://[workspace])"
+    },
+    {
+      "id": "D01",
+      "behavior": "Read one authoritative window choice even if disk write failed",
+      "fileKey": "src/services/notification-dispatcher.ts@52217c0fa873",
+      "diff": [
+        "-  if (state.mode !== 'ghost') return undefined;",
+        "+  if (localStorage.getItem('wm-app-mode') !== 'ghost') return undefined;"
+      ],
+      "suiteKey": "policy@e401bd4f7d",
+      "red": [
+        8,
+        1
+      ],
+      "test": "a failed local save still mutes the current window without consulting the obsolete stored choice",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + [\n    +   'Site warning fixture'\n    + ]\n    - []\n\n\n  expected:\n  actual:\n    0: 'Site warning fixture'\n  operator: 'deepStrictEqual'"
+    },
+    {
+      "id": "D02",
+      "behavior": "Unknown mode blocks covered outgoing attempts",
+      "fileKey": "src/services/notification-dispatcher.ts@52217c0fa873",
+      "diff": [
+        "-  if (state.preference === 'unknown') return 'mode-unavailable';",
+        "+  if (state.preference === 'unknown') return undefined;"
+      ],
+      "suiteKey": "policy@e401bd4f7d",
+      "red": [
+        8,
+        1
+      ],
+      "test": "a storage read failure holds a critical attempt without attributing it to Ghost",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + [\n    +   'Site warning fixture'\n    + ]\n    - []\n\n\n  expected:\n  actual:\n    0: 'Site warning fixture'\n  operator: 'deepStrictEqual'"
+    },
+    {
+      "id": "D03",
+      "behavior": "Unknown cause remains distinct from confirmed Ghost",
+      "fileKey": "src/services/notification-dispatcher.ts@52217c0fa873",
+      "diff": [
+        "-  if (state.preference === 'unknown') return 'mode-unavailable';",
+        "+  if (state.preference === 'unknown') return 'ghost-mode';"
+      ],
+      "suiteKey": "policy@e401bd4f7d",
+      "red": [
+        8,
+        1
+      ],
+      "test": "a storage read failure holds a critical attempt without attributing it to Ghost",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   'ghost-mode': 1\n    -   'mode-unavailable': 1\n      }\n\n\n  expected:\n    mode-unavailable: 1\n  actual:\n    ghost-mode: 1\n  operator: 'deepStrictEqual'"
+    },
+    {
+      "id": "D04",
+      "behavior": "Record actual Ghost decision exactly once",
+      "fileKey": "src/services/notification-dispatcher.ts@52217c0fa873",
+      "diff": [
+        "-  recordGhostSuppression(critical);",
+        "+"
+      ],
+      "suiteKey": "policy@e401bd4f7d",
+      "red": [
+        4,
+        5
+      ],
+      "test": "counts critical site weather and a repeated dispatch at the Ghost gate, excluding silent actions",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   critical: 0,\n    +   muted: 0\n    -   critical: 2,\n    -   muted: 3\n      }\n\n\n  expected:\n    muted: 3\n    critical: 2\n  actual:\n    muted: 0\n    critical: 0\n  operator: 'deepStrictEqual'"
+    },
+    {
+      "id": "D05",
+      "behavior": "Count critical site warnings in a separate subtotal",
+      "fileKey": "src/services/notification-dispatcher.ts@52217c0fa873",
+      "diff": [
+        "-  recordGhostSuppression(critical);",
+        "+  recordGhostSuppression(false);"
+      ],
+      "suiteKey": "policy@e401bd4f7d",
+      "red": [
+        4,
+        5
+      ],
+      "test": "counts critical site weather and a repeated dispatch at the Ghost gate, excluding silent actions",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   critical: 0,\n    -   critical: 2,\n        muted: 3\n      }\n\n\n  expected:\n    muted: 3\n    critical: 2\n  actual:\n    muted: 3\n    critical: 0\n  operator: 'deepStrictEqual'"
+    },
+    {
+      "id": "D06",
+      "behavior": "Keep ordinary notification attempts out of the critical subtotal",
+      "fileKey": "src/services/notification-dispatcher.ts@52217c0fa873",
+      "diff": [
+        "-  recordGhostSuppression(critical);",
+        "+  recordGhostSuppression(true);"
+      ],
+      "suiteKey": "policy@e401bd4f7d",
+      "red": [
+        8,
+        1
+      ],
+      "test": "counts critical site weather and a repeated dispatch at the Ghost gate, excluding silent actions",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   critical: 3,\n    -   critical: 2,\n        muted: 3\n      }\n\n\n  expected:\n    muted: 3\n    critical: 2\n  actual:\n    muted: 3\n    critical: 3\n  operator: 'deepStrictEqual'"
+    },
+    {
+      "id": "D07",
+      "behavior": "Critical severity cannot bypass Ghost policy",
+      "fileKey": "src/services/notification-dispatcher.ts@52217c0fa873",
+      "diff": [
+        "-  if (state.mode !== 'ghost') return undefined;",
+        "+  if (state.mode !== 'ghost' || critical) return undefined;"
+      ],
+      "suiteKey": "policy@e401bd4f7d",
+      "red": [
+        4,
+        5
+      ],
+      "test": "counts critical site weather and a repeated dispatch at the Ghost gate, excluding silent actions",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + [\n    +   'Site warning fixture',\n    +   'Site warning fixture'\n    + ]\n    - []\n\n\n  expected:\n  actual:\n    0: 'Site warning fixture'\n    1: 'Site warning fixture'\n  operator: 'deepStrictEqual'"
+    },
+    {
+      "id": "D08",
+      "behavior": "Silent actions do not increment the Ghost total",
+      "fileKey": "src/services/notification-dispatcher.ts@52217c0fa873",
+      "diff": [
+        "+ holdNotificationForMode(alert.severity === 'critical');"
+      ],
+      "suiteKey": "policy@e401bd4f7d",
+      "red": [
+        8,
+        1
+      ],
+      "test": "counts critical site weather and a repeated dispatch at the Ghost gate, excluding silent actions",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   critical: 3,\n    +   muted: 4\n    -   critical: 2,\n    -   muted: 3\n      }\n\n\n  expected:\n    muted: 3\n    critical: 2\n  actual:\n    muted: 4\n    critical: 3\n  operator: 'deepStrictEqual'"
+    },
+    {
+      "id": "D09",
+      "behavior": "Preserve suppression reason on the dispatcher trace",
+      "fileKey": "src/services/notification-dispatcher.ts@52217c0fa873",
+      "diff": [
+        "- suppressTrace(trace, modeHold);",
+        "+ suppressTrace(trace, 'silent-action');"
+      ],
+      "suiteKey": "policy@e401bd4f7d",
+      "red": [
+        7,
+        2
+      ],
+      "test": "counts critical site weather and a repeated dispatch at the Ghost gate, excluding silent actions",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   'silent-action': 4\n    -   'ghost-mode': 3,\n    -   'silent-action': 1\n      }\n\n\n  expected:\n    ghost-mode: 3\n    silent-action: 1\n  actual:\n    silent-action: 4\n  operator: 'deepStrictEqual'"
+    },
+    {
+      "id": "D10",
+      "behavior": "A permission grant interrupted by Ghost entry and exit cannot send",
+      "fileKey": "src/services/notification-dispatcher.ts@52217c0fa873",
+      "diff": [
+        "-      if (modeHold || mode.generation !== generation) {",
+        "+      if (modeHold) {"
+      ],
+      "suiteKey": "policy@e401bd4f7d",
+      "red": [
+        8,
+        1
+      ],
+      "test": "pending permission observes mode at the actual send boundary (left)",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n\n\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "D11",
+      "behavior": "When Ghost remains active at the permission grant, count once using current state",
+      "fileKey": "src/services/notification-dispatcher.ts@52217c0fa873",
+      "diff": [
+        "-      const modeHold = holdNotificationForMode(critical, mode);",
+        "+      const modeHold = undefined;"
+      ],
+      "suiteKey": "policy@e401bd4f7d",
+      "red": [
+        7,
+        2
+      ],
+      "test": "pending permission observes mode at the actual send boundary (active)",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   critical: 0,\n    +   muted: 0\n    -   critical: 1,\n    -   muted: 1\n      }\n\n\n  expected:\n    muted: 1\n    critical: 1\n  actual:\n    muted: 0\n    critical: 0\n  operator: 'deepStrictEqual'"
+    },
+    {
+      "id": "D12",
+      "behavior": "Permission-stage hold is counted as critical for a site warning",
+      "fileKey": "src/services/notification-dispatcher.ts@52217c0fa873",
+      "diff": [
+        "-      const modeHold = holdNotificationForMode(critical, mode);",
+        "+      const modeHold = holdNotificationForMode(false, mode);"
+      ],
+      "suiteKey": "policy@e401bd4f7d",
+      "red": [
+        7,
+        2
+      ],
+      "test": "pending permission observes mode at the actual send boundary (active)",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   critical: 0,\n    -   critical: 1,\n        muted: 1\n      }\n\n\n  expected:\n    muted: 1\n    critical: 1\n  actual:\n    muted: 1\n    critical: 0\n  operator: 'deepStrictEqual'"
+    },
+    {
+      "id": "D13",
+      "behavior": "A normal uninterrupted permission grant is still delivered",
+      "fileKey": "src/services/notification-dispatcher.ts@52217c0fa873",
+      "diff": [
+        "-      if (modeHold || mode.generation !== generation) {",
+        "+      if (modeHold || mode.generation === generation) {"
+      ],
+      "suiteKey": "policy@e401bd4f7d",
+      "red": [
+        6,
+        3
+      ],
+      "test": "pending permission observes mode at the actual send boundary (uninterrupted)",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    0 !== 1\n\n\n  expected: 1\n  actual: 0\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "D14",
+      "behavior": "Keep muted analyst signatures out of per-alert diagnostic traces",
+      "fileKey": "src/services/hypothesis-notifier.ts@1699a7cef9fb",
+      "diff": [
+        "-  if (holdNotificationForMode(true)) return;",
+        "+"
+      ],
+      "suiteKey": "policy@e401bd4f7d",
+      "red": [
+        8,
+        1
+      ],
+      "test": "HUD-hidden, eligible analyst signatures count once per batch and do not replay on exit",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n\n\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "D15",
+      "behavior": "Only eligible hidden HUD requests contribute",
+      "fileKey": "src/services/hypothesis-notifier.ts@1699a7cef9fb",
+      "diff": [
+        "-  if (hudVisible) return; // user is looking — no need to nudge",
+        "+  "
+      ],
+      "suiteKey": "policy@e401bd4f7d",
+      "red": [
+        8,
+        1
+      ],
+      "test": "HUD-hidden, eligible analyst signatures count once per batch and do not replay on exit",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   critical: 1,\n    +   muted: 1\n    -   critical: 0,\n    -   muted: 0\n      }\n\n\n  expected:\n    muted: 0\n    critical: 0\n  actual:\n    muted: 1\n    critical: 1\n  operator: 'deepStrictEqual'"
+    },
+    {
+      "id": "D16",
+      "behavior": "A below-critical hypothesis cannot contribute",
+      "fileKey": "src/services/hypothesis-notifier.ts@1699a7cef9fb",
+      "diff": [
+        "-    if (h.risk !== 'critical') continue;",
+        "+    "
+      ],
+      "suiteKey": "policy@e401bd4f7d",
+      "red": [
+        8,
+        1
+      ],
+      "test": "HUD-hidden, eligible analyst signatures count once per batch and do not replay on exit",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   critical: 1,\n    +   muted: 1\n    -   critical: 0,\n    -   muted: 0\n      }\n\n\n  expected:\n    muted: 0\n    critical: 0\n  actual:\n    muted: 1\n    critical: 1\n  operator: 'deepStrictEqual'"
+    },
+    {
+      "id": "D17",
+      "behavior": "An empty filtered batch contributes no muted attempts",
+      "fileKey": "src/services/hypothesis-notifier.ts@1699a7cef9fb",
+      "diff": [
+        "-  if (fresh.length === 0) return;",
+        "+"
+      ],
+      "suiteKey": "policy@e401bd4f7d",
+      "red": [
+        8,
+        1
+      ],
+      "test": "HUD-hidden, eligible analyst signatures count once per batch and do not replay on exit",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   critical: 1,\n    +   muted: 1\n    -   critical: 0,\n    -   muted: 0\n      }\n\n\n  expected:\n    muted: 0\n    critical: 0\n  actual:\n    muted: 1\n    critical: 1\n  operator: 'deepStrictEqual'"
+    },
+    {
+      "id": "D18",
+      "behavior": "A previously notified signature does not count again",
+      "fileKey": "src/services/hypothesis-notifier.ts@1699a7cef9fb",
+      "diff": [
+        "-    if (notified.has(sig)) continue;",
+        "+"
+      ],
+      "suiteKey": "policy@e401bd4f7d",
+      "red": [
+        8,
+        1
+      ],
+      "test": "HUD-hidden, eligible analyst signatures count once per batch and do not replay on exit",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   critical: 2,\n    +   muted: 2\n    -   critical: 1,\n    -   muted: 1\n      }\n\n\n  expected:\n    muted: 1\n    critical: 1\n  actual:\n    muted: 2\n    critical: 2\n  operator: 'deepStrictEqual'"
+    },
+    {
+      "id": "D19",
+      "behavior": "Multiple eligible signatures count as one muted attempt",
+      "fileKey": "src/services/hypothesis-notifier.ts@1699a7cef9fb",
+      "diff": [
+        "-  if (holdNotificationForMode(true)) return;",
+        "+  if (holdNotificationForMode(true)) { for (const _item of fresh.slice(1)) holdNotificationForMode(true); return; }"
+      ],
+      "suiteKey": "policy@e401bd4f7d",
+      "red": [
+        8,
+        1
+      ],
+      "test": "HUD-hidden, eligible analyst signatures count once per batch and do not replay on exit",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   critical: 2,\n    +   muted: 2\n    -   critical: 1,\n    -   muted: 1\n      }\n\n\n  expected:\n    muted: 1\n    critical: 1\n  actual:\n    muted: 2\n    critical: 2\n  operator: 'deepStrictEqual'"
+    },
+    {
+      "id": "D20",
+      "behavior": "The analyst subtotal is critical",
+      "fileKey": "src/services/hypothesis-notifier.ts@1699a7cef9fb",
+      "diff": [
+        "-  if (holdNotificationForMode(true)) return;",
+        "+  if (holdNotificationForMode(false)) return;"
+      ],
+      "suiteKey": "policy@e401bd4f7d",
+      "red": [
+        8,
+        1
+      ],
+      "test": "HUD-hidden, eligible analyst signatures count once per batch and do not replay on exit",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   critical: 0,\n    -   critical: 1,\n        muted: 1\n      }\n\n\n  expected:\n    muted: 1\n    critical: 1\n  actual:\n    muted: 1\n    critical: 0\n  operator: 'deepStrictEqual'"
+    },
+    {
+      "id": "D21",
+      "behavior": "Permission callback rechecks storage even while its cross-window event is still pending",
+      "fileKey": "src/services/notification-dispatcher.ts@52217c0fa873",
+      "diff": [
+        "-import { getNotificationModeState, recordGhostSuppression } from './mode-manager';",
+        "+import { getGhostModeState, getNotificationModeState, recordGhostSuppression } from './mode-manager';",
+        "-      const mode = getNotificationModeState();",
+        "+      const mode = getGhostModeState();"
+      ],
+      "suiteKey": "policy@e401bd4f7d",
+      "red": [
+        8,
+        1
+      ],
+      "test": "a stored cross-window Ghost selection blocks the pending send before its storage event arrives",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + [\n    +   'Site warning fixture'\n    + ]\n    - []\n\n\n  expected:\n  actual:\n    0: 'Site warning fixture'\n  operator: 'deepStrictEqual'"
+    },
+    {
+      "id": "E01",
+      "behavior": "Unreadable storage mounts working choices before main initialization",
+      "fileKey": "src/entry.ts@9530bfacb462",
+      "diff": [
+        "-if (getGhostModeState().preference === 'unknown') {",
+        "+if (getGhostModeState().preference === 'saved') {"
+      ],
+      "suiteKey": "entry@ac893c4a11",
+      "red": [
+        0,
+        4
+      ],
+      "test": "unavailable storage mounts choices before main and propagates the original module error",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'wm-app-mode',\n    -   'notice',\n        'main',\n    -   'failure'\n      ]\n\n\n  expected:\n    0: 'wm-app-mode'\n    1: 'notice'\n    2: 'main'\n    3: 'failure'\n  actual:\n    0: 'wm-app-mode'\n    1: 'main'\n  operator: 'deepStrictEqual'"
+    },
+    {
+      "id": "E02",
+      "behavior": "Preserve the original main module error",
+      "fileKey": "src/entry.ts@9530bfacb462",
+      "diff": [
+        "-  throw error;",
+        "+"
+      ],
+      "suiteKey": "entry@ac893c4a11",
+      "red": [
+        3,
+        1
+      ],
+      "test": "unavailable storage mounts choices before main and propagates the original module error",
+      "assertion": "error: 'Missing expected rejection.'\n\n\n  expected:\n  operator: 'rejects'\n\n    async TestContext.<anonymous> ([workspace])\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: unavailable storage"
+    },
+    {
+      "id": "E03",
+      "behavior": "Make a rejected full module visible to the already-mounted fallback",
+      "fileKey": "src/entry.ts@9530bfacb462",
+      "diff": [
+        "-  notice?.showStartupFailure();",
+        "+"
+      ],
+      "suiteKey": "entry@ac893c4a11",
+      "red": [
+        3,
+        1
+      ],
+      "test": "unavailable storage mounts choices before main and propagates the original module error",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'wm-app-mode',\n        'notice',\n        'main',\n    -   'failure'\n      ]\n\n\n  expected:\n    0: 'wm-app-mode'\n    1: 'notice'\n    2: 'main'\n    3: 'failure'\n  actual:\n    0: 'wm-app-mode'\n    1: 'notice'\n    2: 'main'\n  operator: 'dee ..."
+    },
+    {
+      "id": "E04",
+      "behavior": "A late app-start rejection updates the visible fallback",
+      "fileKey": "src/entry.ts@9530bfacb462",
+      "diff": [
+        "-  void startup.catch(() => fallback.showStartupFailure());",
+        "+  void startup.catch(() => {});"
+      ],
+      "suiteKey": "entry@ac893c4a11",
+      "red": [
+        3,
+        1
+      ],
+      "test": "unavailable storage keeps choices informed if application initialization later fails",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'wm-app-mode',\n        'notice',\n        'main',\n    -   'failure'\n      ]\n\n\n  expected:\n    0: 'wm-app-mode'\n    1: 'notice'\n    2: 'main'\n    3: 'failure'\n  actual:\n    0: 'wm-app-mode'\n    1: 'notice'\n    2: 'main'\n  operator: 'dee ..."
+    },
+    {
+      "id": "E05",
+      "behavior": "Failure of optional boot notice must not block main startup",
+      "fileKey": "src/entry.ts@9530bfacb462",
+      "diff": [
+        "-    globalThis.reportError?.(error);",
+        "+    globalThis.reportError?.(error); throw error;"
+      ],
+      "suiteKey": "entry@ac893c4a11",
+      "red": [
+        3,
+        1
+      ],
+      "test": "an unavailable notice chunk cannot prevent loading main",
+      "assertion": "error: 'notice failed'\n\n\n    data:text/javascript,const%20f%3DglobalThis.__ghostBootTest%3Bif(f.scenario.noNotice)%20throw%20Error('notice%20failed')%3B%20export%20function%20mountGhostBootNotice()%7Bf.events.push('notice')%3B%20return%20%7BshowStartupFailure()%7Bf.events.push('failure')%3B%7D%7D%7D#4:1:66\n    ModuleJob.run (node:inte ..."
+    },
+    {
+      "id": "E06",
+      "behavior": "Place-aware message is written synchronously in the family check-in gesture",
+      "fileKey": "src/app/panel-layout.ts@67fbf0032f3e",
+      "diff": [
+        "- navigator.clipboard.writeText(buildPrimaryCommsMessage('safe')).catch(() => { /* ignore */ });",
+        "+ Promise.resolve().then(() => navigator.clipboard.writeText(buildPrimaryCommsMessage('safe'))).catch(() => { /* ignore */ });"
+      ],
+      "suiteKey": "comms@ac893c4a11",
+      "red": [
+        3,
+        1
+      ],
+      "test": "family check-in copies the place-aware message in the original button click",
+      "assertion": "error: |-\n    The input did not match the regular expression /getElementById\\('alertFamilyBtn'\\)\\?\\.addEventListener\\('click', \\(\\) => \\{\\s*navigator\\.clipboard\\.writeText\\(buildPrimaryCommsMessage\\('safe'\\)\\)/. Input:\n    \n    \"import type { AppContext, AppModule } from '@/app/app-context';\\n\" +\n      \"import type { RelatedAsset } fr ..."
+    },
+    {
+      "id": "E07",
+      "behavior": "Healthy startup never requests notice or fallback style modules",
+      "fileKey": "src/entry.ts@9530bfacb462",
+      "diff": [
+        "-if (getGhostModeState().preference === 'unknown') {",
+        "+if (getGhostModeState().preference !== 'window-only') {"
+      ],
+      "suiteKey": "entry@ac893c4a11",
+      "red": [
+        3,
+        1
+      ],
+      "test": "healthy entry reads only mode then starts main without loading an early notice",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        './services/mode-manager',\n    +   './bootstrap/ghost-mode-notice',\n    +   './bootstrap/ghost-mode-notice.css',\n        './main'\n      ]\n\n\n  expected:\n    0: './services/mode-manager'\n    1: './main'\n  actual:\n    0: './services/mode ..."
+    },
+    {
+      "id": "E08",
+      "behavior": "Denied startup also loads usable styling before the main application graph",
+      "fileKey": "src/entry.ts@9530bfacb462",
+      "diff": [
+        "-      import('./bootstrap/ghost-mode-notice.css'),",
+        "+"
+      ],
+      "suiteKey": "entry@ac893c4a11",
+      "red": [
+        3,
+        1
+      ],
+      "test": "unavailable storage mounts choices before main and propagates the original module error",
+      "assertion": "error: |-\n    The expression evaluated to a falsy value:\n    \n      assert.ok(fixture.requested.includes('./bootstrap/ghost-mode-notice.css'))\n\n\n  expected: true\n  actual: false\n  operator: '=='"
+    },
+    {
+      "id": "S01",
+      "behavior": "Legacy getMode restores saved preference before explicit application boot",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-  return initMode();",
+        "+  return currentMode;"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        11,
+        6
+      ],
+      "test": "all legacy mode readers synchronously see a saved Ghost preference before boot",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    null !== 'ghost'\n\n\n  expected: 'ghost'\n  actual: ~\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S02",
+      "behavior": "Restore only recognized persisted modes",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-  return saved === 'ghost' || saved === 'gods-vision' ? saved : null;",
+        "+  return saved as AppMode | null;"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        16,
+        1
+      ],
+      "test": "restored modes are allowlisted; reading invalid storage never rewrites it",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    'GHOST' !== null\n\n\n  expected: ~\n  actual: 'GHOST'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S03",
+      "behavior": "Restore God’s Vision independently of Ghost",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-  return saved === 'ghost' || saved === 'gods-vision' ? saved : null;",
+        "+  return saved === 'ghost' ? saved : null;"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        12,
+        5
+      ],
+      "test": "restored modes are allowlisted; reading invalid storage never rewrites it",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    false !== true\n\n\n  expected: true\n  actual: false\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S04",
+      "behavior": "Unavailable storage holds a separate unknown preference",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-    preference = 'unknown';",
+        "+    preference = 'saved';"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        16,
+        1
+      ],
+      "test": "read failure holds the covered policy as unknown until the operator selects a mode",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    'saved' !== 'unknown'\n\n\n  expected: 'unknown'\n  actual: 'saved'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S05",
+      "behavior": "Same selection can resolve an unknown or retry a window-only choice",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-  if (mode === getMode() && preference === 'saved') return;",
+        "+  if (mode === getMode()) return;"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        13,
+        4
+      ],
+      "test": "read failure holds the covered policy as unknown until the operator selects a mode",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'unknown'\n    - 'window-only'\n\n\n  expected: 'window-only'\n  actual: 'unknown'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S06",
+      "behavior": "Detect dropped preference writes with a readback",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-    saved = observed === mode;",
+        "+    saved = true;"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        15,
+        2
+      ],
+      "test": "a silently rejected persistence write keeps the manual choice, counts and feedback in this window",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'saved'\n    - 'window-only'\n\n\n  expected: 'window-only'\n  actual: 'saved'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S07",
+      "behavior": "An operator choice applies locally despite a storage error",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-  applyMode(mode, saved ? 'saved' : 'window-only', auto);",
+        "+  if (saved) applyMode(mode, 'saved', auto);"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        13,
+        4
+      ],
+      "test": "a silently rejected persistence write keeps the manual choice, counts and feedback in this window",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'gods-vision'\n    - 'ghost'\n\n\n  expected: 'ghost'\n  actual: 'gods-vision'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S08",
+      "behavior": "Preserve prior active mode when toggling Ghost off",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-  setMode(getMode() === 'ghost' ? preGhostMode : 'ghost');",
+        "+  setMode(getMode() === 'ghost' ? null : 'ghost');"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        16,
+        1
+      ],
+      "test": "a silently rejected persistence write keeps the manual choice, counts and feedback in this window",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + null\n    - 'gods-vision'\n\n\n  expected: 'gods-vision'\n  actual: ~\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S09",
+      "behavior": "Do not reset numbers on a same-mode persistence retry",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-  if (mode !== prev) {",
+        "+  if (mode !== prev || nextPreference !== preference) {"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        16,
+        1
+      ],
+      "test": "a silently rejected persistence write keeps the manual choice, counts and feedback in this window",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    0 !== 1\n\n\n  expected: 1\n  actual: 0\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S10",
+      "behavior": "Leaving a Ghost session clears the old attempt total",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-    muted = 0;"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        15,
+        2
+      ],
+      "test": "counter is session-local, updates subscribers once and does not serialize metadata",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    2 !== 0\n\n\n  expected: 0\n  actual: 2\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S11",
+      "behavior": "Leaving a Ghost session clears the critical subtotal",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-    critical = 0;"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        16,
+        1
+      ],
+      "test": "counter is session-local, updates subscribers once and does not serialize metadata",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n\n\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S12",
+      "behavior": "Entering Ghost invalidates prior pending permits",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-  if ((mode === 'ghost' && prev !== 'ghost') || (nextPreference === 'unknown' && preference !== 'unknown')) {",
+        "+  if (nextPreference === 'unknown' && preference !== 'unknown') {"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        15,
+        2
+      ],
+      "test": "counter is session-local, updates subscribers once and does not serialize metadata",
+      "assertion": "error: |-\n    The expression evaluated to a falsy value:\n    \n      assert.ok(entered > original)\n\n\n  expected: true\n  actual: false\n  operator: '=='"
+    },
+    {
+      "id": "S13",
+      "behavior": "Ignore non-Ghost counter updates",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-  if (getMode() !== 'ghost' || preference === 'unknown') return;",
+        "+  getMode();"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        14,
+        3
+      ],
+      "test": "read failure holds the covered policy as unknown until the operator selects a mode",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n\n\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S14",
+      "behavior": "An ordinary attempt increments only the total",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-  const nextCritical = Math.min(critical + Number(isCritical), GHOST_COUNT_LIMIT);",
+        "+  const nextCritical = Math.min(critical + 1, GHOST_COUNT_LIMIT);"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        15,
+        2
+      ],
+      "test": "counter is session-local, updates subscribers once and does not serialize metadata",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   critical: 2,\n    -   critical: 1,\n        generation: 1,\n        mode: 'ghost',\n        muted: 2,\n        preference: 'saved'\n      }\n\n\n  expected:\n    mode: 'ghost'\n    preference: 'saved'\n    generation: 1\n    muted: 2\n    critical: ..."
+    },
+    {
+      "id": "S15",
+      "behavior": "Both counts remain bounded when all attempts are ordinary",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-  const nextMuted = Math.min(muted + 1, GHOST_COUNT_LIMIT);",
+        "+  const nextMuted = muted + 1;"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        16,
+        1
+      ],
+      "test": "muted and critical counts saturate independently and stop notifying at the cap",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    10001 !== 9999\n\n\n  expected: 9999\n  actual: 10001\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S16",
+      "behavior": "Critical increments saturate independently",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-  const nextCritical = Math.min(critical + Number(isCritical), GHOST_COUNT_LIMIT);",
+        "+  const nextCritical = critical + Number(isCritical);"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        16,
+        1
+      ],
+      "test": "muted and critical counts saturate independently and stop notifying at the cap",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n\n\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S17",
+      "behavior": "Stop status notifications once both counts saturate",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-  if (muted === nextMuted && critical === nextCritical) return;",
+        "+  "
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        16,
+        1
+      ],
+      "test": "muted and critical counts saturate independently and stop notifying at the cap",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n\n\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S18",
+      "behavior": "Unsubscribed windows no longer receive state updates",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-  return () => { subscribers.delete(listener); };",
+        "+  return () => {};"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        16,
+        1
+      ],
+      "test": "counter is session-local, updates subscribers once and does not serialize metadata",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    3 !== 2\n\n\n  expected: 2\n  actual: 3\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S19",
+      "behavior": "Counters do not persist alert metadata or totals",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "+  localStorage.setItem(\"muted-total\", String(nextMuted));"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        15,
+        2
+      ],
+      "test": "counter is session-local, updates subscribers once and does not serialize metadata",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    3 !== 1\n\n\n  expected: 1\n  actual: 3\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S20",
+      "behavior": "An identical storage event does not send duplicate subscriptions",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-  if (mode === currentMode && nextPreference === preference) return;",
+        "+"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        16,
+        1
+      ],
+      "test": "storage sync handles mode changes, removal and clear, and ignores unrelated keys and storage areas",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    3 !== 2\n\n\n  expected: 2\n  actual: 3\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S21",
+      "behavior": "Browser storage clear removes restored Ghost",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-  if (event.key !== MODE_STORAGE_KEY && event.key !== null) return;",
+        "+  if (event.key !== MODE_STORAGE_KEY) return;"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        16,
+        1
+      ],
+      "test": "storage sync handles mode changes, removal and clear, and ignores unrelated keys and storage areas",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    'ghost' !== null\n\n\n  expected: ~\n  actual: 'ghost'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S22",
+      "behavior": "Queued storage messages cannot reapply stale local state",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-    saved = localStorage.getItem(MODE_STORAGE_KEY);",
+        "+    saved = event.newValue;"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        14,
+        3
+      ],
+      "test": "an older queued storage event cannot undo a newer manual choice or count a previous session",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    null !== 'ghost'\n\n\n  expected: 'ghost'\n  actual: ~\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S23",
+      "behavior": "Unknown status remains until a genuine later choice",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-  if (preference === 'unknown' && !isNewRemoteChoice(event, saved, mode)) return;",
+        "+  "
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        15,
+        2
+      ],
+      "test": "an unknown preference stays held across clear and stale mode events until a genuine choice",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    'saved' !== 'unknown'\n\n\n  expected: 'unknown'\n  actual: 'saved'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S24",
+      "behavior": "Ignore unrelated preference keys before accessing unreadable storage",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-  if (event.key !== MODE_STORAGE_KEY && event.key !== null) return;",
+        "+  "
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        16,
+        1
+      ],
+      "test": "delivery rechecks retain an unsaved local selection and unrelated events never consult storage",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    'unknown' !== 'saved'\n\n\n  expected: 'saved'\n  actual: 'unknown'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S25",
+      "behavior": "Ignore events from the wrong storage object",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-    if (event.storageArea !== localStorage) return;",
+        "+    "
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        16,
+        1
+      ],
+      "test": "delivery rechecks retain an unsaved local selection and unrelated events never consult storage",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    'unknown' !== 'saved'\n\n\n  expected: 'saved'\n  actual: 'unknown'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S26",
+      "behavior": "Delayed old saved choices cannot override an unsaved current mode",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-  if (preference === 'window-only' && mode === lastSavedMode) return;",
+        "+  "
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        16,
+        1
+      ],
+      "test": "unrelated storage events and delayed evidence of the last saved choice leave window-only Ghost intact",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'gods-vision'\n    - 'ghost'\n\n\n  expected: 'ghost'\n  actual: 'gods-vision'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S27",
+      "behavior": "New cross-window selection may supersede an unsaved choice",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-  if (preference === 'window-only' && mode === lastSavedMode) return;",
+        "+  if (preference === 'window-only') return;"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        16,
+        1
+      ],
+      "test": "a newly saved choice in another window supersedes a window-only choice",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    'ghost' !== null\n\n\n  expected: ~\n  actual: 'ghost'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S28",
+      "behavior": "Intervening cross-window Ghost invalidates previously pending permission",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-  if (event.newValue === 'ghost' && currentMode !== 'ghost' && mode !== 'ghost') generation++;",
+        "+"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        16,
+        1
+      ],
+      "test": "a queued Ghost entry invalidates a pending send even when storage already contains the later exit",
+      "assertion": "error: 'Expected \"actual\" to be strictly unequal to: 0'\n\n\n  expected: 0\n  actual: 0\n  operator: 'notStrictEqual'"
+    },
+    {
+      "id": "S29",
+      "behavior": "Recheck cross-window storage at the delivery boundary",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-      lastSavedMode = readMode();",
+        "+      lastSavedMode = currentMode;"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        14,
+        3
+      ],
+      "test": "delivery sees another window’s saved choice before its queued storage event, once per transition",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    null !== 'ghost'\n\n\n  expected: 'ghost'\n  actual: ~\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S30",
+      "behavior": "Hold at the delivery boundary if canonical read becomes unavailable",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-      applyMode(currentMode, 'unknown');",
+        "+      applyMode(currentMode, 'saved');"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        15,
+        2
+      ],
+      "test": "delivery holds on read failure, preserves last-known privacy and waits for an explicit choice",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    'saved' !== 'unknown'\n\n\n  expected: 'unknown'\n  actual: 'saved'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S31",
+      "behavior": "A failed recheck cannot attribute holds to last-known Ghost",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-  if (getMode() !== 'ghost' || preference === 'unknown') return;",
+        "+  if (getMode() !== 'ghost') return;"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        16,
+        1
+      ],
+      "test": "delivery holds on read failure, preserves last-known privacy and waits for an explicit choice",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n\n\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S32",
+      "behavior": "Only a saved choice may be overwritten by delivery-side storage recheck",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-  if (preference === 'saved') {",
+        "+  if (preference !== 'unknown') {"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        16,
+        1
+      ],
+      "test": "delivery rechecks retain an unsaved local selection and unrelated events never consult storage",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    null !== 'ghost'\n\n\n  expected: 'ghost'\n  actual: ~\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "S33",
+      "behavior": "The product page uses the storage-safe entry before the main graph",
+      "fileKey": "index.html@71dab71f9f55",
+      "diff": [
+        "- <script type=\"module\" src=\"/src/entry.ts\"></script>",
+        "+ <script type=\"module\" src=\"/src/main.ts\"></script>"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        16,
+        1
+      ],
+      "test": "the product page loads the isolated mode bootstrap before the full application graph",
+      "assertion": "error: |-\n    The input did not match the regular expression /<script type=\"module\" src=\"\\/src\\/entry\\.ts\"><\\/script>/. Input:\n    \n    '<!DOCTYPE html>\\n' +\n      '<!-- GitHub Pages deployment trigger — 2026-04-01 -->\\n' +\n      '<html lang=\"en\">\\n' +\n      '  <head>\\n' +\n      ' <meta charset=\"UTF-8\" />\\n' +\n      ' <meta name=\"view ..."
+    },
+    {
+      "id": "S34",
+      "behavior": "An unverifiable initial preference cannot be released by a remote queued event",
+      "fileKey": "src/services/mode-manager.ts@7e36990f794a",
+      "diff": [
+        "-  return lastSavedMode !== undefined && mode !== lastSavedMode",
+        "+  return mode !== lastSavedMode"
+      ],
+      "suiteKey": "state@1f93dad207",
+      "red": [
+        16,
+        1
+      ],
+      "test": "an unreadable initial preference with no reliable baseline holds until a local choice",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    'saved' !== 'unknown'\n\n\n  expected: 'unknown'\n  actual: 'saved'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "U01",
+      "behavior": "Notice discloses critical site warning suppression",
+      "fileKey": "src/bootstrap/ghost-notice-en.json@36ce3c1c7628",
+      "diff": [
+        "-  \"active\": \"Ghost Mode is on. Standard alert notifications and analyst nudges are muted, including critical site warnings. Other channels can still alert.\",",
+        "+  \"active\": \"Ghost Mode is on. Standard alert notifications and analyst nudges are muted, including site notifications. Other channels can still alert.\","
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "Ghost shows the covered critical policy, channel exception and window counts; unchanged copy is silent on increments",
+      "assertion": "error: |-\n    The input did not match the regular expression /critical site warnings/i. Input:\n    \n    'Ghost Mode is on. Standard alert notifications and analyst nudges are muted, including site notifications. Other channels can still alert.'\n\n\n  expected:\n  actual: 'Ghost Mode is on. Standard alert notifications and analyst nudges  ..."
+    },
+    {
+      "id": "U02",
+      "behavior": "Notice explicitly discloses other channel exceptions",
+      "fileKey": "src/bootstrap/ghost-notice-en.json@36ce3c1c7628",
+      "diff": [
+        "-  \"active\": \"Ghost Mode is on. Standard alert notifications and analyst nudges are muted, including critical site warnings. Other channels can still alert.\",",
+        "+  \"active\": \"Ghost Mode is on. Standard alert notifications and analyst nudges are muted, including critical site warnings.\","
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "Ghost shows the covered critical policy, channel exception and window counts; unchanged copy is silent on increments",
+      "assertion": "error: |-\n    The input did not match the regular expression /other channels can still alert/i. Input:\n    \n    'Ghost Mode is on. Standard alert notifications and analyst nudges are muted, including critical site warnings.'\n\n\n  expected:\n  actual: 'Ghost Mode is on. Standard alert notifications and analyst nudges are muted, including ..."
+    },
+    {
+      "id": "U03",
+      "behavior": "Count explains window scope and period",
+      "fileKey": "src/bootstrap/ghost-notice-en.json@36ce3c1c7628",
+      "diff": [
+        "-  \"counts\": \"{{muted}} muted attempts · {{critical}} critical. Counted in this window since entering Ghost Mode or reopening.\",",
+        "+  \"counts\": \"{{muted}} muted attempts · {{critical}} critical. Counted since entering Ghost Mode.\","
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "Ghost shows the covered critical policy, channel exception and window counts; unchanged copy is silent on increments",
+      "assertion": "error: |-\n    The input did not match the regular expression /this window/i. Input:\n    \n    '0 muted attempts · 0 critical. Counted since entering Ghost Mode.'\n\n\n  expected:\n  actual: '0 muted attempts · 0 critical. Counted since entering Ghost Mode.'\n  operator: 'match'"
+    },
+    {
+      "id": "U04",
+      "behavior": "Totals include both muted and critical subtotals",
+      "fileKey": "src/components/GhostModeNotice.ts@299af440c2c3",
+      "diff": [
+        "-    counts.textContent = active ? copy('counts', { muted: shownCount(muted), critical: shownCount(critical) }) : '';",
+        "+    counts.textContent = active ? copy('counts', { muted: shownCount(muted), critical: shownCount(muted) }) : '';"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "Ghost shows the covered critical policy, channel exception and window counts; unchanged copy is silent on increments",
+      "assertion": "error: |-\n    The input did not match the regular expression /5.*3 critical/i. Input:\n    \n    '5 muted attempts · 5 critical. Counted in this window since entering Ghost Mode or reopening.'\n\n\n  expected:\n  actual: '5 muted attempts · 5 critical. Counted in this window since entering Ghost Mode or reopening.'\n  operator: 'match'"
+    },
+    {
+      "id": "U05",
+      "behavior": "Cap labels indicate saturation rather than misleading precision",
+      "fileKey": "src/components/GhostModeNotice.ts@299af440c2c3",
+      "diff": [
+        "-  return value.toLocaleString(document.documentElement.lang || 'en') + (value >= GHOST_COUNT_LIMIT ? '+' : '');",
+        "+  return value.toLocaleString(document.documentElement.lang || 'en') + ('');"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "Ghost shows the covered critical policy, channel exception and window counts; unchanged copy is silent on increments",
+      "assertion": "error: |-\n    The input did not match the regular expression /9,?999\\+.*9,?999\\+ critical/. Input:\n    \n    '9,999 muted attempts · 9,999 critical. Counted in this window since entering Ghost Mode or reopening.'\n\n\n  expected:\n  actual: '9,999 muted attempts · 9,999 critical. Counted in this window since entering Ghost Mode or reopenin ..."
+    },
+    {
+      "id": "U06",
+      "behavior": "Never announce every attempt count in the live region",
+      "fileKey": "src/components/GhostModeNotice.ts@299af440c2c3",
+      "diff": [
+        "+  counts.setAttribute('aria-live','polite');"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "Ghost shows the covered critical policy, channel exception and window counts; unchanged copy is silent on increments",
+      "assertion": "error: 'count outside live regions'\n\n\n  expected: true\n  actual: false\n  operator: '=='"
+    },
+    {
+      "id": "U07",
+      "behavior": "Do not rewrite unchanged live status for counter increments",
+      "fileKey": "src/components/GhostModeNotice.ts@299af440c2c3",
+      "diff": [
+        "-    if (message.textContent !== summary) message.textContent = summary;",
+        "+    message.textContent = summary;"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "Ghost shows the covered critical policy, channel exception and window counts; unchanged copy is silent on increments",
+      "assertion": "error: 'message node unchanged on count update'\n\n\n  expected: true\n  actual: false\n  operator: '=='"
+    },
+    {
+      "id": "U08",
+      "behavior": "Unknown preference remains visible despite no confirmed Ghost",
+      "fileKey": "src/components/GhostModeNotice.ts@299af440c2c3",
+      "diff": [
+        "-    root.hidden = !active && !unknown && !unsaved;",
+        "+    root.hidden = !active && !unsaved;"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        8,
+        2
+      ],
+      "test": "unknown preference explains the hold, offers an explicit choice and withholds Ghost counters",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n\n\n  expected: false\n  actual: true\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "U09",
+      "behavior": "Unknown hold does not display any Ghost counters",
+      "fileKey": "src/components/GhostModeNotice.ts@299af440c2c3",
+      "diff": [
+        "-    counts.hidden = !active;",
+        "+    counts.hidden = false;"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "unknown preference explains the hold, offers an explicit choice and withholds Ghost counters",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    false !== true\n\n\n  expected: true\n  actual: false\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "U10",
+      "behavior": "Unknown mode lets the operator explicitly select Ghost",
+      "fileKey": "src/components/GhostModeNotice.ts@299af440c2c3",
+      "diff": [
+        "-  const ghost = button('use-ghost', () => deps.choose('ghost'));",
+        "+  const ghost = button('use-ghost', () => deps.choose(null));"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        8,
+        2
+      ],
+      "test": "unknown preference explains the hold, offers an explicit choice and withholds Ghost counters",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n    +   null\n    -   'ghost'\n      ]\n\n\n  expected:\n    0: 'ghost'\n  actual:\n    0: ~\n  operator: 'deepStrictEqual'"
+    },
+    {
+      "id": "U11",
+      "behavior": "Unknown mode also permits choosing standard",
+      "fileKey": "src/components/GhostModeNotice.ts@299af440c2c3",
+      "diff": [
+        "-  const standard = button('use-standard', () => deps.choose(null));",
+        "+  const standard = button('use-standard', () => deps.choose('ghost'));"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "unknown preference explains the hold, offers an explicit choice and withholds Ghost counters",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'ghost',\n    +   'ghost'\n    -   null\n      ]\n\n\n  expected:\n    0: 'ghost'\n    1: ~\n  actual:\n    0: 'ghost'\n    1: 'ghost'\n  operator: 'deepStrictEqual'"
+    },
+    {
+      "id": "U12",
+      "behavior": "Keyboard exit uses the prior mode restore path",
+      "fileKey": "src/components/GhostModeNotice.ts@299af440c2c3",
+      "diff": [
+        "-  const exit = button('exit-ghost', deps.exit);",
+        "+  const exit = button('exit-ghost', () => deps.choose(null));"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "keyboard button exits restored Ghost and returns focus to the mode control",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    0 !== 1\n\n\n  expected: 1\n  actual: 0\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "U13",
+      "behavior": "Restore keyboard focus after hiding an action",
+      "fileKey": "src/components/GhostModeNotice.ts@299af440c2c3",
+      "diff": [
+        "-      next?.focus();",
+        "+      "
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        7,
+        3
+      ],
+      "test": "keyboard button exits restored Ghost and returns focus to the mode control",
+      "assertion": "error: 'focus on expected control'\n\n\n  expected: true\n  actual: false\n  operator: '=='"
+    },
+    {
+      "id": "U14",
+      "behavior": "Window-only mode visibly explains the save failure",
+      "fileKey": "src/components/GhostModeNotice.ts@299af440c2c3",
+      "diff": [
+        "-    if (unsaved) summary += ' ' + copy('unsaved');",
+        "+"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        8,
+        2
+      ],
+      "test": "unsaved Ghost, normal, and God’s Vision each explain the window-only choice; retry uses the current mode",
+      "assertion": "error: |-\n    The input did not match the regular expression /only in this window/i. Input:\n    \n    'Ghost Mode is on. Standard alert notifications and analyst nudges are muted, including critical site warnings. Other channels can still alert.0 muted attempts · 0 critical. Counted in this window since entering Ghost Mode or reopening ..."
+    },
+    {
+      "id": "U15",
+      "behavior": "Keep visible unsaved feedback for non-Ghost selection",
+      "fileKey": "src/components/GhostModeNotice.ts@299af440c2c3",
+      "diff": [
+        "-    root.hidden = !active && !unknown && !unsaved;",
+        "+    root.hidden = !active && !unknown;"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "unsaved Ghost, normal, and God’s Vision each explain the window-only choice; retry uses the current mode",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n\n\n  expected: false\n  actual: true\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "U16",
+      "behavior": "Retry persistence with the actual current mode",
+      "fileKey": "src/components/GhostModeNotice.ts@299af440c2c3",
+      "diff": [
+        "-  const save = button('save-mode', () => deps.choose(deps.snapshot().mode));",
+        "+  const save = button('save-mode', () => deps.choose(null));"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "unsaved Ghost, normal, and God’s Vision each explain the window-only choice; retry uses the current mode",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + null\n    - 'gods-vision'\n\n\n  expected: 'gods-vision'\n  actual: ~\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "U17",
+      "behavior": "Unmount releases the aggregate subscription",
+      "fileKey": "src/components/GhostModeNotice.ts@299af440c2c3",
+      "diff": [
+        "-    unmount() { unsubscribe(); root.remove(); },",
+        "+    unmount() { root.remove(); },"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        8,
+        2
+      ],
+      "test": "teardown removes the listener and the visible notice",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n\n\n  expected: false\n  actual: true\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "U18",
+      "behavior": "Unmount removes the stale visual notice",
+      "fileKey": "src/components/GhostModeNotice.ts@299af440c2c3",
+      "diff": [
+        "-    unmount() { unsubscribe(); root.remove(); },",
+        "+    unmount() { unsubscribe(); },"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "teardown removes the listener and the visible notice",
+      "assertion": "error: 'unmount removes the standalone notice'\n\n\n  expected: true\n  actual: false\n  operator: '=='"
+    },
+    {
+      "id": "U19",
+      "behavior": "Mount Home status in its pinned header",
+      "fileKey": "src/components/HomeShellOverlay.ts@42e1645247e6",
+      "diff": [
+        "-    this.unmountGhostNotice = mountGhostModeNotice(header);",
+        "+    "
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        7,
+        3
+      ],
+      "test": "Home mounts its notice in the pinned header and removes it on teardown",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + undefined\n    - false\n\n\n  expected: false\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "U20",
+      "behavior": "Classic bootstrap mounts status in the existing notification stack",
+      "fileKey": "src/main.ts@dbe0f47ee4a2",
+      "diff": [
+        "-  mountGhostModeNotice(notificationStack.element);",
+        "+  "
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "classic mount and responsive shell styles keep a single active notice in view",
+      "assertion": "error: |-\n    The input did not match the regular expression /mountGhostModeNotice\\(notificationStack\\.element\\)/. Input:\n    \n    '/* eslint-disable no-console, @typescript-eslint/prefer-nullish-coalescing, sonarjs/no-nested-conditional, sonarjs/slow-regex, sonarjs/anchor-precedence, @typescript-eslint/no-unsafe-member-access, @types ..."
+    },
+    {
+      "id": "U21",
+      "behavior": "Hide the classic copy while Home is the active view",
+      "fileKey": "src/styles/alerts.css@11cb87b93cd5",
+      "diff": [
+        "-body.home-shell-active #cb-notification-stack .cb-ghost-notice {",
+        "+body.classic-shell-active #cb-notification-stack .cb-ghost-notice {"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "classic mount and responsive shell styles keep a single active notice in view",
+      "assertion": "error: |-\n    The input did not match the regular expression /body\\.home-shell-active #cb-notification-stack \\.cb-ghost-notice\\s*\\{\\s*display: none/. Input:\n    \n    '/* Alert shelf + alert reaction styles */\\n' +\n      '\\n' +\n      '.alert-shelf {\\n' +\n      '  box-sizing: border-box;\\n' +\n      '  width: auto;\\n' +\n      '  max-widt ..."
+    },
+    {
+      "id": "U22",
+      "behavior": "Home’s full notice header stays at the viewport top on scroll",
+      "fileKey": "src/styles/home-shell.css@fb12dfc7f8fc",
+      "diff": [
+        "-  position: sticky;",
+        "+  position: static;"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "classic mount and responsive shell styles keep a single active notice in view",
+      "assertion": "error: |-\n    The input did not match the regular expression /\\.home-shell-header\\s*\\{[^}]*position: sticky/. Input:\n    \n    '/* Home Shell — Apple design language (Cupertino Glass + Graphite).\\n' +\n      '   Palette + DL tokens live in tokens.css. Glass is scoped to\\n' +\n      \"   body.is-desktop-macos and capped to the spec's six-s ..."
+    },
+    {
+      "id": "U23",
+      "behavior": "Home still mounts a visible status when preference and pins reads throw",
+      "fileKey": "src/components/HomeShellOverlay.ts@42e1645247e6",
+      "diff": [
+        "-    try { savedPins = localStorage.getItem(DECK_PINS_KEY); } catch { /* Use the default deck when storage is unavailable. */ }",
+        "+    savedPins = localStorage.getItem(DECK_PINS_KEY);"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "Home can mount and show the unknown-mode choice when the preference and pins cannot be read",
+      "assertion": "error: 'unavailable'\n\n\n    Proxy.<anonymous> ([workspace])\n    HomeShellOverlay.mount ([workspace])"
+    },
+    {
+      "id": "U24",
+      "behavior": "Pinned header measurement follows notice resizing while Home is shown",
+      "fileKey": "src/components/HomeShellOverlay.ts@42e1645247e6",
+      "diff": [
+        "-      this.headerObserver = new ResizeObserver(this.measureHeader);",
+        "+      this.headerObserver = new ResizeObserver(() => {});"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "Home mounts its notice in the pinned header and removes it on teardown",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    '65px' !== '112px'\n\n\n  expected: '112px'\n  actual: '65px'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "U25",
+      "behavior": "Deactivating Home disconnects its layout observation",
+      "fileKey": "src/components/HomeShellOverlay.ts@42e1645247e6",
+      "diff": [
+        "-    this.headerObserver?.disconnect();",
+        "+"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "Home mounts its notice in the pinned header and removes it on teardown",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    false !== true\n\n\n  expected: true\n  actual: false\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "U26",
+      "behavior": "Destroying the shell detaches the notice from its state source",
+      "fileKey": "src/components/HomeShellOverlay.ts@42e1645247e6",
+      "diff": [
+        "-    this.unmountGhostNotice?.();",
+        "+"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "Home mounts its notice in the pinned header and removes it on teardown",
+      "assertion": "error: |-\n    destroyed notice no longer subscribes\n    \n    true !== false\n\n\n  expected: false\n  actual: true\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "U27",
+      "behavior": "Cold notice mounts in a standalone stack independent of full app boot",
+      "fileKey": "src/bootstrap/ghost-mode-notice.ts@843f5cce6bbd",
+      "diff": [
+        "-  notificationStack.mount();",
+        "+"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "cold-boot notice stands outside the app and retains visible choices, errors and focus through handoff",
+      "assertion": "error: |-\n    The expression evaluated to a falsy value:\n    \n      assert.ok(stack.isConnected && !app.contains(stack))\n\n\n  expected: true\n  actual: false\n  operator: '=='"
+    },
+    {
+      "id": "U28",
+      "behavior": "Late startup failure remains visible after a mode choice",
+      "fileKey": "src/bootstrap/ghost-mode-notice.ts@843f5cce6bbd",
+      "diff": [
+        "-      failure.textContent = english.startupFailed;",
+        "+      failure.textContent = '';"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "cold-boot notice stands outside the app and retains visible choices, errors and focus through handoff",
+      "assertion": "error: |-\n    The input did not match the regular expression /could not finish starting/i. Input:\n    \n    ''\n\n\n  expected:\n  actual: ''\n  operator: 'match'"
+    },
+    {
+      "id": "U29",
+      "behavior": "Repeated failures display only one failure status",
+      "fileKey": "src/bootstrap/ghost-mode-notice.ts@843f5cce6bbd",
+      "diff": [
+        "-      if (host.querySelector('.cb-ghost-startup-failure')) return;",
+        "+      "
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "cold-boot notice stands outside the app and retains visible choices, errors and focus through handoff",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    2 !== 1\n\n\n  expected: 1\n  actual: 2\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "U30",
+      "behavior": "Adopt the existing live notice on handoff, keeping one status and focused action",
+      "fileKey": "src/components/GhostModeNotice.ts@299af440c2c3",
+      "diff": [
+        "-  const view = earlyViews.get(parent) ?? createNotice(parent, deps);",
+        "+  const view = createNotice(parent, deps);"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "cold-boot notice stands outside the app and retains visible choices, errors and focus through handoff",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    2 !== 1\n\n\n  expected: 1\n  actual: 2\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "U31",
+      "behavior": "Focus moves to the visible startup failure if main toolbar never mounted",
+      "fileKey": "src/components/GhostModeNotice.ts@299af440c2c3",
+      "diff": [
+        "-        ?? parent.querySelector<HTMLElement>('.cb-ghost-startup-failure');",
+        "+        ;"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "cold-boot notice stands outside the app and retains visible choices, errors and focus through handoff",
+      "assertion": "error: 'app failure receives focus after last action disappears'\n\n\n  expected: true\n  actual: false\n  operator: '=='"
+    },
+    {
+      "id": "U32",
+      "behavior": "Switch from classic to Home transfers the focused notification control",
+      "fileKey": "src/components/HomeShellOverlay.ts@42e1645247e6",
+      "diff": [
+        "-    nextFocus?.focus({ preventScroll: true });"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "switching shells transfers focused notice actions in both directions without stealing unrelated focus",
+      "assertion": "error: 'Home adopts the focused classic action'\n\n\n  expected: true\n  actual: false\n  operator: '=='"
+    },
+    {
+      "id": "U33",
+      "behavior": "Switching from Home to classic returns focus to visible alert control",
+      "fileKey": "src/components/HomeShellOverlay.ts@42e1645247e6",
+      "diff": [
+        "-    nextFocus?.focus({ preventScroll: true });"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "switching shells transfers focused notice actions in both directions without stealing unrelated focus",
+      "assertion": "error: 'classic restores the focused Home action'\n\n\n  expected: true\n  actual: false\n  operator: '=='"
+    },
+    {
+      "id": "U34",
+      "behavior": "Do not move focus when an unrelated control was active",
+      "fileKey": "src/components/HomeShellOverlay.ts@42e1645247e6",
+      "diff": [
+        "-  if (!focused || !from?.contains(focused) || !to) return undefined;",
+        "+  if (!focused || !from?.contains(focused) || !to) return to?.querySelector<HTMLButtonElement>('.cb-ghost-notice button:not([hidden])') ?? undefined;"
+      ],
+      "suiteKey": "ui@7d4449df80",
+      "red": [
+        9,
+        1
+      ],
+      "test": "switching shells transfers focused notice actions in both directions without stealing unrelated focus",
+      "assertion": "error: 'show preserves unrelated focus'\n\n\n  expected: true\n  actual: false\n  operator: '=='"
+    }
+  ],
+  "earlierSurvivors": [],
+  "interruptedAttempts": [
+    {
+      "id": "U06",
+      "checkpoint": "e401bd4f7d1e35866fb937861afeee849b393a58",
+      "resolution": "The initial live-region assertion attempted to format a full DOM graph. Its run was stopped and the source restored. The final fixture uses a boolean DOM relationship assertion."
+    },
+    {
+      "id": "U18",
+      "checkpoint": "754d96a94d97a3f6eb7cc375da9aa51096ecab15",
+      "resolution": "The initial removal assertion attempted to format a full DOM graph. The worker was stopped and the source restored. The final fixture uses a boolean DOM absence assertion."
+    }
+  ],
+  "sourceAndTestChecksumVerification": {
+    "commit": "d641f0c0f7d3cb619f8233610f9390883966f4d7",
+    "matchedFiles": 20
+  }
+}

@@ -45,7 +45,8 @@
   ],
   "src/services/unified-alerts.ts": [
     "test:acc509",
-    "test:ux059"
+    "test:ux059",
+    "test:ux047"
   ],
   "src/services/intel-channels-bridge.ts": [
     "test:acc509"
@@ -93,7 +94,8 @@
     "test:ux059"
   ],
   "src/services/alert-normalizer.ts": [
-    "test:ux059"
+    "test:ux059",
+    "test:ux047"
   ],
   "src/services/gdacs.ts": [
     "test:ux059",
@@ -105,7 +107,8 @@
     "test:ux059",
     "test:quiet-hours",
     "test:datacenter",
-    "test:datacenter-ownership"
+    "test:datacenter-ownership",
+    "test:ux047"
   ],
   "src/services/gdacs-coverage.ts": [
     "test:gdacs-map"
@@ -258,7 +261,29 @@
   "src/services/notifications/imessage-pause-alerts.ts": [
     "test:imessage"
   ],
+  "src/entry.ts": [
+    "test:ux050"
+  ],
+  "src/bootstrap/ghost-mode-notice.css": [
+    "test:ux050"
+  ],
+  "src/bootstrap/ghost-notice-en.json": [
+    "test:ux050"
+  ],
+  "src/bootstrap/ghost-mode-notice.ts": [
+    "test:ux050"
+  ],
+  "src/app/panel-layout.ts": [
+    "test:ux050"
+  ],
+  "src/styles/alerts.css": [
+    "test:ux050"
+  ],
+  "src/styles/home-shell.css": [
+    "test:ux050"
+  ],
   "src/main.ts": [
+    "test:ux050",
     "test:imessage",
     "test:map-clarity",
     "test:map-compatibility",
@@ -353,7 +378,9 @@
     "test:port-publication",
     "test:sidecar-ci",
     "test:health-contract",
-    "test:domain-retirement"
+    "test:domain-retirement",
+    "test:ux047",
+    "test:sidecar-fallback"
   ],
   "src/services/keychain.ts": [
     "test:secret-boundary",
@@ -379,7 +406,9 @@
   "src-tauri/tauri.conf.json": [
     "test:secret-boundary",
     "test:domain-retirement",
-    "test:desktop-identity"
+    "test:desktop-identity",
+    "test:ux047",
+    "test:sidecar-fallback"
   ],
   "src-tauri/src/vault_coordinator.rs": [
     "test:vault-writer"
@@ -810,7 +839,8 @@
     "test:pwa-deployment"
   ],
   "src/App.ts": [
-    "test:pwa-deployment"
+    "test:pwa-deployment",
+    "test:ux047"
   ],
   "src/services/country-geometry.ts": [
     "test:pwa-deployment",
@@ -821,10 +851,13 @@
     "test:emergency-pack"
   ],
   "vite.config.ts": [
+    "test:ux050",
     "test:pwa-deployment",
-    "test:domain-retirement"
+    "test:domain-retirement",
+    "test:sidecar-fallback"
   ],
   "index.html": [
+    "test:ux050",
     "test:pwa-deployment",
     "test:domain-retirement"
   ],
@@ -1178,5 +1211,53 @@
   ],
   "api/_news-provenance.js": [
     "test:news-resilience"
+  ],
+  "api/nws-alerts.js": [
+    "test:ux047"
+  ],
+  "src-tauri/sidecar/nws-alert-snapshot.mjs": [
+    "test:ux047"
+  ],
+  "src/services/nws-alerts.ts": [
+    "test:ux047"
+  ],
+  "src/services/nws-alert-snapshot.ts": [
+    "test:ux047"
+  ],
+  "src/services/nws-alert-lifecycle.ts": [
+    "test:ux047"
+  ],
+  "src/services/nws-alert-snapshot-cache.ts": [
+    "test:ux047"
+  ],
+  "src/services/offline-alert-cache.ts": [
+    "test:ux047"
+  ],
+  "src/components/NWSAlertsPanel.ts": [
+    "test:ux047"
+  ],
+  "src/components/TriageBar.ts": [
+    "test:ux047"
+  ],
+  "src/components/SummaryStrip.ts": [
+    "test:ux047"
+  ],
+  "src/services/sidebar-heat.ts": [
+    "test:ux047"
+  ],
+  "src/services/native/menubar-status.ts": [
+    "test:ux047"
+  ],
+  "src/services/native/dock-badge.ts": [
+    "test:ux047"
+  ],
+  "src/services/notification-digest.ts": [
+    "test:ux047"
+  ],
+  "src/services/alert-reactions.ts": [
+    "test:ux047"
+  ],
+  "src/config/csp-policy.ts": [
+    "test:sidecar-fallback"
   ]
 }

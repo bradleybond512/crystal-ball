@@ -1,0 +1,9 @@
+{
+  "reviewedSha": "b653c1e27f57467539a78c43fe57f62e8432d1ad",
+  "reviewer": "claude",
+  "model": "claude-sonnet-4-6",
+  "verdict": "approve",
+  "blockingFindings": 0,
+  "reviewedAt": "2026-11-03T23:41:35.577Z",
+  "evidence": "### Conclusion\n\n**Reviewed SHA**: `b653c1e27f57467539a78c43fe57f62e8432d1ad`  \n**Actual model**: Claude Sonnet 4.6 (claude-sonnet-4-6), independent session  \n**Blocking finding count**: 0\n\n**Rationale**: The reviewed SHA is a correctly-structured evidence-only commit on top of product SHA `aae7d345f45ecef1adc398641e4ef6d22d1b0d46`. All production files (workflow, checker, marketing lock, CODEOWNERS, dependency-change-policy, targeted-tests-overrides) are present and match the product.diff. The checker file hashes to `040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd`, matching the rollout digest in the workflow exactly. The bootstrap mechanism correctly restricts which bytes execute on each event type, fails closed on any deviation, and is verified by 25 workflow mutations that all triggered their intended failures. The marketing dependency patches address the documented Undici and Zod high advisories with minimal, correctly-scoped lockfile changes backed by live registry responses. The existing root signature check and both Rust audit jobs remain on their original trusted-event restriction. No candidate scripts execute during fork audits; no credentials are forwarded. All 75 mutations triggered intended failures.\n\nA `dependency-review` label and operator approval control any later delivery per the plan."
+}

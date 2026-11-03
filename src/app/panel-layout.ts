@@ -557,7 +557,8 @@ import {
 } from '@/config';
 import { t } from '@/services/i18n';
 import { trackCriticalBannerAction } from '@/services/analytics';
-import { alertFamily, getMode, toggleGhostMode, type AppMode } from '@/services/mode-manager';
+import { getMode, toggleGhostMode, type AppMode } from '@/services/mode-manager';
+import { buildPrimaryCommsMessage } from '@/services/comms-plan';
 import {
   initSituationalMode, setMode as setSituationalMode,
   setAutoMode, getAutoMode, isAutoMode, clearManualMode,
@@ -3258,7 +3259,7 @@ export class PanelLayoutManager implements AppModule {
 
  // Alert Family button (always visible — formerly gated on War mode)
  document.getElementById('alertFamilyBtn')?.addEventListener('click', () => {
- alertFamily();
+ navigator.clipboard.writeText(buildPrimaryCommsMessage('safe')).catch(() => { /* ignore */ });
  const btn = document.getElementById('alertFamilyBtn');
  if (btn) {
  const orig = btn.textContent;

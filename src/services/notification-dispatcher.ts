@@ -1,12 +1,8 @@
 /**
- * Notification Dispatcher — macOS native + web fallback
- *
- * Routes UnifiedAlert notifications through Tauri's native notification plugin
- * when running as a desktop app, or falls back to the Web Notifications API
- * in browser contexts.
+ * Notification Dispatcher — standard UnifiedAlert delivery on desktop and web.
  *
  * Features:
- *  - Ghost Mode suppression (reads `wm-app-mode` from localStorage)
+ *  - Ghost Mode suppression through the shared window preference
  *  - Rate limiting: max 1 notification per source per 2 minutes
  *  - Quiet hours: per-domain, via notification-settings-service (one rule, R4-BUG-003)
  */
@@ -14,6 +10,7 @@
 import type { UnifiedAlert, AlertSeverity, AlertSource } from './unified-alerts';
 import type { CompoundThreat } from './compound-threat';
 import type { Anomaly } from './anomaly-detection';
+import { getNotificationModeState, recordGhostSuppression } from './mode-manager';
 import {
   evaluateNotificationPreference,
   type NotificationDomain,
@@ -36,8 +33,6 @@ export type NotificationAction = 'sound+banner' | 'banner' | 'badge' | 'silent';
 // ──────────────────────────────────────────────────────────────────────────────
 // Constants
 // ──────────────────────────────────────────────────────────────────────────────
-
-const MODE_STORAGE_KEY = 'wm-app-mode';
 
 /** Minimum interval between notifications from the same source (ms). */
 const RATE_LIMIT_MS = 2 * 60 * 1000; // 2 minutes
@@ -62,13 +57,11 @@ export function actionForSeverity(severity: AlertSeverity): NotificationAction {
   return 'silent';
 }
 
-/** Return true when app is in Ghost Mode. */
-function isGhostMode(): boolean {
-  try {
- return localStorage.getItem(MODE_STORAGE_KEY) === 'ghost';
-  } catch {
- return false;
-  }
+export function holdNotificationForMode(critical: boolean, state = getNotificationModeState()): string | undefined {
+  if (state.preference === 'unknown') return 'mode-unavailable';
+  if (state.mode !== 'ghost') return undefined;
+  recordGhostSuppression(critical);
+  return 'ghost-mode';
 }
 
 /** Detect Tauri runtime (desktop app context). */
@@ -223,7 +216,7 @@ class NotificationDispatcher {
  * Dispatch a notification for the given alert.
  *
  * Applies Ghost Mode suppression, rate limiting, and quiet hours before
- * sending through the appropriate channel (Tauri native or Web API).
+ * sending a banner through the Web Notifications API.
  */
   dispatchNotification(alert: UnifiedAlert, action: NotificationAction): void {
  const domain = alertSourceToDomain(alert.source);
@@ -235,9 +228,11 @@ class NotificationDispatcher {
  return;
  }
 
- // ── Ghost Mode — suppress ALL notifications (outermost gate) ──
- if (isGhostMode()) {
- suppressTrace(trace, 'ghost-mode');
+ // ── Mode — hold covered notifications before preferences and rate limits ──
+ const mode = getNotificationModeState();
+ const modeHold = holdNotificationForMode(alert.severity === 'critical', mode);
+ if (modeHold) {
+ suppressTrace(trace, modeHold);
  return;
  }
 
@@ -266,14 +261,7 @@ class NotificationDispatcher {
  this.rateLimitMap.set(alert.source, now);
 
  // ── Send notification (sound+banner or banner) ──
- const withSound = action === 'sound+banner';
- dispatchTrace(trace, action, alert.severity === 'critical');
-
- if (isTauriContext()) {
- this.sendTauriNotification(alert, withSound, trace);
- } else {
- this.sendWebNotification(alert, withSound, trace);
- }
+ void this.sendWebNotification(alert, action, mode.generation, trace);
   }
 
   /**
@@ -346,44 +334,45 @@ class NotificationDispatcher {
     this.dispatchNotification(alert, actionForSeverity(alert.severity));
   }
 
-  // ── Tauri native notification ──────────────────────────────────────────────
+  // The desktop notification plugin is unavailable; both runtimes use Web Notifications.
+  private async sendWebNotification(
+    alert: UnifiedAlert, action: NotificationAction, generation: number, trace?: DispatchTrace,
+  ): Promise<void> {
+    const critical = alert.severity === 'critical';
+    const finish = (result: Parameters<NotificationTraceRegistry['recordNativeResult']>[1]) => {
+      dispatchTrace(trace, action, critical);
+      recordNativeResult(trace, result);
+    };
+    try {
+      if (!('Notification' in window)) {
+        finish({ delivered: false, surface: 'failed', error: 'notification-api-unavailable' });
+        return;
+      }
+      let permission = Notification.permission;
+      if (permission === 'default') {
+        try {
+          permission = await Notification.requestPermission();
+        } catch {
+          finish({ delivered: false, surface: 'failed', error: 'permission-request-failed' });
+          return;
+        }
+      }
+      if (permission !== 'granted') {
+        finish({ delivered: false, surface: 'failed', error: 'permission-denied' });
+        return;
+      }
 
-  private sendTauriNotification(alert: UnifiedAlert, withSound: boolean, trace?: DispatchTrace): void {
- // Plugin not installed — skip dynamic import entirely to avoid Vite preload errors
- this.sendWebNotification(alert, withSound, trace);
-  }
-
-  // ── Web Notifications API fallback ─────────────────────────────────────────
-
-  private sendWebNotification(alert: UnifiedAlert, _withSound?: boolean, trace?: DispatchTrace): void {
- try {
- if (!('Notification' in window)) {
- recordNativeResult(trace, { delivered: false, surface: 'failed', error: 'notification-api-unavailable' });
- return;
- }
-
- if (Notification.permission === 'granted') {
- this.createWebNotification(alert);
- recordNativeResult(trace, { delivered: true, surface: alert.severity === 'critical' ? 'critical' : 'banner' });
- } else if (Notification.permission === 'denied') {
- recordNativeResult(trace, { delivered: false, surface: 'failed', error: 'permission-denied' });
- } else {
- Notification.requestPermission()
- .then(perm => {
- if (perm === 'granted') {
- this.createWebNotification(alert);
- recordNativeResult(trace, { delivered: true, surface: alert.severity === 'critical' ? 'critical' : 'banner' });
- } else {
- recordNativeResult(trace, { delivered: false, surface: 'failed', error: 'permission-denied' });
- }
- })
- .catch(() => {
- recordNativeResult(trace, { delivered: false, surface: 'failed', error: 'permission-request-failed' });
- });
- }
- } catch {
- recordNativeResult(trace, { delivered: false, surface: 'failed', error: 'notification-delivery-failed' });
- }
+      const mode = getNotificationModeState();
+      const modeHold = holdNotificationForMode(critical, mode);
+      if (modeHold || mode.generation !== generation) {
+        suppressTrace(trace, modeHold ?? 'mode-changed-during-permission');
+        return;
+      }
+      this.createWebNotification(alert);
+      finish({ delivered: true, surface: critical ? 'critical' : 'banner' });
+    } catch {
+      finish({ delivered: false, surface: 'failed', error: 'notification-delivery-failed' });
+    }
   }
 
   private createWebNotification(alert: UnifiedAlert): void {

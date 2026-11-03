@@ -2,7 +2,10 @@ import i18next from 'i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 
 // English is always needed as fallback — bundle it eagerly.
-import enTranslation from '../locales/en.json';
+import baseEnglish from '../locales/en.json';
+import ghostNotice from '../bootstrap/ghost-notice-en.json';
+
+const enTranslation = { ...baseEnglish, ghostNotice };
 
 const SUPPORTED_LANGUAGES = ['en', 'fr', 'de', 'el', 'es', 'it', 'pl', 'pt', 'nl', 'sv', 'ru', 'ar', 'zh', 'ja', 'ko', 'tr', 'th', 'vi'] as const;
 type SupportedLanguage = typeof SUPPORTED_LANGUAGES[number];

@@ -277,7 +277,29 @@
   "src/services/notifications/imessage-pause-alerts.ts": [
     "test:imessage"
   ],
+  "src/entry.ts": [
+    "test:ux050"
+  ],
+  "src/bootstrap/ghost-mode-notice.css": [
+    "test:ux050"
+  ],
+  "src/bootstrap/ghost-notice-en.json": [
+    "test:ux050"
+  ],
+  "src/bootstrap/ghost-mode-notice.ts": [
+    "test:ux050"
+  ],
+  "src/app/panel-layout.ts": [
+    "test:ux050"
+  ],
+  "src/styles/alerts.css": [
+    "test:ux050"
+  ],
+  "src/styles/home-shell.css": [
+    "test:ux050"
+  ],
   "src/main.ts": [
+    "test:ux050",
     "test:imessage",
     "test:map-clarity",
     "test:map-compatibility",
@@ -847,11 +869,13 @@
     "test:emergency-pack"
   ],
   "vite.config.ts": [
+    "test:ux050",
     "test:pwa-deployment",
     "test:domain-retirement",
     "test:sidecar-fallback"
   ],
   "index.html": [
+    "test:ux050",
     "test:pwa-deployment",
     "test:domain-retirement"
   ],

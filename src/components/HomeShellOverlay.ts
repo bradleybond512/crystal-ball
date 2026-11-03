@@ -64,6 +64,7 @@ import type { KeylessSourceStateLike } from '@/services/home-shell/startup-readi
 import { dataFreshness } from '@/services/data-freshness';
 import type { DataSourceId } from '@/services/data-freshness';
 import { safeSetItem } from '@/utils/safe-storage';
+import { mountGhostModeNotice } from './GhostModeNotice';
 import { mountImessagePausedNotice } from './ImessagePausedNotice';
 import {
   getStormSnapshot,
@@ -127,16 +128,25 @@ export interface HomeShellOptions {
   contextualProjection?: ContextualProjectionSource;
 }
 
+function matchingGhostControl(from: HTMLElement | null, to: HTMLElement | null): HTMLButtonElement | undefined {
+  const focused = document.activeElement?.closest<HTMLButtonElement>('.cb-ghost-notice button[data-action]');
+  if (!focused || !from?.contains(focused) || !to) return undefined;
+  const controls = [...to.querySelectorAll<HTMLButtonElement>('.cb-ghost-notice:not([hidden]) button:not([hidden]):not([disabled])')];
+  return controls.find(button => button.dataset.action === focused.dataset.action) ?? controls[0];
+}
+
 export class HomeShellOverlay {
   private root: HTMLElement | null = null;
   private mapSlot: HTMLElement | null = null;
-  private topbarEl: HTMLElement | null = null;
+  private headerEl: HTMLElement | null = null;
+  private headerObserver: ResizeObserver | null = null;
   private readinessEl: HTMLElement | null = null;
   private readinessPresenter: HomeShellStartupReadinessPresenter | null = null;
   private briefingEl: HTMLElement | null = null;
   private deckEl: HTMLElement | null = null;
   private contextualEl: HTMLElement | null = null;
   private ribbonEl: HTMLElement | null = null;
+  private unmountGhostNotice: (() => void) | null = null;
   private unmountImessageNotice: (() => void) | null = null;
   private mapHome: Comment | null = null;
   private loop: LoopHandle | null = null;
@@ -164,6 +174,11 @@ export class HomeShellOverlay {
   private readonly contextualSnapshotSource: NonNullable<HomeShellOptions['contextualSnapshotSource']>;
   private readonly contextualProjection: ContextualProjectionSource;
 
+  private readonly measureHeader = (): void => {
+    const height = this.headerEl?.offsetHeight;
+    if (height) this.root?.style.setProperty('--hs-topbar-h', `${height}px`);
+  };
+
   private readonly onKeydown = (e: KeyboardEvent): void => {
     if (e.key === 'Escape' && !e.defaultPrevented && this.visible) this.hide();
   };
@@ -185,10 +200,9 @@ export class HomeShellOverlay {
 
   mount(parent: HTMLElement): void {
     if (this.root) return;
-    this.pins = parseDeckPins(
-      localStorage.getItem(DECK_PINS_KEY),
-      new Set(Object.keys(DEFAULT_PANELS)),
-    );
+    let savedPins: string | null = null;
+    try { savedPins = localStorage.getItem(DECK_PINS_KEY); } catch { /* Use the default deck when storage is unavailable. */ }
+    this.pins = parseDeckPins(savedPins, new Set(Object.keys(DEFAULT_PANELS)));
 
     const root = el('div', 'home-shell');
     root.hidden = true;
@@ -199,7 +213,6 @@ export class HomeShellOverlay {
     const viewport = el('section', 'home-shell-viewport');
 
     const topbar = el('header', 'home-shell-topbar');
-    this.topbarEl = topbar;
     topbar.append(
       el('span', 'home-shell-brand', '🔮 Crystal Ball'),
       button('home-shell-cmdk', 'cmdk', '⌘K — panels, places, situations…'),
@@ -244,11 +257,11 @@ export class HomeShellOverlay {
       if (!next || !this.contextualEl?.contains(next)) this.flushPendingContextualView();
     });
     this.ribbonEl = el('footer', 'home-shell-ribbon');
-    // Topbar is a direct child of the scroll container (not the viewport) so its
-    // sticky containing block spans the whole scroll — it stays pinned even when
-    // the viewport scrolls past to reach the deck. (Nested in the viewport it
-    // unstuck the moment the viewport left the scrollport — the vanishing-header bug.)
-    scroll.append(topbar, viewport, this.contextualEl, this.deckEl, this.ribbonEl);
+    const header = el('div', 'home-shell-header');
+    this.headerEl = header;
+    this.unmountGhostNotice = mountGhostModeNotice(header);
+    header.prepend(topbar);
+    scroll.append(header, viewport, this.contextualEl, this.deckEl, this.ribbonEl);
     root.append(this.mapSlot, scroll);
 
     this.dossier = new SituationDossier({
@@ -326,15 +339,16 @@ export class HomeShellOverlay {
 
   show(): void {
     if (!this.root || this.visible) return;
+    const nextFocus = matchingGhostControl(document.getElementById('cb-notification-stack'), this.headerEl);
     this.visible = true;
     this.root.hidden = false;
     this.startupStartedAt ??= this.now();
     document.body.classList.add('home-shell-active');
-    // The sticky topbar lives above the 100dvh viewport in the scroll flow, so
-    // publish its measured height to CSS (--hs-topbar-h) — now that the shell is
-    // visible it can be measured — keeping the "Your Deck" button on the fold.
-    const topH = this.topbarEl?.offsetHeight;
-    if (topH && topH > 0) this.root.style.setProperty('--hs-topbar-h', `${topH}px`);
+    this.measureHeader();
+    if (this.headerEl && typeof ResizeObserver !== 'undefined') {
+      this.headerObserver = new ResizeObserver(this.measureHeader);
+      this.headerObserver.observe(this.headerEl);
+    }
     document.addEventListener('keydown', this.onKeydown);
     this.adoptMap();
     this.startContextualView();
@@ -342,11 +356,15 @@ export class HomeShellOverlay {
       priority: 'low',
       runImmediately: true,
     });
+    nextFocus?.focus({ preventScroll: true });
   }
 
   hide(): void {
     if (!this.root || !this.visible) return;
+    const nextFocus = matchingGhostControl(this.headerEl, document.getElementById('cb-notification-stack'));
     this.visible = false;
+    this.headerObserver?.disconnect();
+    this.headerObserver = null;
     this.loop?.cancel();
     this.loop = null;
     this.stopContextualView();
@@ -356,6 +374,7 @@ export class HomeShellOverlay {
     this.releaseMap();
     this.root.hidden = true;
     document.body.classList.remove('home-shell-active');
+    nextFocus?.focus({ preventScroll: true });
   }
 
   toggle(): void {
@@ -371,6 +390,8 @@ export class HomeShellOverlay {
     this.hide();
     this.unmountImessageNotice?.();
     this.unmountImessageNotice = null;
+    this.unmountGhostNotice?.();
+    this.unmountGhostNotice = null;
     if (this._onOpenDossier) {
       document.removeEventListener('cb:open-dossier', this._onOpenDossier);
       this._onOpenDossier = null;
@@ -389,6 +410,7 @@ export class HomeShellOverlay {
     }
     this.root?.remove();
     this.root = null;
+    this.headerEl = null;
     this.readinessPresenter = null;
     this.contextualEl = null;
     this.contextualSemanticKey = null;

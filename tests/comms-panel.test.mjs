@@ -47,8 +47,8 @@ test('wires the comms panel into panel layout and saved-place focus', () => {
   assert.match(panelLayoutSrc, /commsPlanPanel\?\.setPlaceId\(placeId\)/);
 });
 
-test('mode-manager builds a place-aware family check-in from the comms plan service', () => {
+test('family check-in copies the place-aware message in the original button click', () => {
   assert.match(commsServiceSrc, /buildPrimaryCommsMessage|buildCommsMessage/);
-  assert.match(modeManagerSrc, /buildPrimaryCommsMessage|buildCommsMessage/);
-  assert.doesNotMatch(modeManagerSrc, /CRYSTAL BALL — SAFETY ALERT/);
+  assert.match(panelLayoutSrc, /getElementById\('alertFamilyBtn'\)\?\.addEventListener\('click', \(\) => \{\s*navigator\.clipboard\.writeText\(buildPrimaryCommsMessage\('safe'\)\)/);
+  assert.doesNotMatch(modeManagerSrc, /comms-plan/);
 });

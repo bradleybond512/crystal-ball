@@ -10,6 +10,7 @@ import './styles/map-feature-list.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as Sentry from '@sentry/browser';
 import { App } from './App';
+import { showWorkspaceStartupFailure, startWorkspace } from './app/workspace-startup';
 import { filterSentryEvent } from './services/sentry-filter';
 
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN?.trim();
@@ -341,22 +342,21 @@ if (urlParams.get('settings') === '1') {
  showDesktopRuntimeDebugNotice(desktopRuntime);
  }
 
- const app = new App('app');
-
- const appInitPromise = app.init();
- if (desktopRuntime.detected || desktopRuntime.forcedDesktopBuild) {
- // Start loading behind the visual intro so the workspace is ready when it finishes.
- const introReady = appInitPromise.catch(() => {});
- const { runVaultIntro } = await import('./app/vault-intro');
- const introCompleted = await runVaultIntro(introReady);
- if (!introCompleted) return appInitPromise;
- }
- await appInitPromise;
- clearChunkReloadGuard(chunkReloadStorageKey);
- try { window.getSelection()?.removeAllRanges(); } catch { /* stray boot text-selection */ }
+    const app = new App('app');
+    const showIntro = desktopRuntime.detected || desktopRuntime.forcedDesktopBuild
+      ? async (ready: Promise<void>) => {
+        const { runVaultIntro } = await import('./app/vault-intro');
+        return runVaultIntro(ready);
+      }
+      : undefined;
+    if (!await startWorkspace(app, showIntro)) return;
+    clearChunkReloadGuard(chunkReloadStorageKey);
+    try { window.getSelection()?.removeAllRanges(); } catch { /* stray boot text-selection */ }
   };
-  appStartup = boot();
-  void appStartup.catch(console.error);
+  void boot().catch((error: unknown) => {
+    console.error('[boot] workspace startup failed:', error);
+    showWorkspaceStartupFailure(document, () => window.location.reload());
+  });
 }
 
 // Debug helpers for geo-convergence testing (development only)

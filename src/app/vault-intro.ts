@@ -753,7 +753,7 @@ function buildDoor(): DoorParts {
  'font-size': '10', 'font-weight': '500', 'letter-spacing': '0.2em',
  fill: 'rgba(180,80,80,0.6)',
   });
-  statusText.textContent = 'STARTUP SEQUENCE READY';
+  statusText.textContent = 'STARTING WORKSPACE';
   svg.append(statusText);
 
   // Status LED — red blinking (locked)
@@ -898,7 +898,7 @@ function setScannerSuccess(p: DoorParts): void {
   p.padFill.setAttribute('fill', 'rgba(30,180,80,0.10)');
   for (const fp of p.fpPaths) fp.setAttribute('stroke', '#28c860');
   p.statusText.setAttribute('fill', 'rgba(40,200,100,0.9)');
-  p.statusText.textContent = 'CRYSTAL BALL READY';
+  p.statusText.textContent = 'OPENING VAULT';
   p.lockedLed.style.animation = '';
   p.lockedLed.setAttribute('fill', '#1a8a3e');
   p.lockedLed.setAttribute('stroke', '#0e5a24');
@@ -908,10 +908,11 @@ function setScannerSuccess(p: DoorParts): void {
 
 async function playOpenSequence(
   p: OverlayRefs,
-  appReady?: Promise<void>,
+  workspaceStatus?: Promise<string>,
 ): Promise<void> {
   setScannerSuccess(p);
   await sleep(260);
+  if (!p.overlay.isConnected) return;
 
   const ctx = newCtx();
   if (ctx) {
@@ -924,13 +925,16 @@ async function playOpenSequence(
   });
   await sleep(540);
 
-  if (appReady) {
+  if (workspaceStatus) {
  p.statusText.textContent = 'INITIALIZING…';
  p.statusText.setAttribute('fill', 'rgba(40,200,100,0.55)');
- await Promise.race([appReady, sleep(1700)]);
- p.statusText.textContent = 'READY';
+ p.statusText.textContent = await Promise.race([
+   workspaceStatus, sleep(1700).then(() => 'STILL INITIALIZING…'),
+ ]);
  await sleep(200);
   }
+
+  if (!p.overlay.isConnected) return;
 
   // Pressure seal releases — micro-jitter before the door mass starts moving
   p.scene.style.animation = 'vi-seal-jitter .34s ease both';
@@ -968,21 +972,20 @@ async function playOpenSequence(
 
 async function runIntroFlow(
   refs: OverlayRefs,
-  onQuit: () => void,
-  appReady?: Promise<void>,
+  workspaceStatus?: Promise<string>,
 ): Promise<boolean> {
   const quitBtn = refs.overlay.querySelector('button')!;
 
   let settled = false;
   let inFlight = false;
   let resolveFlow!: (v: boolean) => void;
-  const result = new Promise<boolean>(res => { resolveFlow = res; });
+  let rejectFlow!: (error: unknown) => void;
+  const result = new Promise<boolean>((resolve, reject) => { resolveFlow = resolve; rejectFlow = reject; });
 
   quitBtn.addEventListener('click', () => {
  if (settled) return;
  settled = true;
  resolveFlow(false);
- onQuit();
   });
 
   const play = async () => {
@@ -997,14 +1000,15 @@ async function runIntroFlow(
  await sleep(600);
  if (settled) { inFlight = false; return; }
 
+ await playOpenSequence(refs, workspaceStatus);
  if (settled) return;
  settled = true;
- await playOpenSequence(refs, appReady);
  resolveFlow(true);
   };
 
-  setTimeout(() => void play(), 1200);
-  refs.scannerBtn.addEventListener('click', () => void play());
+  const start = () => { void play().catch(rejectFlow); };
+  setTimeout(start, 1200);
+  refs.scannerBtn.addEventListener('click', start);
 
   return result;
 }
@@ -1012,13 +1016,13 @@ async function runIntroFlow(
 // ── Export ─────────────────────────────────────────────────────────────────────
 
 export async function runVaultIntro(appReady?: Promise<void>): Promise<boolean> {
+  const workspaceStatus = appReady?.then(() => 'OPENING WORKSPACE', () => 'WORKSPACE UNAVAILABLE');
   const refs = buildOverlay();
   document.body.append(refs.overlay);
 
-  let quitCalled = false;
-  const completed = await runIntroFlow(refs, () => { quitCalled = true; }, appReady);
-
-  refs.overlay.remove();
-  if (quitCalled) window.close();
+  let completed: boolean;
+  try { completed = await runIntroFlow(refs, workspaceStatus); }
+  finally { refs.overlay.remove(); }
+  if (!completed) window.close();
   return completed;
 }

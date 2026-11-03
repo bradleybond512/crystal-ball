@@ -542,6 +542,7 @@ interface RssNewsLoadResult {
 export class DataLoaderManager implements AppModule {
   private ctx: AppContext;
   private callbacks: DataLoaderCallbacks;
+  private activeDataWave: Promise<void> | null = null;
   private unsubscribeNewsRuntimeConfig: (() => void) | null = null;
   private unsubscribeNwsLifecycle: (() => void) | null = null;
   private lastNwsSnapshot: CachedSnapshot<NWSAlertSnapshot> | null = null;
@@ -757,7 +758,15 @@ export class DataLoaderManager implements AppModule {
  return !this.ctx.isMobile && !!this.ctx.findingsBadge?.isPopupEnabled();
   }
 
-  async loadAllData(): Promise<void> {
+  loadAllData(): Promise<void> {
+    // Reserve the shared promise before a provider can synchronously request a retry.
+    this.activeDataWave ??= Promise.resolve().then(() => this.runDataWave()).finally(() => {
+      this.activeDataWave = null;
+    });
+    return this.activeDataWave;
+  }
+
+  private async runDataWave(): Promise<void> {
  const runGuarded = async (name: string, fn: () => Promise<void>): Promise<void> => {
  if (this.ctx.isDestroyed || this.ctx.inFlight.has(name)) return;
  this.ctx.inFlight.add(name);
@@ -940,7 +949,7 @@ export class DataLoaderManager implements AppModule {
 
  // Two-wave loading: critical panels first, then deferred.
  const CRITICAL = new Set([
- 'news', 'markets', 'weather', 'nwsAlerts', 'gdacsAlerts', 'intelligence',
+ 'news', 'markets', 'weather', 'nwsAlerts', 'shakeAlert', 'gdacsAlerts', 'intelligence',
  'natural', 'cyberThreats', 'predictions', 'spaceWeather', 'firms',
  ]);
  const critical = tasks.filter(t => CRITICAL.has(t.name));
@@ -953,6 +962,7 @@ export class DataLoaderManager implements AppModule {
  console.error(`[App] ${critical[idx]?.name} load failed:`, result.reason);
  }
  });
+ if (this.ctx.isDestroyed) return;
  const wave2 = await limiter.mapSettled(deferred, t => t.task());
  wave2.forEach((result, idx) => {
  if (result.status === 'rejected') {
@@ -960,6 +970,7 @@ export class DataLoaderManager implements AppModule {
  }
  });
 
+ if (this.ctx.isDestroyed) return;
  this.updateSearchIndex();
  document.dispatchEvent(new CustomEvent('wm:data-refreshed'));
   }
@@ -3408,6 +3419,7 @@ export class DataLoaderManager implements AppModule {
  fetchExcessiveRainfallOutlooks(),
  fetchWinterWeatherOutlooks(),
  ]);
+ if (this.ctx.isDestroyed) return;
  const alerts = getStormPreparednessContext().nwsAlerts;
  const spcSummary = spcResult.status === 'fulfilled' ? spcResult.value : stormContext.spcSummary;
  const marineHazards = marineResult.status === 'fulfilled' ? marineResult.value : stormContext.marineHazards;
@@ -3434,6 +3446,7 @@ export class DataLoaderManager implements AppModule {
  // shared adapter — carries radiusKm (near-polygon buffer) AND resolved UGC
  // zones (zone fallback), which this site used to drop on both counts.
  const placeZonesById = await resolveSavedPlaceZones(places);
+ if (this.ctx.isDestroyed) return;
  const weatherPlaces = places.map(p => toMatcherPlace(p, placeZonesById.get(p.id)));
  let bestDecision = undefined;
  for (const minimal of minimalAlerts) {
@@ -3454,6 +3467,7 @@ export class DataLoaderManager implements AppModule {
  // concurrent requests so repeated NWS refreshes cannot stampede providers.
  void import('@/services/lifelines/lifeline-prewarm')
  .then(({ lifelinePrewarmCoordinator }) => {
+   if (this.ctx.isDestroyed) return;
    for (const place of places.filter((candidate) => (
      candidate.offlinePinned || candidate.id === bestDecision?.matchedPlaceId
    ))) {
@@ -3464,6 +3478,7 @@ export class DataLoaderManager implements AppModule {
  }
  } catch { /* saved-places unavailable — non-fatal */ }
 
+ if (this.ctx.isDestroyed) return;
  updateStormPreparednessContext({
  spcSummary,
  excessiveRainfallOutlooks,
@@ -3471,6 +3486,7 @@ export class DataLoaderManager implements AppModule {
  marineHazards,
  });
  } catch (error) {
+ if (this.ctx.isDestroyed) return;
  console.warn('[nws-alerts] fetch failed', error);
  }
   }

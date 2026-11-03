@@ -120,7 +120,8 @@
     "test:datacenter",
     "test:datacenter-ownership",
     "test:acc510",
-    "test:ux047"
+    "test:ux047",
+    "test:ux053"
   ],
   "src/services/gdacs-coverage.ts": [
     "test:gdacs-map"
@@ -239,7 +240,8 @@
     "test:native-notify"
   ],
   "src/services/notification-router.ts": [
-    "test:native-notify"
+    "test:native-notify",
+    "test:ux053"
   ],
   "src/services/threat-reactor.ts": [
     "test:native-notify"
@@ -251,7 +253,8 @@
     "test:native-notify"
   ],
   "src/app/desktop-notifications.ts": [
-    "test:native-notify"
+    "test:native-notify",
+    "test:ux053"
   ],
   "src/app/desktop-updater.ts": [
     "test:native-notify",
@@ -290,7 +293,8 @@
     "test:ux050"
   ],
   "src/app/panel-layout.ts": [
-    "test:ux050"
+    "test:ux050",
+    "test:ux053"
   ],
   "src/styles/alerts.css": [
     "test:ux050"
@@ -304,7 +308,8 @@
     "test:map-clarity",
     "test:map-compatibility",
     "test:analytics-lifecycle",
-    "test:domain-retirement"
+    "test:domain-retirement",
+    "test:ux053"
   ],
   "src-tauri/src/sidecar_supervisor.rs": [
     "test:sidecar-supervisor"
@@ -858,7 +863,8 @@
   ],
   "src/App.ts": [
     "test:pwa-deployment",
-    "test:ux047"
+    "test:ux047",
+    "test:ux053"
   ],
   "src/services/country-geometry.ts": [
     "test:pwa-deployment",
@@ -1310,5 +1316,14 @@
   ],
   "src/config/csp-policy.ts": [
     "test:sidecar-fallback"
+  ],
+  "src/app/loaders/cyber.ts": [
+    "test:ux053"
+  ],
+  "src/app/vault-intro.ts": [
+    "test:ux053"
+  ],
+  "src/app/workspace-startup.ts": [
+    "test:ux053"
   ]
 }

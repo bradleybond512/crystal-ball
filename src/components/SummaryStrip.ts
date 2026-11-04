@@ -204,8 +204,10 @@ export class SummaryStrip {
 
   private applyCollapsed(): void {
     this.el.classList.toggle('is-collapsed', this.collapsed);
-    for (const segment of this.segsEl.querySelectorAll<HTMLElement>('button:not([data-seg="status"])')) {
-      if (this.collapsed) segment.style.display = 'none';
+    if (this.collapsed) {
+      for (const segment of this.segsEl.querySelectorAll<HTMLButtonElement>('button:not([data-seg="status"])')) {
+        this.setSegmentDisplay(segment, 'none', 'chevron');
+      }
     }
     const chevron = this.el.querySelector<HTMLElement>('.cb-summary-strip-chevron');
     if (chevron) {
@@ -226,10 +228,18 @@ export class SummaryStrip {
     this.renderRegime();
   }
 
+  private setSegmentDisplay(button: HTMLButtonElement, display: string, fallback: 'fresh' | 'chevron'): void {
+    if (button.style.display === display) return;
+    if (display === 'none' && button.matches(':focus')) {
+      this.el.querySelector<HTMLButtonElement>(`[data-seg="${fallback}"]`)?.focus({ preventScroll: true });
+    }
+    button.style.display = display;
+  }
+
   private updateSegment(key: string, body: string, title: string, attr: 'aria-label' | 'aria-description', name: string): void {
     const button = this.segsEl.querySelector<HTMLButtonElement>(`[data-seg="${key}"]`)!;
     const display = body ? '' : 'none';
-    if (button.style.display !== display) button.style.display = display;
+    this.setSegmentDisplay(button, display, 'fresh');
     if (this.bodies.get(button) !== body) {
       button.innerHTML = body;
       this.bodies.set(button, body);

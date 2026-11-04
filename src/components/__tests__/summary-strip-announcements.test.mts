@@ -13,7 +13,7 @@ const code = compile('../SummaryStrip.ts');
 const suppressionCode = compile('../../utils/critical-ui-announcements.ts');
 type Alert = { severity: string; acknowledged?: boolean };
 
-function setup(t: TestContext, initial: Alert[] = []) {
+function setup(t: TestContext, initial: Alert[] = [], attach = true) {
   const win = new Window({ url: 'https://crystalball.test/' });
   const doc = win.document;
   Object.assign(globalThis, { window: win, document: doc, localStorage: win.localStorage, CustomEvent: win.CustomEvent });
@@ -48,7 +48,7 @@ function setup(t: TestContext, initial: Alert[] = []) {
     onFreshnessClick: () => calls.push('fresh'), onRegimeClick: () => calls.push('regime'),
   });
   const el = strip.getElement() as HTMLElement;
-  doc.body.appendChild(el as never);
+  if (attach) doc.body.appendChild(el as never);
   const quiet = () => doc.dispatchEvent(new win.Event('visibilitychange'));
   const mode = () => doc.dispatchEvent(new win.CustomEvent('wm:mode-changed', { detail: { mode: state.ghost ? 'ghost' : null } }));
   const button = (key: string) => { const b = el.querySelector<HTMLButtonElement>(`[data-seg="${key}"]`); assert.ok(b); return b; };
@@ -62,7 +62,7 @@ test('one pre-mounted, initially empty triage status announces count transitions
   const live = h.el.querySelector<HTMLElement>('[role="status"]');
   assert.ok(live, 'the live region exists before the first update');
   assert.equal(live.getAttribute('aria-live'), 'polite'); assert.equal(live.getAttribute('aria-atomic'), 'true');
-  assert.equal(live.closest('button'), null);
+  assert.ok(!live.closest('button'), 'the live region stays outside controls');
   assert.equal(live.textContent, '');
   h.state.alerts = [{ severity: 'critical', acknowledged: true }, { severity: 'high' }, { severity: 'medium' }];
   h.poll();
@@ -72,6 +72,17 @@ test('one pre-mounted, initially empty triage status announces count transitions
   assert.equal(live.textContent, 'Unacknowledged alerts: 0 critical, 0 high, 0 medium.');
   assert.doesNotMatch(h.button('alerts').textContent ?? '', /no open alerts/i);
   assert.ok(Object.is(h.el.querySelector('[role="status"]'), live));
+});
+
+test('an update before the strip is attached seeds the baseline without preloading speech', t => {
+  const h = setup(t, [], false);
+  const live = h.el.querySelector('[role="status"]'); assert.ok(live);
+  h.state.alerts = [{ severity: 'high' }]; h.poll();
+  assert.equal(live.textContent, '');
+  h.doc.body.appendChild(h.el as never);
+  h.poll(); assert.equal(live.textContent, '');
+  h.state.alerts.push({ severity: 'high' }); h.poll();
+  assert.match(live.textContent ?? '', /2 high/);
 });
 
 test('identical polls, non-triage updates and counts beyond the display cap do not announce', t => {
@@ -167,6 +178,30 @@ test('peer strip settings update visibility immediately and never replay hidden 
   h.state.alerts.push({ severity: 'medium' }); h.poll();
   set(collapse, '0'); assert.equal(live.textContent, '');
   h.state.alerts = []; h.poll(); assert.match(live.textContent ?? '', /0 critical/);
+});
+
+test('a disappearing focused regime moves to freshness; outside focus stays put', t => {
+  const h = setup(t); h.state.regimes = { market: {} }; h.poll();
+  h.button('regime').focus(); h.state.regimes = {}; h.poll();
+  assert.ok(Object.is(h.doc.activeElement, h.button('fresh')), 'freshness is the preceding visible action');
+  assert.equal(h.button('regime').style.display, 'none');
+  const outside = h.doc.createElement('button'); h.doc.body.append(outside); outside.focus();
+  h.state.regimes = { market: {} }; h.poll(); h.state.regimes = {}; h.poll();
+  assert.ok(Object.is(h.doc.activeElement, outside), 'a disappearing unfocused segment cannot pull focus');
+});
+
+test('peer collapse moves a disappearing focused action to the chevron only', t => {
+  const h = setup(t);
+  const collapse = (v: string) => {
+    h.win.localStorage.setItem('crystalball-summary-strip-collapsed', v);
+    h.win.dispatchEvent(new h.win.StorageEvent('storage', { key: 'crystalball-summary-strip-collapsed' }));
+  };
+  h.button('alerts').focus(); collapse('1');
+  assert.ok(Object.is(h.doc.activeElement, h.button('chevron')), 'collapse leaves a focused, operable expand action');
+  collapse('0'); h.button('status').focus(); collapse('1');
+  assert.ok(Object.is(h.doc.activeElement, h.button('status')), 'a still-visible status button keeps focus');
+  collapse('0'); const outside = h.doc.createElement('button'); h.doc.body.append(outside); outside.focus(); collapse('1');
+  assert.ok(Object.is(h.doc.activeElement, outside), 'external focus survives a peer collapse');
 });
 
 test('identical renders leave the focused accessible name, description and control contents untouched', t => {

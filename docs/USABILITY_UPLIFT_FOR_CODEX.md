@@ -1099,7 +1099,8 @@ Acceptance: Inventory all maintained lockfiles and exposed tools; add appropriat
 
 ### UX-055 — Surface stale credential validation honestly
 
-Status: IN PROGRESS — HIGH ASSURANCE
+Status: IN REVIEW — HIGH ASSURANCE
+Evidence: #1851 — [implementation, controlled verification and mutation results](validation/UX-055-CREDENTIAL-VALIDATION.md).
 Priority: S
 Source findings: PR1731 M11.
 
@@ -1267,7 +1268,7 @@ Update the row in the same PR that does the work.
 | UX-052 | Restrain derived alert interruptions | NOT STARTED — HIGH ASSURANCE | — |
 | UX-053 | Finish boot without awaiting all data sources | NOT STARTED — HIGH ASSURANCE | — |
 | UX-054 | Cover subproject dependencies in security checks | NOT STARTED — HIGH ASSURANCE | — |
-| UX-055 | Surface stale credential validation honestly | IN PROGRESS — HIGH ASSURANCE | [Draft #1851](https://github.com/bradleybond512/crystal-ball/pull/1851) |
+| UX-055 | Surface stale credential validation honestly | IN REVIEW — HIGH ASSURANCE | [Evidence](validation/UX-055-CREDENTIAL-VALIDATION.md) · [Draft #1851](https://github.com/bradleybond512/crystal-ball/pull/1851) |
 | UX-056 | Bound retained storage without losing user evidence | NOT STARTED — HIGH ASSURANCE | — |
 | UX-057 | Persist panel state only when it changes | NOT STARTED | — |
 | UX-058 | Account for deferred and updated warnings | NOT STARTED — HIGH ASSURANCE | — |

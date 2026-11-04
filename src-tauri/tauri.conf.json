@@ -38,6 +38,7 @@
     "resources": [
       "../api",
       "sidecar/local-api-server.mjs",
+      "sidecar/nws-alert-row.mjs",
       "sidecar/sidecar-logger.mjs",
       "sidecar/secret-sync.mjs",
       "sidecar/event-store.mjs",

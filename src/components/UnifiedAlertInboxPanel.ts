@@ -77,7 +77,7 @@ export class UnifiedAlertInboxPanel extends Panel {
   private filterEntityIds: Set<string> | null = null;
   private nearMeActive: boolean;
   private nearMeRadiusMi: number;
-  private selectedIndex = -1;
+  private selectedWarning: { id: string; source: string } | undefined;
   private readonly evidenceDrawer = new EvidenceDrawer();
   private readonly unsubscribe: () => void;
   private readonly boundOnClick: (e: Event) => void;
@@ -361,44 +361,46 @@ export class UnifiedAlertInboxPanel extends Panel {
   }
 
   private handleKeydown(e: KeyboardEvent): void {
- const alerts = this.getFilteredAlerts();
- if (alerts.length === 0) return;
+    if (!['j', 'k', 'ArrowDown', 'ArrowUp', 'a', 'p'].includes(e.key)) return;
+    const rows = [...this.content.querySelectorAll<HTMLElement>('tr[data-alert-id]')];
+    if (!rows.length) return;
+    const selected = rows.findIndex(row => row.dataset.alertId === this.selectedWarning?.id
+      && row.dataset.alertSource === this.selectedWarning?.source);
+    if (e.key === 'a' || e.key === 'p') {
+      const row = rows[selected];
+      const alert = row && unifiedAlertStore.getAll().find(a => a.id === row.dataset.alertId && a.source === row.dataset.alertSource);
+      if (alert && e.key === 'a') unifiedAlertStore.acknowledge(alert.id);
+      if (alert && e.key === 'p') unifiedAlertStore.togglePin(alert.id);
+      return;
+    }
+    e.preventDefault();
+    const forward = e.key === 'j' || e.key === 'ArrowDown';
+    const next = rows[Math.min(rows.length - 1, Math.max(0, selected + (forward ? 1 : -1)))]!;
+    this.selectedWarning = { id: next.dataset.alertId!, source: next.dataset.alertSource! };
+    this.render();
+  }
 
- switch (e.key) {
- case 'j':
- case 'ArrowDown': {
- e.preventDefault();
- this.selectedIndex = Math.min(this.selectedIndex + 1, alerts.length - 1);
- this.render();
- break;
- }
- case 'k':
- case 'ArrowUp': {
- e.preventDefault();
- this.selectedIndex = Math.max(this.selectedIndex - 1, 0);
- this.render();
- break;
- }
- case 'a': {
- const ackTarget = alerts[this.selectedIndex];
- if (ackTarget) unifiedAlertStore.acknowledge(ackTarget.id);
- break;
- }
- case 'p': {
- const pinTarget = alerts[this.selectedIndex];
- if (pinTarget) unifiedAlertStore.togglePin(pinTarget.id);
- break;
- }
- }
+  protected override captureContentFocus(): (() => void) | undefined {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement) || !this.content.contains(active) || !active.matches('a[href], button')) return;
+    const escape = window.CSS.escape;
+    const row = active.closest<HTMLElement>('tr[data-alert-id]');
+    const scope = row ? `tr[data-alert-source="${escape(row.dataset.alertSource!)}"][data-alert-id="${escape(row.dataset.alertId!)}"] ` : '';
+    const control = active.getAttributeNames().find(name => name.startsWith('data-'));
+    const selector = control ? `${active.localName}[${control}="${escape(active.getAttribute(control)!)}"]` : 'a[href]';
+    return () => {
+      if (document.activeElement !== document.body) return;
+      (this.content.querySelector<HTMLElement>(scope + selector) ?? this.element).focus({ preventScroll: true });
+    };
   }
 
   // ── Render ──────────────────────────────────────────────────────────────
 
-  private dedupByEntity(alerts: UnifiedAlert[]): { leader: UnifiedAlert; relatedCount: number; relatedAlerts: UnifiedAlert[] }[] {
+  private dedupByEntity(alerts: UnifiedAlert[], dispositions: ReadonlyMap<string, string>): { leader: UnifiedAlert; relatedCount: number; relatedAlerts: UnifiedAlert[] }[] {
     const entityHeat = computeEntityHeat();
     const entityAlertMap = new Map<string, Set<string>>();
     for (const ent of entityHeat) {
-      entityAlertMap.set(ent.name, new Set(ent.alertIds));
+      entityAlertMap.set(ent.name, new Set(ent.alertIds.filter(id => !dispositions.has(id))));
     }
 
     const assigned = new Set<string>();
@@ -436,18 +438,32 @@ export class UnifiedAlertInboxPanel extends Panel {
   private render(): void {
  const alerts = this.getFilteredAlerts();
  const totalCount = unifiedAlertStore.getAll().length;
+ const held = unifiedAlertStore.getHeldWarningCount();
+ const warningWord = held === 1 ? 'warning' : 'warnings';
+ const heldCount = held > 0
+   ? `<div class="uai-session-count">${held} ${warningWord} held during cooldown this session</div>`
+   : '';
 
  if (totalCount === 0) {
  this.setContent(
- '<div class="panel-empty">No alerts yet. Alerts from all sources will appear here.</div>',
+ `<div class="panel-empty">No alerts yet. Alerts from all sources will appear here.</div>${heldCount}`,
  );
  return;
  }
 
  const toolbar = this.renderToolbar();
- const deduped = this.dedupByEntity(alerts);
+ const labels = new Map<string, string>();
+ for (const alert of alerts) {
+   const disposition = unifiedAlertStore.getDisposition(alert);
+   if (!disposition) continue;
+   const reasons = [];
+   if (disposition.heldDuringCooldown) reasons.push('System notification held during cooldown');
+   if (disposition.updatedTo) reasons.push(`Updated to ${disposition.updatedTo}`);
+   if (reasons.length) labels.set(alert.id, reasons.join(' · '));
+ }
+ const deduped = this.dedupByEntity(alerts, labels);
  const rows = deduped.map((g, i) => {
- const row = this.renderRow(g.leader, i, g.relatedCount);
+ const row = this.renderRow(g.leader, i, g.relatedCount, labels.get(g.leader.id));
  if (g.relatedAlerts.length > 0) {
  const tl = buildStoryTimelineHtml([g.leader, ...g.relatedAlerts]);
  if (tl) return row + `<tr class="story-tl-row"><td colspan="7">${tl}</td></tr>`;
@@ -458,6 +474,7 @@ export class UnifiedAlertInboxPanel extends Panel {
  this.setContent(`
  <div class="uai-container">
  ${toolbar}
+ ${heldCount}
  <div class="uai-list">
  <table class="eq-table ct-table uai-table">
  <thead>
@@ -540,9 +557,11 @@ export class UnifiedAlertInboxPanel extends Panel {
  `;
   }
 
-  private renderRow(alert: UnifiedAlert, index: number, relatedCount = 0): string {
+  private renderRow(alert: UnifiedAlert, index: number, relatedCount: number, disposition?: string): string {
  const sevPill = `<span class="ac-pill ac-pill-${alert.severity}">${SEVERITY_LABELS[alert.severity]}</span>`;
- const srcTag = `<span class="uai-src-tag uai-src-${alert.source}" data-filter-src="${alert.source}" title="Filter: ${alert.source}">${SOURCE_LABELS[alert.source] ?? alert.source}</span>`;
+ const source = esc(alert.source);
+ const sourceLabel = Object.prototype.hasOwnProperty.call(SOURCE_LABELS, alert.source) ? SOURCE_LABELS[alert.source] : 'Other';
+ const srcTag = `<span class="uai-src-tag uai-src-${source}" data-filter-src="${source}" title="Filter: ${source}">${sourceLabel}</span>`;
 
  const scoreBar = this.renderScoreBar(alert.relevanceScore);
  const distMi = alert.distanceKm == null ? undefined : alert.distanceKm / KM_PER_MI;
@@ -573,17 +592,18 @@ export class UnifiedAlertInboxPanel extends Panel {
  rowSevClass(alert.severity),
  alert.pinned ? 'uai-pinned' : '',
  alert.acknowledged ? 'uai-acked' : '',
- index === this.selectedIndex ? 'uai-selected' : '',
+ alert.id === this.selectedWarning?.id && alert.source === this.selectedWarning.source ? 'uai-selected' : '',
  ]
  .filter(Boolean)
  .join(' ');
 
- return `<tr class="${rowClasses}" data-alert-index="${index}" data-alert-id="${esc(alert.id)}">
+ return `<tr class="${rowClasses}" data-alert-index="${index}" data-alert-source="${source}" data-alert-id="${esc(alert.id)}">
  <td class="ac-sev">${sevPill}</td>
  <td class="uai-src-cell">${srcTag}</td>
  <td class="uai-title-cell">
  <div class="uai-title">${title}${relatedBadge}</div>
  <div class="uai-body">${esc(alert.body)}${whyBtn}</div>
+ ${disposition ? `<div class="uai-disposition">${esc(disposition)}</div>` : ''}
  </td>
  <td class="uai-score-cell">${scoreBar}</td>
  <td class="uai-dist-cell">${dist}</td>

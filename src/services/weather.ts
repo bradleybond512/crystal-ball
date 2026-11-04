@@ -5,6 +5,7 @@ import { isUsableMatchRing } from './weather/ring-geometry';
 
 export interface WeatherAlert {
   id: string;
+  capId?: string;
   event: string;
   severity: 'Extreme' | 'Severe' | 'Moderate' | 'Minor' | 'Unknown';
   headline: string;
@@ -43,6 +44,7 @@ export type WeatherEvidenceStatus = 'absent' | 'complete' | 'invalid';
 interface NWSAlert {
   id?: unknown;
   properties: {
+ id?: unknown;
  status?: unknown;
  messageType?: unknown;
  event?: unknown;
@@ -295,6 +297,8 @@ export function selectAndNormalizeWeatherAlerts(features: readonly NWSAlert[]): 
       const reportedOnset = optionalDate(alert.properties.onset);
       return {
         id: typeof alert.id === 'string' ? alert.id : '',
+        capId: typeof alert.properties.id === 'string' && alert.properties.id.length <= MAX_NWS_IDENTIFIER_LENGTH
+          && alert.properties.id.trim() ? alert.properties.id : undefined,
         event: typeof alert.properties.event === 'string' ? alert.properties.event : '',
         severity: alert.properties.severity as WeatherAlert['severity'],
         headline: typeof alert.properties.headline === 'string' ? alert.properties.headline : '',

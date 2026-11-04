@@ -3165,6 +3165,8 @@ test('/api/airnow/forecast: keyed AirNow primary carries the ActionDay flag', as
 // per-route failure tests run BEFORE the success test that writes the cache),
 // and timestamp/timezone normalization is exact.
 
+function noop() {}
+
 function mockHttpsRouted(route) {
   const original = https.request;
   const calls = [];
@@ -3172,13 +3174,14 @@ function mockHttpsRouted(route) {
     calls.push({ hostname: options.hostname, path: options.path, headers: options.headers ?? {} });
     const spec = route(options) ?? { statusCode: 500, body: 'unmatched request' };
     const req = new EventEmitter();
-    req.setTimeout = () => {};
-    req.write = () => {};
+    req.setTimeout = noop;
+    req.write = noop;
     req.destroy = (error) => { if (error) req.emit('error', error); };
     req.end = () => {
       queueMicrotask(() => {
         if (spec.error) { req.emit('error', spec.error); return; }
         const res = new EventEmitter();
+        res.destroy = noop;
         res.statusCode = spec.statusCode ?? 200;
         res.statusMessage = '';
         res.headers = spec.headers ?? { 'content-type': 'application/json' };
@@ -4607,4 +4610,41 @@ test('theater posture computes locally without a default cloud request', async (
     await app.close();
     await localApi.cleanup();
   }
+});
+
+test('NWS boundary refuses fabricated CAP identities and issuance and recovers with provider fields', async () => {
+  const sent = '2026-11-01T08:00:00Z';
+  const props = { id: 'nws-fixture', sent, onset: '2026-11-01T06:00:00Z', expires: '2026-11-01T10:00:00Z',
+    event: 'Fixture', severity: 'Severe', urgency: 'Immediate', status: 'Actual', messageType: 'Alert' };
+  let payload = {};
+  let headers = {};
+  const app = await startRouteApp(() => ({ body: JSON.stringify(payload), headers }));
+  try {
+    const feature = { type:'Feature', properties:props };
+    for (const invalid of [{},
+      ...[{id:undefined}, {sent:undefined}, {event:{}}, {areaDesc:[]}, {headline:0}, {onset:'nonsense'}, {severity:'Typo'}, {messageType:'Typo'}].map(fields =>
+        ({ type:'FeatureCollection', features:[{...feature, properties:{...props,...fields}}] })),
+      { type:'FeatureCollection', features:[{...feature, geometry:{type:'Polygon', coordinates:[[[0,0],[1,1]]]}}] }]) {
+      payload = invalid;
+      const refused = await app.get('/api/nws-alerts');
+      assert.equal(refused.status, 503);
+    }
+    payload = { type:'FeatureCollection', features:[{type:'Feature',properties:props}] };
+    headers = { 'content-length': String(8 * 1024 * 1024 + 1) };
+    const oversized = await app.get('/api/nws-alerts');
+    assert.equal(oversized.status, 503);
+    headers = {};
+    const recovered = await app.get('/api/nws-alerts');
+    assert.equal(recovered.status, 200);
+    const [row] = await recovered.json();
+    assert.equal(row.id, props.id);
+    assert.equal(row.sent, sent);
+    payload = { type: 'FeatureCollection', features: [{ ...feature, properties: { ...props, sent: null } }] };
+    const failedRefresh = await app.get('/api/nws-alerts');
+    assert.equal(failedRefresh.status, 503, 'a failed refresh cannot present the previous warning as current');
+    payload = { type:'FeatureCollection', features:[] };
+    const empty = await app.get('/api/nws-alerts');
+    assert.equal(empty.status, 200);
+    assert.deepEqual(await empty.json(), []);
+  } finally { await app.cleanup(); }
 });

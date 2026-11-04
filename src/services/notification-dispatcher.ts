@@ -14,8 +14,11 @@ import { getNotificationModeState, recordGhostSuppression } from './mode-manager
 import {
   evaluateNotificationPreference,
   getSettings,
+  nativeChannelHold,
+  isNotificationSettingsStorageKey,
   type NotificationDomain,
 } from './notifications/notification-settings-service';
+import { validateAlertRetentionEvidence } from './alert-retention';
 import { getNotificationTraceRegistry } from './diagnostics/diagnostics-state';
 import type {
   NotificationUrgency,
@@ -128,6 +131,12 @@ function alertSourceToDomain(source: AlertSource): NotificationDomain {
   }
 }
 
+function inactiveWarning(alert: UnifiedAlert, now: number): boolean {
+  const evidence = validateAlertRetentionEvidence(alert.source, alert.retentionEvidence, now);
+  return alert.acknowledged || (alert.snoozedUntil ?? 0) > now
+    || (evidence?.kind === 'nws-expiry' && evidence.expiresAt <= now);
+}
+
 function traceDomainFor(domain: NotificationDomain): Parameters<NotificationTraceRegistry['byDomain']>[0] {
   switch (domain) {
     case 'derived': { return 'reasoning'; }
@@ -157,6 +166,7 @@ function urgencyForSeverity(severity: AlertSeverity): NotificationUrgency {
 }
 
 interface DispatchTrace {
+  pendingAction?: {action: NotificationAction; critical: boolean};
   registry: NotificationTraceRegistry;
   candidateId: string;
 }
@@ -215,6 +225,10 @@ function recordNativeResult(
   result: Parameters<NotificationTraceRegistry['recordNativeResult']>[1],
 ): void {
   try {
+    if (trace?.pendingAction) {
+      dispatchTrace(trace, trace.pendingAction.action, trace.pendingAction.critical);
+      delete trace.pendingAction;
+    }
     trace?.registry.recordNativeResult(trace.candidateId, result);
   } catch { /* diagnostics must not block delivery */ }
 }
@@ -230,6 +244,18 @@ class NotificationDispatcher {
   private lastDerivedAttempt = -Infinity;
   private derivedTagPrefix?: string;
   private derivedTagSlot = 0;
+  private permissionQuestionOpen = false;
+  private permissionCandidate?: (outcome: NotificationPermission | 'cancelled' | 'failed') => void;
+
+  private finishPermission(outcome: NotificationPermission | 'cancelled' | 'failed'): void {
+    const finish = this.permissionCandidate;
+    this.permissionCandidate = undefined;
+    finish?.(outcome);
+  }
+
+  cancelPendingPermission = (): void => {
+    this.finishPermission('cancelled');
+  };
 
   /**
  * Dispatch a notification for the given alert.
@@ -237,7 +263,7 @@ class NotificationDispatcher {
  * Applies Ghost Mode suppression, rate limiting, and quiet hours before
  * sending a banner through the Web Notifications API.
  */
-  dispatchNotification(alert: UnifiedAlert, action: NotificationAction): void {
+  dispatchNotification(alert: UnifiedAlert, action: NotificationAction, stillEligible?: (afterPermission: boolean) => boolean): 'held-cooldown' | void {
  const domain = alertSourceToDomain(alert.source);
  const trace = createDispatchTrace(alert, action, domain);
 
@@ -277,15 +303,21 @@ class NotificationDispatcher {
 
  // ── Rate limiting — max 1 per source per RATE_LIMIT_MS ──
  const now = Date.now();
+ const hold = nativeChannelHold(domain);
+ if (hold || inactiveWarning(alert, now) || stillEligible?.(false) === false) {
+ suppressTrace(trace, hold ?? 'inactive-warning');
+ return;
+ }
  const lastTime = this.rateLimitMap.get(alert.source);
  if (alert.severity !== 'critical' && lastTime !== undefined && now - lastTime < RATE_LIMIT_MS) {
  suppressTrace(trace, 'source-rate-limit');
- return;
+ return 'held-cooldown';
  }
  this.rateLimitMap.set(alert.source, now);
 
  // ── Send notification (sound+banner or banner) ──
- void this.sendWebNotification(alert, action, mode.generation, trace);
+ if (trace) trace.pendingAction = {action, critical: alert.severity === 'critical'};
+ this.sendWebNotification(alert, domain, trace, stillEligible);
   }
 
   private dispatchDerived(alert: UnifiedAlert, action: NotificationAction, trace?: DispatchTrace): void {
@@ -409,44 +441,86 @@ class NotificationDispatcher {
     this.dispatchNotification(alert, actionForSeverity(alert.severity));
   }
 
-  // The desktop notification plugin is unavailable; both runtimes use Web Notifications.
-  private async sendWebNotification(
-    alert: UnifiedAlert, action: NotificationAction, generation: number, trace?: DispatchTrace,
-  ): Promise<void> {
-    const critical = alert.severity === 'critical';
-    const finish = (result: Parameters<NotificationTraceRegistry['recordNativeResult']>[1]) => {
-      dispatchTrace(trace, action, critical);
-      recordNativeResult(trace, result);
-    };
+  // Desktop uses the same browser permission API as the web workspace.
+  private sendWebNotification(alert: UnifiedAlert, domain: NotificationDomain,
+    trace?: DispatchTrace, stillEligible?: (afterPermission: boolean) => boolean): void {
     try {
       if (!('Notification' in window)) {
-        finish({ delivered: false, surface: 'failed', error: 'notification-api-unavailable' });
-        return;
+        recordNativeResult(trace, { delivered: false, surface: 'failed', error: 'notification-api-unavailable' });
+      } else if (Notification.permission === 'granted') {
+        this.presentNotification(alert, trace);
+      } else if (Notification.permission === 'denied') {
+        recordNativeResult(trace, { delivered: false, surface: 'failed', error: 'permission-denied' });
+      } else if (this.permissionCandidate) {
+        recordNativeResult(trace, { delivered: false, surface: 'failed', error: 'permission-pending' });
+      } else {
+        this.awaitPermission(alert, domain, trace, stillEligible);
       }
-      let permission = Notification.permission;
-      if (permission === 'default') {
-        try {
-          permission = await Notification.requestPermission();
-        } catch {
-          finish({ delivered: false, surface: 'failed', error: 'permission-request-failed' });
-          return;
-        }
-      }
-      if (permission !== 'granted') {
-        finish({ delivered: false, surface: 'failed', error: 'permission-denied' });
-        return;
-      }
-
-      const mode = getNotificationModeState();
-      const modeHold = holdNotificationForMode(critical, mode);
-      if (modeHold || mode.generation !== generation) {
-        suppressTrace(trace, modeHold ?? 'mode-changed-during-permission');
-        return;
-      }
-      this.createWebNotification(alert);
-      finish({ delivered: true, surface: critical ? 'critical' : 'banner' });
     } catch {
-      finish({ delivered: false, surface: 'failed', error: 'notification-delivery-failed' });
+      recordNativeResult(trace, { delivered: false, surface: 'failed', error: 'notification-delivery-failed' });
+    }
+  }
+
+  private awaitPermission(alert: UnifiedAlert, domain: NotificationDomain,
+    trace?: DispatchTrace, stillEligible?: (afterPermission: boolean) => boolean): void {
+    const generation = getNotificationModeState().generation;
+    const started = Date.now();
+    const settings = getSettings();
+    const controller = new AbortController();
+    const cancel = this.cancelPendingPermission;
+    const timer = setTimeout(cancel, RATE_LIMIT_MS);
+    this.permissionCandidate = outcome => {
+      clearTimeout(timer);
+      controller.abort();
+      const mode = getNotificationModeState();
+      const hold = outcome !== 'denied' && holdNotificationForMode(alert.severity === 'critical', mode);
+      if (outcome !== 'denied' && (hold || mode.generation !== generation)) {
+        suppressTrace(trace, hold || 'mode-changed-during-permission');
+        return;
+      }
+      if (outcome !== 'granted' || Notification.permission !== 'granted') {
+        const failure = outcome === 'cancelled' ? 'no-longer-eligible' : 'permission-denied';
+        recordNativeResult(trace, { delivered: false, surface: 'failed',
+          error: outcome === 'failed' ? 'permission-request-failed' : failure });
+        return;
+      }
+      const now = Date.now();
+      const current = getSettings();
+      if (now < started || now - started >= RATE_LIMIT_MS
+        || current.global !== settings.global || current.domains[domain] !== settings.domains[domain]
+        || !evaluateNotificationPreference(domain, alert.severity).allowed
+        || nativeChannelHold(domain) || inactiveWarning(alert, now) || stillEligible?.(true) === false) {
+        recordNativeResult(trace, { delivered: false, surface: 'failed', error: 'no-longer-eligible' });
+        return;
+      }
+      this.presentNotification(alert, trace);
+    };
+    const options = { signal: controller.signal };
+    if (typeof document !== 'undefined') document.addEventListener('wm:mode-changed', () => { if (getNotificationModeState().generation === generation) cancel(); }, options);
+    window.addEventListener?.('storage', event => {
+      if (event.key === 'wm-app-mode' || isNotificationSettingsStorageKey(event.key)) cancel();
+    }, options);
+    if (!this.permissionQuestionOpen) void this.askPermission();
+  }
+
+  private async askPermission(): Promise<void> {
+    this.permissionQuestionOpen = true;
+    try {
+      const result = await Notification.requestPermission();
+      this.finishPermission(result);
+    } catch {
+      this.finishPermission('failed');
+    } finally {
+      this.permissionQuestionOpen = false;
+    }
+  }
+
+  private presentNotification(alert: UnifiedAlert, trace?: DispatchTrace): void {
+    try {
+      this.createWebNotification(alert);
+      recordNativeResult(trace, { delivered: true, surface: alert.severity === 'critical' ? 'critical' : 'banner' });
+    } catch {
+      recordNativeResult(trace, { delivered: false, surface: 'failed', error: 'notification-delivery-failed' });
     }
   }
 

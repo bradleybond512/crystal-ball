@@ -140,19 +140,20 @@ test('real GDACS loader rejects unavailable and breaker-cache responses without 
   }
 });
 
-function alertLoaderBindings(snapshot: unknown, fallback = nws()) {
+function alertLoaderBindings(snapshot: unknown, fallback = nws(), freshRequest = true) {
   const alerts: ReturnType<typeof normalizeNWSAlert>[] = [];
+  const inputs: { live: boolean; stillEligible: () => boolean }[] = [];
   return {
-    alerts,
-    owner: { ctx: { intelligenceCache: {}, panels: {} } },
+    alerts, inputs,
+    owner: { ctx: { isDestroyed:false, intelligenceCache: {}, panels: {} } },
     bindings: {
       withOfflineCache: async () => { if (snapshot instanceof Error) throw snapshot; return snapshot; },
       getStormPreparednessContext: () => ({ nwsAlerts: [fallback] }),
       fetchNWSAlerts: async () => [], fetchSpcSummary: async () => null, fetchMarineHazards: async () => [],
       fetchExcessiveRainfallOutlooks: async () => [], fetchWinterWeatherOutlooks: async () => [],
       nwsAlertMinimal: (row: unknown) => row,
-      normalizeNWSAlert, normalizeGDACSEvent,
-      unifiedAlertStore: { ingest: (rows: typeof alerts) => alerts.push(...rows) },
+      normalizeNWSAlert, normalizeGDACSEvent, captureNwsObservation: () => () => freshRequest,
+      unifiedAlertStore: { ingest: (rows: typeof alerts, options: typeof inputs[number]) => { alerts.push(...rows); inputs.push(options); } },
       recordWarningPredictions: () => { throw new Error('Stop after tested ingestion'); },
       classifyRegion: () => null,
       feedFreshnessFromSnapshot: () => ({ fresh: true }),
@@ -178,7 +179,7 @@ test('real NWS refresh preserves original store provenance and replay never emit
   t.mock.method(alertDB, 'putBatch', async () => {});
   const store = new UnifiedAlertStore();
   const data = { schemaVersion: 1, scope: 'national-active', completeness: 'complete', observedAt: OBSERVED, alerts: [nws()] };
-  let response: unknown = { data, source: 'network', isStale: false, cachedAt: OBSERVED + 10_000 };
+  let response: unknown = { data, source: 'network', isStale: false, liveObservation:true, cachedAt: OBSERVED + 10_000 };
   const owner = { ctx: { isDestroyed: false }, lastNwsSnapshot: null, nwsAcquisitionFailed: false, publishNwsSnapshot() {} };
   const refresh = method('refreshNWSAlerts', {
     fetchCachedNwsSnapshot: async () => { if (response instanceof Error) throw response; return response; },
@@ -193,6 +194,7 @@ test('real NWS refresh preserves original store provenance and replay never emit
     });
     assert.equal(initial.timestamp, ONSET);
     const before = emitted.length;
+    assert.equal(before, 1, 'fresh observation reaches dispatcher');
     for (response of [
       { data, source: 'network', isStale: false, cachedAt: OBSERVED + 30_000 },
       { data, source: 'offline-cache', isStale: true, cachedAt: OBSERVED + 40_000 },
@@ -209,6 +211,7 @@ test('real NWS refresh preserves original store provenance and replay never emit
     store.stopNwsLifecycle();
     Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: originalStorage });
   }
+
 });
 
 test('real GDACS alert loader preserves live and offline row observation instead of wrapper cache time', async () => {
@@ -217,6 +220,9 @@ test('real GDACS alert loader preserves live and offline row observation instead
     await method('loadGDACSAlerts', h.bindings).call(h.owner);
     assert.equal(h.alerts.length, 1);
     assert.deepEqual(h.alerts[0]?.retentionEvidence, { kind: 'gdacs-observation', observedAt: OBSERVED });
+    assert.equal(h.inputs[0]?.live, source === 'network');
+    h.owner.ctx.isDestroyed = true;
+    assert.equal(h.inputs[0]?.stillEligible(), false);
   }
 });
 

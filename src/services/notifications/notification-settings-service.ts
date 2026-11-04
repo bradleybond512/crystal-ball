@@ -42,6 +42,7 @@ export type NotificationPreferenceReason =
   | 'allowed'
   | 'master-mute'
   | 'domain-disabled'
+  | 'settings-unavailable'
   | 'below-threshold'
   | 'domain-quiet-hours'
   | 'preferences-unavailable';
@@ -109,6 +110,22 @@ export function areNotificationPreferencesAvailable(): boolean {
   return preferencesAvailable;
 }
 
+let lastPersisted: string | null;
+let unreadableSettings = false;
+
+function parseSaved(raw: string | null): NotificationSettings | null {
+  if (raw === null) { unreadableSettings = false; return null; }
+  try {
+    const parsed = JSON.parse(raw) as NotificationSettings;
+    unreadableSettings = parsed?.version !== 1 || !parsed.domains || typeof parsed.domains !== 'object' || Array.isArray(parsed.domains);
+    return unreadableSettings ? null : parsed;
+  } catch {
+    unreadableSettings = true;
+    return null;
+  }
+
+}
+
 function validDomain(value: DomainSettings | undefined): value is DomainSettings {
   return typeof value?.enabled === 'boolean' && typeof value.quietHoursEnabled === 'boolean'
     && SEVERITY_ORDER.includes(value.threshold) && ['in_app', 'native', 'both'].includes(value.channel);
@@ -124,7 +141,10 @@ function validSavedSettings(saved: SavedSettings): boolean {
 function saveToStorage(settings: NotificationSettings): boolean {
   if (!preferencesAvailable) return false;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    const raw = JSON.stringify(settings);
+    localStorage.setItem(STORAGE_KEY, raw);
+    lastPersisted = raw;
+    unreadableSettings = false;
     return true;
   } catch {
     return false; // Private browsing or quota: use the established settings in memory.
@@ -136,8 +156,9 @@ function mergeWithDefaults(saved: SavedSettings | null): NotificationSettings {
   if (!saved) return defaults;
   const domains = { ...defaults.domains };
   for (const domain of LEGACY_DOMAINS) {
-    if (saved.domains?.[domain]) {
-      domains[domain] = { ...DEFAULT_DOMAIN_SETTINGS, ...saved.domains[domain] };
+    if (Object.prototype.hasOwnProperty.call(saved.domains, domain)) {
+      const row = saved.domains[domain];
+      domains[domain] = { ...DEFAULT_DOMAIN_SETTINGS, ...row, channel: row?.channel };
     }
   }
   if (validDomain(saved.domains?.derived)) {
@@ -192,7 +213,8 @@ function initialSettings(): NotificationSettings {
   let settings = buildDefaultSettings();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    const saved = raw === null ? null : JSON.parse(raw) as SavedSettings;
+    lastPersisted = raw;
+    const saved = parseSaved(raw);
     if (raw !== null) {
       if (saved?.version === 1) settings = mergeWithDefaults(saved);
       if (saved?.version !== 1 || !validSavedSettings(saved)) {
@@ -215,6 +237,28 @@ function initialSettings(): NotificationSettings {
 
 let currentSettings: NotificationSettings = initialSettings();
 
+function refreshStoredSettings(): void {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw === lastPersisted) return;
+    lastPersisted = raw;
+    const saved = parseSaved(raw);
+    preferencesAvailable = !unreadableSettings && (!saved || validSavedSettings(saved));
+    currentSettings = mergeWithDefaults(saved);
+  } catch { /* keep the in-memory settings if storage is unavailable */ }
+}
+
+export function nativeChannelHold(domain: NotificationDomain): string | undefined {
+  const channel = getSettings().domains?.[domain]?.channel;
+  if (unreadableSettings || !preferencesAvailable) return 'channel-unavailable';
+  if (channel === 'both' || channel === 'native') return;
+  return channel === 'in_app' ? 'in-app-only' : 'channel-unavailable';
+}
+
+export function isNotificationSettingsStorageKey(key: string | null): boolean {
+  return key === null || key === STORAGE_KEY;
+}
+
 function emitChange(): void {
   if (typeof document !== 'undefined') {
     document.dispatchEvent(
@@ -224,6 +268,7 @@ function emitChange(): void {
 }
 
 export function getSettings(): NotificationSettings {
+  refreshStoredSettings();
   return currentSettings;
 }
 
@@ -231,6 +276,7 @@ export function updateDomainSettings(
   domain: NotificationDomain,
   patch: Partial<DomainSettings>,
 ): void {
+  refreshStoredSettings();
   currentSettings = {
     ...currentSettings,
     domains: {
@@ -243,6 +289,7 @@ export function updateDomainSettings(
 }
 
 export function updateGlobalSettings(patch: Partial<GlobalSettings>): GlobalSettingsUpdate {
+  refreshStoredSettings();
   const global = { ...currentSettings.global, ...patch };
   if ('quietHoursStart' in patch || 'quietHoursEnd' in patch) {
     const validity = validateQuietWindow(global.quietHoursStart, global.quietHoursEnd);
@@ -278,16 +325,18 @@ export function evaluateNotificationPreference(
   severity: NotificationSeverity,
   now: Date = new Date(),
 ): NotificationPreferenceDecision {
-  const { global, domains } = currentSettings;
+  const { global, domains } = getSettings();
   if (domain === 'derived' && !preferencesAvailable) return { allowed: false, reason: 'preferences-unavailable' };
   const bypassMute = severity === 'critical' && domain !== 'derived';
   if (global.masterMute && !bypassMute) return { allowed: false, reason: 'master-mute' };
 
   const domainSettings = domains[domain];
+  if (!domainSettings || typeof domainSettings.enabled !== 'boolean') return { allowed: false, reason: 'settings-unavailable' };
   if (!domainSettings.enabled) return { allowed: false, reason: 'domain-disabled' };
 
   const severityIndex = Math.max(0, SEVERITY_ORDER.indexOf(severity));
-  const thresholdIndex = Math.max(0, SEVERITY_ORDER.indexOf(domainSettings.threshold));
+  const thresholdIndex = SEVERITY_ORDER.indexOf(domainSettings.threshold);
+  if (thresholdIndex === -1 || typeof domainSettings.quietHoursEnabled !== 'boolean') return { allowed: false, reason: 'settings-unavailable' };
   if (severityIndex < thresholdIndex) return { allowed: false, reason: 'below-threshold' };
 
   if (!bypassMute && isDomainInQuietHours(domain, now)) {

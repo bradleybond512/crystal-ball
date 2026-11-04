@@ -935,6 +935,8 @@ export class Panel {
  }, this.contentDebounceMs);
   }
 
+  protected captureContentFocus?(): (() => void) | undefined;
+
   private setContentImmediate(html: string): void {
  if (this.contentDebounceTimer) {
  clearTimeout(this.contentDebounceTimer);
@@ -950,7 +952,9 @@ export class Panel {
  // timer. On failure we swap in a minimal error card and mark the cache so
  // subsequent identical writes are skipped.
  try {
+ const restoreFocus = this.captureContentFocus?.();
  this.content.innerHTML = html;
+ restoreFocus?.();
  this.lastAppliedContentHtml = html;
  // Real content rendered — the panel resolved out of any loading state.
  this.clearLoadingBudget();

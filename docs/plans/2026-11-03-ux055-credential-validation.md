@@ -1,6 +1,6 @@
 # UX-055 — Show when a credential was last verified
 
-Proposed November 3, 2026 against canonical main `cd459dfec`. With open PR claims included, the roadmap selected UX-055 at priority S. This changes how the UI describes evidence about credentials and how the existing verification boundary handles failures. It requires operator design approval.
+Approved November 3, 2026 against canonical main `cd459dfec`. With open PR claims included, the roadmap selected UX-055 at priority S. This changes how the UI describes evidence about credentials and how the existing verification boundary handles failures. The operator approved the design, draft claim and local implementation.
 
 ## What the present code does
 
@@ -10,7 +10,7 @@ In a production dashboard DOM fixture with synthetic values, a 306-day-old resul
 
 A public control illustrates the difference between a reachable endpoint and proof of a credential. Without sending credentials, `GET https://openrouter.ai/api/v1/models` returned HTTP 200 and 454 entries in `data`. The same unauthenticated control at `https://api.groq.com/openai/v1/models` returned HTTP 401 with a structured `error` object. A successful public model list cannot verify the supplied OpenRouter credential. These observations do not establish the status of any operator key.
 
-## Proposed operator policy
+## Approved operator policy
 
 * Separate whether a value is present, whether its format is acceptable, and what a provider actually established. Use dated “Provider verified” or “Provider rejected” only for conclusive, provider-specific evidence. Show “Could not verify” for an outage, local transport/authentication failure, rate limit, bot challenge, inconclusive permissions, malformed body or public no-auth endpoint. Show “Not tested” for settings without a supported credential probe. A URL reachable or model available is a different result.
 * Show elapsed age and an accessible exact timestamp for conclusive evidence. Mark it stale at **24 hours**, for rejected as well as verified results. Age changes the wording only. A failed new attempt shows its own time and reason and leaves the last conclusive result identifiable as historical. Missing, malformed, future or unbound timestamps cannot establish a fresh result. Refresh the displayed age when the settings surface is visible without issuing network traffic.

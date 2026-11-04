@@ -119,7 +119,9 @@ test('the sidecar can verify a saved key without being sent its value', () => {
   assert.match(sidecar, /const candidate = useStored === true \? process\.env\[key\] : value;/);
   assert.match(sidecar, /validateSecretAgainstProvider\(key, candidate, safeContext\)/);
   const stored = runtimeConfig.slice(runtimeConfig.indexOf('export async function verifyStoredSecretWithApi('));
-  assert.match(stored.slice(0, 900), /requestSidecarVerification\(\{ key, useStored: true, context \}\)/);
+  const storedFunction = stored.slice(0, stored.indexOf('async function requestSidecarVerification'));
+  assert.match(storedFunction, /requestSidecarVerification\(\{ key, useStored: true, context: \{\} \}, signal\)/);
+  assert.doesNotMatch(storedFunction, /requestSidecarVerification\(\{[^}]*\bvalue\b/);
 });
 
 

@@ -21,9 +21,9 @@ const second = 'src-tauri/sidecar/__tests__/second.test.mts';
 test('the complete sidecar inventory is assigned once across the three real smoke groups', () => {
   const inventory = discoverSidecarTests(root);
   const groups = sidecarSmokeGroups(scripts, SUITE_STAGES['sidecar-remaining']);
-  assert.equal(inventory.length, 58);
-  assert.deepEqual(Object.values(groups).map((files) => files.length), [18, 6, 34]);
-  assert.equal(assertSidecarInventory(inventory, groups), 58);
+  assert.equal(inventory.length, 59);
+  assert.deepEqual(Object.values(groups).map((files) => files.length), [19, 6, 34]);
+  assert.equal(assertSidecarInventory(inventory, groups), 59);
   for (const file of ['sms-auth', 'key-health']) {
     assert.ok(groups.remaining.includes(`src-tauri/sidecar/__tests__/${file}.test.mjs`));
   }

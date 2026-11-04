@@ -182,7 +182,12 @@ test('peer strip settings update visibility immediately and never replay hidden 
 
 test('a disappearing focused regime moves to freshness; outside focus stays put', t => {
   const h = setup(t); h.state.regimes = { market: {} }; h.poll();
-  h.button('regime').focus(); h.state.regimes = {}; h.poll();
+  const regime = h.button('regime');
+  regime.focus();
+  const matches = regime.matches.bind(regime);
+  t.mock.method(regime, 'matches', (selector: string) => selector === ':focus' ? false : matches(selector));
+  assert.ok(Object.is(h.doc.activeElement, regime), 'a background WKWebView retains DOM focus');
+  h.state.regimes = {}; h.poll();
   assert.ok(Object.is(h.doc.activeElement, h.button('fresh')), 'freshness is the preceding visible action');
   assert.equal(h.button('regime').style.display, 'none');
   const outside = h.doc.createElement('button'); h.doc.body.append(outside); outside.focus();

@@ -58,7 +58,7 @@ test('posture status exists empty before a warning, has polite atomic semantics 
   mounted.render([posture()], false);
   assert.equal(doc.activeElement, filter);
   assert.equal(stack.querySelector('[data-posture-announcer]'), status);
-  assert.equal(status.querySelector('button'), null);
+  assert.ok(!status.querySelector('button'), 'unexpected element in posture surface');
   assert.match(status.textContent!, /Elevated posture.*Western Pacific.*strike capable/i);
 });
 
@@ -81,15 +81,18 @@ test('only meaningful posture transitions mutate the status; returning from an e
   assert.doesNotMatch(status.textContent!, /Strike capable/i);
   mounted.render([posture({ theaterId: 'other', theaterName: '<i>Other</i>', postureLevel: 'critical', strikeCapable: false })], false);
   assert.match(status.textContent!, /<i>Other<\/i>/);
-  assert.equal(status.querySelector('i'), null);
+  assert.ok(!status.querySelector('i'), 'unexpected element in posture surface');
   observer.takeRecords();
   mounted.render([posture({ theaterId: 'another', theaterName: '<i>Other</i>', postureLevel: 'critical', strikeCapable: false })], false);
   assert.ok(observer.takeRecords().length, 'a distinct selected theater must announce even if its short label matches');
   mounted.render([], false);
   assert.equal(status.textContent, '', 'no unverified all-clear announcement');
-  assert.equal(stack.querySelector('.critical-posture-banner'), null);
+  assert.ok(!stack.querySelector('.critical-posture-banner'), 'unexpected element in posture surface');
   mounted.render([posture()], false);
   assert.match(status.textContent!, /Western Pacific/);
+  mounted.render([], false);
+  mounted.render([posture()], false);
+  assert.match(status.textContent!, /Western Pacific/, 'same material posture can start again after disappearance');
   observer.disconnect();
 });
 
@@ -103,7 +106,7 @@ test('refresh keeps both action nodes and activates the current selected theater
   assert.ok(doc.activeElement === view, 'View Region focus survived refresh');
   assert.ok(stack.querySelector('.banner-dismiss') === dismiss, 'dismiss node identity survived');
   assert.equal(dismiss.getAttribute('aria-label'), 'Dismiss posture banner');
-  assert.equal(stack.querySelector('img'), null);
+  assert.ok(!stack.querySelector('img'), 'unexpected element in posture surface');
   view.click();
   assert.deepEqual(views, [[0, 0]]);
   assert.deepEqual(actions, [['view','equator']]);
@@ -128,7 +131,7 @@ for (const gate of ['hidden', 'ghost', 'mobile', 'dismissed'] as const) {
     const update = posture({ postureLevel: 'critical' });
     mounted.render([update], gate === 'mobile');
     assert.equal(status.textContent, '');
-    if (gate === 'mobile') assert.equal(stack.querySelector('.critical-posture-banner'), null);
+    if (gate === 'mobile' || gate === 'dismissed') assert.ok(!stack.querySelector('.critical-posture-banner'), 'unexpected element in posture surface');
     if (gate === 'hidden') visibility(false);
     if (gate === 'ghost') setMode(null);
     if (gate === 'dismissed') browser.sessionStorage.setItem('banner-dismissed', String(Date.now() - 31 * 60_000));
@@ -150,6 +153,24 @@ test('a visibility round-trip between polls clears the old speech and seeds the 
   assert.equal(status.textContent, '', 'do not replay changes which may have occurred while hidden');
   mounted.render([posture()], false);
   assert.match(status.textContent!, /Elevated posture/);
+});
+
+test('dismissal lasts for this window when session storage is unavailable', () => {
+  const stack = mount();
+  const saved = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage')!;
+  Object.defineProperty(globalThis, 'sessionStorage', {
+    configurable: true,
+    get() { throw new Error('storage disabled'); },
+  });
+  try {
+    mounted.render([posture()], false);
+    stack.querySelector<HTMLButtonElement>('.banner-dismiss')!.click();
+    mounted.render([posture({ postureLevel: 'critical' })], false);
+    assert.ok(!stack.querySelector('.critical-posture-banner'), 'local dismissal survives another poll');
+    assert.equal(stack.querySelector('[data-posture-announcer]')?.textContent, '');
+  } finally {
+    Object.defineProperty(globalThis, 'sessionStorage', saved);
+  }
 });
 
 test('destroy removes the status and controls, and late reports do not remount them', t => {

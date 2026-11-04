@@ -230,7 +230,7 @@ export class SummaryStrip {
 
   private setSegmentDisplay(button: HTMLButtonElement, display: string, fallback: 'fresh' | 'chevron'): void {
     if (button.style.display === display) return;
-    if (display === 'none' && button.matches(':focus')) {
+    if (display === 'none' && button.isSameNode(document.activeElement)) {
       this.el.querySelector<HTMLButtonElement>(`[data-seg="${fallback}"]`)?.focus({ preventScroll: true });
     }
     button.style.display = display;

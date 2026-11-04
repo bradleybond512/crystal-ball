@@ -42,6 +42,7 @@ import type { ReliabilityCurve, RecalibrationResult } from '@/services/cognition
 import type { FactDomain } from './types';
 import { getMemory as idbGetMemory, putMemory as idbPutMemory } from '@/services/reasoning-memory';
 import {
+  measureOutcomeResolvers,
   runOutcomeResolvers,
   type OutcomeResolver,
   type ResolverContext,
@@ -59,6 +60,7 @@ import {
   buildMomentumBaselinePrediction,
   type MomentumSample,
 } from './momentum-baseline';
+import type { ResolverPassMetrics } from './resolver-pass-metrics';
 import { getSpotPriceHistory } from '@/services/market/spot-price-store';
 
 // ── Calibration store singleton ───────────────────────────────────────────────
@@ -70,26 +72,36 @@ const MAX_RECORDS = 500;
 /** Working-set size; the evidence journal rebuilds at most this many. */
 export const FORECAST_CALIBRATION_CAPACITY = MAX_RECORDS;
 
+let loadedSnapshot: string | null | undefined;
+
 function loadPersisted(store: ForecastCalibrationStore): void {
   try {
     if (typeof localStorage === 'undefined') return;
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
+    if (raw === null) { loadedSnapshot = null; return; }
     const parsed: unknown = JSON.parse(raw);
-    store.loadJson(parsePersistedPredictions(parsed, MAX_RECORDS));
+    const records = parsePersistedPredictions(parsed, MAX_RECORDS);
+    store.loadJson(records);
+    if (Array.isArray(parsed) && records.length === parsed.length) loadedSnapshot = raw;
     for (const record of store.all()) captureEvidence({ kind: 'forecast', record });
   } catch { /* corrupted store — start fresh */ }
 }
 
-function persist(store: ForecastCalibrationStore): void {
+function saveSnapshot(store: ForecastCalibrationStore): boolean {
   try {
-    if (typeof localStorage === 'undefined') return;
+    if (typeof localStorage === 'undefined') return false;
     const all = store.all().sort((a, b) => a.predictedAt - b.predictedAt);
     const trimmed = all.slice(Math.max(0, all.length - MAX_RECORDS));
     if (trimmed.length < all.length) store.loadJson(trimmed);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
-    notifyEvidenceChanged('forecast');
-  } catch { /* quota — calibration is best-effort */ }
+    const next = JSON.stringify(trimmed);
+    localStorage.setItem(STORAGE_KEY, next);
+    loadedSnapshot = next;
+    return true;
+  } catch { return false; }
+}
+
+function persist(store: ForecastCalibrationStore): void {
+  if (saveSnapshot(store)) notifyEvidenceChanged('forecast');
 }
 
 /**
@@ -139,6 +151,7 @@ export function getCalibrationStore(): ForecastCalibrationStore {
       }
       return changed;
     };
+    loadedSnapshot = undefined;
     loadPersisted(store);
   }
   return _calibrationStore;
@@ -322,6 +335,62 @@ export function dispatchOutcomeResolvers(
   persist(store);
   syncForecastEvaluations(store.all());
   return resolved;
+}
+
+export function isCalibrationSnapshotCurrent(): boolean {
+  const store = getCalibrationStore();
+  try {
+    if (loadedSnapshot !== undefined && localStorage.getItem(STORAGE_KEY) === loadedSnapshot) return true;
+    refreshAfterPeerWrite(store);
+  } catch { /* The current snapshot cannot be verified when storage is unavailable. */ }
+  return false;
+}
+
+export function hasDueCalibrationWork(now: number): boolean {
+  return getCalibrationStore().all().some(record => record.status === 'pending' && record.criteria !== undefined && record.resolveBy <= now);
+}
+
+function uncommitted(metrics: ResolverPassMetrics): ResolverPassMetrics {
+  return {
+    ...metrics, direct: 0, proxy: 0, unattributed: 0, expired: 0, persistenceFailures: 1,
+    eligibleOverdueAfter: metrics.eligibleOverdueBefore,
+    rawOverdueAfter: metrics.rawOverdueBefore, diagnosticOverdueAfter: metrics.diagnosticOverdueBefore,
+  };
+}
+
+function refreshAfterPeerWrite(store: ForecastCalibrationStore): void {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw === loadedSnapshot) return;
+    const parsed: unknown = raw === null ? [] : JSON.parse(raw);
+    const records = parsePersistedPredictions(parsed, MAX_RECORDS);
+    if (Array.isArray(parsed) && records.length === parsed.length) {
+      store.loadJson(records);
+      loadedSnapshot = raw;
+    }
+  } catch { /* Keep the current in-memory view if the peer data cannot be validated. */ }
+}
+
+export function dispatchMeasuredOutcomeResolvers(context: ResolverContext, resolvers: readonly OutcomeResolver[]): ResolverPassMetrics {
+  const store = getCalibrationStore();
+  if (!isCalibrationSnapshotCurrent()) throw new Error('Calibration ledger snapshot unavailable');
+  const original = loadedSnapshot;
+  const before = store.all();
+  const staged = createForecastCalibrationStore();
+  staged.loadJson(before);
+  // Stage without the singleton's evidence hooks. A rejected commit must never
+  // enqueue labels for the journal or grade forecasts through another window.
+  const metrics = measureOutcomeResolvers(staged, context, resolvers);
+  if (loadedSnapshot !== original || !isCalibrationSnapshotCurrent()) return uncommitted(metrics);
+  const pending = new Set(before.filter(r => r.status === 'pending').map(r => r.id));
+  const changed = staged.all().filter(r => pending.has(r.id) && r.status !== 'pending');
+  if (!saveSnapshot(staged)) return uncommitted(metrics);
+
+  store.loadJson(staged.all());
+  for (const record of changed) captureEvidence({ kind: 'forecast', record });
+  notifyEvidenceChanged('forecast');
+  syncForecastEvaluations(store.all());
+  return metrics;
 }
 
 const MIN_RESOLVED_FOR_DOMAIN_MULT = 10;

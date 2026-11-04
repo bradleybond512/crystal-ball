@@ -17,6 +17,8 @@ import {
 import type { AlgorithmLedgerPersistenceStatus } from './algorithm-ledger-persistence';
 import type { TuningDecision } from './tuning-decision-log';
 import type { SpotPriceDiagnostics } from '../market/spot-price-store';
+import { getResolutionRunDiagnostics } from '../intelligence/resolution-run-receipts';
+import { FORECAST_RESOLUTION_GRACE_MS } from '../intelligence/resolver-pass-metrics';
 import type { StormReportBatch } from '../intelligence/outcome-resolvers';
 import {
   brierScore,
@@ -56,7 +58,6 @@ const RECENT_EVALUATION_LIMIT = 20;
 const RECENT_TUNING_DECISION_LIMIT = 20;
 const FORECAST_COHORT_LIMIT = 10;
 const FORECAST_COHORT_LABEL_LIMIT = 80;
-const FORECAST_RESOLUTION_GRACE_MS = 15 * 60 * 1000;
 const WEATHER_REPORT_STALE_MS = 30 * 60 * 1000;
 const WEATHER_REPORT_TYPES = new Set([
   'tornado',
@@ -146,6 +147,7 @@ interface ForecastResolverDiagnostics {
 }
 
 export interface ForecastCalibrationDiagnostics {
+  resolverRuns: ReturnType<typeof getResolutionRunDiagnostics> & { historicalLateCauseUnknown: number };
   summary: {
     total: number;
     resolved: number;
@@ -387,6 +389,7 @@ function buildForecastCalibrationDiagnostics(
       resolutionQuality,
     ),
     resolutionQuality,
+    resolverRuns: { ...getResolutionRunDiagnostics(), historicalLateCauseUnknown: resolutionQuality.summary.lateResolutions },
     marketSpots: marketSpotPrices ? { ...marketSpotPrices } : null,
     weatherReports: buildWeatherReportDiagnostics(
       predictions,

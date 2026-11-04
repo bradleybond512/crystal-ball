@@ -332,6 +332,36 @@ test('matching post-prediction storm report resolves a warning true', () => {
   });
 });
 
+// Same mature warning, forecast window and evaluation clock for every replay.
+const replayReport = { id: 'timed-lsr', type: 'tornado', lat: 35, lon: -97, reportedAt: 1_500 };
+const warningReplayClock = 10_001;
+for (const [name, coverage] of [
+  ['future acquisition', { fetchedAt: warningReplayClock + 1 }],
+  ['missing acquisition time', { fetchedAt: Number.NaN }],
+  ['missing coverage start', { coverageStart: Number.NaN }],
+  ['missing coverage end', { coverageEnd: Number.NaN }],
+  ['coverage extends past acquisition', { fetchedAt: 1_499 }],
+  ['report predates coverage', { coverageStart: 1_501 }],
+  ['report follows coverage', { coverageEnd: 1_499 }],
+] as const) {
+  test('direct warning replay declines ' + name, () => {
+    const ctx = weatherContext(warningReplayClock, [replayReport], { ...coverage, complete: false });
+    assert.equal(warningVerificationResolver.resolve(warningPrediction(), ctx), null);
+  });
+}
+
+test('direct warning replay accepts the inclusive observed instant in a partial batch', () => {
+  const instant = replayReport.reportedAt;
+  const ctx = weatherContext(warningReplayClock, [
+    { ...replayReport, id: 'before-coverage', reportedAt: instant - 1 },
+    replayReport,
+  ], { coverageStart: instant, coverageEnd: instant, fetchedAt: instant, complete: false });
+  const verdict = warningVerificationResolver.resolve(warningPrediction(), ctx);
+  assert.equal(verdict?.outcome, true);
+  assert.equal(verdict.metadata.provenance.kind, 'direct');
+  assert.equal(verdict.metadata.provenance.evidence[0]?.reference, replayReport.id);
+});
+
 test('warning resolver ignores look-ahead leaks, wrong types, and outside reports', () => {
   const reports = [
     { id: 'before', type: 'tornado', lat: 35, lon: -97, reportedAt: 999 },

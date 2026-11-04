@@ -15,6 +15,11 @@ export function _resetNwsAlertsForTest(): void {
   inflight = null;
 }
 
+export function captureNwsObservation(): (alerts: NWSAlert[]) => boolean {
+  const previous = cache?.alerts;
+  return alerts => alerts !== previous && alerts === cache?.alerts;
+}
+
 export async function fetchNWSAlertsSnapshot(): Promise<NWSAlertSnapshot> {
   if (cache && Date.now() - cache.observedAt < CACHE_TTL_MS) return cache;
   if (inflight) return inflight;

@@ -4,7 +4,7 @@ import test, { beforeEach } from 'node:test';
 import { setMode } from '../mode-manager.ts';
 import type { UnifiedAlert } from '../unified-alerts.ts';
 import { getNotificationTraceRegistry, resetDiagnosticsState } from '../diagnostics/diagnostics-state.ts';
-import { resetSettings, updateDomainSettings, updateGlobalSettings } from '../notifications/notification-settings-service.ts';
+import { getSettings, resetSettings, updateDomainSettings, updateGlobalSettings } from '../notifications/notification-settings-service.ts';
 
 class NotificationStub {
   static permission: NotificationPermission = 'granted';
@@ -245,4 +245,179 @@ test('permission denial still reserves the attempted banner slot while badges st
   assert.deepEqual(entries[1]?.nativeResult, { delivered: true, surface: 'in_app' });
   assert.equal(NotificationStub.calls.length, 0);
   assert.deepEqual(getNotificationTraceRegistry().summary().suppressedByReason, { 'source-rate-limit': 1 });
+});
+
+test('only a source-cooldown hold returns the inbox disposition', async () => {
+  const { notificationDispatcher: dispatcher } = await loadFresh();
+  assert.equal(dispatcher.dispatchNotification(alert('first', 'high'), 'banner'), undefined);
+  assert.equal(dispatcher.dispatchNotification(alert('held', 'high'), 'banner'), 'held-cooldown');
+  updateDomainSettings('weather', { enabled: false });
+  assert.equal(dispatcher.dispatchNotification(alert('disabled', 'high'), 'banner'), undefined);
+});
+
+for (const desktop of [false, true]) {
+  test(`in-app-only and malformed channels suppress OS permission without spending capacity (desktop ${desktop})`, async (t) => {
+    if (desktop) Object.assign(window, { __TAURI_INTERNALS__: {} });
+    const { notificationDispatcher: dispatcher } = await loadFresh();
+    const prompts = t.mock.method(NotificationStub, 'requestPermission');
+    NotificationStub.permission = 'default';
+    for (const channel of ['in_app', 'future-channel'] as const) {
+      updateDomainSettings('weather', { channel: channel as 'in_app' });
+      dispatcher.dispatchNotification(alert('critical-' + channel), 'sound+banner');
+    }
+    assert.equal(prompts.mock.callCount(), 0);
+    assert.equal(NotificationStub.calls.length, 0);
+    assert.equal(getNotificationTraceRegistry().summary().unsafeSuppressions.length, 1, 'only the malformed preference needs diagnosis');
+    NotificationStub.permission = 'granted';
+    updateDomainSettings('weather', { channel: 'native' });
+    dispatcher.dispatchNotification(alert('allowed', 'high'), 'banner');
+    assert.deepEqual(NotificationStub.calls.map(row => row.title), ['Alert allowed']);
+  });
+}
+
+for (const scenario of ['allowed', 'mode', 'mode-roundtrip', 'channel-roundtrip', 'quiet-hours', 'owner', 'expiry', 'cancel', 'stale-prompt', 'clock-reversal'] as const) {
+  test(`permission completion rechecks eligibility: ${scenario}`, async t => {
+    const { notificationDispatcher: dispatcher } = await loadFresh();
+    const doc = new EventTarget();
+    Object.assign(globalThis, { document: doc });
+    t.after(() => { Reflect.deleteProperty(globalThis, 'document'); });
+    let now = 1_000_000;
+    t.mock.method(Date, 'now', () => now);
+    let hour = 12;
+    t.mock.method(Date.prototype, 'getHours', () => hour);
+    updateDomainSettings('weather', { quietHoursEnabled: true });
+    let resolve!: (choice: NotificationPermission) => void;
+    NotificationStub.permission = 'default';
+    const prompts = t.mock.method(NotificationStub, 'requestPermission', () =>
+      new Promise<NotificationPermission>(done => { resolve = done; }));
+    let current = true;
+    const warning = { ...alert('pending', 'high'), retentionEvidence: { kind: 'nws-expiry' as const, issuedAt: now-1, observedAt: now, expiresAt: now+1000 } };
+    dispatcher.dispatchNotification(warning, 'banner', () => current);
+    assert.equal(prompts.mock.callCount(), 1);
+    if (scenario === 'mode') localStorage.setItem('wm-app-mode', 'ghost');
+    if (scenario === 'mode-roundtrip') {
+      localStorage.setItem('wm-app-mode', 'ghost');
+      doc.dispatchEvent(new Event('wm:mode-changed'));
+      localStorage.removeItem('wm-app-mode');
+      doc.dispatchEvent(new Event('wm:mode-changed'));
+    }
+    if (scenario === 'channel-roundtrip') {
+      updateDomainSettings('weather', { channel: 'in_app' });
+      updateDomainSettings('weather', { channel: 'both' });
+    }
+    if (scenario === 'quiet-hours') hour = 23;
+    if (scenario === 'owner') current = false;
+    if (scenario === 'expiry') now += 1000;
+    if (scenario === 'cancel') dispatcher.cancelPendingPermission();
+    if (scenario === 'stale-prompt') { warning.retentionEvidence.expiresAt += 200_000; now += 120_000; }
+    if (scenario === 'clock-reversal') now--;
+    NotificationStub.permission = 'granted';
+    resolve('granted');
+    await new Promise(resolveTurn => setImmediate(resolveTurn));
+    assert.equal(NotificationStub.calls.length, scenario === 'allowed' ? 1 : 0);
+    if (scenario !== 'allowed') assert.equal(getNotificationTraceRegistry().all()[0]?.nativeResult?.delivered, false);
+  });
+}
+
+test('an outstanding permission question never builds a critical notification backlog', async t => {
+  const { notificationDispatcher: dispatcher } = await loadFresh();
+  NotificationStub.permission = 'default';
+  let resolve!: (choice: NotificationPermission) => void;
+  const prompts = t.mock.method(NotificationStub, 'requestPermission', () => new Promise<NotificationPermission>(r => { resolve = r; }));
+  dispatcher.dispatchNotification(alert('first'), 'sound+banner');
+  dispatcher.dispatchNotification(alert('second'), 'sound+banner');
+  assert.equal(prompts.mock.callCount(), 1);
+  NotificationStub.permission = 'granted';
+  resolve('granted');
+  await new Promise(resolveTurn => setImmediate(resolveTurn));
+  assert.deepEqual(NotificationStub.calls.map(row => row.title), ['Alert first']);
+});
+
+for (const release of ['dispose','expiry'] as const) {
+  test(`a single unresolved permission question releases its candidate on ${release}`, async t => {
+    const { notificationDispatcher: dispatcher } = await loadFresh();
+    let resolve!: (choice: NotificationPermission) => void;
+    NotificationStub.permission = 'default';
+    const prompts = t.mock.method(NotificationStub, 'requestPermission', () => new Promise<NotificationPermission>(r => { resolve = r; }));
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const oldOwner = t.mock.fn(() => true);
+    dispatcher.dispatchNotification(alert('old'), 'sound+banner', oldOwner);
+    if (release === 'dispose') dispatcher.cancelPendingPermission();
+    else t.mock.timers.tick(120_000);
+    assert.equal(getNotificationTraceRegistry().all()[0]?.nativeResult?.delivered, false, 'expired or disposed candidate released before OS response');
+    dispatcher.dispatchNotification(alert('fresh'), 'sound+banner', () => true);
+    assert.equal(prompts.mock.callCount(), 1);
+    NotificationStub.permission = 'granted';
+    resolve('granted');
+    await new Promise(resolveTurn => setImmediate(resolveTurn));
+    assert.equal(oldOwner.mock.callCount(), 1, 'only the initial eligibility check ran');
+    assert.deepEqual(NotificationStub.calls.map(row => row.title), ['Alert fresh']);
+  });
+}
+
+test('a saved channel from a peer applies before delivery even before its storage event arrives', async t => {
+  const { notificationDispatcher: dispatcher } = await loadFresh();
+  NotificationStub.permission = 'default';
+  const prompts = t.mock.method(NotificationStub, 'requestPermission');
+  const peerSettings = structuredClone(getSettings());
+  peerSettings.domains.weather.channel = 'in_app';
+  localStorage.setItem('wm-notification-settings-v1', JSON.stringify(peerSettings));
+  dispatcher.dispatchNotification(alert('peer'), 'sound+banner');
+  assert.equal(prompts.mock.callCount(), 0);
+});
+
+test('missing domain settings cannot authorize OS permission', async t => {
+  const { notificationDispatcher: dispatcher } = await loadFresh();
+  Reflect.deleteProperty(getSettings().domains, 'weather');
+  NotificationStub.permission = 'default';
+  const prompts = t.mock.method(NotificationStub, 'requestPermission');
+  dispatcher.dispatchNotification(alert('missing'), 'sound+banner');
+  assert.equal(prompts.mock.callCount(), 0);
+});
+
+test('a superseded initial warning cannot consume source capacity or request permission', async t => {
+  const { notificationDispatcher: dispatcher } = await loadFresh();
+  NotificationStub.permission = 'default';
+  const prompts = t.mock.method(NotificationStub, 'requestPermission');
+  dispatcher.dispatchNotification(alert('superseded', 'high'), 'banner', () => false);
+  assert.equal(prompts.mock.callCount(), 0);
+  NotificationStub.permission = 'granted';
+  dispatcher.dispatchNotification(alert('current', 'high'), 'banner');
+  assert.deepEqual(NotificationStub.calls.map(row => row.title), ['Alert current']);
+});
+
+for (const boundary of ['peer-mode','peer-channel','peer-channel-before-event','revoked-permission'] as const) {
+  test(`pending permission cannot survive ${boundary}`, async t => {
+    const peer = Object.assign(new EventTarget(), { Notification: NotificationStub });
+    Object.assign(globalThis, { window: peer });
+    const { notificationDispatcher: dispatcher } = await loadFresh();
+    let resolve!: (choice: NotificationPermission) => void;
+    NotificationStub.permission = 'default';
+    t.mock.method(NotificationStub, 'requestPermission', () => new Promise<NotificationPermission>(r => { resolve = r; }));
+    dispatcher.dispatchNotification(alert('pending'), 'sound+banner');
+    if (boundary === 'peer-channel-before-event') {
+      const prefs = structuredClone(getSettings());
+      prefs.domains.weather.channel = 'in_app';
+      localStorage.setItem('wm-notification-settings-v1', JSON.stringify(prefs));
+    } else if (boundary !== 'revoked-permission') {
+      const key = boundary === 'peer-mode' ? 'wm-app-mode' : 'wm-notification-settings-v1';
+      peer.dispatchEvent(Object.assign(new Event('storage'), { key }));
+    }
+    NotificationStub.permission = boundary === 'revoked-permission' ? 'denied' : 'granted';
+    resolve('granted');
+    await new Promise(resolveTurn => setImmediate(resolveTurn));
+    assert.equal(NotificationStub.calls.length, 0);
+  });
+}
+
+test('an explicit malformed stored domain cannot implicitly enable system delivery', async t => {
+  const { notificationDispatcher: dispatcher } = await loadFresh();
+  const prompts = t.mock.method(NotificationStub, 'requestPermission');
+  NotificationStub.permission = 'default';
+  const invalidThreshold = JSON.stringify({ version: 1, domains: { weather: { channel: 'native', threshold: 'unexpected' } } });
+  for (const raw of ['broken', '{"version":1,"domains":[]}', '{"version":1,"domains":{"weather":null}}', '{"version":1,"domains":{"weather":{}}}', invalidThreshold]) {
+    localStorage.setItem('wm-notification-settings-v1', raw);
+    dispatcher.dispatchNotification(alert('malformed'), 'sound+banner');
+    assert.equal(prompts.mock.callCount(), 0, raw);
+  }
 });

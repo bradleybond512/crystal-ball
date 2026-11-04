@@ -148,14 +148,14 @@ async function _parseData(resp) {
 
 // ── Single-URL attempt ───────────────────────────────────────────────────────
 // Returns { ok: true, data } on success or { ok: false } on any failure.
-async function _tryFetch(url, reqOptions, timeoutMs, fetchFn) {
+async function _tryFetch(url, reqOptions, timeoutMs, fetchFn, acceptData) {
   try {
     const resp = await fetchFn(url, reqOptions, timeoutMs);
     if (!resp.ok) return { ok: false };
     const data = await _parseData(resp);
     // A 200 with an unparseable body yields undefined — treat as a failed attempt
     // so we fall through to the next source / cache instead of returning garbage.
-    if (data === undefined) return { ok: false };
+    if (data === undefined || (acceptData && !acceptData(data))) return { ok: false };
     return { ok: true, data };
   } catch {
     return { ok: false };
@@ -168,6 +168,7 @@ export async function fetchWithFallback(primaryUrl, fallbacks = [], options = {}
     cacheKey  = null,
     timeoutMs = 12_000,
     fetchFn   = _fetchUrl,
+    acceptData,
     headers   = {},
   } = options;
 
@@ -175,7 +176,7 @@ export async function fetchWithFallback(primaryUrl, fallbacks = [], options = {}
 
   // ── Try primary ────────────────────────────────────────────────────────────
   if (getCircuitState(primaryUrl).status !== 'open') {
-    const result = await _tryFetch(primaryUrl, reqOptions, timeoutMs, fetchFn);
+    const result = await _tryFetch(primaryUrl, reqOptions, timeoutMs, fetchFn, acceptData);
     if (result.ok) {
       recordSuccess(primaryUrl);
       if (cacheKey) _setCached(cacheKey, result.data);
@@ -186,7 +187,7 @@ export async function fetchWithFallback(primaryUrl, fallbacks = [], options = {}
 
   // ── Try fallbacks ──────────────────────────────────────────────────────────
   for (const [i, fallback] of fallbacks.entries()) {
-    const result = await _tryFetch(fallback, reqOptions, timeoutMs, fetchFn);
+    const result = await _tryFetch(fallback, reqOptions, timeoutMs, fetchFn, acceptData);
     if (result.ok) {
       if (cacheKey) _setCached(cacheKey, result.data);
       return { data: result.data, source: `fallback-${i}`, degraded: true };

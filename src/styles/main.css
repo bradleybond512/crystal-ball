@@ -19980,6 +19980,13 @@ tr.uai-expanded .uai-body { max-height: none; white-space: normal; overflow: vis
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.uai-disposition, .uai-session-count {
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.uai-session-count { padding: 4px 8px; }
 .uai-related-badge {
   margin-left: 6px;
   font-size: 11px;

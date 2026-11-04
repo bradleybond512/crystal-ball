@@ -16,7 +16,8 @@
     "test:api"
   ],
   "src/styles/main.css": [
-    "test:ux032"
+    "test:ux032",
+    "test:ux058"
   ],
   "scripts/targeted-tests-overrides.json": [
     "test:agentic-pipeline",
@@ -50,7 +51,8 @@
   "src/services/unified-alerts.ts": [
     "test:acc509",
     "test:ux059",
-    "test:ux047"
+    "test:ux047",
+    "test:ux058"
   ],
   "src/services/intel-channels-bridge.ts": [
     "test:acc509"
@@ -106,7 +108,8 @@
   ],
   "src/services/alert-normalizer.ts": [
     "test:ux059",
-    "test:ux047"
+    "test:ux047",
+    "test:ux058"
   ],
   "src/services/gdacs.ts": [
     "test:ux059",
@@ -121,7 +124,8 @@
     "test:datacenter-ownership",
     "test:acc510",
     "test:ux047",
-    "test:ux053"
+    "test:ux053",
+    "test:ux058"
   ],
   "src/services/gdacs-coverage.ts": [
     "test:gdacs-map"
@@ -364,13 +368,15 @@
     "test:quiet-hours"
   ],
   "src/services/notifications/notification-settings-service.ts": [
-    "test:quiet-hours"
+    "test:quiet-hours",
+    "test:ux058"
   ],
   "src/services/notifications/alert-trace.ts": [
     "test:quiet-hours"
   ],
   "src/services/notification-dispatcher.ts": [
-    "test:quiet-hours"
+    "test:quiet-hours",
+    "test:ux058"
   ],
   "src/services/alerting-prefs.ts": [
     "test:quiet-hours"
@@ -1237,7 +1243,8 @@
     "test:news-resilience"
   ],
   "src/components/Panel.ts": [
-    "test:panel-presentation"
+    "test:panel-presentation",
+    "test:ux058"
   ],
   "src/components/AlertFatigueDashboardPanel.ts": [
     "test:panel-presentation"
@@ -1276,7 +1283,8 @@
     "test:ux047"
   ],
   "src/services/nws-alerts.ts": [
-    "test:ux047"
+    "test:ux047",
+    "test:ux058"
   ],
   "src/services/nws-alert-snapshot.ts": [
     "test:ux047"
@@ -1325,5 +1333,36 @@
   ],
   "src/app/workspace-startup.ts": [
     "test:ux053"
+  ],
+  "src/services/diagnostics/notification-trace.ts": [
+    "test:ux058"
+  ],
+  "src/components/UnifiedAlertInboxPanel.ts": [
+    "test:ux058"
+  ],
+  "src/services/warning-inbox-session.ts": [
+    "test:ux058"
+  ],
+  "src/services/warning-notification-session.ts": [
+    "test:ux058"
+  ],
+  "src/services/weather.ts": [
+    "test:ux058"
+  ],
+  "src/services/insights/notification-ladder.ts": [
+    "test:ux058"
+  ],
+  "src-tauri/sidecar/feed-resilience.mjs": [
+    "test:domain-retirement"
+  ],
+  "src-tauri/sidecar/nws-alert-row.mjs": [
+    "test:ux058",
+    "test:domain-retirement",
+    "test:ux059"
+  ],
+  "src-tauri/sidecar/nws-alert-row.d.mts": [
+    "test:ux058",
+    "test:domain-retirement",
+    "test:ux059"
   ]
 }

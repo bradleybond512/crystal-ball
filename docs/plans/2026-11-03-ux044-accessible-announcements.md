@@ -4,7 +4,7 @@
 
 PR #1730 repaired stack geometry. Its eight layout controls passed. On main `cd459dfec`, an isolated Chromium accessibility-tree probe found no live regions when the theater posture became critical or the unacknowledged critical count changed from zero to one. Polling replaced focused View Region and Alert Inbox controls, moving keyboard focus to the document body. The probe used recording fixtures and did not test spoken output.
 
-## Proposed behavior
+## Approved behavior
 
 Use one initially empty, visually hidden, polite atomic status per surface, separate from interactive controls. Announce the visible posture’s onset and material changes in theater, severity or strike capability. Use a short label with the current theater. Routine aircraft-count, clock and display-text refreshes stay silent. When posture disappears, clear the status without announcing a safety conclusion.
 

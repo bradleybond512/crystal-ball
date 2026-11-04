@@ -138,6 +138,8 @@ test('a committed measured pass publishes only the changed row after durable dir
     adapter._resetCalibrationForTests();
     const store = adapter.getCalibrationStore();
     store.record(row('positive-control',0));
+    store.record(row('settled-earlier', minute));
+    assert.equal(store.resolve('settled-earlier', true, now - minute), true);
     const published: string[] = [];
     t.mock.method(getEvidenceOutbox(),'capture', change => {
       if (change.kind === 'forecast') {

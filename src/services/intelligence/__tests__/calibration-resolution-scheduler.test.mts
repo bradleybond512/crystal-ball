@@ -188,7 +188,11 @@ test('the actual initial source loader releases calibration after an attempted m
   assert.equal(ready, 1);
   finishNews(); await news;
   assert.equal(ready, 1);
+  let finishMarkets!: () => void;
+  const inFlight = guarded('markets', () => new Promise<void>(done => { finishMarkets = done; }));
   manager.ctx.isDestroyed = true;
+  finishMarkets(); await inFlight;
+  assert.equal(ready, 1, 'a completed request cannot mark a disposed owner ready');
   await guarded('markets', () => Promise.resolve());
   assert.equal(ready, 1);
 });
@@ -207,4 +211,27 @@ test('the production panel releases its owner and refuses delayed imports after 
   assert.match(src.slice(src.indexOf('  destroy(): void {'), src.indexOf('this.calibrationScheduler = undefined;') + 1), /this\.calibrationScheduler\?\.stop\(\)/);
   const app = readFileSync(new URL('../../../App.ts', import.meta.url), 'utf8');
   assert.match(app, /onForecastInputsAttempted: \(\) => this\.panelLayout\.markCalibrationInputsReady\(\)/);
+});
+
+test('a busy writer cannot keep an old pass queued past the five-second deadline; the next scheduled pass recovers', async t => {
+  const f = fixture(t); await settle();
+  const controller = new AbortController();
+  let deadline = 0;
+  t.mock.method(AbortSignal, 'timeout', (ms: number) => { deadline = ms; return controller.signal; });
+  let aborted = false;
+  const unlocked = f.environment.locks.request;
+  f.environment.locks.request = async (_key, opts: { signal: AbortSignal }) => new Promise<void>((_, reject) => {
+    opts.signal.addEventListener('abort', () => { aborted = true; reject(new Error('timed out')); }, { once: true });
+  });
+  t.mock.timers.tick(period); await settle();
+  assert.equal(deadline, 5000, 'locks are admitted for at most five seconds');
+  controller.abort(); await settle();
+  assert.equal(aborted, true);
+  assert.equal(f.data.calls, 1);
+  assert.equal(f.notes.at(-1).readiness, 'coordination-unavailable');
+  assert.equal(f.notes.at(-1).outcome, 'skipped');
+  f.environment.locks.request = unlocked;
+  t.mock.timers.tick(period); await settle();
+  assert.equal(f.data.calls, 2);
+  assert.equal(f.notes.at(-1).outcome, 'completed');
 });

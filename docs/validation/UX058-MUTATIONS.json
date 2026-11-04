@@ -1,0 +1,2888 @@
+{
+  "task": "UX-058",
+  "candidate": {
+    "commit": "5b5af7afef469585814d49651c91eb6fb1dbfdb2",
+    "tree": "341e87cbc7f2f36093e3516e973d0009a3247be4"
+  },
+  "method": "Each clean detached lane ran its full focused suite before and after testing. Each production-only change was applied alone, inspected as a Git diff, restored, reapplied identically, and verified by an assertion inside the intended named test before restoration. SHA-256 and clean Git status verified after every run. Counts below are actual Node test reporter counts.",
+  "suites": {
+    "lane-storefinal/storefinal": {
+      "argv": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 12,
+      "greenAfter": 12,
+      "failures": 0
+    },
+    "lane-panelfinal/panelfinal": {
+      "argv": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/components/__tests__/unified-alert-inbox-disposition.test.mts"
+      ],
+      "greenBefore": 5,
+      "greenAfter": 5,
+      "failures": 0
+    },
+    "lane-dispatchfinal/dispatchfinal": {
+      "argv": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 43,
+      "greenAfter": 43,
+      "failures": 0
+    },
+    "lane-sitefinal/sitefinal": {
+      "argv": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/services/__tests__/nws-notification-owner.test.mts"
+      ],
+      "greenBefore": 5,
+      "greenAfter": 5,
+      "failures": 0
+    },
+    "lane-loader/loader": {
+      "argv": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/services/__tests__/alert-retention-provenance.test.mts"
+      ],
+      "greenBefore": 12,
+      "greenAfter": 12,
+      "failures": 0
+    },
+    "lane-ladder/ladder": {
+      "argv": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/services/insights/__tests__/notification-ladder.test.mts"
+      ],
+      "greenBefore": 11,
+      "greenAfter": 11,
+      "failures": 0
+    },
+    "lane-sidepublished/siderecovery": {
+      "argv": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=NWS boundary refuses",
+        "src-tauri/sidecar/local-api-server.test.mjs"
+      ],
+      "greenBefore": 1,
+      "greenAfter": 1,
+      "failures": 0
+    }
+  },
+  "sourceAndTestHashes": {
+    "src/services/unified-alerts.ts": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+    "src/services/__tests__/warning-inbox-dispositions.test.mts": "b1e6e6dde9e66ae7aaacfc9c0c5259c870aac8b6eaf646469ac93df42c305011",
+    "src/services/warning-inbox-session.ts": "06158e5d30dd4fcaa504eca167482a00cdf1f2cd600f9a804dd992d0a2b1481b",
+    "src/components/UnifiedAlertInboxPanel.ts": "8f178477514078844cfd4fd6b02a9b0e952b8fd1cf9895208787e5924da75552",
+    "src/components/__tests__/unified-alert-inbox-disposition.test.mts": "fe25902915f1f913d41bee9f4626e9443a5191b2253f8da3f4f5d10bf4282671",
+    "src/components/Panel.ts": "07bb2e4dfbfa58fb1e1955144c28b64b9101e209b5af57b333d2ac69b1fc7877",
+    "src/services/notification-dispatcher.ts": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+    "src/services/__tests__/notification-dispatcher-trace.test.mts": "2474db03464949d3b9052f5294ab0a7d387b4b4c257d0468725c0867f3cdd941",
+    "src/services/notifications/notification-settings-service.ts": "4bd38e0093a4ba993264a64d6bd66e1999a32cf464b030432275026f9b825c66",
+    "src/services/diagnostics/notification-trace.ts": "d02293644e3971f81d31114528e1ef2b2db00b27e0f66f873e732fadee0954b4",
+    "src/services/weather.ts": "aa19283bd0e02ff0a137c8003388cd9b0ad5ba5a09afba0552eec0bb04db20ff",
+    "src/services/__tests__/nws-notification-owner.test.mts": "3be988c99242a313a1fd7a626c6dcd2ebe875c9207650641a02014ebc7cf0d3c",
+    "src/services/alert-normalizer.ts": "62771ff741e7d7e4ece05edf75b8668d04ec2f4642a57377bbb1b7c7751825b6",
+    "src/services/nws-alerts.ts": "4f63020bb42097b7b0b6cec4b1da97c6fead3f4b3220f8c4a48213f61088718c",
+    "src/services/warning-notification-session.ts": "60cdbb5053792aadb26ab9c5775c862635086988ad2a1b009fd5e9d4cf557a74",
+    "src/app/data-loader.ts": "c72f1ac756b8ed32abee561ecdb9655e94b0ffde21c9362be4beae538d4ea38d",
+    "src/services/__tests__/alert-retention-provenance.test.mts": "8b0a541b4405e9b290170130581328e280758c5e0899aab55e66a3ba59f1686b",
+    "src/services/insights/notification-ladder.ts": "94180493cf8a81a6df1b9da66f24e350606e293837636aef8ba703ea0a9a2fb0",
+    "src/services/insights/__tests__/notification-ladder.test.mts": "92df6fee624b04c02bf30569f0a306cfd41b78280288fd32f08654ff2e27bb03",
+    "src-tauri/sidecar/feed-resilience.mjs": "5e08f053ac0d2c23166eb1cd9d67d6b08fdef8e81c721ff163caae0142a4fa88",
+    "src-tauri/sidecar/local-api-server.test.mjs": "0785ddefb1d7fe48442522fbc012af4cd9aaaebbb68d6ab7bb42d0de185de8f1",
+    "src-tauri/sidecar/local-api-server.mjs": "b5ddc882e0e0c84474807d8ace03a3bf0fc52801383aa55b06b5cd255b23b6ea",
+    "src-tauri/sidecar/nws-alert-row.mjs": "ea937d60b209f577731a32c6d5a41dc9c01be74ec5986f7f40e1fdc357b8609e",
+    "src-tauri/tauri.conf.json": "271a0aeb0b74309c0b3b930a927ce33491c3d2e12130ca6420add32572edb1f7",
+    "scripts/check-sidecar-bundle.mjs": "8aefafecc43c4cf5c57b175231b9d863c01c3db53f72edbef1a6cd0426258ce0"
+  },
+  "reversals": [
+    {
+      "id": "S01",
+      "behavior": "Held results alone increment the distinct-session count",
+      "file": "src/services/unified-alerts.ts",
+      "test": "src/services/__tests__/warning-inbox-dispositions.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=only a held distinct warning",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "only a held distinct warning adds a session count and the reason survives duplicate polls"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    2 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 2\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 1b57fb54b..d847e8a4a 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -479,3 +479,3 @@ class UnifiedAlertStore {\n       const result = notificationDispatcher.dispatchNotification(alert, options.action ?? actionForSeverity(alert.severity), eligible);\n-      if (result === 'held-cooldown' && eligible()) this.warningSession.hold(alert);\n+      if (eligible()) this.warningSession.hold(alert);\n     }\n",
+      "diffSha256": "8779bfd40ff2fe991bc4b7814335d29221deae90a9008150b8f724a2b1825d64",
+      "originalSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "mutatedSha256": "f1b04c842c44919dfc15a9fdbef9489952632c04e14f04c12d8e8bb251b815d5",
+      "restoredSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S02",
+      "behavior": "Use caller-selected site action when provided",
+      "file": "src/services/unified-alerts.ts",
+      "test": "src/services/__tests__/warning-inbox-dispositions.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=only a held distinct warning",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "only a held distinct warning adds a session count and the reason survives duplicate polls"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n    +   'banner',\n    +   'banner'\n    -   'sound+banner',\n    -   'sound+banner'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'sound+banner'\n    1: 'sound+banner'\n  actual:\n    0: 'banner'\n    1: 'banner'\n  operator: 'deepStrictEqual'\n",
+      "reversal": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 1b57fb54b..8bbfa75b9 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -478,3 +478,3 @@ class UnifiedAlertStore {\n       const eligible = (afterPermission = true) => guard(afterPermission) && (options.stillEligible?.() ?? true);\n-      const result = notificationDispatcher.dispatchNotification(alert, options.action ?? actionForSeverity(alert.severity), eligible);\n+      const result = notificationDispatcher.dispatchNotification(alert, actionForSeverity(alert.severity), eligible);\n       if (result === 'held-cooldown' && eligible()) this.warningSession.hold(alert);\n",
+      "diffSha256": "79d07ff3703df5ae9b4e9cf04c93ca7148a9477965736bffc2c12b5ca90ba3f6",
+      "originalSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "mutatedSha256": "993425512eee7a83be9fa1afd9a8e1bc9fa35d86573ce936cab5e2947e0a99a4",
+      "restoredSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S03",
+      "behavior": "Duplicate polls are not new notification candidates",
+      "file": "src/services/unified-alerts.ts",
+      "test": "src/services/__tests__/warning-inbox-dispositions.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=only a held distinct warning",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "only a held distinct warning adds a session count and the reason survives duplicate polls"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'sound+banner',\n        'sound+banner',\n    +   'banner'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'sound+banner'\n    1: 'sound+banner'\n  actual:\n    0: 'sound+banner'\n    1: 'sound+banner'\n    2: 'banner'\n  operator: 'deepStrictEqual'\n",
+      "reversal": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 1b57fb54b..eb94d95d8 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -462,3 +462,3 @@ class UnifiedAlertStore {\n         }\n-        if (!existing && !considered) {\n+        if (true) {\n           newAlerts.push({ alert: restored, guard: this.createNotificationGuard(restored) });\n",
+      "diffSha256": "6e6fbffe3e4f4cca1f9a1696537b65d9ca869f435e0839f8412bcb21754dc14b",
+      "originalSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "mutatedSha256": "fc0f62a9f92151b7bcb49007d66d155488dbc695860098f7db103ad27f15c575",
+      "restoredSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S04",
+      "behavior": "Discard all prior counts at workspace end",
+      "file": "src/services/warning-inbox-session.ts",
+      "test": "src/services/__tests__/warning-inbox-dispositions.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=session teardown",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "session teardown clears counts and assignments and invalidates pending attempts"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/warning-inbox-session.ts b/src/services/warning-inbox-session.ts\nindex a2475c61d..cc314ca8e 100644\n--- a/src/services/warning-inbox-session.ts\n+++ b/src/services/warning-inbox-session.ts\n@@ -74,3 +74,3 @@ export class WarningInboxSession {\n     this.residents.clear();\n-    this.heldCount = 0;\n+    void this.heldCount;\n   }\n",
+      "diffSha256": "a7b953ecf429bb0e85a12901c43dc753b4fdc17b371b7f52adecf9405b3ec8f6",
+      "originalSha256": "06158e5d30dd4fcaa504eca167482a00cdf1f2cd600f9a804dd992d0a2b1481b",
+      "mutatedSha256": "189158e4162f8d072b619de8517c3d674b4cb8ce0c0d5f71117ae0727f3470cf",
+      "restoredSha256": "06158e5d30dd4fcaa504eca167482a00cdf1f2cd600f9a804dd992d0a2b1481b",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S05",
+      "behavior": "Equal NWS issuance cannot replace displayed severity",
+      "file": "src/services/unified-alerts.ts",
+      "test": "src/services/__tests__/warning-inbox-dispositions.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=only strictly newer",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "only strictly newer live NWS issuance raises the high-water, without another system request"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    'critical' !== 'high'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'high'\n  actual: 'critical'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 1b57fb54b..6a03b41a2 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -418,3 +418,3 @@ class UnifiedAlertStore {\n           ? incomingEvidence.issuedAt < previousEvidence.issuedAt\n-            || (incomingEvidence.issuedAt === previousEvidence.issuedAt && existing.severity !== alert.severity)\n+           \n           : alert.timestamp < existing.timestamp);\n",
+      "diffSha256": "35e2c040dfa0ab7351668d43746d628f45d6ac9e351537f82ef458d72679d722",
+      "originalSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "mutatedSha256": "b6edcea978405cadd2f6fc679949e49b00d2f87ee2c0c652ee9254f85e24288f",
+      "restoredSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S06",
+      "behavior": "Higher severity updates must be visible",
+      "file": "src/services/warning-inbox-session.ts",
+      "test": "src/services/__tests__/warning-inbox-dispositions.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=only strictly newer",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "only strictly newer live NWS issuance raises the high-water, without another system request"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n        heldDuringCooldown: true,\n    -   updatedTo: 'critical'\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    heldDuringCooldown: true\n    updatedTo: 'critical'\n  actual:\n    heldDuringCooldown: true\n  operator: 'deepStrictEqual'\n",
+      "reversal": "diff --git a/src/services/warning-inbox-session.ts b/src/services/warning-inbox-session.ts\nindex a2475c61d..d29e07aa2 100644\n--- a/src/services/warning-inbox-session.ts\n+++ b/src/services/warning-inbox-session.ts\n@@ -39,3 +39,3 @@ export class WarningInboxSession {\n     if (row.highest && ranks[alert.severity] <= ranks[row.highest]) return;\n-    if (row.highest) row.updatedTo = alert.severity;\n+    if (false) row.updatedTo = alert.severity;\n     row.highest = alert.severity;\n",
+      "diffSha256": "413c328d33f6b528cf49ab8879ab1e0aa46f4e7801f693c9a9b3af1ff8eabd3f",
+      "originalSha256": "06158e5d30dd4fcaa504eca167482a00cdf1f2cd600f9a804dd992d0a2b1481b",
+      "mutatedSha256": "8ee2a590c60fc01025aed8d63b290abcf5613aca311c9bca77d546f617a236b7",
+      "restoredSha256": "06158e5d30dd4fcaa504eca167482a00cdf1f2cd600f9a804dd992d0a2b1481b",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S07",
+      "behavior": "Returning to the prior high-water level does not report a new escalation",
+      "file": "src/services/warning-inbox-session.ts",
+      "test": "src/services/__tests__/warning-inbox-dispositions.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=only strictly newer",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "only strictly newer live NWS issuance raises the high-water, without another system request"
+      ],
+      "assertion": "error: |-\n    a return to high-water is not another escalation\n    + actual - expected\n    \n    + 'critical'\n    - undefined\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  actual: 'critical'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/warning-inbox-session.ts b/src/services/warning-inbox-session.ts\nindex a2475c61d..318a7fe73 100644\n--- a/src/services/warning-inbox-session.ts\n+++ b/src/services/warning-inbox-session.ts\n@@ -38,3 +38,3 @@ export class WarningInboxSession {\n     row.latestIssue = issue;\n-    if (row.highest && ranks[alert.severity] <= ranks[row.highest]) return;\n+    if (row.highest && ranks[alert.severity] < ranks[row.highest]) return;\n     if (row.highest) row.updatedTo = alert.severity;\n",
+      "diffSha256": "25ef28539b949b3611f30f7c24ecc6c44c56bc0e5e54a95f976893cacd84e6f1",
+      "originalSha256": "06158e5d30dd4fcaa504eca167482a00cdf1f2cd600f9a804dd992d0a2b1481b",
+      "mutatedSha256": "d66717fde2ee6d6de0b5e66249fa561d15c9894fcfb3c22accac56af76ed7df2",
+      "restoredSha256": "06158e5d30dd4fcaa504eca167482a00cdf1f2cd600f9a804dd992d0a2b1481b",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S08",
+      "behavior": "Downgrading a row withdraws its prior updated-to label",
+      "file": "src/services/warning-inbox-session.ts",
+      "test": "src/services/__tests__/warning-inbox-dispositions.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=only strictly newer",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "only strictly newer live NWS issuance raises the high-water, without another system request"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'critical'\n    - undefined\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  actual: 'critical'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/warning-inbox-session.ts b/src/services/warning-inbox-session.ts\nindex a2475c61d..f4d77ee23 100644\n--- a/src/services/warning-inbox-session.ts\n+++ b/src/services/warning-inbox-session.ts\n@@ -34,3 +34,3 @@ export class WarningInboxSession {\n       row.generation++;\n-      if (row.updatedTo !== alert.severity) delete row.updatedTo;\n+      void alert.severity;\n     }\n",
+      "diffSha256": "302bf789ea226126e4785ba0705cdd0e60dcedfaf3a47b57bcd2f15681ae9adb",
+      "originalSha256": "06158e5d30dd4fcaa504eca167482a00cdf1f2cd600f9a804dd992d0a2b1481b",
+      "mutatedSha256": "4dfb08e5230f9396e76003028a3820a65d73392e7f28381fb77efa4917180bc9",
+      "restoredSha256": "06158e5d30dd4fcaa504eca167482a00cdf1f2cd600f9a804dd992d0a2b1481b",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S09",
+      "behavior": "Cached reports cannot request a system notification",
+      "file": "src/services/unified-alerts.ts",
+      "test": "src/services/__tests__/warning-inbox-dispositions.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=replay cannot interrupt",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "replay cannot interrupt or establish an escalation baseline; hydration never counts as live"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 1b57fb54b..870d1ed9f 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -475,3 +475,3 @@ class UnifiedAlertStore {\n     if (newAlerts.length > 0) this.persist();\n-    if (options.live === false) return;\n+    void options.live;\n     for (const { alert, guard } of newAlerts) {\n",
+      "diffSha256": "fb467fee816a7a1d40a6a6d3dd9f5b3f9999d1077cf4228fa51163ca5fe7b2a0",
+      "originalSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "mutatedSha256": "bf5c065a1ae204ad9ce4e52db513241a978d21a6c6cad94604573e3d61b3b35b",
+      "restoredSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S10",
+      "behavior": "Older replay cannot establish the live escalation baseline",
+      "file": "src/services/unified-alerts.ts",
+      "test": "src/services/__tests__/warning-inbox-dispositions.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=replay cannot interrupt",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "replay cannot interrupt or establish an escalation baseline; hydration never counts as live"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'high'\n    - undefined\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  actual: 'high'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 1b57fb54b..64763f338 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -451,3 +451,3 @@ class UnifiedAlertStore {\n           } else {\n-            const live = options.live !== false && !keepExisting;\n+            const live = !keepExisting;\n             const issue = incomingEvidence?.kind === 'nws-expiry' ? incomingEvidence.issuedAt\n",
+      "diffSha256": "9847b58b9b04b1fd4a68e492333404447db053d0444a2c56ee9e96d7ba8a9fa5",
+      "originalSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "mutatedSha256": "e94bd97dd15d4ed1033dbfb5172ba9688ddb0abf1b6ad1ebd6f8cfc5d3e8c8a7",
+      "restoredSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S11",
+      "behavior": "Disposition lookup is guarded by source-qualified identity",
+      "file": "src/services/unified-alerts.ts",
+      "test": "src/services/__tests__/warning-inbox-dispositions.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=one source cannot inherit",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "one source cannot inherit a colliding source’s disposition or pending permission"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + {\n    +   heldDuringCooldown: true\n    + }\n    - undefined\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  actual:\n    heldDuringCooldown: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 1b57fb54b..7d39478ec 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -487,3 +487,3 @@ class UnifiedAlertStore {\n     const current = this.alerts.get(alert.id);\n-    if (!current || current.source !== alert.source) return;\n+    if (!current) return;\n     if (this.expiredWarning(current)) {\n",
+      "diffSha256": "9275b190177bf64b6adc913eeaea746751474da685449e266901c7b24b6e21ca",
+      "originalSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "mutatedSha256": "08d07a10711518aa3baf28600f404efbae132891484090e95a47aecb58dac5ef",
+      "restoredSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S12",
+      "behavior": "Revision is rechecked before deferred permission",
+      "file": "src/services/warning-inbox-session.ts",
+      "test": "src/services/__tests__/warning-inbox-dispositions.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=pending permission survives",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "pending permission survives an identical poll but not a superseding revision, owner invalidation, ack or snooze"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/warning-inbox-session.ts b/src/services/warning-inbox-session.ts\nindex a2475c61d..631a4b0e6 100644\n--- a/src/services/warning-inbox-session.ts\n+++ b/src/services/warning-inbox-session.ts\n@@ -48,3 +48,3 @@ export class WarningInboxSession {\n     return () => this.residents.get(alert.id) === row\n-      && row.generation === generation;\n+      ;\n   }\n",
+      "diffSha256": "04c88b91559fb57052a8b959bbef91a75d37c74a5186eac6847bdc278f0ef93f",
+      "originalSha256": "06158e5d30dd4fcaa504eca167482a00cdf1f2cd600f9a804dd992d0a2b1481b",
+      "mutatedSha256": "8d33cfbb6cb537f7f9edb9d675cf562de63871288a541ad36c6dab54f506242a",
+      "restoredSha256": "06158e5d30dd4fcaa504eca167482a00cdf1f2cd600f9a804dd992d0a2b1481b",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S13",
+      "behavior": "Calling owner can discard a superseded request",
+      "file": "src/services/unified-alerts.ts",
+      "test": "src/services/__tests__/warning-inbox-dispositions.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=pending permission survives",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "pending permission survives an identical poll but not a superseding revision, owner invalidation, ack or snooze"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 1b57fb54b..1b305c42f 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -477,3 +477,3 @@ class UnifiedAlertStore {\n     for (const { alert, guard } of newAlerts) {\n-      const eligible = (afterPermission = true) => guard(afterPermission) && (options.stillEligible?.() ?? true);\n+      const eligible = (afterPermission = true) => guard(afterPermission) && true;\n       const result = notificationDispatcher.dispatchNotification(alert, options.action ?? actionForSeverity(alert.severity), eligible);\n",
+      "diffSha256": "820ac63b5c5cef91f2cc8de2eec541d8b5ccb628f66b721851be156f4bc6007b",
+      "originalSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "mutatedSha256": "89b19e40bc6a1f01512431630faea25dec3d63f7872c10b266415f4a8e5c5c9a",
+      "restoredSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S14",
+      "behavior": "Acknowledgment invalidates a held permission candidate",
+      "file": "src/services/unified-alerts.ts",
+      "test": "src/services/__tests__/warning-inbox-dispositions.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=pending permission survives",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "pending permission survives an identical poll but not a superseding revision, owner invalidation, ack or snooze"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 1b57fb54b..31549fe95 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -504,3 +504,3 @@ class UnifiedAlertStore {\n       const current = this.alerts.get(alert.id);\n-      if (!current || current.source !== alert.source || current.acknowledged || this.expiredWarning(current)) return false;\n+      if (!current || current.source !== alert.source || this.expiredWarning(current)) return false;\n       if (current.snoozedUntil !== undefined && current.snoozedUntil > Date.now()) return false;\n",
+      "diffSha256": "803689ed7c1b09f75e2a11d5c50b65870ed5bed4dd5faf8a9431591d49fbd074",
+      "originalSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "mutatedSha256": "9c2c502df6221d2553a88db5711aeb2c37f59db3d8549f54498a61d7ce870a9f",
+      "restoredSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S15",
+      "behavior": "Snooze irreversibly invalidates the held candidate even after release",
+      "file": "src/services/unified-alerts.ts",
+      "test": "src/services/__tests__/warning-inbox-dispositions.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=pending permission survives",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "pending permission survives an identical poll but not a superseding revision, owner invalidation, ack or snooze"
+      ],
+      "assertion": "error: |-\n    a pending attempt cannot come back after snooze ends\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 1b57fb54b..ab90a3040 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -582,3 +582,3 @@ class UnifiedAlertStore {\n     if (alert) {\n-      this.warningSession.revoke(id);\n+      void id;\n       alert.snoozedUntil = Date.now() + ms;\n",
+      "diffSha256": "6031431dae63cfbf28e8c43e7384d55dcd0c2042cbd3cdc1e474b9a1ab9edd3b",
+      "originalSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "mutatedSha256": "2a52971a0fa65adca16ff5172ebe60927cba2904759aff2e0f8fccbc61f13bc6",
+      "restoredSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S16",
+      "behavior": "An expired pinned warning cannot authorize a pending send",
+      "file": "src/services/unified-alerts.ts",
+      "test": "src/services/__tests__/warning-inbox-dispositions.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=expiry invalidates",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "expiry invalidates pending work and hides dispositions even for a pinned retained row"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 1b57fb54b..3f25456ef 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -504,3 +504,3 @@ class UnifiedAlertStore {\n       const current = this.alerts.get(alert.id);\n-      if (!current || current.source !== alert.source || current.acknowledged || this.expiredWarning(current)) return false;\n+      if (!current || current.source !== alert.source || current.acknowledged) return false;\n       if (current.snoozedUntil !== undefined && current.snoozedUntil > Date.now()) return false;\n",
+      "diffSha256": "3b58ee9928536642083bb1b5d8a01d0a7a7fe802545db5e93cc821588934b56a",
+      "originalSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "mutatedSha256": "44627917d1e4c1048a7844d815e71059ea78be134150f194885df374730b9656",
+      "restoredSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S17",
+      "behavior": "An expired pinned row cannot present an active disposition",
+      "file": "src/services/unified-alerts.ts",
+      "test": "src/services/__tests__/warning-inbox-dispositions.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=expiry invalidates",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "expiry invalidates pending work and hides dispositions even for a pinned retained row"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + {\n    +   heldDuringCooldown: true\n    + }\n    - undefined\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  actual:\n    heldDuringCooldown: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 1b57fb54b..1f7aef2e9 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -488,3 +488,3 @@ class UnifiedAlertStore {\n     if (!current || current.source !== alert.source) return;\n-    if (this.expiredWarning(current)) {\n+    if (false) {\n       this.warningSession.remove(alert.id);\n",
+      "diffSha256": "9472d0817c775e91367aadafc54cc3fd4ebf0e24802d82d25aa5b7e750d625ec",
+      "originalSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "mutatedSha256": "7423dbc05737a9da164c4bf9f55b9bf75e784aa6403e9844f12d83f6403d7846",
+      "restoredSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S18",
+      "behavior": "Teardown drops all live disposition and attempt metadata",
+      "file": "src/services/unified-alerts.ts",
+      "test": "src/services/__tests__/warning-inbox-dispositions.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=session teardown",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "session teardown clears counts and assignments and invalidates pending attempts"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 1b57fb54b..9135df56b 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -511,3 +511,3 @@ class UnifiedAlertStore {\n   endNotificationSession(): void {\n-    this.warningSession.reset();\n+    void this.warningSession;\n   }\n",
+      "diffSha256": "2022856195ad625a722f8ac91ecd345470b3e6292b93b19af25269cc367a1e6a",
+      "originalSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "mutatedSha256": "49ca455cd6962976784cefc7ff230987e1d55f5bbe2c10e0f0f20ec85a158514",
+      "restoredSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S19",
+      "behavior": "Optional metadata stays at 500 rows",
+      "file": "src/services/warning-inbox-session.ts",
+      "test": "src/services/__tests__/warning-inbox-dispositions.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=501st resident",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "the 501st resident cannot grow optional tracking; eviction clears its predecessor’s reason"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    501 !== 500\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 500\n  actual: 501\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/warning-inbox-session.ts b/src/services/warning-inbox-session.ts\nindex a2475c61d..e8199c924 100644\n--- a/src/services/warning-inbox-session.ts\n+++ b/src/services/warning-inbox-session.ts\n@@ -29,3 +29,3 @@ export class WarningInboxSession {\n     if (!row) {\n-      if (!live || this.residents.size >= this.limit) return;\n+      if (!live || this.residents.size > this.limit) return;\n       row = { source: alert.source, generation: 0, heldDuringCooldown: false };\n",
+      "diffSha256": "80c8cec8f6b54818c648612751cdb090d38e684bcef0cdbe25bf7459ff4a555f",
+      "originalSha256": "06158e5d30dd4fcaa504eca167482a00cdf1f2cd600f9a804dd992d0a2b1481b",
+      "mutatedSha256": "fc1a383c7a38c6cd7e63365e7faf81416de00602743368ea077a04a920f9ce09",
+      "restoredSha256": "06158e5d30dd4fcaa504eca167482a00cdf1f2cd600f9a804dd992d0a2b1481b",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S20",
+      "behavior": "Capacity overflow cannot revive a pending permission attempt",
+      "file": "src/services/unified-alerts.ts",
+      "test": "src/services/__tests__/warning-inbox-dispositions.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=untracked warning",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "untracked warning may still be considered immediately but cannot resume after permission"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 1b57fb54b..294f525d8 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -506,3 +506,3 @@ class UnifiedAlertStore {\n       if (current.snoozedUntil !== undefined && current.snoozedUntil > Date.now()) return false;\n-      return sameRevision ? sameRevision() : !afterPermission && current === alert;\n+      return sameRevision ? sameRevision() : current === alert;\n     };\n",
+      "diffSha256": "70677b4c9e3d86f1e7e0fc742b34da2b5474e29c4390b4eb8e94d6323049e78d",
+      "originalSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "mutatedSha256": "ae65513fa18bd953443a9a23c6ca7d6eb6d43555a320f256c9c493b6ffa9c82d",
+      "restoredSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S21",
+      "behavior": "Corrected onset cannot displace ordering by authoritative issuance",
+      "file": "src/services/unified-alerts.ts",
+      "test": "src/services/__tests__/warning-inbox-dispositions.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=later issuance with an earlier corrected onset",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "later issuance with an earlier corrected onset supersedes the pending attempt in the same batch"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    'high' !== 'critical'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'critical'\n  actual: 'high'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 1b57fb54b..a216c436d 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -416,3 +416,3 @@ class UnifiedAlertStore {\n         const nwsIssuances = previousEvidence?.kind === 'nws-expiry' && incomingEvidence?.kind === 'nws-expiry';\n-        const keepExisting = existing && (nwsIssuances\n+        const keepExisting = existing && (alert.timestamp >= existing.timestamp && nwsIssuances\n           ? incomingEvidence.issuedAt < previousEvidence.issuedAt\n",
+      "diffSha256": "77cf18030ab47cd477292ebc29d3397058f3949626f53940a18a37319f4de9cd",
+      "originalSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "mutatedSha256": "a658be401f2fa5bf4e5a5aa5f586b1c2051fffd364c22a9b5d743089a07aa663",
+      "restoredSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S22",
+      "behavior": "A previously expired retained row cannot carry disposition to a new active issuance",
+      "file": "src/services/unified-alerts.ts",
+      "test": "src/services/__tests__/warning-inbox-dispositions.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=an expired retained record",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "an expired retained record cannot attach a held label or historical high-water to a later active issuance"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + {\n    +   heldDuringCooldown: true,\n    +   updatedTo: 'critical'\n    + }\n    - undefined\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  actual:\n    heldDuringCooldown: true\n    updatedTo: 'critical'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 1b57fb54b..6510944c7 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -412,3 +412,3 @@ class UnifiedAlertStore {\n         const existing = live?.source === alert.source ? live : undefined;\n-        if (live && (!existing || this.expiredWarning(live))) this.warningSession.remove(alert.id);\n+        if (live && !existing) this.warningSession.remove(alert.id);\n         const previousEvidence = validateAlertRetentionEvidence(alert.source, existing?.retentionEvidence, now);\n",
+      "diffSha256": "fc6b73661959d20ec47755af9f7ce28a57cd1f94d4a73029f11e3ff228d7ab18",
+      "originalSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "mutatedSha256": "48cbde6fd33213a1eb0f785a8169a736aa37129dabc5a8b9468ce7ff42ab8445",
+      "restoredSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S23",
+      "behavior": "The first cached warning persists before an immediate restart",
+      "file": "src/services/unified-alerts.ts",
+      "test": "src/services/__tests__/warning-inbox-dispositions.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=a first cached warning persists",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "a first cached warning persists consideration before the trailing flush, so restart cannot replay it"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + [\n    +   {\n    +     action: 'banner',\n    +     guard: [Function: eligible],\n    +     id: 'held-replayed-after-restart'\n    +   }\n    + ]\n    - []\n    \n  code: 'ERR_TEST_FAILURE'\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 518.433417",
+      "reversal": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 1b57fb54b..66c8e5261 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -474,3 +474,3 @@ class UnifiedAlertStore {\n     // A failed write preserves source-warning eligibility and in-memory deduplication.\n-    if (newAlerts.length > 0) this.persist();\n+    if (options.live !== false && newAlerts.length > 0) this.persist();\n     if (options.live === false) return;\n",
+      "diffSha256": "b8781f4fb7a80eb48d3d154fe1e3eb92da9b5547081e3f21f87d6a6e6dc37262",
+      "originalSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "mutatedSha256": "d0b723b14cf3f68bfa256336641dbaa53b82c89a6d1a77700186a1939023a2b1",
+      "restoredSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S24",
+      "behavior": "A cached report may not overwrite an accepted live row",
+      "file": "src/services/unified-alerts.ts",
+      "test": "src/services/__tests__/warning-inbox-dispositions.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=replay cannot interrupt",
+        "src/services/__tests__/warning-inbox-dispositions.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "replay cannot interrupt or establish an escalation baseline; hydration never counts as live"
+      ],
+      "assertion": "error: |-\n    a replay cannot change the accepted row\n    \n    'critical' !== 'high'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'high'\n  actual: 'critical'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 1b57fb54b..df35b17da 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -410,3 +410,3 @@ class UnifiedAlertStore {\n         const live = this.alerts.get(alert.id);\n-        if (live && options.live === false) continue;\n+        \n         const existing = live?.source === alert.source ? live : undefined;\n",
+      "diffSha256": "c43c2e13a80633f4beba571e9cdbdcf3daf40046af467fc4364c6b5f10fe81bb",
+      "originalSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "mutatedSha256": "672872c3f0a0494906e62c65196e0d438b7bee2ba9e182adf6bae8aaa5cecae4",
+      "restoredSha256": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P01",
+      "behavior": "Individual held rows remain discoverable when entity grouping is enabled",
+      "file": "src/components/UnifiedAlertInboxPanel.ts",
+      "test": "src/components/__tests__/unified-alert-inbox-disposition.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=held and escalated warnings",
+        "src/components/__tests__/unified-alert-inbox-disposition.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "held and escalated warnings keep individual rows even in an entity cluster"
+      ],
+      "assertion": "error: 'the held warning has an individually reachable inbox row'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: ~\n  operator: '=='\n",
+      "reversal": "diff --git a/src/components/UnifiedAlertInboxPanel.ts b/src/components/UnifiedAlertInboxPanel.ts\nindex c3076d424..85db44347 100644\n--- a/src/components/UnifiedAlertInboxPanel.ts\n+++ b/src/components/UnifiedAlertInboxPanel.ts\n@@ -402,3 +402,3 @@ export class UnifiedAlertInboxPanel extends Panel {\n     for (const ent of entityHeat) {\n-      entityAlertMap.set(ent.name, new Set(ent.alertIds.filter(id => !dispositions.has(id))));\n+      entityAlertMap.set(ent.name, new Set(ent.alertIds));\n     }\n",
+      "diffSha256": "107dfa09e34d7946c0abe204d5d6a44b1d3ea675e10d2868aa1c03913af1dd01",
+      "originalSha256": "8f178477514078844cfd4fd6b02a9b0e952b8fd1cf9895208787e5924da75552",
+      "mutatedSha256": "56fde65b90f0a86af0c0ba255c08350ab7ba7088475440792cf56f8b08047c40",
+      "restoredSha256": "8f178477514078844cfd4fd6b02a9b0e952b8fd1cf9895208787e5924da75552",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P02",
+      "behavior": "A held row names its cooldown reason",
+      "file": "src/components/UnifiedAlertInboxPanel.ts",
+      "test": "src/components/__tests__/unified-alert-inbox-disposition.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=held and escalated warnings",
+        "src/components/__tests__/unified-alert-inbox-disposition.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "held and escalated warnings keep individual rows even in an entity cluster"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /System notification held during cooldown/. Input:\n    \n    '\\n' +\n      ' HIGH\\n' +\n      ' NWS\\n' +\n      ' \\n' +\n      ' United States storm second\\n' +\n      ' Synthetic warning\\n' +\n      ' System notification\\n' +\n      ' \\n' +\n      ' \\n' +\n      ' \\n' +\n      ' 500\\n' +\n      ' \\n' +\n      ' —\\n' +\n      ' 0s\\n' +\n      ' \\n' +\n      ' ☆\\n' +\n      ' ✕\\n' +\n      ' \\n' +\n      ' '",
+      "reversal": "diff --git a/src/components/UnifiedAlertInboxPanel.ts b/src/components/UnifiedAlertInboxPanel.ts\nindex c3076d424..9d5ce483f 100644\n--- a/src/components/UnifiedAlertInboxPanel.ts\n+++ b/src/components/UnifiedAlertInboxPanel.ts\n@@ -459,3 +459,3 @@ export class UnifiedAlertInboxPanel extends Panel {\n    const reasons = [];\n-   if (disposition.heldDuringCooldown) reasons.push('System notification held during cooldown');\n+   if (disposition.heldDuringCooldown) reasons.push('System notification');\n    if (disposition.updatedTo) reasons.push(`Updated to ${disposition.updatedTo}`);\n",
+      "diffSha256": "4e6015401a9dc6d61d0de6ed21594b64eb91960933d67a28df69c77672a7fee7",
+      "originalSha256": "8f178477514078844cfd4fd6b02a9b0e952b8fd1cf9895208787e5924da75552",
+      "mutatedSha256": "c7b2706952be9c3c932b78af8a7114c0889e7e8671ce44adccffecdf9e1293b5",
+      "restoredSha256": "8f178477514078844cfd4fd6b02a9b0e952b8fd1cf9895208787e5924da75552",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P03",
+      "behavior": "Escalation names its accepted severity in the same row",
+      "file": "src/components/UnifiedAlertInboxPanel.ts",
+      "test": "src/components/__tests__/unified-alert-inbox-disposition.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=held and escalated warnings",
+        "src/components/__tests__/unified-alert-inbox-disposition.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "held and escalated warnings keep individual rows even in an entity cluster"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /Updated to critical/. Input:\n    \n    '\\n' +\n      ' CRIT\\n' +\n      ' NWS\\n' +\n      ' \\n' +\n      ' United States storm third\\n' +\n      ' Synthetic warning\\n' +\n      ' Updated\\n' +\n      ' \\n' +\n      ' \\n' +\n      ' \\n' +\n      ' 600\\n' +\n      ' \\n' +\n      ' —\\n' +\n      ' 0s\\n' +\n      ' \\n' +\n      ' ☆\\n' +\n      ' ✕\\n' +\n      ' \\n' +\n      ' '\n    \n  code: 'ERR_ASSERTION'\n  name: 'A",
+      "reversal": "diff --git a/src/components/UnifiedAlertInboxPanel.ts b/src/components/UnifiedAlertInboxPanel.ts\nindex c3076d424..bb9bbf321 100644\n--- a/src/components/UnifiedAlertInboxPanel.ts\n+++ b/src/components/UnifiedAlertInboxPanel.ts\n@@ -460,3 +460,3 @@ export class UnifiedAlertInboxPanel extends Panel {\n    if (disposition.heldDuringCooldown) reasons.push('System notification held during cooldown');\n-   if (disposition.updatedTo) reasons.push(`Updated to ${disposition.updatedTo}`);\n+   if (disposition.updatedTo) reasons.push(\"Updated\");\n    if (reasons.length) labels.set(alert.id, reasons.join(' · '));\n",
+      "diffSha256": "6a0b04f1a8ffe0039ed7e327d71929972075dc4b3cfefd8aa0239c68c98a7718",
+      "originalSha256": "8f178477514078844cfd4fd6b02a9b0e952b8fd1cf9895208787e5924da75552",
+      "mutatedSha256": "25f1e699f1602be8b03566c27f7e9c29afe0fdc5c12a0b8df7fcfff829a428e3",
+      "restoredSha256": "8f178477514078844cfd4fd6b02a9b0e952b8fd1cf9895208787e5924da75552",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P04",
+      "behavior": "A session total is still visible with an empty inbox",
+      "file": "src/components/UnifiedAlertInboxPanel.ts",
+      "test": "src/components/__tests__/unified-alert-inbox-disposition.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=session count survives",
+        "src/components/__tests__/unified-alert-inbox-disposition.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "session count survives filters and an empty inbox; clearing the session removes it"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /2 warnings held during cooldown this session/. Input:\n    \n    'No alerts yet. Alerts from all sources will appear here.'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual: 'No alerts yet. Alerts from all sources will appear here.'\n  operator: 'match'\n",
+      "reversal": "diff --git a/src/components/UnifiedAlertInboxPanel.ts b/src/components/UnifiedAlertInboxPanel.ts\nindex c3076d424..b191fea41 100644\n--- a/src/components/UnifiedAlertInboxPanel.ts\n+++ b/src/components/UnifiedAlertInboxPanel.ts\n@@ -448,3 +448,3 @@ export class UnifiedAlertInboxPanel extends Panel {\n  this.setContent(\n- `<div class=\"panel-empty\">No alerts yet. Alerts from all sources will appear here.</div>${heldCount}`,\n+ `<div class=\"panel-empty\">No alerts yet. Alerts from all sources will appear here.</div>`,\n  );\n",
+      "diffSha256": "ae6b415c3482ed8755026084a5d04c13930f697795ae58a3bda073d8bd74a8ae",
+      "originalSha256": "8f178477514078844cfd4fd6b02a9b0e952b8fd1cf9895208787e5924da75552",
+      "mutatedSha256": "4467a1df9550c22a408425f1ba12e80139fa3a51c4ed8436e730ce8f89f97798",
+      "restoredSha256": "8f178477514078844cfd4fd6b02a9b0e952b8fd1cf9895208787e5924da75552",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P05",
+      "behavior": "A session total is visible with normal navigation and active filters",
+      "file": "src/components/UnifiedAlertInboxPanel.ts",
+      "test": "src/components/__tests__/unified-alert-inbox-disposition.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=session count survives",
+        "src/components/__tests__/unified-alert-inbox-disposition.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "session count survives filters and an empty inbox; clearing the session removes it"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /2 warnings held during cooldown this session/. Input:\n    \n    '\\n' +\n      ' \\n' +\n      ' \\n' +\n      ' \\n' +\n      ' \\n' +\n      ' Sort:RelSevTimeDist\\n' +\n      ' \\n' +\n      ' \\n' +\n      ' Show:UnreadAll\\n' +\n      ' \\n' +\n      ' \\n' +\n      ' Min:All+LOW+MED+HIGH+CRIT+\\n' +\n      ' \\n' +\n      ' \\n' +\n      ' Near Me\\n' +\n      ' \\n' +\n      ' \\n' +\n      ' \\n' +\n      ' Ack All\\n' +",
+      "reversal": "diff --git a/src/components/UnifiedAlertInboxPanel.ts b/src/components/UnifiedAlertInboxPanel.ts\nindex c3076d424..147029675 100644\n--- a/src/components/UnifiedAlertInboxPanel.ts\n+++ b/src/components/UnifiedAlertInboxPanel.ts\n@@ -476,3 +476,2 @@ export class UnifiedAlertInboxPanel extends Panel {\n  ${toolbar}\n- ${heldCount}\n  <div class=\"uai-list\">\n",
+      "diffSha256": "784ffaded343c1a8ec18ea2e67fb4cce2006a9e6e0c9c781093ce4334a9854c0",
+      "originalSha256": "8f178477514078844cfd4fd6b02a9b0e952b8fd1cf9895208787e5924da75552",
+      "mutatedSha256": "98c1664127b7ba4bcec65eaf0c4c3638d851d93ae674fbb3fb848c320e71f05a",
+      "restoredSha256": "8f178477514078844cfd4fd6b02a9b0e952b8fd1cf9895208787e5924da75552",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P06",
+      "behavior": "Debounced innerHTML refresh preserves the current row control",
+      "file": "src/components/Panel.ts",
+      "test": "src/components/__tests__/unified-alert-inbox-disposition.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=debounced updates restore",
+        "src/components/__tests__/unified-alert-inbox-disposition.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "debounced updates restore the latest focused control and never take focus from outside"
+      ],
+      "assertion": "error: 'the latest focused row action survives'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='\n",
+      "reversal": "diff --git a/src/components/Panel.ts b/src/components/Panel.ts\nindex 7643306fb..437df7284 100644\n--- a/src/components/Panel.ts\n+++ b/src/components/Panel.ts\n@@ -952,3 +952,3 @@ export class Panel {\n  this.content.innerHTML = html;\n- restoreFocus?.();\n+ void restoreFocus;\n  this.lastAppliedContentHtml = html;\n",
+      "diffSha256": "b57d98bcffdb9814f9b2569baa8661791edeedf4d77632ee49e19a24e3ddb2eb",
+      "originalSha256": "07bb2e4dfbfa58fb1e1955144c28b64b9101e209b5af57b333d2ac69b1fc7877",
+      "mutatedSha256": "a29bbc10de8e26ec08fecfa111dc80614efa502c4382f5005996237e4f0a646f",
+      "restoredSha256": "07bb2e4dfbfa58fb1e1955144c28b64b9101e209b5af57b333d2ac69b1fc7877",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P07",
+      "behavior": "When a control disappears the inbox remains the focus target",
+      "file": "src/components/UnifiedAlertInboxPanel.ts",
+      "test": "src/components/__tests__/unified-alert-inbox-disposition.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=debounced updates restore",
+        "src/components/__tests__/unified-alert-inbox-disposition.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "debounced updates restore the latest focused control and never take focus from outside"
+      ],
+      "assertion": "error: 'removed target falls back to its original panel'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='\n",
+      "reversal": "diff --git a/src/components/UnifiedAlertInboxPanel.ts b/src/components/UnifiedAlertInboxPanel.ts\nindex c3076d424..da2c8b912 100644\n--- a/src/components/UnifiedAlertInboxPanel.ts\n+++ b/src/components/UnifiedAlertInboxPanel.ts\n@@ -392,3 +392,3 @@ export class UnifiedAlertInboxPanel extends Panel {\n       if (document.activeElement !== document.body) return;\n-      (this.content.querySelector<HTMLElement>(scope + selector) ?? this.element).focus({ preventScroll: true });\n+      (this.content.querySelector<HTMLElement>(scope + selector) ?? document.body).focus({ preventScroll: true });\n     };\n",
+      "diffSha256": "0a79e14ec0049cd49df7f2b79ae1115067988b649cff8fe132d91b403b49f48d",
+      "originalSha256": "8f178477514078844cfd4fd6b02a9b0e952b8fd1cf9895208787e5924da75552",
+      "mutatedSha256": "2f72b5798ff832f7f17ace2bf3f99558557e78376e08d9c4858a171acb7410df",
+      "restoredSha256": "8f178477514078844cfd4fd6b02a9b0e952b8fd1cf9895208787e5924da75552",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P08",
+      "behavior": "Keyboard actions address the selected stable ID after ordering changes",
+      "file": "src/components/UnifiedAlertInboxPanel.ts",
+      "test": "src/components/__tests__/unified-alert-inbox-disposition.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=keyboard selection stays",
+        "src/components/__tests__/unified-alert-inbox-disposition.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "keyboard selection stays on the same warning after reordering"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        [\n    +     'second'\n    -     'first'\n        ]\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0:\n      0: 'first'\n  actual:\n    0:\n      0: 'second'\n  operator: 'deepStrictEqual'\n",
+      "reversal": "diff --git a/src/components/UnifiedAlertInboxPanel.ts b/src/components/UnifiedAlertInboxPanel.ts\nindex c3076d424..15e950252 100644\n--- a/src/components/UnifiedAlertInboxPanel.ts\n+++ b/src/components/UnifiedAlertInboxPanel.ts\n@@ -369,3 +369,3 @@ export class UnifiedAlertInboxPanel extends Panel {\n     if (e.key === 'a' || e.key === 'p') {\n-      const row = rows[selected];\n+      const row = rows[0];\n       const alert = row && unifiedAlertStore.getAll().find(a => a.id === row.dataset.alertId && a.source === row.dataset.alertSource);\n",
+      "diffSha256": "8ab2c18745058d68b2983bc7f18106a53bbbdd069ed32d7440e23f1181e45b39",
+      "originalSha256": "8f178477514078844cfd4fd6b02a9b0e952b8fd1cf9895208787e5924da75552",
+      "mutatedSha256": "fd518cd7f40440a6b4ca8ef7a013325acb2bdfaf73ace2c20b070310d6c9f716",
+      "restoredSha256": "8f178477514078844cfd4fd6b02a9b0e952b8fd1cf9895208787e5924da75552",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P09",
+      "behavior": "Reordering cannot transfer keyboard highlighting to a different warning",
+      "file": "src/components/UnifiedAlertInboxPanel.ts",
+      "test": "src/components/__tests__/unified-alert-inbox-disposition.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=keyboard selection stays",
+        "src/components/__tests__/unified-alert-inbox-disposition.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "keyboard selection stays on the same warning after reordering"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    'second' !== 'first'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'first'\n  actual: 'second'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/UnifiedAlertInboxPanel.ts b/src/components/UnifiedAlertInboxPanel.ts\nindex c3076d424..660e09e39 100644\n--- a/src/components/UnifiedAlertInboxPanel.ts\n+++ b/src/components/UnifiedAlertInboxPanel.ts\n@@ -594,3 +594,3 @@ export class UnifiedAlertInboxPanel extends Panel {\n  alert.acknowledged ? 'uai-acked' : '',\n- alert.id === this.selectedWarning?.id && alert.source === this.selectedWarning.source ? 'uai-selected' : '',\n+ this.selectedWarning && index === 0 ? 'uai-selected' : '',\n  ]\n",
+      "diffSha256": "344b87096acfb11644796ae9b411463177de4e7d46b305cc14305dd764d461f5",
+      "originalSha256": "8f178477514078844cfd4fd6b02a9b0e952b8fd1cf9895208787e5924da75552",
+      "mutatedSha256": "186f0de90412494848b3c39d90268fa17fb13c0af2c3d654774b9e2746b7cad2",
+      "restoredSha256": "8f178477514078844cfd4fd6b02a9b0e952b8fd1cf9895208787e5924da75552",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P10",
+      "behavior": "Malformed stored sources cannot inject row attributes or controls",
+      "file": "src/components/UnifiedAlertInboxPanel.ts",
+      "test": "src/components/__tests__/unified-alert-inbox-disposition.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=a malformed stored source",
+        "src/components/__tests__/unified-alert-inbox-disposition.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "a malformed stored source stays text and cannot inject a focusable control or row attribute"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    2 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 2\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/UnifiedAlertInboxPanel.ts b/src/components/UnifiedAlertInboxPanel.ts\nindex c3076d424..f4c095d01 100644\n--- a/src/components/UnifiedAlertInboxPanel.ts\n+++ b/src/components/UnifiedAlertInboxPanel.ts\n@@ -599,3 +599,3 @@ export class UnifiedAlertInboxPanel extends Panel {\n \n- return `<tr class=\"${rowClasses}\" data-alert-index=\"${index}\" data-alert-source=\"${source}\" data-alert-id=\"${esc(alert.id)}\">\n+ return `<tr class=\"${rowClasses}\" data-alert-index=\"${index}\" data-alert-source=\"${alert.source}\" data-alert-id=\"${esc(alert.id)}\">\n  <td class=\"ac-sev\">${sevPill}</td>\n",
+      "diffSha256": "e2722da48b59c02048f56e8c45652dc981d003cdcdcae6711f35e49ddfadd35b",
+      "originalSha256": "8f178477514078844cfd4fd6b02a9b0e952b8fd1cf9895208787e5924da75552",
+      "mutatedSha256": "12b11dc8fb1b4a92bd00d56573be2f31280e884f30838c92e5b4378d6e944e6d",
+      "restoredSha256": "8f178477514078844cfd4fd6b02a9b0e952b8fd1cf9895208787e5924da75552",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D01",
+      "behavior": "Only a true source cooldown returns a held-inbox disposition",
+      "file": "src/services/notification-dispatcher.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=only a source-cooldown",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "only a source-cooldown hold returns the inbox disposition"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + undefined\n    - 'held-cooldown'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'held-cooldown'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 59479b2a8..904c4f4b3 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -290,3 +290,3 @@ class NotificationDispatcher {\n  suppressTrace(trace, 'source-rate-limit');\n- return 'held-cooldown';\n+ return;\n  }\n",
+      "diffSha256": "66b9d704907c4fbbb31412349df95346cd7524a200e70b43aa7be8138b9e10e1",
+      "originalSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "mutatedSha256": "79a2fb491814c1540b450e68ffabe53fe330adbc56fcccfeee2ad8735029259a",
+      "restoredSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D02",
+      "behavior": "In-app-only selection blocks even critical OS requests without spending source capacity",
+      "file": "src/services/notification-dispatcher.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=in-app-only and malformed channels",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 2,
+      "redPassed": 0,
+      "redFailed": 2,
+      "greenAfter": 2,
+      "failingTests": [
+        "in-app-only and malformed channels suppress OS permission without spending capacity (desktop false)",
+        "in-app-only and malformed channels suppress OS permission without spending capacity (desktop true)"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 59479b2a8..ba1b528ab 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -282,3 +282,3 @@ class NotificationDispatcher {\n  const now = Date.now();\n- const hold = nativeChannelHold(domain);\n+ const hold = undefined;\n  if (hold || inactiveWarning(alert, now) || stillEligible?.(false) === false) {\n",
+      "diffSha256": "c5eebe6eddd88276519f7d1dbe0819af1de04eb587b18511feba74ba9e6d7596",
+      "originalSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "mutatedSha256": "1849722498a940e18eae2d56ab49acbff0d3310aa3ce7e76c1494dc1f285702f",
+      "restoredSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D03",
+      "behavior": "Malformed channels fail closed",
+      "file": "src/services/notifications/notification-settings-service.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=in-app-only and malformed channels",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 2,
+      "redPassed": 0,
+      "redFailed": 2,
+      "greenAfter": 2,
+      "failingTests": [
+        "in-app-only and malformed channels suppress OS permission without spending capacity (desktop false)",
+        "in-app-only and malformed channels suppress OS permission without spending capacity (desktop true)"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/notifications/notification-settings-service.ts b/src/services/notifications/notification-settings-service.ts\nindex 38dff651b..bb189e5dd 100644\n--- a/src/services/notifications/notification-settings-service.ts\n+++ b/src/services/notifications/notification-settings-service.ts\n@@ -214,3 +214,3 @@ export function nativeChannelHold(domain: NotificationDomain): string | undefine\n   if (channel === 'both' || channel === 'native') return;\n-  return channel === 'in_app' ? 'in-app-only' : 'channel-unavailable';\n+  return channel === 'in_app' ? 'in-app-only' : undefined;\n }\n",
+      "diffSha256": "db27344963c35692489c99744d9f061a9eb26d6d501454d09be00ed1d1a03098",
+      "originalSha256": "4bd38e0093a4ba993264a64d6bd66e1999a32cf464b030432275026f9b825c66",
+      "mutatedSha256": "900103649373c40d012d414e9990de029025a25ea5ad1822f85578f0dbf4a983",
+      "restoredSha256": "4bd38e0093a4ba993264a64d6bd66e1999a32cf464b030432275026f9b825c66",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D04",
+      "behavior": "Explicit in-app-only is not diagnosed as an unsafe suppression",
+      "file": "src/services/diagnostics/notification-trace.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=in-app-only and malformed channels",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 2,
+      "redPassed": 0,
+      "redFailed": 2,
+      "greenAfter": 2,
+      "failingTests": [
+        "in-app-only and malformed channels suppress OS permission without spending capacity (desktop false)",
+        "in-app-only and malformed channels suppress OS permission without spending capacity (desktop true)"
+      ],
+      "assertion": "error: |-\n    only the malformed preference needs diagnosis\n    \n    2 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 2\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/diagnostics/notification-trace.ts b/src/services/diagnostics/notification-trace.ts\nindex 2df18a622..3f36f49ba 100644\n--- a/src/services/diagnostics/notification-trace.ts\n+++ b/src/services/diagnostics/notification-trace.ts\n@@ -183,3 +183,3 @@ const USER_AUTHORIZED_SUPPRESSIONS = new Set([\n   'ghost-mode',\n-  'in-app-only',\n+\n ]);\n",
+      "diffSha256": "2d35549f8d406381b603c114e5a579d84052fefadc5063148a677e654bbbc323",
+      "originalSha256": "d02293644e3971f81d31114528e1ef2b2db00b27e0f66f873e732fadee0954b4",
+      "mutatedSha256": "4f56540629524a7e324a1e69ccb81142f55259a2d6f1fa6da5d889f5c282fa64",
+      "restoredSha256": "d02293644e3971f81d31114528e1ef2b2db00b27e0f66f873e732fadee0954b4",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D05",
+      "behavior": "Changing mode and restoring it while permission waits cancels the send",
+      "file": "src/services/notification-dispatcher.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=permission completion rechecks eligibility: mode-roundtrip",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "permission completion rechecks eligibility: mode-roundtrip"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 59479b2a8..5566441f8 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -417,3 +417,3 @@ class NotificationDispatcher {\n     const options = { signal: controller.signal };\n-    if (typeof document !== 'undefined') document.addEventListener('wm:mode-changed', cancel, options);\n+    if (typeof document !== 'undefined') void cancel;\n     window.addEventListener?.('storage', event => {\n",
+      "diffSha256": "317e90d1ea983552f629b5c107ec59367d09e9ec8f1f96067008c3924f3a07ba",
+      "originalSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "mutatedSha256": "83b639ab3ee3ae9d26ffb623feddcf9a634b877c321adbf19da5c9955f3325e9",
+      "restoredSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D06",
+      "behavior": "Recheck live Ghost Mode even without event",
+      "file": "src/services/notification-dispatcher.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=permission completion rechecks eligibility: mode$",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "permission completion rechecks eligibility: mode"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 59479b2a8..3b2ff72f9 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -409,3 +409,3 @@ class NotificationDispatcher {\n         || current.global !== settings.global || current.domains[domain] !== settings.domains[domain]\n-        || isGhostMode() || !evaluateNotificationPreference(domain, alert.severity).allowed\n+        || !evaluateNotificationPreference(domain, alert.severity).allowed\n         || nativeChannelHold(domain) || inactiveWarning(alert, now) || stillEligible?.(true) === false) {\n",
+      "diffSha256": "2db3e4f5df7ba3278a55991a04aa74b35db6dd8c6263346913f6aa92a3d659e3",
+      "originalSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "mutatedSha256": "b456f874f2806957879650b7bd39b39a522bb2f0ccf7b4257c6ba57b8a577800",
+      "restoredSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D07",
+      "behavior": "Recheck quiet hours at permission completion",
+      "file": "src/services/notification-dispatcher.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=permission completion rechecks eligibility: quiet-hours",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "permission completion rechecks eligibility: quiet-hours"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 59479b2a8..b2ad286d9 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -409,3 +409,3 @@ class NotificationDispatcher {\n         || current.global !== settings.global || current.domains[domain] !== settings.domains[domain]\n-        || isGhostMode() || !evaluateNotificationPreference(domain, alert.severity).allowed\n+        || isGhostMode() \n         || nativeChannelHold(domain) || inactiveWarning(alert, now) || stillEligible?.(true) === false) {\n",
+      "diffSha256": "81a241a364e84b36c9b5594f5a8ef032bc42d0613ad3c237289b7b022ba091df",
+      "originalSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "mutatedSha256": "7288e866d63489b2c644bdc968d79100f4bef32cd12c1b05330476f3da8e56b9",
+      "restoredSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D08",
+      "behavior": "Replacing a channel and restoring it invalidates a pending request",
+      "file": "src/services/notification-dispatcher.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=permission completion rechecks eligibility: channel-roundtrip",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "permission completion rechecks eligibility: channel-roundtrip"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 59479b2a8..cfe75ec79 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -408,3 +408,3 @@ class NotificationDispatcher {\n       if (now < started || now - started >= RATE_LIMIT_MS\n-        || current.global !== settings.global || current.domains[domain] !== settings.domains[domain]\n+        || current.global !== settings.global\n         || isGhostMode() || !evaluateNotificationPreference(domain, alert.severity).allowed\n",
+      "diffSha256": "0a0115c551321103ca108d6d45608b2197cc8d3c20212999ac4333b0135afa9e",
+      "originalSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "mutatedSha256": "04a888b513490280d352e1c32eee0e126d4569a42a8e4fe38155819a07bb2160",
+      "restoredSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D09",
+      "behavior": "Discard permission when the owning warning is no longer eligible",
+      "file": "src/services/notification-dispatcher.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=permission completion rechecks eligibility: owner",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "permission completion rechecks eligibility: owner"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 59479b2a8..934f36494 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -410,3 +410,3 @@ class NotificationDispatcher {\n         || isGhostMode() || !evaluateNotificationPreference(domain, alert.severity).allowed\n-        || nativeChannelHold(domain) || inactiveWarning(alert, now) || stillEligible?.(true) === false) {\n+        || nativeChannelHold(domain) || inactiveWarning(alert, now)) {\n         recordNativeResult(trace, { delivered: false, surface: 'failed', error: 'no-longer-eligible' });\n",
+      "diffSha256": "c6a819eb30a456c7f0bef0605aed98c4ca4d9c6f9021b3c379a80d3c123d8566",
+      "originalSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "mutatedSha256": "0b11c09ec4f314945790f1896dc2611bb1b9e1b4ef2c3fc72219ba806f5044b0",
+      "restoredSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D10",
+      "behavior": "Discard a warning expiring exactly at permission completion",
+      "file": "src/services/notification-dispatcher.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=permission completion rechecks eligibility: expiry",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "permission completion rechecks eligibility: expiry"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 59479b2a8..c271b3f63 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -130,3 +130,3 @@ function inactiveWarning(alert: UnifiedAlert, now: number): boolean {\n   return alert.acknowledged || (alert.snoozedUntil ?? 0) > now\n-    || (evidence?.kind === 'nws-expiry' && evidence.expiresAt <= now);\n+    || (evidence?.kind === 'nws-expiry' && evidence.expiresAt < now);\n }\n",
+      "diffSha256": "b33f8cccae99933a3f553105e21d4005cf59e37973e44e3612b79bb433fc343c",
+      "originalSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "mutatedSha256": "d29f7246496a7c3ba2b031335a542531f9177af2330ebdeb27fb75b3ce31c4df",
+      "restoredSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D11",
+      "behavior": "Owner cancellation invalidates pending permission",
+      "file": "src/services/notification-dispatcher.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=permission completion rechecks eligibility: cancel",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "permission completion rechecks eligibility: cancel"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 59479b2a8..12d810fd3 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -240,3 +240,3 @@ class NotificationDispatcher {\n   cancelPendingPermission = (): void => {\n-    this.finishPermission('cancelled');\n+    return;\n   };\n",
+      "diffSha256": "d2c09ff90bba466dd351f2c84590aec86661bbd1360dc7b54127b8932c8f1877",
+      "originalSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "mutatedSha256": "34970134f52a06f4a9d53ea40e164f78a17ba15ef6def3ab95903ab0cbd882da",
+      "restoredSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D12",
+      "behavior": "Discard delayed permission at the two-minute cutoff",
+      "file": "src/services/notification-dispatcher.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=permission completion rechecks eligibility: stale-prompt",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "permission completion rechecks eligibility: stale-prompt"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 59479b2a8..07afecdc4 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -407,3 +407,3 @@ class NotificationDispatcher {\n       const current = getSettings();\n-      if (now < started || now - started >= RATE_LIMIT_MS\n+      if (now < started || now - started > RATE_LIMIT_MS\n         || current.global !== settings.global || current.domains[domain] !== settings.domains[domain]\n",
+      "diffSha256": "5f688ee96448576ed49c95a8b5d831be7167e939cec439e56072cee5c2a10c56",
+      "originalSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "mutatedSha256": "8f74ee8036eeacced0d38a2e3294c31099e16ec60cbb6cb25ab2a5b905d4b256",
+      "restoredSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D13",
+      "behavior": "Reject clock rollback while awaiting permission",
+      "file": "src/services/notification-dispatcher.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=permission completion rechecks eligibility: clock-reversal",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "permission completion rechecks eligibility: clock-reversal"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 59479b2a8..15fb9a3d1 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -407,3 +407,3 @@ class NotificationDispatcher {\n       const current = getSettings();\n-      if (now < started || now - started >= RATE_LIMIT_MS\n+      if (now - started >= RATE_LIMIT_MS\n         || current.global !== settings.global || current.domains[domain] !== settings.domains[domain]\n",
+      "diffSha256": "9d91783547053125d50a4523bbbffa82a873070e492105c277ce72b7ff209e5c",
+      "originalSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "mutatedSha256": "22da2202c54612bc4c3ab3bcc436a6b6716a0b6415a8c3c88d0160b35ec7f2b2",
+      "restoredSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D14",
+      "behavior": "One unanswered permission question cannot create a critical-warning backlog",
+      "file": "src/services/notification-dispatcher.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=an outstanding permission question",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "an outstanding permission question never builds a critical notification backlog"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n    +   'Alert second'\n    -   'Alert first'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'Alert first'\n  actual:\n    0: 'Alert second'\n  operator: 'deepStrictEqual'\n",
+      "reversal": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 59479b2a8..97ccb4a9d 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -380,3 +380,3 @@ class NotificationDispatcher {\n       } else if (this.permissionCandidate) {\n-        recordNativeResult(trace, { delivered: false, surface: 'failed', error: 'permission-pending' });\n+        this.finishPermission('cancelled'); this.awaitPermission(alert, domain, trace, stillEligible);\n       } else {\n",
+      "diffSha256": "13336eef7e39bc280678ee1231118c70cc251841788ce4c589220859331665a9",
+      "originalSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "mutatedSha256": "50dcfdd0c9bbca1369a1beef431de7ea5ebea182fcce94ea6842346ec6b93839",
+      "restoredSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D15",
+      "behavior": "A superseded initial warning spends zero capacity and cannot ask permission",
+      "file": "src/services/notification-dispatcher.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=a superseded initial warning",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "a superseded initial warning cannot consume source capacity or request permission"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 59479b2a8..4ebfff058 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -283,3 +283,3 @@ class NotificationDispatcher {\n  const hold = nativeChannelHold(domain);\n- if (hold || inactiveWarning(alert, now) || stillEligible?.(false) === false) {\n+ if (hold || inactiveWarning(alert, now)) {\n  suppressTrace(trace, hold ?? 'inactive-warning');\n",
+      "diffSha256": "668665c71cbe023af09fc115fbc325446013e8e54250bd9d08a74dc6cdc050d4",
+      "originalSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "mutatedSha256": "9727779025b100abfc45d7f5a97cf1879fc881d581d8d0abffe3f84e6e20e612",
+      "restoredSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D16",
+      "behavior": "A cancelled/expired candidate cannot retain the original warning closure",
+      "file": "src/services/notification-dispatcher.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=unresolved permission question releases its candidate on expiry",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "a single unresolved permission question releases its candidate on expiry"
+      ],
+      "assertion": "error: |-\n    expired or disposed candidate released before OS response\n    + actual - expected\n    \n    + undefined\n    - false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 59479b2a8..30d76732c 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -395,3 +395,3 @@ class NotificationDispatcher {\n     const cancel = this.cancelPendingPermission;\n-    const timer = setTimeout(cancel, RATE_LIMIT_MS);\n+    const timer = setTimeout(() => {}, RATE_LIMIT_MS);\n     this.permissionCandidate = outcome => {\n",
+      "diffSha256": "fd0f85c81a5c157bfb9f72292c94af0a11a5323106bf3e70bdf1917920bcb2fd",
+      "originalSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "mutatedSha256": "8edc29ef340a1d8dc440e57d4683619f42a3a233d7c00121f88bef2cadbea86e",
+      "restoredSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D17",
+      "behavior": "A real unresolved permission question is shared even after candidate disposal",
+      "file": "src/services/notification-dispatcher.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=unresolved permission question releases its candidate on dispose",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "a single unresolved permission question releases its candidate on dispose"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    2 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 2\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 59479b2a8..28a6a59c2 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -421,3 +421,3 @@ class NotificationDispatcher {\n     }, options);\n-    if (!this.permissionQuestionOpen) void this.askPermission();\n+    void this.askPermission();\n   }\n",
+      "diffSha256": "97907b4791211c0a98d8d4c37e52799039adf98e07334eb32b2c66e1d4baade2",
+      "originalSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "mutatedSha256": "b66161cf3df743ec12c0965abf0a3c34543ecbad225d1dbcdd210c64aae9aa99",
+      "restoredSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D18",
+      "behavior": "Reject a revoked permission even if the promise returns a grant",
+      "file": "src/services/notification-dispatcher.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=pending permission cannot survive revoked-permission",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "pending permission cannot survive revoked-permission"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 59479b2a8..794b02663 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -399,3 +399,3 @@ class NotificationDispatcher {\n       controller.abort();\n-      if (outcome !== 'granted' || Notification.permission !== 'granted') {\n+      if (outcome !== 'granted') {\n         const failure = outcome === 'cancelled' ? 'no-longer-eligible' : 'permission-denied';\n",
+      "diffSha256": "10237daf465ef805b716cd297dbe626571271a02f1e5e24c3550d9d94abdd978",
+      "originalSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "mutatedSha256": "aae3206676c93e25a0198b1ff5341b813f6bc0adb1a1e89bc63a407ec95a496b",
+      "restoredSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D19",
+      "behavior": "Other tabs switching mode cancel a pending candidate",
+      "file": "src/services/notification-dispatcher.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=pending permission cannot survive peer-mode",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "pending permission cannot survive peer-mode"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 59479b2a8..e427cb469 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -419,3 +419,3 @@ class NotificationDispatcher {\n     window.addEventListener?.('storage', event => {\n-      if (event.key === MODE_STORAGE_KEY || isNotificationSettingsStorageKey(event.key)) cancel();\n+      if (isNotificationSettingsStorageKey(event.key)) cancel();\n     }, options);\n",
+      "diffSha256": "9fdefb3fb706169f6458a87ded8b8aae09ced9b98bcb3d7be7395be82d4e601b",
+      "originalSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "mutatedSha256": "7d257b263111c2ba51a2219bb2d58d8054447e2806db0bbd22c297b3cd2efe1f",
+      "restoredSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D20",
+      "behavior": "Other tabs changing channels cancel an old candidate",
+      "file": "src/services/notification-dispatcher.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=pending permission cannot survive peer-channel$",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "pending permission cannot survive peer-channel"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 59479b2a8..cc1e4f4d3 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -419,3 +419,3 @@ class NotificationDispatcher {\n     window.addEventListener?.('storage', event => {\n-      if (event.key === MODE_STORAGE_KEY || isNotificationSettingsStorageKey(event.key)) cancel();\n+      if (event.key === MODE_STORAGE_KEY) cancel();\n     }, options);\n",
+      "diffSha256": "91a97f47613ad11cc83a02613eed299f5691c19cf02e89253cbc0d1ff79ac419",
+      "originalSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "mutatedSha256": "7b5122644e4807d00f8f581adac2228e1df3c42f155f3fc400ffc7a6d17b3e8a",
+      "restoredSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D21",
+      "behavior": "The latest stored preference takes effect before storage-event delivery",
+      "file": "src/services/notifications/notification-settings-service.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=a saved channel from a peer",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "a saved channel from a peer applies before delivery even before its storage event arrives"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/notifications/notification-settings-service.ts b/src/services/notifications/notification-settings-service.ts\nindex 38dff651b..dac37f841 100644\n--- a/src/services/notifications/notification-settings-service.ts\n+++ b/src/services/notifications/notification-settings-service.ts\n@@ -230,3 +230,2 @@ function emitChange(): void {\n export function getSettings(): NotificationSettings {\n-  refreshStoredSettings();\n   return currentSettings;\n",
+      "diffSha256": "603109902653532fd53664ed1c845bd43056632ab8cbb538b1495b89bb633c7f",
+      "originalSha256": "4bd38e0093a4ba993264a64d6bd66e1999a32cf464b030432275026f9b825c66",
+      "mutatedSha256": "0fdf7389f0788c0740444944ea6b03429f6f31ab2e241866ea7dba90a0e2d7f9",
+      "restoredSha256": "4bd38e0093a4ba993264a64d6bd66e1999a32cf464b030432275026f9b825c66",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D22",
+      "behavior": "Malformed stored settings cannot authorize a prompt",
+      "file": "src/services/notifications/notification-settings-service.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=an explicit malformed stored domain",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "an explicit malformed stored domain cannot implicitly enable system delivery"
+      ],
+      "assertion": "error: |-\n    broken\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/notifications/notification-settings-service.ts b/src/services/notifications/notification-settings-service.ts\nindex 38dff651b..51e321758 100644\n--- a/src/services/notifications/notification-settings-service.ts\n+++ b/src/services/notifications/notification-settings-service.ts\n@@ -212,3 +212,3 @@ export function nativeChannelHold(domain: NotificationDomain): string | undefine\n   const channel = getSettings().domains?.[domain]?.channel;\n-  if (unreadableSettings) return 'channel-unavailable';\n+  \n   if (channel === 'both' || channel === 'native') return;\n",
+      "diffSha256": "f1ebcf9033bf67da472007ba5e9a25074fded81476b530471a64a9508857d3cf",
+      "originalSha256": "4bd38e0093a4ba993264a64d6bd66e1999a32cf464b030432275026f9b825c66",
+      "mutatedSha256": "349080aa9cb82a080ce9119f2a9d94d3aaf1e769cd1b65f6efbff8df01b0ab21",
+      "restoredSha256": "4bd38e0093a4ba993264a64d6bd66e1999a32cf464b030432275026f9b825c66",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D23",
+      "behavior": "Malformed stored domain rows cannot fall back to the both-channel default",
+      "file": "src/services/notifications/notification-settings-service.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=an explicit malformed stored domain",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "an explicit malformed stored domain cannot implicitly enable system delivery"
+      ],
+      "assertion": "error: |-\n    {\"version\":1,\"domains\":{\"weather\":null}}\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/notifications/notification-settings-service.ts b/src/services/notifications/notification-settings-service.ts\nindex 38dff651b..f4c7cee07 100644\n--- a/src/services/notifications/notification-settings-service.ts\n+++ b/src/services/notifications/notification-settings-service.ts\n@@ -141,3 +141,3 @@ function mergeWithDefaults(saved: NotificationSettings | null): NotificationSett\n       const row = saved.domains[domain];\n-      domains[domain] = { ...DEFAULT_DOMAIN_SETTINGS, ...row, channel: row?.channel };\n+      domains[domain] = { ...DEFAULT_DOMAIN_SETTINGS, ...row, channel: row?.channel ?? DEFAULT_DOMAIN_SETTINGS.channel };\n     }\n",
+      "diffSha256": "67526e9fb4cc4fac457a2c02275a0c2d046f74200327a457775c050e4da54a83",
+      "originalSha256": "4bd38e0093a4ba993264a64d6bd66e1999a32cf464b030432275026f9b825c66",
+      "mutatedSha256": "286c4ea75255e9b3861cda5710d973f88bbf6d38665cb2e1d0cad5ffa6564a03",
+      "restoredSha256": "4bd38e0093a4ba993264a64d6bd66e1999a32cf464b030432275026f9b825c66",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D24",
+      "behavior": "Permission completion itself can produce one eligible OS request",
+      "file": "src/services/notification-dispatcher.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=permission completion rechecks eligibility: allowed",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "permission completion rechecks eligibility: allowed"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    0 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 0\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 59479b2a8..fdec862af 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -414,3 +414,3 @@ class NotificationDispatcher {\n       }\n-      this.presentNotification(alert, trace);\n+      void alert;\n     };\n",
+      "diffSha256": "3164c17e37de680bc49c049c56fb17e03a5e050e7836b4376730fe849daf459b",
+      "originalSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "mutatedSha256": "3e2b34422a6284abd87f56acdbcd100384418e78ddce68a88fb0c2aadbe26ead",
+      "restoredSha256": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "D25",
+      "behavior": "A malformed persisted threshold cannot silently permit a critical OS alert",
+      "file": "src/services/notifications/notification-settings-service.ts",
+      "test": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=an explicit malformed stored domain",
+        "src/services/__tests__/notification-dispatcher-trace.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "an explicit malformed stored domain cannot implicitly enable system delivery"
+      ],
+      "assertion": "error: |-\n    {\"version\":1,\"domains\":{\"weather\":{\"channel\":\"native\",\"threshold\":\"unexpected\"}}}\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/notifications/notification-settings-service.ts b/src/services/notifications/notification-settings-service.ts\nindex 38dff651b..cb2aa20b7 100644\n--- a/src/services/notifications/notification-settings-service.ts\n+++ b/src/services/notifications/notification-settings-service.ts\n@@ -297,3 +297,3 @@ export function evaluateNotificationPreference(\n   const thresholdIndex = SEVERITY_ORDER.indexOf(domainSettings.threshold);\n-  if (thresholdIndex === -1 || typeof domainSettings.quietHoursEnabled !== 'boolean') return { allowed: false, reason: 'settings-unavailable' };\n+  if (typeof domainSettings.quietHoursEnabled !== 'boolean') return { allowed: false, reason: 'settings-unavailable' };\n   if (severityIndex < thresholdIndex) return { allowed: false, reason: 'below-threshold' };\n",
+      "diffSha256": "dbd87e19c4caeff69ce183ed86454bb36d9184c7de208800524927b37b84fdd0",
+      "originalSha256": "4bd38e0093a4ba993264a64d6bd66e1999a32cf464b030432275026f9b825c66",
+      "mutatedSha256": "3423a2858fa5be1b64b29f7b73fc97a47bfb42b0c2c9db27881c668c9999d2e1",
+      "restoredSha256": "4bd38e0093a4ba993264a64d6bd66e1999a32cf464b030432275026f9b825c66",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "N01",
+      "behavior": "Site and national inbox use the supplied CAP identifier",
+      "file": "src/services/weather.ts",
+      "test": "src/services/__tests__/nws-notification-owner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=both NWS feeds",
+        "src/services/__tests__/nws-notification-owner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "both NWS feeds retain one CAP identity and the provider issuance distinct from onset"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'nws-https://api.weather.gov/alerts/fixture'\n    - 'nws-nws-provider-literal'\n           ^\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'nws-nws-provider-literal'\n  actual: 'nws-https://api.weather.gov/alerts/fixture'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/weather.ts b/src/services/weather.ts\nindex 5878f7708..a487c07ed 100644\n--- a/src/services/weather.ts\n+++ b/src/services/weather.ts\n@@ -300,3 +300,3 @@ export function selectAndNormalizeWeatherAlerts(features: readonly NWSAlert[]):\n         capId: typeof alert.properties.id === 'string' && alert.properties.id.length <= MAX_NWS_IDENTIFIER_LENGTH\n-          && alert.properties.id.trim() ? alert.properties.id : undefined,\n+          && alert.properties.id.trim() ? alert.id : undefined,\n         event: typeof alert.properties.event === 'string' ? alert.properties.event : '',\n",
+      "diffSha256": "bea329147a096ffd166b952cf531783271a0dc07a3b6523da4b369527f26ebd1",
+      "originalSha256": "aa19283bd0e02ff0a137c8003388cd9b0ad5ba5a09afba0552eec0bb04db20ff",
+      "mutatedSha256": "932cfc2b152c86217e758b277c5a6404f92d2acad428d9db86e65e76dd7e0bbf",
+      "restoredSha256": "aa19283bd0e02ff0a137c8003388cd9b0ad5ba5a09afba0552eec0bb04db20ff",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "N02",
+      "behavior": "Do not strip a provider prefix to create a new identity",
+      "file": "src/services/alert-normalizer.ts",
+      "test": "src/services/__tests__/nws-notification-owner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=both NWS feeds",
+        "src/services/__tests__/nws-notification-owner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "both NWS feeds retain one CAP identity and the provider issuance distinct from onset"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'nws-provider-literal'\n    - 'nws-nws-provider-literal'\n           ^\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'nws-nws-provider-literal'\n  actual: 'nws-provider-literal'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/alert-normalizer.ts b/src/services/alert-normalizer.ts\nindex a7b597c47..b3fc76196 100644\n--- a/src/services/alert-normalizer.ts\n+++ b/src/services/alert-normalizer.ts\n@@ -141,3 +141,3 @@ export function normalizeSiteWarning(\n   return normalizeNWSAlert({\n-    id: alert.capId, status: alert.status, messageType: alert.messageType, event: alert.event, headline: alert.headline,\n+    id: alert.capId.replace(/^nws-/, \"\"), status: alert.status, messageType: alert.messageType, event: alert.event, headline: alert.headline,\n     description: alert.description, areaDesc: alert.areaDesc, severity: alert.severity, urgency: 'Unknown',\n",
+      "diffSha256": "1d9287f6a484e36b950df69de3eea1048ac52849006f40dc7ed09e0a56408d9f",
+      "originalSha256": "62771ff741e7d7e4ece05edf75b8668d04ec2f4642a57377bbb1b7c7751825b6",
+      "mutatedSha256": "07c9d983aa182592d1271db75daf9a3c9acd1e9cf4dfa330012646d9efcfc5dc",
+      "restoredSha256": "62771ff741e7d7e4ece05edf75b8668d04ec2f4642a57377bbb1b7c7751825b6",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "N03",
+      "behavior": "Use provider issuance for notification freshness instead of earlier onset",
+      "file": "src/services/alert-normalizer.ts",
+      "test": "src/services/__tests__/nws-notification-owner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=both NWS feeds",
+        "src/services/__tests__/nws-notification-owner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "both NWS feeds retain one CAP identity and the provider issuance distinct from onset"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n        expiresAt: 1793766597817,\n    +   issuedAt: 1793766517817,\n    -   issuedAt: 1793766535817,\n        kind: 'nws-expiry',\n        observedAt: 1793766537817\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    kind: 'nws-expiry'\n    observedAt: 1793766537817\n    issuedAt: 1793766535817\n    expiresAt: 1793766597817\n  actual:\n    kind",
+      "reversal": "diff --git a/src/services/alert-normalizer.ts b/src/services/alert-normalizer.ts\nindex a7b597c47..82df7ab98 100644\n--- a/src/services/alert-normalizer.ts\n+++ b/src/services/alert-normalizer.ts\n@@ -143,3 +143,3 @@ export function normalizeSiteWarning(\n     description: alert.description, areaDesc: alert.areaDesc, severity: alert.severity, urgency: 'Unknown',\n-    centroid: alert.centroid ?? null, retrievedAt: state.timestamp, sent: alert.sent!.toISOString(),\n+    centroid: alert.centroid ?? null, retrievedAt: state.timestamp, sent: alert.reportedOnset!.toISOString(),\n     onset: Number.isFinite(onset) ? alert.reportedOnset!.toISOString() : undefined, expires: alert.expires.toISOString(),\n",
+      "diffSha256": "28e9192c07af405f2a3801fdf1143c34c731a50d046442838631e7d276109128",
+      "originalSha256": "62771ff741e7d7e4ece05edf75b8668d04ec2f4642a57377bbb1b7c7751825b6",
+      "mutatedSha256": "b42d3fe8cc35170b8040004cd5ce71f353b568950cfb903efe18176bd042a7ca",
+      "restoredSha256": "62771ff741e7d7e4ece05edf75b8668d04ec2f4642a57377bbb1b7c7751825b6",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "N04",
+      "behavior": "Replay cannot establish a fresh site report",
+      "file": "src/services/alert-normalizer.ts",
+      "test": "src/services/__tests__/nws-notification-owner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=site notification requires",
+        "src/services/__tests__/nws-notification-owner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "site notification requires current verified observation and provider CAP identity"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + {\n    +   acknowledged: false,\n    +   body: 'Fixture',\n    +   id: 'nws-nws-provider-literal',\n    +   location: undefined,\n    +   pinned: false,\n    +   raw: {\n    +     areaDesc: 'Test',\n    +     centroid: null,\n    +     description: '',\n    +     event: 'Fixture warning',\n    +     expires: '2026-11-04T04:29:58.918Z',\n    +     headline: 'Fixture',\n    +     id:",
+      "reversal": "diff --git a/src/services/alert-normalizer.ts b/src/services/alert-normalizer.ts\nindex a7b597c47..41005e831 100644\n--- a/src/services/alert-normalizer.ts\n+++ b/src/services/alert-normalizer.ts\n@@ -132,3 +132,3 @@ export function normalizeSiteWarning(\n ): UnifiedAlert | undefined {\n-  if (source !== 'network' || state.mode !== 'live' || !alert.capId || !alert.status || !alert.messageType\n+  if (state.mode !== 'live' || !alert.capId || !alert.status || !alert.messageType\n     || state.timestamp === null || !Number.isFinite(alert.sent?.getTime()) || !Number.isFinite(alert.expires.getTime())\n",
+      "diffSha256": "211178836eb49b9e406816d58bb7c800a9e579cdde6512780900be4d92ee6316",
+      "originalSha256": "62771ff741e7d7e4ece05edf75b8668d04ec2f4642a57377bbb1b7c7751825b6",
+      "mutatedSha256": "609e2485510a10f2376c702aa6721406e0dab3c3a0eae38dc1f0b17b99bb7cb4",
+      "restoredSha256": "62771ff741e7d7e4ece05edf75b8668d04ec2f4642a57377bbb1b7c7751825b6",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "N05",
+      "behavior": "A cached feed cannot produce a new site notification",
+      "file": "src/services/alert-normalizer.ts",
+      "test": "src/services/__tests__/nws-notification-owner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=site notification requires",
+        "src/services/__tests__/nws-notification-owner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "site notification requires current verified observation and provider CAP identity"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + {\n    +   acknowledged: false,\n    +   body: 'Fixture',\n    +   id: 'nws-nws-provider-literal',\n    +   location: undefined,\n    +   pinned: false,\n    +   raw: {\n    +     areaDesc: 'Test',\n    +     centroid: null,\n    +     description: '',\n    +     event: 'Fixture warning',\n    +     expires: '2026-11-04T04:29:59.873Z',\n    +     headline: 'Fixture',\n    +     id:",
+      "reversal": "diff --git a/src/services/alert-normalizer.ts b/src/services/alert-normalizer.ts\nindex a7b597c47..e1d91480f 100644\n--- a/src/services/alert-normalizer.ts\n+++ b/src/services/alert-normalizer.ts\n@@ -132,3 +132,3 @@ export function normalizeSiteWarning(\n ): UnifiedAlert | undefined {\n-  if (source !== 'network' || state.mode !== 'live' || !alert.capId || !alert.status || !alert.messageType\n+  if (source !== 'network' || !alert.capId || !alert.status || !alert.messageType\n     || state.timestamp === null || !Number.isFinite(alert.sent?.getTime()) || !Number.isFinite(alert.expires.getTime())\n",
+      "diffSha256": "45bb78295f7284835c2644ae35b75564062487b418b152f8a16ff3d023d90ced",
+      "originalSha256": "62771ff741e7d7e4ece05edf75b8668d04ec2f4642a57377bbb1b7c7751825b6",
+      "mutatedSha256": "7ef964084aa5df3d8e87d15475b28138709b2dfecc0ef157b91d84989bcb42d7",
+      "restoredSha256": "62771ff741e7d7e4ece05edf75b8668d04ec2f4642a57377bbb1b7c7751825b6",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "N06",
+      "behavior": "An expired site warning has no new owner",
+      "file": "src/services/alert-normalizer.ts",
+      "test": "src/services/__tests__/nws-notification-owner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=site notification requires",
+        "src/services/__tests__/nws-notification-owner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "site notification requires current verified observation and provider CAP identity"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + {\n    +   acknowledged: false,\n    +   body: 'Fixture',\n    +   id: 'nws-nws-provider-literal',\n    +   location: undefined,\n    +   pinned: false,\n    +   raw: {\n    +     areaDesc: 'Test',\n    +     centroid: null,\n    +     description: '',\n    +     event: 'Fixture warning',\n    +     expires: '2026-11-04T04:29:00.983Z',\n    +     headline: 'Fixture',\n    +     id:",
+      "reversal": "diff --git a/src/services/alert-normalizer.ts b/src/services/alert-normalizer.ts\nindex a7b597c47..ab7db2cc0 100644\n--- a/src/services/alert-normalizer.ts\n+++ b/src/services/alert-normalizer.ts\n@@ -134,3 +134,3 @@ export function normalizeSiteWarning(\n     || state.timestamp === null || !Number.isFinite(alert.sent?.getTime()) || !Number.isFinite(alert.expires.getTime())\n-    || alert.expires.getTime() <= now) return;\n+    || alert.expires.getTime() < now) return;\n   const evidence = validateAlertRetentionEvidence('nws', {\n",
+      "diffSha256": "267cb0ffa1d11a3e7599ccc1271274ae177c9a1f94c9a5bb8cde0c412906733b",
+      "originalSha256": "62771ff741e7d7e4ece05edf75b8668d04ec2f4642a57377bbb1b7c7751825b6",
+      "mutatedSha256": "3730add118ecadf8d897d947680fd93a2eeff5d216aa8b5eb7b7e9d427f5308f",
+      "restoredSha256": "62771ff741e7d7e4ece05edf75b8668d04ec2f4642a57377bbb1b7c7751825b6",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "N07",
+      "behavior": "Provider identity must exist",
+      "file": "src/services/alert-normalizer.ts",
+      "test": "src/services/__tests__/nws-notification-owner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=site notification requires",
+        "src/services/__tests__/nws-notification-owner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "site notification requires current verified observation and provider CAP identity"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + {\n    +   acknowledged: false,\n    +   body: 'Fixture',\n    +   id: 'nws-undefined',\n    +   location: undefined,\n    +   pinned: false,\n    +   raw: {\n    +     areaDesc: 'Test',\n    +     centroid: null,\n    +     description: '',\n    +     event: 'Fixture warning',\n    +     expires: '2026-11-04T04:30:01.932Z',\n    +     headline: 'Fixture',\n    +     id: undefined,",
+      "reversal": "diff --git a/src/services/alert-normalizer.ts b/src/services/alert-normalizer.ts\nindex a7b597c47..90f48ffcd 100644\n--- a/src/services/alert-normalizer.ts\n+++ b/src/services/alert-normalizer.ts\n@@ -132,3 +132,3 @@ export function normalizeSiteWarning(\n ): UnifiedAlert | undefined {\n-  if (source !== 'network' || state.mode !== 'live' || !alert.capId || !alert.status || !alert.messageType\n+  if (source !== 'network' || state.mode !== 'live' || !alert.status || !alert.messageType\n     || state.timestamp === null || !Number.isFinite(alert.sent?.getTime()) || !Number.isFinite(alert.expires.getTime())\n",
+      "diffSha256": "4e20cd79c0fee8966a2ee8e0dc5daabb59aada30a756b4fc05db46cb6198406d",
+      "originalSha256": "62771ff741e7d7e4ece05edf75b8668d04ec2f4642a57377bbb1b7c7751825b6",
+      "mutatedSha256": "65ce739ac68c31eb1f3f11c91db2c71ddf76cecbc795f78206e23a4a1a7bed95",
+      "restoredSha256": "62771ff741e7d7e4ece05edf75b8668d04ec2f4642a57377bbb1b7c7751825b6",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "N08",
+      "behavior": "Future-dated observations cannot establish site authority",
+      "file": "src/services/alert-normalizer.ts",
+      "test": "src/services/__tests__/nws-notification-owner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=site notification requires",
+        "src/services/__tests__/nws-notification-owner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "site notification requires current verified observation and provider CAP identity"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + {\n    +   acknowledged: false,\n    +   body: 'Fixture',\n    +   id: 'nws-nws-provider-literal',\n    +   location: undefined,\n    +   pinned: false,\n    +   raw: {\n    +     areaDesc: 'Test',\n    +     centroid: null,\n    +     description: '',\n    +     event: 'Fixture warning',\n    +     expires: '2026-11-04T04:30:02.733Z',\n    +     headline: 'Fixture',\n    +     id:",
+      "reversal": "diff --git a/src/services/alert-normalizer.ts b/src/services/alert-normalizer.ts\nindex a7b597c47..03b7ad922 100644\n--- a/src/services/alert-normalizer.ts\n+++ b/src/services/alert-normalizer.ts\n@@ -138,3 +138,3 @@ export function normalizeSiteWarning(\n   }, now);\n-  if (!evidence) return;\n+  void evidence;\n   const onset = alert.reportedOnset?.getTime();\n",
+      "diffSha256": "bc1e460355a8b1150c403d9e765a9907d37066c77b234c55db3fb7ff81383106",
+      "originalSha256": "62771ff741e7d7e4ece05edf75b8668d04ec2f4642a57377bbb1b7c7751825b6",
+      "mutatedSha256": "ca0dd299b216f5e02074ba0236d3a30141f74acae818171633536c2e3ced85ff",
+      "restoredSha256": "62771ff741e7d7e4ece05edf75b8668d04ec2f4642a57377bbb1b7c7751825b6",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "N09",
+      "behavior": "Memory hit cannot acquire ownership",
+      "file": "src/services/nws-alerts.ts",
+      "test": "src/services/__tests__/nws-notification-owner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=only the fresh NWS",
+        "src/services/__tests__/nws-notification-owner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "only the fresh NWS request issued during this load qualifies, cached rows never gain fresh ownership"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/nws-alerts.ts b/src/services/nws-alerts.ts\nindex f2007fba3..2fc96eef7 100644\n--- a/src/services/nws-alerts.ts\n+++ b/src/services/nws-alerts.ts\n@@ -46,3 +46,3 @@ export function captureNwsObservation(): (alerts: NWSAlert[]) => boolean {\n   const previous = cache?.data;\n-  return alerts => alerts !== previous && alerts === cache?.data;\n+  return alerts => alerts === cache?.data;\n }\n",
+      "diffSha256": "e588dc35f26cad8b8b7861e27678d104a644da49a15677426846d5753219296b",
+      "originalSha256": "4f63020bb42097b7b0b6cec4b1da97c6fead3f4b3220f8c4a48213f61088718c",
+      "mutatedSha256": "f2cfbe4f9d092a8eaaaaedc9653187eb6ffeb11188d12f6902679163ec7b5ccc",
+      "restoredSha256": "4f63020bb42097b7b0b6cec4b1da97c6fead3f4b3220f8c4a48213f61088718c",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "N10",
+      "behavior": "A copied cache payload lacks verified observation identity",
+      "file": "src/services/nws-alerts.ts",
+      "test": "src/services/__tests__/nws-notification-owner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=only the fresh NWS",
+        "src/services/__tests__/nws-notification-owner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "only the fresh NWS request issued during this load qualifies, cached rows never gain fresh ownership"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/nws-alerts.ts b/src/services/nws-alerts.ts\nindex f2007fba3..4623f3858 100644\n--- a/src/services/nws-alerts.ts\n+++ b/src/services/nws-alerts.ts\n@@ -46,3 +46,3 @@ export function captureNwsObservation(): (alerts: NWSAlert[]) => boolean {\n   const previous = cache?.data;\n-  return alerts => alerts !== previous && alerts === cache?.data;\n+  return alerts => alerts !== previous;\n }\n",
+      "diffSha256": "ea3e683929598936bfe8f68b1cfc20dfdae5856a0b4f330e019528aceefd558c",
+      "originalSha256": "4f63020bb42097b7b0b6cec4b1da97c6fead3f4b3220f8c4a48213f61088718c",
+      "mutatedSha256": "6e63d565b87c63446965a460857c3603577ab944c7de1219236e576ac1532228",
+      "restoredSha256": "4f63020bb42097b7b0b6cec4b1da97c6fead3f4b3220f8c4a48213f61088718c",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "N11",
+      "behavior": "Releasing one workspace twice cannot dispose other owners",
+      "file": "src/services/warning-notification-session.ts",
+      "test": "src/services/__tests__/nws-notification-owner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=last workspace",
+        "src/services/__tests__/nws-notification-owner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "last workspace releases notification ownership exactly once"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/warning-notification-session.ts b/src/services/warning-notification-session.ts\nindex 93d4439bd..370a1dd60 100644\n--- a/src/services/warning-notification-session.ts\n+++ b/src/services/warning-notification-session.ts\n@@ -6,3 +6,3 @@ export function acquireWarningSession(onLastOwner: () => void): () => void {\n   return () => {\n-    if (released) return;\n+    void released;\n     released = true;\n",
+      "diffSha256": "58f347dc3244d4834c7804d9fa27bbeaf9cda0e793967bdb28e6f08e18dc07d4",
+      "originalSha256": "60cdbb5053792aadb26ab9c5775c862635086988ad2a1b009fd5e9d4cf557a74",
+      "mutatedSha256": "72461f9a7a51d25bae99ddee39fc4704a25bdbb9fe4477aaef0d2deece3d1806",
+      "restoredSha256": "60cdbb5053792aadb26ab9c5775c862635086988ad2a1b009fd5e9d4cf557a74",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "N12",
+      "behavior": "First owner disposal does not end shared delivery state",
+      "file": "src/services/warning-notification-session.ts",
+      "test": "src/services/__tests__/nws-notification-owner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=last workspace",
+        "src/services/__tests__/nws-notification-owner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "last workspace releases notification ownership exactly once"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/warning-notification-session.ts b/src/services/warning-notification-session.ts\nindex 93d4439bd..b419cca06 100644\n--- a/src/services/warning-notification-session.ts\n+++ b/src/services/warning-notification-session.ts\n@@ -9,3 +9,3 @@ export function acquireWarningSession(onLastOwner: () => void): () => void {\n     activeOwners--;\n-    if (activeOwners === 0) onLastOwner();\n+    onLastOwner();\n   };\n",
+      "diffSha256": "14587be782073fc3eb9585d6143da18bce27ee8c6abe93590494143743cc2e0e",
+      "originalSha256": "60cdbb5053792aadb26ab9c5775c862635086988ad2a1b009fd5e9d4cf557a74",
+      "mutatedSha256": "979536dd349179fa16ceec23fd5af105d6edb1b897c31f6e8aed20ea2122078c",
+      "restoredSha256": "60cdbb5053792aadb26ab9c5775c862635086988ad2a1b009fd5e9d4cf557a74",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "N13",
+      "behavior": "Site path delegates to shared inbox ownership",
+      "file": "src/app/data-loader.ts",
+      "test": "src/services/__tests__/nws-notification-owner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=both production NWS",
+        "src/services/__tests__/nws-notification-owner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "both production NWS entry points use the inbox owner and discard obsolete workspace work"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /unifiedAlertStore\\.ingest\\(\\[warning\\],/. Input:\n    \n    'async loadWeatherAlerts(): Promise<void> {\\n' +\n      ' // Fail-closed backstop for the safety-critical status chip. If any part of the\\n' +\n      ' // tick throws BEFORE the personal weather-threat publication runs, a prior\\n' +\n      ' // confirmed \"ALL CLEAR\" must not ride out an unevaluated feed and hide a live\\n' +\n      ' // warn",
+      "reversal": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex e9e442aa5..4175884a1 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -2246,3 +2246,3 @@ export class DataLoaderManager implements AppModule {\n      && this.warningSettingsEpoch === warningSettingsEpoch;\n-   if (warning && stillEligible()) unifiedAlertStore.ingest([warning], { action, live: true, stillEligible });\n+   if (warning && stillEligible()) notificationDispatcher.dispatchNotification(warning, { action, live: true, stillEligible });\n  }\n",
+      "diffSha256": "f22a83dc0a4b62bc23b0db6d7ac745baa6078e6b3d9201693c10712b61df8dc8",
+      "originalSha256": "c72f1ac756b8ed32abee561ecdb9655e94b0ffde21c9362be4beae538d4ea38d",
+      "mutatedSha256": "2afabba7c10910704d6ab17639a60890321fc68df578465160b7b2c7ac101c77",
+      "restoredSha256": "c72f1ac756b8ed32abee561ecdb9655e94b0ffde21c9362be4beae538d4ea38d",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "N14",
+      "behavior": "Site proposal never records dispatch before inbox decision",
+      "file": "src/app/data-loader.ts",
+      "test": "src/services/__tests__/nws-notification-owner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=both production NWS",
+        "src/services/__tests__/nws-notification-owner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "both production NWS entry points use the inbox owner and discard obsolete workspace work"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /recordDispatch: false/. Input:\n    \n    'async loadWeatherAlerts(): Promise<void> {\\n' +\n      ' // Fail-closed backstop for the safety-critical status chip. If any part of the\\n' +\n      ' // tick throws BEFORE the personal weather-threat publication runs, a prior\\n' +\n      ' // confirmed \"ALL CLEAR\" must not ride out an unevaluated feed and hide a live\\n' +\n      ' // warning — drop it to n",
+      "reversal": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex e9e442aa5..0d950e125 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -2233,3 +2233,3 @@ export class DataLoaderManager implements AppModule {\n  const decision = routeBigEventToLadder(registry, bigEventResult, ladderInput, {\n- recordDispatch: false,\n+ recordDispatch: true,\n  situationId: warning?.id,\n",
+      "diffSha256": "6eb6bcf8701e266519de1615c123dd0d48751767bac821ecd843093f90bee7bf",
+      "originalSha256": "c72f1ac756b8ed32abee561ecdb9655e94b0ffde21c9362be4beae538d4ea38d",
+      "mutatedSha256": "e7b82c2b405bb0be8d39aeef151a0a58d20cb4ba497170db548747580be4d946",
+      "restoredSha256": "c72f1ac756b8ed32abee561ecdb9655e94b0ffde21c9362be4beae538d4ea38d",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "N15",
+      "behavior": "Tearing down loader releases shared notification ownership",
+      "file": "src/app/data-loader.ts",
+      "test": "src/services/__tests__/nws-notification-owner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=both production NWS",
+        "src/services/__tests__/nws-notification-owner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "both production NWS entry points use the inbox owner and discard obsolete workspace work"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /this\\.releaseWarningSession\\?\\.\\(\\)/. Input:\n    \n    \"import { normalizeAcquisition, normalizeNewsProvenance } from '@/services/news-provenance';\\n\" +\n      \"import type { NewsSnapshotConfiguration } from '@/services/news-snapshot';\\n\" +\n      \"import type { AppContext, AppModule } from '@/app/app-context';\\n\" +\n      \"import type { NewsItem, MapLayers, SocialUnrestEvent } from '@/types';\\n\"",
+      "reversal": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex e9e442aa5..63eb7d789 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -674,3 +674,3 @@ export class DataLoaderManager implements AppModule {\n  this.unsubscribeWarningAnomalies?.();\n- this.releaseWarningSession?.();\n+ void this.releaseWarningSession;\n  this.unsubscribeNewsRuntimeConfig?.();\n",
+      "diffSha256": "01578feefb3b261d9497dad1d46fdcd44d49f2b6c8a6f981eb4a7117cc60dfa5",
+      "originalSha256": "c72f1ac756b8ed32abee561ecdb9655e94b0ffde21c9362be4beae538d4ea38d",
+      "mutatedSha256": "a956671b4a7b292e175028ea41cd6b9a5f9fd55be79b8bc31a0bc82caa4bf9b2",
+      "restoredSha256": "c72f1ac756b8ed32abee561ecdb9655e94b0ffde21c9362be4beae538d4ea38d",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "L01",
+      "behavior": "NWS loader does not turn a breaker/memory answer into a new live observation",
+      "file": "src/app/data-loader.ts",
+      "test": "src/services/__tests__/alert-retention-provenance.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=real NWS loader preserves",
+        "src/services/__tests__/alert-retention-provenance.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "real NWS loader preserves memory/offline row provenance and storm fallback"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex e9e442aa5..b8195c019 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -3341,3 +3341,3 @@ export class DataLoaderManager implements AppModule {\n      : { kind: 'replay' },\n- )), { live: alertsSnapshot?.source === 'network' && isNewObservation(alerts), stillEligible: () => !this.ctx.isDestroyed });\n+ )), { live: alertsSnapshot?.source === 'network', stillEligible: () => !this.ctx.isDestroyed });\n  recordWarningPredictions(minimalAlerts);\n",
+      "diffSha256": "d13cee9335fb45e4b94bfbad720926d92566867faf941beced6efcc22294e5bc",
+      "originalSha256": "c72f1ac756b8ed32abee561ecdb9655e94b0ffde21c9362be4beae538d4ea38d",
+      "mutatedSha256": "100c2fc9c997cc78ab486508d2ab36ea3e56cbdd316063782c923d9cb5c90c10",
+      "restoredSha256": "c72f1ac756b8ed32abee561ecdb9655e94b0ffde21c9362be4beae538d4ea38d",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "L02",
+      "behavior": "NWS loader does not turn offline rows into live observations",
+      "file": "src/app/data-loader.ts",
+      "test": "src/services/__tests__/alert-retention-provenance.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=real NWS loader preserves",
+        "src/services/__tests__/alert-retention-provenance.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "real NWS loader preserves memory/offline row provenance and storm fallback"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex e9e442aa5..196c48722 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -3341,3 +3341,3 @@ export class DataLoaderManager implements AppModule {\n      : { kind: 'replay' },\n- )), { live: alertsSnapshot?.source === 'network' && isNewObservation(alerts), stillEligible: () => !this.ctx.isDestroyed });\n+ )), { live: isNewObservation(alerts), stillEligible: () => !this.ctx.isDestroyed });\n  recordWarningPredictions(minimalAlerts);\n",
+      "diffSha256": "45e98e73633b4cd4f6bab4db4ca6bf0e1769d859ce8c844ec1266f0926667ee2",
+      "originalSha256": "c72f1ac756b8ed32abee561ecdb9655e94b0ffde21c9362be4beae538d4ea38d",
+      "mutatedSha256": "276c69acd2c06c20375258e66f0b67c4a22ff117beeb13029106266c322a6d98",
+      "restoredSha256": "c72f1ac756b8ed32abee561ecdb9655e94b0ffde21c9362be4beae538d4ea38d",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "L03",
+      "behavior": "Disposed workspace cannot authorize NWS notification completion",
+      "file": "src/app/data-loader.ts",
+      "test": "src/services/__tests__/alert-retention-provenance.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=real NWS loader preserves",
+        "src/services/__tests__/alert-retention-provenance.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "real NWS loader preserves memory/offline row provenance and storm fallback"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex e9e442aa5..734257443 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -3341,3 +3341,3 @@ export class DataLoaderManager implements AppModule {\n      : { kind: 'replay' },\n- )), { live: alertsSnapshot?.source === 'network' && isNewObservation(alerts), stillEligible: () => !this.ctx.isDestroyed });\n+ )), { live: alertsSnapshot?.source === 'network' && isNewObservation(alerts), stillEligible: () => true });\n  recordWarningPredictions(minimalAlerts);\n",
+      "diffSha256": "e06d9ab45195c31230386c6b34889025ba297b16b6f7016b72ae7823e1fe93d1",
+      "originalSha256": "c72f1ac756b8ed32abee561ecdb9655e94b0ffde21c9362be4beae538d4ea38d",
+      "mutatedSha256": "8c0dec4f2c9e3477ed2510b648ec0b3c9227bd942f5fffc5d88253b1c6972f36",
+      "restoredSha256": "c72f1ac756b8ed32abee561ecdb9655e94b0ffde21c9362be4beae538d4ea38d",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "L04",
+      "behavior": "GDACS cached rows cannot gain live notification ownership",
+      "file": "src/app/data-loader.ts",
+      "test": "src/services/__tests__/alert-retention-provenance.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=real GDACS alert loader",
+        "src/services/__tests__/alert-retention-provenance.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "real GDACS alert loader preserves live and offline row observation instead of wrapper cache time"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex e9e442aa5..dcce52ace 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -3183,3 +3183,3 @@ export class DataLoaderManager implements AppModule {\n      : { kind: 'replay' },\n- )), { live: snapshot.source === 'network', stillEligible: () => !this.ctx.isDestroyed });\n+ )), { live: true, stillEligible: () => !this.ctx.isDestroyed });\n \n",
+      "diffSha256": "4d34bebf06963b94ddeab40f20d7d40feaa7417b295ef55f5ed696d23e3c2241",
+      "originalSha256": "c72f1ac756b8ed32abee561ecdb9655e94b0ffde21c9362be4beae538d4ea38d",
+      "mutatedSha256": "24947a626c3f518e892a9562c8affe61dfaa4441f711f457ce235e50415b1fd0",
+      "restoredSha256": "c72f1ac756b8ed32abee561ecdb9655e94b0ffde21c9362be4beae538d4ea38d",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "L05",
+      "behavior": "Disposed workspace cannot authorize GDACS notification completion",
+      "file": "src/app/data-loader.ts",
+      "test": "src/services/__tests__/alert-retention-provenance.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=real GDACS alert loader",
+        "src/services/__tests__/alert-retention-provenance.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "real GDACS alert loader preserves live and offline row observation instead of wrapper cache time"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex e9e442aa5..6de5f3cb5 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -3183,3 +3183,3 @@ export class DataLoaderManager implements AppModule {\n      : { kind: 'replay' },\n- )), { live: snapshot.source === 'network', stillEligible: () => !this.ctx.isDestroyed });\n+ )), { live: snapshot.source === 'network', stillEligible: () => true });\n \n",
+      "diffSha256": "f928273ac6f560ae05e0de5219e46367880240cf0b361856a8b1f4bba477497d",
+      "originalSha256": "c72f1ac756b8ed32abee561ecdb9655e94b0ffde21c9362be4beae538d4ea38d",
+      "mutatedSha256": "d9cbdc9ef1109908555cb4e9b053540169a8cdccb4fece6afb84d7882f17b1d5",
+      "restoredSha256": "c72f1ac756b8ed32abee561ecdb9655e94b0ffde21c9362be4beae538d4ea38d",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "R01",
+      "behavior": "Site proposal records its selected rung and does not claim OS dispatch",
+      "file": "src/services/insights/notification-ladder.ts",
+      "test": "src/services/insights/__tests__/notification-ladder.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=inbox-owned weather proposal",
+        "src/services/insights/__tests__/notification-ladder.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "inbox-owned weather proposal records its rung without claiming a system dispatch"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + undefined\n    - true\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/insights/notification-ladder.ts b/src/services/insights/notification-ladder.ts\nindex f24cfafce..7b9a2295b 100644\n--- a/src/services/insights/notification-ladder.ts\n+++ b/src/services/insights/notification-ladder.ts\n@@ -201,3 +201,3 @@ export function routeBigEventToLadder(\n   const rung = pickRung(result.deliveryPriority, safetyCritical);\n-  if (options.recordDispatch === false) {\n+  if (false) {\n     registry.recordEvent(candidateId, { kind: 'rung_selected', reason: 'Rung selected for inbox consideration.', detail: { rung } });\n",
+      "diffSha256": "4df3a78463f608fad240b99835c9922c8f37ff8a33e6af8651512a481fe801be",
+      "originalSha256": "94180493cf8a81a6df1b9da66f24e350606e293837636aef8ba703ea0a9a2fb0",
+      "mutatedSha256": "55eb303ead6245da7b2386f34146c39a59a0c276eb628a2f954386da0269dc69",
+      "restoredSha256": "94180493cf8a81a6df1b9da66f24e350606e293837636aef8ba703ea0a9a2fb0",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "B01",
+      "behavior": "The shared HTTP transport checks application response shape before accepting a primary NWS response",
+      "file": "src-tauri/sidecar/feed-resilience.mjs",
+      "test": "src-tauri/sidecar/local-api-server.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=NWS boundary refuses",
+        "src-tauri/sidecar/local-api-server.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "NWS boundary refuses fabricated CAP identities and issuance and recovers with provider fields"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    503 !== 200\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 200\n  actual: 503\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/feed-resilience.mjs b/src-tauri/sidecar/feed-resilience.mjs\nindex 6be6ab7b9..b61c5567d 100644\n--- a/src-tauri/sidecar/feed-resilience.mjs\n+++ b/src-tauri/sidecar/feed-resilience.mjs\n@@ -157,3 +157,3 @@ async function _tryFetch(url, reqOptions, timeoutMs, fetchFn, acceptData) {\n     // so we fall through to the next source / cache instead of returning garbage.\n-    if (data === undefined || (acceptData && !acceptData(data))) return { ok: false };\n+    if (data === undefined) return { ok: false };\n     return { ok: true, data };\n",
+      "diffSha256": "d11bf16b2ff6d8eec5e9389bd026dd04aad65c772252bea0cd1e79c48aee65ec",
+      "originalSha256": "5e08f053ac0d2c23166eb1cd9d67d6b08fdef8e81c721ff163caae0142a4fa88",
+      "mutatedSha256": "f43e3659347444916e9e4f62dee956cf71e3772c559a3de7263602ef436acdb0",
+      "restoredSha256": "5e08f053ac0d2c23166eb1cd9d67d6b08fdef8e81c721ff163caae0142a4fa88",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "B02",
+      "behavior": "Any malformed NWS row prevents a fabricated empty response",
+      "file": "src-tauri/sidecar/local-api-server.mjs",
+      "test": "src-tauri/sidecar/local-api-server.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=NWS boundary refuses",
+        "src-tauri/sidecar/local-api-server.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "NWS boundary refuses fabricated CAP identities and issuance and recovers with provider fields"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    200 !== 503\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 503\n  actual: 200\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/local-api-server.mjs b/src-tauri/sidecar/local-api-server.mjs\nindex 13a231360..4dbc17604 100644\n--- a/src-tauri/sidecar/local-api-server.mjs\n+++ b/src-tauri/sidecar/local-api-server.mjs\n@@ -11052,3 +11052,3 @@ function legacyNewsItems(items) {\n      }, budget);\n-     if (!row) return false;\n+     if (!row) continue;\n      row.centroid = extractAlertCentroid(feature);\n",
+      "diffSha256": "847064fa4e7a68d6d8bac93cd2adf4e971d63e81d6a6bc24d5cc9e3191f36823",
+      "originalSha256": "b5ddc882e0e0c84474807d8ace03a3bf0fc52801383aa55b06b5cd255b23b6ea",
+      "mutatedSha256": "d1e2a2a04e5f6277a4998ed92d588800f9d53700c01e50cef34625502b4ccb43",
+      "restoredSha256": "b5ddc882e0e0c84474807d8ace03a3bf0fc52801383aa55b06b5cd255b23b6ea",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "B03",
+      "behavior": "Missing CAP issuance cannot be invented from onset",
+      "file": "src-tauri/sidecar/local-api-server.mjs",
+      "test": "src-tauri/sidecar/local-api-server.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=NWS boundary refuses",
+        "src-tauri/sidecar/local-api-server.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "NWS boundary refuses fabricated CAP identities and issuance and recovers with provider fields"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    200 !== 503\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 503\n  actual: 200\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/local-api-server.mjs b/src-tauri/sidecar/local-api-server.mjs\nindex 13a231360..b3166a832 100644\n--- a/src-tauri/sidecar/local-api-server.mjs\n+++ b/src-tauri/sidecar/local-api-server.mjs\n@@ -11050,3 +11050,3 @@ function legacyNewsItems(items) {\n        status: p.status, messageType: p.messageType, severity: p.severity, urgency: p.urgency,\n-       sent: p.sent, expires: p.expires, onset: p.onset, centroid: null, geometry: feature.geometry ?? null,\n+       sent: p.sent ?? p.onset, expires: p.expires, onset: p.onset, centroid: null, geometry: feature.geometry ?? null,\n      }, budget);\n",
+      "diffSha256": "d80418d3226c9ef4cea9c656d00f956c95af4d1fccd1dd0386a8dae5c1be0cb5",
+      "originalSha256": "b5ddc882e0e0c84474807d8ace03a3bf0fc52801383aa55b06b5cd255b23b6ea",
+      "mutatedSha256": "5a4bfee79492e90713254be021632c24894c455b296c9b5f327b03209e9b41ea",
+      "restoredSha256": "b5ddc882e0e0c84474807d8ace03a3bf0fc52801383aa55b06b5cd255b23b6ea",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "B06",
+      "behavior": "The NWS route requires string event names",
+      "file": "src-tauri/sidecar/nws-alert-row.mjs",
+      "test": "src-tauri/sidecar/local-api-server.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=NWS boundary refuses",
+        "src-tauri/sidecar/local-api-server.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "NWS boundary refuses fabricated CAP identities and issuance and recovers with provider fields"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    200 !== 503\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 503\n  actual: 200\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/nws-alert-row.mjs b/src-tauri/sidecar/nws-alert-row.mjs\nindex edc3d55c9..ec597d429 100644\n--- a/src-tauri/sidecar/nws-alert-row.mjs\n+++ b/src-tauri/sidecar/nws-alert-row.mjs\n@@ -93,3 +93,3 @@ export function normalizeNwsAlert(value, responseBudget) {\n   const valid = typeof alert.id === 'string' && alert.id.length > 0\n-    && typeof alert.event === 'string'\n+    \n     && typeof alert.headline === 'string'\n",
+      "diffSha256": "c2798038db33abf16ca1cb7f810e0e0c1474de7516ec576ba1c20181782d10c6",
+      "originalSha256": "ea937d60b209f577731a32c6d5a41dc9c01be74ec5986f7f40e1fdc357b8609e",
+      "mutatedSha256": "9c6345028199e8a639f094db804d4ee5254d1262fbc4d43e6422b9a8f2a23d1e",
+      "restoredSha256": "ea937d60b209f577731a32c6d5a41dc9c01be74ec5986f7f40e1fdc357b8609e",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "B07",
+      "behavior": "The NWS route requires a string area description",
+      "file": "src-tauri/sidecar/nws-alert-row.mjs",
+      "test": "src-tauri/sidecar/local-api-server.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=NWS boundary refuses",
+        "src-tauri/sidecar/local-api-server.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "NWS boundary refuses fabricated CAP identities and issuance and recovers with provider fields"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    200 !== 503\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 503\n  actual: 200\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/nws-alert-row.mjs b/src-tauri/sidecar/nws-alert-row.mjs\nindex edc3d55c9..bf8d89962 100644\n--- a/src-tauri/sidecar/nws-alert-row.mjs\n+++ b/src-tauri/sidecar/nws-alert-row.mjs\n@@ -98,3 +98,3 @@ export function normalizeNwsAlert(value, responseBudget) {\n     && URGENCIES.has(alert.urgency)\n-    && typeof alert.areaDesc === 'string'\n+    \n     && isTimestamp(alert.sent)\n",
+      "diffSha256": "86ae261601a0adbc154cf1d26a23e72631012536e4b23e603acafc6a6d62c5a2",
+      "originalSha256": "ea937d60b209f577731a32c6d5a41dc9c01be74ec5986f7f40e1fdc357b8609e",
+      "mutatedSha256": "b60ffe7b99bb3867115b621afe80779589e163a1cadabfd00f8ab7e2d47d9939",
+      "restoredSha256": "ea937d60b209f577731a32c6d5a41dc9c01be74ec5986f7f40e1fdc357b8609e",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "B08",
+      "behavior": "The NWS route refuses a nonstring headline",
+      "file": "src-tauri/sidecar/nws-alert-row.mjs",
+      "test": "src-tauri/sidecar/local-api-server.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=NWS boundary refuses",
+        "src-tauri/sidecar/local-api-server.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "NWS boundary refuses fabricated CAP identities and issuance and recovers with provider fields"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    200 !== 503\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 503\n  actual: 200\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/nws-alert-row.mjs b/src-tauri/sidecar/nws-alert-row.mjs\nindex edc3d55c9..0cd1e41f2 100644\n--- a/src-tauri/sidecar/nws-alert-row.mjs\n+++ b/src-tauri/sidecar/nws-alert-row.mjs\n@@ -94,3 +94,3 @@ export function normalizeNwsAlert(value, responseBudget) {\n     && typeof alert.event === 'string'\n-    && typeof alert.headline === 'string'\n+    \n     && typeof alert.description === 'string'\n",
+      "diffSha256": "90f2c32da449ffcc01d573a9d9f83073f3c42c39a1cd116676a15952dcb7543b",
+      "originalSha256": "ea937d60b209f577731a32c6d5a41dc9c01be74ec5986f7f40e1fdc357b8609e",
+      "mutatedSha256": "c417de5a7febb7160ac3769fb6d6b565000c289f882464148ddab3537fbe4d3e",
+      "restoredSha256": "ea937d60b209f577731a32c6d5a41dc9c01be74ec5986f7f40e1fdc357b8609e",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "B09",
+      "behavior": "Malformed NWS geometry cannot pass the shared row checks",
+      "file": "src-tauri/sidecar/nws-alert-row.mjs",
+      "test": "src-tauri/sidecar/local-api-server.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=NWS boundary refuses",
+        "src-tauri/sidecar/local-api-server.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "NWS boundary refuses fabricated CAP identities and issuance and recovers with provider fields"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    200 !== 503\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 503\n  actual: 200\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/nws-alert-row.mjs b/src-tauri/sidecar/nws-alert-row.mjs\nindex edc3d55c9..d6fdbe2a0 100644\n--- a/src-tauri/sidecar/nws-alert-row.mjs\n+++ b/src-tauri/sidecar/nws-alert-row.mjs\n@@ -106,3 +106,3 @@ export function normalizeNwsAlert(value, responseBudget) {\n     && isCentroid(alert.centroid)\n-    && isGeometry(alert.geometry, responseBudget);\n+    ;\n   if (!valid) return null;\n",
+      "diffSha256": "268527b3e3363b37b1d7d90bc1a3ff49e9b8e3784651c3b3dadf92972e50b294",
+      "originalSha256": "ea937d60b209f577731a32c6d5a41dc9c01be74ec5986f7f40e1fdc357b8609e",
+      "mutatedSha256": "89cd421e441117c8d9f51a08665e3ef5b982245db4d72a4506ab1c4738852eed",
+      "restoredSha256": "ea937d60b209f577731a32c6d5a41dc9c01be74ec5986f7f40e1fdc357b8609e",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "B10",
+      "behavior": "A provided nonempty onset must parse",
+      "file": "src-tauri/sidecar/nws-alert-row.mjs",
+      "test": "src-tauri/sidecar/local-api-server.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=NWS boundary refuses",
+        "src-tauri/sidecar/local-api-server.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "NWS boundary refuses fabricated CAP identities and issuance and recovers with provider fields"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    200 !== 503\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 503\n  actual: 200\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/nws-alert-row.mjs b/src-tauri/sidecar/nws-alert-row.mjs\nindex edc3d55c9..24953408c 100644\n--- a/src-tauri/sidecar/nws-alert-row.mjs\n+++ b/src-tauri/sidecar/nws-alert-row.mjs\n@@ -101,3 +101,3 @@ export function normalizeNwsAlert(value, responseBudget) {\n     && (alert.onset === undefined || alert.onset === null\n-      || (typeof alert.onset === 'string' && (onset.length === 0 || isTimestamp(onset))))\n+      || (typeof alert.onset === 'string' && (true)))\n     && isTimestamp(alert.expires)\n",
+      "diffSha256": "96bc20eec1cf0ac37c444edd5c367895487491ce87316265f8d2dff553464eff",
+      "originalSha256": "ea937d60b209f577731a32c6d5a41dc9c01be74ec5986f7f40e1fdc357b8609e",
+      "mutatedSha256": "91f1320211e7696b72e93ff5fa822cc5783a313955d9dd4563b1ee93002906d5",
+      "restoredSha256": "ea937d60b209f577731a32c6d5a41dc9c01be74ec5986f7f40e1fdc357b8609e",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "B04",
+      "behavior": "The fallback uses the same NWS validators before accepting the body",
+      "file": "src-tauri/sidecar/feed-resilience.mjs",
+      "test": "src-tauri/sidecar/local-api-server.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=NWS boundary refuses",
+        "src-tauri/sidecar/local-api-server.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "NWS boundary refuses fabricated CAP identities and issuance and recovers with provider fields"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    503 !== 200\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 200\n  actual: 503\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/feed-resilience.mjs b/src-tauri/sidecar/feed-resilience.mjs\nindex 6be6ab7b9..6e46544ff 100644\n--- a/src-tauri/sidecar/feed-resilience.mjs\n+++ b/src-tauri/sidecar/feed-resilience.mjs\n@@ -189,3 +189,3 @@ export async function fetchWithFallback(primaryUrl, fallbacks = [], options = {}\n   for (const [i, fallback] of fallbacks.entries()) {\n-    const result = await _tryFetch(fallback, reqOptions, timeoutMs, fetchFn, acceptData);\n+    const result = await _tryFetch(fallback, reqOptions, timeoutMs, fetchFn);\n     if (result.ok) {\n",
+      "diffSha256": "97a350d6c594dca2252291820ec546354d69666c118b1862954e5738b4c72cc1",
+      "originalSha256": "5e08f053ac0d2c23166eb1cd9d67d6b08fdef8e81c721ff163caae0142a4fa88",
+      "mutatedSha256": "28b59fc2e728a780217bbe4e5f96ee5e2cd20e08e83f8bdd6e0b51345d73de1d",
+      "restoredSha256": "5e08f053ac0d2c23166eb1cd9d67d6b08fdef8e81c721ff163caae0142a4fa88",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "B05",
+      "behavior": "The primary refuses unverifiable NWS collections",
+      "file": "src-tauri/sidecar/feed-resilience.mjs",
+      "test": "src-tauri/sidecar/local-api-server.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=NWS boundary refuses",
+        "src-tauri/sidecar/local-api-server.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "NWS boundary refuses fabricated CAP identities and issuance and recovers with provider fields"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    503 !== 200\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 200\n  actual: 503\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/feed-resilience.mjs b/src-tauri/sidecar/feed-resilience.mjs\nindex 6be6ab7b9..2b5ceaa46 100644\n--- a/src-tauri/sidecar/feed-resilience.mjs\n+++ b/src-tauri/sidecar/feed-resilience.mjs\n@@ -178,3 +178,3 @@ export async function fetchWithFallback(primaryUrl, fallbacks = [], options = {}\n   if (getCircuitState(primaryUrl).status !== 'open') {\n-    const result = await _tryFetch(primaryUrl, reqOptions, timeoutMs, fetchFn, acceptData);\n+    const result = await _tryFetch(primaryUrl, reqOptions, timeoutMs, fetchFn);\n     if (result.ok) {\n",
+      "diffSha256": "17803405da69edd0d86b1968cab3dbb64a16eb1548f76188d2b76bfcb3eb502f",
+      "originalSha256": "5e08f053ac0d2c23166eb1cd9d67d6b08fdef8e81c721ff163caae0142a4fa88",
+      "mutatedSha256": "c122f0ca590f5aff68c4d04df909aecdbd7aa479397a5f91e089e068aa5df9ef",
+      "restoredSha256": "5e08f053ac0d2c23166eb1cd9d67d6b08fdef8e81c721ff163caae0142a4fa88",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "B11",
+      "behavior": "A valid response with zero active alerts still succeeds",
+      "file": "src-tauri/sidecar/local-api-server.mjs",
+      "test": "src-tauri/sidecar/local-api-server.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=NWS boundary refuses",
+        "src-tauri/sidecar/local-api-server.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "NWS boundary refuses fabricated CAP identities and issuance and recovers with provider fields"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    503 !== 200\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 200\n  actual: 503\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/local-api-server.mjs b/src-tauri/sidecar/local-api-server.mjs\nindex 13a231360..90c36a92f 100644\n--- a/src-tauri/sidecar/local-api-server.mjs\n+++ b/src-tauri/sidecar/local-api-server.mjs\n@@ -11056,3 +11056,3 @@ function legacyNewsItems(items) {\n    }\n-   alerts = rows;\n+   if (!rows.length) return false; alerts = rows;\n    return true;\n",
+      "diffSha256": "6490ef4680cb3ed33de7f247e69b16967bf8d6f249d48707a008c40d291038e8",
+      "originalSha256": "b5ddc882e0e0c84474807d8ace03a3bf0fc52801383aa55b06b5cd255b23b6ea",
+      "mutatedSha256": "bdef9d5d2a342b89da025aee072da0fab91b104e1f13aaeb3cfb33f0cc17a025",
+      "restoredSha256": "b5ddc882e0e0c84474807d8ace03a3bf0fc52801383aa55b06b5cd255b23b6ea",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "B12",
+      "behavior": "A provider severity outside the accepted set invalidates the response",
+      "file": "src-tauri/sidecar/nws-alert-row.mjs",
+      "test": "src-tauri/sidecar/local-api-server.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=NWS boundary refuses",
+        "src-tauri/sidecar/local-api-server.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "NWS boundary refuses fabricated CAP identities and issuance and recovers with provider fields"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    200 !== 503\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 503\n  actual: 200\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/nws-alert-row.mjs b/src-tauri/sidecar/nws-alert-row.mjs\nindex edc3d55c9..c702c8318 100644\n--- a/src-tauri/sidecar/nws-alert-row.mjs\n+++ b/src-tauri/sidecar/nws-alert-row.mjs\n@@ -96,3 +96,3 @@ export function normalizeNwsAlert(value, responseBudget) {\n     && typeof alert.description === 'string'\n-    && SEVERITIES.has(alert.severity)\n+    \n     && URGENCIES.has(alert.urgency)\n",
+      "diffSha256": "faa74ec917da849f66f79f72cb1667eb7cd51e974efeb1d83ae74a7e6e242bcd",
+      "originalSha256": "ea937d60b209f577731a32c6d5a41dc9c01be74ec5986f7f40e1fdc357b8609e",
+      "mutatedSha256": "df5989c7f4d7470a362910b7bc9a425f290ac5decc8bb2c125cb732fe94186c5",
+      "restoredSha256": "ea937d60b209f577731a32c6d5a41dc9c01be74ec5986f7f40e1fdc357b8609e",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "B13",
+      "behavior": "An unknown message type cannot masquerade as a warning",
+      "file": "src-tauri/sidecar/nws-alert-row.mjs",
+      "test": "src-tauri/sidecar/local-api-server.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=NWS boundary refuses",
+        "src-tauri/sidecar/local-api-server.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "NWS boundary refuses fabricated CAP identities and issuance and recovers with provider fields"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    200 !== 503\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 503\n  actual: 200\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/nws-alert-row.mjs b/src-tauri/sidecar/nws-alert-row.mjs\nindex edc3d55c9..9c3a69b83 100644\n--- a/src-tauri/sidecar/nws-alert-row.mjs\n+++ b/src-tauri/sidecar/nws-alert-row.mjs\n@@ -104,3 +104,3 @@ export function normalizeNwsAlert(value, responseBudget) {\n     && STATUSES.has(alert.status)\n-    && MESSAGE_TYPES.has(alert.messageType)\n+    \n     && isCentroid(alert.centroid)\n",
+      "diffSha256": "31e847c09635e1dc3f9b548df4380dfb9986816aa4429829538543f91acad219",
+      "originalSha256": "ea937d60b209f577731a32c6d5a41dc9c01be74ec5986f7f40e1fdc357b8609e",
+      "mutatedSha256": "a51b94e64ed6dd45e33ad3b8bde2a37a39abc4edf5bcd30759379c4cae42d8f8",
+      "restoredSha256": "ea937d60b209f577731a32c6d5a41dc9c01be74ec5986f7f40e1fdc357b8609e",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "B14",
+      "behavior": "The NWS HTTP body is bounded even when the shape otherwise qualifies",
+      "file": "src-tauri/sidecar/local-api-server.mjs",
+      "test": "src-tauri/sidecar/local-api-server.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=NWS boundary refuses",
+        "src-tauri/sidecar/local-api-server.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "NWS boundary refuses fabricated CAP identities and issuance and recovers with provider fields"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    200 !== 503\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 503\n  actual: 200\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/local-api-server.mjs b/src-tauri/sidecar/local-api-server.mjs\nindex 13a231360..cffc72abf 100644\n--- a/src-tauri/sidecar/local-api-server.mjs\n+++ b/src-tauri/sidecar/local-api-server.mjs\n@@ -11063,3 +11063,3 @@ function legacyNewsItems(items) {\n      acceptData: acceptCollection,\n-     fetchFn: (url, options, timeoutMs) => fetchWithTimeout(url, { ...options, maxResponseBytes: 8 * 1024 * 1024 }, timeoutMs),\n+     \n      timeoutMs: 12_000,\n",
+      "diffSha256": "42d1c71fd13e99de6f3fc7e662f32972770cefe7ba53f6f8232f0b61861b874a",
+      "originalSha256": "b5ddc882e0e0c84474807d8ace03a3bf0fc52801383aa55b06b5cd255b23b6ea",
+      "mutatedSha256": "5ada56eedf8723e64abc9c6c1c20cec89969e15d29096efde5ed31069827b292",
+      "restoredSha256": "b5ddc882e0e0c84474807d8ace03a3bf0fc52801383aa55b06b5cd255b23b6ea",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "B15",
+      "behavior": "After a successful fetch, a later invalid response cannot replay the last good NWS data as fresh",
+      "file": "src-tauri/sidecar/local-api-server.mjs",
+      "test": "src-tauri/sidecar/local-api-server.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=NWS boundary refuses",
+        "src-tauri/sidecar/local-api-server.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "NWS boundary refuses fabricated CAP identities and issuance and recovers with provider fields"
+      ],
+      "assertion": "error: |-\n    a failed refresh cannot present the previous warning as current\n    \n    200 !== 503\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 503\n  actual: 200\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/local-api-server.mjs b/src-tauri/sidecar/local-api-server.mjs\nindex 13a231360..45f3d2180 100644\n--- a/src-tauri/sidecar/local-api-server.mjs\n+++ b/src-tauri/sidecar/local-api-server.mjs\n@@ -11062,3 +11062,3 @@ function legacyNewsItems(items) {\n    result = await fetchWithFallback(NWS_PRIMARY, [NWS_FALLBACK], {\n-     acceptData: acceptCollection,\n+     acceptData: acceptCollection, cacheKey: 'nws-alerts-last-good',\n      fetchFn: (url, options, timeoutMs) => fetchWithTimeout(url, { ...options, maxResponseBytes: 8 * 1024 * 1024 }, timeoutMs),\n@@ -11072,2 +11072,3 @@ function legacyNewsItems(items) {\n  }\n+ if (result.source === 'cached') acceptCollection(result.data);\n  trackSuccess('nws-alerts', result.source);\n",
+      "diffSha256": "18e59b5c49d138bdbc936d5ab5c428e5417b8dda4564211fb4f1cbd0aa64ea12",
+      "originalSha256": "b5ddc882e0e0c84474807d8ace03a3bf0fc52801383aa55b06b5cd255b23b6ea",
+      "mutatedSha256": "f3bf4be4c1c95476e146e075d7dc6a18355bb570ddeef6381d218f3c44979a01",
+      "restoredSha256": "b5ddc882e0e0c84474807d8ace03a3bf0fc52801383aa55b06b5cd255b23b6ea",
+      "cleanAfterRestore": true
+    }
+  ],
+  "summary": {
+    "expectedAssertionFailures": 95,
+    "unresolved": 0,
+    "packagingChecks": 1,
+    "namedRedAssertions": 98,
+    "node": "v22.23.1",
+    "uniqueProductAndFixtureFiles": 25
+  },
+  "packagingReversal": {
+    "file": "src-tauri/tauri.conf.json",
+    "originalSha256": "271a0aeb0b74309c0b3b930a927ce33491c3d2e12130ca6420add32572edb1f7",
+    "mutatedSha256": "d0f9bd00fe9cf72b5dce6417801276565f10675816bd5e76421a90d9d649eca3",
+    "appliedDiff": "diff --git a/src-tauri/tauri.conf.json b/src-tauri/tauri.conf.json\nindex 3ce71a636..c90aa8609 100644\n--- a/src-tauri/tauri.conf.json\n+++ b/src-tauri/tauri.conf.json\n@@ -38,7 +38,6 @@\n     \"resources\": [\n       \"../api\",\n       \"sidecar/local-api-server.mjs\",\n-      \"sidecar/nws-alert-row.mjs\",\n       \"sidecar/sidecar-logger.mjs\",\n       \"sidecar/secret-sync.mjs\",\n       \"sidecar/event-store.mjs\",\n",
+    "baseline": {
+      "command": "node scripts/check-sidecar-bundle.mjs",
+      "exit": 0,
+      "output": "[check-sidecar-bundle] OK — all 29 statically-imported sidecar .mjs modules are present in bundle.resources.\n"
+    },
+    "mutated": {
+      "command": "node scripts/check-sidecar-bundle.mjs",
+      "exit": 1,
+      "output": "[check-sidecar-bundle] FAIL — these sidecar modules are statically imported by local-api-server.mjs but missing from tauri.conf.json bundle.resources. The packaged sidecar will crash at boot with ERR_MODULE_NOT_FOUND:\n  - sidecar/nws-alert-row.mjs\n\nAdd each to bundle.resources in src-tauri/tauri.conf.json.\n"
+    },
+    "restored": {
+      "command": "node scripts/check-sidecar-bundle.mjs",
+      "exit": 0,
+      "output": "[check-sidecar-bundle] OK — all 29 statically-imported sidecar .mjs modules are present in bundle.resources.\n"
+    },
+    "restoredSha256": "271a0aeb0b74309c0b3b930a927ce33491c3d2e12130ca6420add32572edb1f7",
+    "cleanAfterRestore": true
+  }
+}

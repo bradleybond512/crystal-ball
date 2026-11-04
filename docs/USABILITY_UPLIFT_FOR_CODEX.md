@@ -1152,7 +1152,8 @@ Acceptance: Inspect the six reported timer writers; remove redundant writes whil
 
 ### UX-058 — Account for deferred and updated warnings
 
-Status: IN PROGRESS — HIGH ASSURANCE
+Status: IN REVIEW — HIGH ASSURANCE
+Evidence: #1852 — [implementation and verification](validation/UX-058-DEFERRED-WARNINGS.md).
 Priority: S
 Source findings: PR1731 H19 follow-up and UX-045 scope limits.
 
@@ -1297,7 +1298,7 @@ Update the row in the same PR that does the work.
 | UX-055 | Surface stale credential validation honestly | NOT STARTED — HIGH ASSURANCE | — |
 | UX-056 | Bound retained storage without losing user evidence | NOT STARTED — HIGH ASSURANCE | — |
 | UX-057 | Persist panel state only when it changes | NOT STARTED | — |
-| UX-058 | Account for deferred and updated warnings | IN PROGRESS — HIGH ASSURANCE | [Draft #1852](https://github.com/bradleybond512/crystal-ball/pull/1852) |
+| UX-058 | Account for deferred and updated warnings | IN REVIEW — HIGH ASSURANCE | [Evidence](validation/UX-058-DEFERRED-WARNINGS.md) · [Draft #1852](https://github.com/bradleybond512/crystal-ball/pull/1852) |
 | UX-059 | Retain active alerts using authoritative lifecycle evidence | DONE | #1739; [evidence](validation/UX-059-RETENTION.md); ACC-509 integration hold |
 | UX-060 | Preserve onboarding keyboard ownership against proactive digest | DONE | #1735 |
 | UX-061 | Truthful, restrained map presentation | DONE | #1802; [bounded evidence](validation/MAP-CLARITY-CLEANUP.md); native acceptance recorded separately |

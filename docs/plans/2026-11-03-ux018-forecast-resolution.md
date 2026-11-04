@@ -1,8 +1,8 @@
 # UX-018 — Forecast resolution timing and evidence
 
-## Decision
+## Approved decision
 
-The roadmap selects UX-018 at priority A. Changes to forecast resolution are high assurance. The proposed first implementation adds a bounded record of actual resolver runs and corrects a demonstrated timestamp error in direct tornado labels. Production acceptance remains open until seven real scheduled runs and matched direct-label coverage can be observed on an approved installed build.
+The roadmap selects UX-018 at priority A. Changes to forecast resolution are high assurance. The operator approved UX-018 as the sole draft claim and authorized local implementation. This first implementation adds a bounded record of actual resolver runs and corrects a demonstrated timestamp error in direct tornado labels. Production acceptance remains open until seven real scheduled runs and matched direct-label coverage can be observed on an approved installed build.
 
 ## Baseline
 

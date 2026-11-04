@@ -539,7 +539,9 @@ to refresh, not immutable acceptance thresholds.
 
 Dependencies: UX-017
 
+Status: IN PROGRESS — HIGH ASSURANCE
 Priority: A
+Evidence: #1853 — approved local implementation. Packaged runtime verification is pending.
 
 - **Change surface:** `src/services/intelligence/prediction-resolver.ts`,
   `prediction-resolution-cadence.ts`, `outcome-resolvers.ts`, and the resolution
@@ -1236,7 +1238,7 @@ Update the row in the same PR that does the work.
 | UX-015 | New outage provider integration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-016 | Timeline controller + cursor wiring | NOT STARTED — HIGH ASSURANCE | — |
 | UX-017 | Complete Mac main-sync toolchain repair | DONE | #1693 |
-| UX-018 | Timely authoritative forecast resolution | NOT STARTED | — |
+| UX-018 | Timely authoritative forecast resolution | IN PROGRESS — HIGH ASSURANCE | [Draft #1853](https://github.com/bradleybond512/crystal-ball/pull/1853) |
 | UX-019 | Safe forecast algorithm recalibration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-020 | Entity and analog evidence growth | NOT STARTED | — |
 | UX-021 | Optional-feed classification and recovery | WAITING | #1692 |

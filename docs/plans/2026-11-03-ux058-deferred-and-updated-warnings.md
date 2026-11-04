@@ -1,6 +1,6 @@
 # UX-058 — Account for deferred and updated warnings
 
-## Decision for the operator
+## Approved operator policy
 
 During the existing two-minute source cooldown, show each otherwise eligible warning immediately in the Alert Inbox with “System notification held during cooldown.” Keep a session count of distinct warnings held. Ending the cooldown, leaving Ghost Mode, reopening the app or granting permission later must not replay a backlog. Apply the operator’s explicit in-app-only selection even to critical warnings.
 
@@ -28,4 +28,4 @@ On canonical main `cd459dfec`, two distinct high NWS warnings produced one recor
 3. Inbox owner adds accessible row state and counts without stealing focus. Verify acknowledgement, cancellation and expiry independently of retention.
 4. Run real store-to-dispatcher-to-inbox fixtures for same-source contention, the two NWS entry points, delayed permission, Ghost/mute, quiet hours, in-app/native/both, restart and teardown. Prove the original eligible warning can request one system notification and later severity-only updates produce zero additional requests. Include clean-tree mutation proofs, focused suites, the repository gate, independent and Sonnet reviews, and draft integration evidence.
 
-Rollback reverts the dispatcher/store/UI change. Existing credentials, inbox items, notification preferences and installed profiles require no migration. Session disposition data expires when its owner closes. Production implementation and publishing the documentation-only draft claim require the operator’s approval.
+Rollback reverts the dispatcher/store/UI change. Existing credentials, inbox items, notification preferences and installed profiles require no migration. Session disposition data expires when its owner closes. The operator approved this design, publishing the documentation-only claim and local implementation.

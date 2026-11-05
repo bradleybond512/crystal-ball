@@ -1178,5 +1178,20 @@
   ],
   "api/_news-provenance.js": [
     "test:news-resilience"
+  ],
+  "src/services/pressure-history.ts": [
+    "test:acc505"
+  ],
+  "src/services/cognition/regime-monitor.ts": [
+    "test:acc505"
+  ],
+  "src/services/cognition/regime-scan.ts": [
+    "test:acc505"
+  ],
+  "src/services/correlation/correlation-calibration.ts": [
+    "test:acc505"
+  ],
+  "src/services/intelligence/forecast-calibration.ts": [
+    "test:acc505"
   ]
 }

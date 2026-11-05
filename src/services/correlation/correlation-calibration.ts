@@ -13,10 +13,14 @@
 
 import {
   createForecastCalibrationStore,
+  perSourceMultipliers,
+  type SourceMultiplier,
   type ForecastCalibrationStore,
   type PredictionRecord,
 } from '../intelligence/forecast-calibration';
 import type { CorrelatedPair } from '../intelligence/correlate-engine';
+import { getCorrelationRegime } from '../cognition/regime-monitor';
+import type { CorrelationRegime } from '../cognition/regime-scan';
 import type { Situation } from '../intelligence/situation-store-v2';
 import { getSituationStoreV2 } from '../intelligence/situation-store-v2';
 import {
@@ -82,21 +86,83 @@ export function recordPairPrediction(pair: CorrelatedPair, now: number = Date.no
 
 // ── Per-rule reliability ─────────────────────────────────────────────────
 
-let reliabilityCache: { at: number; byRule: Map<string, number> } | null = null;
+export const MIN_REGIME_RESOLVED = 5;
 
-/** Learned reliability multiplier for a correlation rule, in [0.5, 1.5].
- *  Neutral 1.0 until the rule has ≥5 resolved outcomes. Cached 60 s. */
-export function reliabilityForRule(ruleId: string, now: number = Date.now()): number {
-  if (!reliabilityCache || now - reliabilityCache.at > RELIABILITY_CACHE_TTL_MS) {
-    const byRule = new Map<string, number>();
-    for (const m of getCorrelationCalibrationStore().bySource()) {
-      if (m.sourceId.startsWith(CORR_RULE_SOURCE_PREFIX)) {
-        byRule.set(m.sourceId.slice(CORR_RULE_SOURCE_PREFIX.length), m.multiplier);
-      }
-    }
-    reliabilityCache = { at: now, byRule };
+interface RuleCohorts { overall: SourceMultiplier; calm: SourceMultiplier; shifted: SourceMultiplier }
+
+export interface CorrelationReliabilityDiagnostics extends RuleCohorts {
+  currentRegime: CorrelationRegime | undefined;
+  selected: CorrelationRegime | 'pooled' | 'neutral';
+  reason: 'regime' | 'sparse-regime' | 'unknown-regime' | 'insufficient-outcomes';
+  multiplier: number;
+}
+
+let reliabilityCache: { at: number; revision: number; nextOutcomeAt: number; byRule: Map<string, RuleCohorts> } | null = null;
+
+function emptyScore(sourceId: string): SourceMultiplier {
+  return { sourceId, predictionCount: 0, resolvedCount: 0, brier: 0, multiplier: 1 };
+}
+
+function refreshReliability(now: number): Map<string, RuleCohorts> {
+  const store = getCorrelationCalibrationStore();
+  if (reliabilityCache && Number.isFinite(now) && now >= reliabilityCache.at
+    && now - reliabilityCache.at < RELIABILITY_CACHE_TTL_MS
+    && now < reliabilityCache.nextOutcomeAt && store.revision() === reliabilityCache.revision) return reliabilityCache.byRule;
+  let nextOutcomeAt = Infinity;
+  const eligible = store.all().filter((r) => {
+    if (!r.sourceId.startsWith(CORR_RULE_SOURCE_PREFIX) || !Number.isFinite(now) || now <= 0) return false;
+    const availableAt = Math.max(r.predictedAt, Number.isFinite(r.resolvedAt) ? r.resolvedAt! : 0);
+    if (availableAt > now) { nextOutcomeAt = Math.min(nextOutcomeAt, availableAt); return false; }
+    return true;
+  });
+  const byRule = new Map<string, RuleCohorts>();
+  for (const overall of perSourceMultipliers(eligible, { minResolvedForMultiplier: MIN_REGIME_RESOLVED })) {
+    byRule.set(overall.sourceId.slice(CORR_RULE_SOURCE_PREFIX.length), {
+      overall, calm: emptyScore(overall.sourceId), shifted: emptyScore(overall.sourceId),
+    });
   }
-  return reliabilityCache.byRule.get(ruleId) ?? 1;
+  for (const regime of ['calm', 'shifted'] as const) {
+    const tagged = eligible.filter((r) => r.outcomeRegime === regime);
+    for (const score of perSourceMultipliers(tagged, { minResolvedForMultiplier: MIN_REGIME_RESOLVED })) {
+      byRule.get(score.sourceId.slice(CORR_RULE_SOURCE_PREFIX.length))![regime] = score;
+    }
+  }
+  reliabilityCache = { at: now, revision: store.revision(), nextOutcomeAt, byRule };
+  return byRule;
+}
+
+export function reliabilityDiagnosticsForRule(ruleId: string, now: number = Date.now()): CorrelationReliabilityDiagnostics {
+  const sourceId = `${CORR_RULE_SOURCE_PREFIX}${ruleId}`;
+  const cohorts = refreshReliability(now).get(ruleId)
+    ?? { overall: emptyScore(sourceId), calm: emptyScore(sourceId), shifted: emptyScore(sourceId) };
+  const currentRegime = getCorrelationRegime(now);
+  const preferred = currentRegime ? cohorts[currentRegime] : undefined;
+  const enoughOverall = cohorts.overall.resolvedCount >= MIN_REGIME_RESOLVED;
+  const enoughRegime = preferred && preferred.resolvedCount >= MIN_REGIME_RESOLVED;
+  let selected: CorrelationReliabilityDiagnostics['selected'] = 'neutral';
+  let reason: CorrelationReliabilityDiagnostics['reason'] = 'insufficient-outcomes';
+  let multiplier = cohorts.overall.multiplier;
+  if (enoughRegime) {
+    selected = currentRegime!;
+    reason = 'regime';
+    multiplier = preferred.multiplier;
+  } else if (enoughOverall) {
+    selected = 'pooled';
+    reason = currentRegime ? 'sparse-regime' : 'unknown-regime';
+  }
+  return {
+    overall: { ...cohorts.overall }, calm: { ...cohorts.calm }, shifted: { ...cohorts.shifted }, currentRegime,
+    selected, reason, multiplier,
+  };
+}
+
+/** Regime-conditional reliability after five tagged outcomes; sparse or unknown regimes retain the pooled score. */
+export function reliabilityForRule(ruleId: string, now: number = Date.now()): number {
+  return reliabilityDiagnosticsForRule(ruleId, now).multiplier;
+}
+
+function outcomeRegime(when: number): CorrelationRegime | undefined {
+  return when <= Date.now() ? getCorrelationRegime(when) : undefined;
 }
 
 /** Expire overdue pending predictions — persists and refreshes
@@ -130,7 +196,7 @@ export function resolveCalibrationPrediction(
   when: number = Date.now(),
 ): boolean {
   const store = getCorrelationCalibrationStore();
-  const ok = store.resolve(id, outcome, when);
+  const ok = store.resolve(id, outcome, when, undefined, outcomeRegime(when));
   if (ok) {
     persist(store);
     reliabilityCache = null;
@@ -168,11 +234,12 @@ export function resolvePairPredictions(
   const store = getCorrelationCalibrationStore();
   const lites = toLite(situations);
   let resolved = 0;
+  const regime = outcomeRegime(now);
   for (const r of store.all()) {
     if (r.status !== 'pending') continue;
     const outcome = assessPairOutcome(r.id, lites);
     if (outcome === null) continue;
-    if (store.resolve(r.id, outcome, now)) resolved += 1;
+    if (store.resolve(r.id, outcome, now, undefined, regime)) resolved += 1;
   }
   const expired = store.expirePending(now);
   if (resolved > 0 || expired > 0) {

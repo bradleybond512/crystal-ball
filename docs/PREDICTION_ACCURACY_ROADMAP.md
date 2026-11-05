@@ -1794,7 +1794,7 @@ measuring the wrong boundary.
 
 Status: `IN REVIEW`
 
-Claim: `codex/acc505-regime-reliability`. Approved design: [regime reliability](plans/2026-11-04-acc505-regime-reliability.md). Local implementation and verification pending; delivery paused.
+Claim: draft [#1856](https://github.com/bradleybond512/crystal-ball/pull/1856), `codex/acc505-regime-reliability`. Approved design: [regime reliability](plans/2026-11-04-acc505-regime-reliability.md). Local implementation and verification pending; delivery paused.
 
 Priority: A
 

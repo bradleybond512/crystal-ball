@@ -11,10 +11,18 @@ import {
 } from './runtime-config';
 import { PLAINTEXT_KEYS, MASKED_SENTINEL } from './settings-constants';
 
+const companions: Partial<Record<RuntimeSecretKey, RuntimeSecretKey>> = {
+  OPENSKY_CLIENT_ID: 'OPENSKY_CLIENT_SECRET',
+  OPENSKY_CLIENT_SECRET: 'OPENSKY_CLIENT_ID',
+};
+
 export class SettingsManager {
   private pendingSecrets = new Map<RuntimeSecretKey, string>();
   private validatedKeys = new Map<RuntimeSecretKey, boolean>();
   private validationMessages = new Map<RuntimeSecretKey, string>();
+
+  private revision = 0;
+  private approvedRevision = -1;
 
   captureUnsavedInputs(container: HTMLElement): void {
  container.querySelectorAll<HTMLInputElement>('input[data-secret]').forEach((input) => {
@@ -23,21 +31,21 @@ export class SettingsManager {
  const raw = input.value.trim();
  if (!raw || raw === MASKED_SENTINEL) return;
  if (PLAINTEXT_KEYS.has(key) && !this.pendingSecrets.has(key)) {
- const stored = getRuntimeConfigSnapshot().secrets[key]?.value || '';
+ const stored = getRuntimeConfigSnapshot().secrets[key]?.value ?? '';
  if (raw === stored) return;
  }
- this.pendingSecrets.set(key, raw);
+ this.setPending(key, raw);
  const result = validateSecret(key, raw);
  if (!result.valid) {
  this.validatedKeys.set(key, false);
- this.validationMessages.set(key, result.hint || 'Invalid format');
+ this.validationMessages.set(key, result.hint ?? 'Invalid format');
  }
  });
  const modelSelect = container.querySelector<HTMLSelectElement>('select[data-model-select]');
  const modelManual = container.querySelector<HTMLInputElement>('input[data-model-manual]');
- const modelValue = (modelManual && !modelManual.classList.contains('hidden-input') ? modelManual.value.trim() : modelSelect?.value) || '';
- if (modelValue && !this.pendingSecrets.has('OLLAMA_MODEL')) {
- this.pendingSecrets.set('OLLAMA_MODEL', modelValue);
+ const modelValue = (modelManual && !modelManual.classList.contains('hidden-input') ? modelManual.value.trim() : modelSelect?.value) ?? '';
+ if (modelValue && modelValue !== getRuntimeConfigSnapshot().secrets.OLLAMA_MODEL?.value && !this.pendingSecrets.has('OLLAMA_MODEL')) {
+ this.setPending('OLLAMA_MODEL', modelValue);
  this.validatedKeys.set('OLLAMA_MODEL', true);
  }
   }
@@ -46,9 +54,9 @@ export class SettingsManager {
  return this.pendingSecrets.size > 0;
   }
 
-  getMissingRequiredSecrets(): string[] {
+  getMissingRequiredSecrets(features = RUNTIME_FEATURES): string[] {
  const missing: string[] = [];
- for (const feature of RUNTIME_FEATURES) {
+ for (const feature of features) {
  if (!isFeatureEnabled(feature.id)) continue;
  const secrets = getEffectiveSecrets(feature);
  const hasPending = secrets.some(k => this.pendingSecrets.has(k));
@@ -66,68 +74,65 @@ export class SettingsManager {
  const errors: string[] = [];
  for (const [key, value] of this.pendingSecrets) {
  const result = validateSecret(key, value);
- if (!result.valid) errors.push(`${key}: ${result.hint || 'Invalid format'}`);
+ if (!result.valid) errors.push(`${key}: ${result.hint ?? 'Invalid format'}`);
  }
  return errors;
   }
 
   async verifyPendingSecrets(): Promise<string[]> {
- const errors: string[] = [];
- const context = Object.fromEntries(this.pendingSecrets.entries()) as Partial<Record<RuntimeSecretKey, string>>;
-
- const toVerifyRemotely: [RuntimeSecretKey, string][] = [];
- for (const [key, value] of this.pendingSecrets) {
- const localResult = validateSecret(key, value);
- if (localResult.valid) {
- toVerifyRemotely.push([key, value]);
- } else {
- this.validatedKeys.set(key, false);
- this.validationMessages.set(key, localResult.hint || 'Invalid format');
- errors.push(`${key}: ${localResult.hint || 'Invalid format'}`);
- }
- }
-
- if (toVerifyRemotely.length > 0) {
- let timeoutId: ReturnType<typeof setTimeout> | undefined;
- const timeoutPromise = new Promise<{ key: RuntimeSecretKey; result: { valid: boolean; message?: string } }[]>(
- resolve => { timeoutId = setTimeout(() => resolve(toVerifyRemotely.map(([key]) => ({
- key, result: { valid: false, message: 'Verification timed out — please try again' },
- }))), 15_000); }
- );
- const verifyPromise = Promise.all(toVerifyRemotely.map(async ([key, value]) => {
- const result = await verifySecretWithApi(key, value, context);
- return { key, result };
- }));
- const results = await Promise.race([verifyPromise, timeoutPromise]);
- // Always clear the timeout so it doesn't fire after verification completes.
- clearTimeout(timeoutId);
- for (const { key, result: verifyResult } of results) {
- this.validatedKeys.set(key, verifyResult.valid);
- if (verifyResult.valid) {
- this.validationMessages.delete(key);
- } else {
- this.validationMessages.set(key, verifyResult.message || 'Verification failed');
- errors.push(`${key}: ${verifyResult.message || 'Verification failed'}`);
- }
- }
- }
-
- return errors;
+    const revision = this.revision;
+    this.approvedRevision = -1;
+    const errors: string[] = [];
+    const drafts = new Map(this.pendingSecrets);
+    for (const [key, value] of drafts) {
+      const local = validateSecret(key, value);
+      let canSave = local.valid;
+      let message = local.hint;
+      if (local.valid) {
+        const context: Partial<Record<RuntimeSecretKey, string>> = {};
+        const companion = companions[key];
+        if (companion && drafts.has(companion)) context[companion] = drafts.get(companion);
+        const result = await verifySecretWithApi(key, value, context);
+        canSave = result.canSave;
+        message = result.message;
+      }
+      if (revision !== this.revision) return ['The draft changed. Review it and save again.'];
+      this.setValidation(key, canSave, message);
+      if (!canSave) errors.push(`${key}: ${message ?? 'Could not validate this value'}`);
+    }
+    if (!errors.length) this.approvedRevision = revision;
+    return errors;
   }
 
   async commitVerifiedSecrets(): Promise<void> {
- for (const [key, value] of this.pendingSecrets) {
- if (this.validatedKeys.get(key) !== false) {
- await setSecretValue(key, value);
- this.pendingSecrets.delete(key);
- this.validatedKeys.delete(key);
- this.validationMessages.delete(key);
- }
- }
+    const revision = this.revision;
+    if (this.approvedRevision !== revision) return;
+    this.approvedRevision = -1;
+    await this.writeDrafts(revision);
+  }
+
+  async commitPendingSecrets(): Promise<void> {
+    if (this.getValidationErrors().length || [...this.pendingSecrets.keys()].some(key => this.validatedKeys.get(key) === false)) return;
+    await this.writeDrafts(this.revision);
+  }
+
+  private async writeDrafts(revision: number): Promise<void> {
+    const drafts = new Map(this.pendingSecrets);
+    for (const [key, value] of drafts) {
+      await setSecretValue(key, value);
+      if (this.revision !== revision) return;
+      this.pendingSecrets.delete(key);
+      this.validatedKeys.delete(key);
+      this.validationMessages.delete(key);
+    }
   }
 
   setPending(key: RuntimeSecretKey, value: string): void {
- this.pendingSecrets.set(key, value);
+    if (this.pendingSecrets.get(key) === value) return;
+    this.revision++;
+    this.pendingSecrets.set(key, value);
+    this.validatedKeys.delete(key);
+    this.validationMessages.delete(key);
   }
 
   getPending(key: RuntimeSecretKey): string | undefined {
@@ -139,9 +144,15 @@ export class SettingsManager {
   }
 
   deletePending(key: RuntimeSecretKey): void {
+ this.revision++;
  this.pendingSecrets.delete(key);
  this.validatedKeys.delete(key);
  this.validationMessages.delete(key);
+  }
+
+  clearValidation(key: RuntimeSecretKey): void {
+    this.validatedKeys.delete(key);
+    this.validationMessages.delete(key);
   }
 
   setValidation(key: RuntimeSecretKey, valid: boolean, message?: string): void {
@@ -161,6 +172,7 @@ export class SettingsManager {
   }
 
   destroy(): void {
+ this.revision++;
  this.pendingSecrets.clear();
  this.validatedKeys.clear();
  this.validationMessages.clear();

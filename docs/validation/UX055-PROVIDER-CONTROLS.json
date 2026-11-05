@@ -1,0 +1,342 @@
+{
+  "collectedAt": "2026-11-04T03:39:41.834Z",
+  "classifierSourceSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+  "policy": {
+    "request": "one GET per public resource; no credential, cookie, account endpoint, POST, redirects, or retries",
+    "maxActive": 2,
+    "maxBodyBytes": 262144,
+    "deadlineMs": 8000,
+    "bodyRetention": false
+  },
+  "excluded": [
+    "OTX_API_KEY",
+    "URLSCAN_API_KEY",
+    "PURPLEAIR_API_KEY",
+    "CESIUM_ION_TOKEN",
+    "VULNERS_API_KEY",
+    "NASA_FIRMS_API_KEY",
+    "THREATFOX_API_KEY",
+    "OPENSKY_CLIENT_ID",
+    "OPENSKY_CLIENT_SECRET"
+  ],
+  "controls": [
+    {
+      "provider": "ABUSEIPDB_API_KEY",
+      "url": "https://api.abuseipdb.com/api/v2/check?ipAddress=8.8.8.8&maxAgeInDays=90",
+      "status": 401,
+      "rowCount": 1,
+      "fields": [
+        "errors"
+      ],
+      "firstRowFields": [
+        "detail",
+        "status"
+      ],
+      "couldVerify": false
+    },
+    {
+      "provider": "ACLED_ACCESS_TOKEN",
+      "url": "https://acleddata.com/api/acled/read?_format=json&limit=1",
+      "status": 403,
+      "rowCount": 1,
+      "fields": [
+        "message"
+      ],
+      "firstRowFields": [],
+      "couldVerify": false
+    },
+    {
+      "provider": "AIRNOW_API_KEY",
+      "url": "https://www.airnowapi.org/aq/observation/latLong/current/?latitude=39.7392&longitude=-104.9903&distance=50&format=application%2Fjson",
+      "status": 401,
+      "rowCount": 1,
+      "fields": [
+        "WebServiceError"
+      ],
+      "firstRowFields": [],
+      "couldVerify": false
+    },
+    {
+      "provider": "ANTHROPIC_API_KEY",
+      "url": "https://api.anthropic.com/v1/models",
+      "status": 401,
+      "rowCount": 1,
+      "fields": [
+        "type",
+        "error",
+        "request_id"
+      ],
+      "firstRowFields": [],
+      "couldVerify": false
+    },
+    {
+      "provider": "AVIATIONSTACK_API",
+      "url": "https://api.aviationstack.com/v1/flights?limit=1",
+      "status": 401,
+      "rowCount": 1,
+      "fields": [
+        "error"
+      ],
+      "firstRowFields": [],
+      "couldVerify": false
+    },
+    {
+      "provider": "BITCOINABUSE_API_KEY",
+      "url": "https://www.bitcoinabuse.com/api/reports/check?address=1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+      "status": 404,
+      "rowCount": 1,
+      "fields": [
+        "error"
+      ],
+      "firstRowFields": [],
+      "couldVerify": false
+    },
+    {
+      "provider": "CLOUDFLARE_API_TOKEN",
+      "url": "https://api.cloudflare.com/client/v4/radar/annotations/outages?dateRange=1d&limit=1",
+      "status": 400,
+      "rowCount": 1,
+      "fields": [
+        "success",
+        "errors",
+        "messages",
+        "result"
+      ],
+      "firstRowFields": [
+        "code",
+        "message"
+      ],
+      "couldVerify": false
+    },
+    {
+      "provider": "EIA_API_KEY",
+      "url": "https://api.eia.gov/v2/",
+      "status": 403,
+      "rowCount": 1,
+      "fields": [
+        "error"
+      ],
+      "firstRowFields": [],
+      "couldVerify": false
+    },
+    {
+      "provider": "FINNHUB_API_KEY",
+      "url": "https://finnhub.io/api/v1/quote?symbol=AAPL",
+      "status": 401,
+      "rowCount": 1,
+      "fields": [
+        "error"
+      ],
+      "firstRowFields": [],
+      "couldVerify": false
+    },
+    {
+      "provider": "FMP_API_KEY",
+      "url": "https://financialmodelingprep.com/api/v3/profile/AAPL",
+      "status": 401,
+      "rowCount": 1,
+      "fields": [
+        "Error Message"
+      ],
+      "firstRowFields": [],
+      "couldVerify": false
+    },
+    {
+      "provider": "FRED_API_KEY",
+      "url": "https://api.stlouisfed.org/fred/series?series_id=GDP&file_type=json",
+      "status": 400,
+      "rowCount": 1,
+      "fields": [
+        "error_code",
+        "error_message"
+      ],
+      "firstRowFields": [],
+      "couldVerify": false
+    },
+    {
+      "provider": "GEONAMES_USERNAME",
+      "url": "https://secure.geonames.org/searchJSON?q=london&maxRows=1",
+      "status": 401,
+      "rowCount": 1,
+      "fields": [
+        "status"
+      ],
+      "firstRowFields": [],
+      "couldVerify": false
+    },
+    {
+      "provider": "GOOGLE_MAPS_API_KEY",
+      "url": "https://maps.googleapis.com/maps/api/directions/json?origin=NY&destination=LA",
+      "status": 200,
+      "rowCount": 0,
+      "fields": [
+        "error_message",
+        "routes",
+        "status"
+      ],
+      "firstRowFields": [],
+      "couldVerify": false
+    },
+    {
+      "provider": "GROQ_API_KEY",
+      "url": "https://api.groq.com/openai/v1/models",
+      "status": 401,
+      "rowCount": 1,
+      "fields": [
+        "error"
+      ],
+      "firstRowFields": [],
+      "couldVerify": false
+    },
+    {
+      "provider": "MAPBOX_API_KEY",
+      "url": "https://api.mapbox.com/geocoding/v5/mapbox.places/SanFrancisco.json?limit=1",
+      "status": 401,
+      "rowCount": 1,
+      "fields": [
+        "message"
+      ],
+      "firstRowFields": [],
+      "couldVerify": false
+    },
+    {
+      "provider": "MAPTILER_API_KEY",
+      "url": "https://api.maptiler.com/maps/streets-v2/style.json",
+      "status": 403,
+      "rowCount": null,
+      "fields": [],
+      "firstRowFields": [],
+      "couldVerify": false,
+      "body": "non-JSON"
+    },
+    {
+      "provider": "MEDIASTACK_API_KEY",
+      "url": "https://api.mediastack.com/v1/news?limit=1",
+      "status": 401,
+      "rowCount": 1,
+      "fields": [
+        "error"
+      ],
+      "firstRowFields": [],
+      "couldVerify": false
+    },
+    {
+      "provider": "NASA_API_KEY",
+      "url": "https://api.nasa.gov/planetary/apod",
+      "status": 403,
+      "rowCount": 1,
+      "fields": [
+        "error"
+      ],
+      "firstRowFields": [],
+      "couldVerify": false
+    },
+    {
+      "provider": "NEWSAPI_KEY",
+      "url": "https://newsapi.org/v2/top-headlines?country=us&pageSize=1",
+      "status": 401,
+      "rowCount": 1,
+      "fields": [
+        "status",
+        "code",
+        "message"
+      ],
+      "firstRowFields": [],
+      "couldVerify": false
+    },
+    {
+      "provider": "NEWSDATA_API_KEY",
+      "url": "https://newsdata.io/api/1/news?size=1",
+      "status": 401,
+      "rowCount": 1,
+      "fields": [
+        "status",
+        "results"
+      ],
+      "firstRowFields": [],
+      "couldVerify": false
+    },
+    {
+      "provider": "OWM_API_KEY",
+      "url": "https://api.openweathermap.org/data/2.5/weather?q=London",
+      "status": 401,
+      "rowCount": 1,
+      "fields": [
+        "cod",
+        "message"
+      ],
+      "firstRowFields": [],
+      "couldVerify": false
+    },
+    {
+      "provider": "URLHAUS_AUTH_KEY",
+      "url": "https://urlhaus-api.abuse.ch/v1/urls/recent/limit/1/",
+      "status": 401,
+      "rowCount": 1,
+      "fields": [
+        "error"
+      ],
+      "firstRowFields": [],
+      "couldVerify": false
+    },
+    {
+      "provider": "VIRUSTOTAL_API_KEY",
+      "url": "https://www.virustotal.com/api/v3/files/d41d8cd98f00b204e9800998ecf8427e",
+      "status": 401,
+      "rowCount": 1,
+      "fields": [
+        "error"
+      ],
+      "firstRowFields": [],
+      "couldVerify": false
+    },
+    {
+      "provider": "WINGBITS_API_KEY",
+      "url": "https://customer-api.wingbits.com/v1/flights",
+      "status": 401,
+      "rowCount": 1,
+      "fields": [
+        "statusCode",
+        "error",
+        "message"
+      ],
+      "firstRowFields": [],
+      "couldVerify": false
+    }
+  ],
+  "earlierControls": {
+    "at": "2026-11-04T02:13:44.474678+00:00",
+    "results": [
+      {
+        "provider": "OpenRouter",
+        "url": "https://openrouter.ai/api/v1/models",
+        "status": "200",
+        "exit": 0,
+        "topLevelFields": [
+          "data",
+          "total_count",
+          "links"
+        ],
+        "rows": 454,
+        "errorFields": [],
+        "credentialsSent": false
+      },
+      {
+        "provider": "Groq",
+        "url": "https://api.groq.com/openai/v1/models",
+        "status": "401",
+        "exit": 0,
+        "topLevelFields": [
+          "error"
+        ],
+        "rows": null,
+        "errorFields": [
+          "message",
+          "type",
+          "code"
+        ],
+        "credentialsSent": false
+      }
+    ]
+  }
+}

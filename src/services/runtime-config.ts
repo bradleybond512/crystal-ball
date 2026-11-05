@@ -1,89 +1,96 @@
 import { isDesktopRuntime, resolveConfirmedLocalApiBase } from './runtime';
 import { invokeTauri } from './tauri-bridge';
 import { keychainService } from './keychain';
+import { createCredentialScheduler, probeBrowser, probeResult, readProbeBody, sidecarProbeResult, type SecretVerificationResult } from './credential-probe';
+import { beginStoredCredentialCheck, completeStoredCredentialCheck, invalidateCredentialEvidence } from './credential-evidence';
+export type { SecretVerificationResult } from './credential-probe';
 import { safeSetItem } from '../utils/safe-storage';
 import {
   isVaultUnlocked as isWebVaultUnlocked,
+  isStoredValueCurrent,
   listSecrets as listWebVaultSecrets,
   setSecret as setWebVaultSecret,
   onVaultChange as onWebVaultChange,
   isSupported as isWebVaultSupported,
 } from './web-secret-store';
 
-export type RuntimeSecretKey =
-  | 'CRYSTALBALL_API_KEY'
-  | 'ANTHROPIC_API_KEY'
-  | 'GROQ_API_KEY'
-  | 'OPENROUTER_API_KEY'
-  | 'FRED_API_KEY'
-  | 'EIA_API_KEY'
-  | 'CLOUDFLARE_API_TOKEN'
-  | 'ACLED_ACCESS_TOKEN'
-  | 'ACLED_EMAIL'
-  | 'ACLED_REFRESH_TOKEN'
-  | 'URLHAUS_AUTH_KEY'
-  | 'OTX_API_KEY'
-  | 'ABUSEIPDB_API_KEY'
-  | 'WINGBITS_API_KEY'
-  | 'WS_RELAY_URL'
-  | 'VITE_WS_RELAY_URL'
-  | 'VITE_OPENSKY_RELAY_URL'
-  | 'OPENSKY_CLIENT_ID'
-  | 'OPENSKY_CLIENT_SECRET'
-  | 'AISSTREAM_API_KEY'
-  | 'FINNHUB_API_KEY'
-  | 'NASA_FIRMS_API_KEY'
-  | 'AIRNOW_API_KEY'
-  | 'PURPLEAIR_API_KEY'
-  | 'OLLAMA_API_URL'
-  | 'OLLAMA_MODEL'
-  | 'WTO_API_KEY'
-  | 'AVIATIONSTACK_API'
-  | 'ICAO_API_KEY'
-  | 'THREATFOX_API_KEY'
-  | 'NEWSAPI_KEY'
-  | 'NEWSDATA_API_KEY'
-  | 'VIRUSTOTAL_API_KEY'
-  | 'SHODAN_API_KEY'
-  | 'UCDP_API_TOKEN'
-  | 'FMP_API_KEY'
-  | 'OWM_API_KEY'
-  | 'GREYNOISE_API_KEY'
-  | 'NASA_API_KEY'
-  | 'URLSCAN_API_KEY'
-  | 'BITCOINABUSE_API_KEY'
-  | 'VULNERS_API_KEY'
-  | 'MEDIASTACK_API_KEY'
-  | 'PULSEDIVE_API_KEY'
-  | 'HIBP_API_KEY'
-  | 'GEONAMES_USERNAME'
-  | 'IPINFO_TOKEN'
-  | 'CESIUM_ION_TOKEN'
-  | 'GOOGLE_MAPS_API_KEY'
-  | 'MAPBOX_API_KEY'
-  | 'MAPTILER_API_KEY'
-  | 'S2U_XMPP_JID'
-  | 'S2U_XMPP_SECRET'
-  | 'S2U_TAK_URL'
-  | 'S2U_TAK_USERNAME'
-  | 'S2U_TAK_SECRET'
-  | 'S2U_TLS_INSECURE_OPT_IN'
-  | 'CENSYS_API_ID'
-  | 'CENSYS_API_SECRET'
-  | 'SECURITYTRAILS_API_KEY'
-  | 'WHOISXML_API_KEY'
-  | 'MISP_URL'
-  | 'MISP_API_KEY'
-  | 'OPENCTI_URL'
-  | 'OPENCTI_API_KEY'
-  | 'PATREON_OAUTH_CLIENT_ID'
-  | 'PATREON_OAUTH_CLIENT_SECRET'
-  | 'PATREON_ACCESS_TOKEN'
-  | 'PATREON_REFRESH_TOKEN'
-  | 'PATREON_AUDIO_RSS_URL'
-  | 'OPENAQ_API_KEY'
-  | 'WINDY_WEBCAMS_API_KEY'
-  | 'NPS_API_KEY';
+const RUNTIME_SECRET_KEYS = [
+  'CRYSTALBALL_API_KEY',
+  'ANTHROPIC_API_KEY',
+  'GROQ_API_KEY',
+  'OPENROUTER_API_KEY',
+  'FRED_API_KEY',
+  'EIA_API_KEY',
+  'CLOUDFLARE_API_TOKEN',
+  'ACLED_ACCESS_TOKEN',
+  'ACLED_EMAIL',
+  'ACLED_REFRESH_TOKEN',
+  'URLHAUS_AUTH_KEY',
+  'OTX_API_KEY',
+  'ABUSEIPDB_API_KEY',
+  'WINGBITS_API_KEY',
+  'WS_RELAY_URL',
+  'VITE_WS_RELAY_URL',
+  'VITE_OPENSKY_RELAY_URL',
+  'OPENSKY_CLIENT_ID',
+  'OPENSKY_CLIENT_SECRET',
+  'AISSTREAM_API_KEY',
+  'FINNHUB_API_KEY',
+  'NASA_FIRMS_API_KEY',
+  'AIRNOW_API_KEY',
+  'PURPLEAIR_API_KEY',
+  'OLLAMA_API_URL',
+  'OLLAMA_MODEL',
+  'WTO_API_KEY',
+  'AVIATIONSTACK_API',
+  'ICAO_API_KEY',
+  'THREATFOX_API_KEY',
+  'NEWSAPI_KEY',
+  'NEWSDATA_API_KEY',
+  'VIRUSTOTAL_API_KEY',
+  'SHODAN_API_KEY',
+  'UCDP_API_TOKEN',
+  'FMP_API_KEY',
+  'OWM_API_KEY',
+  'GREYNOISE_API_KEY',
+  'NASA_API_KEY',
+  'URLSCAN_API_KEY',
+  'BITCOINABUSE_API_KEY',
+  'VULNERS_API_KEY',
+  'MEDIASTACK_API_KEY',
+  'PULSEDIVE_API_KEY',
+  'HIBP_API_KEY',
+  'GEONAMES_USERNAME',
+  'IPINFO_TOKEN',
+  'CESIUM_ION_TOKEN',
+  'GOOGLE_MAPS_API_KEY',
+  'MAPBOX_API_KEY',
+  'MAPTILER_API_KEY',
+  'S2U_XMPP_JID',
+  'S2U_XMPP_SECRET',
+  'S2U_TAK_URL',
+  'S2U_TAK_USERNAME',
+  'S2U_TAK_SECRET',
+  'S2U_TLS_INSECURE_OPT_IN',
+  'CENSYS_API_ID',
+  'CENSYS_API_SECRET',
+  'SECURITYTRAILS_API_KEY',
+  'WHOISXML_API_KEY',
+  'MISP_URL',
+  'MISP_API_KEY',
+  'OPENCTI_URL',
+  'OPENCTI_API_KEY',
+  'PATREON_OAUTH_CLIENT_ID',
+  'PATREON_OAUTH_CLIENT_SECRET',
+  'PATREON_ACCESS_TOKEN',
+  'PATREON_REFRESH_TOKEN',
+  'PATREON_AUDIO_RSS_URL',
+  'OPENAQ_API_KEY',
+  'WINDY_WEBCAMS_API_KEY',
+  'NPS_API_KEY',
+] as const;
+export type RuntimeSecretKey = typeof RUNTIME_SECRET_KEYS[number];
+const knownSecretKeys = new Set<string>(RUNTIME_SECRET_KEYS);
 
 export type RuntimeFeatureId =
   | 'cloudApiFallbackAuth'
@@ -950,9 +957,15 @@ const URL_SECRET_KEYS = new Set<RuntimeSecretKey>([
   'OLLAMA_API_URL',
 ]);
 
-export interface SecretVerificationResult {
-  valid: boolean;
-  message: string;
+const scheduleCredentialCheck = createCredentialScheduler();
+const writesInProgress = new Map<RuntimeSecretKey, number>();
+let desktopLoads = 0;
+let observedWebChange = false;
+let credentialGeneration = 0;
+
+function invalidateCheck(key?: RuntimeSecretKey, publish = true): void {
+  credentialGeneration++;
+  invalidateCredentialEvidence(key, publish);
 }
 
 // IPv4 ranges that are almost always mistakes when supplied as OLLAMA_API_URL:
@@ -1040,9 +1053,10 @@ seedSecretsFromEnvironment();
  * Called after unlock/lock/set/destroy so consumers see the latest.
  * Desktop mode is a no-op here — it uses loadDesktopSecrets instead.
  */
-export function syncWebVaultIntoConfig(): void {
+export function syncWebVaultIntoConfig(changedKey?: RuntimeSecretKey): void {
   if (isDesktopRuntime()) return;
 
+  invalidateCheck(changedKey, false);
   // Clear any previously hydrated vault entries so locking actually hides them.
   for (const key of Object.keys(runtimeConfig.secrets) as RuntimeSecretKey[]) {
  if (runtimeConfig.secrets[key]?.source === 'vault') delete runtimeConfig.secrets[key];
@@ -1051,7 +1065,7 @@ export function syncWebVaultIntoConfig(): void {
   if (isWebVaultUnlocked()) {
  const entries = listWebVaultSecrets();
  for (const [key, value] of entries) {
- if (value) runtimeConfig.secrets[key as RuntimeSecretKey] = { value, source: 'vault' };
+ if (knownSecretKeys.has(key) && value) runtimeConfig.secrets[key as RuntimeSecretKey] = { value, source: 'vault' };
  }
   } else {
  // Re-seed env fallbacks for any slot the vault used to cover.
@@ -1062,7 +1076,14 @@ export function syncWebVaultIntoConfig(): void {
 }
 
 if (!isDesktopRuntime()) {
-  onWebVaultChange(() => { syncWebVaultIntoConfig(); });
+  onWebVaultChange(change => {
+    const key = typeof change === 'object' ? change.key as RuntimeSecretKey : undefined;
+    if (change !== 'local') {
+      invalidateCheck(key);
+      try { localStorage.setItem('wm-secrets-updated', crypto.randomUUID()); } catch { /* storage may be unavailable */ }
+    }
+    syncWebVaultIntoConfig(key);
+  });
 }
 
 // Listen for cross-window state updates (settings ↔ main).
@@ -1070,6 +1091,9 @@ if (!isDesktopRuntime()) {
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (e) => {
  if (e.key === 'wm-secrets-updated') {
+ invalidateCheck(undefined, false);
+ // A different web window may still hold an older decrypted snapshot.
+ if (!isDesktopRuntime()) { observedWebChange = true; return; }
  // Another window updated the keychain — local cache is stale.
  keychainService.invalidateAll();
  void loadDesktopSecrets();
@@ -1145,11 +1169,7 @@ export function setFeatureToggle(featureId: RuntimeFeatureId, enabled: boolean):
 }
 
 async function writeWebSecret(key: RuntimeSecretKey, value: string): Promise<void> {
-  if (!isWebVaultSupported()) {
- // eslint-disable-next-line no-console
- console.warn('[runtime-config] Web vault unsupported (no SubtleCrypto/IDB); ignoring secret write');
- return;
-  }
+  if (!isWebVaultSupported()) throw new Error('Browser credential storage is unavailable.');
   if (!isWebVaultUnlocked()) {
  throw new Error('Vault is locked. Unlock the key vault before saving secrets.');
   }
@@ -1166,7 +1186,7 @@ async function writeWebSecret(key: RuntimeSecretKey, value: string): Promise<voi
   notifyConfigChanged();
 }
 
-export async function setSecretValue(key: RuntimeSecretKey, value: string): Promise<void> {
+async function writeSecretValue(key: RuntimeSecretKey, value: string): Promise<void> {
   if (!isDesktopRuntime()) {
  await writeWebSecret(key, value);
  return;
@@ -1193,13 +1213,24 @@ export async function setSecretValue(key: RuntimeSecretKey, value: string): Prom
   // Native pushes the change (including a deletion, as an unset) to the
   // running sidecar itself; this window never relays secret values.
 
-  // Signal other windows (main ↔ settings) to reload secrets from keychain.
-  // The `storage` event fires in all same-origin windows except the one that wrote.
-  try {
- localStorage.setItem('wm-secrets-updated', String(Date.now()));
-  } catch { /* localStorage may be unavailable */ }
-
   notifyConfigChanged();
+}
+
+export async function setSecretValue(key: RuntimeSecretKey, value: string): Promise<void> {
+  if (!knownSecretKeys.has(key)) throw new Error('Unsupported credential setting.');
+  invalidateCheck(key);
+  writesInProgress.set(key, (writesInProgress.get(key) ?? 0) + 1);
+  try {
+    await writeSecretValue(key, value);
+    if (isDesktopRuntime()) {
+      try { localStorage.setItem('wm-secrets-updated', crypto.randomUUID()); } catch { /* storage may be unavailable */ }
+    }
+  } finally {
+    const remaining = (writesInProgress.get(key) ?? 1) - 1;
+    if (remaining) writesInProgress.set(key, remaining);
+    else writesInProgress.delete(key);
+    invalidateCheck(key);
+  }
 }
 
 const PENDING_SECRET_POLL_MS = 2000;
@@ -1254,150 +1285,93 @@ async function callSidecarWithAuth(path: string, init: RequestInit): Promise<Res
   if (!base) {
  throw new Error('local engine not confirmed');
   }
-  const headers = new Headers(init.headers ?? {});
+  const destination = new URL(base);
+  if (destination.protocol !== 'http:' || destination.hostname !== '127.0.0.1'
+    || !Number(destination.port) || destination.origin !== base) throw new Error('Invalid local engine destination');
   const token = await getLocalApiToken();
-  if (token) {
- headers.set('Authorization', `Bearer ${token}`);
+  if (!token) {
+    localApiTokenPromise = null;
+    throw new Error('Local authentication unavailable');
   }
-  return fetch(`${base}${path}`, { ...init, headers });
+  if (init.signal?.aborted) throw new Error('Credential check expired');
+  const headers = new Headers(init.headers);
+  headers.set('Authorization', `Bearer ${token}`);
+  return fetch(`${base}${path}`, { ...init, headers, redirect: 'error', credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer' });
 }
 
-interface WebProbeSpec {
-  url: (value: string) => string;
-  headers?: (value: string) => Record<string, string>;
-}
-
-/**
- * Browser-direct probes for providers that accept CORS preflight from
- * a web origin. A 200/2xx means the key is valid; 401/403 means bad key;
- * anything else (CORS block, network error, 5xx) falls back to a
- * non-committal "Saved" rather than marking the key invalid.
- */
-const WEB_PROBES: Partial<Record<RuntimeSecretKey, WebProbeSpec>> = {
-  ANTHROPIC_API_KEY: {
- url: () => 'https://api.anthropic.com/v1/models',
- headers: (v) => ({ 'x-api-key': v, 'anthropic-version': '2023-06-01' }),
-  },
-  GROQ_API_KEY: {
- url: () => 'https://api.groq.com/openai/v1/models',
- headers: (v) => ({ Authorization: `Bearer ${v}` }),
-  },
-  OPENROUTER_API_KEY: {
- url: () => 'https://openrouter.ai/api/v1/models',
- headers: (v) => ({ Authorization: `Bearer ${v}` }),
-  },
-  CESIUM_ION_TOKEN: {
- url: () => 'https://api.cesium.com/v1/assets?limit=1',
- headers: (v) => ({ Authorization: `Bearer ${v}` }),
-  },
-  MAPBOX_API_KEY: {
- url: (v) => `https://api.mapbox.com/tokens/v2?access_token=${encodeURIComponent(v)}`,
-  },
-  MAPTILER_API_KEY: {
- url: (v) => `https://api.maptiler.com/maps/basic-v2/style.json?key=${encodeURIComponent(v)}`,
-  },
+const OPEN_SKY_PARTNER: Partial<Record<RuntimeSecretKey, RuntimeSecretKey>> = {
+  OPENSKY_CLIENT_ID: 'OPENSKY_CLIENT_SECRET', OPENSKY_CLIENT_SECRET: 'OPENSKY_CLIENT_ID',
 };
-
-async function verifyWebSecret(
-  key: RuntimeSecretKey,
-  value: string,
-): Promise<SecretVerificationResult> {
-  const spec = WEB_PROBES[key];
-  if (!spec) return { valid: true, message: 'Saved' };
-
-  const trimmed = value.trim();
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
-  try {
- const res = await fetch(spec.url(trimmed), {
- method: 'GET',
- headers: spec.headers ? spec.headers(trimmed) : undefined,
- signal: controller.signal,
- // Suppress Referer so the Authorization bearer doesn't leak to a
- // redirect target if the provider 301/302s to a CDN.
- referrerPolicy: 'no-referrer',
- });
- if (res.ok) return { valid: true, message: 'Verified' };
- if (res.status === 401 || res.status === 403) {
- return { valid: false, message: `Rejected by provider (${res.status})` };
- }
- // Rate limits, 5xx, etc. — don't lie about validity.
- return { valid: true, message: `Saved (provider returned ${res.status})` };
-  } catch {
- // CORS block or network failure — can't tell, so don't block the save.
- return { valid: true, message: 'Saved (could not verify from browser)' };
-  } finally {
- clearTimeout(timer);
-  }
-}
 
 export async function verifySecretWithApi(
   key: RuntimeSecretKey,
   value: string,
   context: Partial<Record<RuntimeSecretKey, string>> = {},
 ): Promise<SecretVerificationResult> {
-  const localValidation = validateSecret(key, value);
-  if (!localValidation.valid) {
- return { valid: false, message: localValidation.hint ?? 'Invalid value' };
-  }
-
-  if (!isDesktopRuntime()) {
- return verifyWebSecret(key, value);
-  }
-
-  return requestSidecarVerification({ key, value: value.trim(), context });
+  if (!knownSecretKeys.has(key) || typeof value !== 'string' || value.length > 8192 || /[\r\n\0]/.test(value) || !validateSecret(key, value).valid) return probeResult('invalid-format');
+  const trimmed = value.trim();
+  const partner = OPEN_SKY_PARTNER[key];
+  const companion = partner ? context[partner] : undefined;
+  if (companion !== undefined && (typeof companion !== 'string' || companion.length > 8192 || /[\r\n\0]/.test(companion))) return probeResult('invalid-format');
+  const desktop = isDesktopRuntime();
+  return scheduleCredentialCheck(key, { stored: false, value: trimmed, companion }, desktop ? 12_000 : 8000, signal =>
+    desktop ? requestSidecarVerification({ key, value: trimmed, context: partner && companion !== undefined ? { [partner]: companion } : {} }, signal)
+    : probeBrowser(key, trimmed, signal));
 }
 
-/**
- * "Test" for a saved key (R4-SEC-001). A sidecar-only secret is checked by the
- * sidecar against its own copy, so the value never comes back into this window.
- * Readable keys (and web builds) still verify the value this window holds.
- */
-export async function verifyStoredSecretWithApi(
-  key: RuntimeSecretKey,
-  context: Partial<Record<RuntimeSecretKey, string>> = {},
-): Promise<SecretVerificationResult> {
-  const held = runtimeConfig.secrets[key]?.value;
-  if (held) return verifySecretWithApi(key, held, context);
-  if (!isDesktopRuntime() || !isSecretSet(key)) return { valid: false, message: 'No value to test' };
-  return requestSidecarVerification({ key, useStored: true, context });
+async function nativeVaultRevision(): Promise<number | null> {
+  const state = await keychainService.writeState().catch(() => null);
+  return state?.pending === 0 && state.source === 'vault' && Number.isSafeInteger(state.revision) && state.revision >= 0
+    ? state.revision : null;
 }
 
-async function requestSidecarVerification(body: Record<string, unknown>): Promise<SecretVerificationResult> {
-  try {
-    const response = await callSidecarWithAuth(SIDECAR_SECRET_VALIDATE_PATH, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+export async function verifyStoredSecretWithApi(key: RuntimeSecretKey): Promise<SecretVerificationResult> {
+  if (!knownSecretKeys.has(key) || !isSecretSet(key)) return probeResult('invalid-format');
+  const desktop = isDesktopRuntime();
+  if (desktopLoads || writesInProgress.size) return probeResult('inconclusive-response');
+  const held = desktop ? undefined : runtimeConfig.secrets[key]?.value;
+  if (!desktop && (!held || !validateSecret(key, held).valid)) return probeResult('invalid-format');
+  const generation = credentialGeneration;
+  let handle: ReturnType<typeof beginStoredCredentialCheck> = null;
+  return scheduleCredentialCheck(key, { stored: true, value: held }, desktop ? 12_000 : 8000, async signal => {
+    if (!desktop) {
+      const vault = runtimeConfig.secrets[key]?.source === 'vault';
+      const matches = () => vault ? isStoredValueCurrent(key, held!) : !observedWebChange;
+      if (!await matches() || signal.aborted || generation !== credentialGeneration) return probeResult('inconclusive-response');
+      const result = await probeBrowser(key, held!, signal, () => {
+        if (generation !== credentialGeneration || signal.aborted) return false;
+        handle = beginStoredCredentialCheck(key);
+        return true;
+      });
+      return !signal.aborted && await matches() ? result : probeResult('inconclusive-response');
+    }
+    handle = beginStoredCredentialCheck(key);
+    const before = await nativeVaultRevision();
+    if (before === null || signal.aborted || generation !== credentialGeneration) return probeResult('inconclusive-response');
+    const result = await requestSidecarVerification({ key, useStored: true, context: {} }, signal);
+    if (signal.aborted || before !== await nativeVaultRevision()) return probeResult('inconclusive-response');
+    return result;
+  }, result => {
+    if (generation !== credentialGeneration) return probeResult('inconclusive-response');
+    if (result.reason === 'cooldown' || result.reason === 'concurrency-limit') return result;
+    const recorded = completeStoredCredentialCheck(handle, result, { historicalOnly: desktop });
+    if (handle && !recorded) return probeResult('inconclusive-response');
+    if (desktop && result.outcome === 'verified') return { ...result, message: 'Provider verified the local engine’s copy.' };
+    if (desktop && result.outcome === 'rejected') return { ...result, message: 'Provider rejected the local engine’s copy.' };
+    return result;
+  });
+}
 
-    let payload: unknown = null;
- try {
- payload = await response.json();
- } catch { /* non-JSON response */ }
-
- if (!response.ok) {
- const rec = payload && typeof payload === 'object' ? payload as Record<string, string> : null;
- const message = rec
- ? String(rec.message ?? rec.error ?? 'Secret validation failed')
- : `Secret validation failed (${response.status})`;
- return { valid: false, message };
- }
-
- if (!payload || typeof payload !== 'object') {
- return { valid: false, message: 'Secret validation returned an invalid response' };
- }
-
- const rec = payload as Record<string, string | boolean>;
- const valid = Boolean(rec.valid);
- const message = String(rec.message ?? (valid ? 'Verified' : 'Verification failed'));
- return { valid, message };
-  } catch (error) {
- // Network errors reaching the sidecar should NOT block saving.
- // Only explicit 401/403 from the provider means the key is invalid.
- const message = error instanceof Error ? error.message : 'Secret validation failed';
- return { valid: true, message: `Saved (could not verify – ${message})` };
+async function requestSidecarVerification(body: Record<string, unknown>, signal: AbortSignal): Promise<SecretVerificationResult> {
+  const response = await callSidecarWithAuth(SIDECAR_SECRET_VALIDATE_PATH, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal,
+  });
+  if (response.status !== 200) {
+    void response.body?.cancel().catch(() => undefined);
+    if (response.status === 401) localApiTokenPromise = null;
+    return probeResult('provider-unavailable');
   }
+  return sidecarProbeResult(await readProbeBody(response, signal));
 }
 
 /**
@@ -1409,6 +1383,8 @@ async function requestSidecarVerification(body: Record<string, unknown>): Promis
 export async function loadDesktopSecrets(): Promise<void> {
   if (!isDesktopRuntime()) return;
 
+  desktopLoads++;
+  invalidateCheck(undefined, false);
   try {
     const [status, values] = await Promise.all([keychainService.status(), keychainService.rendererConfig()]);
     desktopSecretPresence.clear();
@@ -1429,6 +1405,8 @@ export async function loadDesktopSecrets(): Promise<void> {
     // eslint-disable-next-line no-console
     console.warn('[runtime-config] Failed to load desktop secret status', error);
   } finally {
+    desktopLoads--;
+    invalidateCheck(undefined, false);
     secretsReadyResolve();
   }
 }

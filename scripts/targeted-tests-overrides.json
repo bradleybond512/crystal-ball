@@ -1178,5 +1178,23 @@
   ],
   "api/_news-provenance.js": [
     "test:news-resilience"
+  ],
+  "src/app/panel-layout.ts": [
+    "test:ux044"
+  ],
+  "src/components/CriticalPostureBanner.ts": [
+    "test:ux044"
+  ],
+  "src/components/SummaryStrip.ts": [
+    "test:ux044"
+  ],
+  "src/utils/critical-ui-announcements.ts": [
+    "test:ux044"
+  ],
+  "src/styles/eew-status-bar.css": [
+    "test:ux044"
+  ],
+  "e2e/summary-strip-layout.mjs": [
+    "test:ux044"
   ]
 }

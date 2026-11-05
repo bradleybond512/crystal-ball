@@ -1,6 +1,6 @@
 # ACC-505 — Correlation reliability across calm and shifting regimes
 
-The roadmap selects ACC-505 at priority A. This proposal changes a multiplier used by the correlation engine and requires approval of the design, documentation-only draft claim and local implementation.
+The roadmap selects ACC-505 at priority A. Bradley approved this design, the documentation-only draft claim and local implementation on 2026-11-05. Code publication requires separate approval. Installation, auto-merge and delivery remain paused.
 
 ## Evidence and decision
 
@@ -16,3 +16,20 @@ Use one system-wide classification because the existing provider receives a rule
 * Exercise thresholds at four and five, cold/disabled/incomplete detector data, future timestamps, both outcome writers, persistence and restart, stale caches, sparse and legacy cohorts and direction changes. Run a chronological replay using only evidence and settled labels available at each decision time. Compare with the existing pooled path on the same examples, run the correlation benchmark and repository gate, and attach mutation proofs and independent reviews.
 
 Roll back by reverting the tag writer and selection policy. Older readers ignore the optional field and continue to use pooled outcomes. Existing production data cannot recover historical regime tags reliably. Any production uplift claim requires prospective tagged holdout evidence after an approved delivery.
+
+## Scope and acceptance
+
+High assurance: this changes correlation scoring and persisted outcome metadata on web and desktop. The goal is to distinguish reliability under qualified calm versus shifting evidence without treating missing telemetry as calm. Acceptance requires the exact five-outcome threshold, unchanged pooled fallback and bounds, immutable outcome-time tags through both writers, bounded aggregates, chronological replay, mutation evidence, type checks and independent reviews. Production uplift remains unknown until prospective labeled holdout evidence exists. No dependencies, UI changes, detector tuning, promotion, notification changes or production-data access are in scope.
+
+## Bounded implementation tasks
+
+Prior read-only discovery by `repository_analyst` and design by `architect` established the writer paths and missing-data ambiguity before approval.
+
+| Task | Owner | Scope | Dependency | Validation |
+|---|---|---|---|---|
+| Qualified current regime | prediction_engineer | pressure-history.ts, cognition/regime-monitor.ts and regime-scan.ts, focused tests; a narrow classifier module if needed | Published draft claim | Warm/cold, missing/invalid/chronological samples, scan freshness, disabled, stale and future evidence |
+| Outcome tags and selection | prediction_engineer | correlation/correlation-calibration.ts, shared prediction store/types only if necessary, focused tests | Classifier | Both writers; threshold 4/5; unknown and legacy fallback; restart/cache/directional behavior |
+| Replay and mutation proof | test_engineer | Focused tests and external proof artifacts; no production edits | Stable implementation commit | Time-ordered comparison with pooled path, confirmed mutations and restored checksums |
+| Integration and sign-off | root, independent_reviewer, Sonnet | Script registration, tracker, QA report and full diff | Focused tests and proofs | Correlation benchmark, agentic gate, selected CI suites, two independent reviews |
+
+Each owner must preserve other changes and stay within these boundaries. Additive test registration is owned by root. Implementation uses behavior tests first. There is no new external provider, so no live-provider probe is needed.

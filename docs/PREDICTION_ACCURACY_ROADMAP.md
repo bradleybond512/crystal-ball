@@ -938,7 +938,7 @@ These tasks retain their detailed designs in
 | ACC-502 | DONE | Multiple-comparison correction and inhibitory edges | ACC-501 (DONE) |
 | ACC-503 | DONE | Multi-hop mediation/confounder filtering | ACC-501 (DONE) |
 | ACC-504 | DONE | Dispersion correction for bursty streams | ACC-501 (DONE) |
-| ACC-505 | TODO | Per-regime correlation reliability | ACC-501 (DONE) |
+| ACC-505 | IN REVIEW | Per-regime correlation reliability | ACC-501 (DONE) |
 | ACC-506 | WAITING | Bounded correlation-kernel tunables and safety fixtures | ACC-505 |
 | ACC-507 | DONE | Bounded cross-event correlation ingestion and liveness proof | ACC-502 (DONE) |
 | ACC-508 | TODO | Near-threshold coupling recall gate | ACC-503 (DONE), ACC-504 (DONE) |
@@ -1792,7 +1792,9 @@ measuring the wrong boundary.
 
 ### ACC-505 — Per-regime correlation reliability
 
-Status: `TODO`
+Status: `IN REVIEW`
+
+Claim: `codex/acc505-regime-reliability`. Approved design: [regime reliability](plans/2026-11-04-acc505-regime-reliability.md). Local implementation and verification pending; delivery paused.
 
 Priority: A
 

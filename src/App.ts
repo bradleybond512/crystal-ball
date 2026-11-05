@@ -320,6 +320,7 @@ export class App {
  this.desktopNotifications = new DesktopNotifications(this.state);
 
  this.dataLoader = new DataLoaderManager(this.state, {
+ onForecastInputsAttempted: () => this.panelLayout.markCalibrationInputsReady(),
  renderCriticalBanner: (postures) => this.panelLayout.renderCriticalBanner(postures),
  });
 

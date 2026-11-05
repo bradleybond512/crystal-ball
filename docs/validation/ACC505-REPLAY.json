@@ -1,0 +1,39 @@
+{
+  "fixture": "synthetic-regime-replay-v1",
+  "productionUplift": false,
+  "interpretation": "Two chronological arms; each updates only from its own earlier settled forecasts. Same deterministic pressure and outcome schedule; not production evidence.",
+  "arms": [
+    {
+      "arm": "conditional",
+      "training": 12,
+      "evaluated": 24,
+      "calmEvaluated": 12,
+      "shiftedEvaluated": 12,
+      "brier": 0.07301625999999999,
+      "calmBrier": 0.012860239999999993,
+      "shiftedBrier": 0.13317228
+    },
+    {
+      "arm": "pooled",
+      "training": 12,
+      "evaluated": 24,
+      "calmEvaluated": 12,
+      "shiftedEvaluated": 12,
+      "brier": 0.2670105,
+      "calmBrier": 0.29337648,
+      "shiftedBrier": 0.24064452
+    }
+  ],
+  "head": "20e8b9ee26488d5f44b9f40a3f3f54c520f7e82b",
+  "testSha256": "6e5d81bdde4861cd2a8441e872dc647fcaa688379f8427fb36fb32a99f58ceaf",
+  "assertedConstraints": [
+    "Every decision sees exactly the previously settled labels",
+    "Every resolvedAt precedes decision time",
+    "Fresh real pressure ingress and default detector establish current regime",
+    "No read or later regime rewrites prior tags",
+    "Both arms use identical pressure/outcome/settlement schedule",
+    "Four outcomes retain pooled score; five select regime",
+    "Actual writers persist tags and restart preserves wire data",
+    "Each forecast resolves once after its decision"
+  ]
+}

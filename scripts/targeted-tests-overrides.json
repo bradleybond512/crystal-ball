@@ -1193,5 +1193,8 @@
   ],
   "src/services/intelligence/forecast-calibration.ts": [
     "test:acc505"
+  ],
+  "src/services/correlation/island-calibration.ts": [
+    "test:acc505"
   ]
 }

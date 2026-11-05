@@ -80,7 +80,7 @@ export function islandReliability(pairKey: string, now: number = Date.now()): nu
  * multiplying them would double-count (5 fast dismissals ≈ 0.5 × 0.5).
  */
 export function islandLedgerMult(pairKey: string, now: number = Date.now()): number | null {
-  if (resolvedCountForRule(islandRuleId(pairKey)) < MIN_RESOLVED_FOR_LEDGER) return null;
+  if (resolvedCountForRule(islandRuleId(pairKey), now) < MIN_RESOLVED_FOR_LEDGER) return null;
   return reliabilityForRule(islandRuleId(pairKey), now);
 }
 

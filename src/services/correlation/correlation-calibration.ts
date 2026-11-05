@@ -179,13 +179,8 @@ export function expireCalibrationPredictions(now: number = Date.now()): number {
 
 /** Resolved-outcome count for one rule — lets callers gate on whether
  *  ledger evidence exists before trusting the multiplier. */
-export function resolvedCountForRule(ruleId: string): number {
-  const sourceId = `${CORR_RULE_SOURCE_PREFIX}${ruleId}`;
-  let n = 0;
-  for (const r of getCorrelationCalibrationStore().all()) {
-    if (r.sourceId === sourceId && (r.status === 'resolved_true' || r.status === 'resolved_false')) n += 1;
-  }
-  return n;
+export function resolvedCountForRule(ruleId: string, now: number = Date.now()): number {
+  return refreshReliability(now).get(ruleId)?.overall.resolvedCount ?? 0;
 }
 
 /** Resolve one prediction by id (used by non-situation producers such

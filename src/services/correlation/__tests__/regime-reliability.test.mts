@@ -1,6 +1,7 @@
 import test, { before, after, beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import * as calibration from '../correlation-calibration';
+import { islandLedgerMult } from '../island-calibration';
 import { createForecastCalibrationStore } from '../../intelligence/forecast-calibration';
 import { getCorrelationRegime, startRegimeMonitor, _resetRegimeMonitorForTests } from '../../cognition/regime-monitor';
 import { startPressureHistory } from '../../pressure-history';
@@ -177,4 +178,54 @@ test('cache expires at sixty seconds exactly and diagnostics cannot mutate it', 
   assert.equal(cached.multiplier,1.48); assert.equal(cached.overall.multiplier,1.48);
   assert.equal(cached.calm.resolvedCount,5); assert.equal(cached.shifted.resolvedCount,0); assert.equal(reads,1);
   assert.equal(diagnostic('r',now+60_000).calm.resolvedCount,5); assert.equal(reads,2);
+});
+
+
+test('island crossfade counts only outcomes eligible at the same decision time', () => {
+  const store=calibration.getCorrelationCalibrationStore();
+  const sourceId='corr-rule:island:x|y';
+  const row=(i,resolvedAt) => prediction(`crossfade${i}`, { sourceId, status:'resolved_false', predictedAt:now-1000, resolvedAt });
+  store.loadJson(Array.from({length:5},(_,i) => row(i,now+1000)));
+  assert.equal(diagnostic('island:x|y').overall.resolvedCount,0);
+  assert.equal(islandLedgerMult('x|y',now),null,'future labels cannot replace existing feedback');
+  store.loadJson(Array.from({length:5},(_,i) => row(i,i<4 ? now : now+1000)));
+  assert.equal(calibration.resolvedCountForRule('island:x|y',now),4);
+  assert.equal(islandLedgerMult('x|y',now),null,'four eligible outcomes retain existing feedback');
+  assert.equal(calibration.resolvedCountForRule('island:x|y',now+1000),5);
+  assert.equal(islandLedgerMult('x|y',now+1000),.5,'fifth label governs exactly when available');
+  assert.equal(islandLedgerMult('x|y',now+999),null,'clock rollback restores the legacy path');
+  assert.equal(islandLedgerMult('x|y',now+1000),.5);
+});
+
+test('future ledger outcomes cannot re-enable an actually dismissed island rule', async t => {
+  const { unifiedAlertStore }=await import('../../unified-alerts');
+  const { startCorrelationFeedback, getPairFeedbackMult }=await import('../../correlation-feedback');
+  const { startAlertCorrelator, stopAlertCorrelator }=await import('../../alert-correlator');
+  const pairKey='earthquake|tsunami';
+  storage.set('crystalball-intel-provider','local-only');
+  storage.set('crystalball-correlation-feedback-v1',JSON.stringify({[pairKey]:{ack:5,fastAck:5,pinned:0}}));
+  const alert=(id,source,title,timestamp) => ({id,source,title,timestamp,body:'fixture',severity:'high',location:{lat:35,lon:139},relevanceScore:90,acknowledged:false,pinned:false});
+  const alerts=[alert('review-quake','earthquake','M7.5 earthquake',now-2000),alert('review-wave','tsunami','Tsunami detected',now-1000)];
+  const ingested=[];
+  t.mock.method(unifiedAlertStore,'getAll',() => alerts);
+  t.mock.method(unifiedAlertStore,'subscribe',() => () => undefined);
+  t.mock.method(unifiedAlertStore,'ingest',rows => ingested.push(...rows));
+  t.mock.method(globalThis,'fetch',async () => {throw new Error('network prohibited in regression');});
+  startCorrelationFeedback();
+  assert.equal(getPairFeedbackMult(pairKey),.5,'real legacy feedback contains five fast dismissals');
+  const store=calibration.getCorrelationCalibrationStore();
+  store.loadJson(Array.from({length:5},(_,i) => prediction(`dismissed${i}`,{sourceId:`corr-rule:island:${pairKey}`,status:'resolved_false',predictedAt:now-1000,resolvedAt:now+1000})));
+  let initialScan;
+  const oldWindow=Object.getOwnPropertyDescriptor(globalThis,'window');
+  Object.defineProperty(globalThis,'window',{configurable:true,value:{setInterval:() => 0,setTimeout:fn => {initialScan=fn;return 0;}}});
+  try {
+    startAlertCorrelator();
+    assert.equal(typeof initialScan,'function');
+    initialScan();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(ingested,[],'future outcomes must not revive the suppressed earthquake-to-tsunami rule');
+  } finally {
+    stopAlertCorrelator();
+    if(oldWindow)Object.defineProperty(globalThis,'window',oldWindow);else delete globalThis.window;
+  }
 });

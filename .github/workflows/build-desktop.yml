@@ -9,8 +9,8 @@ on:
     #             auto-tag.yml don't trigger downstream workflows). Dispatch
     #             with publish_mode=publish and release_tag=<tag>. The workflow
     #             runs at main (so it always uses the latest automation code),
-    #             then checks out release_tag for the actual build, and
-    #             release-context treats it exactly like a tag push.
+    #             then resolves release_tag to one immutable commit used by
+    #             the context, build checkouts and release manifest.
     inputs:
       variant:
         description: 'Variant to build (build mode only; publish mode derives variant from release_tag)'
@@ -69,6 +69,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+          ref: ${{ github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
@@ -81,20 +82,20 @@ jobs:
         shell: bash
         env:
           # R4-LOW-002: through env, never pasted into the script text.
-          RELEASE_REF: ${{ inputs.release_tag || github.ref_name }}
+          RELEASE_REF: ${{ github.ref_name }}
+          RELEASE_TAG_INPUT: ${{ inputs.release_tag || '' }}
           EVENT_NAME: ${{ github.event_name }}
           VARIANT: ${{ inputs.variant || 'full' }}
           PUBLISH_MODE: ${{ inputs.publish_mode || 'build' }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
-          # For publish-mode workflow_dispatch, the tag comes from the
-          # release_tag input (because the workflow runs at main, not at the
-          # tag — see trigger comment). For everything else, github.ref_name
-          # is either the pushed tag or the dispatched branch.
+          # Keep the dispatched ref and optional recovery tag separate. The
+          # context script resolves one source commit for metadata and builds.
           REF_NAME="$RELEASE_REF"
           node scripts/release-context.mjs \
             --event "$EVENT_NAME" \
             --ref "$REF_NAME" \
+            --release-tag-input "$RELEASE_TAG_INPUT" \
             --variant "$VARIANT" \
             --publish-mode "$PUBLISH_MODE" \
             --sha "$COMMIT_SHA" \
@@ -146,7 +147,13 @@ jobs:
           # always use the latest automation code — but the build must reflect
           # the tagged release. The release-context job resolves the tag, so
           # we reuse its output here.
-          ref: ${{ needs.release-context.outputs.tag || github.ref }}
+          ref: ${{ needs.release-context.outputs.commit_sha }}
+
+      - name: Verify source checkout
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ needs.release-context.outputs.commit_sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
 
       - name: Start job timer
         shell: bash
@@ -462,7 +469,13 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-          ref: ${{ needs.release-context.outputs.tag || github.ref }}
+          ref: ${{ needs.release-context.outputs.commit_sha }}
+
+      - name: Verify source checkout
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ needs.release-context.outputs.commit_sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020

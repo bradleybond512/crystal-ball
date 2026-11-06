@@ -9,6 +9,16 @@ const workflow = readFileSync(
   'utf8',
 );
 
+test('desktop build jobs use one resolved commit for checkout and release metadata', () => {
+  assert.match(workflow, /RELEASE_REF: \$\{\{ github\.ref_name \}\}/);
+  assert.match(workflow, /RELEASE_TAG_INPUT: \$\{\{ inputs\.release_tag \|\| '' \}\}/);
+  assert.match(workflow, /--release-tag-input "\$RELEASE_TAG_INPUT"/);
+  assert.doesNotMatch(workflow, /ref: \$\{\{ needs\.release-context\.outputs\.tag \|\| github\.ref \}\}/);
+  assert.equal((workflow.match(/ref: \$\{\{ needs\.release-context\.outputs\.commit_sha \}\}/g) || []).length, 2);
+  assert.equal((workflow.match(/name: Verify source checkout/g) || []).length, 2);
+  assert.match(workflow, /RELEASE_COMMIT_SHA: \$\{\{ needs\.release-context\.outputs\.commit_sha \}\}/);
+});
+
 test('desktop build workflow is tag-driven and publishes only after artifact verification', () => {
   // Workflow dispatch has two modes (build / publish-recovery) but the default
  // and most common use is build-only — verify a variant input exists with

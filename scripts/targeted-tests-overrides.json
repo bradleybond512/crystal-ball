@@ -720,7 +720,8 @@
     "test:workflow-security"
   ],
   ".github/workflows/roadmap-controller.yml": [
-    "test:workflow-security"
+    "test:workflow-security",
+    "test:roadmap-controller"
   ],
   ".github/workflows/sast.yml": [
     "test:workflow-security"

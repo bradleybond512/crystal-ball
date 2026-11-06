@@ -1,6 +1,6 @@
 # ACC-505 — Regime-specific correlation reliability
 
-Risk: high assurance. Roadmap task ACC-505, draft #1856. Product SHA `20e8b9ee26488d5f44b9f40a3f3f54c520f7e82b`. Implementation is local; installation, auto-merge and delivery remain paused. Production uplift is unproven.
+Risk: high assurance. Roadmap task ACC-505, draft #1856. Product SHA `20e8b9ee26488d5f44b9f40a3f3f54c520f7e82b`. Reviewed product code was pushed to draft #1856; its subsequent CI metadata repair remains local. Installation, auto-merge and delivery remain paused. Production uplift is unproven.
 
 ## Behavior and architecture
 
@@ -99,3 +99,7 @@ Rollback the selection/tagging and shared-count changes together. Older readers 
 Implemented commits: `Keep correlation reliability specific to qualified regimes`; `Use settled evidence consistently before replacing island feedback`.
 
 Proposed PR description: Correlation rules use qualified calm/shifted outcomes when at least five same-regime resolutions exist, retaining pooled fallback otherwise. Outcome-time tags prevent later shifts from rewriting history, and island feedback eligibility uses the same settled evidence as scoring. Focused tests, chronological synthetic replay, mutation proofs and independent reviews cover the change. Production uplift remains unproven; installation, auto-merge and delivery are paused.
+
+## CI repair follow-up
+
+The original push completed 14 successful workflows and one Roadmap controller failure caused by GitHub REST metadata lookup for historical PR #1533. The approved local repair, validation and remaining hosted check are documented in [Roadmap metadata CI repair](ROADMAP-METADATA-CI-REPAIR.md). Original inference source and product evidence above remain unchanged.

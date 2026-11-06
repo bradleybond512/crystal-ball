@@ -941,7 +941,7 @@ These tasks retain their detailed designs in
 | ACC-505 | TODO | Per-regime correlation reliability | ACC-501 (DONE) |
 | ACC-506 | WAITING | Bounded correlation-kernel tunables and safety fixtures | ACC-505 |
 | ACC-507 | DONE | Bounded cross-event correlation ingestion and liveness proof | ACC-502 (DONE) |
-| ACC-508 | TODO | Near-threshold coupling recall gate | ACC-503 (DONE), ACC-504 (DONE) |
+| ACC-508 | IN REVIEW | Near-threshold coupling recall gate | ACC-503 (DONE), ACC-504 (DONE) |
 | ACC-509 | DONE | Stable situation identity under delayed and repeated input | #1738; #1743 performance follow-up; [evidence](validation/ACC-509-IDENTITY.md); UX-059 integration hold |
 | ACC-510 | TODO | Evidence-based domain for news-derived situations | ACC-509 |
 
@@ -1924,7 +1924,9 @@ Outcome — delivered:
 
 ### ACC-508 — Near-threshold coupling recall gate
 
-Status: `TODO`
+Status: `IN REVIEW`
+
+Claim: `codex/acc508-coupling-recall`. [Approved design](plans/2026-11-05-acc508-near-threshold-recall.md). Local implementation and validation pending; installation, auto-merge and delivery remain paused.
 
 Priority: A
 

@@ -1,6 +1,6 @@
 # ACC-508 — Detect lost near-threshold causal couplings
 
-The roadmap selects priority-A ACC-508 after ACC-505 is claimed. Dependencies ACC-503 and ACC-504 are complete. This high-assurance proposal needs approval for the design, documentation-only draft claim and local implementation. Installation, auto-merge and delivery stay paused; code publication requires separate approval.
+The roadmap selects priority-A ACC-508 after ACC-505 is claimed. Dependencies ACC-503 and ACC-504 are complete. Bradley approved this high-assurance design, the documentation-only draft claim and local implementation on 2026-11-05. Installation, auto-merge and delivery stay paused; code publication requires separate approval.
 
 ## Goal and measured evidence
 

@@ -1926,7 +1926,7 @@ Outcome — delivered:
 
 Status: `IN REVIEW`
 
-Claim: `codex/acc508-coupling-recall`. [Approved design](plans/2026-11-05-acc508-near-threshold-recall.md). Local implementation and validation pending; installation, auto-merge and delivery remain paused.
+Claim: draft [#1857](https://github.com/bradleybond512/crystal-ball/pull/1857), `codex/acc508-coupling-recall`. [Approved design](plans/2026-11-05-acc508-near-threshold-recall.md). Local implementation and validation pending; installation, auto-merge and delivery remain paused.
 
 Priority: A
 

@@ -233,10 +233,10 @@ async function runSnapshotScript({
   compareStatuses = new Map(),
   eventName = job === 'watchdog' ? 'schedule' : 'pull_request',
   eventPull = workflowPr(1),
+  metadataCalls = [],
   writes = [],
 } = {}) {
   let written;
-  const metadataCalls = [];
   const listCalls = [];
   const compareCalls = [];
   const fs = {
@@ -252,6 +252,7 @@ async function runSnapshotScript({
   };
   const github = {
     async graphql(query, variables) {
+      metadataCalls.push(variables.number);
       assert.equal(variables.owner, 'owner');
       assert.equal(variables.name, 'repo');
       const fields = query.match(/pullRequest\(number: \$number\)\s*\{([^}]+)\}/)?.[1].trim().split(/\s+/);
@@ -259,7 +260,6 @@ async function runSnapshotScript({
         'baseRefName', 'body', 'isDraft', 'mergedAt', 'number', 'state', 'title', 'updatedAt',
       ]);
       const number = variables.number;
-      metadataCalls.push(number);
       const value = responses.has(number) ? responses.get(number) : currentByNumber.get(number);
       if (value instanceof Error) throw value;
       if (responses.has(number)) return value;
@@ -656,6 +656,18 @@ test('a pull_request metadata lookup failure writes no partial snapshot', async 
   }), /current PR lookup failed/);
   assert.deepEqual(writes, []);
 });
+
+for (const number of [0, '90', 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+  test(`validate rejects malformed event PR number ${JSON.stringify(number)} before metadata lookup`, async () => {
+    const metadataCalls = [];
+    const writes = [];
+    await assert.rejects(runSnapshotScript({
+      eventPull: workflowPr(number), metadataCalls, writes,
+    }), /^Error: invalid PR metadata number$/);
+    assert.deepEqual(metadataCalls, []);
+    assert.deepEqual(writes, []);
+  });
+}
 
 for (const job of ['validate', 'watchdog']) {
   test(`${job} includes every referenced PR using metadata despite oversized diffs`, async () => {

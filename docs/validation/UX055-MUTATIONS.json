@@ -1,0 +1,2641 @@
+{
+  "task": "UX-055",
+  "candidate": {
+    "commit": "4417ac686a05f9c672c144788dcc88b645c72662",
+    "tree": "9f289127df10a5743acd66fee8a0b7bb4ca952b5"
+  },
+  "method": "Each clean detached lane ran its full focused suite before and after testing. Each production-only change was applied alone, inspected as a Git diff, restored, reapplied identically, and verified by an assertion inside the intended named test before restoration. SHA-256 and clean Git status verified after every run. Counts below are actual Node test reporter counts.",
+  "suites": {
+    "lane-state/state": {
+      "argv": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/services/__tests__/credential-evidence.test.mts"
+      ],
+      "greenBefore": 15,
+      "greenAfter": 15,
+      "failures": 0
+    },
+    "lane-wizardstate/wizardstate": {
+      "argv": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/services/__tests__/wizard-state.test.mts"
+      ],
+      "greenBefore": 5,
+      "greenAfter": 5,
+      "failures": 0
+    },
+    "lane-managerfinal/managerfinal": {
+      "argv": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/services/__tests__/settings-manager-verification.test.mts"
+      ],
+      "greenBefore": 4,
+      "greenAfter": 4,
+      "failures": 0
+    },
+    "lane-routefinal/routefinal": {
+      "argv": [
+        "node",
+        "tests/helpers/run-isolated-mcp.mjs",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=stored validation ignores renderer|validation rejects machine-local bearer",
+        "src-tauri/sidecar/local-api-server.test.mjs"
+      ],
+      "greenBefore": 2,
+      "greenAfter": 2,
+      "failures": 0
+    },
+    "lane-sidefinal/sidefinal": {
+      "argv": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "src-tauri/sidecar/__tests__/credential-verification.test.mjs"
+      ],
+      "greenBefore": 47,
+      "greenAfter": 47,
+      "failures": 0
+    },
+    "lane-focus/focus": {
+      "argv": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/components/__tests__/key-dashboard-secret-boundary.test.mts"
+      ],
+      "greenBefore": 13,
+      "greenAfter": 13,
+      "failures": 0
+    },
+    "lane-keyboard/keyboard": {
+      "argv": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/components/__tests__/unified-settings-keyboard.test.mts"
+      ],
+      "greenBefore": 17,
+      "greenAfter": 17,
+      "failures": 0
+    },
+    "lane-footer/footer": {
+      "argv": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/services/__tests__/standalone-credential-row.test.mts"
+      ],
+      "greenBefore": 1,
+      "greenAfter": 1,
+      "failures": 0
+    },
+    "lane-rtprobe/rtprobe": {
+      "argv": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 19,
+      "greenAfter": 19,
+      "failures": 0
+    },
+    "lane-rtschedule/rtschedule": {
+      "argv": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 19,
+      "greenAfter": 19,
+      "failures": 0
+    },
+    "lane-rtbinding/rtbinding": {
+      "argv": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 19,
+      "greenAfter": 19,
+      "failures": 0
+    },
+    "lane-rtwindow/rtwindow": {
+      "argv": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 19,
+      "greenAfter": 19,
+      "failures": 0
+    }
+  },
+  "sourceAndTestHashes": {
+    "src/services/credential-evidence.ts": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+    "src/services/__tests__/credential-evidence.test.mts": "119dd05008691f17371791fa7399aa44c020dff1db37ad98fd798b2b10c01087",
+    "src/services/wizard-state.ts": "bb6f8e3b2372f28da2e487508c36eebf70a283d0eeed18ac0141733633f5b449",
+    "src/services/__tests__/wizard-state.test.mts": "67549b86920ba8a9038c35e08f1e921f86263b9fa445e6d6c1426f1b6485d4d5",
+    "src/services/settings-manager.ts": "aea6b80e50da6eeb8877281aed0adc4cb983bd72f057f9aba37e81666a01e1d0",
+    "src/services/__tests__/settings-manager-verification.test.mts": "62bfd01435473d8f3a1738329149716d22324b3f4b541edf12c9e9befc2386ab",
+    "src-tauri/sidecar/local-api-server.mjs": "ba490857386caec5027537f4974cc18267d1e5c6efce010fe4d0318b1c18a3d9",
+    "src-tauri/sidecar/local-api-server.test.mjs": "ea12bf03417c22760c360fd818cd3bbffec26950318574340f9fedef6fb09e14",
+    "src-tauri/sidecar/credential-verification.mjs": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+    "src-tauri/sidecar/__tests__/credential-verification.test.mjs": "8fbefe49b08be5dc2965817c9a3c6a3f0ea9921b9f83f0231cb4b19cda6bbce6",
+    "src/components/KeyDashboard.ts": "3a94117ef49c941e9c7dc653edbce720b78716d54f907e92d19082eff5b96137",
+    "src/components/__tests__/key-dashboard-secret-boundary.test.mts": "c495ed0a741a6018212082b8e1d62bd87faaab30543bfba08b74b6367f962e75",
+    "src/components/SetupWizard.ts": "7e7ab292826f3de6f2d1a4983b24df675f67796164f71629c50c76d7976c0c45",
+    "src/components/RuntimeConfigPanel.ts": "1d8fd8d5b800fe3283c75f22305836d24f5c571d38f60cf9c8e5f5ec3041ee64",
+    "src/components/UnifiedSettings.ts": "36c69d517b903e1c1d95b70cca02f0a70b71cedd413379f9cc26d59b919abb88",
+    "src/components/__tests__/unified-settings-keyboard.test.mts": "9418015f9fb75a130793f4d6facc705e9a9ec2a9495393ab06cbb837b22b5636",
+    "src/settings-main.ts": "b7aecffc279c8d3e9ce3c80c5b3a5398afc02d0cca82019f7703225a2cd9c576",
+    "src/services/__tests__/standalone-credential-row.test.mts": "ecf228c1ea548cf38c75daa0d308d9a0d238d56ca10a2c9d7f848676309c3943",
+    "src/services/credential-probe.ts": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+    "src/services/__tests__/secret-boundary.test.mts": "600d63646a83cb69b1b963eb74e0ce6f157a356ed33702b4a9ae8f2bf6a1ab41",
+    "src/services/runtime-config.ts": "2cf2c7408cc1b8d7a2c059e6dba70593ac8d71bec97d64d4ea6d117e196619f2",
+    "src/services/web-secret-store.ts": "8bde129d9fe5bb0525e8c7b899a856d2e38ef384fdbd54a1bd96e77424056e02",
+    "src-tauri/tauri.conf.json": "b852f1e3fe528e8aa18b05fc979a30d85353df50bc928f1b73f766b317f54fe0",
+    "scripts/check-sidecar-bundle.mjs": "8aefafecc43c4cf5c57b175231b9d863c01c3db53f72edbef1a6cd0426258ce0"
+  },
+  "reversals": [
+    {
+      "id": "STATE01",
+      "behavior": "Verified and rejected checks are stale at the 24-hour boundary",
+      "file": "src/services/credential-evidence.ts",
+      "test": "src/services/__tests__/credential-evidence.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=ages at exactly 24 hours and has an exact date",
+        "src/services/__tests__/credential-evidence.test.mts"
+      ],
+      "greenBefore": 2,
+      "redPassed": 0,
+      "redFailed": 2,
+      "greenAfter": 2,
+      "failingTests": [
+        "verified ages at exactly 24 hours and has an exact date",
+        "rejected ages at exactly 24 hours and has an exact date"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'verified'\n    - 'stale'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'stale'\n  actual: 'verified'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-evidence.ts b/src/services/credential-evidence.ts\nindex 9005c271c..98184fcd3 100644\n--- a/src/services/credential-evidence.ts\n+++ b/src/services/credential-evidence.ts\n@@ -185,3 +185,3 @@ function legacyDisplay(key: RuntimeSecretKey, now: number): Display {\n function displayReceipt({ latest, previous }: Receipt, bound: boolean, now: number): Display {\n-  const stale = isConclusive(latest) && now - latest.at >= DAY;\n+  const stale = isConclusive(latest) && now - latest.at > DAY;\n   let state: EvidenceState = stale ? 'stale' : latest.outcome;\n",
+      "diffSha256": "2affabdd384ce92ebc4c5e5f78986e9e095e4c3b3e87423cd207648ebc1428c5",
+      "originalSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "mutatedSha256": "e038c30673f5191ae86cc20703a892498fd7364ba01d5baa4889ef39f8db6763",
+      "restoredSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "STATE02",
+      "behavior": "Presence wins over old check results",
+      "file": "src/services/credential-evidence.ts",
+      "test": "src/services/__tests__/credential-evidence.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=ages at exactly 24 hours and has an exact date",
+        "src/services/__tests__/credential-evidence.test.mts"
+      ],
+      "greenBefore": 2,
+      "redPassed": 0,
+      "redFailed": 2,
+      "greenAfter": 2,
+      "failingTests": [
+        "verified ages at exactly 24 hours and has an exact date",
+        "rejected ages at exactly 24 hours and has an exact date"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    'stale' !== 'unset'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'unset'\n  actual: 'stale'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-evidence.ts b/src/services/credential-evidence.ts\nindex 9005c271c..b26d4ff86 100644\n--- a/src/services/credential-evidence.ts\n+++ b/src/services/credential-evidence.ts\n@@ -200,3 +200,3 @@ function displayReceipt({ latest, previous }: Receipt, bound: boolean, now: numb\n export function getCredentialEvidenceDisplay(key: RuntimeSecretKey, present: boolean, now = Date.now()): Display {\n-  if (!present) return { state: 'unset', text: 'Not set', title: '' };\n+  if (false) return { state: 'unset', text: 'Not set', title: '' };\n   try {\n",
+      "diffSha256": "f4372ef6a1e5dee385b7ca1584fd0da7851d90f1515dc7dc102340646d61de9e",
+      "originalSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "mutatedSha256": "970aff946cedcdd019de1962e3d519a3bcf32623d9fcf07830832c76ae0c407c",
+      "restoredSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "STATE03",
+      "behavior": "Expose the exact instant of the last conclusive check",
+      "file": "src/services/credential-evidence.ts",
+      "test": "src/services/__tests__/credential-evidence.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=ages at exactly 24 hours and has an exact date",
+        "src/services/__tests__/credential-evidence.test.mts"
+      ],
+      "greenBefore": 2,
+      "redPassed": 0,
+      "redFailed": 2,
+      "greenAfter": 2,
+      "failingTests": [
+        "verified ages at exactly 24 hours and has an exact date",
+        "rejected ages at exactly 24 hours and has an exact date"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /2027-01-15T08:00:00.000Z/u. Input:\n    \n    'Provider verified: Fri Jan 15 2027'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual: 'Provider verified: Fri Jan 15 2027'\n  operator: 'match'\n",
+      "reversal": "diff --git a/src/services/credential-evidence.ts b/src/services/credential-evidence.ts\nindex 9005c271c..490c79414 100644\n--- a/src/services/credential-evidence.ts\n+++ b/src/services/credential-evidence.ts\n@@ -189,3 +189,3 @@ function displayReceipt({ latest, previous }: Receipt, bound: boolean, now: numb\n   let text = (bound ? '' : 'Saved, not verified \u00b7 Previous check: ') + describe(latest, now);\n-  let title = labels[latest.reason] + ': ' + new Date(latest.at).toISOString();\n+  let title = labels[latest.reason] + ': ' + new Date(latest.at).toDateString();\n   if (stale) text += ' (stale)';\n",
+      "diffSha256": "9d93c4b8c68145ea3505ab9cc472458462080a4c3e271209b5cc635eb017528e",
+      "originalSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "mutatedSha256": "3f401a5bc9c658369ac1bf7f53583573f6b5b00261d6555106bb0e3c8615404c",
+      "restoredSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "STATE04",
+      "behavior": "A temporarily unavailable probe preserves dated historical evidence",
+      "file": "src/services/credential-evidence.ts",
+      "test": "src/services/__tests__/credential-evidence.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=an outage reports its own dated attempt",
+        "src/services/__tests__/credential-evidence.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "an outage reports its own dated attempt and preserves the prior conclusive check"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /previous.*provider verified.*1 day/i. Input:\n    \n    'Could not verify (provider unavailable) \u00b7 1 min ago'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual: 'Could not verify (provider unavailable) \u00b7 1 min ago'\n  operator: 'match'\n",
+      "reversal": "diff --git a/src/services/credential-evidence.ts b/src/services/credential-evidence.ts\nindex 9005c271c..244fdf54a 100644\n--- a/src/services/credential-evidence.ts\n+++ b/src/services/credential-evidence.ts\n@@ -133,3 +133,3 @@ export function completeStoredCredentialCheck(\n     const previous = prior && (isConclusive(prior.latest) ? prior.latest : prior.previous);\n-    const raw = JSON.stringify({ version: 1, latest, previous: isConclusive(latest) ? undefined : previous });\n+    const raw = JSON.stringify({ version: 1, latest, previous: undefined });\n     localStorage.setItem(key, raw);\n",
+      "diffSha256": "00108ffbadbfc826aeec69930a2d7123f6cc5fc2dfc3b67bfb9c897ab529adad",
+      "originalSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "mutatedSha256": "1f6b98c39ef5d3bf4a980c8b2586c431fe2c28ab10ea7b9f971b72c96663f54d",
+      "restoredSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "STATE05",
+      "behavior": "Reset removes current binding and preserves historical receipt",
+      "file": "src/services/credential-evidence.ts",
+      "test": "src/services/__tests__/credential-evidence.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=session reset and credential changes remove current binding",
+        "src/services/__tests__/credential-evidence.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "session reset and credential changes remove current binding; paired edits discard in-flight checks"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'verified'\n    - 'historical'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'historical'\n  actual: 'verified'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-evidence.ts b/src/services/credential-evidence.ts\nindex 9005c271c..06f385128 100644\n--- a/src/services/credential-evidence.ts\n+++ b/src/services/credential-evidence.ts\n@@ -56,3 +56,3 @@ function forgetBindings<T>(cache: Map<RuntimeSecretKey, T>, key?: RuntimeSecretK\n export function invalidateCredentialEvidence(key?: RuntimeSecretKey, publish = true): void {\n-  forgetBindings(current, key);\n+  void current.size;\n   forgetBindings(pending, key);\n",
+      "diffSha256": "9cd8be51472f5387658cdac579038ba442d3c8e36bbe37164a0fd424b1eb6909",
+      "originalSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "mutatedSha256": "1a6766327bdc89379d149c7cb3a74f8e06f000d2891606507b9008e0a1430353",
+      "restoredSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "STATE06",
+      "behavior": "An OpenSky peer change retires the pending stored check",
+      "file": "src/services/credential-evidence.ts",
+      "test": "src/services/__tests__/credential-evidence.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=session reset and credential changes remove current binding",
+        "src/services/__tests__/credential-evidence.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "session reset and credential changes remove current binding; paired edits discard in-flight checks"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "reversal": "The OpenSky client-secret slot was remapped from the client-ID identity group to its own group. Canonical diff is identified by diffSha256.",
+      "diffSha256": "1d84b03053ef67e898e5729e2adc649a3f9e23a94076fc5eab06505986ba6e5e",
+      "originalSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "mutatedSha256": "97ad89c1921f993766816172d18039bc5fd4acdd9533c93a97b75ab951a72d0e",
+      "restoredSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "STATE07",
+      "behavior": "Check stored revision again before accepting a late result",
+      "file": "src/services/credential-evidence.ts",
+      "test": "src/services/__tests__/credential-evidence.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=a marker changed in another window",
+        "src/services/__tests__/credential-evidence.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "a marker changed in another window invalidates evidence before its storage event arrives"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-evidence.ts b/src/services/credential-evidence.ts\nindex 9005c271c..ecc9ed0e5 100644\n--- a/src/services/credential-evidence.ts\n+++ b/src/services/credential-evidence.ts\n@@ -129,3 +129,3 @@ export function completeStoredCredentialCheck(\n   try {\n-    if (!matchesEpoch(attempt) || localStorage.getItem(PREFIX + 'attempt:' + attempt.key) !== attempt.id) return false;\n+    if (false || localStorage.getItem(PREFIX + 'attempt:' + attempt.key) !== attempt.id) return false;\n     const key = PREFIX + attempt.key;\n",
+      "diffSha256": "70cade5d4da5c8361d6452de9564dc54f993a8dd95e22e695d44532dbdc58644",
+      "originalSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "mutatedSha256": "57f4d845f3c4f57c3377b55b12b2bd1d5cd5e48c983877b583186e2a030a4ce1",
+      "restoredSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "STATE08",
+      "behavior": "A consumed attempt cannot write twice",
+      "file": "src/services/credential-evidence.ts",
+      "test": "src/services/__tests__/credential-evidence.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=overlapping attempts cannot overwrite",
+        "src/services/__tests__/credential-evidence.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "overlapping attempts cannot overwrite newer results or be completed twice"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-evidence.ts b/src/services/credential-evidence.ts\nindex 9005c271c..896ec01b2 100644\n--- a/src/services/credential-evidence.ts\n+++ b/src/services/credential-evidence.ts\n@@ -124,3 +124,3 @@ export function completeStoredCredentialCheck(\n   if (!attempt || pending.get(attempt.key) !== attempt) return false;\n-  pending.delete(attempt.key);\n+  void pending.size;\n   const latest = stamp({ outcome: result.outcome, reason: result.reason, at: now }, now);\n",
+      "diffSha256": "551980d9563943b5a5aa23016871f0d52e23ac2576661491a67ab779ba40768f",
+      "originalSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "mutatedSha256": "688e5f47a4b6deed5456b99b983629d8c748beee34ecc876e603b1f982b6a724",
+      "restoredSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "STATE09",
+      "behavior": "Only typed legacy timestamps establish historical evidence",
+      "file": "src/services/credential-evidence.ts",
+      "test": "src/services/__tests__/credential-evidence.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=unknown timestamps and malformed legacy records",
+        "src/services/__tests__/credential-evidence.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "unknown timestamps and malformed legacy records cannot establish evidence"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'historical'\n    - 'unverified'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'unverified'\n  actual: 'historical'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-evidence.ts b/src/services/credential-evidence.ts\nindex 9005c271c..63df1e6fd 100644\n--- a/src/services/credential-evidence.ts\n+++ b/src/services/credential-evidence.ts\n@@ -176,3 +176,3 @@ function legacyDisplay(key: RuntimeSecretKey, now: number): Display {\n   const old = parse(localStorage.getItem('cb:key-status:' + key));\n-  if (!object(old) || !validTime(old.lastChecked, now) || (old.state !== 'valid' && old.state !== 'invalid')) return unverified;\n+  if (!object(old) || !Number.isFinite(Number(old.lastChecked)) || (old.state !== 'valid' && old.state !== 'invalid')) return unverified;\n   return {\n",
+      "diffSha256": "050d928666d03e2255b2d31afa79e87164303d5be30247f1a4129ea5b1439e40",
+      "originalSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "mutatedSha256": "498aaa7fbeafe2d089b85fb1a10771c312b448237a59c120760e22b710e1a7a9",
+      "restoredSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "STATE10",
+      "behavior": "Legacy Boolean result remains historical and cannot certify the current key",
+      "file": "src/services/credential-evidence.ts",
+      "test": "src/services/__tests__/credential-evidence.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=old Boolean records are historical",
+        "src/services/__tests__/credential-evidence.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "old Boolean records are historical and cannot leak errors or certify a provider"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'verified'\n    - 'historical'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'historical'\n  actual: 'verified'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-evidence.ts b/src/services/credential-evidence.ts\nindex 9005c271c..3189f1cf8 100644\n--- a/src/services/credential-evidence.ts\n+++ b/src/services/credential-evidence.ts\n@@ -178,3 +178,3 @@ function legacyDisplay(key: RuntimeSecretKey, now: number): Display {\n   return {\n-    state: 'historical',\n+    state: 'verified',\n     text: 'Saved, not verified \u00b7 Previous check ' + age(old.lastChecked, now),\n",
+      "diffSha256": "d00155f33877143b323bdc4e5a606f1e6c505ed1bb469f6b76d9814b92bde7b5",
+      "originalSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "mutatedSha256": "f3947228c71ff3168916c69992a9678b1bb0d601ac26cb4f5bfce0f564da3835",
+      "restoredSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "STATE11",
+      "behavior": "Legacy error-bearing record removed on successful safe write",
+      "file": "src/services/credential-evidence.ts",
+      "test": "src/services/__tests__/credential-evidence.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=old Boolean records are historical",
+        "src/services/__tests__/credential-evidence.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "old Boolean records are historical and cannot leak errors or certify a provider"
+      ],
+      "assertion": "error: |-\n    The expression evaluated to a falsy value:\n    \n      assert.ok(![...items.values()].join('').includes('SECRET-CANARY'))\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='\n",
+      "reversal": "diff --git a/src/services/credential-evidence.ts b/src/services/credential-evidence.ts\nindex 9005c271c..6092a4b40 100644\n--- a/src/services/credential-evidence.ts\n+++ b/src/services/credential-evidence.ts\n@@ -137,3 +137,3 @@ export function completeStoredCredentialCheck(\n     else current.set(attempt.key, { attempt, raw });\n-    localStorage.removeItem('cb:key-status:' + attempt.key);\n+    void attempt.key;\n   } catch {\n",
+      "diffSha256": "54ac77c721cfb1b44f864cf3014c784a07cc720011f1f4dff896fa74010409d9",
+      "originalSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "mutatedSha256": "df7dac47160bde1f023217bda2cbab591de0865d72a68331fe10629551237dd4",
+      "restoredSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "STATE12",
+      "behavior": "A reason must agree with its reported outcome",
+      "file": "src/services/credential-evidence.ts",
+      "test": "src/services/__tests__/credential-evidence.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=do not accept arbitrary reason codes",
+        "src/services/__tests__/credential-evidence.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "do not accept arbitrary reason codes or relabel a transport failure as verified"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-evidence.ts b/src/services/credential-evidence.ts\nindex 9005c271c..facac4be0 100644\n--- a/src/services/credential-evidence.ts\n+++ b/src/services/credential-evidence.ts\n@@ -98,3 +98,3 @@ function stamp(value: unknown, now: number): Stamp | undefined {\n   const reason = value.reason as Reason;\n-  if (reasons[reason] !== value.outcome) return;\n+  if (false) return;\n   return { outcome: reasons[reason], reason, at: value.at, scope: value.scope === 'sidecar-copy' ? 'sidecar-copy' : undefined };\n",
+      "diffSha256": "3e38fe3164bc4bf7fea95636bf72c0c4a452c16732e4834f5cffbd296538b2ec",
+      "originalSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "mutatedSha256": "d512e79d0894f8fef09d14ddd66031aba81d02eb7e7481c16595b3d217add0ec",
+      "restoredSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "STATE13",
+      "behavior": "Only the latest attempt from any window may write evidence",
+      "file": "src/services/credential-evidence.ts",
+      "test": "src/services/__tests__/credential-evidence.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=a newer check from another window supersedes",
+        "src/services/__tests__/credential-evidence.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "a newer check from another window supersedes a pending check without a credential edit"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-evidence.ts b/src/services/credential-evidence.ts\nindex 9005c271c..3aa614e72 100644\n--- a/src/services/credential-evidence.ts\n+++ b/src/services/credential-evidence.ts\n@@ -129,3 +129,3 @@ export function completeStoredCredentialCheck(\n   try {\n-    if (!matchesEpoch(attempt) || localStorage.getItem(PREFIX + 'attempt:' + attempt.key) !== attempt.id) return false;\n+    if (!matchesEpoch(attempt) || false) return false;\n     const key = PREFIX + attempt.key;\n",
+      "diffSha256": "f9ce9e7ca1531aeca0f7db7a2d2646682e7f1c28dd76e931219f856a77c9c791",
+      "originalSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "mutatedSha256": "1924fc01701bd6ba6913d46092cb737858c4854172743a5861ac1efa35bff85f",
+      "restoredSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "STATE14",
+      "behavior": "A native sidecar-copy probe cannot establish current renderer binding",
+      "file": "src/services/credential-evidence.ts",
+      "test": "src/services/__tests__/credential-evidence.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=a sidecar copy stays historical",
+        "src/services/__tests__/credential-evidence.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "a sidecar copy stays historical even in the testing session"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'verified'\n    - 'historical'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'historical'\n  actual: 'verified'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-evidence.ts b/src/services/credential-evidence.ts\nindex 9005c271c..fb61cd43b 100644\n--- a/src/services/credential-evidence.ts\n+++ b/src/services/credential-evidence.ts\n@@ -135,3 +135,3 @@ export function completeStoredCredentialCheck(\n     localStorage.setItem(key, raw);\n-    if (historicalOnly) current.delete(attempt.key);\n+    if (false) current.delete(attempt.key);\n     else current.set(attempt.key, { attempt, raw });\n",
+      "diffSha256": "01cde2dbd7943235e5442afc53173ae9b0facec3e302bb2159d00009e29e1d23",
+      "originalSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "mutatedSha256": "d15c0ff163bb975f79ea36bea975bf9a2e51ce69c3d9824eaee651af0653a1aa",
+      "restoredSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "STATE15",
+      "behavior": "Prior conclusive results also age when another attempt is unavailable",
+      "file": "src/services/credential-evidence.ts",
+      "test": "src/services/__tests__/credential-evidence.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=prior result is identified as stale",
+        "src/services/__tests__/credential-evidence.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "prior result is identified as stale after an inconclusive attempt"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /previous result.*stale/i. Input:\n    \n    'Could not verify (provider unavailable) \u00b7 just now \u00b7 Previous result: Provider rejected \u00b7 1 day ago'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual: 'Could not verify (provider unavailable) \u00b7 just now \u00b7 Previous result: Provider rejected \u00b7 1 day ago'\n  operator: 'match'\n",
+      "reversal": "diff --git a/src/services/credential-evidence.ts b/src/services/credential-evidence.ts\nindex 9005c271c..046c0e665 100644\n--- a/src/services/credential-evidence.ts\n+++ b/src/services/credential-evidence.ts\n@@ -193,3 +193,3 @@ function displayReceipt({ latest, previous }: Receipt, bound: boolean, now: numb\n     text += ' \u00b7 Previous result: ' + describe(previous, now);\n-    if (now - previous.at >= DAY) text += ' (stale)';\n+    if (false) text += ' (stale)';\n     title += ' \u00b7 Previous result: ' + labels[previous.reason] + ', ' + new Date(previous.at).toISOString();\n",
+      "diffSha256": "f6ad0a477026c9b01ef83d51d3d6a7a6f25f49b87bffb759d8f26dc6ca1afda8",
+      "originalSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "mutatedSha256": "9a177f8e51c22ae959cf192934f0920b0657590f68059b0d38a6794090b26a8a",
+      "restoredSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "STATE16",
+      "behavior": "A denied receipt write cannot report success",
+      "file": "src/services/credential-evidence.ts",
+      "test": "src/services/__tests__/credential-evidence.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=a receipt storage write rejected",
+        "src/services/__tests__/credential-evidence.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "a receipt storage write rejected at completion stays operation-local"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-evidence.ts b/src/services/credential-evidence.ts\nindex 9005c271c..3c5203776 100644\n--- a/src/services/credential-evidence.ts\n+++ b/src/services/credential-evidence.ts\n@@ -140,3 +140,3 @@ export function completeStoredCredentialCheck(\n     current.delete(attempt.key);\n-    return false;\n+    return true;\n   }\n",
+      "diffSha256": "ed8e44bce3af5ddb7e4259e0432bfac4452110e849f306a0563c113162997b30",
+      "originalSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "mutatedSha256": "131a78e81c026c1246437959beda0e409849a6a48ae57dc4527624a633b1bcc7",
+      "restoredSha256": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "WIZARDSTATE01",
+      "behavior": "Denied storage must not prevent opening the setup wizard",
+      "file": "src/services/wizard-state.ts",
+      "test": "src/services/__tests__/wizard-state.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=the wizard can continue without remembering progress",
+        "src/services/__tests__/wizard-state.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "the wizard can continue without remembering progress when storage is unavailable"
+      ],
+      "assertion": "error: 'denied'\n  code: 'ERR_TEST_FAILURE'\n",
+      "reversal": "diff --git a/src/services/wizard-state.ts b/src/services/wizard-state.ts\nindex 3bbec18ec..9b5278122 100644\n--- a/src/services/wizard-state.ts\n+++ b/src/services/wizard-state.ts\n@@ -8,4 +8,4 @@ export interface WizardPosition { tier: number; stepIndex: number }\n function readJson<T>(key: string): T | null {\n+  const raw = localStorage.getItem(key);\n   try {\n-    const raw = localStorage.getItem(key);\n     return raw ? JSON.parse(raw) as T : null;\n",
+      "diffSha256": "513c643d428da1bc15259bac66009934345d2179c07e2fc0b7feeb994daf8359",
+      "originalSha256": "bb6f8e3b2372f28da2e487508c36eebf70a283d0eeed18ac0141733633f5b449",
+      "mutatedSha256": "3d98b40059e131cf5f0598aeaaa31eb79a4e356d4fb53a7f29d8642053f534f1",
+      "restoredSha256": "bb6f8e3b2372f28da2e487508c36eebf70a283d0eeed18ac0141733633f5b449",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "MANAGER01",
+      "behavior": "Well-formed values can be saved during provider outage",
+      "file": "src/services/settings-manager.ts",
+      "test": "src/services/__tests__/settings-manager-verification.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=unavailable explicit validation allows saving",
+        "src/services/__tests__/settings-manager-verification.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "unavailable explicit validation allows saving, a provider rejection retains the draft"
+      ],
+      "assertion": "Expected values to be strictly deep-equal; the actual result contained an unexpected error or context field. Fixture values omitted.",
+      "reversal": "diff --git a/src/services/settings-manager.ts b/src/services/settings-manager.ts\nindex 007ea8787..12d40ba66 100644\n--- a/src/services/settings-manager.ts\n+++ b/src/services/settings-manager.ts\n@@ -95,3 +95,3 @@ export class SettingsManager {\n         const result = await verifySecretWithApi(key, value, context);\n-        canSave = result.canSave;\n+        canSave = result.outcome === 'verified';\n         message = result.message;\n",
+      "diffSha256": "c9fd95ee877e641956c3f3093e19405d22d2b6c218153e35533ab12b50bccb66",
+      "originalSha256": "aea6b80e50da6eeb8877281aed0adc4cb983bd72f057f9aba37e81666a01e1d0",
+      "mutatedSha256": "c2feb0d8094c5a80424c431f7f8fabdc6ee856f70b0f0f4825b9da39e550b0c0",
+      "restoredSha256": "aea6b80e50da6eeb8877281aed0adc4cb983bd72f057f9aba37e81666a01e1d0",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "MANAGER02",
+      "behavior": "Only the OpenSky companion is forwarded",
+      "file": "src/services/settings-manager.ts",
+      "test": "src/services/__tests__/settings-manager-verification.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=a check gets only the companion",
+        "src/services/__tests__/settings-manager-verification.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "a check gets only the companion value for its own key"
+      ],
+      "assertion": "Expected values to be strictly deep-equal; the actual result contained an unexpected error or context field. Fixture values omitted.",
+      "reversal": "diff --git a/src/services/settings-manager.ts b/src/services/settings-manager.ts\nindex 007ea8787..d8891d6b3 100644\n--- a/src/services/settings-manager.ts\n+++ b/src/services/settings-manager.ts\n@@ -91,3 +91,3 @@ export class SettingsManager {\n       if (local.valid) {\n-        const context: Partial<Record<RuntimeSecretKey, string>> = {};\n+        const context: Partial<Record<RuntimeSecretKey, string>> = Object.fromEntries(drafts);\n         const companion = companions[key];\n",
+      "diffSha256": "63fb6beff93c0959fc54163c773f9262b388f3d495eef2efd0431b58a4717f57",
+      "originalSha256": "aea6b80e50da6eeb8877281aed0adc4cb983bd72f057f9aba37e81666a01e1d0",
+      "mutatedSha256": "1213b834db2bde4c27b4b81872fe2e7c51c36e16e0c0eea1514ac9bbcc871b7b",
+      "restoredSha256": "aea6b80e50da6eeb8877281aed0adc4cb983bd72f057f9aba37e81666a01e1d0",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "MANAGER03",
+      "behavior": "Reject an ABA draft edit during verification",
+      "file": "src/services/settings-manager.ts",
+      "test": "src/services/__tests__/settings-manager-verification.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=editing and restoring text during verification",
+        "src/services/__tests__/settings-manager-verification.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "editing and restoring text during verification invalidates the batch"
+      ],
+      "assertion": "error: |-\n    The expression evaluated to a falsy value:\n    \n      assert.ok((await checking).length)\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: 0\n  operator: '=='\n",
+      "reversal": "diff --git a/src/services/settings-manager.ts b/src/services/settings-manager.ts\nindex 007ea8787..9ab0a65d6 100644\n--- a/src/services/settings-manager.ts\n+++ b/src/services/settings-manager.ts\n@@ -98,3 +98,3 @@ export class SettingsManager {\n       }\n-      if (revision !== this.revision) return ['The draft changed. Review it and save again.'];\n+      \n       this.setValidation(key, canSave, message);\n",
+      "diffSha256": "5a273fa980fa9a43d0fce421463cf788da28d16966dde40484287290cf374eda",
+      "originalSha256": "aea6b80e50da6eeb8877281aed0adc4cb983bd72f057f9aba37e81666a01e1d0",
+      "mutatedSha256": "267e5fd84babef2f26c824c17071b987840eb8cded491ed802a01522dd01b9b5",
+      "restoredSha256": "aea6b80e50da6eeb8877281aed0adc4cb983bd72f057f9aba37e81666a01e1d0",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "MANAGER04",
+      "behavior": "Preserve subsequent edits during an outstanding vault write",
+      "file": "src/services/settings-manager.ts",
+      "test": "src/services/__tests__/settings-manager-verification.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=an edit during a vault write survives",
+        "src/services/__tests__/settings-manager-verification.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "an edit during a vault write survives and unchecked later keys are never written"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + undefined\n    - 'sample-b'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'sample-b'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/settings-manager.ts b/src/services/settings-manager.ts\nindex 007ea8787..e38465004 100644\n--- a/src/services/settings-manager.ts\n+++ b/src/services/settings-manager.ts\n@@ -122,3 +122,3 @@ export class SettingsManager {\n       await setSecretValue(key, value);\n-      if (this.revision !== revision) return;\n+      \n       this.pendingSecrets.delete(key);\n",
+      "diffSha256": "b6b5c6b4da3dc71e4a0e79effec00a30bb6f4c57741a13dbaa59207cf2d47747",
+      "originalSha256": "aea6b80e50da6eeb8877281aed0adc4cb983bd72f057f9aba37e81666a01e1d0",
+      "mutatedSha256": "a27daba2a2081960b0a4d698b5537f245b88cb56647ca8e499890f156f358b58",
+      "restoredSha256": "aea6b80e50da6eeb8877281aed0adc4cb983bd72f057f9aba37e81666a01e1d0",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "ROUTE01",
+      "behavior": "A stored desktop check cannot be replaced by a typed bearer value",
+      "file": "src-tauri/sidecar/local-api-server.mjs",
+      "test": "src-tauri/sidecar/local-api-server.test.mjs",
+      "command": [
+        "node",
+        "tests/helpers/run-isolated-mcp.mjs",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=stored validation ignores renderer value and companion overrides",
+        "src-tauri/sidecar/local-api-server.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "stored validation ignores renderer value and companion overrides, emits no secret or provider text"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'typed-value-canary'\n    - 'stored-client-canary'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'stored-client-canary'\n  actual: 'typed-value-canary'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/local-api-server.mjs b/src-tauri/sidecar/local-api-server.mjs\nindex 338e2aa39..8be224531 100644\n--- a/src-tauri/sidecar/local-api-server.mjs\n+++ b/src-tauri/sidecar/local-api-server.mjs\n@@ -15416,3 +15416,3 @@ function legacyNewsItems(items) {\n  // holds it. Check this process's own copy, delivered by native.\n- const candidate = useStored === true ? process.env[key] : value;\n+ const candidate = value || process.env[key];\n  const validateSecretAgainstProvider = context.verifyCredential;\n",
+      "diffSha256": "e4f16744ca10d58a89f943608f9dc39fc02a3500bbb18d0d78dc80ae1287018b",
+      "originalSha256": "ba490857386caec5027537f4974cc18267d1e5c6efce010fe4d0318b1c18a3d9",
+      "mutatedSha256": "f5af977d25dda5f5b35675d897f7ef85a4f7859e6277b719eaadf19e58304c52",
+      "restoredSha256": "ba490857386caec5027537f4974cc18267d1e5c6efce010fe4d0318b1c18a3d9",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "ROUTE02",
+      "behavior": "A renderer context override cannot replace the stored OpenSky companion",
+      "file": "src-tauri/sidecar/local-api-server.mjs",
+      "test": "src-tauri/sidecar/local-api-server.test.mjs",
+      "command": [
+        "node",
+        "tests/helpers/run-isolated-mcp.mjs",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=stored validation ignores renderer value and companion overrides",
+        "src-tauri/sidecar/local-api-server.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "stored validation ignores renderer value and companion overrides, emits no secret or provider text"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'typed-partner-canary'\n    - 'stored-partner-canary'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'stored-partner-canary'\n  actual: 'typed-partner-canary'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/local-api-server.mjs b/src-tauri/sidecar/local-api-server.mjs\nindex 338e2aa39..d27c021a4 100644\n--- a/src-tauri/sidecar/local-api-server.mjs\n+++ b/src-tauri/sidecar/local-api-server.mjs\n@@ -15411,3 +15411,3 @@ function legacyNewsItems(items) {\n  const partner = key === 'OPENSKY_CLIENT_ID' ? 'OPENSKY_CLIENT_SECRET' : 'OPENSKY_CLIENT_ID';\n- const companion = useStored === true ? process.env[partner] : suppliedContext?.[partner];\n+ const companion = suppliedContext?.[partner] ?? process.env[partner];\n  if (typeof companion === 'string' && companion.length <= 8192 && !/[\\r\\n\\0]/.test(companion)) safeContext[partner] = companion;\n",
+      "diffSha256": "5ce51067b00ec4550f6ea310ccd4a7c0421c15157de9ba668cacf675fb97eeaf",
+      "originalSha256": "ba490857386caec5027537f4974cc18267d1e5c6efce010fe4d0318b1c18a3d9",
+      "mutatedSha256": "e4f0ce4c064c744829f3b52c82733f63c6e97f8139a7e30424bff9669b77213f",
+      "restoredSha256": "ba490857386caec5027537f4974cc18267d1e5c6efce010fe4d0318b1c18a3d9",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "SIDECAR01",
+      "behavior": "Each protected provider requires its own success payload",
+      "file": "src-tauri/sidecar/credential-verification.mjs",
+      "test": "src-tauri/sidecar/__tests__/credential-verification.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=retains provider-specific verification",
+        "src-tauri/sidecar/__tests__/credential-verification.test.mjs"
+      ],
+      "greenBefore": 32,
+      "redPassed": 0,
+      "redFailed": 32,
+      "greenAfter": 32,
+      "failingTests": [
+        "GROQ_API_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "ANTHROPIC_API_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "FRED_API_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "EIA_API_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "CLOUDFLARE_API_TOKEN retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "ACLED_ACCESS_TOKEN retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "URLHAUS_AUTH_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "THREATFOX_API_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "OTX_API_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "ABUSEIPDB_API_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "VIRUSTOTAL_API_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "URLSCAN_API_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "VULNERS_API_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "BITCOINABUSE_API_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "WINGBITS_API_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "FINNHUB_API_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "FMP_API_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "AIRNOW_API_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "PURPLEAIR_API_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "NEWSAPI_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "NEWSDATA_API_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "MEDIASTACK_API_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "AVIATIONSTACK_API retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "OWM_API_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "NASA_API_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "OPENSKY_CLIENT_ID retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "OPENSKY_CLIENT_SECRET retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "GOOGLE_MAPS_API_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "MAPBOX_API_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "MAPTILER_API_KEY retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "CESIUM_ION_TOKEN retains provider-specific verification while rejecting generic success and local-looking auth errors",
+        "GEONAMES_USERNAME retains provider-specific verification while rejecting generic success and local-looking auth errors"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'verified'\n    - 'unavailable'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'unavailable'\n  actual: 'verified'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/credential-verification.mjs b/src-tauri/sidecar/credential-verification.mjs\nindex 85765c63c..2fae70fd4 100644\n--- a/src-tauri/sidecar/credential-verification.mjs\n+++ b/src-tauri/sidecar/credential-verification.mjs\n@@ -243,3 +243,3 @@ function classify(key, response, text) {\n  if (key === 'NASA_FIRMS_API_KEY') return text.startsWith('latitude,longitude,') ? verified() : unavailable();\n- return SHAPES[key]?.(payload, response) ? verified() : unavailable();\n+ return response.ok ? verified() : unavailable();\n }\n",
+      "diffSha256": "f4f0219a55723e147ed2af39ed56a6fbb7d37efc89b344cee02fe0b7f0886562",
+      "originalSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "mutatedSha256": "2b3e6fb84547c78f953be399c7d1583c31b62f457997aeff3211edbc8f41d539",
+      "restoredSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "SIDECAR02",
+      "behavior": "Provider rejection requires an authentication-specific code",
+      "file": "src-tauri/sidecar/credential-verification.mjs",
+      "test": "src-tauri/sidecar/__tests__/credential-verification.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=unstructured 401, missing-key and scope errors",
+        "src-tauri/sidecar/__tests__/credential-verification.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "unstructured 401, missing-key and scope errors never become provider rejection"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'rejected'\n    - 'unavailable'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'unavailable'\n  actual: 'rejected'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/credential-verification.mjs b/src-tauri/sidecar/credential-verification.mjs\nindex 85765c63c..4fa2684a8 100644\n--- a/src-tauri/sidecar/credential-verification.mjs\n+++ b/src-tauri/sidecar/credential-verification.mjs\n@@ -240,3 +240,3 @@ function classify(key, response, text) {\n  const authStatus = key === 'GROQ_API_KEY' || key === 'ANTHROPIC_API_KEY' ? response.status === 401 : [200,400,401,403].includes(response.status);\n- if (authStatus && AUTH_CODES[key]?.(payload)) return rejected();\n+ if (response.status === 401 || (authStatus && AUTH_CODES[key]?.(payload))) return rejected();\n  if (!response.ok || payload?.error || (Array.isArray(payload?.errors) ? payload.errors.length > 0 : payload?.errors) || payload?.status === 'error') return unavailable();\n",
+      "diffSha256": "a3bfeb69dccbaa9f54f835be131378b3247a33fb824391b35a69edb31e1b5e29",
+      "originalSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "mutatedSha256": "08ae7084d682c60301905fb40d645ba8e2e95e7c494380a7837302403c2fc5ef",
+      "restoredSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "SIDECAR03",
+      "behavior": "Do not transmit credentials to public model endpoints",
+      "file": "src-tauri/sidecar/credential-verification.mjs",
+      "test": "src-tauri/sidecar/__tests__/credential-verification.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=public endpoints and local settings",
+        "src-tauri/sidecar/__tests__/credential-verification.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "public endpoints and local settings do not claim verification or send credentials"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'unavailable'\n    - 'not-probed'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'not-probed'\n  actual: 'unavailable'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/credential-verification.mjs b/src-tauri/sidecar/credential-verification.mjs\nindex 85765c63c..583011894 100644\n--- a/src-tauri/sidecar/credential-verification.mjs\n+++ b/src-tauri/sidecar/credential-verification.mjs\n@@ -3,2 +3,3 @@ function providerRequest(key, value) {\n  switch (key) {\n+ case 'OPENROUTER_API_KEY': return ['https://openrouter.ai/api/v1/models', { headers: { Authorization: 'Bearer ' + value } }];\n  case 'GROQ_API_KEY': { return ['https://api.groq.com/openai/v1/models', {\n@@ -292,3 +293,3 @@ export function createCredentialVerifier({ fetch, now = Date.now, deadlineMs = 1\n   const value = rawValue.trim();\n-  if (NON_AUTH_PROBES.has(key)) return unsupported();\n+  if (false) return unsupported();\n   const request = requestFor(key, value, context);\n",
+      "diffSha256": "996e256bfb3d7d50003e1b10c3b45edf39019b8e51e48aecff04b1a7031269be",
+      "originalSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "mutatedSha256": "1237ead16732ece7e3638059f71d4fcbfa2dbc3ab1e53b69093e08928e8f6789",
+      "restoredSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "SIDECAR04",
+      "behavior": "No follow-redirect on secret-bearing requests",
+      "file": "src-tauri/sidecar/credential-verification.mjs",
+      "test": "src-tauri/sidecar/__tests__/credential-verification.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=bounded transport disables redirects",
+        "src-tauri/sidecar/__tests__/credential-verification.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "bounded transport disables redirects and strips errors"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    'follow' !== 'error'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'error'\n  actual: 'follow'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/credential-verification.mjs b/src-tauri/sidecar/credential-verification.mjs\nindex 85765c63c..b47f33e66 100644\n--- a/src-tauri/sidecar/credential-verification.mjs\n+++ b/src-tauri/sidecar/credential-verification.mjs\n@@ -269,3 +269,3 @@ async function probeWithDeadline(fetch, request, key, duration) {\n    const [url, init] = request;\n-   const response = await fetch(url, { ...init, redirect:'error', maxResponseBytes:262_144, signal:controller.signal }, duration);\n+   const response = await fetch(url, { ...init, redirect:'follow', maxResponseBytes:262_144, signal:controller.signal }, duration);\n    const text = await response.text();\n",
+      "diffSha256": "6d5548d255db4bd0963cea12b50e9a6cdf49775c79d4360471dd6b771c4dc8b2",
+      "originalSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "mutatedSha256": "b8ffe4a672bf7a109055e68ea6042cee3f0c27eea0b062463fe8a0c61720406b",
+      "restoredSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "SIDECAR05",
+      "behavior": "Bound credential fetch transport response size",
+      "file": "src-tauri/sidecar/credential-verification.mjs",
+      "test": "src-tauri/sidecar/__tests__/credential-verification.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=bounded transport disables redirects",
+        "src-tauri/sidecar/__tests__/credential-verification.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "bounded transport disables redirects and strips errors"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    524288 !== 262144\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 262144\n  actual: 524288\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/credential-verification.mjs b/src-tauri/sidecar/credential-verification.mjs\nindex 85765c63c..e0f840031 100644\n--- a/src-tauri/sidecar/credential-verification.mjs\n+++ b/src-tauri/sidecar/credential-verification.mjs\n@@ -269,3 +269,3 @@ async function probeWithDeadline(fetch, request, key, duration) {\n    const [url, init] = request;\n-   const response = await fetch(url, { ...init, redirect:'error', maxResponseBytes:262_144, signal:controller.signal }, duration);\n+   const response = await fetch(url, { ...init, redirect:'error', maxResponseBytes:524_288, signal:controller.signal }, duration);\n    const text = await response.text();\n",
+      "diffSha256": "5f493d2b26a8d78ee2f7b3dfae8013f3377d76cf7a739e893bb6eb5ac37351f6",
+      "originalSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "mutatedSha256": "d3f840675a696bbb519ade28a86f3fa0773cad99771313bdcfafbe78942502b8",
+      "restoredSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "SIDECAR06",
+      "behavior": "Only identical in-flight attempts share results",
+      "file": "src-tauri/sidecar/credential-verification.mjs",
+      "test": "src-tauri/sidecar/__tests__/credential-verification.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=two probes maximum, overlapping",
+        "src-tauri/sidecar/__tests__/credential-verification.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "two probes maximum, overlapping and recent credential attempts never queue"
+      ],
+      "assertion": "error: |-\n    Expected \"actual\" to be reference-equal to \"expected\":\n    + actual - expected\n    \n    + {\n    +   outcome: 'unavailable',\n    +   reason: 'cooldown'\n    - Promise {\n    -   <pending>,\n    -   [Symbol(async_id_symbol)]: 241,\n    -   [Symbol(trigger_async_id_symbol)]: 230\n      }\n    \n  code: 'ERR_TEST_FAILURE'\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 12157.130875",
+      "reversal": "diff --git a/src-tauri/sidecar/credential-verification.mjs b/src-tauri/sidecar/credential-verification.mjs\nindex 85765c63c..55d9ab4d4 100644\n--- a/src-tauri/sidecar/credential-verification.mjs\n+++ b/src-tauri/sidecar/credential-verification.mjs\n@@ -297,3 +297,3 @@ export function createCredentialVerifier({ fetch, now = Date.now, deadlineMs = 1\n   const running = inFlight.get(key);\n-  if (running && running.value === value && running.companion === companion) return running.promise;\n+  if (false) return running.promise;\n   const started = now();\n",
+      "diffSha256": "2307e246e7b85715f52043e0e95dcd2005b8e77753bcee0dd2fda1a1a8450fd2",
+      "originalSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "mutatedSha256": "befb3abb51471db17eb4a3dbcf396a8da8e78e6fda6c55cb92382ab1245c3b3e",
+      "restoredSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "SIDECAR07",
+      "behavior": "At most two provider calls run at once",
+      "file": "src-tauri/sidecar/credential-verification.mjs",
+      "test": "src-tauri/sidecar/__tests__/credential-verification.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=two probes maximum, overlapping",
+        "src-tauri/sidecar/__tests__/credential-verification.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "two probes maximum, overlapping and recent credential attempts never queue"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 2\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 2\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/credential-verification.mjs b/src-tauri/sidecar/credential-verification.mjs\nindex 85765c63c..59e242ad2 100644\n--- a/src-tauri/sidecar/credential-verification.mjs\n+++ b/src-tauri/sidecar/credential-verification.mjs\n@@ -300,3 +300,3 @@ export function createCredentialVerifier({ fetch, now = Date.now, deadlineMs = 1\n   if (lastAttempt.has(key) && started - lastAttempt.get(key) < 60_000) return unavailable('cooldown');\n-  if (active >= 2) return unavailable('concurrency-limit');\n+  if (active >= 1) return unavailable('concurrency-limit');\n   lastAttempt.set(key, started);\n",
+      "diffSha256": "aa9f665b313944bcd17f7ba167d096eea8181a9340bdc73ebb013325b90ced21",
+      "originalSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "mutatedSha256": "e1b961116ac4c33136e1c3c213e9ee76eeb877ccf4b54f7a815d6f715f89dd2d",
+      "restoredSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "SIDECAR08",
+      "behavior": "Start the subsequent check exactly when cooldown ends",
+      "file": "src-tauri/sidecar/credential-verification.mjs",
+      "test": "src-tauri/sidecar/__tests__/credential-verification.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=two probes maximum, overlapping",
+        "src-tauri/sidecar/__tests__/credential-verification.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "two probes maximum, overlapping and recent credential attempts never queue"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'unavailable'\n    - 'verified'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'verified'\n  actual: 'unavailable'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/credential-verification.mjs b/src-tauri/sidecar/credential-verification.mjs\nindex 85765c63c..a380a1117 100644\n--- a/src-tauri/sidecar/credential-verification.mjs\n+++ b/src-tauri/sidecar/credential-verification.mjs\n@@ -299,3 +299,3 @@ export function createCredentialVerifier({ fetch, now = Date.now, deadlineMs = 1\n   const started = now();\n-  if (lastAttempt.has(key) && started - lastAttempt.get(key) < 60_000) return unavailable('cooldown');\n+  if (lastAttempt.has(key) && started - lastAttempt.get(key) <= 60_000) return unavailable('cooldown');\n   if (active >= 2) return unavailable('concurrency-limit');\n",
+      "diffSha256": "1deef356d336aa1917dc4b029eaf6ef396bfd0a126b7ce245b89c974d3be1b35",
+      "originalSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "mutatedSha256": "e4103b3446c4dd339c04bd1af85d0a4a9dd1a64050afdcb95695c41d35affa50",
+      "restoredSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "SIDECAR09",
+      "behavior": "Overall deadline includes body completion",
+      "file": "src-tauri/sidecar/credential-verification.mjs",
+      "test": "src-tauri/sidecar/__tests__/credential-verification.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=total deadline includes unread response body",
+        "src-tauri/sidecar/__tests__/credential-verification.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "total deadline includes unread response body"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + 'exceeded-deadline'\n    - {\n    -   outcome: 'unavailable',\n    -   reason: 'timeout'\n    - }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    outcome: 'unavailable'\n    reason: 'timeout'\n  actual: 'exceeded-deadline'\n  operator: 'deepStrictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/credential-verification.mjs b/src-tauri/sidecar/credential-verification.mjs\nindex 85765c63c..ea477e4db 100644\n--- a/src-tauri/sidecar/credential-verification.mjs\n+++ b/src-tauri/sidecar/credential-verification.mjs\n@@ -274,3 +274,3 @@ async function probeWithDeadline(fetch, request, key, duration) {\n   })();\n-  return await Promise.race([probe, deadline]);\n+  return await probe;\n  } catch {\n",
+      "diffSha256": "9878e508ebda8cde73d1930b32dede859be59fc5f14dd8b573832259f97c7e46",
+      "originalSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "mutatedSha256": "9c11ae1659a5dc45529cb8077899fabe5101c4d48abb02d96b6cac2a3ddaa152",
+      "restoredSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "SIDECAR10",
+      "behavior": "One OpenSky credential check sends only the documented pair",
+      "file": "src-tauri/sidecar/credential-verification.mjs",
+      "test": "src-tauri/sidecar/__tests__/credential-verification.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=OpenSky pair context only forwards",
+        "src-tauri/sidecar/__tests__/credential-verification.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "OpenSky pair context only forwards required companion and never invents acceptance"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'unavailable'\n    - 'verified'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'verified'\n  actual: 'unavailable'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/credential-verification.mjs b/src-tauri/sidecar/credential-verification.mjs\nindex 85765c63c..16a47a1a0 100644\n--- a/src-tauri/sidecar/credential-verification.mjs\n+++ b/src-tauri/sidecar/credential-verification.mjs\n@@ -225,3 +225,3 @@ function requestFor(key, value, context) {\n   if (typeof clientId !== 'string' || !clientId.trim() || typeof clientSecret !== 'string' || !clientSecret.trim()) return null;\n-  return ['https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:new URLSearchParams({grant_type:'client_credentials',client_id:clientId,client_secret:clientSecret}) }];\n+  return ['https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:new URLSearchParams({grant_type:'client_credentials',client_id:clientId,client_secret:clientSecret,...context}) }];\n  }\n",
+      "diffSha256": "8e1e85fecd730e536e79c50d50a6fa05e9f3ac041d6c1d09639da2931a265182",
+      "originalSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "mutatedSha256": "871f26de4c0142d800c22c088d9c3499fda65c25d4526ab0f421945a938c4bd1",
+      "restoredSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "SIDECAR11",
+      "behavior": "Large otherwise-valid content cannot verify a key",
+      "file": "src-tauri/sidecar/credential-verification.mjs",
+      "test": "src-tauri/sidecar/__tests__/credential-verification.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=a large otherwise-valid body cannot",
+        "src-tauri/sidecar/__tests__/credential-verification.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "a large otherwise-valid body cannot establish verification"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   outcome: 'verified',\n    +   reason: 'provider-accepted'\n    -   outcome: 'unavailable',\n    -   reason: 'inconclusive-response'\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    outcome: 'unavailable'\n    reason: 'inconclusive-response'\n  actual:\n    outcome: 'verified'\n    reason: 'provider-accepted'\n  operator: 'deepStrictE",
+      "reversal": "diff --git a/src-tauri/sidecar/credential-verification.mjs b/src-tauri/sidecar/credential-verification.mjs\nindex 85765c63c..bb2c911bc 100644\n--- a/src-tauri/sidecar/credential-verification.mjs\n+++ b/src-tauri/sidecar/credential-verification.mjs\n@@ -271,3 +271,3 @@ async function probeWithDeadline(fetch, request, key, duration) {\n    const text = await response.text();\n-   if (Buffer.byteLength(text) > 262_144) return unavailable();\n+   if (false) return unavailable();\n    return classify(key, response, text);\n",
+      "diffSha256": "4dc88dac29186e484f2c5b6ae3a498673f7e0d40d504c63d119bf69a479775fc",
+      "originalSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "mutatedSha256": "c7393d1f0e5d7d0530dcd3032547ee294eac25e580b8eb36df6dfad3b65957fa",
+      "restoredSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "SIDECAR12",
+      "behavior": "Cloudflare successful responses with empty error lists are valid",
+      "file": "src-tauri/sidecar/credential-verification.mjs",
+      "test": "src-tauri/sidecar/__tests__/credential-verification.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=Cloudflare success envelope permits",
+        "src-tauri/sidecar/__tests__/credential-verification.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "Cloudflare success envelope permits its empty errors array"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   outcome: 'unavailable',\n    +   reason: 'inconclusive-response'\n    -   outcome: 'verified',\n    -   reason: 'provider-accepted'\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    outcome: 'verified'\n    reason: 'provider-accepted'\n  actual:\n    outcome: 'unavailable'\n    reason: 'inconclusive-response'\n  operator: 'deepStrictE",
+      "reversal": "diff --git a/src-tauri/sidecar/credential-verification.mjs b/src-tauri/sidecar/credential-verification.mjs\nindex 85765c63c..c93b57c76 100644\n--- a/src-tauri/sidecar/credential-verification.mjs\n+++ b/src-tauri/sidecar/credential-verification.mjs\n@@ -241,3 +241,3 @@ function classify(key, response, text) {\n  if (authStatus && AUTH_CODES[key]?.(payload)) return rejected();\n- if (!response.ok || payload?.error || (Array.isArray(payload?.errors) ? payload.errors.length > 0 : payload?.errors) || payload?.status === 'error') return unavailable();\n+ if (!response.ok || payload?.error || payload?.errors || payload?.status === 'error') return unavailable();\n  if (key === 'NASA_FIRMS_API_KEY') return text.startsWith('latitude,longitude,') ? verified() : unavailable();\n",
+      "diffSha256": "233ebb10e6471385dba2622935da19be9086dcf09399a2837a6de7443ba422d4",
+      "originalSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "mutatedSha256": "6d407289e0b0a8135a08089efc0dd415331e00a5e9b99d10c50a91c50ed08767",
+      "restoredSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "SIDECAR13",
+      "behavior": "Local settings with unsupported schemes fail format rather than transmitting",
+      "file": "src-tauri/sidecar/credential-verification.mjs",
+      "test": "src-tauri/sidecar/__tests__/credential-verification.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=URL settings never probe private",
+        "src-tauri/sidecar/__tests__/credential-verification.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "URL settings never probe private, metadata or redirected destinations"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'not-probed'\n    - 'invalid-format'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'invalid-format'\n  actual: 'not-probed'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/credential-verification.mjs b/src-tauri/sidecar/credential-verification.mjs\nindex 85765c63c..e8b82cefc 100644\n--- a/src-tauri/sidecar/credential-verification.mjs\n+++ b/src-tauri/sidecar/credential-verification.mjs\n@@ -253,3 +253,3 @@ function localCandidateResult(key, rawValue) {\n    const protocols = key === 'OLLAMA_API_URL' ? ['http:','https:'] : ['http:','https:','ws:','wss:'];\n-   if (!protocols.includes(url.protocol) || url.username || url.password) return result('invalid-format','invalid-format');\n+   if (url.username || url.password) return result('invalid-format','invalid-format');\n   } catch { return result('invalid-format','invalid-format'); }\n",
+      "diffSha256": "4a0cf784550cf63e7a55daccf746d4a5da4f64f334db641c8a448ff29d9445d0",
+      "originalSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "mutatedSha256": "3d8d2fe122662a3e2c09d6148687176b5be201df036159f50c88d14d0c78c88e",
+      "restoredSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "SIDECAR14",
+      "behavior": "Recognize only NASA FIRMS CSV contract",
+      "file": "src-tauri/sidecar/credential-verification.mjs",
+      "test": "src-tauri/sidecar/__tests__/credential-verification.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=NASA FIRMS requires the known CSV header",
+        "src-tauri/sidecar/__tests__/credential-verification.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "NASA FIRMS requires the known CSV header rather than generic HTTP success"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'verified'\n    - 'unavailable'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'unavailable'\n  actual: 'verified'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/credential-verification.mjs b/src-tauri/sidecar/credential-verification.mjs\nindex 85765c63c..22115b70b 100644\n--- a/src-tauri/sidecar/credential-verification.mjs\n+++ b/src-tauri/sidecar/credential-verification.mjs\n@@ -242,3 +242,3 @@ function classify(key, response, text) {\n  if (!response.ok || payload?.error || (Array.isArray(payload?.errors) ? payload.errors.length > 0 : payload?.errors) || payload?.status === 'error') return unavailable();\n- if (key === 'NASA_FIRMS_API_KEY') return text.startsWith('latitude,longitude,') ? verified() : unavailable();\n+ if (key === 'NASA_FIRMS_API_KEY') return response.ok ? verified() : unavailable();\n  return SHAPES[key]?.(payload, response) ? verified() : unavailable();\n",
+      "diffSha256": "51a8097aaf90bc3f42e5fda6caf3c8d53660d6aaac7efab8252d0d1486da9426",
+      "originalSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "mutatedSha256": "e8bf98cdf39765ffd05d8d51ab1111d8dafd2efa1c07d74098ea1327dea928b8",
+      "restoredSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "SIDECAR15",
+      "behavior": "A real authentication error can reject a key",
+      "file": "src-tauri/sidecar/credential-verification.mjs",
+      "test": "src-tauri/sidecar/__tests__/credential-verification.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=provider evidence requires auth-dependent payload",
+        "src-tauri/sidecar/__tests__/credential-verification.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "provider evidence requires auth-dependent payload and never treats outages as evidence"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'unavailable'\n    - 'rejected'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'rejected'\n  actual: 'unavailable'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src-tauri/sidecar/credential-verification.mjs b/src-tauri/sidecar/credential-verification.mjs\nindex 85765c63c..dadec926e 100644\n--- a/src-tauri/sidecar/credential-verification.mjs\n+++ b/src-tauri/sidecar/credential-verification.mjs\n@@ -240,3 +240,3 @@ function classify(key, response, text) {\n  const authStatus = key === 'GROQ_API_KEY' || key === 'ANTHROPIC_API_KEY' ? response.status === 401 : [200,400,401,403].includes(response.status);\n- if (authStatus && AUTH_CODES[key]?.(payload)) return rejected();\n+ if (authStatus && AUTH_CODES[key]?.(payload)) return unavailable();\n  if (!response.ok || payload?.error || (Array.isArray(payload?.errors) ? payload.errors.length > 0 : payload?.errors) || payload?.status === 'error') return unavailable();\n",
+      "diffSha256": "95d0c19c534f44f1077a14b1d6e01c56d56bc08da8633375b97f3951fc8b7dce",
+      "originalSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "mutatedSha256": "eb56ff907ab86b7144e41438e504129483f026d64676a72fd506e5d00bd39259",
+      "restoredSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "SIDE16",
+      "behavior": "URLScan requires user scope and rejects anonymous quotas",
+      "file": "src-tauri/sidecar/credential-verification.mjs",
+      "test": "src-tauri/sidecar/__tests__/credential-verification.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=URLScan anonymous quota payload never verifies",
+        "src-tauri/sidecar/__tests__/credential-verification.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "URLScan anonymous quota payload never verifies an API key"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   outcome: 'verified',\n    +   reason: 'provider-accepted'\n    -   outcome: 'unavailable',\n    -   reason: 'inconclusive-response'\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    outcome: 'unavailable'\n    reason: 'inconclusive-response'\n  actual:\n    outcome: 'verified'\n    reason: 'provider-accepted'\n  operator: 'deepStrictE",
+      "reversal": "diff --git a/src-tauri/sidecar/credential-verification.mjs b/src-tauri/sidecar/credential-verification.mjs\nindex 85765c63c..deb94f687 100644\n--- a/src-tauri/sidecar/credential-verification.mjs\n+++ b/src-tauri/sidecar/credential-verification.mjs\n@@ -197,3 +197,3 @@ const SHAPES = {\n  VIRUSTOTAL_API_KEY: p => object(p?.data) && p.data.type === 'file',\n- URLSCAN_API_KEY: (p, response) => object(p?.limits) && response.headers?.get('x-rate-limit-scope') === 'user',\n+ URLSCAN_API_KEY: (p, response) => object(p?.limits),\n  VULNERS_API_KEY: p => p?.result === 'OK' && p?.data?.valid === true,\n",
+      "diffSha256": "20d557b0d69e6bc975dfbde7c826b08210dfe5d5a9e9fd8d6534276627140468",
+      "originalSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "mutatedSha256": "a0effd928b6f28896ab9df9a960652432770df660a09272dd68b1f3fa12acf73",
+      "restoredSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "SIDE17",
+      "behavior": "Groq and Anthropic access restrictions cannot reject a credential",
+      "file": "src-tauri/sidecar/credential-verification.mjs",
+      "test": "src-tauri/sidecar/__tests__/credential-verification.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=Groq and Anthropic 403 remain inconclusive",
+        "src-tauri/sidecar/__tests__/credential-verification.test.mjs"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "Groq and Anthropic 403 remain inconclusive even with explicit authentication codes"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   outcome: 'rejected',\n    +   reason: 'provider-rejected'\n    -   outcome: 'unavailable',\n    -   reason: 'inconclusive-response'\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    outcome: 'unavailable'\n    reason: 'inconclusive-response'\n  actual:\n    outcome: 'rejected'\n    reason: 'provider-rejected'\n  operator: 'deepStrictE",
+      "reversal": "diff --git a/src-tauri/sidecar/credential-verification.mjs b/src-tauri/sidecar/credential-verification.mjs\nindex 85765c63c..b5ec4aa12 100644\n--- a/src-tauri/sidecar/credential-verification.mjs\n+++ b/src-tauri/sidecar/credential-verification.mjs\n@@ -239,3 +239,3 @@ function classify(key, response, text) {\n  try { payload = JSON.parse(text); } catch { payload = null; }\n- const authStatus = key === 'GROQ_API_KEY' || key === 'ANTHROPIC_API_KEY' ? response.status === 401 : [200,400,401,403].includes(response.status);\n+ const authStatus = key === 'GROQ_API_KEY' || key === 'ANTHROPIC_API_KEY' ? [401,403].includes(response.status) : [200,400,401,403].includes(response.status);\n  if (authStatus && AUTH_CODES[key]?.(payload)) return rejected();\n",
+      "diffSha256": "2c3e7dde798d2233a3c585ddc2116016eb760bf51134760cf18b43044a7b072e",
+      "originalSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "mutatedSha256": "ae9e4b5dd07c27ed0d084569db3f14062c2dfd5776d5e0930aaed8665e6e4914",
+      "restoredSha256": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "UI01",
+      "behavior": "Visible dashboard age updates in place when evidence changes",
+      "file": "src/components/KeyDashboard.ts",
+      "test": "src/components/__tests__/key-dashboard-secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=age refresh updates saved evidence",
+        "src/components/__tests__/key-dashboard-secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "age refresh updates saved evidence in place without checking or stealing focus"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'verified'\n    - 'stale'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'stale'\n  actual: 'verified'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/KeyDashboard.ts b/src/components/KeyDashboard.ts\nindex c07efd76b..954f59597 100644\n--- a/src/components/KeyDashboard.ts\n+++ b/src/components/KeyDashboard.ts\n@@ -44,3 +44,3 @@ export class KeyDashboard {\n     document.addEventListener('visibilitychange', this.refreshVisible);\n-    window.addEventListener('cb:credential-evidence-changed', this.refreshVisible);\n+    void this.refreshVisible;\n   }\n",
+      "diffSha256": "9c5d046696d73d9dfb30d3dd1a9dc8e01dfb4684751d6ac54df8e5dfd270b048",
+      "originalSha256": "3a94117ef49c941e9c7dc653edbce720b78716d54f907e92d19082eff5b96137",
+      "mutatedSha256": "17f8b824b09e2054f8eac63862964ff7cda8d18e8156ffb7c3ddaf95b7a5979b",
+      "restoredSha256": "3a94117ef49c941e9c7dc653edbce720b78716d54f907e92d19082eff5b96137",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "UI02",
+      "behavior": "An exact timestamp is available on the evidence line",
+      "file": "src/components/KeyDashboard.ts",
+      "test": "src/components/__tests__/key-dashboard-secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=age refresh updates saved evidence",
+        "src/components/__tests__/key-dashboard-secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "age refresh updates saved evidence in place without checking or stealing focus"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + ''\n    - '2026-11-02T00:00:00.000Z'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: '2026-11-02T00:00:00.000Z'\n  actual: ''\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/KeyDashboard.ts b/src/components/KeyDashboard.ts\nindex c07efd76b..ac4948ec1 100644\n--- a/src/components/KeyDashboard.ts\n+++ b/src/components/KeyDashboard.ts\n@@ -324,3 +324,3 @@ export class KeyDashboard {\n     line.textContent = evidence.text;\n-    line.title = evidence.title;\n+    line.title = '';\n     line.setAttribute('aria-label', [evidence.text, evidence.title].filter(Boolean).join('. '));\n",
+      "diffSha256": "83fcf25096ca014b1e172fea3c94445b78addd20c36c3ffd7ab0aa39d59dda10",
+      "originalSha256": "3a94117ef49c941e9c7dc653edbce720b78716d54f907e92d19082eff5b96137",
+      "mutatedSha256": "8cbbc68879dd4dc24b5c80ea67a19b7f83d745e5dca831882f845e8ddd89e13a",
+      "restoredSha256": "3a94117ef49c941e9c7dc653edbce720b78716d54f907e92d19082eff5b96137",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "UI03",
+      "behavior": "An edited or retired draft cannot apply a late response",
+      "file": "src/components/KeyDashboard.ts",
+      "test": "src/components/__tests__/key-dashboard-secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=an edited draft discards its in-flight result",
+        "src/components/__tests__/key-dashboard-secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "an edited draft discards its in-flight result and cannot label the saved credential"
+      ],
+      "assertion": "error: |-\n    The input was expected to not match the regular expression /synthetic-canary|Testing\u2026|Draft.*rejected/i. Input:\n    \n    '1 of 3 configured\u25b6 Run Setup WizardTier 1 \u2014 Core LLMs (1 of 3)\u2713GROQ_API_KEYverifiedTestSaveClearDraft \u00b7 synthetic-canary-error\u25cbOLLAMA_API_URLNot configuredTestSaveClear\u25cbANTHROPIC_API_KEYNot configuredTestSaveClear'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual: '1 of 3 configured\u25b6 Run Setup W",
+      "reversal": "diff --git a/src/components/KeyDashboard.ts b/src/components/KeyDashboard.ts\nindex c07efd76b..5ea477db0 100644\n--- a/src/components/KeyDashboard.ts\n+++ b/src/components/KeyDashboard.ts\n@@ -286,3 +286,3 @@ export class KeyDashboard {\n       const result = typed ? await verifySecretWithApi(key, typed) : await verifyStoredSecretWithApi(key);\n-      if (!input.isConnected || input.dataset.testing !== attempt || input.value.trim() !== typed) return;\n+      \n       if (!typed && !this.opts.isSet(key)) { this.setFeedback(key, '', 'info'); return; }\n",
+      "diffSha256": "6bb1e53adf505bde3609f7d7a9c6c28b732999304a9820f880aa6450068366bb",
+      "originalSha256": "3a94117ef49c941e9c7dc653edbce720b78716d54f907e92d19082eff5b96137",
+      "mutatedSha256": "37037536d9eedb6f64d41a534c018b0830773664f39e6738eb15cc6f3a925b92",
+      "restoredSha256": "3a94117ef49c941e9c7dc653edbce720b78716d54f907e92d19082eff5b96137",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "UI04",
+      "behavior": "Typed feedback is clearly labeled as a draft check",
+      "file": "src/components/KeyDashboard.ts",
+      "test": "src/components/__tests__/key-dashboard-secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=draft feedback is separate",
+        "src/components/__tests__/key-dashboard-secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "draft feedback is separate from saved provider evidence"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /draft.*provider verified/i. Input:\n    \n    'Provider verified'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual: 'Provider verified'\n  operator: 'match'\n",
+      "reversal": "diff --git a/src/components/KeyDashboard.ts b/src/components/KeyDashboard.ts\nindex c07efd76b..aee0946b6 100644\n--- a/src/components/KeyDashboard.ts\n+++ b/src/components/KeyDashboard.ts\n@@ -299,3 +299,3 @@ export class KeyDashboard {\n     if (draft) {\n-      this.setFeedback(key, 'Draft \u00b7 ' + result.message, result.canSave === false ? 'err' : 'info');\n+      this.setFeedback(key, result.message, result.canSave === false ? 'err' : 'info');\n       return;\n",
+      "diffSha256": "bce4a3e7c1d7e560949a1e5185829942373b3ebf03b91c22c2f0636ed18e2dec",
+      "originalSha256": "3a94117ef49c941e9c7dc653edbce720b78716d54f907e92d19082eff5b96137",
+      "mutatedSha256": "d8e83f3f2c96525894edb6249c687d4aa3a056f3a999fbb4503f0351e9ee4a25",
+      "restoredSha256": "3a94117ef49c941e9c7dc653edbce720b78716d54f907e92d19082eff5b96137",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "UI05",
+      "behavior": "A closed setup wizard must not probe a retired step",
+      "file": "src/components/SetupWizard.ts",
+      "test": "src/components/__tests__/key-dashboard-secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=closing the wizard while saving",
+        "src/components/__tests__/key-dashboard-secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "closing the wizard while saving never starts a probe on a retired step"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + [\n    +   [\n    +     'stored',\n    +     'GROQ_API_KEY'\n    +   ]\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0:\n      0: 'stored'\n      1: 'GROQ_API_KEY'\n  operator: 'deepStrictEqual'\n",
+      "reversal": "diff --git a/src/components/SetupWizard.ts b/src/components/SetupWizard.ts\nindex 48d62aa67..0d6db4519 100644\n--- a/src/components/SetupWizard.ts\n+++ b/src/components/SetupWizard.ts\n@@ -272,3 +272,3 @@ export class SetupWizard {\n     }\n-    if (!this.overlay.isConnected || !this.overlay.contains(input)) return;\n+    \n     input.value = '';\n",
+      "diffSha256": "f800aa6048861aaa21a3ab1cb79f86972775dc04fe93b57161f33509ec0a0b4d",
+      "originalSha256": "7e7ab292826f3de6f2d1a4983b24df675f67796164f71629c50c76d7976c0c45",
+      "mutatedSha256": "8208bb2110bec764d3e9387df0bd98c3cc58bcb4dd1ba7b8e305622451e7d0e2",
+      "restoredSha256": "7e7ab292826f3de6f2d1a4983b24df675f67796164f71629c50c76d7976c0c45",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "UI06",
+      "behavior": "Wizard saves first, then verifies the stored copy",
+      "file": "src/components/SetupWizard.ts",
+      "test": "src/components/__tests__/key-dashboard-secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=wizard explicitly saves before testing the stored copy",
+        "src/components/__tests__/key-dashboard-secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "wizard explicitly saves before testing the stored copy and does not expose storage errors"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + [\n    +   [\n    +     'stored',\n    +     'GROQ_API_KEY'\n    +   ]\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0:\n      0: 'stored'\n      1: 'GROQ_API_KEY'\n  operator: 'deepStrictEqual'\n",
+      "reversal": "diff --git a/src/components/SetupWizard.ts b/src/components/SetupWizard.ts\nindex 48d62aa67..1b3be2146 100644\n--- a/src/components/SetupWizard.ts\n+++ b/src/components/SetupWizard.ts\n@@ -265,3 +265,3 @@ export class SetupWizard {\n     try {\n-      await setSecretValue(step.key, value);\n+      void value;\n     } catch {\n",
+      "diffSha256": "5cdf2c28413196ef4f2d1094619813fc322fc92628fcde4e2064654f683b4030",
+      "originalSha256": "7e7ab292826f3de6f2d1a4983b24df675f67796164f71629c50c76d7976c0c45",
+      "mutatedSha256": "9bf64b4eeeaa7c332e492e2a8ad44f0b188332d7a8d79ea1a44a208ce718f195",
+      "restoredSha256": "7e7ab292826f3de6f2d1a4983b24df675f67796164f71629c50c76d7976c0c45",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "UI07",
+      "behavior": "The wizard updates its saved report after a later evidence change",
+      "file": "src/components/SetupWizard.ts",
+      "test": "src/components/__tests__/key-dashboard-secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=wizard evidence follows a later change",
+        "src/components/__tests__/key-dashboard-secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "wizard evidence follows a later change while the user reads the saved result"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /historical/. Input:\n    \n    'verified'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual: 'verified'\n  operator: 'match'\n",
+      "reversal": "diff --git a/src/components/SetupWizard.ts b/src/components/SetupWizard.ts\nindex 48d62aa67..b73642626 100644\n--- a/src/components/SetupWizard.ts\n+++ b/src/components/SetupWizard.ts\n@@ -292,3 +292,3 @@ export class SetupWizard {\n       document.addEventListener('visibilitychange', display);\n-      window.addEventListener('cb:credential-evidence-changed', display);\n+      void display;\n       this.stopEvidence = () => {\n",
+      "diffSha256": "1a124a35bf1b3b75cc8992f7c86c7936ca2addae6b1ee4e185bd9cb976588194",
+      "originalSha256": "7e7ab292826f3de6f2d1a4983b24df675f67796164f71629c50c76d7976c0c45",
+      "mutatedSha256": "14c4ad4fbf9a91d4d093960a44c51a6f67857fb472e9226e6fef39d520a038a9",
+      "restoredSha256": "7e7ab292826f3de6f2d1a4983b24df675f67796164f71629c50c76d7976c0c45",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "UI08",
+      "behavior": "Stored tests ask for the saved copy without sending a value",
+      "file": "src/components/KeyDashboard.ts",
+      "test": "src/components/__tests__/key-dashboard-secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=Test on a saved key verifies the stored copy",
+        "src/components/__tests__/key-dashboard-secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "Test on a saved key verifies the stored copy; a typed value is sent as typed"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        [\n    +     'typed',\n    -     'stored',\n          'GROQ_API_KEY',\n    +     ''\n        ]\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0:\n      0: 'stored'\n      1: 'GROQ_API_KEY'\n  actual:\n    0:\n      0: 'typed'\n      1: 'GROQ_API_KEY'\n      2: ''\n  operator: 'deepStrictEqual'\n",
+      "reversal": "diff --git a/src/components/KeyDashboard.ts b/src/components/KeyDashboard.ts\nindex c07efd76b..54b80b250 100644\n--- a/src/components/KeyDashboard.ts\n+++ b/src/components/KeyDashboard.ts\n@@ -285,3 +285,3 @@ export class KeyDashboard {\n     try {\n-      const result = typed ? await verifySecretWithApi(key, typed) : await verifyStoredSecretWithApi(key);\n+      const result = typed ? await verifySecretWithApi(key, typed) : await verifySecretWithApi(key, typed);\n       if (!input.isConnected || input.dataset.testing !== attempt || input.value.trim() !== typed) return;\n",
+      "diffSha256": "69ad5c3661f37f28adf2cd8a85e9c9a70bee6fb353ccc2b4ab5caebee998c73e",
+      "originalSha256": "3a94117ef49c941e9c7dc653edbce720b78716d54f907e92d19082eff5b96137",
+      "mutatedSha256": "50f1734300c4297c47a420c30b4d1bb85f889f5c125ff04e76f24025bfa545a1",
+      "restoredSha256": "3a94117ef49c941e9c7dc653edbce720b78716d54f907e92d19082eff5b96137",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "UI09",
+      "behavior": "Empty credentials cannot start a check",
+      "file": "src/components/KeyDashboard.ts",
+      "test": "src/components/__tests__/key-dashboard-secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=Test on an unset key sends nothing",
+        "src/components/__tests__/key-dashboard-secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "Test on an unset key sends nothing"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + [\n    +   [\n    +     'stored',\n    +     'ANTHROPIC_API_KEY'\n    +   ]\n    + ]\n    - []\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n    0:\n      0: 'stored'\n      1: 'ANTHROPIC_API_KEY'\n  operator: 'deepStrictEqual'\n",
+      "reversal": "diff --git a/src/components/KeyDashboard.ts b/src/components/KeyDashboard.ts\nindex c07efd76b..9f93432db 100644\n--- a/src/components/KeyDashboard.ts\n+++ b/src/components/KeyDashboard.ts\n@@ -280,3 +280,3 @@ export class KeyDashboard {\n     const typed = input.value.trim();\n-    if (!typed && !this.opts.isSet(key)) { this.setFeedback(key, 'No value to test', 'err'); return; }\n+    if (false) { this.setFeedback(key, 'No value to test', 'err'); return; }\n     const attempt = String(++this.attempt);\n",
+      "diffSha256": "b6cf3589a383782d2448df039be72955ac260c67f35e91fabe0a8bc190fffebd",
+      "originalSha256": "3a94117ef49c941e9c7dc653edbce720b78716d54f907e92d19082eff5b96137",
+      "mutatedSha256": "41d2cc8040ea0e40f40aa96c5c828d96012dcd9a119442bd384a7437caf4330e",
+      "restoredSha256": "3a94117ef49c941e9c7dc653edbce720b78716d54f907e92d19082eff5b96137",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "UI10",
+      "behavior": "A runtime notification preserves another draft, focus and expanded state",
+      "file": "src/components/RuntimeConfigPanel.ts",
+      "test": "src/components/__tests__/key-dashboard-secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=in-app save preserves focus",
+        "src/components/__tests__/key-dashboard-secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "in-app save preserves focus, expanded tier and a different draft across the runtime notification"
+      ],
+      "assertion": "error: 'other draft input was replaced'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='\n",
+      "reversal": "diff --git a/src/components/RuntimeConfigPanel.ts b/src/components/RuntimeConfigPanel.ts\nindex 00db956f5..352678be5 100644\n--- a/src/components/RuntimeConfigPanel.ts\n+++ b/src/components/RuntimeConfigPanel.ts\n@@ -207,3 +207,3 @@ export class RuntimeConfigPanel extends Panel {\n  const dashboardMount = this.content.querySelector<HTMLElement>('[data-key-dashboard-mount]');\n- if (dashboardMount && existing) {\n+ if (false && dashboardMount && existing) {\n  dashboardMount.replaceWith(existing);\n",
+      "diffSha256": "aaed115cab2514d4ce26b92dc2a91dcf1611c47f23a0cff672b9329d18140b58",
+      "originalSha256": "1d8fd8d5b800fe3283c75f22305836d24f5c571d38f60cf9c8e5f5ec3041ee64",
+      "mutatedSha256": "eb4b8c19c130298091a869ceb3e10c39ff8b28e796b2e389c3fe91fdbc239a14",
+      "restoredSha256": "1d8fd8d5b800fe3283c75f22305836d24f5c571d38f60cf9c8e5f5ec3041ee64",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "UI11",
+      "behavior": "Tab must wrap from the last wizard control back to the first",
+      "file": "src/components/SetupWizard.ts",
+      "test": "src/components/__tests__/key-dashboard-secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=Escape returns to the invoking control",
+        "src/components/__tests__/key-dashboard-secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "keyboard focus stays in the wizard and Escape returns to the invoking control"
+      ],
+      "assertion": "error: |-\n    The expression evaluated to a falsy value:\n    \n      assert.ok(document.activeElement === field)\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='\n",
+      "reversal": "diff --git a/src/components/SetupWizard.ts b/src/components/SetupWizard.ts\nindex 48d62aa67..3f3062239 100644\n--- a/src/components/SetupWizard.ts\n+++ b/src/components/SetupWizard.ts\n@@ -68,3 +68,3 @@ export class SetupWizard {\n     const edge = ev.shiftKey ? controls[0] : controls[controls.length - 1];\n-    if (edge?.isSameNode(document.activeElement) || !this.overlay.contains(document.activeElement)) {\n+    if (!this.overlay.contains(document.activeElement)) {\n       ev.preventDefault();\n",
+      "diffSha256": "41a57e7bbe4278ab611d0e0abdf58724bdc23f42f34e5520e92165008fb2d208",
+      "originalSha256": "7e7ab292826f3de6f2d1a4983b24df675f67796164f71629c50c76d7976c0c45",
+      "mutatedSha256": "2ab484511a6c543648997454c12ae0b529817880d6a6650fc5db04a133a176c3",
+      "restoredSha256": "7e7ab292826f3de6f2d1a4983b24df675f67796164f71629c50c76d7976c0c45",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "KEYBOARD01",
+      "behavior": "Only the setup wizard handles keyboard events while it covers settings",
+      "file": "src/components/UnifiedSettings.ts",
+      "test": "src/components/__tests__/unified-settings-keyboard.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=credential wizard gets first use of Tab and Escape",
+        "src/components/__tests__/unified-settings-keyboard.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "credential wizard gets first use of Tab and Escape above Settings"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/UnifiedSettings.ts b/src/components/UnifiedSettings.ts\nindex 8d629c426..ec1c47feb 100644\n--- a/src/components/UnifiedSettings.ts\n+++ b/src/components/UnifiedSettings.ts\n@@ -152,3 +152,3 @@ export class UnifiedSettings {\n  if (!this.overlay.classList.contains('active')) return;\n- if (document.querySelector('.setup-wizard-overlay')) return;\n+ \n  if ((e.key === 'Escape' || e.key === 'Tab') && document.querySelector('.cmdk-v2-overlay:not([hidden])')) {\n",
+      "diffSha256": "c0b858edb905d0f78eb664aa1b8b08db65d631e93a1c7fab68219f51f8709b00",
+      "originalSha256": "36c69d517b903e1c1d95b70cca02f0a70b71cedd413379f9cc26d59b919abb88",
+      "mutatedSha256": "b512dc2b49586075f77b0f5d8be9bffae7e9b0f1b458206df53168caadc82754",
+      "restoredSha256": "36c69d517b903e1c1d95b70cca02f0a70b71cedd413379f9cc26d59b919abb88",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "STANDALONE01",
+      "behavior": "Standalone evidence ages in place without network access",
+      "file": "src/settings-main.ts",
+      "test": "src/services/__tests__/standalone-credential-row.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=saved rows age in place",
+        "src/services/__tests__/standalone-credential-row.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "saved rows age in place, explicit Test uses only the saved key name, and editing stays local"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    'Valid' !== 'stale'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'stale'\n  actual: 'Valid'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/settings-main.ts b/src/settings-main.ts\nindex ab022d3eb..a5c424c85 100644\n--- a/src/settings-main.ts\n+++ b/src/settings-main.ts\n@@ -356,3 +356,3 @@ function refreshCredentialRows(): void {\n     const evidence = getCredentialEvidenceDisplay(key, present);\n-    span.textContent = evidence.text;\n+    span.textContent = 'Valid';\n     span.title = evidence.title;\n",
+      "diffSha256": "477f27d0605980e5d33b8458dd0c0522587103f7779a6cc8f60063fa248f7ab8",
+      "originalSha256": "b7aecffc279c8d3e9ce3c80c5b3a5398afc02d0cca82019f7703225a2cd9c576",
+      "mutatedSha256": "52fe5ce099a6bf30327e31cbb4abc3d0fa5899a2d44647187d2a024c72aebdf8",
+      "restoredSha256": "b7aecffc279c8d3e9ce3c80c5b3a5398afc02d0cca82019f7703225a2cd9c576",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "STANDALONE02",
+      "behavior": "Standalone draft does not offer a stored credential test",
+      "file": "src/settings-main.ts",
+      "test": "src/services/__tests__/standalone-credential-row.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=saved rows age in place",
+        "src/services/__tests__/standalone-credential-row.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "saved rows age in place, explicit Test uses only the saved key name, and editing stays local"
+      ],
+      "assertion": "error: |-\n    The expression evaluated to a falsy value:\n    \n      assert.ok(button.hidden)\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='\n",
+      "reversal": "diff --git a/src/settings-main.ts b/src/settings-main.ts\nindex ab022d3eb..993a81683 100644\n--- a/src/settings-main.ts\n+++ b/src/settings-main.ts\n@@ -353,3 +353,3 @@ function refreshCredentialRows(): void {\n     const button = span.closest('.settings-secret-row')?.querySelector<HTMLButtonElement>('[data-test-stored]');\n-    if (button) button.hidden = pending || !present;\n+    if (button) button.hidden = !present;\n     if (pending) continue;\n",
+      "diffSha256": "197f7e821fc562fff286a4b57896f7a2c71b927b972e04e89834f2589ca8f39b",
+      "originalSha256": "b7aecffc279c8d3e9ce3c80c5b3a5398afc02d0cca82019f7703225a2cd9c576",
+      "mutatedSha256": "f02aa36b556e33f29578d55f7e99ed23e52149b43a37ece6eb024a0f809e3bd2",
+      "restoredSha256": "b7aecffc279c8d3e9ce3c80c5b3a5398afc02d0cca82019f7703225a2cd9c576",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "STANDALONE03",
+      "behavior": "Timestamp a discrete test result so it cannot imply current verification",
+      "file": "src/settings-main.ts",
+      "test": "src/services/__tests__/standalone-credential-row.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=saved rows age in place",
+        "src/services/__tests__/standalone-credential-row.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "saved rows age in place, explicit Test uses only the saved key name, and editing stays local"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /^Test at [\\dT:.Z-]+ \u00b7 Provider verified$/i. Input:\n    \n    'Provider verified'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual: 'Provider verified'\n  operator: 'match'\n",
+      "reversal": "diff --git a/src/settings-main.ts b/src/settings-main.ts\nindex ab022d3eb..2940dcaff 100644\n--- a/src/settings-main.ts\n+++ b/src/settings-main.ts\n@@ -371,3 +371,3 @@ function initFeatureSectionListeners(area: HTMLElement): void {\n         if (button.isConnected && !settingsManager.hasPending(key) && getSecretState(key).present) {\n-          const message = `Test at ${new Date().toISOString()} \u00b7 ${result.message}`;\n+          const message = result.message;\n           testedFooter = { key, evidence: getCredentialEvidenceDisplay(key, true).text, message };\n",
+      "diffSha256": "8fa07dab4b8bc2e503992427c035b0b7e58e23b03e3558e516fbeb658f330191",
+      "originalSha256": "b7aecffc279c8d3e9ce3c80c5b3a5398afc02d0cca82019f7703225a2cd9c576",
+      "mutatedSha256": "82b30abc76ef1099060e077fe8acd5c9d6f3f3d25774368995f3691b1cda5406",
+      "restoredSha256": "b7aecffc279c8d3e9ce3c80c5b3a5398afc02d0cca82019f7703225a2cd9c576",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "STANDALONE04",
+      "behavior": "Editing or evidence invalidation clears transient check feedback",
+      "file": "src/settings-main.ts",
+      "test": "src/services/__tests__/standalone-credential-row.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=saved rows age in place",
+        "src/services/__tests__/standalone-credential-row.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "saved rows age in place, explicit Test uses only the saved key name, and editing stays local"
+      ],
+      "assertion": "error: |-\n    aged or replaced evidence clears the prior test message\n    + actual - expected\n    \n    + 'Test at 2026-11-04T03:37:18.768Z \u00b7 Provider verified'\n    - ''\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ''\n  actual: 'Test at 2026-11-04T03:37:18.768Z \u00b7 Provider verified'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/settings-main.ts b/src/settings-main.ts\nindex ab022d3eb..0d1d7dbe6 100644\n--- a/src/settings-main.ts\n+++ b/src/settings-main.ts\n@@ -344,3 +344,3 @@ function refreshCredentialRows(): void {\n     if (settingsManager.hasPending(key) || current.text !== evidence) {\n-      if (document.getElementById('settingsActionStatus')?.textContent === message) setActionStatus('');\n+      void message;\n       testedFooter = undefined;\n",
+      "diffSha256": "555bc3aa663bf8875b8dbd7011d286f7e4a8de5d7460c7894e5cab6e179b9c76",
+      "originalSha256": "b7aecffc279c8d3e9ce3c80c5b3a5398afc02d0cca82019f7703225a2cd9c576",
+      "mutatedSha256": "448b6fc6127094e92836875ac133894e1009ed0e5f3a50cd5a3ff56e8f545562",
+      "restoredSha256": "b7aecffc279c8d3e9ce3c80c5b3a5398afc02d0cca82019f7703225a2cd9c576",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME01",
+      "behavior": "Groq evidence requires a canonical model-list envelope",
+      "file": "src/services/credential-probe.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=browser needs provider-specific evidence",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "browser needs provider-specific evidence; public endpoints, challenges and upstream text cannot certify a key"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'verified'\n    - 'unavailable'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'unavailable'\n  actual: 'verified'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-probe.ts b/src/services/credential-probe.ts\nindex c93942614..97b06ea56 100644\n--- a/src/services/credential-probe.ts\n+++ b/src/services/credential-probe.ts\n@@ -167,3 +167,3 @@ function classifyBrowser(key: keyof typeof browserProviders, status: number, bod\n   };\n-  const valid = (key !== 'GROQ_API_KEY' || body.object === 'list') && Array.isArray(models) && models.length > 0\n+  const valid = Array.isArray(models) && models.length > 0\n     && models.every(model => isModel(model));\n",
+      "diffSha256": "d80a67bd179a9a04ec4057b3eb2f4794795dcd10747def33c46a6fa44f3fa33e",
+      "originalSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "mutatedSha256": "8717940bc9285935cd9558fe59e5291c7e277feae715aec15ba9c4f406145399",
+      "restoredSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME02",
+      "behavior": "Unavailable service cannot reject a well-formed credential",
+      "file": "src/services/credential-probe.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=browser needs provider-specific evidence",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "browser needs provider-specific evidence; public endpoints, challenges and upstream text cannot certify a key"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'rejected'\n    - 'unavailable'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'unavailable'\n  actual: 'rejected'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-probe.ts b/src/services/credential-probe.ts\nindex c93942614..702cb4ed0 100644\n--- a/src/services/credential-probe.ts\n+++ b/src/services/credential-probe.ts\n@@ -141,3 +141,3 @@ async function fetchBrowserProbe(key: keyof typeof browserProviders, value: stri\n     void response.body?.cancel().catch(() => undefined);\n-    return probeResult(response.status === 429 ? 'rate-limited' : 'provider-unavailable');\n+    return probeResult(response.status === 429 ? 'rate-limited' : 'provider-rejected');\n   }\n",
+      "diffSha256": "480312ad0f8372c62c980b0404183843ae587e9e4f7a26c483da1655644012bc",
+      "originalSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "mutatedSha256": "bb9627e802cbf644402255097e2b604a04cb4f0694de76cc084d5ca740841f93",
+      "restoredSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME03",
+      "behavior": "Public model endpoint cannot verify the key",
+      "file": "src/services/credential-probe.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=browser needs provider-specific evidence",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "browser needs provider-specific evidence; public endpoints, challenges and upstream text cannot certify a key"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'verified'\n    - 'not-probed'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'not-probed'\n  actual: 'verified'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-probe.ts b/src/services/credential-probe.ts\nindex c93942614..e97e48b8f 100644\n--- a/src/services/credential-probe.ts\n+++ b/src/services/credential-probe.ts\n@@ -124,3 +124,3 @@ export async function probeBrowser(key: RuntimeSecretKey, value: string, signal:\n   if (key !== 'GROQ_API_KEY' && key !== 'ANTHROPIC_API_KEY' && key !== 'CESIUM_ION_TOKEN') {\n-    return probeResult(begin && !begin() ? 'inconclusive-response' : 'unsupported-probe');\n+    return probeResult('provider-accepted');\n   }\n",
+      "diffSha256": "d4f0b6fa71b0877bf1cfbe4485510ee18ab077714cf2b1c4661250e5138708a3",
+      "originalSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "mutatedSha256": "14bdc2d7b95a8dbf1a8b5afb07b2b248e586d73f445b9e6d65aad9912beb3ea2",
+      "restoredSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME04",
+      "behavior": "Only structured provider-specific authentication evidence can reject",
+      "file": "src/services/credential-probe.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=browser needs provider-specific evidence",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "browser needs provider-specific evidence; public endpoints, challenges and upstream text cannot certify a key"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'rejected'\n    - 'unavailable'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'unavailable'\n  actual: 'rejected'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-probe.ts b/src/services/credential-probe.ts\nindex c93942614..00c6302bd 100644\n--- a/src/services/credential-probe.ts\n+++ b/src/services/credential-probe.ts\n@@ -153,3 +153,3 @@ function classifyBrowser(key: keyof typeof browserProviders, status: number, bod\n       || (key === 'ANTHROPIC_API_KEY' && body.type === 'error' && error?.type === 'authentication_error');\n-    return probeResult(denied ? 'provider-rejected' : 'inconclusive-response');\n+    return probeResult('provider-rejected');\n   }\n",
+      "diffSha256": "c8a0ac3d6f1082240d34dda6e37f6d6f96af02fcbab6d0271ac5c28ac849b281",
+      "originalSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "mutatedSha256": "f2be3523170230a9edcb66c250a85048607b6e18b33fee743a4800b93bfeb93a",
+      "restoredSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME05",
+      "behavior": "Each locally authenticated wire result must agree with its typed reason",
+      "file": "src/services/credential-probe.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=sidecar trust requires confirmed loopback",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "sidecar trust requires confirmed loopback, bearer and exact outcome agreement"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'rejected'\n    - 'unavailable'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'unavailable'\n  actual: 'rejected'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-probe.ts b/src/services/credential-probe.ts\nindex c93942614..5d6882689 100644\n--- a/src/services/credential-probe.ts\n+++ b/src/services/credential-probe.ts\n@@ -69,3 +69,3 @@ export function sidecarProbeResult(body: Record<string, unknown> | undefined): S\n     const result = probeResult(body.reason as CredentialProbeReason);\n-    if (result.outcome === body.outcome) {\n+    if (true) {\n       // A different window may just have received a definitive rejection.\n",
+      "diffSha256": "7d6a062ace7726158c88c925a5d320d603a04864f5005aa44998f0b0ae5cffc3",
+      "originalSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "mutatedSha256": "914117379c968bbe1fe95161b8ce22dad35cccddfa775436f343e7fc7a06d03c",
+      "restoredSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME06",
+      "behavior": "Extra wire fields cannot smuggle provider text into a successful result",
+      "file": "src/services/credential-probe.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=sidecar trust requires confirmed loopback",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "sidecar trust requires confirmed loopback, bearer and exact outcome agreement"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'verified'\n    - 'unavailable'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'unavailable'\n  actual: 'verified'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-probe.ts b/src/services/credential-probe.ts\nindex c93942614..90e96adf4 100644\n--- a/src/services/credential-probe.ts\n+++ b/src/services/credential-probe.ts\n@@ -67,3 +67,3 @@ export async function readProbeBody(response: Response, signal: AbortSignal): Pr\n export function sidecarProbeResult(body: Record<string, unknown> | undefined): SecretVerificationResult {\n-  if (body && Object.keys(body).length === 2 && typeof body.reason === 'string' && Object.prototype.hasOwnProperty.call(reasons, body.reason)) {\n+  if (body && typeof body.reason === 'string' && Object.prototype.hasOwnProperty.call(reasons, body.reason)) {\n     const result = probeResult(body.reason as CredentialProbeReason);\n",
+      "diffSha256": "3e6b6a889ef38d97c2bdd2f76da1eb039633379964ae167ce03d507eff53ea7e",
+      "originalSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "mutatedSha256": "098b863c125136ceac3ee8466836ec1a002a29b16b3b92deb14a289abb124640",
+      "restoredSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME07",
+      "behavior": "Renderer needs the confirmed loopback origin before transmitting a draft",
+      "file": "src/services/runtime-config.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=sidecar trust requires confirmed loopback",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "sidecar trust requires confirmed loopback, bearer and exact outcome agreement"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'verified'\n    - 'unavailable'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'unavailable'\n  actual: 'verified'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/runtime-config.ts b/src/services/runtime-config.ts\nindex 89fc9770a..0af4cb840 100644\n--- a/src/services/runtime-config.ts\n+++ b/src/services/runtime-config.ts\n@@ -1288,4 +1288,3 @@ async function callSidecarWithAuth(path: string, init: RequestInit): Promise<Res\n   const destination = new URL(base);\n-  if (destination.protocol !== 'http:' || destination.hostname !== '127.0.0.1'\n-    || !Number(destination.port) || destination.origin !== base) throw new Error('Invalid local engine destination');\n+  if (false) throw new Error('Invalid local engine destination');\n   const token = await getLocalApiToken();\n",
+      "diffSha256": "895c84e2155daf20b439b18575dfa54aad575c91d5bd0cafa3e998633aa3948b",
+      "originalSha256": "2cf2c7408cc1b8d7a2c059e6dba70593ac8d71bec97d64d4ea6d117e196619f2",
+      "mutatedSha256": "da9d8a41cf9eda49c88a7c48cb2f053240fa393aacf1218f7ea0ea0011d83631",
+      "restoredSha256": "2cf2c7408cc1b8d7a2c059e6dba70593ac8d71bec97d64d4ea6d117e196619f2",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME08",
+      "behavior": "Missing local bearer fails before sending provider credentials",
+      "file": "src/services/runtime-config.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=sidecar trust requires confirmed loopback",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "sidecar trust requires confirmed loopback, bearer and exact outcome agreement"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'verified'\n    - 'unavailable'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'unavailable'\n  actual: 'verified'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/runtime-config.ts b/src/services/runtime-config.ts\nindex 89fc9770a..c4e92c9a9 100644\n--- a/src/services/runtime-config.ts\n+++ b/src/services/runtime-config.ts\n@@ -1291,3 +1291,3 @@ async function callSidecarWithAuth(path: string, init: RequestInit): Promise<Res\n   const token = await getLocalApiToken();\n-  if (!token) {\n+  if (false) {\n     localApiTokenPromise = null;\n",
+      "diffSha256": "e9d6fbae59cf6c969388f1fe6f41b2b8e177e16837ea731fa3769df70c10e854",
+      "originalSha256": "2cf2c7408cc1b8d7a2c059e6dba70593ac8d71bec97d64d4ea6d117e196619f2",
+      "mutatedSha256": "2dcc274fee2b4a3694fbe7d472f1842cf002e9b33e97acacc2870dbda0397416",
+      "restoredSha256": "2cf2c7408cc1b8d7a2c059e6dba70593ac8d71bec97d64d4ea6d117e196619f2",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME09",
+      "behavior": "Coalesce simultaneous matching inputs",
+      "file": "src/services/credential-probe.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=one in-flight match, two concurrent slots",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "one in-flight match, two concurrent slots and per-key cooldown, with no queued retry"
+      ],
+      "assertion": "error: |-\n    The expression evaluated to a falsy value:\n    \n      assert.ok((await Promise.all([first, same, second])).every(r => r.outcome === 'verified'))\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='\n",
+      "reversal": "diff --git a/src/services/credential-probe.ts b/src/services/credential-probe.ts\nindex c93942614..276945406 100644\n--- a/src/services/credential-probe.ts\n+++ b/src/services/credential-probe.ts\n@@ -186,3 +186,3 @@ export function createCredentialScheduler() {\n     const active = running.get(key);\n-    if (active && active.value === identity.value && active.companion === identity.companion && active.stored === identity.stored) {\n+    if (false && active && active.value === identity.value && active.companion === identity.companion && active.stored === identity.stored) {\n       return active.promise;\n",
+      "diffSha256": "794d645c78197e7c0573c8cbc385fb2b6862c61d8fa62b165725b2954f4ae291",
+      "originalSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "mutatedSha256": "0e83eede85f41aeb2eed4146d8e6afb223a040c4673647a2adaf3bb5dffded55",
+      "restoredSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME10",
+      "behavior": "Different companion credentials identify separate attempts",
+      "file": "src/services/credential-probe.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=one in-flight match, two concurrent slots",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "one in-flight match, two concurrent slots and per-key cooldown, with no queued retry"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'timeout'\n    - 'cooldown'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'cooldown'\n  actual: 'timeout'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-probe.ts b/src/services/credential-probe.ts\nindex c93942614..b04839a85 100644\n--- a/src/services/credential-probe.ts\n+++ b/src/services/credential-probe.ts\n@@ -186,3 +186,3 @@ export function createCredentialScheduler() {\n     const active = running.get(key);\n-    if (active && active.value === identity.value && active.companion === identity.companion && active.stored === identity.stored) {\n+    if (active && active.value === identity.value && active.stored === identity.stored) {\n       return active.promise;\n",
+      "diffSha256": "f1165807f2fb83d47fd70163e119c4da2ba2e90175a449371ae1ad6ffe044fd4",
+      "originalSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "mutatedSha256": "b37be24e4785902f7e793b9fab9cb3e642e3b555b1a2258abf52b13ec640b5a0",
+      "restoredSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME11",
+      "behavior": "Two probes may run concurrently",
+      "file": "src/services/credential-probe.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=one in-flight match, two concurrent slots",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "one in-flight match, two concurrent slots and per-key cooldown, with no queued retry"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'concurrency-limit'\n    - 'cooldown'\n         ^\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'cooldown'\n  actual: 'concurrency-limit'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-probe.ts b/src/services/credential-probe.ts\nindex c93942614..0105d854b 100644\n--- a/src/services/credential-probe.ts\n+++ b/src/services/credential-probe.ts\n@@ -193,3 +193,3 @@ export function createCredentialScheduler() {\n     }\n-    if (running.size >= 2) return Promise.resolve({ ...probeResult('concurrency-limit'), canSave: previous?.canSave !== false });\n+    if (running.size >= 1) return Promise.resolve({ ...probeResult('concurrency-limit'), canSave: previous?.canSave !== false });\n     const controller = new AbortController();\n",
+      "diffSha256": "9a0213a70c6049d8627f944d7c56e8cd0f30752c6902131d5c4df30ce6c93c65",
+      "originalSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "mutatedSha256": "cdede662165cbaf62493583e19080b76158a50cacfca1d9a46d7190151c06f4e",
+      "restoredSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME12",
+      "behavior": "Reject repeats inside the cooldown window",
+      "file": "src/services/credential-probe.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=one in-flight match, two concurrent slots",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "one in-flight match, two concurrent slots and per-key cooldown, with no queued retry"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'provider-accepted'\n    - 'cooldown'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'cooldown'\n  actual: 'provider-accepted'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-probe.ts b/src/services/credential-probe.ts\nindex c93942614..34d4b56e2 100644\n--- a/src/services/credential-probe.ts\n+++ b/src/services/credential-probe.ts\n@@ -190,3 +190,3 @@ export function createCredentialScheduler() {\n     const previous = last.get(key);\n-    if (active || (previous && performance.now() - previous.at < 60_000)) {\n+    if (active || (previous && performance.now() - previous.at < 0)) {\n       return Promise.resolve({ ...probeResult('cooldown'), canSave: !active && previous?.canSave === true });\n",
+      "diffSha256": "c0667dd709979f361005bee101f91a6d3a0a01f4610fdb7e2d97dfd7930301a0",
+      "originalSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "mutatedSha256": "504d3df1611ed624806f9676d1f6eb6b6f6f4e8c742b68f1689e21cd38e0682c",
+      "restoredSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME13",
+      "behavior": "Typed probes send only the required partner",
+      "file": "src/services/runtime-config.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=one in-flight match, two concurrent slots",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "one in-flight match, two concurrent slots and per-key cooldown, with no queued retry"
+      ],
+      "assertion": "Expected values to be strictly deep-equal; the actual result contained an unexpected error or context field. Fixture values omitted.",
+      "reversal": "diff --git a/src/services/runtime-config.ts b/src/services/runtime-config.ts\nindex 89fc9770a..6bbdca1e8 100644\n--- a/src/services/runtime-config.ts\n+++ b/src/services/runtime-config.ts\n@@ -1317,3 +1317,3 @@ export async function verifySecretWithApi(\n   return scheduleCredentialCheck(key, { stored: false, value: trimmed, companion }, desktop ? 12_000 : 8000, signal =>\n-    desktop ? requestSidecarVerification({ key, value: trimmed, context: partner && companion !== undefined ? { [partner]: companion } : {} }, signal)\n+    desktop ? requestSidecarVerification({ key, value: trimmed, context: context }, signal)\n     : probeBrowser(key, trimmed, signal));\n",
+      "diffSha256": "3ee0e35520e98d4658e7b2f86b9d6e856d134e4b581acfe9398840d9a30b131e",
+      "originalSha256": "2cf2c7408cc1b8d7a2c059e6dba70593ac8d71bec97d64d4ea6d117e196619f2",
+      "mutatedSha256": "e0955d5c28ddcdc773881f547df0045ee9d778f881eb9e33f59d2ca787928ad2",
+      "restoredSha256": "2cf2c7408cc1b8d7a2c059e6dba70593ac8d71bec97d64d4ea6d117e196619f2",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME14",
+      "behavior": "Oversize reads are cancelled",
+      "file": "src/services/credential-probe.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=oversized or stalled provider streams",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "oversized or stalled provider streams cannot establish verification"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    false !== true\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-probe.ts b/src/services/credential-probe.ts\nindex c93942614..3d4ff3093 100644\n--- a/src/services/credential-probe.ts\n+++ b/src/services/credential-probe.ts\n@@ -51,3 +51,2 @@ export async function readProbeBody(response: Response, signal: AbortSignal): Pr\n       if (bytes > limit) {\n-        cancel();\n         return undefined;\n",
+      "diffSha256": "57cf66be316dafa12bc53f4f6a085daabaf92c267dabc421e3c688c7bfd7021c",
+      "originalSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "mutatedSha256": "9bfeaea905835c496cbd859e9cab82b643990cfed31bb503b79a3244a260f688",
+      "restoredSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME15",
+      "behavior": "A browser deadline aborts the stalled stream",
+      "file": "src/services/credential-probe.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=oversized or stalled provider streams",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "oversized or stalled provider streams cannot establish verification"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    false !== true\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-probe.ts b/src/services/credential-probe.ts\nindex c93942614..88a95949e 100644\n--- a/src/services/credential-probe.ts\n+++ b/src/services/credential-probe.ts\n@@ -199,3 +199,3 @@ export function createCredentialScheduler() {\n     const timeout = new Promise<SecretVerificationResult>(resolve => {\n-      timer = setTimeout(() => { resolve(probeResult('timeout')); controller.abort(); }, deadlineMs);\n+      timer = setTimeout(() => { resolve(probeResult('timeout')); }, deadlineMs);\n     });\n",
+      "diffSha256": "939ad8904689e70598c7d91daf1c38254b718bc438df685897e91f11345e26f2",
+      "originalSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "mutatedSha256": "6daad82d4685a4c20fd8c2789f0b66732afb7b960a4d8f0db3457a05c6af7fc7",
+      "restoredSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME16",
+      "behavior": "Reject stored browser value already superseded in another window",
+      "file": "src/services/runtime-config.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=stored browser checks require the decrypted window value",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "stored browser checks require the decrypted window value to match the persisted vault before and after"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/runtime-config.ts b/src/services/runtime-config.ts\nindex 89fc9770a..7416d3b83 100644\n--- a/src/services/runtime-config.ts\n+++ b/src/services/runtime-config.ts\n@@ -1339,3 +1339,3 @@ export async function verifyStoredSecretWithApi(key: RuntimeSecretKey): Promise<\n       const matches = () => vault ? isStoredValueCurrent(key, held!) : !observedWebChange;\n-      if (!await matches() || signal.aborted || generation !== credentialGeneration) return probeResult('inconclusive-response');\n+      if (signal.aborted || generation !== credentialGeneration) return probeResult('inconclusive-response');\n       const result = await probeBrowser(key, held!, signal, () => {\n",
+      "diffSha256": "d77937c4b0d3d72abf1d775d3543e1f2cc57fadaa124c489de5090834022f282",
+      "originalSha256": "2cf2c7408cc1b8d7a2c059e6dba70593ac8d71bec97d64d4ea6d117e196619f2",
+      "mutatedSha256": "1ec4c74dbf3a22886a0229f7f4cccaf729f67655da3dbfbd4c397e86bf218c8b",
+      "restoredSha256": "2cf2c7408cc1b8d7a2c059e6dba70593ac8d71bec97d64d4ea6d117e196619f2",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME17",
+      "behavior": "Recheck persisted browser value after the external response",
+      "file": "src/services/runtime-config.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=stored browser checks require the decrypted window value",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "stored browser checks require the decrypted window value to match the persisted vault before and after"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'verified'\n    - 'unavailable'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'unavailable'\n  actual: 'verified'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/runtime-config.ts b/src/services/runtime-config.ts\nindex 89fc9770a..e5996f4e6 100644\n--- a/src/services/runtime-config.ts\n+++ b/src/services/runtime-config.ts\n@@ -1345,3 +1345,3 @@ export async function verifyStoredSecretWithApi(key: RuntimeSecretKey): Promise<\n       });\n-      return !signal.aborted && await matches() ? result : probeResult('inconclusive-response');\n+      return !signal.aborted ? result : probeResult('inconclusive-response');\n     }\n",
+      "diffSha256": "4b6dfd17ca460899835e045f183756c4d3991256a27bfb53a272f98b1748f1f1",
+      "originalSha256": "2cf2c7408cc1b8d7a2c059e6dba70593ac8d71bec97d64d4ea6d117e196619f2",
+      "mutatedSha256": "0fc562d2e2402c7a80b0ee3ca714f1a638f89d1279847bd0d679e78c79db9a6b",
+      "restoredSha256": "2cf2c7408cc1b8d7a2c059e6dba70593ac8d71bec97d64d4ea6d117e196619f2",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME18",
+      "behavior": "A pending native write blocks the provider call",
+      "file": "src/services/runtime-config.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=pending or changing native revision",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "pending or changing native revision cannot verify the saved value"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/runtime-config.ts b/src/services/runtime-config.ts\nindex 89fc9770a..eb60f7485 100644\n--- a/src/services/runtime-config.ts\n+++ b/src/services/runtime-config.ts\n@@ -1323,3 +1323,3 @@ async function nativeVaultRevision(): Promise<number | null> {\n   const state = await keychainService.writeState().catch(() => null);\n-  return state?.pending === 0 && state.source === 'vault' && Number.isSafeInteger(state.revision) && state.revision >= 0\n+  return state && state.source === 'vault' && Number.isSafeInteger(state.revision) && state.revision >= 0\n     ? state.revision : null;\n",
+      "diffSha256": "3634120c89999bcd960598941255105a1971e2617ee1e115a02d5134d9144fde",
+      "originalSha256": "2cf2c7408cc1b8d7a2c059e6dba70593ac8d71bec97d64d4ea6d117e196619f2",
+      "mutatedSha256": "59fc0aadcc4be36386cc4e1f3c06991c9f0a9a9dc6c25a26b563edf4fd10b956",
+      "restoredSha256": "2cf2c7408cc1b8d7a2c059e6dba70593ac8d71bec97d64d4ea6d117e196619f2",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME19",
+      "behavior": "Reject a native vault revision changed during the probe",
+      "file": "src/services/runtime-config.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=pending or changing native revision",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "pending or changing native revision cannot verify the saved value"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'verified'\n    - 'unavailable'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'unavailable'\n  actual: 'verified'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/runtime-config.ts b/src/services/runtime-config.ts\nindex 89fc9770a..9c50315d5 100644\n--- a/src/services/runtime-config.ts\n+++ b/src/services/runtime-config.ts\n@@ -1351,3 +1351,3 @@ export async function verifyStoredSecretWithApi(key: RuntimeSecretKey): Promise<\n     const result = await requestSidecarVerification({ key, useStored: true, context: {} }, signal);\n-    if (signal.aborted || before !== await nativeVaultRevision()) return probeResult('inconclusive-response');\n+    if (signal.aborted) return probeResult('inconclusive-response');\n     return result;\n",
+      "diffSha256": "7e9a3ed75a54aa45590a41335371b6052b6256c0a730dd557232bed05ef9f4b3",
+      "originalSha256": "2cf2c7408cc1b8d7a2c059e6dba70593ac8d71bec97d64d4ea6d117e196619f2",
+      "mutatedSha256": "19e87a454b78dcd4351c74417cbd26c5ee73ba1a5f56ce94cfbc3d0565b8a8b2",
+      "restoredSha256": "2cf2c7408cc1b8d7a2c059e6dba70593ac8d71bec97d64d4ea6d117e196619f2",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME20",
+      "behavior": "Cooldown cannot bypass a provider rejection",
+      "file": "src/services/credential-probe.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=a provider rejection cannot be bypassed",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "a provider rejection cannot be bypassed by a second Save during cooldown"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-probe.ts b/src/services/credential-probe.ts\nindex c93942614..4b2e11016 100644\n--- a/src/services/credential-probe.ts\n+++ b/src/services/credential-probe.ts\n@@ -191,3 +191,3 @@ export function createCredentialScheduler() {\n     if (active || (previous && performance.now() - previous.at < 60_000)) {\n-      return Promise.resolve({ ...probeResult('cooldown'), canSave: !active && previous?.canSave === true });\n+      return Promise.resolve({ ...probeResult('cooldown'), canSave: true });\n     }\n",
+      "diffSha256": "e4087d324525c9cb5b41d3e2c584a44bd7ab016882006ceb2bdf036ae6dab864",
+      "originalSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "mutatedSha256": "e1694e9e351125ab3d7d52139c0ed97c14a59b6784c08c188eb49b9818053a50",
+      "restoredSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME21",
+      "behavior": "Verify encrypted persisted state before binding browser evidence",
+      "file": "src/services/web-secret-store.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=the encrypted vault must still contain the tested value",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "the encrypted vault must still contain the tested value and belong to the unlocked session"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/web-secret-store.ts b/src/services/web-secret-store.ts\nindex 50160f454..12df66bc7 100644\n--- a/src/services/web-secret-store.ts\n+++ b/src/services/web-secret-store.ts\n@@ -215,3 +215,3 @@ export async function isStoredValueCurrent(key: string, value: string): Promise<\n   if (!session || !cachedBlob || plaintext?.get(key) !== value) return false;\n-  const stored = await getMemory<VaultBlob>(VAULT_KEY);\n+  const stored = cachedBlob;\n   if (stored?.v !== 1 || stored.ct !== cachedBlob?.ct || stored.iv !== cachedBlob.iv) return false;\n",
+      "diffSha256": "38395e0b13a17d2510c909b2f0370593cc8a18c31687f48fe035814142f2693e",
+      "originalSha256": "8bde129d9fe5bb0525e8c7b899a856d2e38ef384fdbd54a1bd96e77424056e02",
+      "mutatedSha256": "4a21e9a8dfee65e51e5168346db71babffa18a0e95315ec4dfb9b0591186a331",
+      "restoredSha256": "8bde129d9fe5bb0525e8c7b899a856d2e38ef384fdbd54a1bd96e77424056e02",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME22",
+      "behavior": "Cross-window concurrency is capped at two requests",
+      "file": "src/services/credential-probe.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=separate browser windows honor one key lock",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "separate browser windows honor one key lock, two total slots and the full shared cooldown"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 2\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 2\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-probe.ts b/src/services/credential-probe.ts\nindex c93942614..62616dc3f 100644\n--- a/src/services/credential-probe.ts\n+++ b/src/services/credential-probe.ts\n@@ -91,3 +91,3 @@ function refused(reason: 'cooldown' | 'concurrency-limit'): SecretVerificationRe\n async function withBrowserCapacity(key: string, signal: AbortSignal, send: () => Promise<SecretVerificationResult>): Promise<SecretVerificationResult> {\n-  for (const slot of [0, 1]) {\n+  for (const slot of [0]) {\n     const result = await navigator.locks.request(PROBE_LOCK + 'slot:' + slot, { ifAvailable: true }, async lock => {\n",
+      "diffSha256": "f74e4c9ee2fad737ff0c79741d77b56ec9864e656cc0e832e2e31cd313d23098",
+      "originalSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "mutatedSha256": "30c3fdfbe03d2511f72579f3de95fba8404493bba7558c0d09024a8efddfc82c",
+      "restoredSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME23",
+      "behavior": "Cross-window cooldown lasts the full sixty seconds",
+      "file": "src/services/credential-probe.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=separate browser windows honor one key lock",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "separate browser windows honor one key lock, two total slots and the full shared cooldown"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'provider-accepted'\n    - 'cooldown'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'cooldown'\n  actual: 'provider-accepted'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-probe.ts b/src/services/credential-probe.ts\nindex c93942614..96483db39 100644\n--- a/src/services/credential-probe.ts\n+++ b/src/services/credential-probe.ts\n@@ -114,3 +114,3 @@ async function scheduleBrowserProbe(key: string, signal: AbortSignal, send: () =\n       const raw = localStorage.getItem(PROBE_LOCK + 'last:' + key);\n-      if (raw !== null && (!/^\\d{1,15}$/.test(raw) || Date.now() - Number(raw) < 60_000)) return refused('cooldown');\n+      if (raw !== null && (!/^\\d{1,15}$/.test(raw) || Date.now() - Number(raw) < 59_999)) return refused('cooldown');\n       return withBrowserCapacity(key, signal, send);\n",
+      "diffSha256": "ca310618b56921354a928c1548dfbe4a9d915d3cbb99c0422492fca30df0fab8",
+      "originalSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "mutatedSha256": "da64e1d4b827d114cbc72bee0cc3496047e2dc78e017517341eead16438d1a7d",
+      "restoredSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME24",
+      "behavior": "Denied cross-window coordination cannot send credentials",
+      "file": "src/services/credential-probe.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=a browser without functioning shared coordination",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "a browser without functioning shared coordination sends no credential"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-probe.ts b/src/services/credential-probe.ts\nindex c93942614..a2e703c6b 100644\n--- a/src/services/credential-probe.ts\n+++ b/src/services/credential-probe.ts\n@@ -118,3 +118,3 @@ async function scheduleBrowserProbe(key: string, signal: AbortSignal, send: () =\n   } catch {\n-    return probeResult('provider-unavailable');\n+    return send();\n   }\n",
+      "diffSha256": "8a954a8fcfdfcb339b15928544af0f87cb7d4af7bc62ce30b2a826ec0bb474f9",
+      "originalSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "mutatedSha256": "08b6f777188b95c90ff62500fce97ec9a22168808ec777d22cee4f31b3cde0bf",
+      "restoredSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME25",
+      "behavior": "Request refused by a peer cannot supersede a legitimate in-flight receipt",
+      "file": "src/services/runtime-config.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=a second window denied a stored check",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "a second window denied a stored check cannot replace the first window\u2019s attempt identity"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'unavailable'\n    - 'verified'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'verified'\n  actual: 'unavailable'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/runtime-config.ts b/src/services/runtime-config.ts\nindex 89fc9770a..c44bea539 100644\n--- a/src/services/runtime-config.ts\n+++ b/src/services/runtime-config.ts\n@@ -1337,2 +1337,3 @@ export async function verifyStoredSecretWithApi(key: RuntimeSecretKey): Promise<\n     if (!desktop) {\n+      handle = beginStoredCredentialCheck(key);\n       const vault = runtimeConfig.secrets[key]?.source === 'vault';\n",
+      "diffSha256": "78653bb228e748f3f0bb3286e6d40e2a45414a3dcd84164ea76e122c1b7dec1b",
+      "originalSha256": "2cf2c7408cc1b8d7a2c059e6dba70593ac8d71bec97d64d4ea6d117e196619f2",
+      "mutatedSha256": "92016159e6777200754d20ef10a371ba00459097d9515f38ffe6bd7542ac395d",
+      "restoredSha256": "2cf2c7408cc1b8d7a2c059e6dba70593ac8d71bec97d64d4ea6d117e196619f2",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME26",
+      "behavior": "Cross-window validation writes only a safe timestamp",
+      "file": "src/services/credential-probe.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=separate browser windows honor one key lock",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "separate browser windows honor one key lock, two total slots and the full shared cooldown"
+      ],
+      "assertion": "error: 'only timestamps shared'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='\n",
+      "reversal": "diff --git a/src/services/credential-probe.ts b/src/services/credential-probe.ts\nindex c93942614..bf6c72dbe 100644\n--- a/src/services/credential-probe.ts\n+++ b/src/services/credential-probe.ts\n@@ -95,3 +95,3 @@ async function withBrowserCapacity(key: string, signal: AbortSignal, send: () =>\n       if (signal.aborted) return probeResult('timeout');\n-      localStorage.setItem(PROBE_LOCK + 'last:' + key, String(Date.now()));\n+      localStorage.setItem(PROBE_LOCK + 'last:' + key, JSON.stringify({key,at:Date.now()}));\n       let onAbort!: () => void;\n",
+      "diffSha256": "59bebcdaf24649d10de2c10344027b7c3e8836389579e4e12694221c7b7f7f67",
+      "originalSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "mutatedSha256": "5c5aa552bb172bf47269eb657b2505d32e714fe75a0b31252a6c693d4bd1caa3",
+      "restoredSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "RUNTIME27",
+      "behavior": "A third credential cannot acquire a cross-window provider slot",
+      "file": "src/services/credential-probe.ts",
+      "test": "src/services/__tests__/secret-boundary.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=separate browser windows honor one key lock",
+        "src/services/__tests__/secret-boundary.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "separate browser windows honor one key lock, two total slots and the full shared cooldown"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    3 !== 2\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 2\n  actual: 3\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/services/credential-probe.ts b/src/services/credential-probe.ts\nindex c93942614..3845e962c 100644\n--- a/src/services/credential-probe.ts\n+++ b/src/services/credential-probe.ts\n@@ -91,3 +91,3 @@ function refused(reason: 'cooldown' | 'concurrency-limit'): SecretVerificationRe\n async function withBrowserCapacity(key: string, signal: AbortSignal, send: () => Promise<SecretVerificationResult>): Promise<SecretVerificationResult> {\n-  for (const slot of [0, 1]) {\n+  for (const slot of [0, 1, 2]) {\n     const result = await navigator.locks.request(PROBE_LOCK + 'slot:' + slot, { ifAvailable: true }, async lock => {\n",
+      "diffSha256": "d7382fd5086e573ec297fb702dcd4579851c56b50e0b98da7537ed000dbdcfec",
+      "originalSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "mutatedSha256": "98fee260f9270a30027c91a1abf3aab485a7cec16335c929e31875133231cb17",
+      "restoredSha256": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+      "cleanAfterRestore": true
+    }
+  ],
+  "summary": {
+    "expectedAssertionFailures": 83,
+    "unresolved": 0,
+    "packagingChecks": 1,
+    "namedRedAssertions": 117,
+    "node": "v22.23.1",
+    "uniqueProductAndFixtureFiles": 24
+  },
+  "packagingReversal": {
+    "file": "src-tauri/tauri.conf.json",
+    "originalSha256": "b852f1e3fe528e8aa18b05fc979a30d85353df50bc928f1b73f766b317f54fe0",
+    "mutatedSha256": "d0f9bd00fe9cf72b5dce6417801276565f10675816bd5e76421a90d9d649eca3",
+    "appliedDiff": "diff --git a/src-tauri/tauri.conf.json b/src-tauri/tauri.conf.json\nindex 9f9fb79f3..c90aa8609 100644\n--- a/src-tauri/tauri.conf.json\n+++ b/src-tauri/tauri.conf.json\n@@ -38,7 +38,6 @@\n     \"resources\": [\n       \"../api\",\n       \"sidecar/local-api-server.mjs\",\n-      \"sidecar/credential-verification.mjs\",\n       \"sidecar/sidecar-logger.mjs\",\n       \"sidecar/secret-sync.mjs\",\n       \"sidecar/event-store.mjs\",\n",
+    "baseline": {
+      "command": "node scripts/check-sidecar-bundle.mjs",
+      "exit": 0,
+      "output": "[check-sidecar-bundle] OK \u2014 all 29 statically-imported sidecar .mjs modules are present in bundle.resources.\n"
+    },
+    "mutated": {
+      "command": "node scripts/check-sidecar-bundle.mjs",
+      "exit": 1,
+      "output": "[check-sidecar-bundle] FAIL \u2014 these sidecar modules are statically imported by local-api-server.mjs but missing from tauri.conf.json bundle.resources. The packaged sidecar will crash at boot with ERR_MODULE_NOT_FOUND:\n  - sidecar/credential-verification.mjs\n\nAdd each to bundle.resources in src-tauri/tauri.conf.json.\n"
+    },
+    "restored": {
+      "command": "node scripts/check-sidecar-bundle.mjs",
+      "exit": 0,
+      "output": "[check-sidecar-bundle] OK \u2014 all 29 statically-imported sidecar .mjs modules are present in bundle.resources.\n"
+    },
+    "restoredSha256": "b852f1e3fe528e8aa18b05fc979a30d85353df50bc928f1b73f766b317f54fe0",
+    "cleanAfterRestore": true
+  },
+  "superseded": [
+    {
+      "id": "SIDECAR03",
+      "initialPassed": 1,
+      "initialFailed": 0,
+      "initialDiff": "diff --git a/src-tauri/sidecar/credential-verification.mjs b/src-tauri/sidecar/credential-verification.mjs\nindex 85765c63c..b875c5ed3 100644\n--- a/src-tauri/sidecar/credential-verification.mjs\n+++ b/src-tauri/sidecar/credential-verification.mjs\n@@ -292,3 +292,3 @@ export function createCredentialVerifier({ fetch, now = Date.now, deadlineMs = 1\n   const value = rawValue.trim();\n-  if (NON_AUTH_PROBES.has(key)) return unsupported();\n+  if (false) return unsupported();\n   const request = requestFor(key, value, context);\n",
+      "explanation": "Removing the public-source guard alone left the endpoint absent from the request switch. The final reversal also restores the previously used public request, exercising its no-probe policy."
+    }
+  ],
+  "publication": {
+    "fullCertificateSha256": "512c7d54f9b21208f2c3fdbd3d30286a069568ba6e415643c1d94a211e7ceb1c",
+    "note": "The pairing-map literal and test fixture values in selected raw assertion excerpts are omitted from this published copy. Per-reversal digests identify the full inspected diff. The complete certificate was independently audited."
+  }
+}

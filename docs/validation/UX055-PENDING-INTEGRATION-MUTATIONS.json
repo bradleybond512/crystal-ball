@@ -1,0 +1,101 @@
+{
+  "executionCommit": "169d71149",
+  "pendingBaseline": "3e3facc5d9cda7d3c4a9b03993ec760335239d23",
+  "method": "Clean tree before each mutation; inspected applied diff; ran named test or bundle checker before, red, and restored; verified original SHA-256 and clean status after each reversal. Synthetic credentials only.",
+  "proofs": [
+    {
+      "id": "ROUTE01",
+      "file": "src-tauri/sidecar/local-api-server.mjs",
+      "sourceSha256": "42eccf0c9a7c2f66b77dc736dcb981573247067cbc679dfa5c0e3fb9b8547c55",
+      "appliedDiff": "diff --git a/src-tauri/sidecar/local-api-server.mjs b/src-tauri/sidecar/local-api-server.mjs\nindex 08b2179f1..31a70739b 100644\n--- a/src-tauri/sidecar/local-api-server.mjs\n+++ b/src-tauri/sidecar/local-api-server.mjs\n@@ -15394,7 +15394,7 @@ function legacyNewsItems(items) {\n  }\n  // R4-SEC-001: \"Test\" on a saved key sends no value \u2014 the webview never\n  // holds it. Check this process's own copy, delivered by native.\n- const candidate = useStored === true ? process.env[key] : value;\n+ const candidate = value || process.env[key];\n  const validateSecretAgainstProvider = context.verifyCredential;\n  const result = await validateSecretAgainstProvider(key, candidate, safeContext);\n  return json(result);\n",
+      "restoredSha256": "42eccf0c9a7c2f66b77dc736dcb981573247067cbc679dfa5c0e3fb9b8547c55",
+      "green": {
+        "exit": 0,
+        "counts": [
+          "# pass 1",
+          "# fail 0"
+        ],
+        "failingTests": []
+      },
+      "red": {
+        "exit": 1,
+        "counts": [
+          "# pass 0",
+          "# fail 1"
+        ],
+        "failingTests": [
+          "not ok 1 - stored validation ignores renderer value and companion overrides, emits no secret or provider text"
+        ]
+      },
+      "restored": {
+        "exit": 0,
+        "counts": [
+          "# pass 1",
+          "# fail 0"
+        ],
+        "failingTests": []
+      },
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "ROUTE02",
+      "file": "src-tauri/sidecar/local-api-server.mjs",
+      "sourceSha256": "42eccf0c9a7c2f66b77dc736dcb981573247067cbc679dfa5c0e3fb9b8547c55",
+      "appliedDiff": "diff --git a/src-tauri/sidecar/local-api-server.mjs b/src-tauri/sidecar/local-api-server.mjs\nindex 08b2179f1..58835993d 100644\n--- a/src-tauri/sidecar/local-api-server.mjs\n+++ b/src-tauri/sidecar/local-api-server.mjs\n@@ -15389,7 +15389,7 @@ function legacyNewsItems(items) {\n  const safeContext = {};\n  if (key === 'OPENSKY_CLIENT_ID' || key === 'OPENSKY_CLIENT_SECRET') {\n  const partner = key === 'OPENSKY_CLIENT_ID' ? 'OPENSKY_CLIENT_SECRET' : 'OPENSKY_CLIENT_ID';\n- const companion = useStored === true ? process.env[partner] : suppliedContext?.[partner];\n+ const companion = suppliedContext?.[partner] ?? process.env[partner];\n  if (typeof companion === 'string' && companion.length <= 8192 && !/[\\r\\n\\0]/.test(companion)) safeContext[partner] = companion;\n  }\n  // R4-SEC-001: \"Test\" on a saved key sends no value \u2014 the webview never\n",
+      "restoredSha256": "42eccf0c9a7c2f66b77dc736dcb981573247067cbc679dfa5c0e3fb9b8547c55",
+      "green": {
+        "exit": 0,
+        "counts": [
+          "# pass 1",
+          "# fail 0"
+        ],
+        "failingTests": []
+      },
+      "red": {
+        "exit": 1,
+        "counts": [
+          "# pass 0",
+          "# fail 1"
+        ],
+        "failingTests": [
+          "not ok 1 - stored validation ignores renderer value and companion overrides, emits no secret or provider text"
+        ]
+      },
+      "restored": {
+        "exit": 0,
+        "counts": [
+          "# pass 1",
+          "# fail 0"
+        ],
+        "failingTests": []
+      },
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "PACKAGING",
+      "file": "src-tauri/tauri.conf.json",
+      "sourceSha256": "56b0cb1c0ae89e49aaefc96a879e1f0598136f68c9d439dbe1ed4b4c16b48be7",
+      "appliedDiff": "diff --git a/src-tauri/tauri.conf.json b/src-tauri/tauri.conf.json\nindex df41c0010..091461d27 100644\n--- a/src-tauri/tauri.conf.json\n+++ b/src-tauri/tauri.conf.json\n@@ -39,7 +39,6 @@\n       \"../api\",\n       \"sidecar/local-api-server.mjs\",\n       \"sidecar/nws-alert-row.mjs\",\n-      \"sidecar/credential-verification.mjs\",\n       \"sidecar/sidecar-logger.mjs\",\n       \"sidecar/secret-sync.mjs\",\n       \"sidecar/event-store.mjs\",\n",
+      "restoredSha256": "56b0cb1c0ae89e49aaefc96a879e1f0598136f68c9d439dbe1ed4b4c16b48be7",
+      "green": {
+        "exit": 0,
+        "counts": [],
+        "failingTests": [],
+        "output": "[check-sidecar-bundle] OK \u2014 all 31 statically-imported sidecar .mjs modules are present in bundle.resources.\n"
+      },
+      "red": {
+        "exit": 1,
+        "counts": [],
+        "failingTests": [],
+        "output": "[check-sidecar-bundle] FAIL \u2014 these sidecar modules are statically imported by local-api-server.mjs but missing from tauri.conf.json bundle.resources. The packaged sidecar will crash at boot with ERR_MODULE_NOT_FOUND:\n  - sidecar/credential-verification.mjs\n\nAdd each to bundle.resources in src-tauri/tauri.conf.json.\n"
+      },
+      "restored": {
+        "exit": 0,
+        "counts": [],
+        "failingTests": [],
+        "output": "[check-sidecar-bundle] OK \u2014 all 31 statically-imported sidecar .mjs modules are present in bundle.resources.\n"
+      },
+      "cleanAfterRestore": true
+    }
+  ]
+}

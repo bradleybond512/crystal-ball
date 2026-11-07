@@ -1,0 +1,128 @@
+{
+  "executionCommit": "b2a8f78071f1ce9041dc86822eb6b8f91f5f5d2a",
+  "rootTree": "79aed8dbac1c89a7e102efb652dd031b96ef2f9b",
+  "pendingBaseline": "b8b9d1974f56b9f9ad4841be407eb01cdcd74559",
+  "priorCleanHead": "7ede32dbbf8d6d8e8be7a47a7dc2ebca9928ae32",
+  "priorSelectorExecution": "48751e19484c05fef9f73974ff9d0e71acc38c4e",
+  "changedPriorInputs": {
+    "docs/validation/UX-018-RESOLVER-RUNS.md": {
+      "before": "273a7b17ff94931384d9e58eb1b5fe08fbcf1501c2130842de5bcfa1694afa2c",
+      "after": "159e90d3828bdfd5878f7a0b814d80db020b0a330c1f4ba6dc9dd163023d9eac"
+    },
+    "docs/validation/UX-049-THREAT-COVERAGE.md": {
+      "before": "74a0ec368075c07741972442ee718c68a6ecf6cfeb9acbf464ce173e3f275af2",
+      "after": "24b48b59ffccdf96172ed4013a3061cf89d707f19b39bb6636cf1e1862f3d32e"
+    },
+    "docs/validation/UX-053-LOCAL-INTEGRATION.md": {
+      "before": "d0046046f9d9d8ffd93df192899684ed1e5a2d3d8d3f2c54094806b233ce59c4",
+      "after": "8d2c0d59a41c7a13b9b55e5c3d7372507b20a7488a6ce8eec1a5c94dea36170c"
+    },
+    "docs/validation/UX-055-CREDENTIAL-VALIDATION.md": {
+      "before": "b2f645c0efe26243c0a1dc693ca64f577a72ef17de591e5cfcf309e6ad307e8d",
+      "after": "41a6c21c627faffa43fdf29be7835d54f3a464baf3397fd2fa2b82ef88804285"
+    },
+    "docs/validation/UX-058-LOCAL-INTEGRATION.md": {
+      "before": "6b1be18fcfad2d71d18fd9eca2253f101793569cae2ead070850dcc5cf3ffc8a",
+      "after": "aac50b6f761d5732ee4a811ae5b27a51f2c13ff11ed77e4271c4f5c442b1e2a1"
+    },
+    "src/services/__tests__/notification-dispatcher-trace.test.mts": {
+      "before": "ca6aaab376435be99040083c2d884744663c52e34aa690c9ff747aff1fc8c123",
+      "after": "d7fc52846b0b21161dfd880d0767c6bb61055e5c3ea9ab766480b873f18a1807"
+    },
+    "src/services/notification-dispatcher.ts": {
+      "before": "524a92bbe806aca326148d0109018b06cdc4e31694abd3c93e32945ba933810f",
+      "after": "67c36d15b93e9e077e8588e9fed522b7bd2bdbebe7c6c4f50155395d2f4fdd9c"
+    }
+  },
+  "addedProvenanceInputs": [
+    ".agentic/reviews/9d57060c2cc15663d399d98560ee542d8db93ec7.json",
+    ".agentic/reviews/b3d92db703db7cdde20fa00062a09c7946369150.json",
+    ".agentic/reviews/ce44f2b1b8b0802513d2008af64d474aa27384ac.json",
+    "docs/validation/UX-049-DISPATCHER-REFRESH-CONTINUITY.json",
+    "docs/validation/UX-049-TRUSTED-SELECTION.json",
+    "docs/validation/UX-053-MAIN-CONTINUITY.json",
+    "docs/validation/UX-053-MUTATION-CONTINUITY.json",
+    "docs/validation/UX-058-MAIN-CONTINUITY.json",
+    "docs/validation/UX-058-MUTATION-CONTINUITY.json",
+    "docs/validation/UX-058-SUPERSET-CONTINUITY.json",
+    "docs/validation/UX018-CURRENT-SELECTOR-VALIDATION.json",
+    "docs/validation/UX055-CONSERVATIVE-VALIDATION.json"
+  ],
+  "featureFileSha256": {
+    "settings.html": "7ca2b7273a53613232beed580e6f5afcf504dba497c7ced30ddeeeff0cab947d",
+    "src-tauri/sidecar/__tests__/credential-verification.test.mjs": "8fbefe49b08be5dc2965817c9a3c6a3f0ea9921b9f83f0231cb4b19cda6bbce6",
+    "src-tauri/sidecar/credential-verification.mjs": "652ede5ce38a59d221e8e0294da5abafd2fa548c18c5023e1b00b974c96900cc",
+    "src-tauri/sidecar/local-api-server.mjs": "42eccf0c9a7c2f66b77dc736dcb981573247067cbc679dfa5c0e3fb9b8547c55",
+    "src-tauri/sidecar/local-api-server.test.mjs": "c82b0327aa4712f6b4a5c1865ba8460f9a7ce3d79d8f4b81f765813032645a94",
+    "src-tauri/tauri.conf.json": "56b0cb1c0ae89e49aaefc96a879e1f0598136f68c9d439dbe1ed4b4c16b48be7",
+    "src/components/KeyDashboard.ts": "3a94117ef49c941e9c7dc653edbce720b78716d54f907e92d19082eff5b96137",
+    "src/components/RuntimeConfigPanel.ts": "1d8fd8d5b800fe3283c75f22305836d24f5c571d38f60cf9c8e5f5ec3041ee64",
+    "src/components/SetupWizard.ts": "7e7ab292826f3de6f2d1a4983b24df675f67796164f71629c50c76d7976c0c45",
+    "src/components/UnifiedSettings.ts": "36c69d517b903e1c1d95b70cca02f0a70b71cedd413379f9cc26d59b919abb88",
+    "src/components/__tests__/key-dashboard-secret-boundary.test.mts": "c495ed0a741a6018212082b8e1d62bd87faaab30543bfba08b74b6367f962e75",
+    "src/components/__tests__/unified-settings-keyboard.test.mts": "9418015f9fb75a130793f4d6facc705e9a9ec2a9495393ab06cbb837b22b5636",
+    "src/services/__tests__/credential-evidence.test.mts": "119dd05008691f17371791fa7399aa44c020dff1db37ad98fd798b2b10c01087",
+    "src/services/__tests__/secret-boundary.test.mts": "600d63646a83cb69b1b963eb74e0ce6f157a356ed33702b4a9ae8f2bf6a1ab41",
+    "src/services/__tests__/secret-write-pending.test.mts": "1539b2d5ed3a35f7e7bd40e9cc7ab69cbf2e512ee39f8ec8d148c12648a04cc0",
+    "src/services/__tests__/settings-manager-verification.test.mts": "62bfd01435473d8f3a1738329149716d22324b3f4b541edf12c9e9befc2386ab",
+    "src/services/__tests__/standalone-credential-row.test.mts": "ecf228c1ea548cf38c75daa0d308d9a0d238d56ca10a2c9d7f848676309c3943",
+    "src/services/__tests__/wizard-state.test.mts": "67549b86920ba8a9038c35e08f1e921f86263b9fa445e6d6c1426f1b6485d4d5",
+    "src/services/credential-evidence.ts": "2ffeb0ad2a3493c4dc712fe7d6b3a03aaa0e64a644f8fae06b816f559bdb0abf",
+    "src/services/credential-probe.ts": "9719772d398418c04babef2e3a108076d037d8fa241fa35eb8e1c56804668721",
+    "src/services/runtime-config.ts": "2cf2c7408cc1b8d7a2c059e6dba70593ac8d71bec97d64d4ea6d117e196619f2",
+    "src/services/settings-manager.ts": "aea6b80e50da6eeb8877281aed0adc4cb983bd72f057f9aba37e81666a01e1d0",
+    "src/services/web-secret-store.ts": "8bde129d9fe5bb0525e8c7b899a856d2e38ef384fdbd54a1bd96e77424056e02",
+    "src/services/wizard-state.ts": "bb6f8e3b2372f28da2e487508c36eebf70a283d0eeed18ac0141733633f5b449",
+    "src/settings-main.ts": "b7aecffc279c8d3e9ce3c80c5b3a5398afc02d0cca82019f7703225a2cd9c576",
+    "src/styles/macos-native.css": "ea54598a001d8202500be256f5cbef6228a8d0586e00408eb8de5ba1f483771c",
+    "tests/secret-boundary.test.mjs": "551c8e2ed16fc411deea842b63852ccb15d7121c519c7d29127a5661fbd2a1a5",
+    "tests/sidecar-ci-inventory.test.mjs": "49a4c285649a5fe80771eaa87533c1bc6436c8d6616cf8687fb717d0e23edd1a"
+  },
+  "featureDifferencesFromPriorHead": [],
+  "originalMutationMatches": [
+    "src/services/credential-evidence.ts",
+    "src/services/__tests__/credential-evidence.test.mts",
+    "src/services/wizard-state.ts",
+    "src/services/__tests__/wizard-state.test.mts",
+    "src/services/settings-manager.ts",
+    "src/services/__tests__/settings-manager-verification.test.mts",
+    "src-tauri/sidecar/credential-verification.mjs",
+    "src-tauri/sidecar/__tests__/credential-verification.test.mjs",
+    "src/components/KeyDashboard.ts",
+    "src/components/__tests__/key-dashboard-secret-boundary.test.mts",
+    "src/components/SetupWizard.ts",
+    "src/components/RuntimeConfigPanel.ts",
+    "src/components/UnifiedSettings.ts",
+    "src/components/__tests__/unified-settings-keyboard.test.mts",
+    "src/settings-main.ts",
+    "src/services/__tests__/standalone-credential-row.test.mts",
+    "src/services/credential-probe.ts",
+    "src/services/__tests__/secret-boundary.test.mts",
+    "src/services/runtime-config.ts",
+    "src/services/web-secret-store.ts",
+    "scripts/check-sidecar-bundle.mjs"
+  ],
+  "refreshedSharedMutationMatches": {
+    "ROUTE01": true,
+    "ROUTE02": true,
+    "PACKAGING": true
+  },
+  "freshValidation": {
+    "npm run test:ux058": [
+      "# pass 90",
+      "# fail 0"
+    ],
+    "npm run test:ux055": [
+      "# pass 125",
+      "# fail 0"
+    ],
+    "node tests/helpers/run-isolated-mcp.mjs --test --test-reporter=tap '--test-name-pattern=validation|NWS boundary' src-tauri/sidecar/local-api-server.test.mjs": [
+      "# pass 20",
+      "# fail 0"
+    ]
+  },
+  "allFreshCommandExitCodes": 0,
+  "node": "v22.23.1",
+  "inputAudit": "Only notification-dispatcher.ts and its strengthened trace test differ outside provenance from prior110-suite execution. Prior full selector and aggregate results remain historical, reusable only for unchanged inputs. No fresh heavy gate or lint:ci performed.",
+  "laterMetadataHold": "Preserve #1852 published abaa515e6 metadata on final actual-main transition."
+}

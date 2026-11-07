@@ -1,0 +1,4086 @@
+{
+  "auditedExecution": "ccc73e0f70f0bbf2e20ee5361947b65d9d596445",
+  "auditedTree": "c93362461191ce83c99c2c8070af162a75e1ad45",
+  "actualMain": "8174ce37131fa73f3cbb8aeaadfae4272b0f2404",
+  "originalRemoteHead": "9810479ab849e3a89b9da32369ed939cc15dfb2d",
+  "qualifiedLintAggregateExecution": "ac2830d66a6046bdeddaaf6c4d04681d4711911d",
+  "qualifiedRootTree": "2c0506c901a672ef9e4548b65794d41d955b50cd",
+  "inputContinuity": {
+    "changedPriorProvenance": {
+      "docs/validation/UX-055-CREDENTIAL-VALIDATION.md": {
+        "before": "d4421b8e283e973710fea8aa83afe6ae8144ff26b27b0d5332f4b08b1cd4fc58",
+        "after": "0cf20a0a80913ad5b8277e3049349a78b27eb5ef09bd67566ab82ea4d2fe84c5"
+      }
+    },
+    "addedProvenance": {
+      ".agentic/reviews/72a59206e37a72c2ffaafbbd2c0d78f5d0308f74.json": "d40def86654f443eb535b6498b7eeca25b8e961e46e5134267cdcdbd37beb9fa",
+      "docs/validation/UX055-COMPOSITE-FINAL-VALIDATION.json": "d7d36bf1c9e74b2c89d4078b5fe7c376accb723efbd829dbb4ec674910230d29",
+      "docs/validation/UX055-TRANSPORT-REFRESH-MUTATION.json": "16cac1519a00bee85163acc34c40505e6ab1f6a8721d011b1ec9e85b11d3a83a"
+    },
+    "allSourceTestBuildPackageMapperLintAndToolBytesUnchanged": true,
+    "currentTrackedInputCount": 5960,
+    "postExecutionMismatches": []
+  },
+  "lintScope": {
+    "qualifiedChangedPaths": [
+      "api/aviation/_aviation-helpers.js",
+      "api/aviation/_faa-ground-stop.d.ts",
+      "api/aviation/_faa-ground-stop.js",
+      "api/aviation/delays.js",
+      "src-tauri/sidecar/__tests__/credential-verification.test.mjs",
+      "src-tauri/sidecar/credential-verification.mjs",
+      "src-tauri/sidecar/local-api-server.mjs",
+      "src-tauri/sidecar/local-api-server.test.mjs",
+      "src/app/__tests__/startup-acquisition.test.mts",
+      "src/app/data-loader.ts",
+      "src/app/panel-layout.ts",
+      "src/components/AviationIntelPanel.ts",
+      "src/components/KeyDashboard.ts",
+      "src/components/MaritimeIntelPanel.ts",
+      "src/components/RuntimeConfigPanel.ts",
+      "src/components/SetupWizard.ts",
+      "src/components/ThreatDashboard.ts",
+      "src/components/UnifiedSettings.ts",
+      "src/components/__tests__/key-dashboard-secret-boundary.test.mts",
+      "src/components/__tests__/threat-dashboard-coverage.test.mts",
+      "src/components/__tests__/unified-settings-keyboard.test.mts",
+      "src/services/__tests__/credential-evidence.test.mts",
+      "src/services/__tests__/secret-boundary.test.mts",
+      "src/services/__tests__/secret-write-pending.test.mts",
+      "src/services/__tests__/settings-manager-verification.test.mts",
+      "src/services/__tests__/standalone-credential-row.test.mts",
+      "src/services/__tests__/wizard-state.test.mts",
+      "src/services/aviation/__tests__/threat-feed-cache.test.mts",
+      "src/services/aviation/aviation-intel-normalize.ts",
+      "src/services/aviation/aviation-intel-service.ts",
+      "src/services/aviation/aviation-intel-types.ts",
+      "src/services/credential-evidence.ts",
+      "src/services/credential-probe.ts",
+      "src/services/earthquake/__tests__/usgs-fusion-fetch.test.mts",
+      "src/services/earthquake/usgs-fusion-fetch.ts",
+      "src/services/runtime-config.ts",
+      "src/services/settings-manager.ts",
+      "src/services/spaceweather/__tests__/kp-fusion-observations.test.mts",
+      "src/services/spaceweather/gfz-kp-fetch.ts",
+      "src/services/synthesis/__tests__/faa-stop-handoff.test.mts",
+      "src/services/synthesis/__tests__/geo-threat-evidence.test.mts",
+      "src/services/synthesis/__tests__/threat-aggregator.test.mts",
+      "src/services/synthesis/__tests__/transport-evidence.test.mts",
+      "src/services/synthesis/geo-threat-evidence.ts",
+      "src/services/synthesis/threat-aggregator.ts",
+      "src/services/synthesis/transport-evidence.ts",
+      "src/services/web-secret-store.ts",
+      "src/services/wizard-state.ts",
+      "src/settings-main.ts",
+      "tests/data-sources-wiring.test.mjs",
+      "tests/panels/threat-transport-coverage.test.mts",
+      "tests/secret-boundary.test.mjs",
+      "tests/sidecar-ci-inventory.test.mjs"
+    ],
+    "actualMainChangedPaths": [
+      "src-tauri/sidecar/__tests__/credential-verification.test.mjs",
+      "src-tauri/sidecar/credential-verification.mjs",
+      "src-tauri/sidecar/local-api-server.mjs",
+      "src-tauri/sidecar/local-api-server.test.mjs",
+      "src/components/KeyDashboard.ts",
+      "src/components/RuntimeConfigPanel.ts",
+      "src/components/SetupWizard.ts",
+      "src/components/UnifiedSettings.ts",
+      "src/components/__tests__/key-dashboard-secret-boundary.test.mts",
+      "src/components/__tests__/unified-settings-keyboard.test.mts",
+      "src/services/__tests__/credential-evidence.test.mts",
+      "src/services/__tests__/secret-boundary.test.mts",
+      "src/services/__tests__/secret-write-pending.test.mts",
+      "src/services/__tests__/settings-manager-verification.test.mts",
+      "src/services/__tests__/standalone-credential-row.test.mts",
+      "src/services/__tests__/wizard-state.test.mts",
+      "src/services/credential-evidence.ts",
+      "src/services/credential-probe.ts",
+      "src/services/runtime-config.ts",
+      "src/services/settings-manager.ts",
+      "src/services/web-secret-store.ts",
+      "src/services/wizard-state.ts",
+      "src/settings-main.ts",
+      "tests/secret-boundary.test.mjs",
+      "tests/sidecar-ci-inventory.test.mjs"
+    ],
+    "actualScopeSubsetOfQualified": true
+  },
+  "effectiveSelection": {
+    "execution": "ccc73e0f70f0bbf2e20ee5361947b65d9d596445",
+    "actualMain": "8174ce37131fa73f3cbb8aeaadfae4272b0f2404",
+    "qualifiedExecution": "ac2830d66a6046bdeddaaf6c4d04681d4711911d",
+    "priorCount": 92,
+    "currentCount": 84,
+    "commands": [
+      {
+        "name": "test:acc509",
+        "owner": "main",
+        "command": "tsx --test src/services/__tests__/alert-identity.test.mts src/services/__tests__/unified-alerts-identity.test.mts src/services/__tests__/lsr-alert-identity.test.mts src/services/__tests__/acc509-replay.test.mts tests/intelligence/situation-engine-identity.test.mts tests/intelligence/compound-episode-identity.test.mts tests/intelligence/situation-geography-consumers.test.mts tests/components/situation-panel-delegation.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/alert-identity.test.mts",
+              "src/services/__tests__/unified-alerts-identity.test.mts",
+              "src/services/__tests__/lsr-alert-identity.test.mts",
+              "src/services/__tests__/acc509-replay.test.mts",
+              "tests/intelligence/situation-engine-identity.test.mts",
+              "tests/intelligence/compound-episode-identity.test.mts",
+              "tests/intelligence/situation-geography-consumers.test.mts",
+              "tests/components/situation-panel-delegation.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/alert-identity.test.mts",
+              "src/services/__tests__/unified-alerts-identity.test.mts",
+              "src/services/__tests__/lsr-alert-identity.test.mts",
+              "src/services/__tests__/acc509-replay.test.mts",
+              "tests/intelligence/situation-engine-identity.test.mts",
+              "tests/intelligence/compound-episode-identity.test.mts",
+              "tests/intelligence/situation-geography-consumers.test.mts",
+              "tests/components/situation-panel-delegation.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:acc510",
+        "owner": "main",
+        "command": "tsx --test src/services/__tests__/acc510-news-domain.test.mts src/services/__tests__/acc510-news-producers.test.mts src/services/__tests__/acc510-news-handoff.test.mts src/services/__tests__/acc510-news-replay.test.mts src/services/__tests__/acc510-situation-domains.test.mts src/services/__tests__/acc510-analyst-domain-path.test.mts tests/intelligence/acc510-neutral-consumers.test.mts tests/components/situation-panel-delegation.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/acc510-news-domain.test.mts",
+              "src/services/__tests__/acc510-news-producers.test.mts",
+              "src/services/__tests__/acc510-news-handoff.test.mts",
+              "src/services/__tests__/acc510-news-replay.test.mts",
+              "src/services/__tests__/acc510-situation-domains.test.mts",
+              "src/services/__tests__/acc510-analyst-domain-path.test.mts",
+              "tests/intelligence/acc510-neutral-consumers.test.mts",
+              "tests/components/situation-panel-delegation.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/acc510-news-domain.test.mts",
+              "src/services/__tests__/acc510-news-producers.test.mts",
+              "src/services/__tests__/acc510-news-handoff.test.mts",
+              "src/services/__tests__/acc510-news-replay.test.mts",
+              "src/services/__tests__/acc510-situation-domains.test.mts",
+              "src/services/__tests__/acc510-analyst-domain-path.test.mts",
+              "tests/intelligence/acc510-neutral-consumers.test.mts",
+              "tests/components/situation-panel-delegation.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:agentic-pipeline",
+        "owner": "PR-only",
+        "command": "tsx --test tests/agentic-pipeline.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:agentic-pipeline"
+            ],
+            "packageScript": "tsx --test tests/agentic-pipeline.test.mjs"
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "tests/agentic-pipeline.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "PR-only",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:airquality",
+        "owner": "main",
+        "command": "tsx --test src/services/airquality/__tests__/purpleair-helpers.test.mts src/services/airquality/__tests__/airquality-fusion-observations.test.mts src/services/airquality/__tests__/purpleair-fusion-fetch.test.mts src/services/airquality/__tests__/air-quality-callout-bridge.test.mts && node --test src-tauri/sidecar/__tests__/purpleair-route-guards.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/airquality/__tests__/purpleair-helpers.test.mts",
+              "src/services/airquality/__tests__/airquality-fusion-observations.test.mts",
+              "src/services/airquality/__tests__/purpleair-fusion-fetch.test.mts",
+              "src/services/airquality/__tests__/air-quality-callout-bridge.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/purpleair-route-guards.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/airquality/__tests__/purpleair-helpers.test.mts",
+              "src/services/airquality/__tests__/airquality-fusion-observations.test.mts",
+              "src/services/airquality/__tests__/purpleair-fusion-fetch.test.mts",
+              "src/services/airquality/__tests__/air-quality-callout-bridge.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/purpleair-route-guards.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:alert-capacity",
+        "owner": "main",
+        "command": "tsx --test src/services/__tests__/unified-alerts-capacity.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/unified-alerts-capacity.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/unified-alerts-capacity.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:algorithms",
+        "owner": "main",
+        "command": "tsx --test src/services/algorithms/__tests__/*.test.mts src/services/__tests__/military-patterns.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/algorithms/__tests__/*.test.mts",
+              "src/services/__tests__/military-patterns.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/algorithms/__tests__/*.test.mts",
+              "src/services/__tests__/military-patterns.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:analytics-consent",
+        "owner": "main",
+        "command": "tsx --test src/services/__tests__/analytics-consent.test.mts src/services/__tests__/analytics-sdk-lifecycle.test.mjs src/components/__tests__/analytics-reset-notice.test.mts src/components/__tests__/shell-a11y-contracts.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/analytics-consent.test.mts",
+              "src/services/__tests__/analytics-sdk-lifecycle.test.mjs",
+              "src/components/__tests__/analytics-reset-notice.test.mts",
+              "src/components/__tests__/shell-a11y-contracts.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/analytics-consent.test.mts",
+              "src/services/__tests__/analytics-sdk-lifecycle.test.mjs",
+              "src/components/__tests__/analytics-reset-notice.test.mts",
+              "src/components/__tests__/shell-a11y-contracts.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:analytics-lifecycle",
+        "owner": "main",
+        "command": "tsx --test src/services/__tests__/analytics-sdk-lifecycle.test.mjs src/components/__tests__/analytics-reset-notice.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/analytics-sdk-lifecycle.test.mjs",
+              "src/components/__tests__/analytics-reset-notice.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/analytics-sdk-lifecycle.test.mjs",
+              "src/components/__tests__/analytics-reset-notice.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:components",
+        "owner": "main",
+        "command": "tsx --test src/components/__tests__/disease-outbreak-tabs.test.mts src/components/__tests__/space-weather-panel.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/components/__tests__/disease-outbreak-tabs.test.mts",
+              "src/components/__tests__/space-weather-panel.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/components/__tests__/disease-outbreak-tabs.test.mts",
+              "src/components/__tests__/space-weather-panel.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:desktop-identity",
+        "owner": "PR-only",
+        "command": "node --test tests/desktop-identity.test.mjs tests/release-metadata.test.mjs tests/release-context.test.mjs tests/release-manifest.test.mjs tests/build-desktop-workflow.test.mjs tests/desktop-package-signing.test.mjs && npm run test:desktop-updater",
+        "effectiveStages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:desktop-identity"
+            ],
+            "packageScript": "node --test tests/desktop-identity.test.mjs tests/release-metadata.test.mjs tests/release-context.test.mjs tests/release-manifest.test.mjs tests/build-desktop-workflow.test.mjs tests/desktop-package-signing.test.mjs && npm run test:desktop-updater"
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/desktop-identity.test.mjs",
+              "tests/release-metadata.test.mjs",
+              "tests/release-context.test.mjs",
+              "tests/release-manifest.test.mjs",
+              "tests/build-desktop-workflow.test.mjs",
+              "tests/desktop-package-signing.test.mjs"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/desktop-updater-signature.test.mjs",
+              "tests/desktop-updater-authority.test.mjs",
+              "tests/updater-identity-native.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/app/__tests__/desktop-updater.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "PR-only",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:diagnostics",
+        "owner": "main",
+        "command": "tsx --import ./tests/panels/register-hook.mjs --test src/services/diagnostics/__tests__/*.test.mts tests/services/analysis-worker.test.mts && node --test scripts/checkup-log-audit.test.mjs scripts/claude-auth-core.test.mjs scripts/claude-auth-doctor.test.mjs scripts/doctor-core.test.mjs tools/mcp-server/__tests__/diagnostics-tools.test.mjs src-tauri/sidecar/__tests__/analyst-diagnostics-mirror.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "src/services/diagnostics/__tests__/*.test.mts",
+              "tests/services/analysis-worker.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "scripts/checkup-log-audit.test.mjs",
+              "scripts/claude-auth-core.test.mjs",
+              "scripts/claude-auth-doctor.test.mjs",
+              "scripts/doctor-core.test.mjs",
+              "tools/mcp-server/__tests__/diagnostics-tools.test.mjs",
+              "src-tauri/sidecar/__tests__/analyst-diagnostics-mirror.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "src/services/diagnostics/__tests__/*.test.mts",
+              "tests/services/analysis-worker.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "scripts/checkup-log-audit.test.mjs",
+              "scripts/claude-auth-core.test.mjs",
+              "scripts/claude-auth-doctor.test.mjs",
+              "scripts/doctor-core.test.mjs",
+              "tools/mcp-server/__tests__/diagnostics-tools.test.mjs",
+              "src-tauri/sidecar/__tests__/analyst-diagnostics-mirror.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:domain-retirement",
+        "owner": "PR-only",
+        "command": "node --test tests/retired-domain-suite.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:domain-retirement"
+            ],
+            "packageScript": "node --test tests/retired-domain-suite.test.mjs"
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/retired-domain-suite.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "PR-only",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:emergency-pack",
+        "owner": "main",
+        "command": "tsx --test src/services/emergency-pack/__tests__/*.test.mts src/components/__tests__/emergency-pack-view.test.mts src/components/__tests__/emergency-readiness-pack-panel.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/emergency-pack/__tests__/*.test.mts",
+              "src/components/__tests__/emergency-pack-view.test.mts",
+              "src/components/__tests__/emergency-readiness-pack-panel.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/emergency-pack/__tests__/*.test.mts",
+              "src/components/__tests__/emergency-pack-view.test.mts",
+              "src/components/__tests__/emergency-readiness-pack-panel.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:emergency-readiness",
+        "owner": "main",
+        "command": "tsx --import ./tests/panels/register-hook.mjs --test src/services/survival/__tests__/snapshot-store.test.mts src/services/lifelines/__tests__/lifeline-runtime.test.mts src/components/__tests__/emergency-readiness-view.test.mts src/components/__tests__/emergency-readiness-panel.test.mts tests/emergency-readiness-panel-wiring.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "src/services/survival/__tests__/snapshot-store.test.mts",
+              "src/services/lifelines/__tests__/lifeline-runtime.test.mts",
+              "src/components/__tests__/emergency-readiness-view.test.mts",
+              "src/components/__tests__/emergency-readiness-panel.test.mts",
+              "tests/emergency-readiness-panel-wiring.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "src/services/survival/__tests__/snapshot-store.test.mts",
+              "src/services/lifelines/__tests__/lifeline-runtime.test.mts",
+              "src/components/__tests__/emergency-readiness-view.test.mts",
+              "src/components/__tests__/emergency-readiness-panel.test.mts",
+              "tests/emergency-readiness-panel-wiring.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:event-store",
+        "owner": "main",
+        "command": "tsx --test src/components/__tests__/event-store-helpers.test.mts && node --test src-tauri/sidecar/__tests__/event-store.test.mjs src-tauri/sidecar/__tests__/event-store-wiring.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/components/__tests__/event-store-helpers.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/event-store.test.mjs",
+              "src-tauri/sidecar/__tests__/event-store-wiring.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/components/__tests__/event-store-helpers.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/event-store.test.mjs",
+              "src-tauri/sidecar/__tests__/event-store-wiring.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:evidence-journal",
+        "owner": "main",
+        "command": "node --test src-tauri/sidecar/__tests__/evidence-store.test.mjs src-tauri/sidecar/__tests__/evidence-routes.test.mjs tests/evidence-journal-boundary.test.mjs && tsx --test src/services/intelligence/__tests__/evidence-journal.test.mts src/components/__tests__/evidence-journal-view.test.mts src/components/__tests__/evidence-journal-panel.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/evidence-store.test.mjs",
+              "src-tauri/sidecar/__tests__/evidence-routes.test.mjs",
+              "tests/evidence-journal-boundary.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/intelligence/__tests__/evidence-journal.test.mts",
+              "src/components/__tests__/evidence-journal-view.test.mts",
+              "src/components/__tests__/evidence-journal-panel.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/evidence-store.test.mjs",
+              "src-tauri/sidecar/__tests__/evidence-routes.test.mjs",
+              "tests/evidence-journal-boundary.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/intelligence/__tests__/evidence-journal.test.mts",
+              "src/components/__tests__/evidence-journal-view.test.mts",
+              "src/components/__tests__/evidence-journal-panel.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:feed-health",
+        "owner": "main",
+        "command": "tsx --test src/services/diagnostics/__tests__/feed-catalog.test.mts src/components/__tests__/feed-health-panel.test.mts && node --test src-tauri/sidecar/__tests__/feed-tracker.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/diagnostics/__tests__/feed-catalog.test.mts",
+              "src/components/__tests__/feed-health-panel.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/feed-tracker.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/diagnostics/__tests__/feed-catalog.test.mts",
+              "src/components/__tests__/feed-health-panel.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/feed-tracker.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:feed-health-dashboard",
+        "owner": "main",
+        "command": "tsx --test src/components/__tests__/feed-health-dashboard-panel.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/components/__tests__/feed-health-dashboard-panel.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/components/__tests__/feed-health-dashboard-panel.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:fetch-attribution",
+        "owner": "main",
+        "command": "tsx --test src/services/__tests__/fetch-attribution.test.mts src/services/__tests__/fetch-attribution-wiring.test.mts src/services/__tests__/fetch-attribution-port-race.test.mts src/services/__tests__/caller-abort.test.mts src/services/__tests__/cached-fetch-fallback.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/fetch-attribution.test.mts",
+              "src/services/__tests__/fetch-attribution-wiring.test.mts",
+              "src/services/__tests__/fetch-attribution-port-race.test.mts",
+              "src/services/__tests__/caller-abort.test.mts",
+              "src/services/__tests__/cached-fetch-fallback.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/fetch-attribution.test.mts",
+              "src/services/__tests__/fetch-attribution-wiring.test.mts",
+              "src/services/__tests__/fetch-attribution-port-race.test.mts",
+              "src/services/__tests__/caller-abort.test.mts",
+              "src/services/__tests__/cached-fetch-fallback.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:firms",
+        "owner": "main",
+        "command": "tsx --test src/components/__tests__/firms-helpers.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/components/__tests__/firms-helpers.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/components/__tests__/firms-helpers.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:gdacs-map",
+        "owner": "main",
+        "command": "tsx --test src/services/__tests__/gdacs-map.test.mts src/services/__tests__/api-diagnostic.test.mts src/services/__tests__/data-freshness.test.mts src/services/__tests__/persisted-date-hydration.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/gdacs-map.test.mts",
+              "src/services/__tests__/api-diagnostic.test.mts",
+              "src/services/__tests__/data-freshness.test.mts",
+              "src/services/__tests__/persisted-date-hydration.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/gdacs-map.test.mts",
+              "src/services/__tests__/api-diagnostic.test.mts",
+              "src/services/__tests__/data-freshness.test.mts",
+              "src/services/__tests__/persisted-date-hydration.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:health-contract",
+        "owner": "PR-only",
+        "command": "node --test tests/health-contract-suite.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:health-contract"
+            ],
+            "packageScript": "node --test tests/health-contract-suite.test.mjs"
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/health-contract-suite.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "PR-only",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:home-reassurance",
+        "owner": "main",
+        "command": "tsx --test src/services/home-shell/__tests__/briefing-view.test.mts src/components/__tests__/home-shell-reassurance.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/home-shell/__tests__/briefing-view.test.mts",
+              "src/components/__tests__/home-shell-reassurance.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/home-shell/__tests__/briefing-view.test.mts",
+              "src/components/__tests__/home-shell-reassurance.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:imessage",
+        "owner": "main",
+        "command": "node --test tests/imessage-native-boundary.test.mjs && tsx --test src/services/__tests__/imessage-bridge.test.mts src/components/__tests__/imessage-settings.test.mts src/app/__tests__/desktop-imessage.test.mts src/services/seismic/__tests__/eew-imessage.test.mts src/services/notifications/__tests__/imessage-bridge-extended.test.mts src/services/notifications/__tests__/imessage-pause-alerts.test.mts src/components/__tests__/imessage-paused-notice.test.mts src/components/__tests__/imessage-paused-notice-bridge.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/imessage-native-boundary.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/imessage-bridge.test.mts",
+              "src/components/__tests__/imessage-settings.test.mts",
+              "src/app/__tests__/desktop-imessage.test.mts",
+              "src/services/seismic/__tests__/eew-imessage.test.mts",
+              "src/services/notifications/__tests__/imessage-bridge-extended.test.mts",
+              "src/services/notifications/__tests__/imessage-pause-alerts.test.mts",
+              "src/components/__tests__/imessage-paused-notice.test.mts",
+              "src/components/__tests__/imessage-paused-notice-bridge.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/imessage-native-boundary.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/imessage-bridge.test.mts",
+              "src/components/__tests__/imessage-settings.test.mts",
+              "src/app/__tests__/desktop-imessage.test.mts",
+              "src/services/seismic/__tests__/eew-imessage.test.mts",
+              "src/services/notifications/__tests__/imessage-bridge-extended.test.mts",
+              "src/services/notifications/__tests__/imessage-pause-alerts.test.mts",
+              "src/components/__tests__/imessage-paused-notice.test.mts",
+              "src/components/__tests__/imessage-paused-notice-bridge.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:insights",
+        "owner": "main",
+        "command": "tsx --test src/services/insights/__tests__/big-event-detector.test.mts src/services/insights/__tests__/confidence-urgency-matrix.test.mts src/services/insights/__tests__/notification-ladder.test.mts src/services/insights/__tests__/share-packet.test.mts src/services/insights/__tests__/ask-the-data.test.mts src/services/insights/__tests__/ask-context.test.mts src/components/__tests__/ask-the-data-view.test.mts src/services/insights/__tests__/action-briefs.test.mts src/services/insights/__tests__/data-bridge.test.mts src/services/action-guidance/__tests__/earthquake-action-guidance.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/insights/__tests__/big-event-detector.test.mts",
+              "src/services/insights/__tests__/confidence-urgency-matrix.test.mts",
+              "src/services/insights/__tests__/notification-ladder.test.mts",
+              "src/services/insights/__tests__/share-packet.test.mts",
+              "src/services/insights/__tests__/ask-the-data.test.mts",
+              "src/services/insights/__tests__/ask-context.test.mts",
+              "src/components/__tests__/ask-the-data-view.test.mts",
+              "src/services/insights/__tests__/action-briefs.test.mts",
+              "src/services/insights/__tests__/data-bridge.test.mts",
+              "src/services/action-guidance/__tests__/earthquake-action-guidance.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/insights/__tests__/big-event-detector.test.mts",
+              "src/services/insights/__tests__/confidence-urgency-matrix.test.mts",
+              "src/services/insights/__tests__/notification-ladder.test.mts",
+              "src/services/insights/__tests__/share-packet.test.mts",
+              "src/services/insights/__tests__/ask-the-data.test.mts",
+              "src/services/insights/__tests__/ask-context.test.mts",
+              "src/components/__tests__/ask-the-data-view.test.mts",
+              "src/services/insights/__tests__/action-briefs.test.mts",
+              "src/services/insights/__tests__/data-bridge.test.mts",
+              "src/services/action-guidance/__tests__/earthquake-action-guidance.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:install-scripts",
+        "owner": "PR-only",
+        "command": "node --test tests/install-script-drift.test.mjs tests/main-sync-agent.test.mjs tests/install-mcp-deps.test.mjs tests/desktop-package-signing.test.mjs tests/desktop-build-full.test.mjs scripts/install-crystalball-mcp.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:install-scripts"
+            ],
+            "packageScript": "node --test tests/install-script-drift.test.mjs tests/main-sync-agent.test.mjs tests/install-mcp-deps.test.mjs tests/desktop-package-signing.test.mjs tests/desktop-build-full.test.mjs scripts/install-crystalball-mcp.test.mjs"
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/install-script-drift.test.mjs",
+              "tests/main-sync-agent.test.mjs",
+              "tests/install-mcp-deps.test.mjs",
+              "tests/desktop-package-signing.test.mjs",
+              "tests/desktop-build-full.test.mjs",
+              "scripts/install-crystalball-mcp.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "PR-only",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:lifelines",
+        "owner": "main",
+        "command": "node --test api/local-logistics.test.mjs api/grid-outages.test.mjs api/usgs-water-proxy.test.mjs api/__tests__/local-logistics.test.mjs src-tauri/sidecar/__tests__/bounded-provider-responses.test.mjs src-tauri/sidecar/__tests__/local-logistics-route.test.mjs src-tauri/sidecar/__tests__/intel-expansion-cluster3.test.mjs src-tauri/sidecar/__tests__/sidecar-ttl-cache-guards.test.mjs tests/local-logistics-panel.test.mjs tests/lifeline-runtime-wiring.test.mjs tests/place-briefs.test.mjs tests/saved-place-lifeline-pack-wiring.test.mjs tests/water-quality-wiring.test.mjs && tsx --test src/services/lifelines/__tests__/*.test.mts src/services/__tests__/offline-alert-cache.test.mts tests/comms-lifeline-context.test.mts tests/lifeline-evidence-expiry.test.mts tests/local-logistics.test.mts tests/local-logistics-prewarm.test.mts tests/place-briefs-lifelines.test.mts tests/saved-place-lifeline-pack.test.mts tests/saved-place-weather.test.mts tests/water-quality-truth.test.mts src/components/__tests__/feed-health-panel.test.mts src/components/__tests__/local-logistics-panel.test.mts src/components/__tests__/personal-storm-mode-shelf.test.mts src/services/diagnostics/__tests__/feed-catalog.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "api/local-logistics.test.mjs",
+              "api/grid-outages.test.mjs",
+              "api/usgs-water-proxy.test.mjs",
+              "api/__tests__/local-logistics.test.mjs",
+              "src-tauri/sidecar/__tests__/bounded-provider-responses.test.mjs",
+              "src-tauri/sidecar/__tests__/local-logistics-route.test.mjs",
+              "src-tauri/sidecar/__tests__/intel-expansion-cluster3.test.mjs",
+              "src-tauri/sidecar/__tests__/sidecar-ttl-cache-guards.test.mjs",
+              "tests/local-logistics-panel.test.mjs",
+              "tests/lifeline-runtime-wiring.test.mjs",
+              "tests/place-briefs.test.mjs",
+              "tests/saved-place-lifeline-pack-wiring.test.mjs",
+              "tests/water-quality-wiring.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/lifelines/__tests__/*.test.mts",
+              "src/services/__tests__/offline-alert-cache.test.mts",
+              "tests/comms-lifeline-context.test.mts",
+              "tests/lifeline-evidence-expiry.test.mts",
+              "tests/local-logistics.test.mts",
+              "tests/local-logistics-prewarm.test.mts",
+              "tests/place-briefs-lifelines.test.mts",
+              "tests/saved-place-lifeline-pack.test.mts",
+              "tests/saved-place-weather.test.mts",
+              "tests/water-quality-truth.test.mts",
+              "src/components/__tests__/feed-health-panel.test.mts",
+              "src/components/__tests__/local-logistics-panel.test.mts",
+              "src/components/__tests__/personal-storm-mode-shelf.test.mts",
+              "src/services/diagnostics/__tests__/feed-catalog.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "api/local-logistics.test.mjs",
+              "api/grid-outages.test.mjs",
+              "api/usgs-water-proxy.test.mjs",
+              "api/__tests__/local-logistics.test.mjs",
+              "src-tauri/sidecar/__tests__/bounded-provider-responses.test.mjs",
+              "src-tauri/sidecar/__tests__/local-logistics-route.test.mjs",
+              "src-tauri/sidecar/__tests__/intel-expansion-cluster3.test.mjs",
+              "src-tauri/sidecar/__tests__/sidecar-ttl-cache-guards.test.mjs",
+              "tests/local-logistics-panel.test.mjs",
+              "tests/lifeline-runtime-wiring.test.mjs",
+              "tests/place-briefs.test.mjs",
+              "tests/saved-place-lifeline-pack-wiring.test.mjs",
+              "tests/water-quality-wiring.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/lifelines/__tests__/*.test.mts",
+              "src/services/__tests__/offline-alert-cache.test.mts",
+              "tests/comms-lifeline-context.test.mts",
+              "tests/lifeline-evidence-expiry.test.mts",
+              "tests/local-logistics.test.mts",
+              "tests/local-logistics-prewarm.test.mts",
+              "tests/place-briefs-lifelines.test.mts",
+              "tests/saved-place-lifeline-pack.test.mts",
+              "tests/saved-place-weather.test.mts",
+              "tests/water-quality-truth.test.mts",
+              "src/components/__tests__/feed-health-panel.test.mts",
+              "src/components/__tests__/local-logistics-panel.test.mts",
+              "src/components/__tests__/personal-storm-mode-shelf.test.mts",
+              "src/services/diagnostics/__tests__/feed-catalog.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:lifelines-grid",
+        "owner": "main",
+        "command": "node --test api/grid-outages.test.mjs tests/grid-odin-wiring.test.mjs src-tauri/sidecar/__tests__/intel-expansion-cluster3.test.mjs src-tauri/sidecar/__tests__/sidecar-ttl-cache-guards.test.mjs && tsx --test tests/grid-loader-lifecycle.test.mts src/services/infrastructure/__tests__/grid-monitor.test.mts src/services/infrastructure/__tests__/infrastructure-overlay.test.mts src/services/infrarisks/__tests__/infra-risk-service.test.mts src/services/diagnostics/__tests__/feed-catalog.test.mts src/components/__tests__/feed-health-panel.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "api/grid-outages.test.mjs",
+              "tests/grid-odin-wiring.test.mjs",
+              "src-tauri/sidecar/__tests__/intel-expansion-cluster3.test.mjs",
+              "src-tauri/sidecar/__tests__/sidecar-ttl-cache-guards.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "tests/grid-loader-lifecycle.test.mts",
+              "src/services/infrastructure/__tests__/grid-monitor.test.mts",
+              "src/services/infrastructure/__tests__/infrastructure-overlay.test.mts",
+              "src/services/infrarisks/__tests__/infra-risk-service.test.mts",
+              "src/services/diagnostics/__tests__/feed-catalog.test.mts",
+              "src/components/__tests__/feed-health-panel.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "api/grid-outages.test.mjs",
+              "tests/grid-odin-wiring.test.mjs",
+              "src-tauri/sidecar/__tests__/intel-expansion-cluster3.test.mjs",
+              "src-tauri/sidecar/__tests__/sidecar-ttl-cache-guards.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "tests/grid-loader-lifecycle.test.mts",
+              "src/services/infrastructure/__tests__/grid-monitor.test.mts",
+              "src/services/infrastructure/__tests__/infrastructure-overlay.test.mts",
+              "src/services/infrarisks/__tests__/infra-risk-service.test.mts",
+              "src/services/diagnostics/__tests__/feed-catalog.test.mts",
+              "src/components/__tests__/feed-health-panel.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:lifelines-map",
+        "owner": "main",
+        "command": "tsx --import ./tests/panels/register-hook.mjs --test tests/lifelines-map.test.mts tests/evacuation-routing.test.mts src/components/__tests__/map-popup-lifeline.test.mts && node --test api/osrm-route.test.mjs src-tauri/sidecar/__tests__/osrm-route.test.mjs tests/lifelines-map-wiring.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "tests/lifelines-map.test.mts",
+              "tests/evacuation-routing.test.mts",
+              "src/components/__tests__/map-popup-lifeline.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "api/osrm-route.test.mjs",
+              "src-tauri/sidecar/__tests__/osrm-route.test.mjs",
+              "tests/lifelines-map-wiring.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "tests/lifelines-map.test.mts",
+              "tests/evacuation-routing.test.mts",
+              "src/components/__tests__/map-popup-lifeline.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "api/osrm-route.test.mjs",
+              "src-tauri/sidecar/__tests__/osrm-route.test.mjs",
+              "tests/lifelines-map-wiring.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:little-snitch",
+        "owner": "main",
+        "command": "node --test scripts/export-little-snitch-traffic.test.mjs scripts/install-little-snitch-exporter.test.mjs scripts/little-snitch-log-traffic-helper.test.mjs src-tauri/sidecar/local-api-server.test.mjs && tsx --test src/services/__tests__/little-snitch.test.mts src/components/__tests__/little-snitch-panel-source-state.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "scripts/export-little-snitch-traffic.test.mjs",
+              "scripts/install-little-snitch-exporter.test.mjs",
+              "scripts/little-snitch-log-traffic-helper.test.mjs",
+              "src-tauri/sidecar/local-api-server.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/little-snitch.test.mts",
+              "src/components/__tests__/little-snitch-panel-source-state.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "scripts/export-little-snitch-traffic.test.mjs",
+              "scripts/install-little-snitch-exporter.test.mjs",
+              "scripts/little-snitch-log-traffic-helper.test.mjs",
+              "src-tauri/sidecar/local-api-server.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/little-snitch.test.mts",
+              "src/components/__tests__/little-snitch-panel-source-state.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:map-clarity",
+        "owner": "main",
+        "command": "tsx --test src/components/__tests__/map-clarity-model.test.mts src/components/__tests__/map-feature-list.test.mts && tsx --import ./tests/panels/register-hook.mjs --test --test-force-exit src/components/__tests__/map-popup-faa-camera.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/components/__tests__/map-clarity-model.test.mts",
+              "src/components/__tests__/map-feature-list.test.mts"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "--test-force-exit",
+              "src/components/__tests__/map-popup-faa-camera.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/components/__tests__/map-clarity-model.test.mts",
+              "src/components/__tests__/map-feature-list.test.mts"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "--test-force-exit",
+              "src/components/__tests__/map-popup-faa-camera.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:maritime",
+        "owner": "main",
+        "command": "tsx --test src/services/maritime/__tests__/freight-stress.test.mts src/services/maritime/__tests__/chokepoint-monitor.test.mts src/services/maritime/__tests__/chokepoint-aggregator.test.mts src/services/maritime/__tests__/maritime-threats.test.mts src/services/maritime/__tests__/vessel-classifier.test.mts src/services/maritime/__tests__/vessel-globe-helpers.test.mts src/services/__tests__/dark-vessel-gaps.test.mts && node --test src-tauri/sidecar/__tests__/freight-stress-parity.test.mjs src-tauri/sidecar/__tests__/dark-vessel-gaps-parity.test.mjs src-tauri/sidecar/__tests__/maritime-vessels-parity.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/maritime/__tests__/freight-stress.test.mts",
+              "src/services/maritime/__tests__/chokepoint-monitor.test.mts",
+              "src/services/maritime/__tests__/chokepoint-aggregator.test.mts",
+              "src/services/maritime/__tests__/maritime-threats.test.mts",
+              "src/services/maritime/__tests__/vessel-classifier.test.mts",
+              "src/services/maritime/__tests__/vessel-globe-helpers.test.mts",
+              "src/services/__tests__/dark-vessel-gaps.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/freight-stress-parity.test.mjs",
+              "src-tauri/sidecar/__tests__/dark-vessel-gaps-parity.test.mjs",
+              "src-tauri/sidecar/__tests__/maritime-vessels-parity.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/maritime/__tests__/freight-stress.test.mts",
+              "src/services/maritime/__tests__/chokepoint-monitor.test.mts",
+              "src/services/maritime/__tests__/chokepoint-aggregator.test.mts",
+              "src/services/maritime/__tests__/maritime-threats.test.mts",
+              "src/services/maritime/__tests__/vessel-classifier.test.mts",
+              "src/services/maritime/__tests__/vessel-globe-helpers.test.mts",
+              "src/services/__tests__/dark-vessel-gaps.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/freight-stress-parity.test.mjs",
+              "src-tauri/sidecar/__tests__/dark-vessel-gaps-parity.test.mjs",
+              "src-tauri/sidecar/__tests__/maritime-vessels-parity.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:mcp-companion",
+        "owner": "PR-only",
+        "command": "node --test tests/mcp-companion-suite.test.mjs tests/mcp-suite-entry.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:mcp-companion"
+            ],
+            "packageScript": "node --test tests/mcp-companion-suite.test.mjs tests/mcp-suite-entry.test.mjs"
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/mcp-companion-suite.test.mjs",
+              "tests/mcp-suite-entry.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "PR-only",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:mcp-untrusted",
+        "owner": "PR-only",
+        "command": "node --test tests/mcp-untrusted-suite.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:mcp-untrusted"
+            ],
+            "packageScript": "node --test tests/mcp-untrusted-suite.test.mjs"
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/mcp-untrusted-suite.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "PR-only",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:ml-budget",
+        "owner": "main",
+        "command": "tsx --test src/services/__tests__/ml-request-budget.test.mts src/services/__tests__/ml-worker-manager.test.mts src/workers/__tests__/ml-worker-eviction.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/ml-request-budget.test.mts",
+              "src/services/__tests__/ml-worker-manager.test.mts",
+              "src/workers/__tests__/ml-worker-eviction.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/ml-request-budget.test.mts",
+              "src/services/__tests__/ml-worker-manager.test.mts",
+              "src/workers/__tests__/ml-worker-eviction.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:native-notify",
+        "owner": "main",
+        "command": "node --test tests/native-notify-boundary.test.mjs && tsx --test src/services/__tests__/native-notify.test.mts src/services/__tests__/notification-router.test.mts src/services/__tests__/proximity-alert-delivery.test.mts src/services/notifications/__tests__/push-notifier-history.test.mts src/app/__tests__/desktop-imessage.test.mts src/app/__tests__/desktop-updater.test.mts src/services/__tests__/threat-reactor.test.mts src/services/__tests__/threat-reactor-retry.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/native-notify-boundary.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/native-notify.test.mts",
+              "src/services/__tests__/notification-router.test.mts",
+              "src/services/__tests__/proximity-alert-delivery.test.mts",
+              "src/services/notifications/__tests__/push-notifier-history.test.mts",
+              "src/app/__tests__/desktop-imessage.test.mts",
+              "src/app/__tests__/desktop-updater.test.mts",
+              "src/services/__tests__/threat-reactor.test.mts",
+              "src/services/__tests__/threat-reactor-retry.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/native-notify-boundary.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/native-notify.test.mts",
+              "src/services/__tests__/notification-router.test.mts",
+              "src/services/__tests__/proximity-alert-delivery.test.mts",
+              "src/services/notifications/__tests__/push-notifier-history.test.mts",
+              "src/app/__tests__/desktop-imessage.test.mts",
+              "src/app/__tests__/desktop-updater.test.mts",
+              "src/services/__tests__/threat-reactor.test.mts",
+              "src/services/__tests__/threat-reactor-retry.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:news-resilience",
+        "owner": "main",
+        "command": "tsx --test src/services/__tests__/news-provenance.test.mts src/services/__tests__/rss-adapters-tracked.test.mts src/services/news/__tests__/news-snapshot.test.mts tests/components/news-resilience-panels.test.mts && node --test tests/news-route-provenance.test.mjs tests/ux040-news-snapshot-wiring.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/news-provenance.test.mts",
+              "src/services/__tests__/rss-adapters-tracked.test.mts",
+              "src/services/news/__tests__/news-snapshot.test.mts",
+              "tests/components/news-resilience-panels.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/news-route-provenance.test.mjs",
+              "tests/ux040-news-snapshot-wiring.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/news-provenance.test.mts",
+              "src/services/__tests__/rss-adapters-tracked.test.mts",
+              "src/services/news/__tests__/news-snapshot.test.mts",
+              "tests/components/news-resilience-panels.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/news-route-provenance.test.mjs",
+              "tests/ux040-news-snapshot-wiring.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:notification-history",
+        "owner": "main",
+        "command": "tsx --test src/services/notifications/__tests__/notification-history-service.test.mts src/services/notifications/__tests__/push-notifier-history.test.mts src/components/__tests__/notification-history-helpers.test.mts src/services/diagnostics/__tests__/sidecar-self-test.test.mts && node --test src-tauri/sidecar/__tests__/self-test-classify.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/notifications/__tests__/notification-history-service.test.mts",
+              "src/services/notifications/__tests__/push-notifier-history.test.mts",
+              "src/components/__tests__/notification-history-helpers.test.mts",
+              "src/services/diagnostics/__tests__/sidecar-self-test.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/self-test-classify.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/notifications/__tests__/notification-history-service.test.mts",
+              "src/services/notifications/__tests__/push-notifier-history.test.mts",
+              "src/components/__tests__/notification-history-helpers.test.mts",
+              "src/services/diagnostics/__tests__/sidecar-self-test.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/self-test-classify.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:notifications",
+        "owner": "main",
+        "command": "tsx --test src/services/notifications/__tests__/eew-tiers.test.mts src/services/notifications/__tests__/notification-ledger.test.mts src/services/notifications/__tests__/push-notifier.test.mts src/services/notifications/__tests__/imessage-bridge-extended.test.mts src/services/notifications/__tests__/voice-alerter.test.mts src/services/notifications/__tests__/event-bridge.test.mts src-tauri/sidecar/__tests__/notification-integration.test.mts src/components/__tests__/notification-panels.test.mts tests/notifications/all-producers.integration.test.mts tests/notifications/notification-ladder.test.mts src/services/insights/__tests__/weather-quiet-hours-wiring.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/notifications/__tests__/eew-tiers.test.mts",
+              "src/services/notifications/__tests__/notification-ledger.test.mts",
+              "src/services/notifications/__tests__/push-notifier.test.mts",
+              "src/services/notifications/__tests__/imessage-bridge-extended.test.mts",
+              "src/services/notifications/__tests__/voice-alerter.test.mts",
+              "src/services/notifications/__tests__/event-bridge.test.mts",
+              "src-tauri/sidecar/__tests__/notification-integration.test.mts",
+              "src/components/__tests__/notification-panels.test.mts",
+              "tests/notifications/all-producers.integration.test.mts",
+              "tests/notifications/notification-ladder.test.mts",
+              "src/services/insights/__tests__/weather-quiet-hours-wiring.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/notifications/__tests__/eew-tiers.test.mts",
+              "src/services/notifications/__tests__/notification-ledger.test.mts",
+              "src/services/notifications/__tests__/push-notifier.test.mts",
+              "src/services/notifications/__tests__/imessage-bridge-extended.test.mts",
+              "src/services/notifications/__tests__/voice-alerter.test.mts",
+              "src/services/notifications/__tests__/event-bridge.test.mts",
+              "src-tauri/sidecar/__tests__/notification-integration.test.mts",
+              "src/components/__tests__/notification-panels.test.mts",
+              "tests/notifications/all-producers.integration.test.mts",
+              "tests/notifications/notification-ladder.test.mts",
+              "src/services/insights/__tests__/weather-quiet-hours-wiring.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:openaq",
+        "owner": "main",
+        "command": "tsx --test src/services/airquality/__tests__/openaq-service.test.mts src/components/__tests__/openaq-panel-contract.test.mts src/app/__tests__/openaq-desktop-boundary.test.mts && node --test src-tauri/sidecar/__tests__/openaq-v3-route.test.mjs tests/openaq-local-boundary.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/airquality/__tests__/openaq-service.test.mts",
+              "src/components/__tests__/openaq-panel-contract.test.mts",
+              "src/app/__tests__/openaq-desktop-boundary.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/openaq-v3-route.test.mjs",
+              "tests/openaq-local-boundary.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/airquality/__tests__/openaq-service.test.mts",
+              "src/components/__tests__/openaq-panel-contract.test.mts",
+              "src/app/__tests__/openaq-desktop-boundary.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/openaq-v3-route.test.mjs",
+              "tests/openaq-local-boundary.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:port-publication",
+        "owner": "PR-only",
+        "command": "node --test tests/sidecar-port-publication-suite.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:port-publication"
+            ],
+            "packageScript": "node --test tests/sidecar-port-publication-suite.test.mjs"
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/sidecar-port-publication-suite.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "PR-only",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:quiet-hours",
+        "owner": "main",
+        "command": "tsx --import ./tests/panels/register-hook.mjs --test src/services/notifications/__tests__/quiet-hours.test.mts src/components/__tests__/notification-quiet-hours-panels.test.mts src/components/__tests__/notification-settings-unavailable.test.mts src/services/notifications/__tests__/notification-settings-service.test.mts src/services/__tests__/notification-dispatcher-trace.test.mts src/services/insights/__tests__/weather-quiet-hours-wiring.test.mts src/services/notifications/__tests__/alert-trace.test.mts src/components/__tests__/notification-panels.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "src/services/notifications/__tests__/quiet-hours.test.mts",
+              "src/components/__tests__/notification-quiet-hours-panels.test.mts",
+              "src/components/__tests__/notification-settings-unavailable.test.mts",
+              "src/services/notifications/__tests__/notification-settings-service.test.mts",
+              "src/services/__tests__/notification-dispatcher-trace.test.mts",
+              "src/services/insights/__tests__/weather-quiet-hours-wiring.test.mts",
+              "src/services/notifications/__tests__/alert-trace.test.mts",
+              "src/components/__tests__/notification-panels.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "src/services/notifications/__tests__/quiet-hours.test.mts",
+              "src/components/__tests__/notification-quiet-hours-panels.test.mts",
+              "src/components/__tests__/notification-settings-unavailable.test.mts",
+              "src/services/notifications/__tests__/notification-settings-service.test.mts",
+              "src/services/__tests__/notification-dispatcher-trace.test.mts",
+              "src/services/insights/__tests__/weather-quiet-hours-wiring.test.mts",
+              "src/services/notifications/__tests__/alert-trace.test.mts",
+              "src/components/__tests__/notification-panels.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:reasoning",
+        "owner": "main",
+        "command": "tsx --test src/services/__tests__/hypothesis-dedupe.test.mts src/services/__tests__/hypothesis-entities.test.mts src/services/__tests__/hypothesis-feedback.test.mts src/services/__tests__/hypothesis-feedback-mult.test.mts src/services/__tests__/pressure-baselines.test.mts src/services/__tests__/llm-budget.test.mts src/services/__tests__/action-memory.test.mts src/services/__tests__/hypothesis-alternatives.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/hypothesis-dedupe.test.mts",
+              "src/services/__tests__/hypothesis-entities.test.mts",
+              "src/services/__tests__/hypothesis-feedback.test.mts",
+              "src/services/__tests__/hypothesis-feedback-mult.test.mts",
+              "src/services/__tests__/pressure-baselines.test.mts",
+              "src/services/__tests__/llm-budget.test.mts",
+              "src/services/__tests__/action-memory.test.mts",
+              "src/services/__tests__/hypothesis-alternatives.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/hypothesis-dedupe.test.mts",
+              "src/services/__tests__/hypothesis-entities.test.mts",
+              "src/services/__tests__/hypothesis-feedback.test.mts",
+              "src/services/__tests__/hypothesis-feedback-mult.test.mts",
+              "src/services/__tests__/pressure-baselines.test.mts",
+              "src/services/__tests__/llm-budget.test.mts",
+              "src/services/__tests__/action-memory.test.mts",
+              "src/services/__tests__/hypothesis-alternatives.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:review-trail",
+        "owner": "main",
+        "command": "tsx --test src/services/__tests__/panel-attention.test.mts src/services/__tests__/sidebar-heat.test.mts src/components/__tests__/attention-navigator.test.mts src/app/__tests__/panel-attention-wiring.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/panel-attention.test.mts",
+              "src/services/__tests__/sidebar-heat.test.mts",
+              "src/components/__tests__/attention-navigator.test.mts",
+              "src/app/__tests__/panel-attention-wiring.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/panel-attention.test.mts",
+              "src/services/__tests__/sidebar-heat.test.mts",
+              "src/components/__tests__/attention-navigator.test.mts",
+              "src/app/__tests__/panel-attention-wiring.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:roadmap-controller",
+        "owner": "main",
+        "command": "node --test tests/roadmap-controller.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/roadmap-controller.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/roadmap-controller.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:rules-engine",
+        "owner": "main",
+        "command": "tsx --test src/services/intelligence/__tests__/rules-engine.test.mts src/services/intelligence/__tests__/rules-bootstrap.test.mts src/components/__tests__/observation-rules-helpers.test.mts && node --test src-tauri/sidecar/__tests__/rules.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/intelligence/__tests__/rules-engine.test.mts",
+              "src/services/intelligence/__tests__/rules-bootstrap.test.mts",
+              "src/components/__tests__/observation-rules-helpers.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/rules.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/intelligence/__tests__/rules-engine.test.mts",
+              "src/services/intelligence/__tests__/rules-bootstrap.test.mts",
+              "src/components/__tests__/observation-rules-helpers.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/rules.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:satellite",
+        "owner": "main",
+        "command": "tsx --test src/services/__tests__/satellite-weather.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/satellite-weather.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/satellite-weather.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:sec-hardening",
+        "owner": "main",
+        "command": "node --test tests/csp-allowlist.test.mjs src-tauri/sidecar/__tests__/faa-cam-ssrf-pinning.test.mjs src-tauri/sidecar/__tests__/webhook-dispatch.test.mjs src-tauri/sidecar/__tests__/ipv4-fetch-redirect.test.mjs src-tauri/sidecar/__tests__/isprivateip-ssrf.test.mjs src-tauri/sidecar/__tests__/ipaws-outage.test.mjs src-tauri/sidecar/__tests__/feed-resilience.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/csp-allowlist.test.mjs",
+              "src-tauri/sidecar/__tests__/faa-cam-ssrf-pinning.test.mjs",
+              "src-tauri/sidecar/__tests__/webhook-dispatch.test.mjs",
+              "src-tauri/sidecar/__tests__/ipv4-fetch-redirect.test.mjs",
+              "src-tauri/sidecar/__tests__/isprivateip-ssrf.test.mjs",
+              "src-tauri/sidecar/__tests__/ipaws-outage.test.mjs",
+              "src-tauri/sidecar/__tests__/feed-resilience.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/csp-allowlist.test.mjs",
+              "src-tauri/sidecar/__tests__/faa-cam-ssrf-pinning.test.mjs",
+              "src-tauri/sidecar/__tests__/webhook-dispatch.test.mjs",
+              "src-tauri/sidecar/__tests__/ipv4-fetch-redirect.test.mjs",
+              "src-tauri/sidecar/__tests__/isprivateip-ssrf.test.mjs",
+              "src-tauri/sidecar/__tests__/ipaws-outage.test.mjs",
+              "src-tauri/sidecar/__tests__/feed-resilience.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:secret-boundary",
+        "owner": "main",
+        "command": "node --test tests/secret-boundary.test.mjs tests/sidecar-secret-routing-boundary.test.mjs tests/ucdp-local-boundary.test.mjs src-tauri/sidecar/secret-sync.test.mjs && tsx --test src/services/__tests__/secret-boundary.test.mts src/services/__tests__/keychain.test.mts src/components/__tests__/key-dashboard-secret-boundary.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/secret-boundary.test.mjs",
+              "tests/sidecar-secret-routing-boundary.test.mjs",
+              "tests/ucdp-local-boundary.test.mjs",
+              "src-tauri/sidecar/secret-sync.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/secret-boundary.test.mts",
+              "src/services/__tests__/keychain.test.mts",
+              "src/components/__tests__/key-dashboard-secret-boundary.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/secret-boundary.test.mjs",
+              "tests/sidecar-secret-routing-boundary.test.mjs",
+              "tests/ucdp-local-boundary.test.mjs",
+              "src-tauri/sidecar/secret-sync.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/secret-boundary.test.mts",
+              "src/services/__tests__/keychain.test.mts",
+              "src/components/__tests__/key-dashboard-secret-boundary.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:security",
+        "owner": "main",
+        "command": "tsx --test src/services/security/__tests__/cve-service.test.mts src/services/security/__tests__/vulners-service.test.mts src/components/__tests__/cve-panel-helpers.test.mts && node --test src-tauri/sidecar/__tests__/security-cve-parity.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/security/__tests__/cve-service.test.mts",
+              "src/services/security/__tests__/vulners-service.test.mts",
+              "src/components/__tests__/cve-panel-helpers.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/security-cve-parity.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/security/__tests__/cve-service.test.mts",
+              "src/services/security/__tests__/vulners-service.test.mts",
+              "src/components/__tests__/cve-panel-helpers.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/security-cve-parity.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:settings",
+        "owner": "main",
+        "command": "tsx --test src/services/__tests__/key-categories.test.mts src/services/__tests__/key-feature-index.test.mts src/services/__tests__/key-shape-registry.test.mts src/services/__tests__/wizard-state.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/key-categories.test.mts",
+              "src/services/__tests__/key-feature-index.test.mts",
+              "src/services/__tests__/key-shape-registry.test.mts",
+              "src/services/__tests__/wizard-state.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/key-categories.test.mts",
+              "src/services/__tests__/key-feature-index.test.mts",
+              "src/services/__tests__/key-shape-registry.test.mts",
+              "src/services/__tests__/wizard-state.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:sidecar-ci",
+        "owner": "main",
+        "command": "node --test tests/sidecar-ci-inventory.test.mjs tests/sidecar-ci-suite.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/sidecar-ci-inventory.test.mjs",
+              "tests/sidecar-ci-suite.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/sidecar-ci-inventory.test.mjs",
+              "tests/sidecar-ci-suite.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:sidecar-fallback",
+        "owner": "PR-only",
+        "command": "node --test tests/sidecar-port-range.test.mjs tests/csp-allowlist.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:sidecar-fallback"
+            ],
+            "packageScript": "node --test tests/sidecar-port-range.test.mjs tests/csp-allowlist.test.mjs"
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/sidecar-port-range.test.mjs",
+              "tests/csp-allowlist.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "PR-only",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:sidecar-lows",
+        "owner": "main",
+        "command": "node --test --test-timeout=60000 src-tauri/sidecar/__tests__/q20-sidecar-lows.test.mjs src-tauri/sidecar/sms-security.test.mjs src-tauri/sidecar/__tests__/sms-auth.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "--test-timeout=60000",
+              "src-tauri/sidecar/__tests__/q20-sidecar-lows.test.mjs",
+              "src-tauri/sidecar/sms-security.test.mjs",
+              "src-tauri/sidecar/__tests__/sms-auth.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "--test-timeout=60000",
+              "src-tauri/sidecar/__tests__/q20-sidecar-lows.test.mjs",
+              "src-tauri/sidecar/sms-security.test.mjs",
+              "src-tauri/sidecar/__tests__/sms-auth.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:sidecar-routing",
+        "owner": "main",
+        "command": "node --test tests/sidecar-secret-routing-boundary.test.mjs tests/ucdp-local-boundary.test.mjs tests/openaq-local-boundary.test.mjs && tsx --test src/services/__tests__/cloud-fallback-policy.test.mts src/services/__tests__/runtime-fetch-fallback.test.mts src/services/__tests__/confirmed-port-routing.test.mts src/services/diagnostics/__tests__/local-engine-status.test.mts src/services/diagnostics/__tests__/sidecar-probe-engine.test.mts tests/api-param-classification.test.mts src/services/__tests__/fetch-attribution-port-race.test.mts src/services/__tests__/fetch-attribution.test.mts src/services/__tests__/ucdp-runtime-boundary.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/sidecar-secret-routing-boundary.test.mjs",
+              "tests/ucdp-local-boundary.test.mjs",
+              "tests/openaq-local-boundary.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/cloud-fallback-policy.test.mts",
+              "src/services/__tests__/runtime-fetch-fallback.test.mts",
+              "src/services/__tests__/confirmed-port-routing.test.mts",
+              "src/services/diagnostics/__tests__/local-engine-status.test.mts",
+              "src/services/diagnostics/__tests__/sidecar-probe-engine.test.mts",
+              "tests/api-param-classification.test.mts",
+              "src/services/__tests__/fetch-attribution-port-race.test.mts",
+              "src/services/__tests__/fetch-attribution.test.mts",
+              "src/services/__tests__/ucdp-runtime-boundary.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/sidecar-secret-routing-boundary.test.mjs",
+              "tests/ucdp-local-boundary.test.mjs",
+              "tests/openaq-local-boundary.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/cloud-fallback-policy.test.mts",
+              "src/services/__tests__/runtime-fetch-fallback.test.mts",
+              "src/services/__tests__/confirmed-port-routing.test.mts",
+              "src/services/diagnostics/__tests__/local-engine-status.test.mts",
+              "src/services/diagnostics/__tests__/sidecar-probe-engine.test.mts",
+              "tests/api-param-classification.test.mts",
+              "src/services/__tests__/fetch-attribution-port-race.test.mts",
+              "src/services/__tests__/fetch-attribution.test.mts",
+              "src/services/__tests__/ucdp-runtime-boundary.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:situations",
+        "owner": "main",
+        "command": "tsx --test src/services/intelligence/__tests__/situation-store.test.mts src/services/intelligence/__tests__/situation-detector.test.mts src/components/__tests__/situation-panel-helpers.test.mts && node --test src-tauri/sidecar/__tests__/situations.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/intelligence/__tests__/situation-store.test.mts",
+              "src/services/intelligence/__tests__/situation-detector.test.mts",
+              "src/components/__tests__/situation-panel-helpers.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/situations.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/intelligence/__tests__/situation-store.test.mts",
+              "src/services/intelligence/__tests__/situation-detector.test.mts",
+              "src/components/__tests__/situation-panel-helpers.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/situations.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:smoke-engine",
+        "owner": "main",
+        "command": "tsx --test src/services/smoke/__tests__/aqi-category.test.mts src/services/smoke/__tests__/safe-windows.test.mts src/services/smoke/__tests__/arrival-eta.test.mts src/services/smoke/__tests__/forecast-field.test.mts src/services/smoke/__tests__/hrrr-smoke.test.mts src/services/smoke/__tests__/hrrr-smoke-parity.test.mts src/services/smoke/__tests__/fire-detection-sources.test.mts src/services/smoke/__tests__/clean-air-compass.test.mts src/services/smoke/__tests__/activity-guidance.test.mts src/services/smoke/__tests__/clean-room-checklist.test.mts src/services/smoke/__tests__/smoke-fetch.test.mts src/services/smoke/__tests__/smoke-state.test.mts src/services/smoke/__tests__/smoke-headline.test.mts src/services/smoke/__tests__/smoke-callout.test.mts && node --test src-tauri/sidecar/__tests__/hrrr-smoke.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/smoke/__tests__/aqi-category.test.mts",
+              "src/services/smoke/__tests__/safe-windows.test.mts",
+              "src/services/smoke/__tests__/arrival-eta.test.mts",
+              "src/services/smoke/__tests__/forecast-field.test.mts",
+              "src/services/smoke/__tests__/hrrr-smoke.test.mts",
+              "src/services/smoke/__tests__/hrrr-smoke-parity.test.mts",
+              "src/services/smoke/__tests__/fire-detection-sources.test.mts",
+              "src/services/smoke/__tests__/clean-air-compass.test.mts",
+              "src/services/smoke/__tests__/activity-guidance.test.mts",
+              "src/services/smoke/__tests__/clean-room-checklist.test.mts",
+              "src/services/smoke/__tests__/smoke-fetch.test.mts",
+              "src/services/smoke/__tests__/smoke-state.test.mts",
+              "src/services/smoke/__tests__/smoke-headline.test.mts",
+              "src/services/smoke/__tests__/smoke-callout.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/hrrr-smoke.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/smoke/__tests__/aqi-category.test.mts",
+              "src/services/smoke/__tests__/safe-windows.test.mts",
+              "src/services/smoke/__tests__/arrival-eta.test.mts",
+              "src/services/smoke/__tests__/forecast-field.test.mts",
+              "src/services/smoke/__tests__/hrrr-smoke.test.mts",
+              "src/services/smoke/__tests__/hrrr-smoke-parity.test.mts",
+              "src/services/smoke/__tests__/fire-detection-sources.test.mts",
+              "src/services/smoke/__tests__/clean-air-compass.test.mts",
+              "src/services/smoke/__tests__/activity-guidance.test.mts",
+              "src/services/smoke/__tests__/clean-room-checklist.test.mts",
+              "src/services/smoke/__tests__/smoke-fetch.test.mts",
+              "src/services/smoke/__tests__/smoke-state.test.mts",
+              "src/services/smoke/__tests__/smoke-headline.test.mts",
+              "src/services/smoke/__tests__/smoke-callout.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/hrrr-smoke.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:sms",
+        "owner": "main",
+        "command": "node --test src-tauri/sidecar/sms-command-parser.test.mjs src-tauri/sidecar/sms-security.test.mjs src-tauri/sidecar/sms-response-formatter.test.mjs src-tauri/sidecar/__tests__/sms-auth.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/sms-command-parser.test.mjs",
+              "src-tauri/sidecar/sms-security.test.mjs",
+              "src-tauri/sidecar/sms-response-formatter.test.mjs",
+              "src-tauri/sidecar/__tests__/sms-auth.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/sms-command-parser.test.mjs",
+              "src-tauri/sidecar/sms-security.test.mjs",
+              "src-tauri/sidecar/sms-response-formatter.test.mjs",
+              "src-tauri/sidecar/__tests__/sms-auth.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:sms-panel",
+        "owner": "PR-only",
+        "command": "tsx --import ./tests/panels/register-hook.mjs --test tests/panels/sms-settings-panel.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:sms-panel"
+            ],
+            "packageScript": "tsx --import ./tests/panels/register-hook.mjs --test tests/panels/sms-settings-panel.test.mts"
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "tests/panels/sms-settings-panel.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "PR-only",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:spaceweather",
+        "owner": "main",
+        "command": "tsx --test src/services/spaceweather/__tests__/swpc-monitor.test.mts src/services/spaceweather/__tests__/globe-overlay.test.mts src/services/spaceweather/__tests__/solar-imagery.test.mts src/services/spaceweather/__tests__/kp-fusion-observations.test.mts && node --test src-tauri/sidecar/__tests__/spaceweather-parity.test.mjs && node --import tsx --test src-tauri/sidecar/__tests__/spaceweather-imagery-parity.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/spaceweather/__tests__/swpc-monitor.test.mts",
+              "src/services/spaceweather/__tests__/globe-overlay.test.mts",
+              "src/services/spaceweather/__tests__/solar-imagery.test.mts",
+              "src/services/spaceweather/__tests__/kp-fusion-observations.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/spaceweather-parity.test.mjs"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--import",
+              "tsx",
+              "--test",
+              "src-tauri/sidecar/__tests__/spaceweather-imagery-parity.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/spaceweather/__tests__/swpc-monitor.test.mts",
+              "src/services/spaceweather/__tests__/globe-overlay.test.mts",
+              "src/services/spaceweather/__tests__/solar-imagery.test.mts",
+              "src/services/spaceweather/__tests__/kp-fusion-observations.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/spaceweather-parity.test.mjs"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--import",
+              "tsx",
+              "--test",
+              "src-tauri/sidecar/__tests__/spaceweather-imagery-parity.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:survival",
+        "owner": "main",
+        "command": "tsx --test src/services/survival/__tests__/survival-types.test.mts src/services/survival/__tests__/threat-projection.test.mts src/services/survival/__tests__/posture-trajectory.test.mts src/services/survival/__tests__/world-branches.test.mts src/services/survival/__tests__/decision-consequence.test.mts src/services/survival/__tests__/grid-down-certify.test.mts src/services/survival/__tests__/offline-playbook.test.mts src/services/survival/__tests__/comms-fallback.test.mts src/services/survival/__tests__/posture-loop-replay.test.mts src/services/survival/__tests__/posture-calibration.test.mts src/services/survival/__tests__/projection-calibration.test.mts src/services/survival/__tests__/retrospective-digest.test.mts src/services/survival/__tests__/retrospective-view.test.mts src/services/survival/__tests__/decision-consequence-view.test.mts src/services/survival/__tests__/offline-playbook-view.test.mts src/services/survival/__tests__/comms-fallback-view.test.mts src/services/survival/__tests__/grid-down-certify-view.test.mts src/services/survival/__tests__/posture-trajectory-view.test.mts src/services/survival/__tests__/world-branches-view.test.mts src/services/survival/__tests__/survival-posture-view.test.mts src/services/survival/__tests__/survival-outlook.test.mts src/services/survival/__tests__/survival-posture.test.mts src/services/survival/__tests__/survival-moves.test.mts src/services/survival/__tests__/survival-plan.test.mts src/services/survival/__tests__/world-snapshot.test.mts src/services/survival/__tests__/snapshot-integrity.test.mts src/services/survival/__tests__/survival-loop.test.mts src/services/survival/__tests__/posture-contributor.test.mts src/services/survival/__tests__/move-provider.test.mts src/services/survival/__tests__/storm-posture-adapter.test.mts src/services/survival/__tests__/supply-contributor.test.mts src/services/survival/__tests__/energy-water-contributor.test.mts src/services/survival/__tests__/grid-energy-adapter.test.mts src/services/__tests__/power-grid-alerts-cache.test.mts src/services/survival/__tests__/financial-contributor.test.mts src/services/survival/__tests__/security-contributor.test.mts src/services/survival/__tests__/mobility-contributor.test.mts src/services/survival/__tests__/comms-contributor.test.mts src/services/survival/__tests__/health-contributor.test.mts src/services/__tests__/disease-intel-cache.test.mts src/services/survival/__tests__/personal-lens.test.mts src/services/survival/__tests__/lens-board.test.mts src/services/survival/__tests__/board-events.test.mts src/services/survival/__tests__/scrubber-view.test.mts src/services/survival/__tests__/time-scrubber.test.mts src/services/survival/__tests__/map-modes.test.mts src/services/survival/__tests__/lens-marker-style.test.mts src/services/survival/__tests__/scrubber-loop.test.mts src/services/survival/__tests__/map-modes-apply.test.mts src/services/survival/__tests__/lens-marker-apply.test.mts src/services/survival/__tests__/survival-map-modes.test.mts src/services/__tests__/internet-outages-cache.test.mts src/services/survival/__tests__/chokepoint-mobility-adapter.test.mts src/services/supply-chain/__tests__/chokepoint-cache.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/survival/__tests__/survival-types.test.mts",
+              "src/services/survival/__tests__/threat-projection.test.mts",
+              "src/services/survival/__tests__/posture-trajectory.test.mts",
+              "src/services/survival/__tests__/world-branches.test.mts",
+              "src/services/survival/__tests__/decision-consequence.test.mts",
+              "src/services/survival/__tests__/grid-down-certify.test.mts",
+              "src/services/survival/__tests__/offline-playbook.test.mts",
+              "src/services/survival/__tests__/comms-fallback.test.mts",
+              "src/services/survival/__tests__/posture-loop-replay.test.mts",
+              "src/services/survival/__tests__/posture-calibration.test.mts",
+              "src/services/survival/__tests__/projection-calibration.test.mts",
+              "src/services/survival/__tests__/retrospective-digest.test.mts",
+              "src/services/survival/__tests__/retrospective-view.test.mts",
+              "src/services/survival/__tests__/decision-consequence-view.test.mts",
+              "src/services/survival/__tests__/offline-playbook-view.test.mts",
+              "src/services/survival/__tests__/comms-fallback-view.test.mts",
+              "src/services/survival/__tests__/grid-down-certify-view.test.mts",
+              "src/services/survival/__tests__/posture-trajectory-view.test.mts",
+              "src/services/survival/__tests__/world-branches-view.test.mts",
+              "src/services/survival/__tests__/survival-posture-view.test.mts",
+              "src/services/survival/__tests__/survival-outlook.test.mts",
+              "src/services/survival/__tests__/survival-posture.test.mts",
+              "src/services/survival/__tests__/survival-moves.test.mts",
+              "src/services/survival/__tests__/survival-plan.test.mts",
+              "src/services/survival/__tests__/world-snapshot.test.mts",
+              "src/services/survival/__tests__/snapshot-integrity.test.mts",
+              "src/services/survival/__tests__/survival-loop.test.mts",
+              "src/services/survival/__tests__/posture-contributor.test.mts",
+              "src/services/survival/__tests__/move-provider.test.mts",
+              "src/services/survival/__tests__/storm-posture-adapter.test.mts",
+              "src/services/survival/__tests__/supply-contributor.test.mts",
+              "src/services/survival/__tests__/energy-water-contributor.test.mts",
+              "src/services/survival/__tests__/grid-energy-adapter.test.mts",
+              "src/services/__tests__/power-grid-alerts-cache.test.mts",
+              "src/services/survival/__tests__/financial-contributor.test.mts",
+              "src/services/survival/__tests__/security-contributor.test.mts",
+              "src/services/survival/__tests__/mobility-contributor.test.mts",
+              "src/services/survival/__tests__/comms-contributor.test.mts",
+              "src/services/survival/__tests__/health-contributor.test.mts",
+              "src/services/__tests__/disease-intel-cache.test.mts",
+              "src/services/survival/__tests__/personal-lens.test.mts",
+              "src/services/survival/__tests__/lens-board.test.mts",
+              "src/services/survival/__tests__/board-events.test.mts",
+              "src/services/survival/__tests__/scrubber-view.test.mts",
+              "src/services/survival/__tests__/time-scrubber.test.mts",
+              "src/services/survival/__tests__/map-modes.test.mts",
+              "src/services/survival/__tests__/lens-marker-style.test.mts",
+              "src/services/survival/__tests__/scrubber-loop.test.mts",
+              "src/services/survival/__tests__/map-modes-apply.test.mts",
+              "src/services/survival/__tests__/lens-marker-apply.test.mts",
+              "src/services/survival/__tests__/survival-map-modes.test.mts",
+              "src/services/__tests__/internet-outages-cache.test.mts",
+              "src/services/survival/__tests__/chokepoint-mobility-adapter.test.mts",
+              "src/services/supply-chain/__tests__/chokepoint-cache.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/survival/__tests__/survival-types.test.mts",
+              "src/services/survival/__tests__/threat-projection.test.mts",
+              "src/services/survival/__tests__/posture-trajectory.test.mts",
+              "src/services/survival/__tests__/world-branches.test.mts",
+              "src/services/survival/__tests__/decision-consequence.test.mts",
+              "src/services/survival/__tests__/grid-down-certify.test.mts",
+              "src/services/survival/__tests__/offline-playbook.test.mts",
+              "src/services/survival/__tests__/comms-fallback.test.mts",
+              "src/services/survival/__tests__/posture-loop-replay.test.mts",
+              "src/services/survival/__tests__/posture-calibration.test.mts",
+              "src/services/survival/__tests__/projection-calibration.test.mts",
+              "src/services/survival/__tests__/retrospective-digest.test.mts",
+              "src/services/survival/__tests__/retrospective-view.test.mts",
+              "src/services/survival/__tests__/decision-consequence-view.test.mts",
+              "src/services/survival/__tests__/offline-playbook-view.test.mts",
+              "src/services/survival/__tests__/comms-fallback-view.test.mts",
+              "src/services/survival/__tests__/grid-down-certify-view.test.mts",
+              "src/services/survival/__tests__/posture-trajectory-view.test.mts",
+              "src/services/survival/__tests__/world-branches-view.test.mts",
+              "src/services/survival/__tests__/survival-posture-view.test.mts",
+              "src/services/survival/__tests__/survival-outlook.test.mts",
+              "src/services/survival/__tests__/survival-posture.test.mts",
+              "src/services/survival/__tests__/survival-moves.test.mts",
+              "src/services/survival/__tests__/survival-plan.test.mts",
+              "src/services/survival/__tests__/world-snapshot.test.mts",
+              "src/services/survival/__tests__/snapshot-integrity.test.mts",
+              "src/services/survival/__tests__/survival-loop.test.mts",
+              "src/services/survival/__tests__/posture-contributor.test.mts",
+              "src/services/survival/__tests__/move-provider.test.mts",
+              "src/services/survival/__tests__/storm-posture-adapter.test.mts",
+              "src/services/survival/__tests__/supply-contributor.test.mts",
+              "src/services/survival/__tests__/energy-water-contributor.test.mts",
+              "src/services/survival/__tests__/grid-energy-adapter.test.mts",
+              "src/services/__tests__/power-grid-alerts-cache.test.mts",
+              "src/services/survival/__tests__/financial-contributor.test.mts",
+              "src/services/survival/__tests__/security-contributor.test.mts",
+              "src/services/survival/__tests__/mobility-contributor.test.mts",
+              "src/services/survival/__tests__/comms-contributor.test.mts",
+              "src/services/survival/__tests__/health-contributor.test.mts",
+              "src/services/__tests__/disease-intel-cache.test.mts",
+              "src/services/survival/__tests__/personal-lens.test.mts",
+              "src/services/survival/__tests__/lens-board.test.mts",
+              "src/services/survival/__tests__/board-events.test.mts",
+              "src/services/survival/__tests__/scrubber-view.test.mts",
+              "src/services/survival/__tests__/time-scrubber.test.mts",
+              "src/services/survival/__tests__/map-modes.test.mts",
+              "src/services/survival/__tests__/lens-marker-style.test.mts",
+              "src/services/survival/__tests__/scrubber-loop.test.mts",
+              "src/services/survival/__tests__/map-modes-apply.test.mts",
+              "src/services/survival/__tests__/lens-marker-apply.test.mts",
+              "src/services/survival/__tests__/survival-map-modes.test.mts",
+              "src/services/__tests__/internet-outages-cache.test.mts",
+              "src/services/survival/__tests__/chokepoint-mobility-adapter.test.mts",
+              "src/services/supply-chain/__tests__/chokepoint-cache.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:synthesis",
+        "owner": "main",
+        "command": "tsx --test src/services/synthesis/__tests__/signal-watch.test.mts src/services/synthesis/__tests__/precedent-matcher.test.mts src/services/synthesis/__tests__/leading-indicators.test.mts src/services/synthesis/__tests__/ai-brief-generator.test.mts src/services/synthesis/__tests__/correlation-engine.test.mts && node --test src-tauri/sidecar/__tests__/synthesis-correlations.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/synthesis/__tests__/signal-watch.test.mts",
+              "src/services/synthesis/__tests__/precedent-matcher.test.mts",
+              "src/services/synthesis/__tests__/leading-indicators.test.mts",
+              "src/services/synthesis/__tests__/ai-brief-generator.test.mts",
+              "src/services/synthesis/__tests__/correlation-engine.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/synthesis-correlations.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/synthesis/__tests__/signal-watch.test.mts",
+              "src/services/synthesis/__tests__/precedent-matcher.test.mts",
+              "src/services/synthesis/__tests__/leading-indicators.test.mts",
+              "src/services/synthesis/__tests__/ai-brief-generator.test.mts",
+              "src/services/synthesis/__tests__/correlation-engine.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/synthesis-correlations.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:ucdp-provider",
+        "owner": "main",
+        "command": "tsx --test server/crystalball/conflict/v1/__tests__/list-ucdp-events.test.mts src/services/conflict/__tests__/ucdp-fetch-behavior.test.mts src/services/__tests__/ucdp-runtime-boundary.test.mts src/components/__tests__/ucdp-events-panel.test.mts src/app/__tests__/ucdp-desktop-boundary.test.mts api/__tests__/ucdp-classifications.test.mjs src-tauri/sidecar/__tests__/ucdp-local-routes.test.mjs tests/ucdp-local-boundary.test.mjs tests/ucdp-loader-freshness.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "server/crystalball/conflict/v1/__tests__/list-ucdp-events.test.mts",
+              "src/services/conflict/__tests__/ucdp-fetch-behavior.test.mts",
+              "src/services/__tests__/ucdp-runtime-boundary.test.mts",
+              "src/components/__tests__/ucdp-events-panel.test.mts",
+              "src/app/__tests__/ucdp-desktop-boundary.test.mts",
+              "api/__tests__/ucdp-classifications.test.mjs",
+              "src-tauri/sidecar/__tests__/ucdp-local-routes.test.mjs",
+              "tests/ucdp-local-boundary.test.mjs",
+              "tests/ucdp-loader-freshness.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "server/crystalball/conflict/v1/__tests__/list-ucdp-events.test.mts",
+              "src/services/conflict/__tests__/ucdp-fetch-behavior.test.mts",
+              "src/services/__tests__/ucdp-runtime-boundary.test.mts",
+              "src/components/__tests__/ucdp-events-panel.test.mts",
+              "src/app/__tests__/ucdp-desktop-boundary.test.mts",
+              "api/__tests__/ucdp-classifications.test.mjs",
+              "src-tauri/sidecar/__tests__/ucdp-local-routes.test.mjs",
+              "tests/ucdp-local-boundary.test.mjs",
+              "tests/ucdp-loader-freshness.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:untrusted-html",
+        "owner": "main",
+        "command": "tsx --import ./tests/panels/register-hook.mjs --test src/services/resource-inventory/__tests__/schema.test.mts src/utils/__tests__/finite-number.test.mts src/components/__tests__/resource-inventory-untrusted.test.mts src/components/__tests__/untrusted-numeric-fields.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "src/services/resource-inventory/__tests__/schema.test.mts",
+              "src/utils/__tests__/finite-number.test.mts",
+              "src/components/__tests__/resource-inventory-untrusted.test.mts",
+              "src/components/__tests__/untrusted-numeric-fields.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "src/services/resource-inventory/__tests__/schema.test.mts",
+              "src/utils/__tests__/finite-number.test.mts",
+              "src/components/__tests__/resource-inventory-untrusted.test.mts",
+              "src/components/__tests__/untrusted-numeric-fields.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:ux010",
+        "owner": "main",
+        "command": "node --test tests/ux010-location-startup.test.mjs && tsx --test src/services/__tests__/location.test.mts tests/ux010-ephemeral-local-logistics.test.mts tests/ux010-current-location-save.test.mts src/components/__tests__/ux010-current-location-panel.test.mts && npm run build:full && node --test tests/ux010-native-gate.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/ux010-location-startup.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/location.test.mts",
+              "tests/ux010-ephemeral-local-logistics.test.mts",
+              "tests/ux010-current-location-save.test.mts",
+              "src/components/__tests__/ux010-current-location-panel.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/typescript/bin/tsc"
+            ],
+            "environmentOverrides": {
+              "VITE_VARIANT": "full"
+            }
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/vite/bin/vite.js",
+              "build"
+            ],
+            "environmentOverrides": {
+              "VITE_VARIANT": "full"
+            }
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/ux010-native-gate.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/ux010-location-startup.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/location.test.mts",
+              "tests/ux010-ephemeral-local-logistics.test.mts",
+              "tests/ux010-current-location-save.test.mts",
+              "src/components/__tests__/ux010-current-location-panel.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/typescript/bin/tsc"
+            ],
+            "environmentOverrides": {
+              "VITE_VARIANT": "full"
+            }
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/vite/bin/vite.js",
+              "build"
+            ],
+            "environmentOverrides": {
+              "VITE_VARIANT": "full"
+            }
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/ux010-native-gate.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:ux011",
+        "owner": "main",
+        "command": "tsx --test src/services/weather/__tests__/weather-alerts-parse.test.mts src/services/weather/__tests__/evacuation-hazard-exposure.test.mts src/components/__tests__/evacuation-hazard-exposure-panel.test.mts && node --test tests/evacuation-hazard-exposure-wiring.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/weather/__tests__/weather-alerts-parse.test.mts",
+              "src/services/weather/__tests__/evacuation-hazard-exposure.test.mts",
+              "src/components/__tests__/evacuation-hazard-exposure-panel.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/evacuation-hazard-exposure-wiring.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/weather/__tests__/weather-alerts-parse.test.mts",
+              "src/services/weather/__tests__/evacuation-hazard-exposure.test.mts",
+              "src/components/__tests__/evacuation-hazard-exposure-panel.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/evacuation-hazard-exposure-wiring.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:ux026",
+        "owner": "main",
+        "command": "tsx --test src/services/__tests__/digest-alert-projection.test.mts src/services/__tests__/digest-narrative-contract.test.mts src/services/__tests__/nws-alert-retrieval-freshness.test.mts src/components/__tests__/digest-overlay.test.mts tests/ux026-digest-lifecycle.test.mjs tests/ux026-fourth-cycle-runtime.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/digest-alert-projection.test.mts",
+              "src/services/__tests__/digest-narrative-contract.test.mts",
+              "src/services/__tests__/nws-alert-retrieval-freshness.test.mts",
+              "src/components/__tests__/digest-overlay.test.mts",
+              "tests/ux026-digest-lifecycle.test.mjs",
+              "tests/ux026-fourth-cycle-runtime.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/digest-alert-projection.test.mts",
+              "src/services/__tests__/digest-narrative-contract.test.mts",
+              "src/services/__tests__/nws-alert-retrieval-freshness.test.mts",
+              "src/components/__tests__/digest-overlay.test.mts",
+              "tests/ux026-digest-lifecycle.test.mjs",
+              "tests/ux026-fourth-cycle-runtime.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:ux032",
+        "owner": "main",
+        "command": "tsx --test src/components/__tests__/unified-settings-keyboard.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/components/__tests__/unified-settings-keyboard.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/components/__tests__/unified-settings-keyboard.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:ux047",
+        "owner": "main",
+        "command": "tsx --test tests/nws-provider-snapshot.test.mjs src/services/__tests__/nws-alert-retrieval-freshness.test.mts src/services/__tests__/nws-alert-lifecycle.test.mts tests/ux047/nws-ui-loader.test.mts tests/ux047/nws-snapshot-cache.test.mts tests/ux047/nws-panel.test.mts tests/ux047/operational-consumers.test.mts src/services/__tests__/sidebar-heat.test.mts src/services/native/__tests__/menubar-status.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "tests/nws-provider-snapshot.test.mjs",
+              "src/services/__tests__/nws-alert-retrieval-freshness.test.mts",
+              "src/services/__tests__/nws-alert-lifecycle.test.mts",
+              "tests/ux047/nws-ui-loader.test.mts",
+              "tests/ux047/nws-snapshot-cache.test.mts",
+              "tests/ux047/nws-panel.test.mts",
+              "tests/ux047/operational-consumers.test.mts",
+              "src/services/__tests__/sidebar-heat.test.mts",
+              "src/services/native/__tests__/menubar-status.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "tests/nws-provider-snapshot.test.mjs",
+              "src/services/__tests__/nws-alert-retrieval-freshness.test.mts",
+              "src/services/__tests__/nws-alert-lifecycle.test.mts",
+              "tests/ux047/nws-ui-loader.test.mts",
+              "tests/ux047/nws-snapshot-cache.test.mts",
+              "tests/ux047/nws-panel.test.mts",
+              "tests/ux047/operational-consumers.test.mts",
+              "src/services/__tests__/sidebar-heat.test.mts",
+              "src/services/native/__tests__/menubar-status.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:ux049",
+        "owner": "main",
+        "command": "tsx --test src/services/synthesis/__tests__/threat-aggregator.test.mts src/services/synthesis/__tests__/geo-threat-evidence.test.mts src/services/synthesis/__tests__/transport-evidence.test.mts src/services/synthesis/__tests__/faa-stop-handoff.test.mts src/services/aviation/__tests__/threat-feed-cache.test.mts tests/panels/threat-transport-coverage.test.mts src/services/earthquake/__tests__/usgs-fusion-fetch.test.mts src/services/spaceweather/__tests__/kp-fusion-observations.test.mts src/components/__tests__/threat-dashboard-coverage.test.mts && node --test tests/data-sources-wiring.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/synthesis/__tests__/threat-aggregator.test.mts",
+              "src/services/synthesis/__tests__/geo-threat-evidence.test.mts",
+              "src/services/synthesis/__tests__/transport-evidence.test.mts",
+              "src/services/synthesis/__tests__/faa-stop-handoff.test.mts",
+              "src/services/aviation/__tests__/threat-feed-cache.test.mts",
+              "tests/panels/threat-transport-coverage.test.mts",
+              "src/services/earthquake/__tests__/usgs-fusion-fetch.test.mts",
+              "src/services/spaceweather/__tests__/kp-fusion-observations.test.mts",
+              "src/components/__tests__/threat-dashboard-coverage.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/data-sources-wiring.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/synthesis/__tests__/threat-aggregator.test.mts",
+              "src/services/synthesis/__tests__/geo-threat-evidence.test.mts",
+              "src/services/synthesis/__tests__/transport-evidence.test.mts",
+              "src/services/synthesis/__tests__/faa-stop-handoff.test.mts",
+              "src/services/aviation/__tests__/threat-feed-cache.test.mts",
+              "tests/panels/threat-transport-coverage.test.mts",
+              "src/services/earthquake/__tests__/usgs-fusion-fetch.test.mts",
+              "src/services/spaceweather/__tests__/kp-fusion-observations.test.mts",
+              "src/components/__tests__/threat-dashboard-coverage.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/data-sources-wiring.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "PR-only",
+        "newScript": false,
+        "changedOwner": true,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:ux050",
+        "owner": "main",
+        "command": "tsx --test src/services/__tests__/ghost-mode-state.test.mts src/services/__tests__/ghost-notification-policy.test.mts src/services/__tests__/notification-dispatcher-trace.test.mts src/components/__tests__/ghost-mode-notice.test.mts tests/ghost-mode-entry.test.mts src/config/__tests__/story-renderer-chunk.test.mts && node --test tests/comms-panel.test.mjs && npm run build:full && node scripts/check-precache-budget.mjs && node --experimental-vm-modules --test tests/ghost-mode-bundle.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/ghost-mode-state.test.mts",
+              "src/services/__tests__/ghost-notification-policy.test.mts",
+              "src/services/__tests__/notification-dispatcher-trace.test.mts",
+              "src/components/__tests__/ghost-mode-notice.test.mts",
+              "tests/ghost-mode-entry.test.mts",
+              "src/config/__tests__/story-renderer-chunk.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/comms-panel.test.mjs"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/typescript/bin/tsc"
+            ],
+            "environmentOverrides": {
+              "VITE_VARIANT": "full"
+            }
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/vite/bin/vite.js",
+              "build"
+            ],
+            "environmentOverrides": {
+              "VITE_VARIANT": "full"
+            }
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "scripts/check-precache-budget.mjs"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--experimental-vm-modules",
+              "--test",
+              "tests/ghost-mode-bundle.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/ghost-mode-state.test.mts",
+              "src/services/__tests__/ghost-notification-policy.test.mts",
+              "src/services/__tests__/notification-dispatcher-trace.test.mts",
+              "src/components/__tests__/ghost-mode-notice.test.mts",
+              "tests/ghost-mode-entry.test.mts",
+              "src/config/__tests__/story-renderer-chunk.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/comms-panel.test.mjs"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/typescript/bin/tsc"
+            ],
+            "environmentOverrides": {
+              "VITE_VARIANT": "full"
+            }
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/vite/bin/vite.js",
+              "build"
+            ],
+            "environmentOverrides": {
+              "VITE_VARIANT": "full"
+            }
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "scripts/check-precache-budget.mjs"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--experimental-vm-modules",
+              "--test",
+              "tests/ghost-mode-bundle.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:ux052",
+        "owner": "main",
+        "command": "tsx --import ./tests/panels/register-hook.mjs --test src/services/__tests__/derived-notification-policy.test.mts src/services/__tests__/derived-alert-reactions.test.mts src/services/notifications/__tests__/notification-settings-service.test.mts src/services/notifications/__tests__/alert-trace.test.mts src/services/notifications/__tests__/quiet-hours.test.mts src/components/__tests__/notification-panels.test.mts src/components/__tests__/notification-quiet-hours-panels.test.mts src/components/__tests__/notification-settings-unavailable.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "src/services/__tests__/derived-notification-policy.test.mts",
+              "src/services/__tests__/derived-alert-reactions.test.mts",
+              "src/services/notifications/__tests__/notification-settings-service.test.mts",
+              "src/services/notifications/__tests__/alert-trace.test.mts",
+              "src/services/notifications/__tests__/quiet-hours.test.mts",
+              "src/components/__tests__/notification-panels.test.mts",
+              "src/components/__tests__/notification-quiet-hours-panels.test.mts",
+              "src/components/__tests__/notification-settings-unavailable.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "src/services/__tests__/derived-notification-policy.test.mts",
+              "src/services/__tests__/derived-alert-reactions.test.mts",
+              "src/services/notifications/__tests__/notification-settings-service.test.mts",
+              "src/services/notifications/__tests__/alert-trace.test.mts",
+              "src/services/notifications/__tests__/quiet-hours.test.mts",
+              "src/components/__tests__/notification-panels.test.mts",
+              "src/components/__tests__/notification-quiet-hours-panels.test.mts",
+              "src/components/__tests__/notification-settings-unavailable.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:ux053",
+        "owner": "main",
+        "command": "node --test tests/vault-intro-scanner.test.mjs && tsx --test src/app/__tests__/boot-workspace.test.mts src/app/__tests__/startup-acquisition.test.mts src/app/__tests__/desktop-imessage.test.mts src/services/__tests__/notification-router.test.mts src/services/__tests__/threat-reactor-retry.test.mts tests/workspace-startup.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/vault-intro-scanner.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/app/__tests__/boot-workspace.test.mts",
+              "src/app/__tests__/startup-acquisition.test.mts",
+              "src/app/__tests__/desktop-imessage.test.mts",
+              "src/services/__tests__/notification-router.test.mts",
+              "src/services/__tests__/threat-reactor-retry.test.mts",
+              "tests/workspace-startup.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/vault-intro-scanner.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/app/__tests__/boot-workspace.test.mts",
+              "src/app/__tests__/startup-acquisition.test.mts",
+              "src/app/__tests__/desktop-imessage.test.mts",
+              "src/services/__tests__/notification-router.test.mts",
+              "src/services/__tests__/threat-reactor-retry.test.mts",
+              "tests/workspace-startup.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:ux055",
+        "owner": "PR-only",
+        "command": "tsx --test src/services/__tests__/credential-evidence.test.mts src/services/__tests__/settings-manager-verification.test.mts src/services/__tests__/standalone-credential-row.test.mts src/services/__tests__/secret-boundary.test.mts src/components/__tests__/key-dashboard-secret-boundary.test.mts src/services/__tests__/wizard-state.test.mts src/services/__tests__/secret-write-pending.test.mts src/components/__tests__/unified-settings-keyboard.test.mts src-tauri/sidecar/__tests__/credential-verification.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:ux055"
+            ],
+            "packageScript": "tsx --test src/services/__tests__/credential-evidence.test.mts src/services/__tests__/settings-manager-verification.test.mts src/services/__tests__/standalone-credential-row.test.mts src/services/__tests__/secret-boundary.test.mts src/components/__tests__/key-dashboard-secret-boundary.test.mts src/services/__tests__/wizard-state.test.mts src/services/__tests__/secret-write-pending.test.mts src/components/__tests__/unified-settings-keyboard.test.mts src-tauri/sidecar/__tests__/credential-verification.test.mjs"
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/credential-evidence.test.mts",
+              "src/services/__tests__/settings-manager-verification.test.mts",
+              "src/services/__tests__/standalone-credential-row.test.mts",
+              "src/services/__tests__/secret-boundary.test.mts",
+              "src/components/__tests__/key-dashboard-secret-boundary.test.mts",
+              "src/services/__tests__/wizard-state.test.mts",
+              "src/services/__tests__/secret-write-pending.test.mts",
+              "src/components/__tests__/unified-settings-keyboard.test.mts",
+              "src-tauri/sidecar/__tests__/credential-verification.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "PR-only",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:ux058",
+        "owner": "main",
+        "command": "tsx --test src/services/__tests__/alert-retention-provenance.test.mts src/services/insights/__tests__/notification-ladder.test.mts src/services/__tests__/nws-notification-owner.test.mts src/services/__tests__/warning-inbox-dispositions.test.mts src/components/__tests__/unified-alert-inbox-disposition.test.mts src/services/__tests__/notification-dispatcher-trace.test.mts src/services/__tests__/unified-alerts-warning-delivery.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/alert-retention-provenance.test.mts",
+              "src/services/insights/__tests__/notification-ladder.test.mts",
+              "src/services/__tests__/nws-notification-owner.test.mts",
+              "src/services/__tests__/warning-inbox-dispositions.test.mts",
+              "src/components/__tests__/unified-alert-inbox-disposition.test.mts",
+              "src/services/__tests__/notification-dispatcher-trace.test.mts",
+              "src/services/__tests__/unified-alerts-warning-delivery.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/alert-retention-provenance.test.mts",
+              "src/services/insights/__tests__/notification-ladder.test.mts",
+              "src/services/__tests__/nws-notification-owner.test.mts",
+              "src/services/__tests__/warning-inbox-dispositions.test.mts",
+              "src/components/__tests__/unified-alert-inbox-disposition.test.mts",
+              "src/services/__tests__/notification-dispatcher-trace.test.mts",
+              "src/services/__tests__/unified-alerts-warning-delivery.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:ux059",
+        "owner": "main",
+        "command": "tsx --test src/services/__tests__/alert-retention-provenance.test.mts src/services/__tests__/unified-alert-retention.test.mts src/services/__tests__/alert-retention-identity.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/alert-retention-provenance.test.mts",
+              "src/services/__tests__/unified-alert-retention.test.mts",
+              "src/services/__tests__/alert-retention-identity.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/alert-retention-provenance.test.mts",
+              "src/services/__tests__/unified-alert-retention.test.mts",
+              "src/services/__tests__/alert-retention-identity.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:ux060",
+        "owner": "main",
+        "command": "tsx --test tests/ux060-onboarding-digest.test.mjs src/components/__tests__/digest-overlay.test.mts src/components/__tests__/welcome-flow-sources.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "tests/ux060-onboarding-digest.test.mjs",
+              "src/components/__tests__/digest-overlay.test.mts",
+              "src/components/__tests__/welcome-flow-sources.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "tests/ux060-onboarding-digest.test.mjs",
+              "src/components/__tests__/digest-overlay.test.mts",
+              "src/components/__tests__/welcome-flow-sources.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:vault-writer",
+        "owner": "main",
+        "command": "node --test tests/vault-writer-boundary.test.mjs tests/vault-writer-native.test.mjs && tsx --test src/services/__tests__/secret-write-pending.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/vault-writer-boundary.test.mjs",
+              "tests/vault-writer-native.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/secret-write-pending.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/vault-writer-boundary.test.mjs",
+              "tests/vault-writer-native.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/secret-write-pending.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:warning-delivery",
+        "owner": "main",
+        "command": "tsx --test src/services/__tests__/notification-dispatcher-trace.test.mts src/services/__tests__/unified-alerts-warning-delivery.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/notification-dispatcher-trace.test.mts",
+              "src/services/__tests__/unified-alerts-warning-delivery.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/notification-dispatcher-trace.test.mts",
+              "src/services/__tests__/unified-alerts-warning-delivery.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:watchboard",
+        "owner": "main",
+        "command": "tsx --test src/components/__tests__/watchboard-store-helpers.test.mts && node --test src-tauri/sidecar/__tests__/watchboard-engine.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/components/__tests__/watchboard-store-helpers.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/watchboard-engine.test.mjs"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/components/__tests__/watchboard-store-helpers.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/watchboard-engine.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:weather",
+        "owner": "main",
+        "command": "tsx --test src/services/weather/__tests__/weather-exposure.test.mts src/services/weather/__tests__/nws-polygon-match.test.mts src/services/weather/__tests__/personal-storm-mode.test.mts src/services/weather/__tests__/spc-outlook.test.mts src/services/weather/__tests__/warning-verification-bridge.test.mts src/services/weather/__tests__/weather-warning-diagnostics.test.mts src/services/weather/__tests__/weather-feed-select.test.mts src/services/weather/__tests__/weather-feed-state.test.mts src/services/weather/__tests__/saved-place-adapter.test.mts src/services/weather/__tests__/personal-weather-status.test.mts src/services/weather/__tests__/ring-geometry.test.mts src/services/weather/__tests__/weather-alerts-parse.test.mts src/services/weather/__tests__/weather-unevaluable-alert.test.mts src/services/weather/__tests__/weather-feed-toctou.test.mts src/services/weather/__tests__/weather-ugc-fetch.test.mts src/services/weather/__tests__/saved-place-signature.test.mts src/services/weather/__tests__/classify-hazard.test.mts src/services/weather/__tests__/nws-hazards.test.mts src/services/weather/__tests__/self-test-fixture.test.mts src/services/weather/__tests__/weather-urgency.test.mts src/services/weather/__tests__/weather-warning-router.test.mts src/services/weather/__tests__/weather-fusion-observations.test.mts src/components/__tests__/personal-storm-mode-view.test.mts src/components/__tests__/personal-storm-mode-shelf.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/weather/__tests__/weather-exposure.test.mts",
+              "src/services/weather/__tests__/nws-polygon-match.test.mts",
+              "src/services/weather/__tests__/personal-storm-mode.test.mts",
+              "src/services/weather/__tests__/spc-outlook.test.mts",
+              "src/services/weather/__tests__/warning-verification-bridge.test.mts",
+              "src/services/weather/__tests__/weather-warning-diagnostics.test.mts",
+              "src/services/weather/__tests__/weather-feed-select.test.mts",
+              "src/services/weather/__tests__/weather-feed-state.test.mts",
+              "src/services/weather/__tests__/saved-place-adapter.test.mts",
+              "src/services/weather/__tests__/personal-weather-status.test.mts",
+              "src/services/weather/__tests__/ring-geometry.test.mts",
+              "src/services/weather/__tests__/weather-alerts-parse.test.mts",
+              "src/services/weather/__tests__/weather-unevaluable-alert.test.mts",
+              "src/services/weather/__tests__/weather-feed-toctou.test.mts",
+              "src/services/weather/__tests__/weather-ugc-fetch.test.mts",
+              "src/services/weather/__tests__/saved-place-signature.test.mts",
+              "src/services/weather/__tests__/classify-hazard.test.mts",
+              "src/services/weather/__tests__/nws-hazards.test.mts",
+              "src/services/weather/__tests__/self-test-fixture.test.mts",
+              "src/services/weather/__tests__/weather-urgency.test.mts",
+              "src/services/weather/__tests__/weather-warning-router.test.mts",
+              "src/services/weather/__tests__/weather-fusion-observations.test.mts",
+              "src/components/__tests__/personal-storm-mode-view.test.mts",
+              "src/components/__tests__/personal-storm-mode-shelf.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/weather/__tests__/weather-exposure.test.mts",
+              "src/services/weather/__tests__/nws-polygon-match.test.mts",
+              "src/services/weather/__tests__/personal-storm-mode.test.mts",
+              "src/services/weather/__tests__/spc-outlook.test.mts",
+              "src/services/weather/__tests__/warning-verification-bridge.test.mts",
+              "src/services/weather/__tests__/weather-warning-diagnostics.test.mts",
+              "src/services/weather/__tests__/weather-feed-select.test.mts",
+              "src/services/weather/__tests__/weather-feed-state.test.mts",
+              "src/services/weather/__tests__/saved-place-adapter.test.mts",
+              "src/services/weather/__tests__/personal-weather-status.test.mts",
+              "src/services/weather/__tests__/ring-geometry.test.mts",
+              "src/services/weather/__tests__/weather-alerts-parse.test.mts",
+              "src/services/weather/__tests__/weather-unevaluable-alert.test.mts",
+              "src/services/weather/__tests__/weather-feed-toctou.test.mts",
+              "src/services/weather/__tests__/weather-ugc-fetch.test.mts",
+              "src/services/weather/__tests__/saved-place-signature.test.mts",
+              "src/services/weather/__tests__/classify-hazard.test.mts",
+              "src/services/weather/__tests__/nws-hazards.test.mts",
+              "src/services/weather/__tests__/self-test-fixture.test.mts",
+              "src/services/weather/__tests__/weather-urgency.test.mts",
+              "src/services/weather/__tests__/weather-warning-router.test.mts",
+              "src/services/weather/__tests__/weather-fusion-observations.test.mts",
+              "src/components/__tests__/personal-storm-mode-view.test.mts",
+              "src/components/__tests__/personal-storm-mode-shelf.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:webcams",
+        "owner": "main",
+        "command": "tsx --test src/services/webcams/__tests__/webcam-aggregator.test.mts src/services/webcams/__tests__/webcam-health.test.mts src/services/webcams/__tests__/flight-rule.test.mts src/services/webcams/__tests__/metar-parser.test.mts src/services/webcams/__tests__/station-matcher.test.mts src/services/webcams/__tests__/dot511-adapter.test.mts src/services/webcams/__tests__/volcano-cam-catalog.test.mts src/services/webcams/__tests__/nps-adapter.test.mts src/services/webcams/__tests__/alertwildfire-adapter.test.mts src/services/webcams/__tests__/streamgauge-adapter.test.mts src/services/webcams/__tests__/windy-adapter.test.mts src/services/webcams/__tests__/noaa-coastal-catalog.test.mts src/services/webcams/__tests__/health-view.test.mts src/services/webcams/__tests__/youtube-live-registry.test.mts src/services/webcams/__tests__/probe-backoff.test.mts src/services/webcams/__tests__/pinned-store.test.mts src/services/webcams/__tests__/webcam-config-loader.test.mts src/services/webcams/__tests__/caltrans-config.test.mts src/services/webcams/__tests__/tfl-config.test.mts src/services/webcams/__tests__/singapore-config.test.mts src/services/webcams/__tests__/airnow-visibility-catalog.test.mts src/services/webcams/__tests__/geonet-config.test.mts src/services/webcams/__tests__/hazecam-catalog.test.mts src/services/webcams/__tests__/live-video-refresh.test.mts src/services/webcams/__tests__/webcam-pick.test.mts src/services/webcams/__tests__/webcam-viewer.test.mts src/services/webcams/__tests__/webcam-globe-layer.test.mts src/services/webcams/__tests__/frame-resolver.test.mts && tsx --import ./tests/panels/register-hook.mjs --test --test-force-exit src/components/__tests__/live-webcams-panel.test.mts src/components/__tests__/map-popup-faa-camera.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/webcams/__tests__/webcam-aggregator.test.mts",
+              "src/services/webcams/__tests__/webcam-health.test.mts",
+              "src/services/webcams/__tests__/flight-rule.test.mts",
+              "src/services/webcams/__tests__/metar-parser.test.mts",
+              "src/services/webcams/__tests__/station-matcher.test.mts",
+              "src/services/webcams/__tests__/dot511-adapter.test.mts",
+              "src/services/webcams/__tests__/volcano-cam-catalog.test.mts",
+              "src/services/webcams/__tests__/nps-adapter.test.mts",
+              "src/services/webcams/__tests__/alertwildfire-adapter.test.mts",
+              "src/services/webcams/__tests__/streamgauge-adapter.test.mts",
+              "src/services/webcams/__tests__/windy-adapter.test.mts",
+              "src/services/webcams/__tests__/noaa-coastal-catalog.test.mts",
+              "src/services/webcams/__tests__/health-view.test.mts",
+              "src/services/webcams/__tests__/youtube-live-registry.test.mts",
+              "src/services/webcams/__tests__/probe-backoff.test.mts",
+              "src/services/webcams/__tests__/pinned-store.test.mts",
+              "src/services/webcams/__tests__/webcam-config-loader.test.mts",
+              "src/services/webcams/__tests__/caltrans-config.test.mts",
+              "src/services/webcams/__tests__/tfl-config.test.mts",
+              "src/services/webcams/__tests__/singapore-config.test.mts",
+              "src/services/webcams/__tests__/airnow-visibility-catalog.test.mts",
+              "src/services/webcams/__tests__/geonet-config.test.mts",
+              "src/services/webcams/__tests__/hazecam-catalog.test.mts",
+              "src/services/webcams/__tests__/live-video-refresh.test.mts",
+              "src/services/webcams/__tests__/webcam-pick.test.mts",
+              "src/services/webcams/__tests__/webcam-viewer.test.mts",
+              "src/services/webcams/__tests__/webcam-globe-layer.test.mts",
+              "src/services/webcams/__tests__/frame-resolver.test.mts"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "--test-force-exit",
+              "src/components/__tests__/live-webcams-panel.test.mts",
+              "src/components/__tests__/map-popup-faa-camera.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/webcams/__tests__/webcam-aggregator.test.mts",
+              "src/services/webcams/__tests__/webcam-health.test.mts",
+              "src/services/webcams/__tests__/flight-rule.test.mts",
+              "src/services/webcams/__tests__/metar-parser.test.mts",
+              "src/services/webcams/__tests__/station-matcher.test.mts",
+              "src/services/webcams/__tests__/dot511-adapter.test.mts",
+              "src/services/webcams/__tests__/volcano-cam-catalog.test.mts",
+              "src/services/webcams/__tests__/nps-adapter.test.mts",
+              "src/services/webcams/__tests__/alertwildfire-adapter.test.mts",
+              "src/services/webcams/__tests__/streamgauge-adapter.test.mts",
+              "src/services/webcams/__tests__/windy-adapter.test.mts",
+              "src/services/webcams/__tests__/noaa-coastal-catalog.test.mts",
+              "src/services/webcams/__tests__/health-view.test.mts",
+              "src/services/webcams/__tests__/youtube-live-registry.test.mts",
+              "src/services/webcams/__tests__/probe-backoff.test.mts",
+              "src/services/webcams/__tests__/pinned-store.test.mts",
+              "src/services/webcams/__tests__/webcam-config-loader.test.mts",
+              "src/services/webcams/__tests__/caltrans-config.test.mts",
+              "src/services/webcams/__tests__/tfl-config.test.mts",
+              "src/services/webcams/__tests__/singapore-config.test.mts",
+              "src/services/webcams/__tests__/airnow-visibility-catalog.test.mts",
+              "src/services/webcams/__tests__/geonet-config.test.mts",
+              "src/services/webcams/__tests__/hazecam-catalog.test.mts",
+              "src/services/webcams/__tests__/live-video-refresh.test.mts",
+              "src/services/webcams/__tests__/webcam-pick.test.mts",
+              "src/services/webcams/__tests__/webcam-viewer.test.mts",
+              "src/services/webcams/__tests__/webcam-globe-layer.test.mts",
+              "src/services/webcams/__tests__/frame-resolver.test.mts"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "--test-force-exit",
+              "src/components/__tests__/live-webcams-panel.test.mts",
+              "src/components/__tests__/map-popup-faa-camera.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:wildfire",
+        "owner": "main",
+        "command": "tsx --test src/services/__tests__/fire-intel-service.test.mts",
+        "effectiveStages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/fire-intel-service.test.mts"
+            ]
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/fire-intel-service.test.mts"
+            ]
+          }
+        ],
+        "previousOwner": "main",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      },
+      {
+        "name": "test:workflow-security",
+        "owner": "PR-only",
+        "command": "node --test tests/workflow-injection.test.mjs tests/dependency-change-gate.test.mjs tests/lint-workflow.test.mjs tests/build-desktop-workflow.test.mjs tests/github-automation-hardening.test.mjs tests/agent-merge-workflow.test.mjs tests/workflow-action-pinning.test.mjs tests/workflow-security-boundaries.test.mjs tests/auto-tag-auth.test.mjs tests/workflow-expression-runtime.test.mjs",
+        "effectiveStages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:workflow-security"
+            ],
+            "packageScript": "node --test tests/workflow-injection.test.mjs tests/dependency-change-gate.test.mjs tests/lint-workflow.test.mjs tests/build-desktop-workflow.test.mjs tests/github-automation-hardening.test.mjs tests/agent-merge-workflow.test.mjs tests/workflow-action-pinning.test.mjs tests/workflow-security-boundaries.test.mjs tests/auto-tag-auth.test.mjs tests/workflow-expression-runtime.test.mjs"
+          }
+        ],
+        "expanded": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/workflow-injection.test.mjs",
+              "tests/dependency-change-gate.test.mjs",
+              "tests/lint-workflow.test.mjs",
+              "tests/build-desktop-workflow.test.mjs",
+              "tests/github-automation-hardening.test.mjs",
+              "tests/agent-merge-workflow.test.mjs",
+              "tests/workflow-action-pinning.test.mjs",
+              "tests/workflow-security-boundaries.test.mjs",
+              "tests/auto-tag-auth.test.mjs",
+              "tests/workflow-expression-runtime.test.mjs"
+            ]
+          }
+        ],
+        "previousOwner": "PR-only",
+        "newScript": false,
+        "changedOwner": false,
+        "changedRecipe": false,
+        "changedExpansion": false
+      }
+    ],
+    "results": [
+      {
+        "script": "test:ux049",
+        "stage": {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux055-credential-validation/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/synthesis/__tests__/threat-aggregator.test.mts",
+            "src/services/synthesis/__tests__/geo-threat-evidence.test.mts",
+            "src/services/synthesis/__tests__/transport-evidence.test.mts",
+            "src/services/synthesis/__tests__/faa-stop-handoff.test.mts",
+            "src/services/aviation/__tests__/threat-feed-cache.test.mts",
+            "tests/panels/threat-transport-coverage.test.mts",
+            "src/services/earthquake/__tests__/usgs-fusion-fetch.test.mts",
+            "src/services/spaceweather/__tests__/kp-fusion-observations.test.mts",
+            "src/components/__tests__/threat-dashboard-coverage.test.mts"
+          ]
+        },
+        "exit": 0
+      },
+      {
+        "script": "test:ux049",
+        "stage": {
+          "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+          "args": [
+            "--test",
+            "tests/data-sources-wiring.test.mjs"
+          ]
+        },
+        "exit": 0
+      }
+    ],
+    "environmentForwarding": "stage.env ?? process.env"
+  },
+  "liveRoadmap": {
+    "generatedAt": "2026-11-07T14:05:37.167662Z",
+    "complete": true,
+    "truncated": false,
+    "candidatePrNumbers": [
+      1851
+    ],
+    "totalPrs": 103,
+    "openMainPrs": 29,
+    "exit": 0,
+    "blocking": [],
+    "baselineReportIdentical": true,
+    "snapshotSha256": "7ca34f52ca1f291ffc144ec7fdaf2ba1213376792d150d08d882e9399bce458f",
+    "reportSha256": "bac19646879acb44f025198a51379a39d9347c959269bcd5fb797316b8bcf6cb",
+    "coveredPrNumbers": [
+      1495,
+      1498,
+      1499,
+      1500,
+      1510,
+      1511,
+      1512,
+      1514,
+      1515,
+      1518,
+      1521,
+      1523,
+      1524,
+      1525,
+      1527,
+      1529,
+      1530,
+      1533,
+      1536,
+      1564,
+      1566,
+      1571,
+      1592,
+      1596,
+      1597,
+      1618,
+      1624,
+      1659,
+      1660,
+      1661,
+      1665,
+      1669,
+      1670,
+      1673,
+      1676,
+      1677,
+      1678,
+      1683,
+      1684,
+      1685,
+      1688,
+      1689,
+      1692,
+      1693,
+      1699,
+      1704,
+      1707,
+      1714,
+      1720,
+      1723,
+      1726,
+      1728,
+      1729,
+      1730,
+      1733,
+      1734,
+      1735,
+      1738,
+      1739,
+      1740,
+      1743,
+      1747,
+      1748,
+      1750,
+      1752,
+      1753,
+      1761,
+      1765,
+      1769,
+      1781,
+      1790,
+      1791,
+      1796,
+      1797,
+      1798,
+      1802,
+      1807,
+      1816,
+      1821,
+      1822,
+      1825,
+      1828,
+      1836,
+      1837,
+      1838,
+      1839,
+      1840,
+      1841,
+      1843,
+      1844,
+      1845,
+      1846,
+      1847,
+      1848,
+      1849,
+      1851,
+      1852,
+      1853,
+      1854,
+      1856,
+      1857,
+      1858,
+      1859
+    ]
+  },
+  "newActualTrustedPathOutput": [
+    "# pass 145",
+    "# fail 0",
+    "# pass 23",
+    "# fail 0"
+  ],
+  "newActualTrustedPathLogSha256": "0e39657d0a36802f770c436daa05b9a2a6390abae77adf228229853810bc7c6d",
+  "qualification": "Actual8174 integration is source/input-identical to fresh ac283 lint+1436-pass aggregate/build; no blanket claim from older changed-helper receipts. Current84-script plan is an audited subset, not fresh84-script execution. Newly trusted UX049 path was executed with per-stage environment forwarding. Source will be collapsed into one linear commit; review and coordinator verdict/publication are separate."
+}

@@ -42,13 +42,14 @@ let derivedKey: CryptoKey | null = null;
 let plaintext: Map<string, string> | null = null;
 let cachedBlob: VaultBlob | null | undefined = undefined;
 let hiddenSince: number | null = null;
-const listeners = new Set<() => void>();
+type VaultChange = { key: string } | 'reset' | 'local';
+const listeners = new Set<(change: VaultChange) => void>();
 
-function notify(): void {
-  for (const listener of listeners) listener();
+function notify(change: VaultChange): void {
+  for (const listener of listeners) listener(change);
 }
 
-export function onVaultChange(listener: () => void): () => void {
+export function onVaultChange(listener: (change: VaultChange) => void): () => void {
   listeners.add(listener);
   return () => { listeners.delete(listener); };
 }
@@ -169,7 +170,7 @@ export async function createVault(passphrase: string): Promise<void> {
   derivedKey = key;
   plaintext = map;
   cachedBlob = blob;
-  notify();
+  notify('reset');
 }
 
 export async function unlockVault(passphrase: string): Promise<boolean> {
@@ -187,7 +188,7 @@ export async function unlockVault(passphrase: string): Promise<boolean> {
     derivedKey = key;
     plaintext = map;
     hiddenSince = null;
-    notify();
+    notify('local');
     return true;
   } catch {
     // AES-GCM auth failure = wrong passphrase or tampered blob.
@@ -199,13 +200,25 @@ export function lockVault(): void {
   derivedKey = null;
   plaintext = null;
   hiddenSince = null;
-  notify();
+  notify('local');
 }
 
 export async function destroyVault(): Promise<void> {
   await deleteMemory(VAULT_KEY);
   cachedBlob = null;
   lockVault();
+  notify('reset');
+}
+
+export async function isStoredValueCurrent(key: string, value: string): Promise<boolean> {
+  const session = derivedKey;
+  if (!session || !cachedBlob || plaintext?.get(key) !== value) return false;
+  const stored = await getMemory<VaultBlob>(VAULT_KEY);
+  if (stored?.v !== 1 || stored.ct !== cachedBlob?.ct || stored.iv !== cachedBlob.iv) return false;
+  try {
+    const persisted = await decryptBlob(session, stored);
+    return session === derivedKey && persisted.get(key) === value;
+  } catch { return false; }
 }
 
 export function listSecrets(): Map<string, string> {
@@ -247,7 +260,7 @@ export async function setSecret(key: string, value: string): Promise<void> {
     plaintext.delete(key);
   }
   await persistCurrent();
-  notify();
+  notify({ key });
 }
 
 export async function deleteSecret(key: string): Promise<void> {
@@ -255,7 +268,7 @@ export async function deleteSecret(key: string): Promise<void> {
   plaintext.delete(key);
   await persistCurrent();
   if (!plaintext) return;
-  notify();
+  notify({ key });
 }
 
 // ── Auto-lock on prolonged tab hidden ──────────────────────────────────────

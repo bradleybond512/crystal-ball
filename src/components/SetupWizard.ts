@@ -2,15 +2,14 @@ import {
   KEY_CATEGORIES, HUMAN_LABELS, KEY_DESCRIPTIONS, SIGNUP_URLS, OAUTH_CONNECT_KEYS, KEY_SETUP_STEPS,
 } from '../services/settings-constants';
 import {
-  setSecretValue, verifySecretWithApi, type RuntimeSecretKey,
+  setSecretValue, validateSecret, verifyStoredSecretWithApi, type RuntimeSecretKey,
 } from '../services/runtime-config';
 import {
   getPosition, setPosition,
   getDontAsk, addDontAsk,
   getSkipped, addSkipped, clearSkipped,
-  setKeyStatus,
 } from '../services/wizard-state';
-import { featuresFor } from '../services/key-feature-index';
+import { getCredentialEvidenceDisplay } from '../services/credential-evidence';
 import { invokeTauri } from '../services/tauri-bridge';
 import { startWatching, stopWatching, markConsumed } from '../services/clipboard-watcher';
 
@@ -20,7 +19,7 @@ type StepView =
   | { kind: 'done' };
 
 export interface SetupWizardOpts {
-  /** Whether the key is set (saved or pending). Never needs the value (R4-SEC-001). */
+  /** Presence of the saved key. */
   isSet: (key: RuntimeSecretKey) => boolean;
   onClose: () => void;
 }
@@ -28,6 +27,8 @@ export interface SetupWizardOpts {
 export class SetupWizard {
   private overlay: HTMLElement;
   private opts: SetupWizardOpts;
+  private stopEvidence?: () => void;
+  private opener = document.activeElement;
   private current: StepView = { kind: 'done' };
 
   constructor(host: HTMLElement, opts: SetupWizardOpts) {
@@ -41,19 +42,34 @@ export class SetupWizard {
     const pos = getPosition() ?? { tier: 1, stepIndex: 0 };
     this.current = this.resolveStep(pos.tier, pos.stepIndex);
     this.render();
-    document.addEventListener('keydown', this.onKey);
+    window.addEventListener('keydown', this.onKey, true);
   }
 
   close(): void {
+    this.stopEvidence?.();
     stopWatching();
     clearSkipped();
-    document.removeEventListener('keydown', this.onKey);
+    window.removeEventListener('keydown', this.onKey, true);
     this.overlay.remove();
     this.opts.onClose();
+    if (this.opener instanceof HTMLElement && this.opener.isConnected) this.opener.focus();
   }
 
   private onKey = (ev: KeyboardEvent): void => {
-    if (ev.key === 'Escape' && confirm('Close the setup wizard? Your progress is saved.')) this.close();
+    if (ev.key !== 'Escape' && ev.key !== 'Tab') return;
+    if (document.querySelector('.cmdk-v2-overlay:not([hidden])')) return;
+    if (ev.key === 'Escape') {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      if (confirm('Close the setup wizard? Your progress is saved.')) this.close();
+      return;
+    }
+    const controls = this.overlay.querySelectorAll<HTMLElement>('a[href], input:not(:disabled), button:not(:disabled)');
+    const edge = ev.shiftKey ? controls[0] : controls[controls.length - 1];
+    if (edge?.isSameNode(document.activeElement) || !this.overlay.contains(document.activeElement)) {
+      ev.preventDefault();
+      (ev.shiftKey ? controls[controls.length - 1] : controls[0])?.focus();
+    }
   };
 
   // Keys excluded from this wizard session: explicitly skipped, marked
@@ -92,13 +108,19 @@ export class SetupWizard {
   }
 
   private render(): void {
+    this.stopEvidence?.();
+    this.stopEvidence = undefined;
     this.overlay.replaceChildren();
     const modal = document.createElement('div');
     modal.className = 'setup-wizard-modal';
     if (this.current.kind === 'step') this.renderStep(modal, this.current);
     else if (this.current.kind === 'checkpoint') this.renderCheckpoint(modal, this.current.tier);
     else this.renderDone(modal);
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Credential setup');
     this.overlay.append(modal);
+    modal.querySelector<HTMLElement>('.setup-wizard-input, button')?.focus();
   }
 
   private renderStep(modal: HTMLElement, step: { tier: number; stepIndex: number; key: RuntimeSecretKey }): void {
@@ -147,16 +169,18 @@ export class SetupWizard {
     input.type = 'password';
     input.className = 'setup-wizard-input';
     input.placeholder = 'Paste key here';
-    input.autofocus = true;
+    input.setAttribute('aria-label', HUMAN_LABELS[step.key] ?? step.key);
     modal.append(input);
 
     const feedback = document.createElement('div');
     feedback.className = 'setup-wizard-feedback';
+    feedback.setAttribute('role', 'status');
     modal.append(feedback);
 
     startWatching(step.key, (value) => {
+      if (input.readOnly) return;
       input.value = value;
-      feedback.textContent = 'Detected from clipboard — click Save & Next to use';
+      feedback.textContent = 'Detected from clipboard — click Save & verify to use';
       feedback.dataset.kind = 'info';
     });
 
@@ -166,8 +190,12 @@ export class SetupWizard {
       this.button('← Back',           () => { this.advance(step, -1); }),
       this.button('Skip',             () => { addSkipped(step.key); this.advance(step, +1); }),
       this.button("Don't ask again",  () => { addDontAsk(step.key); this.advance(step, +1); }),
-      this.button('Save & Next →',    () => { void this.handleSaveNext(step, input, feedback); }, 'primary'),
     );
+    const save = this.button('Save & verify', () => {
+      if (save.dataset.saved) this.advance(step, 0);
+      else void this.handleSaveNext(step, input, feedback, save);
+    }, 'primary');
+    footer.append(save);
     modal.append(footer);
   }
 
@@ -224,37 +252,56 @@ export class SetupWizard {
     step: { tier: number; stepIndex: number; key: RuntimeSecretKey },
     input: HTMLInputElement,
     feedback: HTMLElement,
+    save: HTMLButtonElement,
   ): Promise<void> {
+    if (input.readOnly) return;
     const value = input.value.trim();
-    if (!value) { this.setFeedback(feedback, 'Enter a value or click Skip', 'err'); return; }
-    // Mark this clipboard value as consumed so the watcher doesn't auto-fill
-    // the same string into subsequent steps whose key shapes happen to match.
+    const format = validateSecret(step.key, value);
+    if (!format.valid) { this.setFeedback(feedback, format.hint ?? 'Invalid format', 'err'); return; }
+    input.readOnly = true;
+    save.setAttribute('aria-busy', 'true');
     markConsumed(value);
-    this.setFeedback(feedback, 'Saving and validating…', 'info');
-
-    // Persist first. If the keychain/vault write fails, surface the error and
-    // stay on this step so the user can retry — silently advancing here is
-    // how a 'saved' key vanishes after restart.
+    this.setFeedback(feedback, 'Saving…', 'info');
     try {
       await setSecretValue(step.key, value);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setKeyStatus(step.key, { state: 'unset', lastChecked: Date.now(), lastError: message });
-      this.setFeedback(feedback, '✗ Save failed: ' + message + ' — try again', 'err');
+    } catch {
+      input.readOnly = false;
+      save.removeAttribute('aria-busy');
+      this.setFeedback(feedback, 'Save failed. Check vault access and try again.', 'err');
       return;
     }
-
-    const result = await verifySecretWithApi(step.key, value);
-    if (result.valid) {
-      setKeyStatus(step.key, { state: 'valid', lastChecked: Date.now() });
-      const feats = featuresFor(step.key);
-      const unlock = feats.length ? ' — Unlocks: ' + feats.join(', ') : '';
-      this.setFeedback(feedback, '✓ ' + result.message + unlock, 'ok');
-    } else {
-      setKeyStatus(step.key, { state: 'invalid', lastChecked: Date.now(), lastError: result.message });
-      this.setFeedback(feedback, '✗ ' + result.message + ' — saved anyway', 'err');
+    if (!this.overlay.isConnected || !this.overlay.contains(input)) return;
+    input.value = '';
+    this.setFeedback(feedback, 'Saved. Checking stored credential…', 'info');
+    try {
+      const result = await verifyStoredSecretWithApi(step.key);
+      if (!this.overlay.contains(input) || !input.isConnected) return;
+      const display = () => {
+        const evidence = getCredentialEvidenceDisplay(step.key, this.opts.isSet(step.key));
+        this.setFeedback(feedback, evidence.text, evidence.state === 'rejected' ? 'err' : 'info');
+        feedback.title = evidence.title;
+        feedback.setAttribute('aria-label', [evidence.text, evidence.title].filter(Boolean).join('. '));
+        return evidence.state;
+      };
+      const state = display();
+      if (state === 'unverified' || result.reason === 'cooldown' || result.reason === 'concurrency-limit') {
+        feedback.append(' · This check: ' + result.message);
+        feedback.removeAttribute('aria-label');
+      }
+      const timer = window.setInterval(() => { if (!document.hidden) display(); }, 60_000);
+      document.addEventListener('visibilitychange', display);
+      window.addEventListener('cb:credential-evidence-changed', display);
+      this.stopEvidence = () => {
+        window.clearInterval(timer);
+        document.removeEventListener('visibilitychange', display);
+        window.removeEventListener('cb:credential-evidence-changed', display);
+      };
+    } catch {
+      this.setFeedback(feedback, 'Saved, not verified. Try again from API Keys.', 'info');
     }
-    setTimeout(() => { this.advance(step, +1); }, 700);
+    save.removeAttribute('aria-busy');
+    save.dataset.saved = 'true';
+    save.textContent = 'Next →';
   }
 
   private setFeedback(el: HTMLElement, message: string, kind: 'ok' | 'err' | 'info'): void {

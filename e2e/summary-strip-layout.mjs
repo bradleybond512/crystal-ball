@@ -30,14 +30,15 @@ const stubs = {
   "../services/datacenter/datacenter-state": `let site=null, posture=null, listeners=[]; export const getDatacenterSite=()=>site; export const getDatacenterPosture=()=>posture; export const subscribeDatacenterPosture=f=>{listeners.push(f);return()=>listeners=listeners.filter(x=>x!==f)}; export const set=(s,p)=>{site=s;posture=p;listeners.forEach(f=>f(p))};`,
 };
 const entry = `
-import {notificationStack} from ${JSON.stringify(`${repo}/src/components/NotificationStack.ts`)};
+import {notificationStack, NotificationStack} from ${JSON.stringify(`${repo}/src/components/NotificationStack.ts`)};
 import {BreakingNewsBanner} from ${JSON.stringify(`${repo}/src/components/BreakingNewsBanner.ts`)};
 import {DataCenterPinnedStrip} from ${JSON.stringify(`${repo}/src/components/DataCenterPinnedStrip.ts`)};
 import {set} from '../services/datacenter/datacenter-state';
 import {CriticalPostureBanner} from ${JSON.stringify(`${repo}/src/components/CriticalPostureBanner.ts`)};
 const trackCriticalBannerAction=()=>{};
 class Subject {ctx={isMobile:false,map:{setCenter:(...x)=>window.lastCenter=x}}; criticalPostureBanner=new CriticalPostureBanner(notificationStack.element,(lat,lon)=>this.ctx.map.setCenter(lat,lon,4),trackCriticalBannerAction); ${method} }
-notificationStack.mount();
+if (!new URLSearchParams(location.search).has('late')) notificationStack.mount();
+window.stack=notificationStack;window.Stack=NotificationStack;window.Banner=BreakingNewsBanner;
 const lower=document.createElement('div');lower.id='lower-row';lower.style.cssText='height:36px;min-height:36px;background:#445';lower.textContent='Existing alert row';notificationStack.element.append(lower);
 window.subject=new Subject();window.breaking=new BreakingNewsBanner();
 window.expand=0;window.dc=new DataCenterPinnedStrip(()=>window.expand++);document.querySelector('.cb-summary-strip').after(window.dc.getElement());
@@ -67,27 +68,25 @@ const out = await build({
     },
   ],
 });
-const html = `<!doctype html><link rel="stylesheet" href="/main.css"><style>html,body{margin:0} .fixture-header{height:32px;flex-shrink:0}.fixture-map{height:350px;min-height:350px}.fixture-panels{height:1800px;min-height:1800px}</style><body class="is-desktop-macos"><div id="app"><div class="header fixture-header">Header</div><div class="main-content"><div class="fixture-map">Map</div><div class="cb-summary-strip">Summary</div><div class="fixture-panels">Panels</div></div></div><script src="/entry.js"></script>`;
-const styles = new Map(["main.css", "eew-status-bar.css"].map((name) => [
-  `/${name}`, fs.readFileSync(`${repo}/src/styles/${name}`),
-]));
+// Native CSS hides the web header. Include the actual 44px toolbar so the
+// scroll fixture has the same vertical origin as the native shell.
+const html = `<!doctype html><link rel="stylesheet" href="/main.css"><style>html,body{margin:0} .fixture-header{height:32px;flex-shrink:0}.fixture-map{height:350px;min-height:350px}.fixture-panels{height:1800px;min-height:1800px}</style><body class="is-desktop-macos"><div id="app"><div class="header fixture-header">Header</div><div class="mac-content-toolbar">Native toolbar</div><div class="main-content"><div class="fixture-map">Map</div><div class="cb-summary-strip">Summary</div><div class="fixture-panels">Panels</div></div></div><script src="/entry.js"></script>`;
 const server = http
   .createServer((req, res) => {
-    res.setHeader(
-      "Content-Type",
-      req.url === "/entry.js"
-        ? "application/javascript"
-        : styles.has(req.url)
-          ? "text/css"
-          : "text/html",
-    );
-    res.end(
-      req.url === "/entry.js"
-        ? out.outputFiles[0].text
-        : styles.has(req.url)
-          ? styles.get(req.url)
-          : html,
-    );
+    const url = new URL(req.url, 'http://127.0.0.1');
+    if (url.pathname === '/entry.js') {
+      res.setHeader('Content-Type', 'application/javascript');
+      res.end(out.outputFiles[0].text);
+    } else if (url.pathname.endsWith('.css')) {
+      const file = path.resolve(repo, 'src/styles', `.${url.pathname}`);
+      if (!file.startsWith(path.resolve(repo, 'src/styles') + path.sep) || !fs.existsSync(file)) {
+        res.writeHead(404); res.end(); return;
+      }
+      res.setHeader('Content-Type', 'text/css'); res.end(fs.readFileSync(file));
+    } else {
+      res.setHeader('Content-Type', 'text/html');
+      res.end(url.searchParams.has('web') ? html.replace('class="is-desktop-macos"', '').replace('<div class="mac-content-toolbar">Native toolbar</div>', '') : html);
+    }
   })
   .listen(0, "127.0.0.1");
 await new Promise((r) => server.on("listening", r));
@@ -96,15 +95,19 @@ try {
   browser = await chromium.launch({ headless: true });
   let pass = 0,
     fail = 0;
-  const test = async (name, fn) => {
+  const test = async (name, fn, options = {}) => {
     const page = await browser.newPage({
-      viewport: { width: 1000, height: 720 },
+      viewport: { width: options.width ?? 1000, height: 720 },
       reducedMotion: "reduce",
     });
     const pageErrors = [];
     page.on("pageerror", (e) => pageErrors.push(e.message));
     try {
-      await page.goto(`http://127.0.0.1:${server.address().port}`);
+      await page.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1' ? route.continue() : route.abort());
+      const query = new URLSearchParams();
+      if (options.web) query.set('web', '1');
+      if (options.late) query.set('late', '1');
+      await page.goto(`http://127.0.0.1:${server.address().port}/?${query}`);
       await page.waitForFunction(() => window.ready);
       await settle(page);
       await fn(page);
@@ -342,6 +345,80 @@ try {
       before.height,
     );
   });
+  const activate = async (p) => {
+    await p.evaluate(() => document.dispatchEvent(new CustomEvent('wm:breaking-news', {detail: {
+      id: 'ordinary', threatLevel: 'high', headline: 'Synthetic warning', source: 'Fixture', timestamp: new Date(),
+    }})));
+    await settle(p);
+  };
+  const attached = async (p) => {
+    await p.waitForFunction(() => {
+      const s = document.getElementById('cb-notification-stack');
+      const b = document.querySelector('.breaking-news-container');
+      return s && b && Math.abs(s.getBoundingClientRect().bottom - b.getBoundingClientRect().top) < 1
+        && parseFloat(document.documentElement.style.getPropertyValue('--notification-stack-h')) === s.offsetHeight;
+    }, null, {timeout: 1000});
+    const s = await rect(p, '#cb-notification-stack'), b = await rect(p, '.breaking-news-container');
+    assert.ok(Math.abs(s.bottom-b.top) < 1, JSON.stringify({s,b}));
+    assert.ok(b.top >= s.bottom - 0.5, 'breaking must not overlap the shelf');
+  };
+  const trackIncidentalEvents = async (p) => p.evaluate(() => {
+    window.incidental = {classes: 0, resize: 0};
+    new MutationObserver(rs => incidental.classes += rs.length).observe(document.body, {attributes:true,attributeFilter:['class']});
+    window.addEventListener('resize', () => incidental.resize++);
+  });
+  for (const web of [false, true]) {
+    const variant = web ? 'web' : 'native-style';
+    for (const [transition, height] of [['grow',140],['shrink',12],['remove',0]]) {
+      await test(`${variant} ordinary row ${transition} follows shelf without incidental triggers`, async p => {
+        // Start each independently counted transition at its actual prior size.
+        if (transition !== 'grow') await p.evaluate(height => {
+          const row = document.getElementById('lower-row');
+          row.style.height = `${height}px`; row.style.minHeight = `${height}px`;
+        }, transition === 'shrink' ? 140 : 12);
+        await activate(p); await attached(p); await trackIncidentalEvents(p);
+        await p.evaluate(height => {
+          const row = document.getElementById('lower-row');
+          if (height === 0) row.remove(); else {row.style.height = `${height}px`;row.style.minHeight = `${height}px`;}
+        }, height);
+        await attached(p);
+        assert.deepEqual(await p.evaluate(() => incidental), {classes:0,resize:0});
+        assert.equal(await p.locator('.critical-posture-banner').count(),0);
+        assert.equal(await p.locator('.breaking-alert').count(),1);
+      }, {web});
+    }
+    await test(`${variant} narrow ordinary text wrapping follows measured shelf`, async p => {
+      await activate(p);await attached(p);await trackIncidentalEvents(p);
+      const before = await rect(p,'#cb-notification-stack');
+      await p.evaluate(() => {const row=document.getElementById('lower-row');row.style.height='auto';row.style.minHeight='0';row.textContent='Ordinary shelf text wrapping across narrow space. '.repeat(12);});
+      await attached(p);
+      assert.ok((await rect(p,'#cb-notification-stack')).height > before.height);
+      assert.deepEqual(await p.evaluate(() => incidental),{classes:0,resize:0});
+    },{web,width:500});
+    await test(`${variant} late shelf mount follows active breaking without class or resize`, async p => {
+      await activate(p);assert.equal((await rect(p,'.breaking-news-container')).top,44);
+      await trackIncidentalEvents(p);await p.evaluate(() => stack.mount());await attached(p);
+      assert.deepEqual(await p.evaluate(() => incidental),{classes:0,resize:0});
+    },{web,late:true});
+    await test(`${variant} replacement removal and reattachment track only the current shelf`, async p => {
+      await activate(p);await attached(p);await trackIncidentalEvents(p);
+      await p.evaluate(() => {window.oldStack=stack;oldStack.destroy();window.stack=new Stack();stack.element.innerHTML='<div style="height:90px;min-height:90px">Replacement</div>';stack.mount();});
+      await attached(p);
+      await p.evaluate(() => {oldStack.element.style.height='300px';});await settle(p);await attached(p);
+      await p.evaluate(() => stack.destroy());
+      await p.waitForFunction(() => document.querySelector('.breaking-news-container').getBoundingClientRect().top===44,null,{timeout:1000});
+      await p.evaluate(() => stack.mount());await attached(p);
+      await p.evaluate(() => {stack.element.remove();document.body.append(stack.element);});await attached(p);
+      assert.deepEqual(await p.evaluate(() => incidental),{classes:0,resize:0});
+    },{web});
+    await test(`${variant} destroy prevents shelf changes from resurrecting breaking offset`, async p => {
+      await activate(p);await attached(p);await p.evaluate(() => {breaking.destroy();stack.element.style.height='150px';stack.element.remove();document.body.append(stack.element);});
+      await settle(p);
+      assert.equal(await p.locator('.breaking-news-container').count(),0);
+      assert.equal(await p.evaluate(() => document.documentElement.style.getPropertyValue('--breaking-alert-offset')),'');
+      assert.equal(await p.evaluate(() => document.body.classList.contains('has-breaking-alert')),false);
+    },{web});
+  }
   console.log(`RESULT ${pass} pass / ${fail} fail`);
   process.exitCode = fail ? 1 : 0;
 } finally {

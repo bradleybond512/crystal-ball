@@ -23,12 +23,13 @@ export class BreakingNewsBanner {
   private lastSoundMs = 0;
   private mutationObserver: MutationObserver | null = null;
   private resizeObserver: ResizeObserver | null = null;
-  private observedPostureBanner: Element | null = null;
+  private observedStack: Element | null = null;
   private boundOnAlert: (e: Event) => void;
   private boundOnVisibility: () => void;
   private boundOnResize: () => void;
   private dismissed = new Map<string, number>();
   private resizeRaf: number | null = null;
+  private destroyed = false;
 
   constructor() {
  this.container = document.createElement('div');
@@ -76,35 +77,39 @@ export class BreakingNewsBanner {
   }
 
   private setupObservers(): void {
- this.mutationObserver = new MutationObserver(() => this.updatePosition());
- this.mutationObserver.observe(document.body, {
- attributes: true,
- attributeFilter: ['class'],
- });
+    this.mutationObserver = new MutationObserver((records) => {
+      if (this.destroyed) return;
+      const shelfChanged = records.some(record => record.type === 'attributes'
+        || [...record.addedNodes, ...record.removedNodes].some(node =>
+          (this.observedStack?.isSameNode(node) ?? false)
+          || (node.nodeType === 1 && (node as Element).id === 'cb-notification-stack')));
+      if (shelfChanged) this.updatePosition();
+    });
+    this.mutationObserver.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['class'],
+      childList: true,
+    });
   }
 
-  private attachResizeObserverIfNeeded(): void {
- const postureBanner = document.querySelector('.critical-posture-banner');
- if (!postureBanner) return;
- if (postureBanner === this.observedPostureBanner) return;
-
- if (this.resizeObserver) this.resizeObserver.disconnect();
- this.resizeObserver = new ResizeObserver(() => this.updatePosition());
- this.resizeObserver.observe(postureBanner);
- this.observedPostureBanner = postureBanner;
+  private observeStack(stack: Element | null): void {
+    if (stack === this.observedStack) return;
+    this.resizeObserver?.disconnect();
+    this.observedStack = stack;
+    if (!stack) return;
+    this.resizeObserver ??= new ResizeObserver(() => this.updatePosition());
+    this.resizeObserver.observe(stack, { box: 'border-box' });
   }
 
   private updatePosition(): void {
+    if (this.destroyed) return;
     const stack = document.getElementById('cb-notification-stack');
-    // The critical posture banner is now a row INSIDE the stack, so the
-    // stack's own bottom already includes it — adding its height here would
-    // double-count and push this container a banner-height too low.
+    this.observeStack(stack);
+    // Observe the same whole shelf whose bottom we measure, including ordinary
+    // rows and posture rows. An absent shelf retains the existing 44px fallback.
     const top = stack ? stack.getBoundingClientRect().bottom : 44;
-    if (document.body.classList.contains('has-critical-banner')) {
-      this.attachResizeObserverIfNeeded(); // reposition when that row resizes
-    }
     this.container.style.top = `${top}px`;
- this.updateOffset();
+    this.updateOffset();
   }
 
   private updateOffset(): void {
@@ -262,12 +267,15 @@ export class BreakingNewsBanner {
   }
 
   public destroy(): void {
+ this.destroyed = true;
  document.removeEventListener('wm:breaking-news', this.boundOnAlert);
  document.removeEventListener('visibilitychange', this.boundOnVisibility);
  window.removeEventListener('resize', this.boundOnResize);
  if (this.resizeRaf !== null) cancelAnimationFrame(this.resizeRaf);
+ this.resizeRaf = null;
  this.mutationObserver?.disconnect();
  this.resizeObserver?.disconnect();
+ this.observedStack = null;
 
  for (const active of this.activeAlerts) {
  if (active.timer) clearTimeout(active.timer);

@@ -314,7 +314,8 @@
     "test:map-clarity-browser": "playwright test e2e/map-clarity.spec.ts",
     "test:release-capabilities": "node --test tests/release-manifest.test.mjs tests/release-capabilities.test.mjs",
     "test:acc505": "tsx --test src/services/cognition/__tests__/correlation-regime.test.mts src/services/correlation/__tests__/regime-reliability.test.mts src/services/correlation/__tests__/regime-reliability-replay.test.mts",
-    "test:acc508": "tsx --test src/services/correlation/__tests__/near-threshold-recall.test.mts src/services/correlation/__tests__/boundary-baseline-migration.test.mts"
+    "test:acc508": "tsx --test src/services/correlation/__tests__/near-threshold-recall.test.mts src/services/correlation/__tests__/boundary-baseline-migration.test.mts",
+    "test:breaking-stack-lifecycle": "tsx --test src/components/__tests__/breaking-news-stack-lifecycle.test.mts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",

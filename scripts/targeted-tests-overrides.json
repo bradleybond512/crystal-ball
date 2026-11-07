@@ -1439,7 +1439,8 @@
     "test:ux044"
   ],
   "e2e/summary-strip-layout.mjs": [
-    "test:ux044"
+    "test:ux044",
+    "test:breaking-stack-lifecycle"
   ],
   "src/services/pressure-history.ts": [
     "test:acc505"
@@ -1473,5 +1474,11 @@
   ],
   "scripts/correlation-benchmark.mts": [
     "test:acc508"
+  ],
+  "src/components/BreakingNewsBanner.ts": [
+    "test:breaking-stack-lifecycle"
+  ],
+  "src/components/__tests__/breaking-news-stack-lifecycle.test.mts": [
+    "test:breaking-stack-lifecycle"
   ]
 }

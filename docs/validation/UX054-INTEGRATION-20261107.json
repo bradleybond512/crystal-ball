@@ -1,0 +1,101 @@
+{
+  "sourceSha": "7e5dd2d54d30da9aee71d58c6edb899eb877fe57",
+  "mainSha": "180f58ed0e15c6453afdc5b5a267fe1af38a7793",
+  "checkerSha256": "040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd",
+  "pinMutation": {
+    "file": ".github/workflows/security-audit.yml",
+    "before": "1058dd056a0efc6e92c2e9c6d44214dfe9aeb10cea4fef39be447a3278d0a920",
+    "after": "1058dd056a0efc6e92c2e9c6d44214dfe9aeb10cea4fef39be447a3278d0a920",
+    "appliedDiff": "diff --git a/.github/workflows/security-audit.yml b/.github/workflows/security-audit.yml\nindex 894ffd672..36d3ae087 100644\n--- a/.github/workflows/security-audit.yml\n+++ b/.github/workflows/security-audit.yml\n@@ -28,7 +28,7 @@ jobs:\n         env:\n           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}\n           MERGE_BASE_SHA: ${{ github.event.merge_group.base_sha }}\n-          ROLLOUT_BASE: 180f58ed0e15c6453afdc5b5a267fe1af38a7793\n+          ROLLOUT_BASE: cd459dfec514c80e2fcc3f0d7965ea6ef76a7b6a\n           ROLLOUT_SHA256: '040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd'\n         shell: bash\n         run: |\n",
+    "exitCode": 1,
+    "counts": "15 pass / 1 fail",
+    "cleanRestoration": true
+  },
+  "bootstrapControls": [
+    {
+      "name": "old-bootstrap-base",
+      "head": "7e5dd2d54d30da9aee71d58c6edb899eb877fe57",
+      "base": "180f58ed0e15c6453afdc5b5a267fe1af38a7793",
+      "status": 1,
+      "expected": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "name": "wrong-digest",
+      "head": "7e5dd2d54d30da9aee71d58c6edb899eb877fe57",
+      "base": "180f58ed0e15c6453afdc5b5a267fe1af38a7793",
+      "status": 1,
+      "expected": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "name": "wrong-candidate",
+      "head": "7e5dd2d54d30da9aee71d58c6edb899eb877fe57",
+      "base": "180f58ed0e15c6453afdc5b5a267fe1af38a7793",
+      "status": 1,
+      "expected": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "name": "reserved-base-bootstrap",
+      "head": "7e5dd2d54d30da9aee71d58c6edb899eb877fe57",
+      "base": "180f58ed0e15c6453afdc5b5a267fe1af38a7793",
+      "status": 0,
+      "expected": 0,
+      "stdout": "[npm-audit] .: 1041 dependencies; 0 info, 2 low, 13 moderate, 0 high, 0 critical (@eslint/config-array:moderate, @rollup/plugin-node-resolve:low, @typescript-eslint/eslint-plugin:moderate, @typescript-eslint/parser:moderate, @typescript-eslint/type-utils:moderate, @typescript-eslint/typescript-estree:moderate, @typescript-eslint/utils:moderate, deepmerge:low, eslint:moderate, eslint-plugin-sonarjs:moderate, glob:moderate, minimatch:moderate, typescript-eslint:moderate, vite-plugin-pwa:moderate, workbox-build:moderate)\n[npm-audit] .github/tools/codex: 7 dependencies; 0 info, 0 low, 0 moderate, 0 high, 0 critical\n[npm-audit] marketing-site: 626 dependencies; 0 info, 0 low, 12 moderate, 0 high, 0 critical (@typescript-eslint/eslint-plugin:moderate, @typescript-eslint/parser:moderate, @typescript-eslint/type-utils:moderate, @typescript-eslint/typescript-estree:moderate, @typescript-eslint/utils:moderate, @vercel/og:moderate, eslint-config-next:moderate, fast-uri:moderate, minimatch:moderate, satori:moderate, typescript-eslint:moderate, vinext:moderate)\n[npm-audit] scripts: 47 dependencies; 0 info, 0 low, 1 moderate, 0 high, 0 critical (ip-address:moderate)\n[npm-audit] tools/cb-control: 41 dependencies; 0 info, 0 low, 0 moderate, 0 high, 0 critical\n[npm-audit] tools/mcp-server: 93 dependencies; 0 info, 0 low, 0 moderate, 0 high, 0 critical\n",
+      "stderr": ""
+    }
+  ],
+  "gate": {
+    "exitCode": 0,
+    "scripts": [
+      "test:ux054",
+      "test:workflow-security",
+      "test:supply-chain-gates",
+      "test:roadmap-controller",
+      "test:acc008",
+      "typecheck:acc008"
+    ],
+    "passCounts": [
+      16,
+      61,
+      21,
+      126,
+      25
+    ],
+    "fail": 0,
+    "buildSeconds": 11.93,
+    "precacheEntries": 441
+  },
+  "mainOwnedSelector": {
+    "exitCode": 0,
+    "scripts": 9,
+    "passCounts": [
+      82,
+      37,
+      15,
+      24,
+      2,
+      62,
+      126,
+      13,
+      21,
+      16,
+      61
+    ],
+    "fail": 0
+  },
+  "roadmapSnapshot": {
+    "records": 103,
+    "blocking": [],
+    "candidatePr": 1849
+  },
+  "limits": [
+    "No installed app, release or deployment action.",
+    "Fresh live bootstrap covers advisory step; earlier root signature verification and marketing 42-test/build evidence remain unchanged historical evidence.",
+    "GitHub hosted final-head checks remain publication-time acceptance."
+  ]
+}

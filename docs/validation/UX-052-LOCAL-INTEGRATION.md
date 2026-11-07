@@ -83,3 +83,8 @@ After #1846 lands, compare the fresh main-owned required selection and all relev
 source/test/build bytes against this receipt, rerunning new or changed coverage.
 A final live candidate snapshot, exact-head Sonnet review and hosted checks remain
 required. Native acceptance and installation/release holds are unchanged.
+
+The subsequent metadata-only rebase at `54038130340bf6b8443dc376fe1b1de3df01196d` onto corrected pending #1846
+`e7fd299d9b624e7c1d41d13bffae66264d8b29c3` preserved every non-evidence root object
+and all 42 relevant file hashes in the superset receipt. The 74-script execution
+head remains `8021f76453d6225b04393d519830a993e56d95c9`; no rerun is claimed.

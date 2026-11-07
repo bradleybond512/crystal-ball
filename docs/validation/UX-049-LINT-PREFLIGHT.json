@@ -1,0 +1,23 @@
+{
+  "path": "src-tauri/sidecar/s2u-xmpp.bundle.mjs",
+  "beforeSha256": "4c5328fdbdf07514d9f04d5bd7815dd99664a23455418026c0c3b97074dc11ce",
+  "restoredSha256": "4c5328fdbdf07514d9f04d5bd7815dd99664a23455418026c0c3b97074dc11ce",
+  "tracked": false,
+  "ignored": true,
+  "generatedBy": "scripts/build-sidecar-xmpp.mjs",
+  "restored": true,
+  "executionHead": "b8b9d1974f56b9f9ad4841be407eb01cdcd74559",
+  "command": "npm run lint:ci",
+  "initialExit": 1,
+  "initialFailure": "Only ignored untracked generated s2u-xmpp.bundle.mjs increased lint baseline",
+  "ciEquivalentExit": 0,
+  "baselineExistingFindings": 1015,
+  "changedFiles": 72,
+  "changedErrors": 0,
+  "changedWarnings": 2,
+  "marketingInstalledEntriesVerified": 494,
+  "marketingNpmLsExit": 0,
+  "marketingPackageSha256": "ae22421663b88098d80c2daa8098ab913b7b6e6565a393aabbc90ab65a3e5628",
+  "marketingLockSha256": "e981f0710a0912e11068ba27fe6227dab1b5f101dcdb9241a0dd33b8f46b7480",
+  "rulesAndBaselineUnchanged": true
+}

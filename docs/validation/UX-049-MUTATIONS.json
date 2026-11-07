@@ -1,0 +1,1723 @@
+{
+  "schemaVersion": 1,
+  "behaviorChangingMutationsKilled": 84,
+  "result": "Every listed mutation changed the specified source on a clean detached checkpoint, failed its expected behavioral assertion, restored the recorded checksum, and finished with empty git status. Counts are [passed, failed].",
+  "files": {
+    "src/services/synthesis/threat-aggregator.ts@dcdc4d02725c": {
+      "path": "src/services/synthesis/threat-aggregator.ts",
+      "beforeSha256": "dcdc4d02725c7d0e92b8e4d670f459cc4ea09287f9837cc09074f60da1230aaa",
+      "restoredSha256": "dcdc4d02725c7d0e92b8e4d670f459cc4ea09287f9837cc09074f60da1230aaa"
+    },
+    "src/services/synthesis/geo-threat-evidence.ts@1cf8499441af": {
+      "path": "src/services/synthesis/geo-threat-evidence.ts",
+      "beforeSha256": "1cf8499441af884c100f39d13a722760c3071415b998bea748d60b73479aa0ed",
+      "restoredSha256": "1cf8499441af884c100f39d13a722760c3071415b998bea748d60b73479aa0ed"
+    },
+    "src/services/earthquake/usgs-fusion-fetch.ts@f131762886e5": {
+      "path": "src/services/earthquake/usgs-fusion-fetch.ts",
+      "beforeSha256": "f131762886e5944aaabe00e6a92675386d6df3b0d1a585c31eccf88d60e5ff9e",
+      "restoredSha256": "f131762886e5944aaabe00e6a92675386d6df3b0d1a585c31eccf88d60e5ff9e"
+    },
+    "src/services/spaceweather/gfz-kp-fetch.ts@26c58ecbe53e": {
+      "path": "src/services/spaceweather/gfz-kp-fetch.ts",
+      "beforeSha256": "26c58ecbe53e63f5204a05943af3fb0f9ba4a097b89d9eb48fdadd1256a216c6",
+      "restoredSha256": "26c58ecbe53e63f5204a05943af3fb0f9ba4a097b89d9eb48fdadd1256a216c6"
+    },
+    "src-tauri/sidecar/local-api-server.mjs@b9fd9334520e": {
+      "path": "src-tauri/sidecar/local-api-server.mjs",
+      "beforeSha256": "b9fd9334520e48c99a107c783a3fadb4d019472de805076f27295b17657f9a0f",
+      "restoredSha256": "b9fd9334520e48c99a107c783a3fadb4d019472de805076f27295b17657f9a0f"
+    },
+    "src/app/data-loader.ts@c21c6f74f891": {
+      "path": "src/app/data-loader.ts",
+      "beforeSha256": "c21c6f74f89138ad2885099197037234bfc4daf28e500e90e730b423f90ef333",
+      "restoredSha256": "c21c6f74f89138ad2885099197037234bfc4daf28e500e90e730b423f90ef333"
+    },
+    "src/components/ThreatDashboard.ts@a5104e092cfc": {
+      "path": "src/components/ThreatDashboard.ts",
+      "beforeSha256": "a5104e092cfc824f6dd19172bec4b1cea94e49412df56f39968272515b97b6e2",
+      "restoredSha256": "a5104e092cfc824f6dd19172bec4b1cea94e49412df56f39968272515b97b6e2"
+    },
+    "api/aviation/delays.js@20ebd6e8d552": {
+      "path": "api/aviation/delays.js",
+      "beforeSha256": "20ebd6e8d552a2b7d886d4c5ccb83221b9e758ce1cbd51cdf36136f4f62d7b4c",
+      "restoredSha256": "20ebd6e8d552a2b7d886d4c5ccb83221b9e758ce1cbd51cdf36136f4f62d7b4c"
+    },
+    "api/aviation/_faa-ground-stop.js@aaf76f4002a3": {
+      "path": "api/aviation/_faa-ground-stop.js",
+      "beforeSha256": "aaf76f4002a36f9d752281f0000398527105e307748a94c0961346b3277fb2db",
+      "restoredSha256": "aaf76f4002a36f9d752281f0000398527105e307748a94c0961346b3277fb2db"
+    },
+    "src/services/aviation/aviation-intel-normalize.ts@a5feb89cec60": {
+      "path": "src/services/aviation/aviation-intel-normalize.ts",
+      "beforeSha256": "a5feb89cec60e1a3c1c6be8bdb861f282daccb6ab79acd8f5d0745e6fb18d3fa",
+      "restoredSha256": "a5feb89cec60e1a3c1c6be8bdb861f282daccb6ab79acd8f5d0745e6fb18d3fa"
+    },
+    "src/services/aviation/aviation-intel-service.ts@d86902787bc1": {
+      "path": "src/services/aviation/aviation-intel-service.ts",
+      "beforeSha256": "d86902787bc13b536a04f2a3dc74daaf77778b26391ac51cdcd955b6fa7ef492",
+      "restoredSha256": "d86902787bc13b536a04f2a3dc74daaf77778b26391ac51cdcd955b6fa7ef492"
+    },
+    "api/aviation/_aviation-helpers.js@96788c805bfd": {
+      "path": "api/aviation/_aviation-helpers.js",
+      "beforeSha256": "96788c805bfd9ab9ac66f5df7baad17a02141ad697bb8930488e5a8b0b50c2e7",
+      "restoredSha256": "96788c805bfd9ab9ac66f5df7baad17a02141ad697bb8930488e5a8b0b50c2e7"
+    },
+    "src/services/synthesis/transport-evidence.ts@9692b32edb98": {
+      "path": "src/services/synthesis/transport-evidence.ts",
+      "beforeSha256": "9692b32edb98bc423a2aef653c6645b69866da2535aed9a0d11b3ad63af960a5",
+      "restoredSha256": "9692b32edb98bc423a2aef653c6645b69866da2535aed9a0d11b3ad63af960a5"
+    },
+    "src/services/aviation/aviation-intel-types.ts@974cbef2b15c": {
+      "path": "src/services/aviation/aviation-intel-types.ts",
+      "beforeSha256": "974cbef2b15ca1e36c9395890efea8052acf1ed4dae488e2d87cb67bbc5bd2ad",
+      "restoredSha256": "974cbef2b15ca1e36c9395890efea8052acf1ed4dae488e2d87cb67bbc5bd2ad"
+    },
+    "src/components/AviationIntelPanel.ts@c1217f2d2308": {
+      "path": "src/components/AviationIntelPanel.ts",
+      "beforeSha256": "c1217f2d230887c1f8ca9340d78b2fda3ddd50825c41830c9c69fbe5c447fcaf",
+      "restoredSha256": "c1217f2d230887c1f8ca9340d78b2fda3ddd50825c41830c9c69fbe5c447fcaf"
+    },
+    "src/components/MaritimeIntelPanel.ts@1290d1a65b81": {
+      "path": "src/components/MaritimeIntelPanel.ts",
+      "beforeSha256": "1290d1a65b811258eea1b1cfedf938665f86bdd42e88db30c7e579d0a34a9f3c",
+      "restoredSha256": "1290d1a65b811258eea1b1cfedf938665f86bdd42e88db30c7e579d0a34a9f3c"
+    }
+  },
+  "suites": {
+    "core@e5541b9d76": {
+      "checkpoint": "e5541b9d76ca79c4fd07c9f6c4a990a7020027c5",
+      "command": [
+        "./node_modules/.bin/tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/services/synthesis/__tests__/threat-aggregator.test.mts"
+      ],
+      "baseline": [
+        72,
+        0
+      ],
+      "restored": [
+        72,
+        0
+      ],
+      "testSha256": {
+        "src/services/synthesis/__tests__/threat-aggregator.test.mts": "368e8b404f641401a2603a00407ade37c9f6ad7535fe3f5c005eb57a8a1060d5"
+      }
+    },
+    "geo@e5541b9d76": {
+      "checkpoint": "e5541b9d76ca79c4fd07c9f6c4a990a7020027c5",
+      "command": [
+        "./node_modules/.bin/tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/services/synthesis/__tests__/geo-threat-evidence.test.mts"
+      ],
+      "baseline": [
+        7,
+        0
+      ],
+      "restored": [
+        7,
+        0
+      ],
+      "testSha256": {
+        "src/services/synthesis/__tests__/geo-threat-evidence.test.mts": "11ae1577d784c36aecc617d5ff3d21fbd314b259a3e3242a7733b5bd30d04264"
+      }
+    },
+    "kp@e5541b9d76": {
+      "checkpoint": "e5541b9d76ca79c4fd07c9f6c4a990a7020027c5",
+      "command": [
+        "./node_modules/.bin/tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/services/spaceweather/__tests__/kp-fusion-observations.test.mts"
+      ],
+      "baseline": [
+        17,
+        0
+      ],
+      "restored": [
+        17,
+        0
+      ],
+      "testSha256": {
+        "src/services/spaceweather/__tests__/kp-fusion-observations.test.mts": "ab617f6399fcc97d6b9887a97d641c14fae3ed9b5a38f58e1179d0f8d7696e87"
+      }
+    },
+    "usgs@e5541b9d76": {
+      "checkpoint": "e5541b9d76ca79c4fd07c9f6c4a990a7020027c5",
+      "command": [
+        "./node_modules/.bin/tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/services/earthquake/__tests__/usgs-fusion-fetch.test.mts"
+      ],
+      "baseline": [
+        17,
+        0
+      ],
+      "restored": [
+        17,
+        0
+      ],
+      "testSha256": {
+        "src/services/earthquake/__tests__/usgs-fusion-fetch.test.mts": "73ff809f81a9f7debaa53dd2aff16098af06aa43fb848e120fe223d96a253f43"
+      }
+    },
+    "kpSidecar@e5541b9d76": {
+      "checkpoint": "e5541b9d76ca79c4fd07c9f6c4a990a7020027c5",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=Kp acquisition time",
+        "src-tauri/sidecar/local-api-server.test.mjs"
+      ],
+      "baseline": [
+        1,
+        0
+      ],
+      "restored": [
+        1,
+        0
+      ],
+      "testSha256": {
+        "src-tauri/sidecar/local-api-server.test.mjs": "59facdc15e84f4de6828cb3c2c9e53a3e53ed8d93901f5cbc1435f2b0dfe3f4c"
+      }
+    },
+    "geoWiring@e5541b9d76": {
+      "checkpoint": "e5541b9d76ca79c4fd07c9f6c4a990a7020027c5",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "tests/data-sources-wiring.test.mjs"
+      ],
+      "baseline": [
+        23,
+        0
+      ],
+      "restored": [
+        23,
+        0
+      ],
+      "testSha256": {
+        "tests/data-sources-wiring.test.mjs": "51563a748b4df64ec099e1dee96b1cacbf7650b18d3738d03d0517b504f1d66e"
+      }
+    },
+    "ui@c935054d36": {
+      "checkpoint": "c935054d367ffb1f73bdb02dffd26754a0edf959",
+      "command": [
+        "./node_modules/.bin/tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/components/__tests__/threat-dashboard-coverage.test.mts"
+      ],
+      "baseline": [
+        9,
+        0
+      ],
+      "restored": [
+        9,
+        0
+      ],
+      "testSha256": {
+        "src/components/__tests__/threat-dashboard-coverage.test.mts": "9b00a7ebf1a918bc1499de20973a0961684fe2798009cce839d06adfd9983db1"
+      }
+    },
+    "uiTeardown@c935054d36": {
+      "checkpoint": "c935054d367ffb1f73bdb02dffd26754a0edf959",
+      "command": [
+        "./node_modules/.bin/tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=destroy stops",
+        "src/components/__tests__/threat-dashboard-coverage.test.mts"
+      ],
+      "baseline": [
+        1,
+        0
+      ],
+      "restored": [
+        1,
+        0
+      ],
+      "testSha256": {
+        "src/components/__tests__/threat-dashboard-coverage.test.mts": "9b00a7ebf1a918bc1499de20973a0961684fe2798009cce839d06adfd9983db1"
+      }
+    },
+    "faa@c935054d36": {
+      "checkpoint": "c935054d367ffb1f73bdb02dffd26754a0edf959",
+      "command": [
+        "./node_modules/.bin/tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/services/synthesis/__tests__/faa-stop-handoff.test.mts"
+      ],
+      "baseline": [
+        5,
+        0
+      ],
+      "restored": [
+        5,
+        0
+      ],
+      "testSha256": {
+        "src/services/synthesis/__tests__/faa-stop-handoff.test.mts": "ea60cf0160d0dbef36a0f6b6d66cf68c9400d8d253ea9b9e9fa58eaa4c29fb74"
+      }
+    },
+    "aviationCache@c935054d36": {
+      "checkpoint": "c935054d367ffb1f73bdb02dffd26754a0edf959",
+      "command": [
+        "./node_modules/.bin/tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/services/aviation/__tests__/threat-feed-cache.test.mts"
+      ],
+      "baseline": [
+        2,
+        0
+      ],
+      "restored": [
+        2,
+        0
+      ],
+      "testSha256": {
+        "src/services/aviation/__tests__/threat-feed-cache.test.mts": "eba7ae5e79eb9c95186940a8f3f38039dbfd2fe241f7cbb5940ff4d909f2fe11"
+      }
+    },
+    "transport@b140364fac": {
+      "checkpoint": "b140364fac18c238a94e5806356c9e14cc7a974c",
+      "command": [
+        "./node_modules/.bin/tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/services/synthesis/__tests__/transport-evidence.test.mts"
+      ],
+      "baseline": [
+        8,
+        0
+      ],
+      "restored": [
+        8,
+        0
+      ],
+      "testSha256": {
+        "src/services/synthesis/__tests__/transport-evidence.test.mts": "2bbe8839abe36a3ce7c36f670131969870b324313561f397f50d96e4b0768d45"
+      }
+    },
+    "transportWiring@b140364fac": {
+      "checkpoint": "b140364fac18c238a94e5806356c9e14cc7a974c",
+      "command": [
+        "./node_modules/.bin/tsx",
+        "--import",
+        "./tests/panels/register-hook.mjs",
+        "--test",
+        "--test-reporter=tap",
+        "tests/panels/threat-transport-coverage.test.mts"
+      ],
+      "baseline": [
+        1,
+        0
+      ],
+      "restored": [
+        1,
+        0
+      ],
+      "testSha256": {
+        "tests/panels/threat-transport-coverage.test.mts": "bd2f425eb4018185612a1d4a0198bc03043a8899c9bc23e3ebe6bfac48634ecb"
+      }
+    }
+  },
+  "cases": [
+    {
+      "id": "C01",
+      "behavior": "startup has no verified quiet domains",
+      "fileKey": "src/services/synthesis/threat-aggregator.ts@dcdc4d02725c",
+      "diff": [
+        "-  return { ...emptyThreat(domain, 0), coverage: 'unknown', sources: [], lastKnown: false, signalSource: null };",
+        "+  return { ...emptyThreat(domain, 0), coverage: 'complete', sources: [], lastKnown: false, signalSource: null };"
+      ],
+      "suiteKey": "core@e5541b9d76",
+      "red": [
+        70,
+        2
+      ],
+      "test": "starts with eleven unknown domains and no observation clocks",
+      "assertion": "error: |-\n        Expected values to be strictly equal:\n        + actual - expected\n        \n        + 'complete'\n        - 'unknown'\n\n\n      expected: 'unknown'\n      actual: 'complete'\n      operator: 'strictEqual'"
+    },
+    {
+      "id": "C02",
+      "behavior": "equal receipt cannot extend expiry",
+      "fileKey": "src/services/synthesis/threat-aggregator.ts@dcdc4d02725c",
+      "diff": [
+        "-  if (previous.evidenceAtMs === incoming.evidenceAtMs) return reviseReceipt(slot, previous, incoming, nowMs);",
+        "+  "
+      ],
+      "suiteKey": "core@e5541b9d76",
+      "red": [
+        66,
+        6
+      ],
+      "test": "keeps the original observation and validity when a receipt is replayed",
+      "assertion": "error: |-\n        Expected values to be strictly equal:\n        + actual - expected\n        \n        + 'complete'\n        - 'stale'\n\n\n      expected: 'stale'\n      actual: 'complete'\n      operator: 'strictEqual'"
+    },
+    {
+      "id": "C03",
+      "behavior": "older receipt cannot overwrite newer signal",
+      "fileKey": "src/services/synthesis/threat-aggregator.ts@dcdc4d02725c",
+      "diff": [
+        "-  if (incoming.evidenceAtMs < previous.evidenceAtMs) {",
+        "+  if (false) {"
+      ],
+      "suiteKey": "core@e5541b9d76",
+      "red": [
+        70,
+        2
+      ],
+      "test": "rejects time travel, invalid horizons, and regressions without replacing a newer hazard",
+      "assertion": "error: |-\n        Expected values to be strictly equal:\n        \n        'NONE' !== 'CRITICAL'\n\n\n      expected: 'CRITICAL'\n      actual: 'NONE'\n      operator: 'strictEqual'"
+    },
+    {
+      "id": "C04",
+      "behavior": "superseded settlement cannot erase admitted evidence",
+      "fileKey": "src/services/synthesis/threat-aggregator.ts@dcdc4d02725c",
+      "diff": [
+        "-        if (slot.pending === token) settle(true);",
+        "+        settle(true);"
+      ],
+      "suiteKey": "core@e5541b9d76",
+      "red": [
+        71,
+        1
+      ],
+      "test": "ignores superseded and cancelled attempts, including repeated settlements",
+      "assertion": "error: |-\n        Expected values to be strictly equal:\n        + actual - expected\n        \n        + 'unavailable'\n        - 'complete'\n\n\n      expected: 'complete'\n      actual: 'unavailable'\n      operator: 'strictEqual'"
+    },
+    {
+      "id": "C05",
+      "behavior": "failed refresh immediately stops current reporting",
+      "fileKey": "src/services/synthesis/threat-aggregator.ts@dcdc4d02725c",
+      "diff": [
+        "-    source, state, reporting: fresh && !failed, evidenceAtMs: receipt?.evidenceAtMs ?? null,",
+        "+    source, state, reporting: fresh, evidenceAtMs: receipt?.evidenceAtMs ?? null,"
+      ],
+      "suiteKey": "core@e5541b9d76",
+      "red": [
+        64,
+        8
+      ],
+      "test": "keeps a failed source last-known, withholds reassurance, and expires it offline",
+      "assertion": "error: |-\n        Expected values to be strictly equal:\n        + actual - expected\n        \n        + 'partial'\n        - 'unavailable'\n\n\n      expected: 'unavailable'\n      actual: 'partial'\n      operator: 'strictEqual'"
+    },
+    {
+      "id": "C06",
+      "behavior": "sources expire at the exclusive validity bound",
+      "fileKey": "src/services/synthesis/threat-aggregator.ts@dcdc4d02725c",
+      "diff": [
+        "-  const fresh = !!receipt && receipt.evidenceAtMs <= nowMs && nowMs < receipt.expiresAtMs;",
+        "+  const fresh = !!receipt && receipt.evidenceAtMs <= nowMs && nowMs <= receipt.expiresAtMs;"
+      ],
+      "suiteKey": "core@e5541b9d76",
+      "red": [
+        67,
+        5
+      ],
+      "test": "keeps the original observation and validity when a receipt is replayed",
+      "assertion": "error: |-\n        Expected values to be strictly equal:\n        + actual - expected\n        \n        + 'complete'\n        - 'stale'\n\n\n      expected: 'stale'\n      actual: 'complete'\n      operator: 'strictEqual'"
+    },
+    {
+      "id": "C07",
+      "behavior": "coverage requires explicit full source scope",
+      "fileKey": "src/services/synthesis/threat-aggregator.ts@dcdc4d02725c",
+      "diff": [
+        "-    complete &&= detail.state === 'current' && receipt?.scope === 'complete';",
+        "+    complete &&= detail.state === 'current';"
+      ],
+      "suiteKey": "core@e5541b9d76",
+      "red": [
+        70,
+        2
+      ],
+      "test": "uses the oldest complete receipt and withholds a whole-domain claim for partial evidence",
+      "assertion": "error: |-\n        Expected values to be strictly equal:\n        + actual - expected\n        \n        + 'complete'\n        - 'partial'\n\n\n      expected: 'partial'\n      actual: 'complete'\n      operator: 'strictEqual'"
+    },
+    {
+      "id": "C08",
+      "behavior": "completed domains use oldest evidence date",
+      "fileKey": "src/services/synthesis/threat-aggregator.ts@dcdc4d02725c",
+      "diff": [
+        "-  row.lastUpdatedMs = complete ? oldest : signalAtMs || latest;",
+        "+  row.lastUpdatedMs = complete ? latest : signalAtMs || latest;"
+      ],
+      "suiteKey": "core@e5541b9d76",
+      "red": [
+        71,
+        1
+      ],
+      "test": "uses the oldest complete receipt and withholds a whole-domain claim for partial evidence",
+      "assertion": "error: |-\n        Expected values to be strictly equal:\n        + actual - expected\n        \n        + 1700000000000\n        - 1699999999900\n\n\n      expected: 1699999999900\n      actual: 1700000000000\n      operator: 'strictEqual'"
+    },
+    {
+      "id": "C09",
+      "behavior": "event can expire before source",
+      "fileKey": "src/services/synthesis/threat-aggregator.ts@dcdc4d02725c",
+      "diff": [
+        "-    const signal = receipt.evaluate(nowMs);",
+        "+    const signal = receipt.evaluate(receipt.evidenceAtMs);"
+      ],
+      "suiteKey": "core@e5541b9d76",
+      "red": [
+        71,
+        1
+      ],
+      "test": "re-evaluates event validity before the source receipt expires",
+      "assertion": "error: |-\n        Expected values to be strictly equal:\n        \n        'HIGH' !== 'NONE'\n\n\n      expected: 'NONE'\n      actual: 'HIGH'\n      operator: 'strictEqual'"
+    },
+    {
+      "id": "C10",
+      "behavior": "a stopped tick cannot emit",
+      "fileKey": "src/services/synthesis/threat-aggregator.ts@dcdc4d02725c",
+      "diff": [
+        "-    if (!stopped) {",
+        "+    if (true) {"
+      ],
+      "suiteKey": "core@e5541b9d76",
+      "red": [
+        71,
+        1
+      ],
+      "test": "publishes admitted readings, preserves their clock across ticks and stops publishing on teardown",
+      "assertion": "error: |-\n        Expected values to be strictly equal:\n        \n        4 !== 3\n\n\n      expected: 3\n      actual: 4\n      operator: 'strictEqual'"
+    },
+    {
+      "id": "C11",
+      "behavior": "a degraded positive leg remains visibly degraded",
+      "fileKey": "src/services/synthesis/threat-aggregator.ts@dcdc4d02725c",
+      "diff": [
+        "-  if (receipt && fresh) state = failed || receipt.degraded ? 'degraded' : 'current';",
+        "+  if (receipt && fresh) state = failed ? 'degraded' : 'current';"
+      ],
+      "suiteKey": "core@e5541b9d76",
+      "red": [
+        70,
+        2
+      ],
+      "test": "keeps a partially successful leg reporting when its sibling fails",
+      "assertion": "error: |-\n        Expected values to be strictly deep-equal:\n        + actual - expected\n        \n          [\n            [\n              'FAA',\n        +     'current',\n        -     'degraded',\n              true\n            ],\n            [\n              'SIGMET',\n              'unavailable',\n\n\n      expected:\n        0:\n           ..."
+    },
+    {
+      "id": "C12",
+      "behavior": "future timestamps never count as received evidence",
+      "fileKey": "src/services/synthesis/threat-aggregator.ts@dcdc4d02725c",
+      "diff": [
+        "-  if (!Number.isFinite(evidenceAtMs) || evidenceAtMs <= 0 || evidenceAtMs > nowMs",
+        "+  if (!Number.isFinite(evidenceAtMs) || evidenceAtMs <= 0"
+      ],
+      "suiteKey": "core@e5541b9d76",
+      "red": [
+        71,
+        1
+      ],
+      "test": "rejects time travel, invalid horizons, and regressions without replacing a newer hazard",
+      "assertion": "error: |-\n        Expected values to be strictly equal:\n        + actual - expected\n        \n        + 'stale'\n        - 'unavailable'\n\n\n      expected: 'unavailable'\n      actual: 'stale'\n      operator: 'strictEqual'"
+    },
+    {
+      "id": "C13",
+      "behavior": "duplicate report can downgrade health without refreshing its age",
+      "fileKey": "src/services/synthesis/threat-aggregator.ts@dcdc4d02725c",
+      "diff": [
+        "-    degraded: previous.degraded === true || incoming.degraded,",
+        "+    degraded: previous.degraded,"
+      ],
+      "suiteKey": "core@e5541b9d76",
+      "red": [
+        71,
+        1
+      ],
+      "test": "accepts a worse coverage report for a replay without renewing or replacing the signal",
+      "assertion": "error: |-\n        Expected values to be strictly equal:\n        + actual - expected\n        \n        + 'complete'\n        - 'partial'\n\n\n      expected: 'partial'\n      actual: 'complete'\n      operator: 'strictEqual'"
+    },
+    {
+      "id": "C14",
+      "behavior": "only newer evidence can recover from a failure",
+      "fileKey": "src/services/synthesis/threat-aggregator.ts@dcdc4d02725c",
+      "diff": [
+        "-  return !slot.failed;",
+        "+  return true;"
+      ],
+      "suiteKey": "core@e5541b9d76",
+      "red": [
+        70,
+        2
+      ],
+      "test": "requires strictly newer evidence to recover from a failed refresh",
+      "assertion": "error: |-\n        Expected values to be strictly equal:\n        + actual - expected\n        \n        + 'complete'\n        - 'unavailable'\n\n\n      expected: 'unavailable'\n      actual: 'complete'\n      operator: 'strictEqual'"
+    },
+    {
+      "id": "C15",
+      "behavior": "deterministic equal-severity source selection",
+      "fileKey": "src/services/synthesis/threat-aggregator.ts@dcdc4d02725c",
+      "diff": [
+        "-  return source.source < row.signalSource;",
+        "+  return source.source > row.signalSource;"
+      ],
+      "suiteKey": "core@e5541b9d76",
+      "red": [
+        71,
+        1
+      ],
+      "test": "prefers a current signal at equal severity, then the newest, then a stable source",
+      "assertion": "error: |-\n        Expected values to be strictly equal:\n        \n        'B' !== 'A'\n\n\n      expected: 'A'\n      actual: 'B'\n      operator: 'strictEqual'"
+    },
+    {
+      "id": "C16",
+      "behavior": "a current signal takes priority over a stronger last-known sibling",
+      "fileKey": "src/services/synthesis/threat-aggregator.ts@dcdc4d02725c",
+      "diff": [
+        "-  if (source.reporting !== currentWinnerReporting) return source.reporting;",
+        "+  "
+      ],
+      "suiteKey": "core@e5541b9d76",
+      "red": [
+        70,
+        2
+      ],
+      "test": "leads with the reporting hazard and preserves the stronger last-known sibling",
+      "assertion": "error: |-\n        Expected values to be strictly equal:\n        \n        'HIGH' !== 'ELEVATED'\n\n\n      expected: 'ELEVATED'\n      actual: 'HIGH'\n      operator: 'strictEqual'"
+    },
+    {
+      "id": "C17",
+      "behavior": "equal revision clock cannot authorize conflicting sample",
+      "fileKey": "src/services/synthesis/threat-aggregator.ts@dcdc4d02725c",
+      "diff": [
+        "-    && incoming.revisionAtMs > previous.revisionAtMs;",
+        "+    && incoming.revisionAtMs >= previous.revisionAtMs;"
+      ],
+      "suiteKey": "core@e5541b9d76",
+      "red": [
+        71,
+        1
+      ],
+      "test": "retains a positive as last-known when different content cannot be ordered",
+      "assertion": "error: |-\n        Expected values to be strictly equal:\n        + actual - expected\n        \n        + 'complete'\n        - 'unavailable'\n\n\n      expected: 'unavailable'\n      actual: 'complete'\n      operator: 'strictEqual'"
+    },
+    {
+      "id": "C18",
+      "behavior": "a correction cannot renew event validity",
+      "fileKey": "src/services/synthesis/threat-aggregator.ts@dcdc4d02725c",
+      "diff": [
+        "-  const expiresAtMs = Math.min(previous.expiresAtMs, incoming.expiresAtMs);",
+        "+  const expiresAtMs = incoming.expiresAtMs;"
+      ],
+      "suiteKey": "core@e5541b9d76",
+      "red": [
+        70,
+        2
+      ],
+      "test": "does not extend the original validity window on a newer revision",
+      "assertion": "error: |-\n        Expected values to be strictly equal:\n        + actual - expected\n        \n        + 'complete'\n        - 'stale'\n\n\n      expected: 'stale'\n      actual: 'complete'\n      operator: 'strictEqual'"
+    },
+    {
+      "id": "C19",
+      "behavior": "identical replay advances only its revision watermark",
+      "fileKey": "src/services/synthesis/threat-aggregator.ts@dcdc4d02725c",
+      "diff": [
+        "-  const revisionAtMs = Math.max(previous.revisionAtMs ?? 0, incoming.revisionAtMs ?? 0);",
+        "+  const revisionAtMs = previous.revisionAtMs ?? 0;"
+      ],
+      "suiteKey": "core@e5541b9d76",
+      "red": [
+        71,
+        1
+      ],
+      "test": "retains a positive as last-known when different content cannot be ordered",
+      "assertion": "error: |-\n        Expected values to be strictly equal:\n        + actual - expected\n        \n        + 'complete'\n        - 'unavailable'\n\n\n      expected: 'unavailable'\n      actual: 'complete'\n      operator: 'strictEqual'"
+    },
+    {
+      "id": "C20",
+      "behavior": "invalid future revision is rejected",
+      "fileKey": "src/services/synthesis/threat-aggregator.ts@dcdc4d02725c",
+      "diff": [
+        "-    && revisionAtMs >= evidenceAtMs && revisionAtMs <= nowMs;",
+        "+    && revisionAtMs >= evidenceAtMs;"
+      ],
+      "suiteKey": "core@e5541b9d76",
+      "red": [
+        71,
+        1
+      ],
+      "test": "rejects invalid revision clocks and unlabeled revisions before admission",
+      "assertion": "error: |-\n        Expected values to be strictly equal:\n        + actual - expected\n        \n        + 'complete'\n        - 'unavailable'\n\n\n      expected: 'unavailable'\n      actual: 'complete'\n      operator: 'strictEqual'"
+    },
+    {
+      "id": "C21",
+      "behavior": "newer snapshot can remove the newest position",
+      "fileKey": "src/services/synthesis/threat-aggregator.ts@dcdc4d02725c",
+      "diff": [
+        "-    return previous.snapshotMembership === true && reviseReceipt(slot, previous, incoming, nowMs);",
+        "+    return false;"
+      ],
+      "suiteKey": "core@e5541b9d76",
+      "red": [
+        71,
+        1
+      ],
+      "test": "accepts an ordered membership removal even when the latest remaining item is older",
+      "assertion": "error: |-\n        Expected values to be strictly equal:\n        + actual - expected\n        \n        + 'CRITICAL'\n        - 'ELEVATED'\n\n\n      expected: 'ELEVATED'\n      actual: 'CRITICAL'\n      operator: 'strictEqual'"
+    },
+    {
+      "id": "C22",
+      "behavior": "replays with newer position cannot reintroduce exited member",
+      "fileKey": "src/services/synthesis/threat-aggregator.ts@dcdc4d02725c",
+      "diff": [
+        "-  if (previous.snapshotMembership && !orderedChange(previous, incoming)) return false;",
+        "+  "
+      ],
+      "suiteKey": "core@e5541b9d76",
+      "red": [
+        71,
+        1
+      ],
+      "test": "accepts an ordered membership removal even when the latest remaining item is older",
+      "assertion": "error: |-\n        Expected values to be strictly equal:\n        + actual - expected\n        \n        + 'CRITICAL'\n        - 'ELEVATED'\n\n\n      expected: 'ELEVATED'\n      actual: 'CRITICAL'\n      operator: 'strictEqual'"
+    },
+    {
+      "id": "F01",
+      "behavior": "normalize production nested FAA response before fallback",
+      "fileKey": "api/aviation/delays.js@20ebd6e8d552",
+      "diff": [
+        "-  if ('airportId' in item && 'groundStop' in item) {",
+        "+  if (false) {"
+      ],
+      "suiteKey": "faa@c935054d36",
+      "red": [
+        4,
+        1
+      ],
+      "test": "the production FAA handler carries a live-shaped nested stop through acquisition to its dashboard expiry",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    0 !== 1\n\n\n  expected: 1\n  actual: 0\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "F02",
+      "behavior": "normalizer matches nested airport to parent identifier",
+      "fileKey": "api/aviation/_faa-ground-stop.js@aaf76f4002a3",
+      "diff": [
+        "-    || !program || typeof program !== 'object' || program.airportId !== airport) return null;",
+        "+    || !program || typeof program !== 'object') return null;"
+      ],
+      "suiteKey": "faa@c935054d36",
+      "red": [
+        4,
+        1
+      ],
+      "test": "nested stops reject malformed, mismatched or unordered windows and use the earlier program expiry",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + [\n    +   {\n    +     airport: 'FLL',\n    +     avgDelayMinutes: null,\n    +     endsAt: 1793676600000,\n    +     maxDelayMinutes: null,\n    +     programType: 'ground_stop',\n    +     reason: 'thunderstorms',\n    +     startedAt: 1793671320000 ..."
+    },
+    {
+      "id": "F03",
+      "behavior": "stop expires at earlier of program end and actual expiration",
+      "fileKey": "api/aviation/_faa-ground-stop.js@aaf76f4002a3",
+      "diff": [
+        "-  const endsAt = Math.min(end, expiry);",
+        "+  const endsAt = end;"
+      ],
+      "suiteKey": "faa@c935054d36",
+      "red": [
+        4,
+        1
+      ],
+      "test": "nested stops reject malformed, mismatched or unordered windows and use the earlier program expiry",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + [\n    +   {\n    +     airport: 'FLL',\n    +     avgDelayMinutes: null,\n    +     endsAt: 1793676600000,\n    +     maxDelayMinutes: null,\n    +     programType: 'ground_stop',\n    +     reason: 'thunderstorms',\n    +     startedAt: 1793671320000 ..."
+    },
+    {
+      "id": "F04",
+      "behavior": "do not classify cancellation as active stop",
+      "fileKey": "src/services/aviation/aviation-intel-normalize.ts@a5feb89cec60",
+      "diff": [
+        "-  if (/^(?:GROUND[ _-]STOP|STOP)$/.test(u)) return 'ground_stop';",
+        "+  if (u.includes('STOP')) return 'ground_stop';"
+      ],
+      "suiteKey": "faa@c935054d36",
+      "red": [
+        4,
+        1
+      ],
+      "test": "nested stops reject malformed, mismatched or unordered windows and use the earlier program expiry",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n\n\n  expected: false\n  actual: true\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "F05",
+      "behavior": "reject nonexistent calendar dates",
+      "fileKey": "api/aviation/_faa-ground-stop.js@aaf76f4002a3",
+      "diff": [
+        "-  return Number.isFinite(ms) && new Date(ms).toISOString().slice(0, 19) === value.slice(0, 19) ? ms : Number.NaN;",
+        "+  return ms;"
+      ],
+      "suiteKey": "faa@c935054d36",
+      "red": [
+        4,
+        1
+      ],
+      "test": "nested stops reject malformed, mismatched or unordered windows and use the earlier program expiry",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + [\n    +   {\n    +     airport: 'FLL',\n    +     avgDelayMinutes: null,\n    +     endsAt: 1793676600000,\n    +     maxDelayMinutes: null,\n    +     programType: 'ground_stop',\n    +     reason: 'thunderstorms',\n    +     startedAt: 1772499600000 ..."
+    },
+    {
+      "id": "F06",
+      "behavior": "do not cache invalid or misattributed upstream shapes",
+      "fileKey": "src/services/aviation/aviation-intel-service.ts@d86902787bc1",
+      "diff": [
+        "-      if (accept) {",
+        "+      if (false) {"
+      ],
+      "suiteKey": "aviationCache@c935054d36",
+      "red": [
+        0,
+        2
+      ],
+      "test": "malformed and partially malformed envelopes do not block recovery for five minutes",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + undefined\n    - true\n\n\n  expected: true\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "F07",
+      "behavior": "malformed primary FAA HTTP 200 falls through to secondary",
+      "fileKey": "api/aviation/delays.js@20ebd6e8d552",
+      "diff": [
+        "-      if (result) return result;",
+        "+      return result ?? envelope([], SOURCE);"
+      ],
+      "suiteKey": "faa@c935054d36",
+      "red": [
+        3,
+        2
+      ],
+      "test": "malformed primary 200 falls through to a usable secondary FAA response",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + undefined\n    - 'ground_stop'\n\n\n  expected: 'ground_stop'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "F08",
+      "behavior": "invalid or degraded FAA result cannot poison cache",
+      "fileKey": "api/aviation/_aviation-helpers.js@96788c805bfd",
+      "diff": [
+        "-    if (shouldCache(payload)) cache.set(key, { at: Date.now(), payload });",
+        "+    cache.set(key, { at: Date.now(), payload });"
+      ],
+      "suiteKey": "faa@c935054d36",
+      "red": [
+        4,
+        1
+      ],
+      "test": "unusable, failed and mixed FAA responses retry immediately without discarding valid stops",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    0 !== 1\n\n\n  expected: 1\n  actual: 0\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "G01",
+      "behavior": "source origin age is reflected in local acquisition time",
+      "fileKey": "src/services/synthesis/geo-threat-evidence.ts@1cf8499441af",
+      "diff": [
+        "-    const evidenceAtMs = receivedAtMs - (sourceNow - generatedAtMs);",
+        "+    const evidenceAtMs = receivedAtMs;"
+      ],
+      "suiteKey": "geo@e5541b9d76",
+      "red": [
+        6,
+        1
+      ],
+      "test": "USGS receipt ages the acquisition and the event against the origin despite a slow local clock",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 1793570400000\n    - 1793570360000\n             ^\n\n\n  expected: 1793570360000\n  actual: 1793570400000\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "G02",
+      "behavior": "event ages are evaluated against upstream time",
+      "fileKey": "src/services/synthesis/geo-threat-evidence.ts@1cf8499441af",
+      "diff": [
+        "-      evaluate: (nowMs) => computeSeismicThreat({ quakes, nowMs: sourceNow + (nowMs - receivedAtMs) }),",
+        "+      evaluate: (nowMs) => computeSeismicThreat({ quakes, nowMs: nowMs }),"
+      ],
+      "suiteKey": "geo@e5541b9d76",
+      "red": [
+        6,
+        1
+      ],
+      "test": "USGS receipt ages the acquisition and the event against the origin despite a slow local clock",
+      "assertion": "error: |-\n    The input did not match the regular expression /ridge.*2h ago/. Input:\n    \n    'M6.1 ridge • now'\n\n\n  expected:\n  actual: 'M6.1 ridge • now'\n  operator: 'match'"
+    },
+    {
+      "id": "G03",
+      "behavior": "narrow snapshots retain earlier hazard within event window",
+      "fileKey": "src/services/synthesis/geo-threat-evidence.ts@1cf8499441af",
+      "diff": [
+        "+    this.quakes.clear();"
+      ],
+      "suiteKey": "geo@e5541b9d76",
+      "red": [
+        6,
+        1
+      ],
+      "test": "a narrower USGS refresh retains a strong observation until its event horizon; corrections replace by ID",
+      "assertion": "error: |-\n    The input did not match the regular expression /old/. Input:\n    \n    'M4.0 new • 1m ago'\n\n\n  expected:\n  actual: 'M4.0 new • 1m ago'\n  operator: 'match'"
+    },
+    {
+      "id": "G04",
+      "behavior": "equal seismic generation cannot redate",
+      "fileKey": "src/services/synthesis/geo-threat-evidence.ts@1cf8499441af",
+      "diff": [
+        "-    if (generatedAtMs === this.generation) return this.receipt;",
+        "+    "
+      ],
+      "suiteKey": "geo@e5541b9d76",
+      "red": [
+        6,
+        1
+      ],
+      "test": "an equal cached generation cannot restamp and an older generation cannot replace observations",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 1793642489000\n    - 1793642400000\n              ^\n\n\n  expected: 1793642400000\n  actual: 1793642489000\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "G05",
+      "behavior": "older seismic generation cannot replace newer",
+      "fileKey": "src/services/synthesis/geo-threat-evidence.ts@1cf8499441af",
+      "diff": [
+        "-    if (generatedAtMs < this.generation) return null;",
+        "+    "
+      ],
+      "suiteKey": "geo@e5541b9d76",
+      "red": [
+        6,
+        1
+      ],
+      "test": "an equal cached generation cannot restamp and an older generation cannot replace observations",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + {\n    +   ageKind: 'fetched',\n    +   degraded: false,\n    +   evaluate: [Function: evaluate],\n    +   evidenceAtMs: 1793642500000,\n    +   expiresAtMs: 1793643100000,\n    +   scope: 'partial'\n    + }\n    - null\n\n  ...\n# Subtest: empty, impossible c ..."
+    },
+    {
+      "id": "G06",
+      "behavior": "reject physically impossible coordinates",
+      "fileKey": "src/services/synthesis/geo-threat-evidence.ts@1cf8499441af",
+      "diff": [
+        "-      && Math.abs(e.lat) <= 90 && Math.abs(e.lon) <= 180);",
+        "+      && Math.abs(e.lat) <= 90);"
+      ],
+      "suiteKey": "geo@e5541b9d76",
+      "red": [
+        6,
+        1
+      ],
+      "test": "empty, impossible coordinates, expired and future event times supply no USGS receipt",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + {\n    +   ageKind: 'fetched',\n    +   degraded: false,\n    +   evaluate: [Function: evaluate],\n    +   evidenceAtMs: 1793642400000,\n    +   expiresAtMs: 1793643000000,\n    +   scope: 'partial'\n    + }\n    - null\n\n  ...\n# Subtest: current source Kp b ..."
+    },
+    {
+      "id": "G07",
+      "behavior": "reject earthquake timestamp in future",
+      "fileKey": "src/services/synthesis/geo-threat-evidence.ts@1cf8499441af",
+      "diff": [
+        "-    const valid = dashboardEvents.filter((e) => e.time > 0 && e.time >= cutoff && e.time <= generatedAtMs",
+        "+    const valid = dashboardEvents.filter((e) => e.time > 0 && e.time >= cutoff"
+      ],
+      "suiteKey": "geo@e5541b9d76",
+      "red": [
+        6,
+        1
+      ],
+      "test": "empty, impossible coordinates, expired and future event times supply no USGS receipt",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + {\n    +   ageKind: 'fetched',\n    +   degraded: false,\n    +   evaluate: [Function: evaluate],\n    +   evidenceAtMs: 1793642400000,\n    +   expiresAtMs: 1793643000000,\n    +   scope: 'partial'\n    + }\n    - null\n\n  ...\n# Subtest: current source Kp b ..."
+    },
+    {
+      "id": "G08",
+      "behavior": "Kp only from successful votes",
+      "fileKey": "src/services/synthesis/geo-threat-evidence.ts@1cf8499441af",
+      "diff": [
+        "-  if (!vote.ok) return null;",
+        "+  "
+      ],
+      "suiteKey": "geo@e5541b9d76",
+      "red": [
+        6,
+        1
+      ],
+      "test": "failed, conflicting and sentinel Kp are withheld; a sampled expired bin keeps its original expiry",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + {\n    +   ageKind: 'observed',\n    +   evaluate: [Function: evaluate],\n    +   evidenceAtMs: 1793642400000,\n    +   expiresAtMs: 1793653200000,\n    +   revisionAtMs: undefined,\n    +   revisionKey: '8',\n    +   scope: 'partial'\n    + }\n    - null\n\n  ..."
+    },
+    {
+      "id": "G09",
+      "behavior": "Kp excludes timestamps outside source bins",
+      "fileKey": "src/services/synthesis/geo-threat-evidence.ts@1cf8499441af",
+      "diff": [
+        "-  const bins = vote.observations.filter(({ occurredAt }) => occurredAt <= nowMs && occurredAt % KP_BIN_MS === 0);",
+        "+  const bins = vote.observations.filter(({ occurredAt }) => occurredAt <= nowMs);"
+      ],
+      "suiteKey": "geo@e5541b9d76",
+      "red": [
+        6,
+        1
+      ],
+      "test": "current source Kp bin is partial, zero is a reading, older storm and future/skewed bins cannot win",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 1793642400001\n    - 1793642400000\n                  ^\n\n\n  expected: 1793642400000\n  actual: 1793642400001\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "G10",
+      "behavior": "do not substitute old high Kp sample for current zero",
+      "fileKey": "src/services/synthesis/geo-threat-evidence.ts@1cf8499441af",
+      "diff": [
+        "-  const latest = bins.reduce((a, b) => b.occurredAt > a.occurredAt ? b : a, bins[0]!);",
+        "+  const latest = bins.reduce((a, b) => b.occurredAt < a.occurredAt ? b : a, bins[0]!);"
+      ],
+      "suiteKey": "geo@e5541b9d76",
+      "red": [
+        6,
+        1
+      ],
+      "test": "current source Kp bin is partial, zero is a reading, older storm and future/skewed bins cannot win",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 1793631600000\n    - 1793642400000\n           ^\n\n\n  expected: 1793642400000\n  actual: 1793631600000\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "G11",
+      "behavior": "ambiguous conflicting bin is unknown",
+      "fileKey": "src/services/synthesis/geo-threat-evidence.ts@1cf8499441af",
+      "diff": [
+        "-  if (bins.some((sample) => sample.occurredAt === latest.occurredAt && sample.value !== latest.value)) return null;",
+        "+  "
+      ],
+      "suiteKey": "geo@e5541b9d76",
+      "red": [
+        6,
+        1
+      ],
+      "test": "failed, conflicting and sentinel Kp are withheld; a sampled expired bin keeps its original expiry",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + {\n    +   ageKind: 'observed',\n    +   evaluate: [Function: evaluate],\n    +   evidenceAtMs: 1793642400000,\n    +   expiresAtMs: 1793653200000,\n    +   revisionAtMs: undefined,\n    +   revisionKey: '8',\n    +   scope: 'partial'\n    + }\n    - null\n\n  ..."
+    },
+    {
+      "id": "G12",
+      "behavior": "admit strict source rows separately from fusion-coerced values",
+      "fileKey": "src/services/earthquake/usgs-fusion-fetch.ts@f131762886e5",
+      "diff": [
+        "-  const dashboardEvents = strictRows.length === rows.length ? events : parseUsgsEvents(strictRows);",
+        "+  const dashboardEvents = events;"
+      ],
+      "suiteKey": "usgs@e5541b9d76",
+      "red": [
+        16,
+        1
+      ],
+      "test": "ships source-relative timing and strict dashboard rows alongside the existing fusion rows",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'us1000',\n    +   'invalid'\n      ]\n\n\n  expected:\n    0: 'us1000'\n  actual:\n    0: 'us1000'\n    1: 'invalid'\n  operator: 'deepStrictEqual'"
+    },
+    {
+      "id": "G13",
+      "behavior": "account for upstream reference Date plus Age",
+      "fileKey": "src/services/earthquake/usgs-fusion-fetch.ts@f131762886e5",
+      "diff": [
+        "-    events, dashboardEvents, generatedAtMs: generatedAt, originNowMs: serverNow,",
+        "+    events, dashboardEvents, generatedAtMs: generatedAt, originNowMs: generatedAt,"
+      ],
+      "suiteKey": "usgs@e5541b9d76",
+      "red": [
+        16,
+        1
+      ],
+      "test": "ships source-relative timing and strict dashboard rows alongside the existing fusion rows",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 1785671995000\n    - 1785672031000\n            ^\n\n\n  expected: 1785672031000\n  actual: 1785671995000\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "G14",
+      "behavior": "reject future upstream Kp bin",
+      "fileKey": "src/services/spaceweather/gfz-kp-fetch.ts@26c58ecbe53e",
+      "diff": [
+        "-  return samples.filter((s) => s.observedAt >= cutoff && s.observedAt <= now);",
+        "+  return samples.filter((s) => s.observedAt >= cutoff);"
+      ],
+      "suiteKey": "kp@e5541b9d76",
+      "red": [
+        16,
+        1
+      ],
+      "test": "fetchGfzKp fails closed on non-2xx, degraded, malformed, and empty payloads",
+      "assertion": "error: |-\n    unrepresentable future epoch\n    + actual - expected\n    \n      {\n    +   ok: true,\n    +   samples: [\n    +     {\n    +       kp: 9,\n    +       observedAt: 1e+30\n    +     }\n    +   ]\n    -   ok: false,\n    -   samples: []\n      }\n\n\n  expected:\n    ok: false\n    samples:\n  actual:\n    ok: true\n    samples:\n      0:\n    ..."
+    },
+    {
+      "id": "G15",
+      "behavior": "reject failed SWPC Kp subfeed even when parent returns stale rows",
+      "fileKey": "src/services/spaceweather/gfz-kp-fetch.ts@26c58ecbe53e",
+      "diff": [
+        "-    if (!data || data.degraded || (data.subfeeds !== undefined && data.subfeeds?.kp !== true)) return failed();",
+        "+    if (!data || data.degraded) return failed();"
+      ],
+      "suiteKey": "kp@e5541b9d76",
+      "red": [
+        16,
+        1
+      ],
+      "test": "fetchSwpcKp fails closed on non-2xx, degraded, malformed, and empty payloads",
+      "assertion": "error: |-\n    Kp subfeed failed\n    + actual - expected\n    \n      {\n    +   ok: true,\n    +   samples: [\n    +     {\n    +       kp: 9,\n    +       observedAt: 1793674800000\n    +     }\n    +   ]\n    -   ok: false,\n    -   samples: []\n      }\n\n\n  expected:\n    ok: false\n    samples:\n  actual:\n    ok: true\n    samples:\n      0:\n       ..."
+    },
+    {
+      "id": "G16",
+      "behavior": "NOAA cache hits retain acquisition date",
+      "fileKey": "src/services/spaceweather/gfz-kp-fetch.ts@26c58ecbe53e",
+      "diff": [
+        "-    return received(recent, data.kpFetchedAt);",
+        "+    return received(recent, now);"
+      ],
+      "suiteKey": "geo@e5541b9d76",
+      "red": [
+        6,
+        1
+      ],
+      "test": "both Kp fetch routes preserve the frozen acquisition clock independently of bin time and summary time",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 1793642460000\n    - 1793642410000\n              ^\n\n\n  expected: 1793642410000\n  actual: 1793642460000\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "G17",
+      "behavior": "GFZ cache hits retain acquisition date",
+      "fileKey": "src/services/spaceweather/gfz-kp-fetch.ts@26c58ecbe53e",
+      "diff": [
+        "-    return received(recent, data.fetchedAt);",
+        "+    return received(recent, now);"
+      ],
+      "suiteKey": "geo@e5541b9d76",
+      "red": [
+        6,
+        1
+      ],
+      "test": "both Kp fetch routes preserve the frozen acquisition clock independently of bin time and summary time",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 1793642460000\n    - 1793642410000\n              ^\n\n\n  expected: 1793642410000\n  actual: 1793642460000\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "G18",
+      "behavior": "future fetch clocks cannot authorize a correction",
+      "fileKey": "src/services/synthesis/geo-threat-evidence.ts@1cf8499441af",
+      "diff": [
+        "-      && fetchedAtMs >= latest.occurredAt && fetchedAtMs <= nowMs ? fetchedAtMs : undefined,",
+        "+      && fetchedAtMs >= latest.occurredAt ? fetchedAtMs : undefined,"
+      ],
+      "suiteKey": "geo@e5541b9d76",
+      "red": [
+        6,
+        1
+      ],
+      "test": "both Kp fetch routes preserve the frozen acquisition clock independently of bin time and summary time",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 1793642460001\n    - undefined\n\n\n  actual: 1793642460001\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "G19",
+      "behavior": "Kp subfeed acquisition is frozen across a cache hit",
+      "fileKey": "src-tauri/sidecar/local-api-server.mjs@b9fd9334520e",
+      "diff": [
+        "-  status.kpFetchedAt = kp.ok ? kp.fetchedAt : null;",
+        "+  status.kpFetchedAt = kp.ok ? Date.now() : null;"
+      ],
+      "suiteKey": "kpSidecar@e5541b9d76",
+      "red": [
+        0,
+        1
+      ],
+      "test": "/api/spaceweather/status — Kp acquisition time is frozen through a cache hit and advances on a real revision",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 1793678877642\n    - 1793678817636\n              ^\n\n\n  expected: 1793678817636\n  actual: 1793678877642\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "T01",
+      "behavior": "honor original envelope age",
+      "fileKey": "src/services/synthesis/transport-evidence.ts@9692b32edb98",
+      "diff": [
+        "-    evidenceAtMs: at, expiresAtMs, ageKind: 'fetched', scope: 'partial', degraded: body.degraded,",
+        "+    evidenceAtMs: now, expiresAtMs, ageKind: 'fetched', scope: 'partial', degraded: body.degraded,"
+      ],
+      "suiteKey": "transport@b140364fac",
+      "red": [
+        7,
+        1
+      ],
+      "test": "AWC reports active SIGMETs on partial upstream failure, with actual fetch age and advisory expiry",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'fetched',\n    +   1800000000000,\n    -   1799999990000,\n        'partial',\n        true\n      ]\n\n\n  expected:\n    0: 'fetched'\n    1: 1799999990000\n    2: 'partial'\n    3: true\n  actual:\n    0: 'fetched'\n    1: 1800000000000\n    2: ' ..."
+    },
+    {
+      "id": "T02",
+      "behavior": "never treat AIRMET as SIGMET",
+      "fileKey": "src/services/synthesis/transport-evidence.ts@9692b32edb98",
+      "diff": [
+        "-    if (s.isAirmet !== false || typeof s.id !== 'string' || !s.id.trim()",
+        "+    if (typeof s.id !== 'string' || !s.id.trim()"
+      ],
+      "suiteKey": "transport@b140364fac",
+      "red": [
+        6,
+        2
+      ],
+      "test": "AWC reports active SIGMETs on partial upstream failure, with actual fetch age and advisory expiry",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + '2 SIGMETs (2 ash)'\n    - '1 SIGMET (1 ash)'\n\n\n  expected: '1 SIGMET (1 ash)'\n  actual: '2 SIGMETs (2 ash)'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "T03",
+      "behavior": "verify upstream envelope provenance",
+      "fileKey": "src/services/synthesis/transport-evidence.ts@9692b32edb98",
+      "diff": [
+        "-  if (!record(body) || body.source !== source || typeof body.degraded !== 'boolean' || !Array.isArray(body.data)) return null;",
+        "+  if (!record(body) || typeof body.degraded !== 'boolean' || !Array.isArray(body.data)) return null;"
+      ],
+      "suiteKey": "transport@b140364fac",
+      "red": [
+        7,
+        1
+      ],
+      "test": "aviation fails closed for wrong source, stale/future envelope, wrong type, expired or absent rows",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + {\n    +   ageKind: 'fetched',\n    +   degraded: false,\n    +   evaluate: [Function: evaluate],\n    +   evidenceAtMs: 1799999990000,\n    +   expiresAtMs: 1800000060000,\n    +   scope: 'partial'\n    + }\n    - null\n\n  ...\n# Subtest: FAA admits only exp ..."
+    },
+    {
+      "id": "T04",
+      "behavior": "exclude expired advisories on tick",
+      "fileKey": "src/services/synthesis/transport-evidence.ts@9692b32edb98",
+      "diff": [
+        "-    evaluate: (t) => score([...rows.values()].filter((item) => item.until > t).map((item) => item.row), t),",
+        "+    evaluate: (t) => score([...rows.values()].filter((item) => true).map((item) => item.row), t),"
+      ],
+      "suiteKey": "transport@b140364fac",
+      "red": [
+        6,
+        2
+      ],
+      "test": "AWC reports active SIGMETs on partial upstream failure, with actual fetch age and advisory expiry",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    'ELEVATED' !== 'NONE'\n\n\n  expected: 'NONE'\n  actual: 'ELEVATED'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "T05",
+      "behavior": "bound all aviation rows to the five-minute provider freshness horizon",
+      "fileKey": "src/services/aviation/aviation-intel-types.ts@974cbef2b15c",
+      "diff": [
+        "-export const AVIATION_CACHE_MS = 5 * 60_000;",
+        "+export const AVIATION_CACHE_MS = 10 * 60_000;"
+      ],
+      "suiteKey": "transport@b140364fac",
+      "red": [
+        6,
+        2
+      ],
+      "test": "aviation fails closed for wrong source, stale/future envelope, wrong type, expired or absent rows",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + {\n    +   ageKind: 'fetched',\n    +   degraded: false,\n    +   evaluate: [Function: evaluate],\n    +   evidenceAtMs: 1799999700000,\n    +   expiresAtMs: 1800000060000,\n    +   scope: 'partial'\n    + }\n    - null\n\n  ...\n# Subtest: FAA admits only exp ..."
+    },
+    {
+      "id": "T06",
+      "behavior": "admit only explicit FAA program type",
+      "fileKey": "src/services/synthesis/transport-evidence.ts@9692b32edb98",
+      "diff": [
+        "-    if (s.programType !== 'ground_stop' || typeof s.airport !== 'string' || !/^[A-Z0-9]{3,4}$/.test(s.airport)",
+        "+    if (typeof s.airport !== 'string' || !/^[A-Z0-9]{3,4}$/.test(s.airport)"
+      ],
+      "suiteKey": "transport@b140364fac",
+      "red": [
+        7,
+        1
+      ],
+      "test": "FAA admits only explicit active airport ground stops and bounds untimed stops at fetch freshness",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + {\n    +   ageKind: 'fetched',\n    +   degraded: false,\n    +   evaluate: [Function: evaluate],\n    +   evidenceAtMs: 1799999990000,\n    +   expiresAtMs: 1800000000500,\n    +   scope: 'partial'\n    + }\n    - null\n\n  ...\n# Subtest: AIS uses the newest ..."
+    },
+    {
+      "id": "T07",
+      "behavior": "do not treat a future program as active",
+      "fileKey": "src/services/synthesis/transport-evidence.ts@9692b32edb98",
+      "diff": [
+        "-      || (s.startedAt !== null && (!stamp(s.startedAt) || s.startedAt > now))",
+        "+      || (s.startedAt !== null && (!stamp(s.startedAt)))"
+      ],
+      "suiteKey": "transport@b140364fac",
+      "red": [
+        7,
+        1
+      ],
+      "test": "FAA admits only explicit active airport ground stops and bounds untimed stops at fetch freshness",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + {\n    +   ageKind: 'fetched',\n    +   degraded: false,\n    +   evaluate: [Function: evaluate],\n    +   evidenceAtMs: 1799999990000,\n    +   expiresAtMs: 1800000000500,\n    +   scope: 'partial'\n    + }\n    - null\n\n  ...\n# Subtest: AIS uses the newest ..."
+    },
+    {
+      "id": "T08",
+      "behavior": "bound FAA stops with no end date",
+      "fileKey": "src/services/synthesis/transport-evidence.ts@9692b32edb98",
+      "diff": [
+        "-    return { id: s.airport, until: Math.min(s.endsAt ?? cutoff, cutoff), row: { airport: s.airport } };",
+        "+    return { id: s.airport, until: Math.min(s.endsAt ?? Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER), row: { airport: s.airport } };"
+      ],
+      "suiteKey": "transport@b140364fac",
+      "red": [
+        7,
+        1
+      ],
+      "test": "FAA admits only explicit active airport ground stops and bounds untimed stops at fetch freshness",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 9007199254740991\n    - 1800000290000\n\n\n  expected: 1800000290000\n  actual: 9007199254740991\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "T09",
+      "behavior": "AIS uses upstream position receipt clock",
+      "fileKey": "src/services/synthesis/transport-evidence.ts@9692b32edb98",
+      "diff": [
+        "-    evidenceAtMs: newest, expiresAtMs: newest + AIS_MAX_AGE_MS, ageKind: 'received', scope: 'partial',",
+        "+    evidenceAtMs: now, expiresAtMs: newest + AIS_MAX_AGE_MS, ageKind: 'received', scope: 'partial',"
+      ],
+      "suiteKey": "transport@b140364fac",
+      "red": [
+        5,
+        3
+      ],
+      "test": "AIS uses the newest receipt per MMSI and expires individual positions on the four-zone 15 minute horizon",
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'received',\n    +   1800000000000,\n    -   1799999940000,\n        'partial'\n      ]\n\n\n  expected:\n    0: 'received'\n    1: 1799999940000\n    2: 'partial'\n  actual:\n    0: 'received'\n    1: 1800000000000\n    2: 'partial'\n  operator: 'd ..."
+    },
+    {
+      "id": "T10",
+      "behavior": "AIS filters every vessel at the position horizon",
+      "fileKey": "src/services/synthesis/transport-evidence.ts@9692b32edb98",
+      "diff": [
+        "-      vesselsInRedZone: positions.filter((v) => v.at + AIS_MAX_AGE_MS > nowMs).map((v) => v.row), nowMs,",
+        "+      vesselsInRedZone: positions.filter((v) => true).map((v) => v.row), nowMs,"
+      ],
+      "suiteKey": "transport@b140364fac",
+      "red": [
+        7,
+        1
+      ],
+      "test": "AIS uses the newest receipt per MMSI and expires individual positions on the four-zone 15 minute horizon",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + '2 in red zone (incl. LATEST)'\n    - '1 in red zone: LATEST'\n\n\n  expected: '1 in red zone: LATEST'\n  actual: '2 in red zone (incl. LATEST)'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "T11",
+      "behavior": "AIS rejects mislabeled zone or mismatched coordinates",
+      "fileKey": "src/services/synthesis/transport-evidence.ts@9692b32edb98",
+      "diff": [
+        "-      || zoneForPosition(v.lat, v.lon)?.id !== v.zoneId"
+      ],
+      "suiteKey": "transport@b140364fac",
+      "red": [
+        7,
+        1
+      ],
+      "test": "AIS uses the newest receipt per MMSI and expires individual positions on the four-zone 15 minute horizon",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + '4 in red zone (incl. LATEST)'\n    - '2 in red zone (incl. LATEST)'\n\n\n  expected: '2 in red zone (incl. LATEST)'\n  actual: '4 in red zone (incl. LATEST)'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "T12",
+      "behavior": "AIS keeps newest position per MMSI",
+      "fileKey": "src/services/synthesis/transport-evidence.ts@9692b32edb98",
+      "diff": [
+        "-    if ((latest.get(v.mmsi)?.at ?? 0) >= v.observedAt) continue;",
+        "+    "
+      ],
+      "suiteKey": "transport@b140364fac",
+      "red": [
+        7,
+        1
+      ],
+      "test": "AIS uses the newest receipt per MMSI and expires individual positions on the four-zone 15 minute horizon",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + '2 in red zone (incl. SECOND)'\n    - '2 in red zone (incl. LATEST)'\n                            ^\n\n\n  expected: '2 in red zone (incl. LATEST)'\n  actual: '2 in red zone (incl. SECOND)'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "T13",
+      "behavior": "AIS rejects sentinel identifiers",
+      "fileKey": "src/services/synthesis/transport-evidence.ts@9692b32edb98",
+      "diff": [
+        "-    if (!record(v) || typeof v.mmsi !== 'string' || !/^[2-7]\\d{8}$/.test(v.mmsi)",
+        "+    if (!record(v) || typeof v.mmsi !== 'string'"
+      ],
+      "suiteKey": "transport@b140364fac",
+      "red": [
+        7,
+        1
+      ],
+      "test": "AIS uses the newest receipt per MMSI and expires individual positions on the four-zone 15 minute horizon",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + '3 in red zone (incl. LATEST)'\n    - '2 in red zone (incl. LATEST)'\n\n\n  expected: '2 in red zone (incl. LATEST)'\n  actual: '3 in red zone (incl. LATEST)'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "T14",
+      "behavior": "AIS rejects unattested empty samples",
+      "fileKey": "src/services/synthesis/transport-evidence.ts@9692b32edb98",
+      "diff": [
+        "-    || typeof body.sampleSize !== 'number' || !Number.isSafeInteger(body.sampleSize) || body.sampleSize < 1) return null;",
+        "+    || typeof body.sampleSize !== 'number' || !Number.isSafeInteger(body.sampleSize)) return null;"
+      ],
+      "suiteKey": "transport@b140364fac",
+      "red": [
+        7,
+        1
+      ],
+      "test": "AIS envelope generation, empty samples and invalid timestamps never certify coverage",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + {\n    +   ageKind: 'received',\n    +   evaluate: [Function: evaluate],\n    +   evidenceAtMs: 1799999160000,\n    +   expiresAtMs: 1800000060000,\n    +   revisionAtMs: 1800000000000,\n    +   revisionKey: '[[\"367123456\",1799999160000,\"OLD\"]]',\n    +    ..."
+    },
+    {
+      "id": "T15",
+      "behavior": "AIS revisions exclude future/unordered source snapshots",
+      "fileKey": "src/services/synthesis/transport-evidence.ts@9692b32edb98",
+      "diff": [
+        "-  if (!stamp(revisionAtMs) || revisionAtMs < newest || revisionAtMs > now",
+        "+  if (!stamp(revisionAtMs) || revisionAtMs < newest"
+      ],
+      "suiteKey": "transport@b140364fac",
+      "red": [
+        7,
+        1
+      ],
+      "test": "missing, malformed, future and pre-position AIS snapshot revisions cannot order membership changes",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + {\n    +   ageKind: 'received',\n    +   evaluate: [Function: evaluate],\n    +   evidenceAtMs: 1799999160000,\n    +   expiresAtMs: 1800000060000,\n    +   revisionAtMs: 1800000000001,\n    +   revisionKey: '[[\"367123456\",1799999160000,\"OLD\"]]',\n    +    ..."
+    },
+    {
+      "id": "T16",
+      "behavior": "AIS sorts tied positions by identity to recognize unchanged content",
+      "fileKey": "src/services/synthesis/transport-evidence.ts@9692b32edb98",
+      "diff": [
+        "-  const positions = [...latest.values()].sort((a, b) => b.at - a.at || a.row.mmsi.localeCompare(b.row.mmsi));",
+        "+  const positions = [...latest.values()].sort((a, b) => b.at - a.at);"
+      ],
+      "suiteKey": "transport@b140364fac",
+      "red": [
+        7,
+        1
+      ],
+      "test": "a newer AIS snapshot revises membership while preserving original position age and expiry",
+      "assertion": "error: |-\n    same content with a newer asOf cannot clear failure\n    \n    false !== true\n\n\n  expected: true\n  actual: false\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "T17",
+      "behavior": "revision signature preserves the whole AIS membership at a source stamp",
+      "fileKey": "src/services/synthesis/transport-evidence.ts@9692b32edb98",
+      "diff": [
+        "-  const revisionKey = JSON.stringify(positions.map(({ at, row }) => [row.mmsi, at, row.name]));",
+        "+  const revisionKey = String(newest);"
+      ],
+      "suiteKey": "transport@b140364fac",
+      "red": [
+        7,
+        1
+      ],
+      "test": "a newer AIS snapshot revises membership while preserving original position age and expiry",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    'HIGH' !== 'ELEVATED'\n\n\n  expected: 'ELEVATED'\n  actual: 'HIGH'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "T18",
+      "behavior": "a snapshot-membership revision can move latest sample age backwards",
+      "fileKey": "src/services/synthesis/transport-evidence.ts@9692b32edb98",
+      "diff": [
+        "-    revisionAtMs, revisionKey, snapshotMembership: true,",
+        "+    revisionAtMs, revisionKey, "
+      ],
+      "suiteKey": "transport@b140364fac",
+      "red": [
+        7,
+        1
+      ],
+      "test": "a newer AIS snapshot can remove the newest departing vessel and use the older remaining report age",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    'HIGH' !== 'ELEVATED'\n\n\n  expected: 'ELEVATED'\n  actual: 'HIGH'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "U01",
+      "behavior": "quiet requires complete as well as low severity",
+      "fileKey": "src/components/ThreatDashboard.ts@a5104e092cfc",
+      "diff": [
+        "-    const allQuiet = rows.every(row => row.coverage === 'complete' && row.level === 'NONE');",
+        "+    const allQuiet = rows.every(row => row.level === 'NONE');"
+      ],
+      "suiteKey": "ui@c935054d36",
+      "red": [
+        7,
+        2
+      ],
+      "test": "startup exposes all eleven unknown rows with zero reporting",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n\n\n  expected: false\n  actual: true\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "U02",
+      "behavior": "quiet summary uses oldest evidence",
+      "fileKey": "src/components/ThreatDashboard.ts@a5104e092cfc",
+      "diff": [
+        "-    const oldest = Math.min(...DOMAINS.map((meta) => this.latest[meta.domain].lastUpdatedMs));",
+        "+    const oldest = Math.max(...DOMAINS.map((meta) => this.latest[meta.domain].lastUpdatedMs));"
+      ],
+      "suiteKey": "ui@c935054d36",
+      "red": [
+        8,
+        1
+      ],
+      "test": "only eleven complete quiet domains can collapse, with the oldest evidence age",
+      "assertion": "error: |-\n    The input did not match the regular expression /oldest evidence 9m ago/i. Input:\n    \n    '\\n' +\n      '            \\n' +\n      '            All sensors quiet\\n' +\n      '            · oldest evidence 1m ago\\n' +\n      '            11 of 11 domains reporting\\n' +\n      '          '\n\n\n  expected:\n  actual: |-\n    \n        ..."
+    },
+    {
+      "id": "U03",
+      "behavior": "count reporting domains from admitted active legs",
+      "fileKey": "src/components/ThreatDashboard.ts@a5104e092cfc",
+      "diff": [
+        "-    const reporting = rows.filter(row => row.sources.some(source => source.reporting));",
+        "+    const reporting = rows.filter(row => row.sources.length > 0);"
+      ],
+      "suiteKey": "ui@c935054d36",
+      "red": [
+        7,
+        2
+      ],
+      "test": "one failed domain breaks reassurance despite ten complete, quiet domains",
+      "assertion": "error: |-\n    The input did not match the regular expression /10 of 11 domains reporting/i. Input:\n    \n    '\\n' +\n      '      \\n' +\n      '        11 of 11 domains reporting\\n' +\n      '        \\n' +\n      '          \\n' +\n      '      \\n' +\n      '        \\n' +\n      '          \\n' +\n      '            ⚡\\n' +\n      '            Sei ..."
+    },
+    {
+      "id": "U04",
+      "behavior": "display source observation or acquisition kind",
+      "fileKey": "src/components/ThreatDashboard.ts@a5104e092cfc",
+      "diff": [
+        "-    parts.push(`${source.ageKind} ${formatRelativeTime(source.evidenceAtMs)}`);",
+        "+    parts.push(`fetched ${formatRelativeTime(source.evidenceAtMs)}`);"
+      ],
+      "suiteKey": "ui@c935054d36",
+      "red": [
+        7,
+        2
+      ],
+      "test": "a stale receipt retains its actual observation age without a quiet badge",
+      "assertion": "error: |-\n    The input did not match the regular expression /Kp.*observed 4h ago.*stale.*refresh failed/is. Input:\n    \n    '\\n' +\n      '        \\n' +\n      '          \\n' +\n      '            ☀\\n' +\n      '            Space Weather\\n' +\n      '          \\n' +\n      '          Stale evidence\\n' +\n      '        \\n' +\n      '         ..."
+    },
+    {
+      "id": "U05",
+      "behavior": "owner stops old heartbeat on teardown",
+      "fileKey": "src/components/ThreatDashboard.ts@a5104e092cfc",
+      "diff": [
+        "-    this.poller.stop();",
+        "+    "
+      ],
+      "suiteKey": "uiTeardown@c935054d36",
+      "red": [
+        0,
+        1
+      ],
+      "test": "destroy stops the dashboard tick and remount creates just one producer",
+      "assertion": "error: |-\n    only the live dashboard emits\n    \n    2 !== 1\n\n\n  expected: 1\n  actual: 2\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "U06",
+      "behavior": "last-known hazard is visibly distinct",
+      "fileKey": "src/components/ThreatDashboard.ts@a5104e092cfc",
+      "diff": [
+        "-    const signalAge = threat.lastKnown ? 'Last known' : null;",
+        "+    const signalAge = null;"
+      ],
+      "suiteKey": "ui@c935054d36",
+      "red": [
+        8,
+        1
+      ],
+      "test": "current partial hazard shows its source and acquisition age alongside the failed leg",
+      "assertion": "error: |-\n    The input did not match the regular expression /last known/i. Input:\n    \n    '\\n' +\n      '        \\n' +\n      '          \\n' +\n      '            ✈\\n' +\n      '            Aviation\\n' +\n      '          \\n' +\n      '          HIGH\\n' +\n      '        \\n' +\n      '        \\n' +\n      '          FAA · Ground stop at EWR\\ ..."
+    },
+    {
+      "id": "U07",
+      "behavior": "preserve focused card between heartbeats",
+      "fileKey": "src/components/ThreatDashboard.ts@a5104e092cfc",
+      "diff": [
+        "-      target?.focus({ preventScroll: true });",
+        "+      "
+      ],
+      "suiteKey": "ui@c935054d36",
+      "red": [
+        8,
+        1
+      ],
+      "test": "current partial hazard shows its source and acquisition age alongside the failed leg",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    null !== 'aviation'\n\n\n  expected: 'aviation'\n  actual: ~\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "U08",
+      "behavior": "disable the base activity heartbeat masquerading as source age",
+      "fileKey": "src/components/ThreatDashboard.ts@a5104e092cfc",
+      "diff": [
+        "-    this.heartbeatEl?.remove();",
+        "+    "
+      ],
+      "suiteKey": "ui@c935054d36",
+      "red": [
+        8,
+        1
+      ],
+      "test": "startup exposes all eleven unknown rows with zero reporting",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n\n\n  expected: false\n  actual: true\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "U09",
+      "behavior": "last-known hazards excluded from current badge count",
+      "fileKey": "src/components/ThreatDashboard.ts@a5104e092cfc",
+      "diff": [
+        "-    if (!t.lastKnown && (t.level === 'ELEVATED' || t.level === 'HIGH' || t.level === 'CRITICAL')) n += 1;",
+        "+    if ((t.level === 'ELEVATED' || t.level === 'HIGH' || t.level === 'CRITICAL')) n += 1;"
+      ],
+      "suiteKey": "ui@c935054d36",
+      "red": [
+        8,
+        1
+      ],
+      "test": "current partial hazard shows its source and acquisition age alongside the failed leg",
+      "assertion": "error: |-\n    a retained hazard is not counted as currently confirmed\n    \n    '1' !== '0'\n\n\n  expected: '0'\n  actual: '1'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "U10",
+      "behavior": "mixed row shows last-known sibling separately",
+      "fileKey": "src/components/ThreatDashboard.ts@a5104e092cfc",
+      "diff": [
+        "-  if (source.signal && source.source !== headlineSource) {",
+        "+  if (false) {"
+      ],
+      "suiteKey": "ui@c935054d36",
+      "red": [
+        8,
+        1
+      ],
+      "test": "a current SIGMET and a last-known ground stop remain distinct on the same card",
+      "assertion": "error: |-\n    The input did not match the regular expression /FAA.*last known.*HIGH.*Ground stop at EWR/is. Input:\n    \n    '\\n' +\n      '        \\n' +\n      '          \\n' +\n      '            ✈\\n' +\n      '            Aviation\\n' +\n      '          \\n' +\n      '          ELEVATED\\n' +\n      '        \\n' +\n      '        \\n' +\n       ..."
+    },
+    {
+      "id": "U11",
+      "behavior": "external provider names and headline text render as text",
+      "fileKey": "src/components/ThreatDashboard.ts@a5104e092cfc",
+      "diff": [
+        "-      `<div>${escapeHtml(describeSource(source, threat.signalSource))}</div>`).join('');",
+        "+      `<div>${describeSource(source, threat.signalSource)}</div>`).join('');"
+      ],
+      "suiteKey": "ui@c935054d36",
+      "red": [
+        8,
+        1
+      ],
+      "test": "limited Kp and AIS evidence names its scope and keeps source text inert",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n\n\n  expected: false\n  actual: true\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "W01",
+      "behavior": "SIGMET owner records actual independent failure",
+      "fileKey": "src/components/AviationIntelPanel.ts@c1217f2d2308",
+      "diff": [
+        "-        trackTransportFetch('sigmets', fetchSigmets, this.signal),",
+        "+        fetchSigmets(),"
+      ],
+      "suiteKey": "transportWiring@b140364fac",
+      "red": [
+        0,
+        1
+      ],
+      "test": "mounted panels feed the existing requests independently and discard completions after destruction",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + undefined\n    - 'failed'\n\n\n  expected: 'failed'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "W02",
+      "behavior": "ground-stop owner passes existing acquisition result",
+      "fileKey": "src/components/AviationIntelPanel.ts@c1217f2d2308",
+      "diff": [
+        "-        trackTransportFetch('stops', fetchAirportDelays, this.signal),",
+        "+        fetchAirportDelays(),"
+      ],
+      "suiteKey": "transportWiring@b140364fac",
+      "red": [
+        0,
+        1
+      ],
+      "test": "mounted panels feed the existing requests independently and discard completions after destruction",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + null\n    - 'FLL ground stop'\n\n\n  expected: 'FLL ground stop'\n  actual: ~\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "W03",
+      "behavior": "AIS acquisition owner attaches position receipt",
+      "fileKey": "src/components/MaritimeIntelPanel.ts@1290d1a65b81",
+      "diff": [
+        "-      const body = await trackTransportFetch('vessels', async () => {",
+        "+      const body = await ((_, acquire) => acquire())('vessels', async () => {"
+      ],
+      "suiteKey": "transportWiring@b140364fac",
+      "red": [
+        0,
+        1
+      ],
+      "test": "mounted panels feed the existing requests independently and discard completions after destruction",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + null\n    - '1 in red zone: FIRST'\n\n\n  expected: '1 in red zone: FIRST'\n  actual: ~\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "W04",
+      "behavior": "retired panel cannot publish returned responses",
+      "fileKey": "src/services/synthesis/transport-evidence.ts@9692b32edb98",
+      "diff": [
+        "-  signal.addEventListener('abort', attempt.cancel, { once: true });",
+        "+  "
+      ],
+      "suiteKey": "transportWiring@b140364fac",
+      "red": [
+        0,
+        1
+      ],
+      "test": "mounted panels feed the existing requests independently and discard completions after destruction",
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'pending'\n    - 'failed'\n\n\n  expected: 'failed'\n  actual: 'pending'\n  operator: 'strictEqual'"
+    },
+    {
+      "id": "W05",
+      "behavior": "record Kp vote against its actual source",
+      "fileKey": "src/app/data-loader.ts@c21c6f74f891",
+      "diff": [
+        "-    for (const [attempt, vote, source] of [[swpcAttempt, swpcVote, swpc], [gfzAttempt, gfzVote, gfz]] as const) {",
+        "+    for (const [attempt, vote, source] of [[swpcAttempt, swpcVote, swpc], [gfzAttempt, swpcVote, swpc]] as const) {"
+      ],
+      "suiteKey": "geoWiring@e5541b9d76",
+      "red": [
+        22,
+        1
+      ],
+      "test": "dashboard seismic and Kp receipts come from the live acquisitions and each failed leg is reported",
+      "assertion": "error: |-\n        The input did not match the regular expression /\\[\\[swpcAttempt, swpcVote, swpc\\], \\[gfzAttempt, gfzVote, gfz\\]\\]/. Input:\n        \n        'async loadSpaceWeather(): Promise<void> {\\n' +\n          '    await spaceLoaders.loadSpaceWeather(this.ctx);\\n' +\n          \"    // Planetary Kp fusion: SWPC's 8-station estimat ..."
+    },
+    {
+      "id": "W06",
+      "behavior": "superseded seismic attempts cannot alter retained quake history",
+      "fileKey": "src/app/data-loader.ts@c21c6f74f891",
+      "diff": [
+        "- if (!attempt.isCurrent()) return;",
+        "+ "
+      ],
+      "suiteKey": "geoWiring@e5541b9d76",
+      "red": [
+        22,
+        1
+      ],
+      "test": "dashboard seismic and Kp receipts come from the live acquisitions and each failed leg is reported",
+      "assertion": "error: |-\n        The input did not match the regular expression /if \\(this\\.ctx\\.isDestroyed\\) return attempt\\.cancel\\(\\);\\s*if \\(!attempt\\.isCurrent\\(\\)\\) return;\\s*const receipt = this\\.seismicThreatHistory\\.admit\\(snapshot, Date\\.now\\(\\)\\);/. Input:\n        \n        'async loadUsgsSeismic(): Promise<void> {\\n' +\n          \" const  ..."
+    }
+  ],
+  "earlierSurvivors": [
+    {
+      "id": "T05",
+      "classification": "equivalent",
+      "checkpoint": "e5541b9d76ca79c4fd07c9f6c4a990a7020027c5",
+      "file": "src/services/synthesis/transport-evidence.ts",
+      "beforeSha256": "9692b32edb98bc423a2aef653c6645b69866da2535aed9a0d11b3ad63af960a5",
+      "restoredSha256": "9692b32edb98bc423a2aef653c6645b69866da2535aed9a0d11b3ad63af960a5",
+      "originalTestSha256": {
+        "src/services/synthesis/__tests__/transport-evidence.test.mts": "a83b372eedc6f5d212d8fb9143086f50a26dd1e123f3a49483a11117fbf19922"
+      },
+      "diff": [
+        "-  if (!stamp(at) || at > now || at + AVIATION_CACHE_MS <= now) return null;",
+        "+  if (!stamp(at) || at > now) return null;"
+      ],
+      "counts": [
+        8,
+        0
+      ],
+      "resolution": "Per-row cutoff and empty admission also reject every stale envelope. The replacement T05 lengthens the effective cache horizon."
+    },
+    {
+      "id": "T14",
+      "classification": "test gap repaired",
+      "checkpoint": "e5541b9d76ca79c4fd07c9f6c4a990a7020027c5",
+      "file": "src/services/synthesis/transport-evidence.ts",
+      "beforeSha256": "9692b32edb98bc423a2aef653c6645b69866da2535aed9a0d11b3ad63af960a5",
+      "restoredSha256": "9692b32edb98bc423a2aef653c6645b69866da2535aed9a0d11b3ad63af960a5",
+      "originalTestSha256": {
+        "src/services/synthesis/__tests__/transport-evidence.test.mts": "a83b372eedc6f5d212d8fb9143086f50a26dd1e123f3a49483a11117fbf19922"
+      },
+      "diff": [
+        "-    || typeof body.sampleSize !== 'number' || !Number.isSafeInteger(body.sampleSize) || body.sampleSize < 1) return null;",
+        "+    || typeof body.sampleSize !== 'number' || !Number.isSafeInteger(body.sampleSize)) return null;"
+      ],
+      "counts": [
+        8,
+        0
+      ],
+      "resolution": "The zero-sized sample fixture also lacked the required valid asOf. The corrected fixture isolates the failed size guard and the same mutation now fails."
+    }
+  ],
+  "sourceAndTestChecksumVerification": {
+    "commit": "3c68b4fa9e8c2c23db936a965e1793cc714dcbe3",
+    "matchedFiles": 27
+  }
+}

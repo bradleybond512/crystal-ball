@@ -47,14 +47,10 @@ export interface AviationNotam {
 
 // SIGMET / AIRMET (NWS Aviation Weather Center)
 
-export type SigmetHazard =
-  | 'volcanic_ash'
-  | 'turbulence'
-  | 'icing'
-  | 'thunderstorm'
-  | 'mountain_obscuration'
-  | 'ifr'
-  | 'other';
+export const SIGMET_HAZARDS = ['volcanic_ash', 'turbulence', 'icing', 'thunderstorm', 'mountain_obscuration', 'ifr', 'other'] as const;
+export type SigmetHazard = typeof SIGMET_HAZARDS[number];
+
+export const AVIATION_CACHE_MS = 5 * 60_000;
 
 export interface AviationSigmet {
   id: string;

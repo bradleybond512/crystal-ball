@@ -1,0 +1,866 @@
+{
+  "baseline": "cd459dfec514c80e2fcc3f0d7965ea6ef76a7b6a",
+  "fixedCommit": "c935054d367ffb1f73bdb02dffd26754a0edf959",
+  "before": [
+    {
+      "file": "baseline-chromium.json",
+      "pass": 1,
+      "fail": 4,
+      "failedNames": [
+        "Startup exposes eleven domain cards",
+        "No reassurance before evidence",
+        "Empty aggregation leaves all eleven visible",
+        "Empty aggregation cannot claim quiet"
+      ],
+      "renderer": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/147.0.7727.15 Safari/537.36",
+      "origin": "http://127.0.0.1:54648",
+      "sourceRequests": [],
+      "diagnostics": [],
+      "receiptSHA256": "64f16ee84d86041d46c98f88199d01383ddfe2a376ead721ccb90091dab50ff8"
+    },
+    {
+      "file": "baseline-native.json",
+      "pass": 1,
+      "fail": 4,
+      "failedNames": [
+        "Startup exposes eleven domain cards",
+        "No reassurance before evidence",
+        "Empty aggregation leaves all eleven visible",
+        "Empty aggregation cannot claim quiet"
+      ],
+      "renderer": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+      "origin": "tauri://localhost",
+      "sourceRequests": [],
+      "diagnostics": [
+        "CSP connect-src ipc://localhost/qa_result"
+      ],
+      "receiptSHA256": "b373ea46115dee892fa067b34fd339a31ca11dfc90d2e1147810ec087e0b3705",
+      "hostExitCode": 0,
+      "hostSHA256": "44bd3e41c8d8b39031b6857d7d33aa63215130570d792573c548d402a781c96d",
+      "productionCspIdentical": true,
+      "websiteDataStore": "Tauri incognito(true), nonpersistent"
+    }
+  ],
+  "after": [
+    {
+      "file": "verified-chromium.json",
+      "pass": 42,
+      "fail": 0,
+      "failedNames": [],
+      "renderer": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/147.0.7727.15 Safari/537.36",
+      "origin": "http://127.0.0.1:58920",
+      "sourceRequests": [
+        {
+          "path": "/api/earthquakes",
+          "method": "GET"
+        },
+        {
+          "path": "/api/aviation/notams",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/aviation/sigmets",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/aviation/pireps",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/aviation/military",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/aviation/delays",
+          "method": "GET",
+          "status": 200
+        },
+        {
+          "path": "/api/aviation/flights",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/dark-vessels",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/freight-stress",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/acled-events",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/maritime/vessels",
+          "method": "GET",
+          "status": 200
+        },
+        {
+          "path": "/api/dark-vessels",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/freight-stress",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/acled-events",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/maritime/vessels",
+          "method": "GET",
+          "status": 200
+        },
+        {
+          "path": "/api/dark-vessels",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/freight-stress",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/acled-events",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/maritime/vessels",
+          "method": "GET",
+          "status": 200
+        },
+        {
+          "path": "/api/space-weather-feeds",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/donki-events",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/spaceweather/status",
+          "method": "GET",
+          "status": 200,
+          "bin": 1793707200000,
+          "kp": 0,
+          "revisionAt": 1793707773000
+        },
+        {
+          "path": "/api/spaceweather-kp-gfz",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/space-weather-feeds",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/spaceweather/status",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/spaceweather-kp-gfz",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/space-weather-feeds",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/spaceweather/status",
+          "method": "GET",
+          "status": 200,
+          "bin": 1793707200000,
+          "kp": 0,
+          "revisionAt": 1793707775000
+        },
+        {
+          "path": "/api/spaceweather-kp-gfz",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/space-weather-feeds",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/spaceweather/status",
+          "method": "GET",
+          "status": 200,
+          "bin": 1793707200000,
+          "kp": 7,
+          "revisionAt": 1793707776000
+        },
+        {
+          "path": "/api/spaceweather-kp-gfz",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/space-weather-feeds",
+          "method": "GET",
+          "status": 503
+        },
+        {
+          "path": "/api/spaceweather/status",
+          "method": "GET",
+          "status": 200,
+          "bin": 1793707200000,
+          "kp": 0,
+          "revisionAt": 1793707777000
+        },
+        {
+          "path": "/api/spaceweather-kp-gfz",
+          "method": "GET",
+          "status": 503
+        }
+      ],
+      "diagnostics": [],
+      "receiptSHA256": "5c1b82c487ababe7109980260b3701893e49a41c2a905c704bc52ce90836ef28"
+    },
+    {
+      "file": "verified-native.json",
+      "pass": 42,
+      "fail": 0,
+      "failedNames": [],
+      "renderer": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+      "origin": "tauri://localhost",
+      "sourceRequests": [
+        {
+          "method": "GET",
+          "path": "/api/earthquakes"
+        },
+        {
+          "method": "GET",
+          "path": "/api/aviation/notams",
+          "status": 503
+        },
+        {
+          "method": "GET",
+          "path": "/api/aviation/sigmets",
+          "status": 503
+        },
+        {
+          "method": "GET",
+          "path": "/api/aviation/pireps",
+          "status": 503
+        },
+        {
+          "method": "GET",
+          "path": "/api/aviation/military",
+          "status": 503
+        },
+        {
+          "method": "GET",
+          "path": "/api/aviation/delays",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/api/aviation/flights",
+          "status": 503
+        },
+        {
+          "method": "GET",
+          "path": "/api/dark-vessels",
+          "status": 503
+        },
+        {
+          "method": "GET",
+          "path": "/api/freight-stress",
+          "status": 503
+        },
+        {
+          "method": "GET",
+          "path": "/api/acled-events",
+          "status": 503
+        },
+        {
+          "method": "GET",
+          "path": "/api/maritime/vessels",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/api/dark-vessels",
+          "status": 503
+        },
+        {
+          "method": "GET",
+          "path": "/api/freight-stress",
+          "status": 503
+        },
+        {
+          "method": "GET",
+          "path": "/api/acled-events",
+          "status": 503
+        },
+        {
+          "method": "GET",
+          "path": "/api/maritime/vessels",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/api/dark-vessels",
+          "status": 503
+        },
+        {
+          "method": "GET",
+          "path": "/api/freight-stress",
+          "status": 503
+        },
+        {
+          "method": "GET",
+          "path": "/api/acled-events",
+          "status": 503
+        },
+        {
+          "method": "GET",
+          "path": "/api/maritime/vessels",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/api/space-weather-feeds",
+          "status": 503
+        },
+        {
+          "method": "GET",
+          "path": "/api/donki-events",
+          "status": 503
+        },
+        {
+          "bin": 1793707200000,
+          "kp": 0,
+          "method": "GET",
+          "path": "/api/spaceweather/status",
+          "revisionAt": 1793707773000,
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/api/spaceweather-kp-gfz",
+          "status": 503
+        },
+        {
+          "method": "GET",
+          "path": "/api/space-weather-feeds",
+          "status": 503
+        },
+        {
+          "method": "GET",
+          "path": "/api/spaceweather/status",
+          "status": 503
+        },
+        {
+          "method": "GET",
+          "path": "/api/spaceweather-kp-gfz",
+          "status": 503
+        },
+        {
+          "method": "GET",
+          "path": "/api/space-weather-feeds",
+          "status": 503
+        },
+        {
+          "bin": 1793707200000,
+          "kp": 0,
+          "method": "GET",
+          "path": "/api/spaceweather/status",
+          "revisionAt": 1793707775000,
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/api/spaceweather-kp-gfz",
+          "status": 503
+        },
+        {
+          "method": "GET",
+          "path": "/api/space-weather-feeds",
+          "status": 503
+        },
+        {
+          "bin": 1793707200000,
+          "kp": 7,
+          "method": "GET",
+          "path": "/api/spaceweather/status",
+          "revisionAt": 1793707776000,
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/api/spaceweather-kp-gfz",
+          "status": 503
+        },
+        {
+          "method": "GET",
+          "path": "/api/space-weather-feeds",
+          "status": 503
+        },
+        {
+          "bin": 1793707200000,
+          "kp": 0,
+          "method": "GET",
+          "path": "/api/spaceweather/status",
+          "revisionAt": 1793707777000,
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/api/spaceweather-kp-gfz",
+          "status": 503
+        }
+      ],
+      "diagnostics": [
+        "CSP connect-src ipc://localhost/qa_result"
+      ],
+      "receiptSHA256": "205bcb4df71545438c485fad7061a4b0de932cc1582b71acfbd3f22c205f0ef3",
+      "hostExitCode": 0,
+      "hostSHA256": "44bd3e41c8d8b39031b6857d7d33aa63215130570d792573c548d402a781c96d",
+      "productionCspIdentical": true,
+      "websiteDataStore": "Tauri incognito(true), nonpersistent"
+    }
+  ],
+  "scenarios": "Production Threat Dashboard, its 30-second poller, production USGS loader and both transport owner panels, and the production Kp loader. Same-stamp Kp corrections and AIS membership changes are exercised through their normal acquisition owners. Controlled virtual time and synthetic HTTP fixture bodies. Kp and eleven complete quiet domains also exercised via direct synthetic receipts. Dedicated macOS Tauri 2/Wry host with a nonpersistent WKWebView and the branch CSP. No ordinary application bootstrap, installed app, live provider availability or production settings were exercised.",
+  "beforeSameStampRepair": {
+    "commit": "ba2e44a838e39b4b4432dc3a690fe889708cd397",
+    "runs": [
+      {
+        "file": "before-review-chromium.json",
+        "pass": 38,
+        "fail": 4,
+        "failedNames": [
+          "A revised six-vessel AIS membership at the same newest receipt yields HIGH",
+          "Removing a vessel at the same maximum timestamp lowers HIGH to ELEVATED",
+          "A newer same-bin Kp correction from zero to seven recovers and shows HIGH",
+          "A newer correction in that bin from seven to zero removes the high signal without redating it"
+        ],
+        "renderer": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/147.0.7727.15 Safari/537.36",
+        "origin": "http://127.0.0.1:57554",
+        "sourceRequests": [
+          {
+            "path": "/api/earthquakes",
+            "method": "GET"
+          },
+          {
+            "path": "/api/aviation/notams",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/aviation/sigmets",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/aviation/pireps",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/aviation/military",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/aviation/delays",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/aviation/flights",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/dark-vessels",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/freight-stress",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/acled-events",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/maritime/vessels",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/dark-vessels",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/freight-stress",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/acled-events",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/maritime/vessels",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/dark-vessels",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/freight-stress",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/acled-events",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/maritime/vessels",
+            "method": "GET",
+            "status": 200
+          },
+          {
+            "path": "/api/space-weather-feeds",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/donki-events",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/spaceweather/status",
+            "method": "GET",
+            "status": 200,
+            "bin": 1793707200000,
+            "kp": 0,
+            "revisionAt": 1793707773000
+          },
+          {
+            "path": "/api/spaceweather-kp-gfz",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/space-weather-feeds",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/spaceweather/status",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/spaceweather-kp-gfz",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/space-weather-feeds",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/spaceweather/status",
+            "method": "GET",
+            "status": 200,
+            "bin": 1793707200000,
+            "kp": 0,
+            "revisionAt": 1793707775000
+          },
+          {
+            "path": "/api/spaceweather-kp-gfz",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/space-weather-feeds",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/spaceweather/status",
+            "method": "GET",
+            "status": 200,
+            "bin": 1793707200000,
+            "kp": 7,
+            "revisionAt": 1793707776000
+          },
+          {
+            "path": "/api/spaceweather-kp-gfz",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/space-weather-feeds",
+            "method": "GET",
+            "status": 503
+          },
+          {
+            "path": "/api/spaceweather/status",
+            "method": "GET",
+            "status": 200,
+            "bin": 1793707200000,
+            "kp": 0,
+            "revisionAt": 1793707777000
+          },
+          {
+            "path": "/api/spaceweather-kp-gfz",
+            "method": "GET",
+            "status": 503
+          }
+        ],
+        "diagnostics": [],
+        "receiptSHA256": "ecef586a5af34b8aa9351a04307ae515f0f1644723c59b847f3c2b261fa855ab"
+      },
+      {
+        "file": "before-review-native.json",
+        "pass": 38,
+        "fail": 4,
+        "failedNames": [
+          "A revised six-vessel AIS membership at the same newest receipt yields HIGH",
+          "Removing a vessel at the same maximum timestamp lowers HIGH to ELEVATED",
+          "A newer same-bin Kp correction from zero to seven recovers and shows HIGH",
+          "A newer correction in that bin from seven to zero removes the high signal without redating it"
+        ],
+        "renderer": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+        "origin": "tauri://localhost",
+        "sourceRequests": [
+          {
+            "method": "GET",
+            "path": "/api/earthquakes"
+          },
+          {
+            "method": "GET",
+            "path": "/api/aviation/notams",
+            "status": 503
+          },
+          {
+            "method": "GET",
+            "path": "/api/aviation/sigmets",
+            "status": 503
+          },
+          {
+            "method": "GET",
+            "path": "/api/aviation/pireps",
+            "status": 503
+          },
+          {
+            "method": "GET",
+            "path": "/api/aviation/military",
+            "status": 503
+          },
+          {
+            "method": "GET",
+            "path": "/api/aviation/delays",
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/aviation/flights",
+            "status": 503
+          },
+          {
+            "method": "GET",
+            "path": "/api/dark-vessels",
+            "status": 503
+          },
+          {
+            "method": "GET",
+            "path": "/api/freight-stress",
+            "status": 503
+          },
+          {
+            "method": "GET",
+            "path": "/api/acled-events",
+            "status": 503
+          },
+          {
+            "method": "GET",
+            "path": "/api/maritime/vessels",
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/dark-vessels",
+            "status": 503
+          },
+          {
+            "method": "GET",
+            "path": "/api/freight-stress",
+            "status": 503
+          },
+          {
+            "method": "GET",
+            "path": "/api/acled-events",
+            "status": 503
+          },
+          {
+            "method": "GET",
+            "path": "/api/maritime/vessels",
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/dark-vessels",
+            "status": 503
+          },
+          {
+            "method": "GET",
+            "path": "/api/freight-stress",
+            "status": 503
+          },
+          {
+            "method": "GET",
+            "path": "/api/acled-events",
+            "status": 503
+          },
+          {
+            "method": "GET",
+            "path": "/api/maritime/vessels",
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/space-weather-feeds",
+            "status": 503
+          },
+          {
+            "method": "GET",
+            "path": "/api/donki-events",
+            "status": 503
+          },
+          {
+            "bin": 1793707200000,
+            "kp": 0,
+            "method": "GET",
+            "path": "/api/spaceweather/status",
+            "revisionAt": 1793707773000,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/spaceweather-kp-gfz",
+            "status": 503
+          },
+          {
+            "method": "GET",
+            "path": "/api/space-weather-feeds",
+            "status": 503
+          },
+          {
+            "method": "GET",
+            "path": "/api/spaceweather/status",
+            "status": 503
+          },
+          {
+            "method": "GET",
+            "path": "/api/spaceweather-kp-gfz",
+            "status": 503
+          },
+          {
+            "method": "GET",
+            "path": "/api/space-weather-feeds",
+            "status": 503
+          },
+          {
+            "bin": 1793707200000,
+            "kp": 0,
+            "method": "GET",
+            "path": "/api/spaceweather/status",
+            "revisionAt": 1793707775000,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/spaceweather-kp-gfz",
+            "status": 503
+          },
+          {
+            "method": "GET",
+            "path": "/api/space-weather-feeds",
+            "status": 503
+          },
+          {
+            "bin": 1793707200000,
+            "kp": 7,
+            "method": "GET",
+            "path": "/api/spaceweather/status",
+            "revisionAt": 1793707776000,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/spaceweather-kp-gfz",
+            "status": 503
+          },
+          {
+            "method": "GET",
+            "path": "/api/space-weather-feeds",
+            "status": 503
+          },
+          {
+            "bin": 1793707200000,
+            "kp": 0,
+            "method": "GET",
+            "path": "/api/spaceweather/status",
+            "revisionAt": 1793707777000,
+            "status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/spaceweather-kp-gfz",
+            "status": 503
+          }
+        ],
+        "diagnostics": [
+          "CSP connect-src ipc://localhost/qa_result"
+        ],
+        "receiptSHA256": "dce0af79d884d724cb9c5a79d7048285f17f3206c9e08f3a206392377f7e566d",
+        "hostExitCode": 0,
+        "hostSHA256": "44bd3e41c8d8b39031b6857d7d33aa63215130570d792573c548d402a781c96d",
+        "productionCspIdentical": true,
+        "websiteDataStore": "Tauri incognito(true), nonpersistent"
+      }
+    ]
+  }
+}

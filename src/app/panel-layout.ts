@@ -440,7 +440,6 @@ import { PlaybookPanel } from '@/components/PlaybookPanel';
 import { CrossDomainContradictionDetectorPanel } from '@/components/CrossDomainContradictionDetectorPanel';
 import { SmsSettingsPanel } from '@/components/SmsSettingsPanel';
 import { ThreatDashboard } from '@/components/ThreatDashboard';
-import { startThreatAggregator } from '@/services/synthesis/threat-aggregator';
 import { AviationIntelPanel } from '@/components/AviationIntelPanel';
 import { AviationSuperpowerPanel } from '@/components/AviationSuperpowerPanel';
 import { NuclearSuperpowerPanel } from '@/components/NuclearSuperpowerPanel';
@@ -2409,7 +2408,6 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['cross-domain-contradiction-detector'] = new CrossDomainContradictionDetectorPanel();
  this.ctx.panels['sms-command-interface'] = new SmsSettingsPanel();
  this.ctx.panels['threat-dashboard'] = new ThreatDashboard();
- startThreatAggregator();
  this.ctx.panels['aviation-intel'] = new AviationIntelPanel();
  this.ctx.panels['aviation-superpower'] = new AviationSuperpowerPanel();
  this.ctx.panels['nuclear-superpower'] = new NuclearSuperpowerPanel();

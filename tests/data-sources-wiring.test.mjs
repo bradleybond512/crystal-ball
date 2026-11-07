@@ -510,7 +510,7 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     // the fetched rows have to be what is fed in.
     assert.match(
       tryBody,
-      /const events = await fetchUsgsSeismicForFusion\(\)/,
+      /const snapshot = await fetchUsgsSeismicForFusion\(\);\s*const \{ events \} = snapshot;/,
       'the rows must come from the fusion fetch, which is the path that rejects replays',
     );
     assert.match(
@@ -527,6 +527,19 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
       'loadNatural must not record usgs-earthquakes: it reads through a 1-hour offline cache, ' +
       'so recording there stamps a fresh lastSuccessAt onto hour-old rows',
     );
+  });
+
+  it('dashboard seismic and Kp receipts come from the live acquisitions and each failed leg is reported', () => {
+    const seismic = dataLoaderMethod('loadUsgsSeismic');
+    assert.match(seismic, /threatEvidence\.begin\('seismic', 'USGS earthquakes'\)/);
+    assert.match(seismic, /if \(this\.ctx\.isDestroyed\) return attempt\.cancel\(\);\s*if \(!attempt\.isCurrent\(\)\) return;\s*const receipt = this\.seismicThreatHistory\.admit\(snapshot, Date\.now\(\)\);/);
+    assert.match(seismic, /if \(receipt\) attempt\.report\(receipt\);\s*else attempt\.fail\(\);/);
+    assert.match(seismic.slice(seismic.indexOf('} catch')), /if \(this\.ctx\.isDestroyed\) attempt\.cancel\(\);\s*else attempt\.fail\(\);/);
+    const kp = dataLoaderMethod('loadSpaceWeather');
+    assert.match(kp, /swpcAttempt = threatEvidence\.begin\('space_weather', 'NOAA SWPC Kp'\)/);
+    assert.match(kp, /gfzAttempt = threatEvidence\.begin\('space_weather', 'GFZ Kp'\)/);
+    assert.match(kp, /\[\[swpcAttempt, swpcVote, swpc\], \[gfzAttempt, gfzVote, gfz\]\]/);
+    assert.match(kp, /const receipt = kpThreatReceipt\(vote, Date\.now\(\), source\.fetchedAtMs\);\s*if \(receipt\) attempt\.report\(receipt\);\s*else attempt\.fail\(\);/);
   });
 
   it('the usgs-earthquakes vote reaches every variant that ships the map layer', () => {

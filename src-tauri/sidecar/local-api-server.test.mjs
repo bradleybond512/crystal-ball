@@ -3991,6 +3991,40 @@ function swpcTag(agoMs) {
   return new Date(Date.now() - agoMs).toISOString().replace(/\.\d{3}Z$/, '');
 }
 
+test('/api/spaceweather/status — Kp acquisition time is frozen through a cache hit and advances on a real revision', async () => {
+  const tag = swpcTag(60_000);
+  let value = 0;
+  let kpCalls = 0;
+  const app = await startRouteApp((options) => {
+    if (!options.path.includes('noaa-planetary-k-index')) return { statusCode: 200, body: '[]' };
+    kpCalls++;
+    return { statusCode: 200, body: JSON.stringify([{ time_tag: tag, Kp: value }]) };
+  });
+  try {
+    const first = await app.getJson('/api/spaceweather/status');
+    assert.ok(Number.isSafeInteger(first.kpFetchedAt));
+    value = 7;
+    const restore1 = shiftClock(60_000);
+    try {
+      const hit = await app.getJson('/api/spaceweather/status');
+      assert.equal(hit.kpFetchedAt, first.kpFetchedAt);
+      assert.equal(hit.kpPoints[0].kp, 0);
+      assert.equal(kpCalls, 1);
+    } finally { restore1(); }
+    const restore2 = shiftClock(6 * 60_000);
+    try {
+      const revision = await app.getJson('/api/spaceweather/status');
+      assert.ok(revision.kpFetchedAt > first.kpFetchedAt);
+      assert.equal(revision.kpPoints[0].kp, 7);
+      assert.equal(revision.kpPoints[0].time_tag, first.kpPoints[0].time_tag);
+      assert.equal(kpCalls, 2);
+    } finally { restore2(); }
+  } finally {
+    _resetSidecarCacheForTests();
+    await app.cleanup();
+  }
+});
+
 test('/api/spaceweather/status — a recovered Kp subfeed is not pinned empty by the healthy xray subfeed', async () => {
   const tag = swpcTag(60_000);
   let kpUp = false;
@@ -4009,6 +4043,7 @@ test('/api/spaceweather/status — a recovered Kp subfeed is not pinned empty by
   try {
     const degraded = await app.getJson('/api/spaceweather/status');
     assert.deepEqual(degraded.kpPoints, [], 'the Kp product is down, so it contributes no points');
+    assert.equal(degraded.kpFetchedAt, null);
     assert.ok(degraded.xray, 'the xray product answered and must still be reported');
 
     kpUp = true;

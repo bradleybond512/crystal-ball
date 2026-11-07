@@ -26,6 +26,14 @@
 import { getApiBaseUrl } from '@/services/runtime';
 import { parseUsgsEvents, type UsgsEvent } from '@/services/earthquake/earthquake-intelligence';
 
+export interface UsgsFusionSnapshot {
+  events: UsgsEvent[];
+  dashboardEvents: UsgsEvent[];
+  generatedAtMs: number;
+  originNowMs: number;
+  degraded: boolean;
+}
+
 interface UsgsRouteResponse {
   events?: unknown;
   degraded?: boolean;
@@ -166,7 +174,7 @@ function normalizeRows(events: readonly unknown[]): unknown[] {
  * counting it with an honest age. The cap is where "reusable" ends, not
  * "live".
  */
-export async function fetchUsgsSeismicForFusion(): Promise<UsgsEvent[]> {
+export async function fetchUsgsSeismicForFusion(): Promise<UsgsFusionSnapshot> {
   // 35s, not 18s: the sidecar gives EACH attempt a 15s deadline, so a tick that
   // times out on all_hour and then succeeds on all_day legitimately takes just
   // over 30s. A shorter client abort would reject those live rows as a failure.
@@ -198,5 +206,18 @@ export async function fetchUsgsSeismicForFusion(): Promise<UsgsEvent[]> {
   if (ageMs < -MAX_CLOCK_SKEW_MS) {
     throw new Error(`usgs-earthquakes incoherent timestamps (${Math.round(-ageMs / 1000)}s ahead)`);
   }
-  return parseUsgsEvents(normalizeRows(data.events));
+  const rows = normalizeRows(data.events);
+  const events = parseUsgsEvents(rows);
+  // The legacy fusion parser also accepts numeric strings. The dashboard
+  // admits only measured JSON numbers from the two known route schemas.
+  const strictRows = rows.filter((row) => {
+    const r = row as Record<string, unknown>;
+    return Number.isFinite(r.magnitude) && Number.isFinite(r.lat)
+      && Number.isFinite(r.lon) && Number.isFinite(r.time);
+  });
+  const dashboardEvents = strictRows.length === rows.length ? events : parseUsgsEvents(strictRows);
+  return {
+    events, dashboardEvents, generatedAtMs: generatedAt, originNowMs: serverNow,
+    degraded: data.degraded === true || dashboardEvents.length < data.events.length,
+  };
 }

@@ -1,0 +1,17 @@
+{
+  "actualMain": "b7f5483089e30592163647f70626bf925305b62d",
+  "pendingSource": "818f6c206e27b56f3bacc80303ae6108ea5b521c",
+  "qualifiedPendingExecution": "fb46c3793f2aefd0a0781aa8281842329972d740",
+  "trackedExecutableInputs": 5218,
+  "allExecutableInputHashesIdentical": true,
+  "selectedScripts": 91,
+  "allEffectiveCommandsAndOwnershipIdenticalToPendingAudit": true,
+  "newUpstreamFile": ".agentic/reviews/6f78cebd9918efe6898728b70b7766d6b5f6ea75.json",
+  "liveSnapshotRecords": 103,
+  "liveCandidate": 1845,
+  "liveExit": 0,
+  "lintProof": "UX-049-LINT-PREFLIGHT.json: exact b8b9d197 execution, unchanged executable input bytes; no rerun claimed",
+  "priorConservativeProof": "UX-049-TRUSTED-SELECTION.json: 109 scripts at943ad430; only unchanged inputs retain that proof; dispatcher change separately qualified per UX-049-DISPATCHER-REFRESH-CONTINUITY.json; fresh trusted UX053/058 ownership paths per UX-049-FINAL-PENDING-CONTINUITY.json",
+  "backup": "backup/ux049-before-actual-main-b7",
+  "history": "One linear exact-candidate-tree source commit will be constructed on actualmain before review; complete reconciled candidate tree equality is independently verified outside repository after commit. No production/test/tooling changes."
+}

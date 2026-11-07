@@ -371,6 +371,8 @@ import {
   recordDomainObservations,
 } from '@/services/providers/fusion-publish';
 import { usgsEventsToObservations, emscEventsToObservations, geofonEventsToObservations } from '@/services/earthquake/earthquake-fusion-observations';
+import { threatEvidence } from '@/services/synthesis/threat-aggregator';
+import { kpThreatReceipt, SeismicThreatHistory } from '@/services/synthesis/geo-threat-evidence';
 import { fetchUsgsSeismicForFusion } from '@/services/earthquake/usgs-fusion-fetch';
 import { openMeteoAqToObservations, openaqToObservations, airnowToObservations, purpleairToObservations } from '@/services/airquality/airquality-fusion-observations';
 import { fetchAirnowCurrent } from '@/services/airquality/airnow-fusion-fetch';
@@ -546,6 +548,7 @@ export class DataLoaderManager implements AppModule {
   private nwsAcquisitionFailed = false;
 
   private mapFlashCache = new Map<string, number>();
+  private readonly seismicThreatHistory = new SeismicThreatHistory();
   private readonly dedupeConflictObservations =
     createConflictObservationDeduper();
   private readonly MAP_FLASH_COOLDOWN_MS = 10 * 60 * 1000;
@@ -2990,6 +2993,9 @@ export class DataLoaderManager implements AppModule {
     // independent clocks would drift by however long the slower leg takes,
     // orphaning any bin that fell in the gap.
     const now = Date.now();
+    if (this.ctx.isDestroyed) return;
+    const swpcAttempt = threatEvidence.begin('space_weather', 'NOAA SWPC Kp');
+    const gfzAttempt = threatEvidence.begin('space_weather', 'GFZ Kp');
     const [swpc, gfz] = await Promise.all([fetchSwpcKp(now), fetchGfzKp(now)]);
     // kpVote derives `ok` from the same array it hands back, so a provider
     // whose rows all get dropped records ok:false instead of green-but-silent.
@@ -2997,6 +3003,12 @@ export class DataLoaderManager implements AppModule {
     const gfzVote = kpVote('gfz-kp', gfz.ok, gfz.samples);
     recordDomainObservations('swpc-kp', swpcVote.observations, swpcVote.ok);
     recordDomainObservations('gfz-kp', gfzVote.observations, gfzVote.ok);
+    for (const [attempt, vote, source] of [[swpcAttempt, swpcVote, swpc], [gfzAttempt, gfzVote, gfz]] as const) {
+      if (this.ctx.isDestroyed) { attempt.cancel(); continue; }
+      const receipt = kpThreatReceipt(vote, Date.now(), source.fetchedAtMs);
+      if (receipt) attempt.report(receipt);
+      else attempt.fail();
+    }
   }
   async loadSpaceflightNews(): Promise<void> { return spaceLoaders.loadSpaceflightNews(this.ctx); }
   async loadSpaceLaunches(): Promise<void> { return spaceLoaders.loadSpaceLaunches(this.ctx); }
@@ -4716,8 +4728,10 @@ export class DataLoaderManager implements AppModule {
    * outrun.
    */
   async loadUsgsSeismic(): Promise<void> {
+ const attempt = threatEvidence.begin('seismic', 'USGS earthquakes');
  try {
- const events = await fetchUsgsSeismicForFusion();
+ const snapshot = await fetchUsgsSeismicForFusion();
+ const { events } = snapshot;
  // ok comes from the ADAPTER's output, not the raw rows: a 200 whose rows
  // the adapter all drops is a format change, and recording it healthy would
  // put a phantom vote behind "verified by N independent sources". Empty is
@@ -4731,7 +4745,14 @@ export class DataLoaderManager implements AppModule {
  // difference is that a quiet internet is common and a silent planet is not.
  const observations = usgsEventsToObservations(events);
  recordDomainObservations('usgs-earthquakes', observations, observations.length > 0);
+ if (this.ctx.isDestroyed) return attempt.cancel();
+ if (!attempt.isCurrent()) return;
+ const receipt = this.seismicThreatHistory.admit(snapshot, Date.now());
+ if (receipt) attempt.report(receipt);
+ else attempt.fail();
  } catch (error) {
+ if (this.ctx.isDestroyed) attempt.cancel();
+ else attempt.fail();
  console.warn('[usgs-seismic] fetch failed', error);
  recordDomainObservations('usgs-earthquakes', [], false);
  }

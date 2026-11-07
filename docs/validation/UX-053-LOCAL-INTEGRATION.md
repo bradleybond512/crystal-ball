@@ -46,3 +46,12 @@ Historical isolated timing/renderer receipts are not final integrated installed
 app acceptance. Installation, release, tags, build dispatch and deployment remain
 paused. Rollback must retain warning retirement and Ghost recovery semantics
 while reverting workspace startup/lifecycle changes together.
+
+## Refreshed pending dependency
+
+This local checkpoint was replayed onto `ebc362760e5eeff52381e65010a7a0a661941f2c` while #1844 was still pending.
+[Continuity hashes](UX-053-DEPENDENCY-CONTINUITY.json) confirm 15 feature source/test files and the complete
+`src`, `src-tauri`, and `api` trees are unchanged from `83fa69ebf2142bfb5a5281f74df3271fb234c5ac`.
+No new full test run is claimed for this history/metadata transition. The original
+local tip is preserved on `codex/ux053-preserved-local-base-nov7`. Actual-main
+reconciliation, live candidate snapshot and exact-head Sonnet review remain open.

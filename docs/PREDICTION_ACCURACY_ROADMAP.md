@@ -1998,7 +1998,7 @@ in UX-059 must coordinate with this store path. No accuracy-gate weakening.
 
 Status: `IN REVIEW`
 
-Claim: `codex/acc510-news-domain`, documentation-only draft claim. [Approved design](plans/2026-11-06-acc510-news-domain-evidence.md). Local implementation is authorized; code publication, installation, auto-merge and delivery remain paused.
+Claim: draft [#1858](https://github.com/bradleybond512/crystal-ball/pull/1858), `codex/acc510-news-domain`. [Approved design](plans/2026-11-06-acc510-news-domain-evidence.md). Local implementation is authorized; code publication, installation, auto-merge and delivery remain paused.
 
 Priority: A
 

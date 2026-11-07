@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { assertManifestIdentity, collectReleaseArtifacts } from '../scripts/release-manifest.mjs';
+import { VariantEnv } from '../e2e/variant-env.mjs';
 
 const sourceRoot = fileURLToPath(new URL('..', import.meta.url));
 const version = '2.25.148';
@@ -193,12 +194,26 @@ test('future 148 Disaster Lifelines name is a Full-only release feature introduc
 });
 
 
-test('actual source-only checkout remains 147 and excludes deferred desktop claims', async () => {
+test('prepared 2.25.148 checkout includes deferred desktop claims without giving them to Tech or Finance', async () => {
   const pkg = JSON.parse(await readFile(path.join(sourceRoot, 'package.json'), 'utf8'));
-  assert.equal(pkg.version, '2.25.147', 'source-only delivery must not prepare a new desktop release');
+  assert.equal(pkg.version, '2.25.148', 'release preparation sets the desktop version');
   for (const variant of ['full', 'tech', 'finance']) {
-    assert147Boundary(await derive({ repoRoot: sourceRoot, version: pkg.version, commitSha, variant }));
+    const result = await derive({ repoRoot: sourceRoot, version: pkg.version, commitSha, variant });
+    const ids = result.components.desktop.features.map((feature) => feature.id);
+    assert.ok(ids.includes('command-palette'));
+    assert.ok(ids.includes('explicit-analytics-consent'));
+    assert.equal(ids.includes('disaster-lifelines-name'), variant === 'full');
+    assert.equal(ids.includes('home-shell-source-readiness'), variant === 'full');
+    assert.equal(ids.includes('home-shell-evidence-notes'), variant === 'full');
   }
+});
+
+test('Vite variant selection rejects the SITE_VARIANT env name', () => {
+  assert.equal(VariantEnv.resolve({}), 'full');
+  assert.equal(VariantEnv.resolve({ VITE_VARIANT: 'tech' }), 'tech');
+  assert.throws(() => VariantEnv.resolve({ SITE_VARIANT: 'finance' }), /Set VITE_VARIANT=finance/);
+  assert.throws(() => VariantEnv.resolve({ VITE_VARIANT: 'tech', SITE_VARIANT: 'finance' }), /disagrees/);
+  assert.throws(() => VariantEnv.resolve({ VITE_VARIANT: 'nope' }), /Unsupported VITE_VARIANT/);
 });
 
 test('147 real-source fixtures exclude deferred claims in every release edition', async (t) => {

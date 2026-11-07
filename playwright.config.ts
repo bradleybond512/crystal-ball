@@ -1,4 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
+import { VariantEnv } from './e2e/variant-env.mjs';
+
+const activeVariant = VariantEnv.resolve(process.env);
 
 // Parallel agent sessions on one machine collide on a fixed port
 // (reuseExistingServer is false, so a second run aborts outright).
@@ -36,7 +39,7 @@ export default defineConfig({
   ],
   snapshotPathTemplate: '{testDir}/{testFileName}-snapshots/{arg}{ext}',
   webServer: {
- command: `VITE_E2E=1 npm run dev -- --host 127.0.0.1 --port ${PORT}`,
+ command: `VITE_E2E=1 VITE_VARIANT=${activeVariant} npm run dev -- --host 127.0.0.1 --port ${PORT}`,
  url: `http://127.0.0.1:${PORT}/tests/map-harness.html`,
  reuseExistingServer: false,
  timeout: 120000,

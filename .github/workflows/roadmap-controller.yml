@@ -269,9 +269,12 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
+            const { pathToFileURL } = require('node:url');
+            const { RoadmapWatchdogIssues } = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/scripts/roadmap-controller.mjs`).href);
             const marker = '<!-- crystal-ball-roadmap-controller:v1 -->';
+            if (marker !== RoadmapWatchdogIssues.marker) throw new Error('watchdog marker drifted from the planner');
             const body = fs.readFileSync(process.env.REPORT_PATH, 'utf8');
-            if (!body.includes(marker)) throw new Error('watchdog report marker is missing');
+            if (!body.startsWith(`${marker}\n`)) throw new Error('watchdog report marker is missing');
             const limit = 512;
             const issues = [];
             for (let page = 1; issues.length <= limit; page += 1) {
@@ -287,23 +290,7 @@ jobs:
               if (data.length < 100 || issues.length > limit) break;
             }
             if (issues.length > limit) throw new Error('open issue scan exceeds 512 entries');
-            const matches = issues.filter((issue) => !issue.pull_request && (issue.body ?? '').includes(marker));
-            if (matches.length > 1) throw new Error('multiple roadmap watchdog issues found');
-            if (matches.length === 0) {
-              await github.rest.issues.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title: '[Roadmap Controller] Program status',
-                body,
-              });
-            } else if ((matches[0].body ?? '') !== body) {
-              await github.rest.issues.update({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: matches[0].number,
-                body,
-              });
-            }
+            await RoadmapWatchdogIssues.reconcile({ github, ...context.repo, issues, body });
       - name: Enforce reconciliation result
         env:
           STATUS: ${{ steps.reconcile.outputs.status }}

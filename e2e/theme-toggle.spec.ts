@@ -4,7 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
  * Theme toggle E2E tests for the happy variant.
  *
  * Tests run against the dev server started by the webServer config
- * (VITE_SITE_VARIANT=happy on port 4173).
+ * (VITE_VARIANT=happy on port 4173). SITE_VARIANT is the in-app constant, not the env var.
  */
 
 const visibleThemeToggle = (page: Page) =>

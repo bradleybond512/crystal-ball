@@ -720,7 +720,8 @@
     "test:workflow-security"
   ],
   ".github/workflows/roadmap-controller.yml": [
-    "test:workflow-security"
+    "test:workflow-security",
+    "test:roadmap-controller"
   ],
   ".github/workflows/sast.yml": [
     "test:workflow-security"
@@ -1178,5 +1179,23 @@
   ],
   "api/_news-provenance.js": [
     "test:news-resilience"
+  ],
+  "src/services/pressure-history.ts": [
+    "test:acc505"
+  ],
+  "src/services/cognition/regime-monitor.ts": [
+    "test:acc505"
+  ],
+  "src/services/cognition/regime-scan.ts": [
+    "test:acc505"
+  ],
+  "src/services/correlation/correlation-calibration.ts": [
+    "test:acc505"
+  ],
+  "src/services/intelligence/forecast-calibration.ts": [
+    "test:acc505"
+  ],
+  "src/services/correlation/island-calibration.ts": [
+    "test:acc505"
   ]
 }

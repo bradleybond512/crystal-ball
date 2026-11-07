@@ -1037,12 +1037,15 @@ Implementation, local gates and independent substantive review pass. Final integ
 
 ### UX-047 — Keep national weather warnings current
 
-Status: IN REVIEW — HIGH ASSURANCE
+Status: MONITOR — HIGH ASSURANCE
 Owner: Codex (`codex/ux047-warning-freshness-nov1`); draft claim #1844.
 Approval: November 2 UTC; complete national snapshots, five-minute base refresh,
 offline/restart lifecycle and preserved history/user state.
 Design: [approved implementation plan](plans/2026-11-02-ux047-national-warning-lifecycle.md).
 Evidence: #1844 — [local validation, 57 mutation proofs and review](validation/UX-047-NATIONAL-WARNINGS.md). [Native port-collision repair and acceptance](validation/UX-047-FALLBACK-PORTS.md) cover acquisition, restart and range exhaustion on the repaired checkpoint.
+Review after: 2026-11-14
+Candidate evidence PR #1844; local integration validation and independent review govern merge. Historical isolated native receipts do not establish final integrated installed-app acceptance.
+Exit condition: Verify the integrated packaged app across offline expiry/restart and normal startup, preserving user state; installation, release and deployment remain paused.
 Priority: S
 Source findings: PR1731 H12/H13/H14.
 
@@ -1271,7 +1274,7 @@ Update the row in the same PR that does the work.
 | UX-044 | Announce critical UI changes accessibly | NOT STARTED | — |
 | UX-045 | Keep advisories from suppressing warnings | DONE | #1733 |
 | UX-046 | Preserve alert priorities at capacity | DONE — HIGH ASSURANCE | #1734 |
-| UX-047 | Keep national weather warnings current | IN REVIEW — HIGH ASSURANCE | #1844 — [local implementation, validation and review](validation/UX-047-NATIONAL-WARNINGS.md); [native acceptance on the fixed branch](validation/UX-047-FALLBACK-PORTS.md) |
+| UX-047 | Keep national weather warnings current | MONITOR — HIGH ASSURANCE | #1844 candidate evidence; [local validation](validation/UX-047-NATIONAL-WARNINGS.md) and [historical isolated native receipts](validation/UX-047-FALLBACK-PORTS.md). Integrated packaged acceptance remains open; installation/release/deployment paused. |
 | UX-048 | Restore verified GDACS ingestion | DONE — HIGH ASSURANCE | #1740 — approved five-feed repair; [validation](validation/UX-048-GDACS.md) and [alert burst performance evidence](validation/UX-048-PERFORMANCE.md); final review/CI govern delivery |
 | UX-049 | Distinguish quiet sensors from missing observations | NOT STARTED — HIGH ASSURANCE | — |
 | UX-050 | Make Ghost Mode suppression unmistakable | NOT STARTED — HIGH ASSURANCE | — |

@@ -172,3 +172,10 @@ test('only App owns the threat-router subscription across a real layout init', (
   assert.doesNotMatch(body, /\bstartNotificationRouter\s*\(/, 'layout must not leak an unowned shared router lease');
   assert.match(source, /this\.releaseNotificationRouter\s*=\s*startNotificationRouter\(\)/);
 });
+
+// Entry's early Ghost recovery observes this promise even when workspace startup fails.
+test('main exposes the real workspace boot promise to the Ghost recovery entry', () => {
+  const main = readFileSync(new URL('../../main.ts', import.meta.url), 'utf8');
+  assert.match(main, /appStartup = boot\(\);\s*void appStartup\.catch/);
+  assert.match(main, /if \(!await startWorkspace\(app, showIntro\)\) return/);
+});

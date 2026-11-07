@@ -1,3 +1,4 @@
+import { classifyNewsDomain } from './situation-news-domain';
 import { validateAlertRetentionEvidence } from './alert-retention';
 
 export interface ObservationIdentity { key: string; revision: string; eventTime: number }
@@ -66,7 +67,11 @@ export function identifySignal(signal: SignalIdentityInput): ObservationIdentity
   if (!boundedString(signal.id, MAX_KEY_BYTES) || !boundedString(signal.title, MAX_REVISION_BYTES, true) || !boundedString(signal.description, MAX_REVISION_BYTES, true)) return null;
   if ((signal.data !== undefined && !record(signal.data)) || (signal.evidence !== undefined && !record(signal.evidence))) return null;
   if (!validSignalContext(signal.data)) return null;
-  return makeIdentity(['signal', signal.type, signal.id], [eventTime, signal.type, signal.confidence, signal.title, signal.description, pick(signal.data, SIGNAL_DATA), pick(signal.evidence, MATERIAL_EVIDENCE)], eventTime);
+  const material = pick(signal.data, SIGNAL_DATA);
+  if (signal.data && Object.prototype.hasOwnProperty.call(signal.data, 'newsEvidence')) {
+    material.newsDomainClassification = classifyNewsDomain((signal.data as Record<string, unknown>).newsEvidence, eventTime);
+  }
+  return makeIdentity(['signal', signal.type, signal.id], [eventTime, signal.type, signal.confidence, signal.title, signal.description, material, pick(signal.evidence, MATERIAL_EVIDENCE)], eventTime);
 }
 
 export function canonicalStormReportId(report: StormReportIdentityInput): string | null {
@@ -90,7 +95,7 @@ function validSignalContext(value: object | undefined): boolean {
     if (data[key] !== undefined && !boundedString(data[key], MAX_REVISION_BYTES, true)) return false;
   }
   if (data.source !== undefined && !boundedString(data.source, MAX_KEY_BYTES)) return false;
-  if (data.domainHint !== undefined && !['military', 'economic', 'natural_hazard', 'cyber', 'infrastructure', 'health', 'civil_unrest', 'compound'].includes(data.domainHint as string)) return false;
+  if (data.domainHint !== undefined && !['military', 'economic', 'natural_hazard', 'cyber', 'infrastructure', 'health', 'civil_unrest', 'compound', 'unknown'].includes(data.domainHint as string)) return false;
   return data.geo === undefined || validSignalGeo(data.geo);
 }
 function validSignalGeo(value: unknown): boolean {

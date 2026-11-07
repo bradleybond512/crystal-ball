@@ -20,6 +20,8 @@ import type {
   CausalTemplate,
 } from './situation-types';
 import { SIGNAL_DOMAIN_MAP, DEFAULT_ENGINE_CONFIG, situationReportedPoint, validSituationPoint } from './situation-types';
+import { classifyNewsDomain, isGenericNewsSignalType } from './situation-news-domain';
+export { isGenericNewsSignalType } from './situation-news-domain';
 import { CAUSAL_TEMPLATES } from './situation-forecaster';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -37,12 +39,30 @@ export function classifyDomain(signalType: string): SituationDomain {
 
 const SITUATION_DOMAINS: ReadonlySet<string> = new Set<SituationDomain>([
   'military', 'economic', 'natural_hazard', 'cyber',
-  'infrastructure', 'health', 'civil_unrest', 'compound',
+  'infrastructure', 'health', 'civil_unrest', 'compound', 'unknown',
 ]);
 
+export function domainHintForAlertSource(source: string): SituationDomain | undefined {
+  switch (source) {
+    case 'nws': case 'spc': case 'cyclone': case 'gdacs': case 'tsunami': case 'volcano':
+    case 'earthquake': case 'fire': case 'hazard': case 'space-weather': { return 'natural_hazard'; }
+    case 'cyber': case 'local-ids': { return 'cyber'; }
+    case 'power-grid': case 'comms-health': case 'resource': case 'aviation-hazard': case 'maritime': { return 'infrastructure'; }
+    case 'disease': case 'air-quality': case 'radiation': { return 'health'; }
+    case 'oref': { return 'military'; }
+    default: { return undefined; }
+  }
+}
+
 export function signalDomainOf(signal: CorrelationSignalCore): SituationDomain {
-  const hint = signal.data.domainHint;
-  return hint && SITUATION_DOMAINS.has(hint) ? hint as SituationDomain : classifyDomain(signal.type);
+  const authoritative = signal.data.source && domainHintForAlertSource(signal.data.source);
+  if (authoritative) return authoritative;
+  if (isGenericNewsSignalType(signal.type)) return classifyNewsDomain(signal.data.newsEvidence, signal.timestamp.getTime()).domain;
+  return classifyDomain(signal.type);
+}
+
+export function supportedSituationDomains(signals: SituationSignalSnapshot[]): SituationDomain[] {
+  return [...new Set(signals.map(s => s.domain).filter(d => d !== 'unknown'))];
 }
 
 export function extractSignalGeo(signal: CorrelationSignalCore): SituationGeo {
@@ -79,6 +99,12 @@ interface AffinityResult {
   temporalProximity: number;
 }
 
+function domainAffinity(signalDomain: SituationDomain, situationDomain: SituationDomain): { domainMatch: boolean; domainScore: number } {
+  if (signalDomain === 'unknown' || situationDomain === 'unknown') return { domainMatch: false, domainScore: 0 };
+  const domainMatch = signalDomain === situationDomain || signalDomain === 'compound';
+  return { domainMatch, domainScore: domainMatch ? 0.2 : 0.05 };
+}
+
 function computeAffinity(
   signal: CorrelationSignalCore,
   situation: Situation,
@@ -106,8 +132,8 @@ function computeAffinity(
 
   // 3. Domain affinity
   const signalDomain = signalDomainOf(signal);
-  const domainMatch = signalDomain === situation.domain || signalDomain === 'compound';
-  score += domainMatch ? 0.2 : 0.05;
+  const { domainMatch, domainScore } = domainAffinity(signalDomain, situation.domain);
+  score += domainScore;
 
   // 4. Entity/keyword overlap
   const incomingEntities = new Set(signalEntities(signal));
@@ -139,6 +165,7 @@ const DOMAIN_LABELS: Record<SituationDomain, string> = {
   health: 'Health',
   civil_unrest: 'Civil Unrest',
   compound: 'Compound',
+  unknown: 'Topic unconfirmed',
 };
 
 function generateTitle(domain: SituationDomain, geo: SituationGeo, signals: SituationSignalSnapshot[]): string {
@@ -146,7 +173,8 @@ function generateTitle(domain: SituationDomain, geo: SituationGeo, signals: Situ
   const domainLabel = DOMAIN_LABELS[domain];
 
   // Use the highest-confidence signal's title as a hint
-  const top = [...signals].sort((a, b) => b.confidence - a.confidence)[0];
+  const candidates = domain === 'unknown' ? signals : signals.filter(signal => signal.domain !== 'unknown');
+  const top = [...candidates].sort((a, b) => b.confidence - a.confidence)[0];
   if (top && top.title.length < 80) {
  return top.title;
   }
@@ -154,10 +182,14 @@ function generateTitle(domain: SituationDomain, geo: SituationGeo, signals: Situ
 }
 
 function generateSummary(signals: SituationSignalSnapshot[], domain: SituationDomain): string {
-  const types = [...new Set(signals.map(s => s.type))];
-  const count = signals.length;
+  const supported = domain === 'unknown' ? signals : signals.filter(signal => signal.domain !== 'unknown');
+  const types = [...new Set(supported.map(s => s.type))];
+  const count = supported.length;
+  const unconfirmed = signals.length - count;
   const more = types.length > 3 ? ` (+${types.length - 3} more)` : '';
-  return `${count} correlated ${DOMAIN_LABELS[domain].toLowerCase()} signal${count === 1 ? '' : 's'} detected: ${types.slice(0, 3).join(', ')}${more}.`;
+  const unconfirmedPlural = unconfirmed === 1 ? '' : 's';
+  const uncertainty = unconfirmed > 0 ? ` ${unconfirmed} signal${unconfirmedPlural} with unconfirmed topics.` : '';
+  return `${count} correlated ${DOMAIN_LABELS[domain].toLowerCase()} signal${count === 1 ? '' : 's'} detected: ${types.slice(0, 3).join(', ')}${more}.${uncertainty}`;
 }
 
 // ── Situation Phase Logic ────────────────────────────────────────────────────
@@ -197,22 +229,23 @@ export function computePhase(
 // ── Confidence Computation ───────────────────────────────────────────────────
 
 export function computeSituationConfidence(signals: SituationSignalSnapshot[]): number {
-  if (signals.length === 0) return 0;
+  const supported = signals.filter(signal => signal.domain !== 'unknown');
+  if (supported.length === 0) return 0;
 
   // Base: weighted average of signal confidences
-  const totalWeight = signals.reduce((sum, s) => sum + s.confidence, 0);
-  const avgConfidence = totalWeight / signals.length;
+  const totalWeight = supported.reduce((sum, s) => sum + s.confidence, 0);
+  const avgConfidence = totalWeight / supported.length;
 
   // Source diversity bonus: more distinct signal types = higher confidence
-  const uniqueTypes = new Set(signals.map(s => s.type)).size;
+  const uniqueTypes = new Set(supported.map(s => s.type)).size;
   const diversityBonus = Math.min(0.2, (uniqueTypes - 1) * 0.05);
 
   // Domain diversity bonus: cross-domain corroboration is very strong
-  const uniqueDomains = new Set(signals.map(s => s.domain)).size;
+  const uniqueDomains = supportedSituationDomains(supported).length;
   const crossDomainBonus = uniqueDomains >= 2 ? 0.15 : 0;
 
   // Volume bonus: more signals = slightly more confident (diminishing returns)
-  const volumeBonus = Math.min(0.1, Math.log2(signals.length) * 0.03);
+  const volumeBonus = Math.min(0.1, Math.log2(supported.length) * 0.03);
 
   return Math.min(1, avgConfidence + diversityBonus + crossDomainBonus + volumeBonus);
 }
@@ -220,12 +253,12 @@ export function computeSituationConfidence(signals: SituationSignalSnapshot[]): 
 // ── Causal Chain Matching ────────────────────────────────────────────────────
 
 export function matchCausalChain(signals: SituationSignalSnapshot[]): CausalTemplate | null {
-  const signalTypes = new Set(signals.map(s => s.type));
 
   // Majority domain of the signal set — used to penalise cross-domain template matches.
   const domainCounts: Partial<Record<SituationDomain, number>> = {};
   for (const s of signals) {
     const d = s.domain ?? classifyDomain(s.type);
+    if (d === 'unknown') continue;
     domainCounts[d] = (domainCounts[d] ?? 0) + 1;
   }
   let majorityDomain: SituationDomain = 'compound';
@@ -239,7 +272,8 @@ export function matchCausalChain(signals: SituationSignalSnapshot[]): CausalTemp
 
   for (const template of CAUSAL_TEMPLATES) {
     const chainTypes = template.links.map(l => l.triggerType);
-    const matched = chainTypes.filter(t => signalTypes.has(t)).length;
+    const matched = chainTypes.filter(t => signals.some(s => s.type === t && s.domain !== 'unknown'
+      && (!isGenericNewsSignalType(s.type) || s.domain === template.domain))).length;
     let coverage = matched / chainTypes.length;
     // Penalise templates whose domain conflicts with the signal majority
     if (template.domain !== 'compound' && template.domain !== majorityDomain && majorityDomain !== 'compound') {
@@ -256,7 +290,9 @@ export function matchCausalChain(signals: SituationSignalSnapshot[]): CausalTemp
 // ── Main Correlator API ──────────────────────────────────────────────────────
 
 function snapshotFor(signal: CorrelationSignalCore): SituationSignalSnapshot {
+  const news = isGenericNewsSignalType(signal.type) && !domainHintForAlertSource(signal.data.source ?? '');
   return {
+    ...(news ? { domainClassification: classifyNewsDomain(signal.data.newsEvidence, signal.timestamp.getTime()) } : {}),
     id: signal.id, type: signal.type, title: signal.data.explanation ?? signal.title,
     confidence: signal.confidence, timestamp: signal.timestamp.getTime(), domain: signalDomainOf(signal),
     identity: signal.data.identity, source: signal.data.source,
@@ -308,14 +344,21 @@ function updateSituation(situation: Situation, snapshot: SituationSignalSnapshot
   situation.lastUpdated = now;
   situation.latestEventAt = Math.max(...situation.signals.map(s => s.timestamp).filter(time => Number.isFinite(time)));
   if (!Number.isFinite(situation.latestEventAt)) situation.latestEventAt = null;
-  situation.confidence = computeSituationConfidence(situation.signals);
-  situation.domainDiversity = new Set(situation.signals.map(s => s.domain)).size;
+  recomputeSituationClassification(situation);
   situation.phase = computePhase(situation, config, now);
-  situation.summary = generateSummary(situation.signals, situation.domain);
-  situation.geo = currentSituationGeo(situation.signals);
-  const chain = matchCausalChain(situation.signals);
-  situation.causalChainId = chain?.id ?? null;
   situation.reassessmentCount++;
+}
+
+export function recomputeSituationClassification(situation: Situation): void {
+  const domains = supportedSituationDomains(situation.signals);
+  situation.domain = domains[0] ?? 'unknown';
+  if (domains.length > 1) situation.domain = 'compound';
+  situation.domainDiversity = domains.length;
+  situation.confidence = computeSituationConfidence(situation.signals);
+  situation.geo = currentSituationGeo(situation.signals);
+  situation.title = generateTitle(situation.domain, situation.geo, situation.signals);
+  situation.summary = generateSummary(situation.signals, situation.domain);
+  situation.causalChainId = matchCausalChain(situation.signals)?.id ?? null;
 }
 
 export function correlateSignalToSituation(
@@ -346,8 +389,8 @@ export function correlateSignalToSituation(
   const newSituation: Situation = {
     id: options.situationId ?? newSituationId(), title: generateTitle(signalDomain, signalGeo, [snapshot]),
     summary: generateSummary([snapshot], signalDomain), phase: 'emerging', domain: signalDomain,
-    confidence: signal.confidence, geo: signalGeo, signalIds: [signal.id], signals: [snapshot],
-    domainDiversity: 1, evidence: null, scenarios: [], actions: [], causalChainId: matchCausalChain([snapshot])?.id ?? null,
+    confidence: computeSituationConfidence([snapshot]), geo: signalGeo, signalIds: [signal.id], signals: [snapshot],
+    domainDiversity: signalDomain === 'unknown' ? 0 : 1, evidence: null, scenarios: [], actions: [], causalChainId: matchCausalChain([snapshot])?.id ?? null,
     firstSeen: now, lastUpdated: now, latestEventAt: signalTs, reassessmentCount: 0,
   };
   existingSituations.push(newSituation);

@@ -53,6 +53,7 @@ const DOMAIN_ICONS: Record<SituationDomain, string> = {
   health: '\u{1F3E5}', // 🏥
   civil_unrest: '\u{1F4E2}', // 📢
   compound: '\u{1F310}', // 🌐
+  unknown: '?',
 };
 
 const URGENCY_COLORS: Record<ActionUrgency, string> = {
@@ -79,6 +80,7 @@ const DOMAIN_COLORS: Record<SituationDomain, string> = {
   health:         'var(--domain-biosurveillance)',
   civil_unrest:   'var(--severity-high)',
   compound:       'var(--severity-low)',
+  unknown:        'var(--severity-info)',
 };
 
 const VERIFICATION_BADGE: Record<VerificationVerdict, { icon: string; color: string; label: string }> = {
@@ -86,6 +88,15 @@ const VERIFICATION_BADGE: Record<VerificationVerdict, { icon: string; color: str
   likely:      { icon: '~',      color: 'var(--severity-medium)',   label: 'Likely' },
   unverified:  { icon: '?',      color: 'var(--severity-info)',     label: 'Unverified' },
   contradicted:{ icon: '\u26A0', color: 'var(--severity-critical)', label: 'Contradicted' },
+};
+
+const DOMAIN_ABSTENTION_REASONS = {
+  incomplete_evidence: 'Article classification evidence is incomplete.',
+  unsupported_category: 'Article classifications do not identify a supported topic.',
+  invalid_evidence: 'Article classification evidence could not be validated.',
+  conflicting_evidence: 'Contributing article classifications disagree.',
+  insufficient_evidence: 'More articles from distinct sources are needed.',
+  evidence_overflow: 'Too many contributing articles to confirm a topic.',
 };
 
 // ── Panel ────────────────────────────────────────────────────────────────────
@@ -208,6 +219,17 @@ export class SituationPanel extends Panel {
  }
 
  card.append(header);
+
+ if (sit.domain === 'unknown') {
+ const reasons = new Set(sit.signals.map(signal => signal.domainClassification?.reason));
+ const labels = Object.entries(DOMAIN_ABSTENTION_REASONS)
+ .filter(([reason]) => reasons.has(reason as keyof typeof DOMAIN_ABSTENTION_REASONS))
+ .slice(0, 3).map(([, label]) => label);
+ const topic = document.createElement('div');
+ topic.className = 'sit-summary sit-domain-reason';
+ topic.textContent = `Topic unconfirmed — ${labels.join(' ') || DOMAIN_ABSTENTION_REASONS.incomplete_evidence}`;
+ card.append(topic);
+ }
 
  // Confidence bar + verification badge
  const confRow = document.createElement('div');

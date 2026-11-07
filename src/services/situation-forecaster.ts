@@ -12,6 +12,7 @@ import type {
   Scenario,
   Situation,
 } from './situation-types';
+import { isGenericNewsSignalType } from './situation-news-domain';
 
 // ── Causal Chain Templates ───────────────────────────────────────────────────
 
@@ -142,12 +143,15 @@ export const CAUSAL_TEMPLATES: CausalTemplate[] = [
  * 3. Signal confidence and recency
  */
 export function projectScenarios(situation: Situation): Scenario[] {
+  if (situation.domain === 'unknown') return [];
   const template = CAUSAL_TEMPLATES.find(t => t.id === situation.causalChainId);
   if (!template) {
  return generateFallbackScenarios(situation);
   }
 
-  const signalTypes = new Set(situation.signals.map(s => s.type));
+  const eligibleSignals = situation.signals
+ .filter(s => s.domain !== 'unknown' && (!isGenericNewsSignalType(s.type) || s.domain === template.domain));
+  const signalTypes = new Set(eligibleSignals.map(s => s.type));
 
   // Chain coverage: fraction of expected signals we've seen
   const chainTypes = template.links.map(l => l.triggerType);
@@ -171,10 +175,11 @@ export function projectScenarios(situation: Situation): Scenario[] {
  }
 
  // Freshness boost: recent signals increase probability
- const avgAge = situation.signals.reduce(
+ const avgAge = eligibleSignals.reduce(
  (s, sig) => s + (Date.now() - sig.timestamp), 0,
- ) / situation.signals.length;
- const freshnessMultiplier = avgAge < 3600000 ? 1.1 : avgAge < 21600000 ? 1.0 : 0.85;
+ ) / eligibleSignals.length;
+ const olderSignalMultiplier = avgAge < 21_600_000 ? 1 : 0.85;
+ const freshnessMultiplier = avgAge < 3_600_000 ? 1.1 : olderSignalMultiplier;
  prob *= freshnessMultiplier;
 
  return {

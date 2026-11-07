@@ -361,6 +361,8 @@ export async function fetchFeedTracked(feed: Feed): Promise<RssFeedFetchResult> 
  pubDate: item.pubDate,
  source: item.source,
  link: item.link,
+ threat: item.threat,
+ provenance: item.provenance,
  })));
 
  const aiCandidates = parsed

@@ -56,11 +56,11 @@ test('malformed persisted signals are quarantined with diagnostics while valid r
     { timestamp: { toString: null, valueOf: null } }]) {
     storage.clear();
     const seed = new SituationEngine(); seed.observeAlerts([alert()]);
-    const envelope = JSON.parse(storage.get('wm-situations-v2')!);
+    const envelope = JSON.parse(storage.get('wm-situations-v3')!);
     const bad = structuredClone(envelope.situations[0]); bad.id = 'bad';
     Object.assign(bad.signals[0], fields);
     envelope.situations.push(bad);
-    storage.set('wm-situations-v2', JSON.stringify(envelope));
+    storage.set('wm-situations-v3', JSON.stringify(envelope));
     const engine = new SituationEngine();
     assert.equal(engine.getSituations().length, 1);
     assert.equal(engine.getIdentityDiagnostics().restartProtected, false);
@@ -117,11 +117,11 @@ test('current geography is independent of revision arrival order and falls back 
   assert.deepEqual(run(false), run(true));
 });
 
-test('v2 rows without per-source geography cannot revive aggregate coordinates on restart', () => {
+test('restored rows without per-source geography cannot revive aggregate coordinates on restart', () => {
   const engine = new SituationEngine(); engine.observeAlerts([alert()]);
-  const envelope = JSON.parse(storage.get('wm-situations-v2')!);
+  const envelope = JSON.parse(storage.get('wm-situations-v3')!);
   delete envelope.situations[0].signals[0].geo;
-  storage.set('wm-situations-v2', JSON.stringify(envelope));
+  storage.set('wm-situations-v3', JSON.stringify(envelope));
   const restarted = new SituationEngine();
   assert.equal(restarted.getSituations().length, 1);
   assert.equal(restarted.getSituations()[0]!.geo.kind, 'unknown');
@@ -159,7 +159,7 @@ test('legacy source situation remains readable but cannot be promoted by the act
   assert.equal(restored.getSituations()[0]!.geo.kind, 'unknown');
   assert.deepEqual(restored.getActionableSituations(), []);
   assert.equal(storage.get('wm-situations-v1'), raw);
-  assert.ok(storage.get('wm-situations-v2'));
+  assert.ok(storage.get('wm-situations-v3'));
   let sync: (() => void) | undefined;
   const promotions: UnifiedAlert[] = [];
   t.mock.method(situationEngine, 'getActionableSituations', () => restored.getSituations());
@@ -178,7 +178,7 @@ test('migration failure leaves v1 intact and reports degraded restart protection
   const restored = new SituationEngine();
   assert.equal(restored.getSituations().length, 1);
   assert.equal(storage.get('wm-situations-v1'), raw);
-  assert.equal(storage.has('wm-situations-v2'), false);
+  assert.equal(storage.has('wm-situations-v3'), false);
   assert.equal(restored.getIdentityDiagnostics().restartProtected, false);
   assert.equal(restored.getIdentityDiagnostics().persistenceFailures, 1);
 });

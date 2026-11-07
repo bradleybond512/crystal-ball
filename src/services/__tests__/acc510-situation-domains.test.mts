@@ -199,6 +199,7 @@ test('supported topical evidence supplies qualified unrest criteria while retain
   assert.equal(eventOccurrenceCriteriaFor({ ...hypothesis, region: 'global' } as never), undefined);
   assert.equal(eventOccurrenceCriteriaFor({ ...hypothesis, entitySlugs: ['usa', 'canada'] } as never), undefined);
   assert.equal(eventOccurrenceCriteriaFor({ ...hypothesis, qualifiedEventTypes: ['unsupported'] } as never), undefined);
+  assert.equal(eventOccurrenceCriteriaFor({ ...hypothesis, qualifiedEventTypes: ['civil-unrest', 'unsupported'] } as never), undefined);
 });
 
 
@@ -228,7 +229,7 @@ test('oversized or over-count v3 persistence is rejected with degraded restart d
     storage.clear(); storage.set('wm-situations-v2', JSON.stringify({ ...good, version: 2 }));
     storage.set('wm-situations-v3', raw);
     const restored = new SituationEngine();
-    assert.deepEqual(restored.getSituations(), []);
+    assert.equal(restored.getSituations().length, 0);
     assert.equal(restored.getIdentityDiagnostics().restartProtected, false);
     assert.ok(restored.getIdentityDiagnostics().persistenceFailures > 0);
   }
@@ -264,4 +265,63 @@ test('adding high-confidence unknown news cannot amplify or relabel a supported 
   const restored = new SituationEngine().getSituations()[0]!;
   assert.equal(restored.confidence, before.confidence);
   assert.equal(restored.title, 'Flooding reported');
+});
+
+test('valid v3 envelope above the serialized size limit fails closed independently of JSON validity', () => {
+  const seed = new SituationEngine(); seed.observeSignals([signal()]);
+  const envelope = JSON.parse(storage.get('wm-situations-v3')!);
+  assert.equal(new SituationEngine().getSituations().length, 1);
+  storage.set('wm-situations-v2', JSON.stringify({ ...envelope, version: 2 }));
+  const raw = JSON.stringify({ ...envelope, padding: 'x'.repeat(8 * 1024 * 1024) });
+  assert.ok(raw.length > 8 * 1024 * 1024);
+  assert.equal(JSON.parse(raw).version, 3);
+  storage.set('wm-situations-v3', raw);
+  const restored = new SituationEngine();
+  assert.equal(restored.getSituations().length, 0);
+  assert.equal(restored.getIdentityDiagnostics().restartProtected, false);
+  assert.equal(restored.getIdentityDiagnostics().persistenceFailures, 1);
+});
+
+test('valid v3 situations above the entry limit fail closed independently of row validation and size', () => {
+  const seed = new SituationEngine(); seed.observeSignals([signal()]);
+  const original = seed.getSituations()[0]!;
+  const row = { ...original, title: '', summary: '', scenarios: [], actions: [], signals: [], signalIds: [] };
+  const situations = Array.from({ length: 4097 }, (_, index) => ({ ...row, id: `entry-${index}` }));
+  const identities = { version: 1, entries: [] };
+  storage.set('wm-situations-v3', JSON.stringify({ version: 3, situations: situations.slice(0, 4096), identities }));
+  const withinLimit = new SituationEngine();
+  assert.equal(withinLimit.getSituations().length, 20);
+  assert.equal(withinLimit.getIdentityDiagnostics().restartProtected, true);
+  assert.equal(withinLimit.getIdentityDiagnostics().persistenceFailures, 0);
+  const raw = JSON.stringify({ version: 3, situations, identities });
+  assert.ok(raw.length < 8 * 1024 * 1024);
+  storage.set('wm-situations-v3', raw);
+  const restored = new SituationEngine();
+  assert.equal(restored.getSituations().length, 0);
+  assert.equal(restored.getIdentityDiagnostics().restartProtected, false);
+  assert.equal(restored.getIdentityDiagnostics().persistenceFailures, 1);
+});
+
+test('valid v3 signals above the per-situation limit fail closed independently of signal validation', () => {
+  const seed = new SituationEngine(); seed.observeSignals([signal()]);
+  const envelope = JSON.parse(storage.get('wm-situations-v3')!);
+  const signals = Array.from({ length: 4097 }, (_, index) => ({ id: `signal-${index}`, type: 'keyword_spike',
+    title: '', confidence: 0.5, timestamp: now, domain: 'unknown' }));
+  envelope.situations[0].signals = signals.slice(0, 4096);
+  envelope.situations[0].signalIds = envelope.situations[0].signals.map((entry: { id: string }) => entry.id);
+  envelope.identities = { version: 1, entries: [] };
+  storage.set('wm-situations-v3', JSON.stringify(envelope));
+  const withinLimit = new SituationEngine();
+  assert.equal(withinLimit.getSituations()[0]!.signals.length, 4096);
+  assert.equal(withinLimit.getIdentityDiagnostics().restartProtected, true);
+  assert.equal(withinLimit.getIdentityDiagnostics().persistenceFailures, 0);
+  envelope.situations[0].signals = signals;
+  envelope.situations[0].signalIds = signals.map(entry => entry.id);
+  const raw = JSON.stringify(envelope);
+  assert.ok(raw.length < 8 * 1024 * 1024);
+  storage.set('wm-situations-v3', raw);
+  const restored = new SituationEngine();
+  assert.equal(restored.getSituations().length, 0);
+  assert.equal(restored.getIdentityDiagnostics().restartProtected, false);
+  assert.equal(restored.getIdentityDiagnostics().persistenceFailures, 1);
 });

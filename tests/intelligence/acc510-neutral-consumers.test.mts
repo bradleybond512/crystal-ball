@@ -70,6 +70,17 @@ for (const domain of ['unknown', 'economic'] as const) {
     const supported = projectScenarios({ ...sit, signals: [olderHazard, ...freshTypedSignals] });
     assert.ok(supported.find(s => s.id.endsWith('sc0'))!.probability > baseline.find(s => s.id.endsWith('sc0'))!.probability);
   });
+
+  test(`recent ${domain} news cannot alter the supported freshness age total`, () => {
+    const now = Date.now();
+    const supportedHazard = { ...signal('flow_drop', 'infrastructure'), timestamp: now - 30 * 60 * 1000 };
+    const sit = { ...situation('natural_hazard'), causalChainId: 'natural-compound', signals: [supportedHazard] };
+    const baseline = projectScenarios(sit);
+    const recentNews = Array.from({ length: 4 }, (_, i) => ({
+      ...signal('velocity_spike', domain), id: `recent-${i}`, timestamp: now - 15 * 60 * 1000,
+    }));
+    assert.deepEqual(projectScenarios({ ...sit, signals: [supportedHazard, ...recentNews] }), baseline);
+  });
 }
 
 test('unknown situations offer only neutral information despite stale scenarios and nearby exposure', () => {

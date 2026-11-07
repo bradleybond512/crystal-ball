@@ -12,7 +12,7 @@
  * work; no restart required. Fail-safe ON (see cognition-settings.ts).
  */
 
-import { scanRegimeShifts } from './regime-scan';
+import { scanRegimeShifts, scanCorrelationRegime, classifyCorrelationRegime, type CorrelationRegime, type CorrelationRegimeEvidence } from './regime-scan';
 import type { RegimeShift } from './regime-detection';
 import { isCognitionEnabled } from './cognition-settings';
 import { getPressureHistory, subscribePressureHistory } from '@/services/pressure-history';
@@ -30,6 +30,8 @@ const SCAN_THROTTLE_MS = 60_000;
 
 let _started = false;
 let _lastScanAt = 0;
+let _correlationEvidence: CorrelationRegimeEvidence | null = null;
+let _unsubscribe: (() => void) | null = null;
 let _active: Partial<Record<ForecastDomain, RegimeShift>> = {};
 /** detectedAt of the last shift announced per domain (new-detection dedupe). */
 const _announced = new Map<ForecastDomain, number>();
@@ -37,16 +39,19 @@ let _notify: ((n: RegimeNotification) => void) | null = null;
 
 function rescan(force = false): void {
   const now = Date.now();
-  if (!force && now - _lastScanAt < SCAN_THROTTLE_MS) return;
+  if (!force && now >= _lastScanAt && now - _lastScanAt < SCAN_THROTTLE_MS) return;
   _lastScanAt = now;
 
   if (!isCognitionEnabled('bocpd')) {
     _active = {};
+    _correlationEvidence = null;
     return;
   }
 
   try {
-    const shifts = scanRegimeShifts(getPressureHistory());
+    const history = getPressureHistory();
+    const shifts = scanRegimeShifts(history);
+    _correlationEvidence = scanCorrelationRegime(history, now);
     _active = shifts;
     for (const domain of Object.keys(shifts) as ForecastDomain[]) {
       const shift = shifts[domain];
@@ -65,6 +70,7 @@ function rescan(force = false): void {
   } catch {
     // Detector errors must never crash the pressure-history pipeline.
     _active = {};
+    _correlationEvidence = null;
   }
 }
 
@@ -77,7 +83,10 @@ export function startRegimeMonitor(opts?: { notify?: (n: RegimeNotification) => 
   if (opts?.notify) _notify = opts.notify;
   if (_started) return;
   _started = true;
-  subscribePressureHistory(() => rescan());
+  _unsubscribe = subscribePressureHistory(() => {
+    _correlationEvidence = null;
+    rescan();
+  });
   rescan(true);
 }
 
@@ -90,10 +99,17 @@ export function getActiveRegimeShifts(): Partial<Record<ForecastDomain, RegimeSh
   return _active;
 }
 
+export function getCorrelationRegime(now: number = Date.now()): CorrelationRegime | undefined {
+  return classifyCorrelationRegime(_correlationEvidence, now, isCognitionEnabled('bocpd'));
+}
+
 /** Test hook: reset module state. */
 export function _resetRegimeMonitorForTests(): void {
+  _unsubscribe?.();
+  _unsubscribe = null;
   _started = false;
   _lastScanAt = 0;
+  _correlationEvidence = null;
   _active = {};
   _announced.clear();
   _notify = null;

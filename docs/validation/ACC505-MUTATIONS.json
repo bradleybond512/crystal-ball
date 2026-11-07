@@ -1,0 +1,1082 @@
+{
+  "head": "20e8b9ee26488d5f44b9f40a3f3f54c520f7e82b",
+  "baselines": {
+    "classifier": {
+      "exit": 0,
+      "passed": 6,
+      "failed": 0
+    },
+    "reliability": {
+      "exit": 0,
+      "passed": 14,
+      "failed": 0
+    },
+    "replay": {
+      "exit": 0,
+      "passed": 1,
+      "failed": 0
+    }
+  },
+  "mutations": [
+    {
+      "id": "raw-values",
+      "behavior": "Missing values must not receive a real-observation witness after fallback",
+      "file": "src/services/pressure-history.ts",
+      "sha256": "866c72c8bfccb3aa592da556eae67c929de2261790f40b460658f08c6fe43543",
+      "diff": "raw-values.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 6,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 5,
+        "failed": 1
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "live ingress witnesses actual values before fallback, monitor read honors kill and freshness"
+      ],
+      "assertionErrors": [
+        "'Expected \"actual\" to be strictly unequal to: true'"
+      ],
+      "diffSha256": "81615435da5a7d166cd7374467995c698a443c0b92bbccbdd4f34321a8937d7b",
+      "appliedDiff": "diff --git a/src/services/pressure-history.ts b/src/services/pressure-history.ts\nindex d106f50cb..395afebbb 100644\n--- a/src/services/pressure-history.ts\n+++ b/src/services/pressure-history.ts\n@@ -124,8 +124,8 @@ function handleForecast(snapshot: ForecastSnapshot): void {\n     const value = snapshot.pressure[d] ?? 0;\n     const series = history[d];\n     const observed = Number.isFinite(snapshot.timestamp) && snapshot.timestamp > 0\n-      && snapshot.timestamp <= Date.now() && Number.isFinite(snapshot.pressure[d])\n-      && snapshot.pressure[d] >= 0 && snapshot.pressure[d] <= 1;\n+      && snapshot.timestamp <= Date.now() && Number.isFinite(value)\n+      && value >= 0 && value <= 1;\n     series.push({ timestamp: now, value, ...(observed ? { observed: true as const } : {}) });\n     if (series.length > HISTORY_MAX) series.splice(0, series.length - HISTORY_MAX);\n     maybeFireCritical(d, value);\n",
+      "restoredSha256": "866c72c8bfccb3aa592da556eae67c929de2261790f40b460658f08c6fe43543",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "raw-timestamp",
+      "behavior": "Fallback clock must not supply an observation timestamp witness",
+      "file": "src/services/pressure-history.ts",
+      "sha256": "866c72c8bfccb3aa592da556eae67c929de2261790f40b460658f08c6fe43543",
+      "diff": "raw-timestamp.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 6,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 5,
+        "failed": 1
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "live ingress witnesses actual values before fallback, monitor read honors kill and freshness"
+      ],
+      "assertionErrors": [
+        "'fallback timestamp is not real observation'"
+      ],
+      "diffSha256": "78ec64a087c4f1c9f633e7e89477bab7688c1ffcef142b4f6b4d30c4906624d3",
+      "appliedDiff": "diff --git a/src/services/pressure-history.ts b/src/services/pressure-history.ts\nindex d106f50cb..a2fcd34d5 100644\n--- a/src/services/pressure-history.ts\n+++ b/src/services/pressure-history.ts\n@@ -123,7 +123,7 @@ function handleForecast(snapshot: ForecastSnapshot): void {\n   for (const d of DOMAINS) {\n     const value = snapshot.pressure[d] ?? 0;\n     const series = history[d];\n-    const observed = Number.isFinite(snapshot.timestamp) && snapshot.timestamp > 0\n+    const observed = Number.isFinite(now) && now > 0\n       && snapshot.timestamp <= Date.now() && Number.isFinite(snapshot.pressure[d])\n       && snapshot.pressure[d] >= 0 && snapshot.pressure[d] <= 1;\n     series.push({ timestamp: now, value, ...(observed ? { observed: true as const } : {}) });\n",
+      "restoredSha256": "866c72c8bfccb3aa592da556eae67c929de2261790f40b460658f08c6fe43543",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "witness-required",
+      "behavior": "Legacy unwitnessed samples cannot establish calm",
+      "file": "src/services/cognition/regime-scan.ts",
+      "sha256": "acbea693721c9a6e3b64e3dfd153894095227071c4689cf6422970257e20f3cb",
+      "diff": "witness-required.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 6,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 2,
+        "failed": 4
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "qualified scan distinguishes ten observed samples from cold and legacy data",
+        "invalid or nonchronological samples cannot qualify calm",
+        "positive shift survives incomplete other domains and uses valid pressure observations",
+        "live ingress witnesses actual values before fallback, monitor read honors kill and freshness"
+      ],
+      "assertionErrors": [
+        "|-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'calm'\n    - undefined",
+        "|-\n    {\"observed\":false}\n    + actual - expected\n    \n    + 'calm'\n    - undefined",
+        "|-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'shifted'\n    - undefined",
+        "|-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'calm'\n    - undefined"
+      ],
+      "diffSha256": "f7b012c3908f3cc07c52d08001a7d340b6fa27af1432374766d16fe7ca21352f",
+      "appliedDiff": "diff --git a/src/services/cognition/regime-scan.ts b/src/services/cognition/regime-scan.ts\nindex 14d483e0f..fc7d77d18 100644\n--- a/src/services/cognition/regime-scan.ts\n+++ b/src/services/cognition/regime-scan.ts\n@@ -61,7 +61,7 @@ export function scanCorrelationRegime(\n     const samples: PressureSample[] = [];\n     for (const sample of history[domain] ?? []) {\n       const previous = samples[samples.length - 1]?.timestamp ?? 0;\n-      if (sample?.observed !== true || !Number.isFinite(sample.value)\n+      if (!Number.isFinite(sample.value)\n         || sample.value < 0 || sample.value > 1 || !Number.isFinite(sample.timestamp)\n         || sample.timestamp <= previous || sample.timestamp > now) {\n         samples.length = 0;\n",
+      "restoredSha256": "acbea693721c9a6e3b64e3dfd153894095227071c4689cf6422970257e20f3cb",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "warm-threshold",
+      "behavior": "All domains need ten samples rather than nine",
+      "file": "src/services/cognition/regime-scan.ts",
+      "sha256": "acbea693721c9a6e3b64e3dfd153894095227071c4689cf6422970257e20f3cb",
+      "diff": "warm-threshold.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 6,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 5,
+        "failed": 1
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "qualified scan distinguishes ten observed samples from cold and legacy data"
+      ],
+      "assertionErrors": [
+        "|-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'calm'\n    - undefined"
+      ],
+      "diffSha256": "d4814dc17890d9607ab73de791fa869fa3536545bd79e3300131e0b354f9dcd0",
+      "appliedDiff": "diff --git a/src/services/cognition/regime-scan.ts b/src/services/cognition/regime-scan.ts\nindex 14d483e0f..7d064f586 100644\n--- a/src/services/cognition/regime-scan.ts\n+++ b/src/services/cognition/regime-scan.ts\n@@ -47,7 +47,7 @@ export interface CorrelationRegimeEvidence {\n }\n \n const CORRELATION_DOMAINS: readonly ForecastDomain[] = ['finance', 'security', 'disaster', 'cyber'];\n-const CORRELATION_WARM_SAMPLES = 10;\n+const CORRELATION_WARM_SAMPLES = 9;\n const CORRELATION_FRESH_MS = 4 * 60_000;\n const CORRELATION_SHIFT_MAX_AGE_MS = 6 * 3_600_000;\n \n",
+      "restoredSha256": "acbea693721c9a6e3b64e3dfd153894095227071c4689cf6422970257e20f3cb",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "chronology",
+      "behavior": "Duplicate or reversed samples cannot establish calm",
+      "file": "src/services/cognition/regime-scan.ts",
+      "sha256": "acbea693721c9a6e3b64e3dfd153894095227071c4689cf6422970257e20f3cb",
+      "diff": "chronology.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 6,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 5,
+        "failed": 1
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "invalid or nonchronological samples cannot qualify calm"
+      ],
+      "assertionErrors": [
+        "|-\n    {\"timestamp\":1793879880000}\n    + actual - expected\n    \n    + 'calm'\n    - undefined"
+      ],
+      "diffSha256": "fa944dd824311128de33f6bae6d7b7503f0ad3ac079c1c758c53890021f951f9",
+      "appliedDiff": "diff --git a/src/services/cognition/regime-scan.ts b/src/services/cognition/regime-scan.ts\nindex 14d483e0f..62e7b8c36 100644\n--- a/src/services/cognition/regime-scan.ts\n+++ b/src/services/cognition/regime-scan.ts\n@@ -63,7 +63,7 @@ export function scanCorrelationRegime(\n       const previous = samples[samples.length - 1]?.timestamp ?? 0;\n       if (sample?.observed !== true || !Number.isFinite(sample.value)\n         || sample.value < 0 || sample.value > 1 || !Number.isFinite(sample.timestamp)\n-        || sample.timestamp <= previous || sample.timestamp > now) {\n+        || sample.timestamp <= 0 || sample.timestamp > now) {\n         samples.length = 0;\n         continue;\n       }\n",
+      "restoredSha256": "acbea693721c9a6e3b64e3dfd153894095227071c4689cf6422970257e20f3cb",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "pressure-bounds",
+      "behavior": "Pressure sample range is restricted to zero through one",
+      "file": "src/services/cognition/regime-scan.ts",
+      "sha256": "acbea693721c9a6e3b64e3dfd153894095227071c4689cf6422970257e20f3cb",
+      "diff": "pressure-bounds.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 6,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 5,
+        "failed": 1
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "invalid or nonchronological samples cannot qualify calm"
+      ],
+      "assertionErrors": [
+        "|-\n    {\"value\":-0.1}\n    + actual - expected\n    \n    + 'calm'\n    - undefined"
+      ],
+      "diffSha256": "3607bac0928fab0b82f1da166d85f69c290ff3cc7db2a64e2604ec8eeafcff96",
+      "appliedDiff": "diff --git a/src/services/cognition/regime-scan.ts b/src/services/cognition/regime-scan.ts\nindex 14d483e0f..c155342d8 100644\n--- a/src/services/cognition/regime-scan.ts\n+++ b/src/services/cognition/regime-scan.ts\n@@ -62,7 +62,7 @@ export function scanCorrelationRegime(\n     for (const sample of history[domain] ?? []) {\n       const previous = samples[samples.length - 1]?.timestamp ?? 0;\n       if (sample?.observed !== true || !Number.isFinite(sample.value)\n-        || sample.value < 0 || sample.value > 1 || !Number.isFinite(sample.timestamp)\n+        || !Number.isFinite(sample.timestamp)\n         || sample.timestamp <= previous || sample.timestamp > now) {\n         samples.length = 0;\n         continue;\n",
+      "restoredSha256": "acbea693721c9a6e3b64e3dfd153894095227071c4689cf6422970257e20f3cb",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "scan-freshness",
+      "behavior": "A stale scan cannot establish a regime",
+      "file": "src/services/cognition/regime-scan.ts",
+      "sha256": "acbea693721c9a6e3b64e3dfd153894095227071c4689cf6422970257e20f3cb",
+      "diff": "scan-freshness.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 6,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 5,
+        "failed": 1
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "shift field allowlists and six-hour horizon reject malformed evidence"
+      ],
+      "assertionErrors": [
+        "|-\n    stale scan cannot retain a still-young shift\n    + actual - expected\n    \n    + 'shifted'\n    - undefined"
+      ],
+      "diffSha256": "3d82b3e006bcc3c8b6afb98b20cf24dab173638bc4fcc8776c0a8b75ca57332d",
+      "appliedDiff": "diff --git a/src/services/cognition/regime-scan.ts b/src/services/cognition/regime-scan.ts\nindex 14d483e0f..af235af1d 100644\n--- a/src/services/cognition/regime-scan.ts\n+++ b/src/services/cognition/regime-scan.ts\n@@ -92,7 +92,7 @@ export function classifyCorrelationRegime(\n ): CorrelationRegime | undefined {\n   if (!enabled || !evidence || !Number.isFinite(now) || now <= 0\n     || !Number.isFinite(evidence.scannedAt) || evidence.scannedAt <= 0\n-    || evidence.scannedAt > now || now - evidence.scannedAt > CORRELATION_FRESH_MS) return undefined;\n+    || evidence.scannedAt > now || false) return undefined;\n   let invalidShift = false;\n   for (const domain of CORRELATION_DOMAINS) {\n     const shift = evidence.shifts[domain];\n",
+      "restoredSha256": "acbea693721c9a6e3b64e3dfd153894095227071c4689cf6422970257e20f3cb",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "future-scan",
+      "behavior": "Future scan evidence cannot establish a regime",
+      "file": "src/services/cognition/regime-scan.ts",
+      "sha256": "acbea693721c9a6e3b64e3dfd153894095227071c4689cf6422970257e20f3cb",
+      "diff": "future-scan.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 6,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 5,
+        "failed": 1
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "classification fails closed for stale, future, disabled or failed scans"
+      ],
+      "assertionErrors": [
+        "|-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'calm'\n    - undefined"
+      ],
+      "diffSha256": "30ac5e5fecb943e67094fd78b604306a5a91d735c53b67a498d5d75bac5b6324",
+      "appliedDiff": "diff --git a/src/services/cognition/regime-scan.ts b/src/services/cognition/regime-scan.ts\nindex 14d483e0f..975c3be09 100644\n--- a/src/services/cognition/regime-scan.ts\n+++ b/src/services/cognition/regime-scan.ts\n@@ -92,7 +92,7 @@ export function classifyCorrelationRegime(\n ): CorrelationRegime | undefined {\n   if (!enabled || !evidence || !Number.isFinite(now) || now <= 0\n     || !Number.isFinite(evidence.scannedAt) || evidence.scannedAt <= 0\n-    || evidence.scannedAt > now || now - evidence.scannedAt > CORRELATION_FRESH_MS) return undefined;\n+    || false || now - evidence.scannedAt > CORRELATION_FRESH_MS) return undefined;\n   let invalidShift = false;\n   for (const domain of CORRELATION_DOMAINS) {\n     const shift = evidence.shifts[domain];\n",
+      "restoredSha256": "acbea693721c9a6e3b64e3dfd153894095227071c4689cf6422970257e20f3cb",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "observation-freshness",
+      "behavior": "A fresh scan over stale observations cannot prove calm",
+      "file": "src/services/cognition/regime-scan.ts",
+      "sha256": "acbea693721c9a6e3b64e3dfd153894095227071c4689cf6422970257e20f3cb",
+      "diff": "observation-freshness.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 6,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 5,
+        "failed": 1
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "classification fails closed for stale, future, disabled or failed scans"
+      ],
+      "assertionErrors": [
+        "|-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'calm'\n    - undefined"
+      ],
+      "diffSha256": "5cfd55ab1e50d3f9eefad64ad800bd1aaaff91e1cabe913c3a992413844b8561",
+      "appliedDiff": "diff --git a/src/services/cognition/regime-scan.ts b/src/services/cognition/regime-scan.ts\nindex 14d483e0f..c3c36e43d 100644\n--- a/src/services/cognition/regime-scan.ts\n+++ b/src/services/cognition/regime-scan.ts\n@@ -102,6 +102,6 @@ export function classifyCorrelationRegime(\n   }\n   if (invalidShift || evidence.completeObservedAt === null || !Number.isFinite(evidence.completeObservedAt)\n     || evidence.completeObservedAt <= 0 || evidence.completeObservedAt > evidence.scannedAt\n-    || now - evidence.completeObservedAt > CORRELATION_FRESH_MS) return undefined;\n+    || false) return undefined;\n   return 'calm';\n }\n",
+      "restoredSha256": "acbea693721c9a6e3b64e3dfd153894095227071c4689cf6422970257e20f3cb",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "kill-read",
+      "behavior": "Disabling BOCPD takes effect on the next read despite cached scans",
+      "file": "src/services/cognition/regime-monitor.ts",
+      "sha256": "daf3900480979d50217e47dd5506aedcea43661f4adc7cf648546a3271d4b30a",
+      "diff": "kill-read.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 6,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 5,
+        "failed": 1
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "live ingress witnesses actual values before fallback, monitor read honors kill and freshness"
+      ],
+      "assertionErrors": [
+        "|-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'calm'\n    - undefined"
+      ],
+      "diffSha256": "97e24814679fd0e1faf65ec0e0750e21ec60914983a55e0f4e7a46d3d1742e55",
+      "appliedDiff": "diff --git a/src/services/cognition/regime-monitor.ts b/src/services/cognition/regime-monitor.ts\nindex 8282b3d68..114e79ebb 100644\n--- a/src/services/cognition/regime-monitor.ts\n+++ b/src/services/cognition/regime-monitor.ts\n@@ -100,7 +100,7 @@ export function getActiveRegimeShifts(): Partial<Record<ForecastDomain, RegimeSh\n }\n \n export function getCorrelationRegime(now: number = Date.now()): CorrelationRegime | undefined {\n-  return classifyCorrelationRegime(_correlationEvidence, now, isCognitionEnabled('bocpd'));\n+  return classifyCorrelationRegime(_correlationEvidence, now, true);\n }\n \n /** Test hook: reset module state. */\n",
+      "restoredSha256": "daf3900480979d50217e47dd5506aedcea43661f4adc7cf648546a3271d4b30a",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "shift-field-validation",
+      "behavior": "Malformed shift fields must not produce a shifting regime",
+      "file": "src/services/cognition/regime-scan.ts",
+      "sha256": "acbea693721c9a6e3b64e3dfd153894095227071c4689cf6422970257e20f3cb",
+      "diff": "shift-field-validation.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 6,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 5,
+        "failed": 1
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "shift field allowlists and six-hour horizon reject malformed evidence"
+      ],
+      "assertionErrors": [
+        "|-\n    {\"metric\":\"unknown\"}\n    + actual - expected\n    \n    + 'shifted'\n    - undefined"
+      ],
+      "diffSha256": "ba638c0b4bc8fcca771db7925374cc3b956b36d3b875b77c340f13910780cb8f",
+      "appliedDiff": "diff --git a/src/services/cognition/regime-scan.ts b/src/services/cognition/regime-scan.ts\nindex 14d483e0f..0438bd941 100644\n--- a/src/services/cognition/regime-scan.ts\n+++ b/src/services/cognition/regime-scan.ts\n@@ -97,7 +97,7 @@ export function classifyCorrelationRegime(\n   for (const domain of CORRELATION_DOMAINS) {\n     const shift = evidence.shifts[domain];\n     if (!shift) continue;\n-    if (!validCorrelationShift(shift, domain, evidence.scannedAt)) invalidShift = true;\n+    if (false) invalidShift = true;\n     else if (now - shift.detectedAt <= CORRELATION_SHIFT_MAX_AGE_MS) return 'shifted';\n   }\n   if (invalidShift || evidence.completeObservedAt === null || !Number.isFinite(evidence.completeObservedAt)\n",
+      "restoredSha256": "acbea693721c9a6e3b64e3dfd153894095227071c4689cf6422970257e20f3cb",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "shift-horizon",
+      "behavior": "A shift older than six hours cannot remain active",
+      "file": "src/services/cognition/regime-scan.ts",
+      "sha256": "acbea693721c9a6e3b64e3dfd153894095227071c4689cf6422970257e20f3cb",
+      "diff": "shift-horizon.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 6,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 5,
+        "failed": 1
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "shift field allowlists and six-hour horizon reject malformed evidence"
+      ],
+      "assertionErrors": [
+        "|-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'shifted'\n    - undefined"
+      ],
+      "diffSha256": "cf820fd9611b856c41235d59de33aa9ba0a141027a08ea9666623bdd189f1b7a",
+      "appliedDiff": "diff --git a/src/services/cognition/regime-scan.ts b/src/services/cognition/regime-scan.ts\nindex 14d483e0f..ec437ddb9 100644\n--- a/src/services/cognition/regime-scan.ts\n+++ b/src/services/cognition/regime-scan.ts\n@@ -49,7 +49,7 @@ export interface CorrelationRegimeEvidence {\n const CORRELATION_DOMAINS: readonly ForecastDomain[] = ['finance', 'security', 'disaster', 'cyber'];\n const CORRELATION_WARM_SAMPLES = 10;\n const CORRELATION_FRESH_MS = 4 * 60_000;\n-const CORRELATION_SHIFT_MAX_AGE_MS = 6 * 3_600_000;\n+const CORRELATION_SHIFT_MAX_AGE_MS = 7 * 3_600_000;\n \n export function scanCorrelationRegime(\n   history: Partial<Record<ForecastDomain, PressureSample[]>>,\n",
+      "restoredSha256": "acbea693721c9a6e3b64e3dfd153894095227071c4689cf6422970257e20f3cb",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "positive-shift-incomplete",
+      "behavior": "A valid shift remains usable when another domain is incomplete",
+      "file": "src/services/cognition/regime-scan.ts",
+      "sha256": "acbea693721c9a6e3b64e3dfd153894095227071c4689cf6422970257e20f3cb",
+      "diff": "positive-shift-incomplete.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 6,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 4,
+        "failed": 2
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "positive shift survives incomplete other domains and uses valid pressure observations",
+        "shift field allowlists and six-hour horizon reject malformed evidence"
+      ],
+      "assertionErrors": [
+        "|-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + undefined\n    - 'shifted'",
+        "|-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + undefined\n    - 'shifted'"
+      ],
+      "diffSha256": "d9f6852c3a4a4fb2d32dd763d8c689fa0881ff2fd893006efb097ecdff830f6a",
+      "appliedDiff": "diff --git a/src/services/cognition/regime-scan.ts b/src/services/cognition/regime-scan.ts\nindex 14d483e0f..ca855b644 100644\n--- a/src/services/cognition/regime-scan.ts\n+++ b/src/services/cognition/regime-scan.ts\n@@ -98,7 +98,7 @@ export function classifyCorrelationRegime(\n     const shift = evidence.shifts[domain];\n     if (!shift) continue;\n     if (!validCorrelationShift(shift, domain, evidence.scannedAt)) invalidShift = true;\n-    else if (now - shift.detectedAt <= CORRELATION_SHIFT_MAX_AGE_MS) return 'shifted';\n+    else if (now - shift.detectedAt <= CORRELATION_SHIFT_MAX_AGE_MS && evidence.completeObservedAt !== null) return 'shifted';\n   }\n   if (invalidShift || evidence.completeObservedAt === null || !Number.isFinite(evidence.completeObservedAt)\n     || evidence.completeObservedAt <= 0 || evidence.completeObservedAt > evidence.scannedAt\n",
+      "restoredSha256": "acbea693721c9a6e3b64e3dfd153894095227071c4689cf6422970257e20f3cb",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "unscanned-ingress",
+      "behavior": "A new unscanned sample must invalidate cached qualification even inside scan throttle",
+      "file": "src/services/cognition/regime-monitor.ts",
+      "sha256": "daf3900480979d50217e47dd5506aedcea43661f4adc7cf648546a3271d4b30a",
+      "diff": "unscanned-ingress.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 6,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 5,
+        "failed": 1
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "live ingress witnesses actual values before fallback, monitor read honors kill and freshness"
+      ],
+      "assertionErrors": [
+        "|-\n    unscanned ingress cannot retain the old complete witness\n    + actual - expected\n    \n    + 'calm'\n    - undefined"
+      ],
+      "diffSha256": "6d1786850d95eeaed3d543c83855487de28a895ee0518d433a4ca7348d8136b6",
+      "appliedDiff": "diff --git a/src/services/cognition/regime-monitor.ts b/src/services/cognition/regime-monitor.ts\nindex 8282b3d68..10f37fd15 100644\n--- a/src/services/cognition/regime-monitor.ts\n+++ b/src/services/cognition/regime-monitor.ts\n@@ -84,7 +84,6 @@ export function startRegimeMonitor(opts?: { notify?: (n: RegimeNotification) =>\n   if (_started) return;\n   _started = true;\n   _unsubscribe = subscribePressureHistory(() => {\n-    _correlationEvidence = null;\n     rescan();\n   });\n   rescan(true);\n",
+      "restoredSha256": "daf3900480979d50217e47dd5506aedcea43661f4adc7cf648546a3271d4b30a",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "outcome-tag-island",
+      "behavior": "Directional writer must stamp regime at successful resolution",
+      "file": "src/services/correlation/correlation-calibration.ts",
+      "sha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "diff": "outcome-tag-island.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 14,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 10,
+        "failed": 4
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "outcome writer tags at resolution and never rewrites an existing outcome",
+        "five outcomes select the regime; four retain pooled reliability",
+        "current switch and staleness take effect inside the score cache lifetime",
+        "cache expires at sixty seconds exactly and diagnostics cannot mutate it"
+      ],
+      "assertionErrors": [
+        "|-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + undefined\n    - 'calm'",
+        "|-\n    Expected values to be strictly equal:\n    \n    0 !== 4",
+        "|-\n    Expected values to be strictly equal:\n    \n    0.68 !== 0.5",
+        "|-\n    Expected values to be strictly equal:\n    \n    'pooled' !== 'calm'"
+      ],
+      "diffSha256": "1220dcf48b0362567435217259810623fa74bbbafbf9d556770481353fe915f7",
+      "appliedDiff": "diff --git a/src/services/correlation/correlation-calibration.ts b/src/services/correlation/correlation-calibration.ts\nindex e06702355..4a63e69a0 100644\n--- a/src/services/correlation/correlation-calibration.ts\n+++ b/src/services/correlation/correlation-calibration.ts\n@@ -191,7 +191,7 @@ export function resolveCalibrationPrediction(\n   when: number = Date.now(),\n ): boolean {\n   const store = getCorrelationCalibrationStore();\n-  const ok = store.resolve(id, outcome, when, undefined, outcomeRegime(when));\n+  const ok = store.resolve(id, outcome, when);\n   if (ok) {\n     persist(store);\n     reliabilityCache = null;\n",
+      "restoredSha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "outcome-tag-pair",
+      "behavior": "Pair resolution must stamp regime in the same state transition",
+      "file": "src/services/correlation/correlation-calibration.ts",
+      "sha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "diff": "outcome-tag-pair.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 14,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 13,
+        "failed": 1
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "pair resolver stamps same outcome-time tag"
+      ],
+      "assertionErrors": [
+        "|-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + undefined\n    - 'calm'"
+      ],
+      "diffSha256": "952b5d20aaa4c5802bc2275c1090dd4dcadf21282130a99e91107a589ee84ba9",
+      "appliedDiff": "diff --git a/src/services/correlation/correlation-calibration.ts b/src/services/correlation/correlation-calibration.ts\nindex e06702355..d47beb222 100644\n--- a/src/services/correlation/correlation-calibration.ts\n+++ b/src/services/correlation/correlation-calibration.ts\n@@ -234,7 +234,7 @@ export function resolvePairPredictions(\n     if (r.status !== 'pending') continue;\n     const outcome = assessPairOutcome(r.id, lites);\n     if (outcome === null) continue;\n-    if (store.resolve(r.id, outcome, now, undefined, regime)) resolved += 1;\n+    if (store.resolve(r.id, outcome, now)) resolved += 1;\n   }\n   const expired = store.expirePending(now);\n   if (resolved > 0 || expired > 0) {\n",
+      "restoredSha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "cohort-threshold",
+      "behavior": "Four conditional outcomes stay pooled; five can select the regime",
+      "file": "src/services/correlation/correlation-calibration.ts",
+      "sha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "diff": "cohort-threshold.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 14,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 12,
+        "failed": 2
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "five outcomes select the regime; four retain pooled reliability",
+        "unknown regimes and legacy data use the exact pooled score, sparse overall stays neutral"
+      ],
+      "assertionErrors": [
+        "|-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'shifted'\n    - 'pooled'",
+        "|-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'pooled'\n    - 'neutral'"
+      ],
+      "diffSha256": "ef079735325c72f53ab6fe78e57473a300f33addb6524139092705292242897d",
+      "appliedDiff": "diff --git a/src/services/correlation/correlation-calibration.ts b/src/services/correlation/correlation-calibration.ts\nindex e06702355..53453ae85 100644\n--- a/src/services/correlation/correlation-calibration.ts\n+++ b/src/services/correlation/correlation-calibration.ts\n@@ -86,7 +86,7 @@ export function recordPairPrediction(pair: CorrelatedPair, now: number = Date.no\n \n // \u2500\u2500 Per-rule reliability \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n \n-export const MIN_REGIME_RESOLVED = 5;\n+export const MIN_REGIME_RESOLVED = 4;\n \n interface RuleCohorts { overall: SourceMultiplier; calm: SourceMultiplier; shifted: SourceMultiplier }\n \n",
+      "restoredSha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "conditional-selection",
+      "behavior": "Sufficient regime-specific outcomes select their own multiplier",
+      "file": "src/services/correlation/correlation-calibration.ts",
+      "sha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "diff": "conditional-selection.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 14,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 11,
+        "failed": 3
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "five outcomes select the regime; four retain pooled reliability",
+        "current switch and staleness take effect inside the score cache lifetime",
+        "cache expires at sixty seconds exactly and diagnostics cannot mutate it"
+      ],
+      "assertionErrors": [
+        "|-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'pooled'\n    - 'shifted'",
+        "|-\n    Expected values to be strictly equal:\n    \n    0.68 !== 0.5",
+        "|-\n    Expected values to be strictly equal:\n    \n    'pooled' !== 'calm'"
+      ],
+      "diffSha256": "6f9b5300c2c677aa76999485d07111bf177e432460a413e6c3808f20fc89a73a",
+      "appliedDiff": "diff --git a/src/services/correlation/correlation-calibration.ts b/src/services/correlation/correlation-calibration.ts\nindex e06702355..02279b6ff 100644\n--- a/src/services/correlation/correlation-calibration.ts\n+++ b/src/services/correlation/correlation-calibration.ts\n@@ -138,7 +138,7 @@ export function reliabilityDiagnosticsForRule(ruleId: string, now: number = Date\n   const currentRegime = getCorrelationRegime(now);\n   const preferred = currentRegime ? cohorts[currentRegime] : undefined;\n   const enoughOverall = cohorts.overall.resolvedCount >= MIN_REGIME_RESOLVED;\n-  const enoughRegime = preferred && preferred.resolvedCount >= MIN_REGIME_RESOLVED;\n+  const enoughRegime = false;\n   let selected: CorrelationReliabilityDiagnostics['selected'] = 'neutral';\n   let reason: CorrelationReliabilityDiagnostics['reason'] = 'insufficient-outcomes';\n   let multiplier = cohorts.overall.multiplier;\n",
+      "restoredSha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "sparse-fallback",
+      "behavior": "Sparse or unknown regimes preserve the exact pooled score, not a neutral reset",
+      "file": "src/services/correlation/correlation-calibration.ts",
+      "sha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "diff": "sparse-fallback.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 14,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 8,
+        "failed": 6
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "five outcomes select the regime; four retain pooled reliability",
+        "unknown regimes and legacy data use the exact pooled score, sparse overall stays neutral",
+        "current switch and staleness take effect inside the score cache lifetime",
+        "direct store writes and loads invalidate aggregate cache without waiting",
+        "rollback excludes future labels and forward time admits them at the exact boundary",
+        "island crossfade counts only outcomes eligible at the same decision time"
+      ],
+      "assertionErrors": [
+        "|-\n    Expected values to be strictly equal:\n    \n    1 !== 0.84",
+        "|-\n    Expected values to be strictly equal:\n    \n    1 !== 1.48",
+        "|-\n    Expected values to be strictly equal:\n    \n    1 !== 0.68",
+        "|-\n    Expected values to be strictly equal:\n    \n    1 !== 0.5",
+        "|-\n    Expected values to be strictly equal:\n    \n    1 !== 0.5",
+        "|-\n    fifth label governs exactly when available\n    \n    1 !== 0.5"
+      ],
+      "diffSha256": "79e39e25c27ea88005350cecbbbd27e6653a9862737bf1c67a398cfd1435e401",
+      "appliedDiff": "diff --git a/src/services/correlation/correlation-calibration.ts b/src/services/correlation/correlation-calibration.ts\nindex e06702355..85300c339 100644\n--- a/src/services/correlation/correlation-calibration.ts\n+++ b/src/services/correlation/correlation-calibration.ts\n@@ -141,7 +141,7 @@ export function reliabilityDiagnosticsForRule(ruleId: string, now: number = Date\n   const enoughRegime = preferred && preferred.resolvedCount >= MIN_REGIME_RESOLVED;\n   let selected: CorrelationReliabilityDiagnostics['selected'] = 'neutral';\n   let reason: CorrelationReliabilityDiagnostics['reason'] = 'insufficient-outcomes';\n-  let multiplier = cohorts.overall.multiplier;\n+  let multiplier = 1;\n   if (enoughRegime) {\n     selected = currentRegime!;\n     reason = 'regime';\n",
+      "restoredSha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "cache-revision",
+      "behavior": "Direct store changes invalidate aggregate cache immediately",
+      "file": "src/services/correlation/correlation-calibration.ts",
+      "sha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "diff": "cache-revision.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 14,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 12,
+        "failed": 2
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "direct store writes and loads invalidate aggregate cache without waiting",
+        "island crossfade counts only outcomes eligible at the same decision time"
+      ],
+      "assertionErrors": [
+        "|-\n    Expected values to be strictly equal:\n    \n    1 !== 0.5",
+        "|-\n    Expected values to be strictly equal:\n    \n    0 !== 4"
+      ],
+      "diffSha256": "3eed4f45ff00508a0e3278ce62ada10fcf31c9fe1158b2cccd0f01d65a1bccab",
+      "appliedDiff": "diff --git a/src/services/correlation/correlation-calibration.ts b/src/services/correlation/correlation-calibration.ts\nindex e06702355..31b3ce8aa 100644\n--- a/src/services/correlation/correlation-calibration.ts\n+++ b/src/services/correlation/correlation-calibration.ts\n@@ -107,7 +107,7 @@ function refreshReliability(now: number): Map<string, RuleCohorts> {\n   const store = getCorrelationCalibrationStore();\n   if (reliabilityCache && Number.isFinite(now) && now >= reliabilityCache.at\n     && now - reliabilityCache.at < RELIABILITY_CACHE_TTL_MS\n-    && now < reliabilityCache.nextOutcomeAt && store.revision() === reliabilityCache.revision) return reliabilityCache.byRule;\n+    && now < reliabilityCache.nextOutcomeAt) return reliabilityCache.byRule;\n   let nextOutcomeAt = Infinity;\n   const eligible = store.all().filter((r) => {\n     if (!r.sourceId.startsWith(CORR_RULE_SOURCE_PREFIX) || !Number.isFinite(now) || now <= 0) return false;\n",
+      "restoredSha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "cache-time-reversal",
+      "behavior": "A backward clock cannot reuse future-outcome aggregates",
+      "file": "src/services/correlation/correlation-calibration.ts",
+      "sha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "diff": "cache-time-reversal.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 14,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 12,
+        "failed": 2
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "rollback excludes future labels and forward time admits them at the exact boundary",
+        "island crossfade counts only outcomes eligible at the same decision time"
+      ],
+      "assertionErrors": [
+        "|-\n    Expected values to be strictly equal:\n    \n    5 !== 0",
+        "|-\n    clock rollback restores the legacy path\n    \n    0.5 !== null"
+      ],
+      "diffSha256": "202d2f8a94df34d17b4e0144686d9814a01b937a7fb038063b3163a43e162ec0",
+      "appliedDiff": "diff --git a/src/services/correlation/correlation-calibration.ts b/src/services/correlation/correlation-calibration.ts\nindex e06702355..b256ecea6 100644\n--- a/src/services/correlation/correlation-calibration.ts\n+++ b/src/services/correlation/correlation-calibration.ts\n@@ -105,7 +105,7 @@ function emptyScore(sourceId: string): SourceMultiplier {\n \n function refreshReliability(now: number): Map<string, RuleCohorts> {\n   const store = getCorrelationCalibrationStore();\n-  if (reliabilityCache && Number.isFinite(now) && now >= reliabilityCache.at\n+  if (reliabilityCache && Number.isFinite(now)\n     && now - reliabilityCache.at < RELIABILITY_CACHE_TTL_MS\n     && now < reliabilityCache.nextOutcomeAt && store.revision() === reliabilityCache.revision) return reliabilityCache.byRule;\n   let nextOutcomeAt = Infinity;\n",
+      "restoredSha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "cache-forward-boundary",
+      "behavior": "An outcome becomes eligible exactly at its availability time even inside cache TTL",
+      "file": "src/services/correlation/correlation-calibration.ts",
+      "sha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "diff": "cache-forward-boundary.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 14,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 12,
+        "failed": 2
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "rollback excludes future labels and forward time admits them at the exact boundary",
+        "island crossfade counts only outcomes eligible at the same decision time"
+      ],
+      "assertionErrors": [
+        "|-\n    Expected values to be strictly equal:\n    \n    1 !== 0.5",
+        "|-\n    Expected values to be strictly equal:\n    \n    4 !== 5"
+      ],
+      "diffSha256": "739264404ad92f6945fd50e7448ed2bb9d7cff09361805a323b01636fd6b9b8b",
+      "appliedDiff": "diff --git a/src/services/correlation/correlation-calibration.ts b/src/services/correlation/correlation-calibration.ts\nindex e06702355..63df14a30 100644\n--- a/src/services/correlation/correlation-calibration.ts\n+++ b/src/services/correlation/correlation-calibration.ts\n@@ -107,7 +107,7 @@ function refreshReliability(now: number): Map<string, RuleCohorts> {\n   const store = getCorrelationCalibrationStore();\n   if (reliabilityCache && Number.isFinite(now) && now >= reliabilityCache.at\n     && now - reliabilityCache.at < RELIABILITY_CACHE_TTL_MS\n-    && now < reliabilityCache.nextOutcomeAt && store.revision() === reliabilityCache.revision) return reliabilityCache.byRule;\n+    && store.revision() === reliabilityCache.revision) return reliabilityCache.byRule;\n   let nextOutcomeAt = Infinity;\n   const eligible = store.all().filter((r) => {\n     if (!r.sourceId.startsWith(CORR_RULE_SOURCE_PREFIX) || !Number.isFinite(now) || now <= 0) return false;\n",
+      "restoredSha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "future-outcome-exclusion",
+      "behavior": "Future labels or future issuance cannot influence an earlier decision",
+      "file": "src/services/correlation/correlation-calibration.ts",
+      "sha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "diff": "future-outcome-exclusion.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 14,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 12,
+        "failed": 2
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "rollback excludes future labels and forward time admits them at the exact boundary",
+        "island crossfade counts only outcomes eligible at the same decision time"
+      ],
+      "assertionErrors": [
+        "|-\n    Expected values to be strictly equal:\n    \n    5 !== 0",
+        "|-\n    Expected values to be strictly equal:\n    \n    5 !== 0"
+      ],
+      "diffSha256": "eb18622c1fabf3bbf474f5a89ed438375dc7ad3cd22adebff0364fe4d2838fad",
+      "appliedDiff": "diff --git a/src/services/correlation/correlation-calibration.ts b/src/services/correlation/correlation-calibration.ts\nindex e06702355..a4c26b0a7 100644\n--- a/src/services/correlation/correlation-calibration.ts\n+++ b/src/services/correlation/correlation-calibration.ts\n@@ -112,7 +112,7 @@ function refreshReliability(now: number): Map<string, RuleCohorts> {\n   const eligible = store.all().filter((r) => {\n     if (!r.sourceId.startsWith(CORR_RULE_SOURCE_PREFIX) || !Number.isFinite(now) || now <= 0) return false;\n     const availableAt = Math.max(r.predictedAt, Number.isFinite(r.resolvedAt) ? r.resolvedAt! : 0);\n-    if (availableAt > now) { nextOutcomeAt = Math.min(nextOutcomeAt, availableAt); return false; }\n+    if (false) { nextOutcomeAt = Math.min(nextOutcomeAt, availableAt); return false; }\n     return true;\n   });\n   const byRule = new Map<string, RuleCohorts>();\n",
+      "restoredSha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "future-tag-exclusion",
+      "behavior": "Future resolution arguments cannot borrow current regime evidence",
+      "file": "src/services/correlation/correlation-calibration.ts",
+      "sha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "diff": "future-tag-exclusion.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 14,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 13,
+        "failed": 1
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "future and historical resolution arguments cannot stamp current regime evidence"
+      ],
+      "assertionErrors": [
+        "|-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'calm'\n    - undefined"
+      ],
+      "diffSha256": "f748198ce716eded7c426868846cf271e4a6738f9c8fc830d3d8faa3aac7462e",
+      "appliedDiff": "diff --git a/src/services/correlation/correlation-calibration.ts b/src/services/correlation/correlation-calibration.ts\nindex e06702355..d5249e729 100644\n--- a/src/services/correlation/correlation-calibration.ts\n+++ b/src/services/correlation/correlation-calibration.ts\n@@ -162,7 +162,7 @@ export function reliabilityForRule(ruleId: string, now: number = Date.now()): nu\n }\n \n function outcomeRegime(when: number): CorrelationRegime | undefined {\n-  return when <= Date.now() ? getCorrelationRegime(when) : undefined;\n+  return getCorrelationRegime(when);\n }\n \n /** Expire overdue pending predictions \u2014 persists and refreshes\n",
+      "restoredSha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "loaded-tag-allowlist",
+      "behavior": "Pending, expired, malformed and missing-time tags cannot enter a regime cohort",
+      "file": "src/services/intelligence/forecast-calibration.ts",
+      "sha256": "5ff665e893d68270cc5f7fa06fce647ecf78af68ab89293a315e8942ca5dfbbf",
+      "diff": "loaded-tag-allowlist.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 14,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 13,
+        "failed": 1
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "pending, expired, malformed and missing-time tags never form regime cohorts"
+      ],
+      "assertionErrors": [
+        "|-\n    pending\n    + actual - expected\n    \n    + 'calm'\n    - undefined"
+      ],
+      "diffSha256": "bed30c115cb775a039edceb79afd5070dc31d030f2c50c41365a76a52b41e31c",
+      "appliedDiff": "diff --git a/src/services/intelligence/forecast-calibration.ts b/src/services/intelligence/forecast-calibration.ts\nindex 4ead1b6aa..834ab6216 100644\n--- a/src/services/intelligence/forecast-calibration.ts\n+++ b/src/services/intelligence/forecast-calibration.ts\n@@ -397,9 +397,7 @@ function cloneResolutionCriteria(\n function cloneRecord(record: PredictionRecord): PredictionRecord {\n   return {\n     ...record,\n-    outcomeRegime: (record.status === 'resolved_true' || record.status === 'resolved_false')\n-      && Number.isFinite(record.resolvedAt) && record.resolvedAt! > 0\n-      && (record.outcomeRegime === 'calm' || record.outcomeRegime === 'shifted') ? record.outcomeRegime : undefined,\n+    outcomeRegime: record.outcomeRegime,\n     criteria: record.criteria\n       ? cloneResolutionCriteria(record.criteria)\n       : undefined,\n",
+      "restoredSha256": "5ff665e893d68270cc5f7fa06fce647ecf78af68ab89293a315e8942ca5dfbbf",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "resolved-tag-retention",
+      "behavior": "Valid outcome-time tags survive read and persisted restart",
+      "file": "src/services/intelligence/forecast-calibration.ts",
+      "sha256": "5ff665e893d68270cc5f7fa06fce647ecf78af68ab89293a315e8942ca5dfbbf",
+      "diff": "resolved-tag-retention.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 14,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 9,
+        "failed": 5
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "outcome writer tags at resolution and never rewrites an existing outcome",
+        "pair resolver stamps same outcome-time tag",
+        "five outcomes select the regime; four retain pooled reliability",
+        "current switch and staleness take effect inside the score cache lifetime",
+        "cache expires at sixty seconds exactly and diagnostics cannot mutate it"
+      ],
+      "assertionErrors": [
+        "|-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + undefined\n    - 'calm'",
+        "|-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + undefined\n    - 'calm'",
+        "|-\n    Expected values to be strictly equal:\n    \n    0 !== 4",
+        "|-\n    Expected values to be strictly equal:\n    \n    0.68 !== 0.5",
+        "|-\n    Expected values to be strictly equal:\n    \n    'pooled' !== 'calm'"
+      ],
+      "diffSha256": "452a531ba93e37b736a3c8b1a8858ecafe4e75fc591fd71390c44a5e3bea3012",
+      "appliedDiff": "diff --git a/src/services/intelligence/forecast-calibration.ts b/src/services/intelligence/forecast-calibration.ts\nindex 4ead1b6aa..51cd5c7ff 100644\n--- a/src/services/intelligence/forecast-calibration.ts\n+++ b/src/services/intelligence/forecast-calibration.ts\n@@ -399,7 +399,7 @@ function cloneRecord(record: PredictionRecord): PredictionRecord {\n     ...record,\n     outcomeRegime: (record.status === 'resolved_true' || record.status === 'resolved_false')\n       && Number.isFinite(record.resolvedAt) && record.resolvedAt! > 0\n-      && (record.outcomeRegime === 'calm' || record.outcomeRegime === 'shifted') ? record.outcomeRegime : undefined,\n+      && (record.outcomeRegime === 'calm' || record.outcomeRegime === 'shifted') ? undefined : undefined,\n     criteria: record.criteria\n       ? cloneResolutionCriteria(record.criteria)\n       : undefined,\n",
+      "restoredSha256": "5ff665e893d68270cc5f7fa06fce647ecf78af68ab89293a315e8942ca5dfbbf",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "outcome-immutability",
+      "behavior": "Existing terminal-state guard prevents a second outcome from rewriting its original regime",
+      "file": "src/services/intelligence/forecast-calibration.ts",
+      "sha256": "5ff665e893d68270cc5f7fa06fce647ecf78af68ab89293a315e8942ca5dfbbf",
+      "diff": "outcome-immutability.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 14,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 12,
+        "failed": 2
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "outcome writer tags at resolution and never rewrites an existing outcome",
+        "shared store revisions advance only when state changes"
+      ],
+      "assertionErrors": [
+        "|-\n    Expected values to be strictly equal:\n    \n    true !== false",
+        "|-\n    Expected values to be strictly equal:\n    \n    true !== false"
+      ],
+      "diffSha256": "f734936f1dc1d41efe0cb068e1381d9c2414830a73bb49c7259e3bd85c7cf660",
+      "appliedDiff": "diff --git a/src/services/intelligence/forecast-calibration.ts b/src/services/intelligence/forecast-calibration.ts\nindex 4ead1b6aa..d06cefae7 100644\n--- a/src/services/intelligence/forecast-calibration.ts\n+++ b/src/services/intelligence/forecast-calibration.ts\n@@ -275,7 +275,7 @@ export function createForecastCalibrationStore(): ForecastCalibrationStore {\n   ): boolean {\n     const prev = store.get(id);\n     if (!prev) return false;\n-    if (prev.status !== 'pending') return false;\n+    if (false) return false;\n     const resolvedAt = when ?? Date.now();\n     if (metadata && !validateResolutionMetadata(prev, resolvedAt, metadata).ok) {\n       return false;\n",
+      "restoredSha256": "5ff665e893d68270cc5f7fa06fce647ecf78af68ab89293a315e8942ca5dfbbf",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "cache-ttl",
+      "behavior": "Cache expires exactly at sixty seconds",
+      "file": "src/services/correlation/correlation-calibration.ts",
+      "sha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "diff": "cache-ttl.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 14,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 13,
+        "failed": 1
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "cache expires at sixty seconds exactly and diagnostics cannot mutate it"
+      ],
+      "assertionErrors": [
+        "|-\n    Expected values to be strictly equal:\n    \n    1 !== 2"
+      ],
+      "diffSha256": "7c526ff2bb9568187003e887a6ac5c9fbda5f340f04c73e6f5b6195b44d84499",
+      "appliedDiff": "diff --git a/src/services/correlation/correlation-calibration.ts b/src/services/correlation/correlation-calibration.ts\nindex e06702355..b9aa13fbc 100644\n--- a/src/services/correlation/correlation-calibration.ts\n+++ b/src/services/correlation/correlation-calibration.ts\n@@ -106,7 +106,7 @@ function emptyScore(sourceId: string): SourceMultiplier {\n function refreshReliability(now: number): Map<string, RuleCohorts> {\n   const store = getCorrelationCalibrationStore();\n   if (reliabilityCache && Number.isFinite(now) && now >= reliabilityCache.at\n-    && now - reliabilityCache.at < RELIABILITY_CACHE_TTL_MS\n+    && now - reliabilityCache.at <= RELIABILITY_CACHE_TTL_MS\n     && now < reliabilityCache.nextOutcomeAt && store.revision() === reliabilityCache.revision) return reliabilityCache.byRule;\n   let nextOutcomeAt = Infinity;\n   const eligible = store.all().filter((r) => {\n",
+      "restoredSha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "diagnostic-isolation",
+      "behavior": "Consumers cannot corrupt cached cohort scores through diagnostics",
+      "file": "src/services/correlation/correlation-calibration.ts",
+      "sha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "diff": "diagnostic-isolation.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 14,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 13,
+        "failed": 1
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "cache expires at sixty seconds exactly and diagnostics cannot mutate it"
+      ],
+      "assertionErrors": [
+        "|-\n    Expected values to be strictly equal:\n    \n    99 !== 1.48"
+      ],
+      "diffSha256": "53ab4e64b3b6d03fa73eb49a40a6ffc96d6cc09fbc106fe49b579ee76798b3b9",
+      "appliedDiff": "diff --git a/src/services/correlation/correlation-calibration.ts b/src/services/correlation/correlation-calibration.ts\nindex e06702355..02aff0941 100644\n--- a/src/services/correlation/correlation-calibration.ts\n+++ b/src/services/correlation/correlation-calibration.ts\n@@ -151,7 +151,7 @@ export function reliabilityDiagnosticsForRule(ruleId: string, now: number = Date\n     reason = currentRegime ? 'sparse-regime' : 'unknown-regime';\n   }\n   return {\n-    overall: { ...cohorts.overall }, calm: { ...cohorts.calm }, shifted: { ...cohorts.shifted }, currentRegime,\n+    overall: cohorts.overall, calm: cohorts.calm, shifted: cohorts.shifted, currentRegime,\n     selected, reason, multiplier,\n   };\n }\n",
+      "restoredSha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "replay-conditional-selection",
+      "behavior": "Chronological replay must fail when conditional selection is disabled",
+      "file": "src/services/correlation/correlation-calibration.ts",
+      "sha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "diff": "replay-conditional-selection.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "chronological regime replay compares matched arms without future labels or retrospective tags"
+      ],
+      "assertionErrors": [
+        "|-\n    Expected values to be strictly equal:\n    \n    'pooled' !== 'calm'"
+      ],
+      "diffSha256": "6f9b5300c2c677aa76999485d07111bf177e432460a413e6c3808f20fc89a73a",
+      "appliedDiff": "diff --git a/src/services/correlation/correlation-calibration.ts b/src/services/correlation/correlation-calibration.ts\nindex e06702355..02279b6ff 100644\n--- a/src/services/correlation/correlation-calibration.ts\n+++ b/src/services/correlation/correlation-calibration.ts\n@@ -138,7 +138,7 @@ export function reliabilityDiagnosticsForRule(ruleId: string, now: number = Date\n   const currentRegime = getCorrelationRegime(now);\n   const preferred = currentRegime ? cohorts[currentRegime] : undefined;\n   const enoughOverall = cohorts.overall.resolvedCount >= MIN_REGIME_RESOLVED;\n-  const enoughRegime = preferred && preferred.resolvedCount >= MIN_REGIME_RESOLVED;\n+  const enoughRegime = false;\n   let selected: CorrelationReliabilityDiagnostics['selected'] = 'neutral';\n   let reason: CorrelationReliabilityDiagnostics['reason'] = 'insufficient-outcomes';\n   let multiplier = cohorts.overall.multiplier;\n",
+      "restoredSha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "directional-key-identity",
+      "behavior": "Lossy source-key extraction cannot collapse directional rule suffixes",
+      "file": "src/services/correlation/correlation-calibration.ts",
+      "sha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "diff": "directional-key-identity.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 14,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 12,
+        "failed": 2
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "directional keys stay independent and persistence retains the 400-record cap",
+        "island crossfade counts only outcomes eligible at the same decision time"
+      ],
+      "assertionErrors": [
+        "|-\n    Expected values to be strictly equal:\n    \n    1 !== 1.48",
+        "|-\n    Expected values to be strictly equal:\n    \n    0 !== 4"
+      ],
+      "diffSha256": "6b6aa3156f8022ee58ae155e9ef660a9a97dcc818371d0fb373b9a96ec925ef6",
+      "appliedDiff": "diff --git a/src/services/correlation/correlation-calibration.ts b/src/services/correlation/correlation-calibration.ts\nindex e06702355..98960ba18 100644\n--- a/src/services/correlation/correlation-calibration.ts\n+++ b/src/services/correlation/correlation-calibration.ts\n@@ -117,14 +117,14 @@ function refreshReliability(now: number): Map<string, RuleCohorts> {\n   });\n   const byRule = new Map<string, RuleCohorts>();\n   for (const overall of perSourceMultipliers(eligible, { minResolvedForMultiplier: MIN_REGIME_RESOLVED })) {\n-    byRule.set(overall.sourceId.slice(CORR_RULE_SOURCE_PREFIX.length), {\n+    byRule.set(overall.sourceId.split(':')[1], {\n       overall, calm: emptyScore(overall.sourceId), shifted: emptyScore(overall.sourceId),\n     });\n   }\n   for (const regime of ['calm', 'shifted'] as const) {\n     const tagged = eligible.filter((r) => r.outcomeRegime === regime);\n     for (const score of perSourceMultipliers(tagged, { minResolvedForMultiplier: MIN_REGIME_RESOLVED })) {\n-      byRule.get(score.sourceId.slice(CORR_RULE_SOURCE_PREFIX.length))![regime] = score;\n+      byRule.get(score.sourceId.split(':')[1])![regime] = score;\n     }\n   }\n   reliabilityCache = { at: now, revision: store.revision(), nextOutcomeAt, byRule };\n",
+      "restoredSha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "crossfade-count-eligibility",
+      "behavior": "Island crossfade counts only outcomes eligible at the decision time, preserving existing suppression until five available labels",
+      "file": "src/services/correlation/correlation-calibration.ts",
+      "sha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "diff": "crossfade-count-eligibility.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 14,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 12,
+        "failed": 2
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "island crossfade counts only outcomes eligible at the same decision time",
+        "future ledger outcomes cannot re-enable an actually dismissed island rule"
+      ],
+      "assertionErrors": [
+        "|-\n    future labels cannot replace existing feedback\n    \n    1 !== null",
+        "|-\n    future outcomes must not revive the suppressed earthquake-to-tsunami rule\n    + actual - expected\n    \n    + [\n    +   {\n    +     acknowledged: false,\n    +     body: 'Rule: earthquake \u2192 tsunami  \u00b7  confidence 89%\\n' +\n    +       '\u2022 [earthquake] M7.5 earthquake\\n' +\n    +       '\u2022 [tsunami] Tsunami detected',\n    +     correlationMembers: [\n    +       'review-quake',\n    +       'review-wave'\n    +     ],\n    +     correlationPair: [\n    +       'earthquake',\n    +       'tsunami'\n    "
+      ],
+      "diffSha256": "4082c9ac0863a7563a85f277d4abd8080e9ba748d9d4775aa6e8922a15cc84c1",
+      "appliedDiff": "diff --git a/src/services/correlation/correlation-calibration.ts b/src/services/correlation/correlation-calibration.ts\nindex e06702355..f9b0d8444 100644\n--- a/src/services/correlation/correlation-calibration.ts\n+++ b/src/services/correlation/correlation-calibration.ts\n@@ -180,7 +180,8 @@ export function expireCalibrationPredictions(now: number = Date.now()): number {\n /** Resolved-outcome count for one rule \u2014 lets callers gate on whether\n  *  ledger evidence exists before trusting the multiplier. */\n export function resolvedCountForRule(ruleId: string, now: number = Date.now()): number {\n-  return refreshReliability(now).get(ruleId)?.overall.resolvedCount ?? 0;\n+  const sourceId = `${CORR_RULE_SOURCE_PREFIX}${ruleId}`;\n+  return getCorrelationCalibrationStore().all().filter(r => r.sourceId === sourceId && (r.status === 'resolved_true' || r.status === 'resolved_false')).length;\n }\n \n /** Resolve one prediction by id (used by non-situation producers such\n",
+      "restoredSha256": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    },
+    {
+      "id": "crossfade-decision-time",
+      "behavior": "Island crossfade eligibility uses the same explicit decision time as multiplier lookup",
+      "file": "src/services/correlation/island-calibration.ts",
+      "sha256": "e551630ffacd8d2223fd24881f1ef319ee3476e2d96225a8151d89886b776e5c",
+      "diff": "crossfade-decision-time.diff",
+      "baseline": {
+        "exit": 0,
+        "passed": 14,
+        "failed": 0
+      },
+      "red": {
+        "exit": 1,
+        "passed": 13,
+        "failed": 1
+      },
+      "restored": true,
+      "clean": true,
+      "failedSubtests": [
+        "island crossfade counts only outcomes eligible at the same decision time"
+      ],
+      "assertionErrors": [
+        "|-\n    fifth label governs exactly when available\n    \n    null !== 0.5"
+      ],
+      "diffSha256": "05f0c2dcecf18ea2f0972a6e3bfb7594ab6d6189d848e888eb21ed9156d54024",
+      "appliedDiff": "diff --git a/src/services/correlation/island-calibration.ts b/src/services/correlation/island-calibration.ts\nindex 1013a0175..403b4a7af 100644\n--- a/src/services/correlation/island-calibration.ts\n+++ b/src/services/correlation/island-calibration.ts\n@@ -80,7 +80,7 @@ export function islandReliability(pairKey: string, now: number = Date.now()): nu\n  * multiplying them would double-count (5 fast dismissals \u2248 0.5 \u00d7 0.5).\n  */\n export function islandLedgerMult(pairKey: string, now: number = Date.now()): number | null {\n-  if (resolvedCountForRule(islandRuleId(pairKey), now) < MIN_RESOLVED_FOR_LEDGER) return null;\n+  if (resolvedCountForRule(islandRuleId(pairKey)) < MIN_RESOLVED_FOR_LEDGER) return null;\n   return reliabilityForRule(islandRuleId(pairKey), now);\n }\n \n",
+      "restoredSha256": "e551630ffacd8d2223fd24881f1ef319ee3476e2d96225a8151d89886b776e5c",
+      "cleanBefore": true,
+      "confirmedApplied": true
+    }
+  ],
+  "unresolved": 0,
+  "evidenceDirectory": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/acc505/proofs",
+  "productionSha256": {
+    "src/services/cognition/regime-monitor.ts": "daf3900480979d50217e47dd5506aedcea43661f4adc7cf648546a3271d4b30a",
+    "src/services/cognition/regime-scan.ts": "acbea693721c9a6e3b64e3dfd153894095227071c4689cf6422970257e20f3cb",
+    "src/services/correlation/correlation-calibration.ts": "f5c0f1e32b857b244796b74d72f8ea161c0dedd541650a6b30df31b4b6ffb03b",
+    "src/services/correlation/island-calibration.ts": "e551630ffacd8d2223fd24881f1ef319ee3476e2d96225a8151d89886b776e5c",
+    "src/services/intelligence/forecast-calibration.ts": "5ff665e893d68270cc5f7fa06fce647ecf78af68ab89293a315e8942ca5dfbbf",
+    "src/services/pressure-history.ts": "866c72c8bfccb3aa592da556eae67c929de2261790f40b460658f08c6fe43543"
+  },
+  "finalCombined": {
+    "command": "npm run test:acc505",
+    "passed": 21,
+    "failed": 0,
+    "clean": true
+  },
+  "mutationsKilled": 33,
+  "totalFailingSubtests": 59
+}

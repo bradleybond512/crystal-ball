@@ -971,7 +971,7 @@ These tasks retain their detailed designs in
 | ACC-502 | DONE | Multiple-comparison correction and inhibitory edges | ACC-501 (DONE) |
 | ACC-503 | DONE | Multi-hop mediation/confounder filtering | ACC-501 (DONE) |
 | ACC-504 | DONE | Dispersion correction for bursty streams | ACC-501 (DONE) |
-| ACC-505 | TODO | Per-regime correlation reliability | ACC-501 (DONE) |
+| ACC-505 | DONE | Per-regime correlation reliability | ACC-501 (DONE) |
 | ACC-506 | WAITING | Bounded correlation-kernel tunables and safety fixtures | ACC-505 |
 | ACC-507 | DONE | Bounded cross-event correlation ingestion and liveness proof | ACC-502 (DONE) |
 | ACC-508 | TODO | Near-threshold coupling recall gate | ACC-503 (DONE), ACC-504 (DONE) |
@@ -1825,7 +1825,11 @@ measuring the wrong boundary.
 
 ### ACC-505 — Per-regime correlation reliability
 
-Status: `TODO`
+Status: `DONE`
+
+Claim: draft [#1856](https://github.com/bradleybond512/crystal-ball/pull/1856), `codex/acc505-regime-reliability`. Approved design: [regime reliability](plans/2026-11-04-acc505-regime-reliability.md). Local implementation verified: 21 focused checks, 453 correlation checks, 51 selected suites and 33 caught mutations. [QA and replay evidence](validation/ACC-505-REGIME-RELIABILITY.md). Scoped acceptance covers the five-outcome threshold, unchanged pooled fallback and bounds, immutable outcome-time tags, bounded aggregates, chronological replay, mutation evidence, type checks and independent reviews. Prospective production uplift remains unproven. Bradley authorized reconciliation, publication and merging; installation and deployment remain paused.
+
+Evidence: #1856 (candidate completion PR); [QA and replay evidence](validation/ACC-505-REGIME-RELIABILITY.md). DONE records the bounded code/replay acceptance, not production accuracy uplift.
 
 Priority: A
 

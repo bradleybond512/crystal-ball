@@ -19,6 +19,7 @@ import type { ForecastDomain, ForecastSnapshot } from './mode-forecast';
 export interface PressureSample {
   timestamp: number;
   value: number;
+  observed?: true;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -122,7 +123,10 @@ function handleForecast(snapshot: ForecastSnapshot): void {
   for (const d of DOMAINS) {
     const value = snapshot.pressure[d] ?? 0;
     const series = history[d];
-    series.push({ timestamp: now, value });
+    const observed = Number.isFinite(snapshot.timestamp) && snapshot.timestamp > 0
+      && snapshot.timestamp <= Date.now() && Number.isFinite(snapshot.pressure[d])
+      && snapshot.pressure[d] >= 0 && snapshot.pressure[d] <= 1;
+    series.push({ timestamp: now, value, ...(observed ? { observed: true as const } : {}) });
     if (series.length > HISTORY_MAX) series.splice(0, series.length - HISTORY_MAX);
     maybeFireCritical(d, value);
   }

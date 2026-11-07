@@ -1,10 +1,266 @@
 {
-  "previousValidatedTip": "142069b7046b435b7dbc8b9e01245b50f28f5aca",
-  "currentRebasedTip": "5ea9a544d032fdf04fd07d8c7b2941576d621c3c",
-  "previousFullTree": "27e0208a169063fa1c5457a00cae5ad90636e332",
-  "currentFullTree": "27e0208a169063fa1c5457a00cae5ad90636e332",
+  "gateExecutionHead": "0a7bb6c6036d45cc51152e2cd766b9494a825ec8",
+  "preparedDependencyCheckpoint": "142069b7046b435b7dbc8b9e01245b50f28f5aca",
+  "actualMainRebasedHead": "5ea9a544d032fdf04fd07d8c7b2941576d621c3c",
+  "previousReviewedSourceHead": "e2a0ef50cc59eb000cf9d61cec27acce318c4082",
   "actualMain": "4b047a1288291fd4f030985b26878c28b28b38d5",
   "retainedGate": "/tmp/ux050-final-dependency/gate.log",
   "retainedGateSHA256": "c84c385142279d80c951014fba9d6cb69fcb4e42a17ea85b4f6a61dcadec582d",
-  "scope": "Entire Git trees identical before evidence-only update; seven-suite gate actually ran on previousValidatedTip. Current-main-owned selector and live candidate snapshot rerun separately. No new mutation run claimed."
+  "fullTrees": {
+    "0a7bb6c6036d45cc51152e2cd766b9494a825ec8": "43824d3a65a633b05c25677b3d7b45e7dac0e185",
+    "142069b7046b435b7dbc8b9e01245b50f28f5aca": "27e0208a169063fa1c5457a00cae5ad90636e332",
+    "5ea9a544d032fdf04fd07d8c7b2941576d621c3c": "27e0208a169063fa1c5457a00cae5ad90636e332",
+    "e2a0ef50cc59eb000cf9d61cec27acce318c4082": "f2c01ec3f39ee900237215d42df95868ec3ab597"
+  },
+  "nonEvidenceRootEntries": {
+    ".agents": {
+      "kind": "tree",
+      "object": "f51565948bd39a798773c0edb80bcd156b5d8921"
+    },
+    ".claude": {
+      "kind": "tree",
+      "object": "4a89f8f581c2daf2935e0db2febfd5402b246e67"
+    },
+    ".codex": {
+      "kind": "tree",
+      "object": "ba392459d764db0240746bcdcd0d93a9e88cdb68"
+    },
+    ".env.example": {
+      "kind": "blob",
+      "object": "965957eb0686346d9acc017d734b9409da98c090"
+    },
+    ".github": {
+      "kind": "tree",
+      "object": "d2adfd4b37b09d25ef678132f831c0a9f272ae39"
+    },
+    ".gitignore": {
+      "kind": "blob",
+      "object": "e0b5d557fa1bf0f40761693e97b1ca932303400c"
+    },
+    ".husky": {
+      "kind": "tree",
+      "object": "9c2dcd507f2b998d65e0fe70d9ec3ac39b704fae"
+    },
+    ".mcp.json": {
+      "kind": "blob",
+      "object": "efc00743f64247a36394d4b88db278204352720a"
+    },
+    ".node-version": {
+      "kind": "blob",
+      "object": "2bd5a0a98a36cc08ada88b804d3be047e6aa5b8a"
+    },
+    ".npmrc": {
+      "kind": "blob",
+      "object": "da29da5a1403bd304a3accd02b2b56a31f27571b"
+    },
+    ".nvmrc": {
+      "kind": "blob",
+      "object": "2bd5a0a98a36cc08ada88b804d3be047e6aa5b8a"
+    },
+    "AGENTS.md": {
+      "kind": "blob",
+      "object": "e0bf4af2edd12b8a17d735ebe4451f5f16054500"
+    },
+    "CHANGELOG.md": {
+      "kind": "blob",
+      "object": "133145ef8ce04cd081ca9f0614aabf69644c9550"
+    },
+    "CLAUDE.md": {
+      "kind": "blob",
+      "object": "cbfa872ae890e4cac965acaf77565b4efd916d0d"
+    },
+    "CODE_OF_CONDUCT.md": {
+      "kind": "blob",
+      "object": "e19aaf8762c7dd8d27d685ffffa1ecc6738e7f13"
+    },
+    "CONTRIBUTING.md": {
+      "kind": "blob",
+      "object": "c07f9b9107172f4356da5205727a1c33cb16b8dd"
+    },
+    "LICENSE": {
+      "kind": "blob",
+      "object": "cfc37be9cc23878b4a487800b341f6c2df0ad578"
+    },
+    "Makefile": {
+      "kind": "blob",
+      "object": "9de826b991614d33c4982d99618eb7fa23529c3b"
+    },
+    "NOTICE.md": {
+      "kind": "blob",
+      "object": "cbef1b4ac1bcd677609f776a2a1f2db24fdb88e4"
+    },
+    "PRIVACY.md": {
+      "kind": "blob",
+      "object": "9a742855224300503d36061b8d35a60d98c3f277"
+    },
+    "README.md": {
+      "kind": "blob",
+      "object": "1af35aee4b7f1b47722dee40ad72bd0d9423d260"
+    },
+    "ROADMAP.md": {
+      "kind": "blob",
+      "object": "f4ec1804d2a016394123372245f2393dc4bdb55e"
+    },
+    "SECURITY.md": {
+      "kind": "blob",
+      "object": "bd124bf8822fbda5b79708b39623d1e6cdc656d8"
+    },
+    "api": {
+      "kind": "tree",
+      "object": "643298657ac791b23d9060901dbc5976d099eb05"
+    },
+    "config": {
+      "kind": "tree",
+      "object": "176d812ce3ba065130a53df8bff75e6280feb354"
+    },
+    "convex": {
+      "kind": "tree",
+      "object": "aed466cd0aa7ce9f93d7c1bd20df81ea91cf8d4f"
+    },
+    "data": {
+      "kind": "tree",
+      "object": "1656d097a888855bcf46aa8bdde2cbff24bbb5c2"
+    },
+    "deploy": {
+      "kind": "tree",
+      "object": "a69a3a8209ab29c7a9c42c13a733c120c84bb2bd"
+    },
+    "e2e": {
+      "kind": "tree",
+      "object": "07560038c5f9468df3028ce3b0c9988404337243"
+    },
+    "eslint.config.mjs": {
+      "kind": "blob",
+      "object": "85f40a6f9d558c826e05c347d05867aaf0ee5c6e"
+    },
+    "index.html": {
+      "kind": "blob",
+      "object": "1e6f2431a4aae2212adcc2828559ef1af7acb7bb"
+    },
+    "live-channels.html": {
+      "kind": "blob",
+      "object": "627e8a8a14cf8ef698c68109b138d9826cfc30d3"
+    },
+    "marketing-site": {
+      "kind": "tree",
+      "object": "4f899990ec06891ac7f6e89a7530e9f418b97b16"
+    },
+    "middleware.ts": {
+      "kind": "blob",
+      "object": "228b3ac17769fde63fbd1289d3cbd847a864e6dc"
+    },
+    "package-lock.json": {
+      "kind": "blob",
+      "object": "7592cb374049e70c9fe83f9356f0f0cb9b83e7cc"
+    },
+    "package.json": {
+      "kind": "blob",
+      "object": "4101f57a2885c47bf2bebcf06294e4dda1dcc0ff"
+    },
+    "page-load-baseline.png": {
+      "kind": "blob",
+      "object": "5d577ada39a2ff6b7f24b32db131d1d915fd4acc"
+    },
+    "playwright.config.ts": {
+      "kind": "blob",
+      "object": "48f2f96c8164beef5db8a026a04d3e3c74720d47"
+    },
+    "proto": {
+      "kind": "tree",
+      "object": "6f3943b29ed1273a4e367c22061499b35fe60007"
+    },
+    "public": {
+      "kind": "tree",
+      "object": "c0d42e5b8fd5699cf8f223a871d9c62d2e6b726b"
+    },
+    "railpack.json": {
+      "kind": "blob",
+      "object": "6267467415f0e490c96868ef1540b0318044cda2"
+    },
+    "research": {
+      "kind": "tree",
+      "object": "7eea69c7414d3583f7264502fcc339baeabc1c37"
+    },
+    "scripts": {
+      "kind": "tree",
+      "object": "2cc687b64f05b2d1d0399f0e17ae5be64c7c4d6d"
+    },
+    "server": {
+      "kind": "tree",
+      "object": "b1075e2066a9147da79b831b5bac22ade1b2e25f"
+    },
+    "settings.html": {
+      "kind": "blob",
+      "object": "5f1bab4142b50bdccf6d187a5174f6a3300b6c82"
+    },
+    "skills-lock.json": {
+      "kind": "blob",
+      "object": "15a65e8a8cc59f1fbbff1016089d0f553666929f"
+    },
+    "src-tauri": {
+      "kind": "tree",
+      "object": "360d24ae0f5985c0b234779411625bf98f908d59"
+    },
+    "src": {
+      "kind": "tree",
+      "object": "db8f51554a2fceb4b183f6e718e99f90dbc4c1eb"
+    },
+    "tests": {
+      "kind": "tree",
+      "object": "d868a05434d4b8729d3ecbc809c8365e87f51d9a"
+    },
+    "tools": {
+      "kind": "tree",
+      "object": "811e15eb88d38c3304b7f5376ff7f616615d8446"
+    },
+    "tsconfig.acc008.json": {
+      "kind": "blob",
+      "object": "000085ff10193be68a7a60d7a55f60684340e046"
+    },
+    "tsconfig.api.json": {
+      "kind": "blob",
+      "object": "b2eea0835235e1779dd7274d4660105e835e71a7"
+    },
+    "tsconfig.json": {
+      "kind": "blob",
+      "object": "4a9e00fdc92c4b2d5986628d45e002703eb172c4"
+    },
+    "vendor": {
+      "kind": "tree",
+      "object": "61ef8a5822d3c87c08ef38647495bb947ac24e2b"
+    },
+    "verbose-mode.json": {
+      "kind": "blob",
+      "object": "0fe3624b26b419c68d5ada362eafe667bfe0c2b0"
+    },
+    "vercel.json": {
+      "kind": "blob",
+      "object": "0a32f78540b56fcf63e0e30ebac73f81edff36b6"
+    },
+    "vite.config.ts": {
+      "kind": "blob",
+      "object": "83369e5bbfe43c39c6b8be9f795e4a2a0020e720"
+    },
+    "website-screenshots": {
+      "kind": "tree",
+      "object": "20fb2e1c53fab04da2b180d10061cb456681066e"
+    }
+  },
+  "metadataOnlyChangesFromGateHead": {
+    "142069b7046b435b7dbc8b9e01245b50f28f5aca": [
+      "docs/validation/UX-050-DEPENDENCY-CONTINUITY.json",
+      "docs/validation/UX-050-INTEGRATION.md"
+    ],
+    "5ea9a544d032fdf04fd07d8c7b2941576d621c3c": [
+      "docs/validation/UX-050-DEPENDENCY-CONTINUITY.json",
+      "docs/validation/UX-050-INTEGRATION.md"
+    ],
+    "e2a0ef50cc59eb000cf9d61cec27acce318c4082": [
+      "docs/validation/UX-050-DEPENDENCY-CONTINUITY.json",
+      "docs/validation/UX-050-INTEGRATION.md",
+      "docs/validation/UX-050-MAIN-CONTINUITY.json"
+    ]
+  },
+  "scope": "The seven-suite gate actually ran on gateExecutionHead 0a7bb6c6. The later prepared, rebased and previously reviewed heads differ from that execution head only in evidence metadata. Their source/test/build bytes match exactly. Whole-tree identity applies only between preparedDependencyCheckpoint and actualMainRebasedHead, not across the evidence commits. Current-main-owned72-script selector and live candidate snapshot were separately rerun. No new gate or mutation run claimed.",
+  "correction": "Earlier evidence incorrectly labeled142069b7 as the gate execution head. The correct execution head is0a7bb6c6; no production/test/build changes accompany this correction."
 }

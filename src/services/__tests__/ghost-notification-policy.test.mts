@@ -3,8 +3,6 @@ import { beforeEach, test } from 'node:test';
 import type { UnifiedAlert } from '../unified-alerts.ts';
 import { getNotificationTraceRegistry, resetDiagnosticsState } from '../diagnostics/diagnostics-state.ts';
 import * as modes from '../mode-manager.ts';
-import { notificationDispatcher } from '../notification-dispatcher.ts';
-import { startHypothesisNotifier } from '../hypothesis-notifier.ts';
 
 class NotificationStub {
   static permission: NotificationPermission = 'granted';
@@ -21,6 +19,11 @@ const storage = {
 };
 const page = Object.assign(new EventTarget(), { Notification: NotificationStub, localStorage: storage });
 const doc = new EventTarget();
+// Policy initialization must see this fixture's storage, not a missing browser global.
+Object.assign(globalThis, { window: page, document: doc, localStorage: storage, Notification: NotificationStub });
+const { resetSettings } = await import('../notifications/notification-settings-service.ts');
+const { notificationDispatcher } = await import('../notification-dispatcher.ts');
+const { startHypothesisNotifier } = await import('../hypothesis-notifier.ts');
 
 function siteWeather(severity: UnifiedAlert['severity'] = 'critical'): UnifiedAlert {
   return { id: 'site-fixture', source: 'nws', severity, title: 'Site warning fixture', body: 'Test',
@@ -36,6 +39,7 @@ beforeEach(() => {
   Object.assign(globalThis, { window: page, document: doc, localStorage: storage, Notification: NotificationStub });
   modes.setMode(null);
   values.clear();
+  resetSettings();
   NotificationStub.permission = 'granted';
   NotificationStub.sent = [];
   resetDiagnosticsState();
@@ -111,7 +115,8 @@ for (const variant of ['active', 'left', 'uninterrupted', 'denied'] as const) {
   });
 }
 
-test('HUD-hidden, eligible analyst signatures count once per batch and do not replay on exit', () => {
+test('HUD-hidden, eligible analyst signatures count once per batch and do not replay on exit', (t) => {
+  t.mock.method(Date.prototype, 'getHours', () => 12);
   startHypothesisNotifier();
   const snapshot = (regions: string[], risk: string = 'critical') => doc.dispatchEvent(new CustomEvent('cb:analyst-hypotheses', {
     detail: { hypotheses: regions.map(region => ({ kind: 'regional-burst', risk, evidence: [], confidence: 0.9, region })) },
@@ -131,5 +136,5 @@ test('HUD-hidden, eligible analyst signatures count once per batch and do not re
   snapshot(['North', 'South']);
   assert.deepEqual(NotificationStub.sent, []);
   snapshot(['West']);
-  assert.equal(NotificationStub.sent.length, 1);
+  assert.equal(NotificationStub.sent.length, 1, JSON.stringify(getNotificationTraceRegistry().summary()));
 });

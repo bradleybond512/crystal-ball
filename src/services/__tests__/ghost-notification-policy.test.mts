@@ -98,7 +98,8 @@ for (const variant of ['active', 'left', 'uninterrupted', 'denied'] as const) {
     notificationDispatcher.dispatchNotification(siteWeather(), 'sound+banner');
     if (variant !== 'uninterrupted') modes.setMode('ghost');
     if (variant === 'left') modes.setMode(null);
-    resolve(variant === 'denied' ? 'denied' : 'granted');
+    NotificationStub.permission = variant === 'denied' ? 'denied' : 'granted';
+    resolve(NotificationStub.permission);
     await pending;
     assert.equal(NotificationStub.sent.length, variant === 'uninterrupted' ? 1 : 0);
     const expected = Number(variant === 'active');

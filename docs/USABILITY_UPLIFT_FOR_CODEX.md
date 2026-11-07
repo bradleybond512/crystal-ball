@@ -919,9 +919,11 @@ Acceptance: Inventory each rail as measured content or an intentional overlay; v
 
 ### UX-035 — Gate background panel work by actual need
 
-Status: NOT STARTED — HIGH ASSURANCE
+Status: IN REVIEW — HIGH ASSURANCE
 Priority: B
 Source findings: PR1731 H3.
+
+Claim: `codex/ux035-hidden-presentation`; approved documentation-only draft claim and local implementation. [Design](plans/2026-11-06-ux035-hidden-presentation.md). Scope is the two profiled Alert Fatigue and Correlation Map presentation timers; broader application acceptance remains open. Code publication, installation, auto-merge and delivery remain paused.
 
 Acceptance: Profile foreground/background behavior before selecting panels. Reduce invisible presentation work while preserving safety monitoring and data dependencies; do not blanket-disable off-screen acquisition.
 
@@ -1249,7 +1251,7 @@ Update the row in the same PR that does the work.
 | UX-032 | Settings keyboard containment | MONITOR | #1723 |
 | UX-033 | Keep content reachable during stacked warnings | NOT STARTED | — |
 | UX-034 | Assign ownership of top-of-window surfaces | MONITOR | #1730 |
-| UX-035 | Gate background panel work by actual need | NOT STARTED — HIGH ASSURANCE | — |
+| UX-035 | Gate background panel work by actual need | IN REVIEW — HIGH ASSURANCE | Approved bounded two-panel slice; [design](plans/2026-11-06-ux035-hidden-presentation.md). Broader acceptance remains open; delivery paused. |
 | UX-036 | Spread refresh work and honor battery policy | NOT STARTED — HIGH ASSURANCE | — |
 | UX-037 | Prevent new unowned stacking levels | NOT STARTED | — |
 | UX-038 | Constrain video-channel link construction | NOT STARTED — HIGH ASSURANCE | — |

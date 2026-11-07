@@ -1008,7 +1008,10 @@ Acceptance: Measure fan-out cost and update subscriber contracts without losing 
 
 ### UX-044 — Announce critical UI changes accessibly
 
-Status: NOT STARTED
+Status: MONITOR
+Evidence: #1854 — [browser and native verification](validation/UX-044-CRITICAL-ANNOUNCEMENTS.md). Candidate implementation only; manual VoiceOver/NVDA spoken-output and final macOS accessibility-notification acceptance remain open.
+Review after: 2026-11-08
+Exit condition: Record actual screen-reader spoken-output and final macOS accessibility-notification acceptance for the identified surfaces, including suppression, repeat updates and keyboard focus.
 Priority: A
 Source findings: PR1731 L3.
 
@@ -1297,7 +1300,7 @@ Update the row in the same PR that does the work.
 | UX-040 | Expose unavailable and stale feed outcomes | MONITOR — HIGH ASSURANCE | #1841 — merged bounded news/status slice; broader acceptance remains open |
 | UX-042 | Construct panels when needed without losing coverage | MONITOR | #1714 |
 | UX-043 | Reduce repeated alert subscriber scans | NOT STARTED | — |
-| UX-044 | Announce critical UI changes accessibly | NOT STARTED | — |
+| UX-044 | Announce critical UI changes accessibly | MONITOR | [Evidence](validation/UX-044-CRITICAL-ANNOUNCEMENTS.md) · [Draft #1854](https://github.com/bradleybond512/crystal-ball/pull/1854) |
 | UX-045 | Keep advisories from suppressing warnings | DONE | #1733 |
 | UX-046 | Preserve alert priorities at capacity | DONE — HIGH ASSURANCE | #1734 |
 | UX-047 | Keep national weather warnings current | MONITOR — HIGH ASSURANCE | #1844 candidate evidence; [local validation](validation/UX-047-NATIONAL-WARNINGS.md) and [historical isolated native receipts](validation/UX-047-FALLBACK-PORTS.md). Integrated packaged acceptance remains open; installation/release/deployment paused. |

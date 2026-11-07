@@ -72,6 +72,7 @@ import { FirmsPanel } from '@/components/FirmsPanel';
 import { WatchAreaAlertingPanel } from '@/components/WatchAreaAlertingPanel';
 import { TriageBar } from '@/components/TriageBar';
 import { notificationStack } from '@/components/NotificationStack';
+import { CriticalPostureBanner } from '@/components/CriticalPostureBanner';
 import { EEWStatusBar } from '@/components/EEWStatusBar';
 import { CorrelationAlertBanner } from '@/components/CorrelationAlertBanner';
 import { startSpaceWeatherStatusBarPoller } from '@/services/spaceweather/status-bar-poller';
@@ -751,7 +752,7 @@ export class PanelLayoutManager implements AppModule {
   private mountingPanels = new Map<string, Promise<Panel | null>>();
   private isolatedPanelKeys: readonly string[] | null = null;
   private panelDragCleanupHandlers: (() => void)[] = [];
-  private criticalBannerEl: HTMLElement | null = null;
+  private criticalPostureBanner?: CriticalPostureBanner;
   private dcStrip: DataCenterPinnedStrip | null = null;
   private summaryStrip: SummaryStrip | null = null;
   private triageBar: TriageBar | null = null;
@@ -909,10 +910,8 @@ export class PanelLayoutManager implements AppModule {
  this.personalWeatherUnsub = null;
  this.modeAdvisoryUnsub?.();
  this.modeAdvisoryUnsub = null;
- if (this.criticalBannerEl) {
- this.criticalBannerEl.remove();
- this.criticalBannerEl = null;
- }
+ this.criticalPostureBanner?.destroy();
+ this.criticalPostureBanner = undefined;
  if (this.stalenessBanner) {
  this.stalenessBanner.destroy();
  this.stalenessBanner = null;
@@ -1115,74 +1114,7 @@ export class PanelLayoutManager implements AppModule {
   private buildWebLayout(): string { return htmlBuilders.buildWebLayout(this.ctx); }
 
   renderCriticalBanner(postures: TheaterPostureSummary[]): void {
- if (this.ctx.isMobile) {
- if (this.criticalBannerEl) {
- this.criticalBannerEl.remove();
- this.criticalBannerEl = null;
- }
- document.body.classList.remove('has-critical-banner');
- return;
- }
-
- const dismissedAt = sessionStorage.getItem('banner-dismissed');
- if (dismissedAt && Date.now() - Number.parseInt(dismissedAt, 10) < 30 * 60 * 1000) {
- return;
- }
-
- const critical = postures.filter(
- (p) => p.postureLevel === 'critical' || (p.postureLevel === 'elevated' && p.strikeCapable)
- );
-
- if (critical.length === 0) {
- if (this.criticalBannerEl) {
- this.criticalBannerEl.remove();
- this.criticalBannerEl = null;
- document.body.classList.remove('has-critical-banner');
- }
- return;
- }
-
- const top = critical[0]!;
- const isCritical = top.postureLevel === 'critical';
-
- if (!this.criticalBannerEl) {
- this.criticalBannerEl = document.createElement('div');
- this.criticalBannerEl.className = 'critical-posture-banner';
- // Highest-priority row of the notification stack: the stack's
- // ResizeObserver then publishes its height as --notification-stack-h,
- // so content shifts instead of being occluded.
- notificationStack.element.prepend(this.criticalBannerEl);
- }
-
- document.body.classList.add('has-critical-banner');
- this.criticalBannerEl.className = `critical-posture-banner ${isCritical ? 'severity-critical' : 'severity-elevated'}`;
- this.criticalBannerEl.innerHTML = `
- <div class="banner-content">
- <span class="banner-icon">${isCritical ? '🚨' : '⚠️'}</span>
- <span class="banner-headline">${escapeHtml(top.headline)}</span>
- <span class="banner-stats">${top.totalAircraft} aircraft • ${escapeHtml(top.summary)}</span>
- ${top.strikeCapable ? '<span class="banner-strike">STRIKE CAPABLE</span>' : ''}
- </div>
- <button class="banner-view" data-lat="${top.centerLat}" data-lon="${top.centerLon}">View Region</button>
- <button class="banner-dismiss">×</button>
- `;
-
- this.criticalBannerEl.querySelector('.banner-view')?.addEventListener('click', () => {
- console.log('[Banner] View Region clicked:', top.theaterId, 'lat:', top.centerLat, 'lon:', top.centerLon);
- trackCriticalBannerAction('view', top.theaterId);
- if (typeof top.centerLat === 'number' && typeof top.centerLon === 'number') {
- this.ctx.map?.setCenter(top.centerLat, top.centerLon, 4);
- } else {
- console.error('[Banner] Missing coordinates for', top.theaterId);
- }
- });
-
- this.criticalBannerEl.querySelector('.banner-dismiss')?.addEventListener('click', () => {
- trackCriticalBannerAction('dismiss', top.theaterId);
- this.criticalBannerEl?.classList.add('dismissed');
- document.body.classList.remove('has-critical-banner');
- sessionStorage.setItem('banner-dismissed', Date.now().toString());
- });
+    this.criticalPostureBanner?.render(postures, this.ctx.isMobile);
   }
 
   applyPanelSettings(): void {
@@ -1215,6 +1147,9 @@ export class PanelLayoutManager implements AppModule {
  // Mount the notification stack directly below the EEW bar. All secondary
  // banners mount into this container so they flow vertically without overlap.
  notificationStack.mount(document.body);
+ this.criticalPostureBanner = new CriticalPostureBanner(
+   notificationStack.element, (lat, lon) => this.ctx.map?.setCenter(lat, lon, 4), trackCriticalBannerAction,
+ );
 
  // The data-loader dispatches this event on every NWS refresh. One shared
  // mounting path also lets isolated E2E shells exercise the real listener.

@@ -1,0 +1,85 @@
+{
+  "executionSha": "45de3cf5c2e0313858ec870dc3cc587ed033ed95",
+  "localPendingBaseline": "7de0cd97bac7481506e7a18669c6e33eb17a266a",
+  "notActualMain": true,
+  "backup": "backup/ux044-pre-dispatcher-lint-d524a1766",
+  "priorConservativeExecution": "a838543b67622519f0c60609fc70bf3c649fe2c8",
+  "changedPriorInputs": {
+    "docs/validation/UX-018-RESOLVER-RUNS.md": {
+      "previousSha256": "273a7b17ff94931384d9e58eb1b5fe08fbcf1501c2130842de5bcfa1694afa2c",
+      "currentSha256": "159e90d3828bdfd5878f7a0b814d80db020b0a330c1f4ba6dc9dd163023d9eac"
+    },
+    "docs/validation/UX-044-CRITICAL-ANNOUNCEMENTS.md": {
+      "previousSha256": "0457a3809c7b63d78ed240eda10f38a41468e17794d2216675651f63f7a3567e",
+      "currentSha256": "36d8551e3167b9145d514e8caeff9fe4b72f564e98bd2091f31b6358c81cfdd3"
+    },
+    "docs/validation/UX-049-THREAT-COVERAGE.md": {
+      "previousSha256": "74a0ec368075c07741972442ee718c68a6ecf6cfeb9acbf464ce173e3f275af2",
+      "currentSha256": "24b48b59ffccdf96172ed4013a3061cf89d707f19b39bb6636cf1e1862f3d32e"
+    },
+    "docs/validation/UX-053-LOCAL-INTEGRATION.md": {
+      "previousSha256": "d0046046f9d9d8ffd93df192899684ed1e5a2d3d8d3f2c54094806b233ce59c4",
+      "currentSha256": "8d2c0d59a41c7a13b9b55e5c3d7372507b20a7488a6ce8eec1a5c94dea36170c"
+    },
+    "docs/validation/UX-055-CREDENTIAL-VALIDATION.md": {
+      "previousSha256": "b2f645c0efe26243c0a1dc693ca64f577a72ef17de591e5cfcf309e6ad307e8d",
+      "currentSha256": "669ab3799b47a19765a434aa3a77383236cd6a28e15a65a650a323fcd026e04e"
+    },
+    "docs/validation/UX-058-LOCAL-INTEGRATION.md": {
+      "previousSha256": "6b1be18fcfad2d71d18fd9eca2253f101793569cae2ead070850dcc5cf3ffc8a",
+      "currentSha256": "aac50b6f761d5732ee4a811ae5b27a51f2c13ff11ed77e4271c4f5c442b1e2a1"
+    },
+    "src/services/__tests__/notification-dispatcher-trace.test.mts": {
+      "previousSha256": "ca6aaab376435be99040083c2d884744663c52e34aa690c9ff747aff1fc8c123",
+      "currentSha256": "d7fc52846b0b21161dfd880d0767c6bb61055e5c3ea9ab766480b873f18a1807"
+    },
+    "src/services/notification-dispatcher.ts": {
+      "previousSha256": "524a92bbe806aca326148d0109018b06cdc4e31694abd3c93e32945ba933810f",
+      "currentSha256": "67c36d15b93e9e077e8588e9fed522b7bd2bdbebe7c6c4f50155395d2f4fdd9c"
+    }
+  },
+  "unchangedPriorInputCount": 5937,
+  "ownSourceTestHashes": {
+    "src/components/CriticalPostureBanner.ts": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+    "src/components/__tests__/critical-posture-banner.test.mts": "65a39ee6d2870a4a1347c7e045e0f26a77bcef501138ad9ea138fc52d248a712",
+    "src/app/panel-layout.ts": "c85905265944f1efbe4f35f802202e602e123a0e48034e7aeb4764840d945332",
+    "src/components/SummaryStrip.ts": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92",
+    "src/components/__tests__/summary-strip-announcements.test.mts": "ec7c380013344d847abdc0eb1123efe04e645ff475eee13260efd3b5e845210e",
+    "src/utils/critical-ui-announcements.ts": "c7cee0fb78a913fb3020e6020104b379526981c0966b275565672cc4468ccfde",
+    "src/styles/eew-status-bar.css": "85e5958779e7754a576e111ebf88203ba203a86c387f71f6d3dfa30a05bd2be6",
+    "e2e/summary-strip-layout.mjs": "13ceb8c762e07a433ad3e5a245b4e55af5299650de684d804ba79d36f1bc170d",
+    "tests/ux047/operational-consumers.test.mts": "d86251b01af8f22a6e1905fa37763ae93bfa341b3525fb2818d14bbe7c996f6a"
+  },
+  "ownMutationSourcesAndTestsUnchanged": true,
+  "changedExecutableInputsMatchUpstream": true,
+  "focused": {
+    "ux058": [
+      90,
+      0
+    ],
+    "ux044": [
+      26,
+      0
+    ],
+    "layout": [
+      9,
+      0
+    ],
+    "ux047": [
+      124,
+      0
+    ],
+    "ghostFocusedFileStage": [
+      90,
+      0
+    ]
+  },
+  "logSha256": "5449dedf2fc324c9b2ab0ffce1b01f03e78c195fa4f14d0629aa167c2102aa1c",
+  "node": "v22.23.1",
+  "limitations": [
+    "Prior113-script and aggregate results apply to their recorded old execution and unchanged inputs only",
+    "Final preflight must explicitly run lint:ci with verified locked marketing dependencies and CI-clean generated-artifact setup",
+    "Later1852 abaa and sensor f334 evidence absent from local base must be retained from actual main",
+    "No heavy lint:ci/aggregate, selector, Claude, push or native acceptance in this refresh"
+  ]
+}

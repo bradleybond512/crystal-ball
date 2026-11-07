@@ -28,6 +28,7 @@ function fixture(file: string, extra: Record<string, unknown> = {}) {
   const invocations: Array<{ command: string; payload: unknown }> = [];
   const dependencies: Record<string, unknown> = {
     '@/services/unified-alerts': { unifiedAlertStore: store },
+    '@/utils/critical-ui-announcements': { criticalAnnouncementsSuppressed: () => false, watchCriticalAnnouncementSuppression: () => () => {} },
     './unified-alerts': { unifiedAlertStore: store },
     '@/services/alert-routing': {
       rankAlerts: (alerts: typeof retired[]) => { inputs.push(alerts); return []; },

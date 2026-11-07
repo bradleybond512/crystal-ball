@@ -1,0 +1,230 @@
+{
+  "candidate": "946abbc33242f6f49fb2c5b851f43d0022815e54",
+  "localPendingBaseline": "71559607401f95bdd62fbc3002a9a3192cf63ced",
+  "notActualMain": true,
+  "historicalIdentity": {
+    "src/components/CriticalPostureBanner.ts": true,
+    "src/components/__tests__/critical-posture-banner.test.mts": true,
+    "src/app/panel-layout.ts": false,
+    "src/components/SummaryStrip.ts": false,
+    "src/components/__tests__/summary-strip-announcements.test.mts": false,
+    "src/utils/critical-ui-announcements.ts": true,
+    "src/styles/eew-status-bar.css": true,
+    "e2e/summary-strip-layout.mjs": true
+  },
+  "sourceAndTestHashes": {
+    "src/components/CriticalPostureBanner.ts": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+    "src/components/__tests__/critical-posture-banner.test.mts": "65a39ee6d2870a4a1347c7e045e0f26a77bcef501138ad9ea138fc52d248a712",
+    "src/app/panel-layout.ts": "c85905265944f1efbe4f35f802202e602e123a0e48034e7aeb4764840d945332",
+    "src/components/SummaryStrip.ts": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92",
+    "src/components/__tests__/summary-strip-announcements.test.mts": "ec7c380013344d847abdc0eb1123efe04e645ff475eee13260efd3b5e845210e",
+    "src/utils/critical-ui-announcements.ts": "c7cee0fb78a913fb3020e6020104b379526981c0966b275565672cc4468ccfde",
+    "src/styles/eew-status-bar.css": "85e5958779e7754a576e111ebf88203ba203a86c387f71f6d3dfa30a05bd2be6",
+    "e2e/summary-strip-layout.mjs": "13ceb8c762e07a433ad3e5a245b4e55af5299650de684d804ba79d36f1bc170d"
+  },
+  "summaryStripReversals": [
+    {
+      "id": "S01",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..f5a463da5 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -138,7 +138,7 @@ export class SummaryStrip {\n       <button type=\"button\" class=\"cb-summary-strip-seg\" data-seg=\"regime\"></button>`;\n     this.live = document.createElement('span');\n     this.live.className = 'critical-ui-announcer';\n-    this.live.setAttribute('role', 'status');\n+    this.live.setAttribute('role', 'note');\n     this.live.setAttribute('aria-live', 'polite');\n     this.live.setAttribute('aria-atomic', 'true');\n     const chevron = document.createElement('button');\n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    },
+    {
+      "id": "S02",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..bd2d32b9e 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -139,7 +139,7 @@ export class SummaryStrip {\n     this.live = document.createElement('span');\n     this.live.className = 'critical-ui-announcer';\n     this.live.setAttribute('role', 'status');\n-    this.live.setAttribute('aria-live', 'polite');\n+    this.live.setAttribute('aria-live', 'assertive');\n     this.live.setAttribute('aria-atomic', 'true');\n     const chevron = document.createElement('button');\n     chevron.type = 'button';\n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    },
+    {
+      "id": "S03",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..bb209ea5a 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -140,7 +140,7 @@ export class SummaryStrip {\n     this.live.className = 'critical-ui-announcer';\n     this.live.setAttribute('role', 'status');\n     this.live.setAttribute('aria-live', 'polite');\n-    this.live.setAttribute('aria-atomic', 'true');\n+    this.live.setAttribute('aria-atomic', 'false');\n     const chevron = document.createElement('button');\n     chevron.type = 'button';\n     chevron.className = 'cb-summary-strip-chevron';\n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    },
+    {
+      "id": "S04",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..4da4af82a 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -146,7 +146,7 @@ export class SummaryStrip {\n     chevron.className = 'cb-summary-strip-chevron';\n     chevron.dataset.seg = 'chevron';\n     chevron.innerHTML = icon('chevron-down', { size: 12 });\n-    this.el.append(this.segsEl, chevron, this.live);\n+    this.el.append(this.segsEl, chevron); chevron.append(this.live);\n \n     // One delegated listener for every segment + the chevron.\n     this.el.addEventListener('click', this.onClick);\n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    },
+    {
+      "id": "S05",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..7eef9f230 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -264,7 +264,7 @@ export class SummaryStrip {\n     const counts = { critical: 0, high: 0, medium: 0 };\n     let total = 0;\n     for (const alert of unifiedAlertStore.getOperationalAlerts()) {\n-      if (alert.acknowledged) continue;\n+      if (false) continue;\n       total++;\n       if (alert.severity === 'critical' || alert.severity === 'high' || alert.severity === 'medium') counts[alert.severity]++;\n     }\n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    },
+    {
+      "id": "S06",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..4f2bfe766 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -278,7 +278,7 @@ export class SummaryStrip {\n         parts.push(`<strong class=\"cb-stat-value\" style=\"color:${ALERT_SEV_TOKEN[severity]};\">${count}</strong> ${short}`);\n       }\n     }\n-    const empty = total ? 'no critical, high or medium alerts' : 'no open alerts';\n+    const empty = 'no open alerts';\n     const body = parts.length ? parts.join('<span class=\"cb-stat-sep\" aria-hidden=\"true\">\u00b7</span>')\n       : `<span class=\"cb-summary-strip-muted\">${empty}</span>`;\n     this.updateSegment('alerts', body, `${total} unacknowledged alerts \u2014 open Alert Inbox`, 'aria-description', `${total} unacknowledged alerts. Open Alert Inbox.`);\n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    },
+    {
+      "id": "S07",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..7faa371b2 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -291,7 +291,7 @@ export class SummaryStrip {\n       if (this.live.textContent) this.live.textContent = '';\n       this.previousTriage = undefined;\n     } else {\n-      if (this.previousTriage !== undefined && message !== this.previousTriage && this.el.isConnected) this.live.textContent = message;\n+      if (this.previousTriage !== undefined && message !== this.previousTriage && this.el.isConnected) this.live.textContent = message === 'Unacknowledged alerts: 0 critical, 0 high, 0 medium.' ? '' : message;\n       this.previousTriage = message;\n     }\n   }\n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    },
+    {
+      "id": "S08",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..d3907d835 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -272,7 +272,7 @@ export class SummaryStrip {\n     const triage: string[] = [];\n     for (const severity of ['critical', 'high', 'medium'] as const) {\n       const count = capCount(counts[severity]);\n-      triage.push(`${count} ${severity}`);\n+      triage.push(`${counts[severity]} ${severity}`);\n       if (counts[severity]) {\n         const short = severity === 'medium' ? 'med' : severity.slice(0, 4);\n         parts.push(`<strong class=\"cb-stat-value\" style=\"color:${ALERT_SEV_TOKEN[severity]};\">${count}</strong> ${short}`);\n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    },
+    {
+      "id": "S09",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..e8008178a 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -291,7 +291,7 @@ export class SummaryStrip {\n       if (this.live.textContent) this.live.textContent = '';\n       this.previousTriage = undefined;\n     } else {\n-      if (this.previousTriage !== undefined && message !== this.previousTriage && this.el.isConnected) this.live.textContent = message;\n+      if (this.previousTriage !== undefined && this.el.isConnected) this.live.textContent = message;\n       this.previousTriage = message;\n     }\n   }\n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    },
+    {
+      "id": "S10",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..f2732292d 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -245,6 +245,7 @@ export class SummaryStrip {\n       this.bodies.set(button, body);\n     }\n     if (button.title !== title) button.title = title;\n+    button.replaceWith(button.cloneNode(true));\n     if (button.getAttribute(attr) !== name) button.setAttribute(attr, name);\n   }\n \n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    },
+    {
+      "id": "S11",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..a1e9010ca 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -348,7 +348,7 @@ export class SummaryStrip {\n         break;\n       }\n       case 'status': { this.deps.onStatusClick(); break; }\n-      case 'alerts': { this.deps.onAlertsClick(); break; }\n+      case 'alerts': { this.deps.onStatusClick(); break; }\n       case 'fresh': { this.deps.onFreshnessClick(); break; }\n       case 'regime': { this.deps.onRegimeClick(); break; }\n       default: { break; }\n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    },
+    {
+      "id": "S12",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..24ef7ba1c 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -222,7 +222,7 @@ export class SummaryStrip {\n   private renderSegments(): void {\n     if (!this.enabled) return;\n     this.renderStatus();\n-    if (this.collapsed) return;\n+    if (false) return;\n     this.renderAlerts();\n     this.renderFreshness();\n     this.renderRegime();\n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    },
+    {
+      "id": "S15",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..5f240ab98 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -220,7 +220,7 @@ export class SummaryStrip {\n   // \u2500\u2500 Rendering \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n \n   private renderSegments(): void {\n-    if (!this.enabled) return;\n+    if (false) return;\n     this.renderStatus();\n     if (this.collapsed) return;\n     this.renderAlerts();\n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    },
+    {
+      "id": "S16",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..ae5fd071d 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -172,7 +172,7 @@ export class SummaryStrip {\n   }\n \n   public destroy(): void {\n-    this.stopWatchingSuppression();\n+    ;\n     this.unsubStatus?.();\n     this.unsubStatus = null;\n     this.unsubAlerts?.();\n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    },
+    {
+      "id": "S17",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..c77fca9d4 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -175,7 +175,7 @@ export class SummaryStrip {\n     this.stopWatchingSuppression();\n     this.unsubStatus?.();\n     this.unsubStatus = null;\n-    this.unsubAlerts?.();\n+    ;\n     this.unsubAlerts = null;\n     if (this.refreshTimer !== null) {\n       clearInterval(this.refreshTimer);\n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    },
+    {
+      "id": "S18",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..9f7f93f22 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -185,7 +185,7 @@ export class SummaryStrip {\n     document.removeEventListener(SUMMARY_STRIP_TOGGLE_EVENT, this.onToggleEvent);\n     window.removeEventListener('storage', this.onStorage);\n     this.el.removeEventListener('click', this.onClick);\n-    this.el.remove();\n+    ;\n   }\n \n   // \u2500\u2500 State \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    },
+    {
+      "id": "S19",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..d53965864 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -291,7 +291,7 @@ export class SummaryStrip {\n       if (this.live.textContent) this.live.textContent = '';\n       this.previousTriage = undefined;\n     } else {\n-      if (this.previousTriage !== undefined && message !== this.previousTriage && this.el.isConnected) this.live.textContent = message;\n+      if (message !== this.previousTriage && this.el.isConnected) this.live.textContent = message;\n       this.previousTriage = message;\n     }\n   }\n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    },
+    {
+      "id": "S24",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..16c256cea 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -160,7 +160,7 @@ export class SummaryStrip {\n     this.refreshTimer = setInterval(() => this.renderSegments(), REFRESH_MS);\n     document.addEventListener(REGIME_SHIFT_EVENT, this.onRegimeEvent);\n     document.addEventListener(SUMMARY_STRIP_TOGGLE_EVENT, this.onToggleEvent);\n-    window.addEventListener('storage', this.onStorage);\n+    ;\n \n     this.applyEnabled();\n     this.applyCollapsed();\n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    },
+    {
+      "id": "S25",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..f93f1f7a7 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -291,7 +291,7 @@ export class SummaryStrip {\n       if (this.live.textContent) this.live.textContent = '';\n       this.previousTriage = undefined;\n     } else {\n-      if (this.previousTriage !== undefined && message !== this.previousTriage && this.el.isConnected) this.live.textContent = message;\n+      if (this.previousTriage !== undefined && message !== this.previousTriage) this.live.textContent = message;\n       this.previousTriage = message;\n     }\n   }\n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    },
+    {
+      "id": "S26",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..b63904e4f 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -240,7 +240,7 @@ export class SummaryStrip {\n     const button = this.segsEl.querySelector<HTMLButtonElement>(`[data-seg=\"${key}\"]`)!;\n     const display = body ? '' : 'none';\n     this.setSegmentDisplay(button, display, 'fresh');\n-    if (this.bodies.get(button) !== body) {\n+    if (true) {\n       button.innerHTML = body;\n       this.bodies.set(button, body);\n     }\n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    },
+    {
+      "id": "S27",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..1dbe701c0 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -245,7 +245,7 @@ export class SummaryStrip {\n       this.bodies.set(button, body);\n     }\n     if (button.title !== title) button.title = title;\n-    if (button.getAttribute(attr) !== name) button.setAttribute(attr, name);\n+    button.setAttribute(attr, name);\n   }\n \n   private renderStatus(): void {\n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    },
+    {
+      "id": "S28",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..ee458422c 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -231,7 +231,7 @@ export class SummaryStrip {\n   private setSegmentDisplay(button: HTMLButtonElement, display: string, fallback: 'fresh' | 'chevron'): void {\n     if (button.style.display === display) return;\n     if (display === 'none' && button.isSameNode(document.activeElement)) {\n-      this.el.querySelector<HTMLButtonElement>(`[data-seg=\"${fallback}\"]`)?.focus({ preventScroll: true });\n+      ;\n     }\n     button.style.display = display;\n   }\n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    },
+    {
+      "id": "S29",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..6e853124b 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -230,7 +230,7 @@ export class SummaryStrip {\n \n   private setSegmentDisplay(button: HTMLButtonElement, display: string, fallback: 'fresh' | 'chevron'): void {\n     if (button.style.display === display) return;\n-    if (display === 'none' && button.isSameNode(document.activeElement)) {\n+    if (display === 'none') {\n       this.el.querySelector<HTMLButtonElement>(`[data-seg=\"${fallback}\"]`)?.focus({ preventScroll: true });\n     }\n     button.style.display = display;\n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    },
+    {
+      "id": "S30",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..02dca9d51 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -206,7 +206,7 @@ export class SummaryStrip {\n     this.el.classList.toggle('is-collapsed', this.collapsed);\n     if (this.collapsed) {\n       for (const segment of this.segsEl.querySelectorAll<HTMLButtonElement>('button:not([data-seg=\"status\"])')) {\n-        this.setSegmentDisplay(segment, 'none', 'chevron');\n+        this.setSegmentDisplay(segment, 'none', 'fresh');\n       }\n     }\n     const chevron = this.el.querySelector<HTMLElement>('.cb-summary-strip-chevron');\n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    },
+    {
+      "id": "S31",
+      "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..e55ca8434 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -230,7 +230,7 @@ export class SummaryStrip {\n \n   private setSegmentDisplay(button: HTMLButtonElement, display: string, fallback: 'fresh' | 'chevron'): void {\n     if (button.style.display === display) return;\n-    if (display === 'none' && button.isSameNode(document.activeElement)) {\n+    if (display === 'none' && button.matches(':focus')) {\n       this.el.querySelector<HTMLButtonElement>(`[data-seg=\"${fallback}\"]`)?.focus({ preventScroll: true });\n     }\n     button.style.display = display;\n",
+      "passed": 0,
+      "failed": 1,
+      "originalSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92"
+    }
+  ],
+  "operationalRetirement": {
+    "before": {
+      "exit": 0,
+      "passed": 1,
+      "failed": 0,
+      "output": "TAP version 13\n# Subtest: retired warnings never enter visible counts or spoken triage and focus survives retirement\nok 1 - retired warnings never enter visible counts or spoken triage and focus survives retirement\n  ---\n  duration_ms: 14.83425\n  type: 'test'\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 1\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 929.198125\n"
+    },
+    "red": {
+      "exit": 1,
+      "passed": 0,
+      "failed": 1,
+      "output": "TAP version 13\n# Subtest: retired warnings never enter visible counts or spoken triage and focus survives retirement\nnot ok 1 - retired warnings never enter visible counts or spoken triage and focus survives retirement\n  ---\n  duration_ms: 16.253208\n  type: 'test'\n  location: '/Users/bradleybond/.codex/worktrees/ux044-critical-announcements/crystalball/src/components/__tests__/summary-strip-announcements.test.mts:1:12084'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'Unacknowledged alerts: 1 critical, 1 high, 0 medium.'\n    - 'Unacknowledged alerts: 0 critical, 1 high, 0 medium.'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'Unacknowledged alerts: 0 critical, 1 high, 0 medium.'\n  actual: 'Unacknowledged alerts: 1 critical, 1 high, 0 medium.'\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (/Users/bradleybond/.codex/worktrees/ux044-critical-announcements/crystalball/src/components/__tests__/summary-strip-announcements.test.mts:240:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 897.689541\n"
+    },
+    "after": {
+      "exit": 0,
+      "passed": 1,
+      "failed": 0,
+      "output": "TAP version 13\n# Subtest: retired warnings never enter visible counts or spoken triage and focus survives retirement\nok 1 - retired warnings never enter visible counts or spoken triage and focus survives retirement\n  ---\n  duration_ms: 14.756875\n  type: 'test'\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 1\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 896.011208\n"
+    },
+    "diff": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex 9c9c7a395..c4914265a 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -263,7 +263,7 @@ export class SummaryStrip {\n   private renderAlerts(): void {\n     const counts = { critical: 0, high: 0, medium: 0 };\n     let total = 0;\n-    for (const alert of unifiedAlertStore.getOperationalAlerts()) {\n+    for (const alert of unifiedAlertStore.getAll()) {\n       if (alert.acknowledged) continue;\n       total++;\n       if (alert.severity === 'critical' || alert.severity === 'high' || alert.severity === 'medium') counts[alert.severity]++;\n",
+    "restoredSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92",
+    "clean": true
+  },
+  "restoredFocused": {
+    "ux044": "26 pass / 0 fail",
+    "layout": "9 pass / 0 fail",
+    "operationalAndCalibration": "24 pass / 0 fail"
+  }
+}

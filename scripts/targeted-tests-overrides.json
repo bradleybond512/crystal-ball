@@ -301,7 +301,8 @@
     "test:ux050",
     "test:ux053",
     "test:ux018",
-    "test:ux049"
+    "test:ux049",
+    "test:ux044"
   ],
   "src/styles/alerts.css": [
     "test:ux050"
@@ -1316,7 +1317,8 @@
     "test:ux047"
   ],
   "src/components/SummaryStrip.ts": [
-    "test:ux047"
+    "test:ux047",
+    "test:ux044"
   ],
   "src/services/sidebar-heat.ts": [
     "test:ux047"
@@ -1426,5 +1428,17 @@
   ],
   "src-tauri/sidecar/credential-verification.mjs": [
     "test:ux055"
+  ],
+  "src/components/CriticalPostureBanner.ts": [
+    "test:ux044"
+  ],
+  "src/utils/critical-ui-announcements.ts": [
+    "test:ux044"
+  ],
+  "src/styles/eew-status-bar.css": [
+    "test:ux044"
+  ],
+  "e2e/summary-strip-layout.mjs": [
+    "test:ux044"
   ]
 }

@@ -312,7 +312,8 @@
     "test:forecast-load": "tsx --test src/services/intelligence/__tests__/forecast-calibration-load.test.mts src/services/intelligence/__tests__/forecast-calibration-adapter.test.mts",
     "test:map-clarity": "tsx --test src/components/__tests__/map-clarity-model.test.mts src/components/__tests__/map-feature-list.test.mts && tsx --import ./tests/panels/register-hook.mjs --test --test-force-exit src/components/__tests__/map-popup-faa-camera.test.mts",
     "test:map-clarity-browser": "playwright test e2e/map-clarity.spec.ts",
-    "test:release-capabilities": "node --test tests/release-manifest.test.mjs tests/release-capabilities.test.mjs"
+    "test:release-capabilities": "node --test tests/release-manifest.test.mjs tests/release-capabilities.test.mjs",
+    "test:acc505": "tsx --test src/services/cognition/__tests__/correlation-regime.test.mts src/services/correlation/__tests__/regime-reliability.test.mts src/services/correlation/__tests__/regime-reliability-replay.test.mts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",

@@ -37,3 +37,71 @@ export function scanRegimeShifts(
   }
   return out;
 }
+
+export type CorrelationRegime = 'calm' | 'shifted';
+
+export interface CorrelationRegimeEvidence {
+  scannedAt: number;
+  completeObservedAt: number | null;
+  shifts: Partial<Record<ForecastDomain, RegimeShift>>;
+}
+
+const CORRELATION_DOMAINS: readonly ForecastDomain[] = ['finance', 'security', 'disaster', 'cyber'];
+const CORRELATION_WARM_SAMPLES = 10;
+const CORRELATION_FRESH_MS = 4 * 60_000;
+const CORRELATION_SHIFT_MAX_AGE_MS = 6 * 3_600_000;
+
+export function scanCorrelationRegime(
+  history: Partial<Record<ForecastDomain, PressureSample[]>>,
+  now: number,
+): CorrelationRegimeEvidence {
+  const qualified: Partial<Record<ForecastDomain, PressureSample[]>> = {};
+  let completeObservedAt: number | null = now;
+  for (const domain of CORRELATION_DOMAINS) {
+    const samples: PressureSample[] = [];
+    for (const sample of history[domain] ?? []) {
+      const previous = samples[samples.length - 1]?.timestamp ?? 0;
+      if (sample?.observed !== true || !Number.isFinite(sample.value)
+        || sample.value < 0 || sample.value > 1 || !Number.isFinite(sample.timestamp)
+        || sample.timestamp <= previous || sample.timestamp > now) {
+        samples.length = 0;
+        continue;
+      }
+      samples.push(sample);
+    }
+    qualified[domain] = samples;
+    if (samples.length < CORRELATION_WARM_SAMPLES) completeObservedAt = null;
+    else if (completeObservedAt !== null) completeObservedAt = Math.min(completeObservedAt, samples[samples.length - 1]!.timestamp);
+  }
+  return { scannedAt: now, completeObservedAt, shifts: scanRegimeShifts(qualified) };
+}
+
+function validCorrelationShift(shift: RegimeShift, domain: ForecastDomain, scannedAt: number): boolean {
+  return shift.metric === domain && Number.isFinite(shift.detectedAt)
+    && shift.detectedAt > 0 && shift.detectedAt <= scannedAt
+    && Number.isFinite(shift.triggerValue) && shift.triggerValue >= 0 && shift.triggerValue <= 1
+    && Number.isFinite(shift.runLength) && shift.runLength >= 0
+    && Number.isFinite(shift.changeProbability) && shift.changeProbability > 0 && shift.changeProbability <= 1
+    && ['up', 'down', 'unclear'].includes(shift.direction);
+}
+
+export function classifyCorrelationRegime(
+  evidence: CorrelationRegimeEvidence | null,
+  now: number,
+  enabled: boolean,
+): CorrelationRegime | undefined {
+  if (!enabled || !evidence || !Number.isFinite(now) || now <= 0
+    || !Number.isFinite(evidence.scannedAt) || evidence.scannedAt <= 0
+    || evidence.scannedAt > now || now - evidence.scannedAt > CORRELATION_FRESH_MS) return undefined;
+  let invalidShift = false;
+  for (const domain of CORRELATION_DOMAINS) {
+    const shift = evidence.shifts[domain];
+    if (!shift) continue;
+    if (!validCorrelationShift(shift, domain, evidence.scannedAt)) invalidShift = true;
+    else if (now - shift.detectedAt <= CORRELATION_SHIFT_MAX_AGE_MS) return 'shifted';
+  }
+  if (invalidShift || evidence.completeObservedAt === null || !Number.isFinite(evidence.completeObservedAt)
+    || evidence.completeObservedAt <= 0 || evidence.completeObservedAt > evidence.scannedAt
+    || now - evidence.completeObservedAt > CORRELATION_FRESH_MS) return undefined;
+  return 'calm';
+}

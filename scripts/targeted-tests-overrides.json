@@ -1440,5 +1440,23 @@
   ],
   "e2e/summary-strip-layout.mjs": [
     "test:ux044"
+  ],
+  "src/services/pressure-history.ts": [
+    "test:acc505"
+  ],
+  "src/services/cognition/regime-monitor.ts": [
+    "test:acc505"
+  ],
+  "src/services/cognition/regime-scan.ts": [
+    "test:acc505"
+  ],
+  "src/services/correlation/correlation-calibration.ts": [
+    "test:acc505"
+  ],
+  "src/services/intelligence/forecast-calibration.ts": [
+    "test:acc505"
+  ],
+  "src/services/correlation/island-calibration.ts": [
+    "test:acc505"
   ]
 }

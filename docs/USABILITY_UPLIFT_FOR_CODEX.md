@@ -1155,7 +1155,7 @@ Acceptance: Inspect the six reported timer writers; remove redundant writes whil
 Status: MONITOR — HIGH ASSURANCE
 Review after: 2026-11-14
 Exit condition: Verify final integrated packaged held-warning accounting, permission cancellation and no replay across warning retirement and Ghost transitions; historical receipts are not installed-app acceptance.
-Evidence: #1852 — [implementation and verification](validation/UX-058-DEFERRED-WARNINGS.md).
+Evidence: #1852 — [implementation and verification](validation/UX-058-DEFERRED-WARNINGS.md); [local dependency integration](validation/UX-058-LOCAL-INTEGRATION.md).
 Priority: S
 Source findings: PR1731 H19 follow-up and UX-045 scope limits.
 

@@ -103,3 +103,46 @@ worktree `064b0cc72d8836e2eb5ba8f31eabdd9990155f22` remains unchanged under
 `codex/ux058-preserved-nov7-before-main`; this active worktree now owns original
 PR branch `codex/ux058-deferred-warnings`. MONITOR and all release/install holds
 remain intact. Exact-head Sonnet review and hosted checks remain required.
+
+## Hosted ESLint repair: supersedes dispatcher/test byte continuity
+
+Hosted ESLint on `1d703f661` failed at dispatcher line 478 with
+`@typescript-eslint/prefer-nullish-coalescing` (baseline zero). Local aggregate
+had run `lint:strict`, which checks conflicts/JSON/YAML/shell/Markdown/colors,
+not type-aware ESLint. That earlier aggregate was genuine but insufficient to
+claim ESLint passed. No baseline or validation rule was changed.
+
+A blind `||` to `??` replacement failed typecheck because `hold` could be false.
+The final two-expression normalization returns undefined for denied outcomes
+without invoking the hold function, then uses nullish fallback. A first negated
+ternary also failed Unicorn lint; the final positive denied condition passes.
+These attempts are failures, not passed evidence. Exact reason assertions and a
+new denied-Ghost test protect accounting and suppression semantics.
+
+All following fresh checks ran on **`c26c5b8c6080798477098127ce50e04ca5360da8`**:
+
+- Actual `npm run lint:ci` passed: full repository baseline, then 29 changed
+  files; no errors, one existing unmatched declaration-file warning.
+- Focused dispatcher baseline/restoration 44/0. Three independent negative
+  mutations each 43/1: wrong fallback reason, dropped Ghost reason, and denied
+  outcome accidentally invoking hold/accounting. Clean SHA restoration verified.
+- Prescribed full aggregate passed with UX05890, UX05090+4+2, UX052117,
+  quiet-hours151, notifications227, warning-delivery45, UX05932, all zero failures,
+  plus lint:strict, typechecks, secrets, documentation and full build.
+
+[Exact repair receipts and artifact/dependency hashes](UX-058-LINT-REPAIR.json)
+qualify the **changed dispatcher and trace-test bytes**. Old 92-suite execution,
+old three-command reruns and old hosted results are historical for these files;
+they remain continuity evidence only for unaffected inputs. No fresh full90 run
+is claimed. Fresh required selection remains90 and new-head hosted CI is required.
+
+Local lint reproduction first lacked marketing-site ESLint dependencies. The
+existing CI prerequisite `npm ci --prefix marketing-site --ignore-scripts`
+resolved that without lockfile changes. A second scan found only the untracked,
+Git-ignored generated `src-tauri/sidecar/s2u-xmpp.bundle.mjs` left by prior local
+work. Its hash was preserved and it was temporarily moved outside the scan to
+match CI's clean checkout. No tracked source was excluded. The aggregate did not
+regenerate it; the original artifact was restored with matching SHA afterward.
+Reuse marketing dependencies only when both recorded package/lock hashes match;
+future clean-checkout lint must distinguish generated artifacts from real source
+findings. No app installation or deployment occurred. MONITOR remains open.

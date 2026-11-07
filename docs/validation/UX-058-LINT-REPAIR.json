@@ -1,0 +1,84 @@
+{
+  "executionHead": "c26c5b8c6080798477098127ce50e04ca5360da8",
+  "actualMain": "6dec686846bcf9f12a6de3062ac1b46697d49259",
+  "changedFiles": {
+    "src/services/notification-dispatcher.ts": "67c36d15b93e9e077e8588e9fed522b7bd2bdbebe7c6c4f50155395d2f4fdd9c",
+    "src/services/__tests__/notification-dispatcher-trace.test.mts": "d7fc52846b0b21161dfd880d0767c6bb61055e5c3ea9ab766480b873f18a1807"
+  },
+  "mutations": {
+    "executionHead": "c26c5b8c6080798477098127ce50e04ca5360da8",
+    "baseline": "44 passed, 0 failed",
+    "mutations": [
+      {
+        "name": "fallback-reason",
+        "file": "src/services/notification-dispatcher.ts",
+        "originalAndRestoredSHA256": "67c36d15b93e9e077e8588e9fed522b7bd2bdbebe7c6c4f50155395d2f4fdd9c",
+        "diff": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 79a11fce4..0efa27000 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -475,7 +475,7 @@ class NotificationDispatcher {\n       const mode = getNotificationModeState();\n       const hold = outcome === 'denied' ? undefined : holdNotificationForMode(alert.severity === 'critical', mode);\n       if (outcome !== 'denied' && (hold || mode.generation !== generation)) {\n-        suppressTrace(trace, hold ?? 'mode-changed-during-permission');\n+        suppressTrace(trace, hold ?? 'incorrect-reason');\n         return;\n       }\n       if (outcome !== 'granted' || Notification.permission !== 'granted') {\n",
+        "failCount": 1,
+        "passCount": 43,
+        "assertions": [
+          "not ok 26 - permission completion rechecks eligibility: mode-roundtrip"
+        ]
+      },
+      {
+        "name": "lost-ghost-reason",
+        "file": "src/services/notification-dispatcher.ts",
+        "originalAndRestoredSHA256": "67c36d15b93e9e077e8588e9fed522b7bd2bdbebe7c6c4f50155395d2f4fdd9c",
+        "diff": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 79a11fce4..177b4b2b6 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -475,7 +475,7 @@ class NotificationDispatcher {\n       const mode = getNotificationModeState();\n       const hold = outcome === 'denied' ? undefined : holdNotificationForMode(alert.severity === 'critical', mode);\n       if (outcome !== 'denied' && (hold || mode.generation !== generation)) {\n-        suppressTrace(trace, hold ?? 'mode-changed-during-permission');\n+        suppressTrace(trace, 'mode-changed-during-permission');\n         return;\n       }\n       if (outcome !== 'granted' || Notification.permission !== 'granted') {\n",
+        "failCount": 1,
+        "passCount": 43,
+        "assertions": [
+          "not ok 24 - permission completion rechecks eligibility: mode"
+        ]
+      },
+      {
+        "name": "denial-side-effect",
+        "file": "src/services/notification-dispatcher.ts",
+        "originalAndRestoredSHA256": "67c36d15b93e9e077e8588e9fed522b7bd2bdbebe7c6c4f50155395d2f4fdd9c",
+        "diff": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 79a11fce4..698d554b1 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -473,7 +473,7 @@ class NotificationDispatcher {\n       clearTimeout(timer);\n       controller.abort();\n       const mode = getNotificationModeState();\n-      const hold = outcome === 'denied' ? undefined : holdNotificationForMode(alert.severity === 'critical', mode);\n+      const hold = holdNotificationForMode(alert.severity === 'critical', mode);\n       if (outcome !== 'denied' && (hold || mode.generation !== generation)) {\n         suppressTrace(trace, hold ?? 'mode-changed-during-permission');\n         return;\n",
+        "failCount": 1,
+        "passCount": 43,
+        "assertions": [
+          "not ok 25 - permission completion rechecks eligibility: denied-mode"
+        ]
+      }
+    ],
+    "restoredClean": true
+  },
+  "fullLintCI": "passed, clean-checkout reproduction; no baseline or rules changed",
+  "aggregateTests": [
+    "test:ux058",
+    "test:ux050",
+    "test:ux052",
+    "test:quiet-hours",
+    "test:notifications",
+    "test:warning-delivery",
+    "test:ux059"
+  ],
+  "marketingDependencies": {
+    "path": "/Users/bradleybond/.codex/worktrees/ux058-reconcile-nov7/crystalball/marketing-site/node_modules",
+    "setup": "npm ci --prefix marketing-site --ignore-scripts",
+    "files": {
+      "marketing-site/package.json": "ae22421663b88098d80c2daa8098ab913b7b6e6565a393aabbc90ab65a3e5628",
+      "marketing-site/package-lock.json": "e981f0710a0912e11068ba27fe6227dab1b5f101dcdb9241a0dd33b8f46b7480"
+    }
+  },
+  "generatedArtifact": {
+    "path": "src-tauri/sidecar/s2u-xmpp.bundle.mjs",
+    "gitLsFiles": "",
+    "gitCheckIgnore": ".gitignore:42:src-tauri/sidecar/s2u-xmpp.bundle.mjs\tsrc-tauri/sidecar/s2u-xmpp.bundle.mjs",
+    "sha256": "4c5328fdbdf07514d9f04d5bd7815dd99664a23455418026c0c3b97074dc11ce",
+    "temporarilyPreservedAt": "/tmp/ux058-lint-repair/s2u-xmpp.bundle.mjs",
+    "aggregateRegenerated": false,
+    "restoredAfterValidation": true
+  },
+  "logSHA256": {
+    "lint-ci.log": "8812a1b0c094b91b756ae5b1cacf113a7cceaa8e86c7629c27be6e7f774b488b",
+    "lint-ci-complete.log": "1d811b94a42e30d264bb2cf0dc51ff17f8d4c98c932d94138327d28eee2bb3cf",
+    "lint-ci-clean.log": "a2c003d0e92a40872ac14940b20789eeca777eb74adee039791f2f693e4a3e9e",
+    "gate.log": "b525f2757534dcf2109f7c15c0dbf80f174fbde77cb07df16aecf0802cade737",
+    "restored-tests.log": "c2c46636aad19e73c461e6d4b66713bd66337e250cf09e2e695fba90d8c15b26",
+    "selected.log": "e64def769e266aa6533bd859122056e8c7b7263c189ba7eac2a31307e55e86c7"
+  },
+  "scope": "Old92 and old current-main byte-continuity receipts apply only to unaffected inputs. Dispatcher and trace tests changed and are certified by this new execution. No new full90 run claimed; hosted new-head checks remain required."
+}

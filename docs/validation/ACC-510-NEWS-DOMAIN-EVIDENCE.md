@@ -1,6 +1,6 @@
 # ACC-510 — News-domain evidence
 
-Local implementation validated; draft #1858 remains documentation-only until a separately approved code push. Installation, auto-merge and delivery remain paused. This is synthetic regression evidence, not measured production accuracy.
+Implemented and published to PR #1858. Bradley authorized reconciliation and merging on 2026-11-07. Installation, tags, releases, build dispatch and deployment remain paused. This is synthetic regression evidence, not measured production accuracy.
 
 ## Behavior and architecture
 
@@ -81,7 +81,7 @@ Independent GPT-6.1 Sol review concluded **“No blocking findings.”** on `65b
 
 ## Limits, manual verification and rollback
 
-No installed-app or live production data verification was performed. The replay has only 20 synthetic cases and explicitly adds four misses. Retained provenance cannot independently prove discarded inputs. Storage limits are guards, not measured memory budgets. New code has not run hosted CI while publication is pending.
+No installed-app or live production data verification was performed. The replay has only 20 synthetic cases and explicitly adds four misses. Retained provenance cannot independently prove discarded inputs. Storage limits are guards, not measured memory budgets. The previously published head `14e0fdf2f6b6b5fffc013d8a6f3196c653f669ca` passed all 17 latest hosted workflows. Reconciled heads require their own fresh hosted checks before merge.
 
 Manual verification after separately authorized delivery: inspect an unsupported news burst and a supported multi-source protest; confirm neutral versus supported labels and details; revise same-identity evidence; restart and inspect migration/history/dismissals; confirm authoritative warnings and Ghost Mode behavior. Do not perform these steps against production until authorized.
 
@@ -93,4 +93,34 @@ Commit: `Require supporting topics before news becomes a hazard claim`.
 
 Draft title: `ACC-510: require topic evidence for news-derived situations`.
 
-Draft description: Generic news spikes previously became civil-unrest claims regardless of topic. Require complete supporting article agreement and source diversity, show unsupported situations as Topic unconfirmed, and prevent unsupported forecast criteria through the connected analyst path. Preserve legacy history through versioned storage. Synthetic replay changes false positives from 13 to 0 and misses from 0 to 4; all added misses are explicit. Validation: 79 selected suites, final 85 focused tests, validation gates, 89 fresh mutation kills and independent review. Installation, auto-merge and delivery remain paused.
+Draft description: Generic news spikes previously became civil-unrest claims regardless of topic. Require complete supporting article agreement and source diversity, show unsupported situations as Topic unconfirmed, and prevent unsupported forecast criteria through the connected analyst path. Preserve legacy history through versioned storage. Synthetic replay changes false positives from 13 to 0 and misses from 0 to 4; all added misses are explicit. Validation: 79 selected suites, final 85 focused tests, validation gates, 89 fresh mutation kills and independent review. Installation, tags, releases, build dispatch and deployment remain paused.
+
+## November 7 main reconciliation
+
+Rebased onto `8bc006af2f80fdebb6398917c60b39d9797980b4` after UX-035 landed. The sole conflict was the additive test mapping: both UX-035 and ACC-510 entries were retained. ACC-510 production and test bytes are unchanged from the previously reviewed `14e0fdf2f6b6b5fffc013d8a6f3196c653f669ca`; historical mutation evidence therefore remains applicable and is not claimed as a new execution. The obsolete verdict-only commit was dropped for a new exact-head review.
+
+On reconciliation tree `d747aa1c9d00f4660e325ea0817b195da2288cb9`, using Node 22:
+
+```sh
+bash scripts/agentic-validate.sh --tests 'test:acc510 test:acc509 test:intelligence test:roadmap-controller test:workflow-security test:panel-presentation'
+```
+
+Actual respective output:
+
+```text
+# pass 85
+# fail 0
+# pass 126
+# fail 0
+# pass 589
+# fail 0
+# pass 126
+# fail 0
+# pass 61
+# fail 0
+# pass 41
+# fail 0
+Agentic validation gate passed.
+```
+
+All six suites passed (1,028 tests), plus the unchanged lockfile, strict lint, application/API typecheck, secret scan, documentation/roadmap and production-build gates. The remaining changes after that run are this status/evidence update and removal of the stale verdict; no production/test/gate inputs changed. The full main-owned targeted selector is recorded separately after it completes. Native installation acceptance and production-accuracy measurement remain open.

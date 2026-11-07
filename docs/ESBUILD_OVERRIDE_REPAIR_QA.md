@@ -53,8 +53,10 @@ The coordinator must retain clean-tree mutation evidence and run
 `bash scripts/agentic-validate.sh --tests "test:supply-chain-gates test:workflow-security"`
 and independent review before reporting completion.
 
-Package-lock SHA-256 remains
+The standalone #1862 change preserved main's package-lock SHA-256,
 `fa0fc7a76d31ce38c5b03b52e88b4c61956e444dc5171e89fab9a105e02e147f`.
+The #1838 integration preserves that branch's existing happy-dom lockfile instead;
+its SHA-256 is `5466eee89b22fc5ccf1af96878380e196241dee47671c596ceea75fd3220ca8c`.
 No new security exception or dependency-age exception is requested. Release tag
 integrity is a separate known issue, outside this repair. Rollback is reverting
 this metadata/test change; no persistent data migration is involved. Merging,

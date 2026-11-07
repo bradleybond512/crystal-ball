@@ -1998,7 +1998,7 @@ in UX-059 must coordinate with this store path. No accuracy-gate weakening.
 
 Status: `IN REVIEW`
 
-Claim: draft [#1858](https://github.com/bradleybond512/crystal-ball/pull/1858), `codex/acc510-news-domain`. [Approved design](plans/2026-11-06-acc510-news-domain-evidence.md). Local implementation is authorized; code publication, installation, auto-merge and delivery remain paused.
+Claim: draft [#1858](https://github.com/bradleybond512/crystal-ball/pull/1858), `codex/acc510-news-domain`. [Approved design](plans/2026-11-06-acc510-news-domain-evidence.md). Local implementation validated: [QA and replay evidence](validation/ACC-510-NEWS-DOMAIN-EVIDENCE.md). Synthetic replay reduces false unrest positives from 13 to 0, with four added misses explicitly retained. Code publication, installation, auto-merge and delivery remain paused.
 
 Priority: A
 

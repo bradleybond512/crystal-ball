@@ -1,0 +1,135 @@
+{
+  "previousTip": "bb4055611754fc1f07bd212fe1175541f3fad051",
+  "previousDependency": "56ccd569362361d92be0877980262f56aeae36da",
+  "pendingDependency": "c2718140c75ae041c487db236258029de65d5c0e",
+  "sourceHead": "0a7bb6c6036d45cc51152e2cd766b9494a825ec8",
+  "sourceTree": "db8f51554a2fceb4b183f6e718e99f90dbc4c1eb",
+  "previousSourceTree": "db8f51554a2fceb4b183f6e718e99f90dbc4c1eb",
+  "rows": [
+    {
+      "path": "index.html",
+      "oldSHA256": "71dab71f9f55abe38f7cabe955f40f366afd24fc488751e8624d07b3301e7dba",
+      "currentSHA256": "71dab71f9f55abe38f7cabe955f40f366afd24fc488751e8624d07b3301e7dba"
+    },
+    {
+      "path": "src/app/panel-layout.ts",
+      "oldSHA256": "67fbf0032f3e781d5ef5d722d681b14867efe1373dd1a9c8009d3b9739c59303",
+      "currentSHA256": "67fbf0032f3e781d5ef5d722d681b14867efe1373dd1a9c8009d3b9739c59303"
+    },
+    {
+      "path": "src/bootstrap/ghost-mode-notice.css",
+      "oldSHA256": "9223ddf912a31ba935a9d0228e163754cb5a64b418ba115bd051aaa0f737af49",
+      "currentSHA256": "9223ddf912a31ba935a9d0228e163754cb5a64b418ba115bd051aaa0f737af49"
+    },
+    {
+      "path": "src/bootstrap/ghost-mode-notice.ts",
+      "oldSHA256": "843f5cce6bbd0b65b9010623f446a30cdccb5b2f6eec90a6aab088e18ee87b6a",
+      "currentSHA256": "843f5cce6bbd0b65b9010623f446a30cdccb5b2f6eec90a6aab088e18ee87b6a"
+    },
+    {
+      "path": "src/bootstrap/ghost-notice-en.json",
+      "oldSHA256": "36ce3c1c762878d770a8a62f905beac6407493f4d647960ce24ed2a13d59cd37",
+      "currentSHA256": "36ce3c1c762878d770a8a62f905beac6407493f4d647960ce24ed2a13d59cd37"
+    },
+    {
+      "path": "src/components/GhostModeNotice.ts",
+      "oldSHA256": "299af440c2c3550fc2b9c697c95e3d92c98b51e0783438f1329c25736aac8077",
+      "currentSHA256": "299af440c2c3550fc2b9c697c95e3d92c98b51e0783438f1329c25736aac8077"
+    },
+    {
+      "path": "src/components/HomeShellOverlay.ts",
+      "oldSHA256": "42e1645247e67ec22908a1c9087efd262830dba724ac8d16bc6ef2088a9e8350",
+      "currentSHA256": "42e1645247e67ec22908a1c9087efd262830dba724ac8d16bc6ef2088a9e8350"
+    },
+    {
+      "path": "src/components/NotificationStack.ts",
+      "oldSHA256": "4b83b851e1f5e9907d56212dc49614efa1e869c81edc2842c2579615e76f5b48",
+      "currentSHA256": "4b83b851e1f5e9907d56212dc49614efa1e869c81edc2842c2579615e76f5b48"
+    },
+    {
+      "path": "src/components/__tests__/ghost-mode-notice.test.mts",
+      "oldSHA256": "cde76aba1bf58df6724c3d4c51aff8c91efa201bfc3d1c6c2deeb69a0b2eb026",
+      "currentSHA256": "cde76aba1bf58df6724c3d4c51aff8c91efa201bfc3d1c6c2deeb69a0b2eb026"
+    },
+    {
+      "path": "src/config/__tests__/story-renderer-chunk.test.mts",
+      "oldSHA256": "dfd4c661cf9dfac1892ff39fe20ae273ad3e75bc1a6d8e379617acb9392b8b04",
+      "currentSHA256": "dfd4c661cf9dfac1892ff39fe20ae273ad3e75bc1a6d8e379617acb9392b8b04"
+    },
+    {
+      "path": "src/entry.ts",
+      "oldSHA256": "4151971770935166c70c52d9cc8097cffdbb6752ec12ad88d4e4425e2cdf4465",
+      "currentSHA256": "4151971770935166c70c52d9cc8097cffdbb6752ec12ad88d4e4425e2cdf4465"
+    },
+    {
+      "path": "src/main.ts",
+      "oldSHA256": "dbe0f47ee4a25641fafc84b019183ff8f556957cecd8193d0e1335d0236f4b2a",
+      "currentSHA256": "dbe0f47ee4a25641fafc84b019183ff8f556957cecd8193d0e1335d0236f4b2a"
+    },
+    {
+      "path": "src/services/__tests__/ghost-mode-state.test.mts",
+      "oldSHA256": "121b4b47ef73847f7ac719677958cd015aededf3ed8910e98fc9a0c71733ba3a",
+      "currentSHA256": "121b4b47ef73847f7ac719677958cd015aededf3ed8910e98fc9a0c71733ba3a"
+    },
+    {
+      "path": "src/services/__tests__/ghost-notification-policy.test.mts",
+      "oldSHA256": "054d330c6ea01207db5a9b0617168dbacb55a5769b37d4701fc254361d43d9a9",
+      "currentSHA256": "054d330c6ea01207db5a9b0617168dbacb55a5769b37d4701fc254361d43d9a9"
+    },
+    {
+      "path": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "oldSHA256": "7fd3500502b5ec6ac050c01ebf61af05daf4eb2d2049d6be38966286066465b0",
+      "currentSHA256": "7fd3500502b5ec6ac050c01ebf61af05daf4eb2d2049d6be38966286066465b0"
+    },
+    {
+      "path": "src/services/hypothesis-notifier.ts",
+      "oldSHA256": "1699a7cef9fb949c24a19dd01a66afde5027df7e0dd95297b32e0251ed10c8b1",
+      "currentSHA256": "1699a7cef9fb949c24a19dd01a66afde5027df7e0dd95297b32e0251ed10c8b1"
+    },
+    {
+      "path": "src/services/i18n.ts",
+      "oldSHA256": "12e94d22bdb83f78a7b1a199ade99a6c9d29a7ab87f4ee3a7662c3aa080ed397",
+      "currentSHA256": "12e94d22bdb83f78a7b1a199ade99a6c9d29a7ab87f4ee3a7662c3aa080ed397"
+    },
+    {
+      "path": "src/services/mode-manager.ts",
+      "oldSHA256": "7e36990f794a5c96e69d89a53a4a7bf22132565addce3c0972401e8dc99059cf",
+      "currentSHA256": "7e36990f794a5c96e69d89a53a4a7bf22132565addce3c0972401e8dc99059cf"
+    },
+    {
+      "path": "src/services/notification-dispatcher.ts",
+      "oldSHA256": "52217c0fa87371a2ca3e38f993f1c1b608cc11ad6ae7af2e0276dbb08e5b10ae",
+      "currentSHA256": "52217c0fa87371a2ca3e38f993f1c1b608cc11ad6ae7af2e0276dbb08e5b10ae"
+    },
+    {
+      "path": "src/styles/alerts.css",
+      "oldSHA256": "11cb87b93cd5ba9848f4b48a7d1e7bd4bf7054d352faf3e59735e79b9797fbbc",
+      "currentSHA256": "11cb87b93cd5ba9848f4b48a7d1e7bd4bf7054d352faf3e59735e79b9797fbbc"
+    },
+    {
+      "path": "src/styles/home-shell.css",
+      "oldSHA256": "fb12dfc7f8fce1a5e80d342253a2255b92da4be91fb0a1928743a7182736b41a",
+      "currentSHA256": "fb12dfc7f8fce1a5e80d342253a2255b92da4be91fb0a1928743a7182736b41a"
+    },
+    {
+      "path": "tests/comms-panel.test.mjs",
+      "oldSHA256": "15c875b6794dd34d8c7318eb3da69e4b8e6d1e6f2177c261b6ddf470dd38d0a4",
+      "currentSHA256": "15c875b6794dd34d8c7318eb3da69e4b8e6d1e6f2177c261b6ddf470dd38d0a4"
+    },
+    {
+      "path": "tests/ghost-mode-bundle.test.mjs",
+      "oldSHA256": "969c9b8961adf0e5482c51a2097c5bdfe93a2fbd8581bac9197401756d8e2857",
+      "currentSHA256": "969c9b8961adf0e5482c51a2097c5bdfe93a2fbd8581bac9197401756d8e2857"
+    },
+    {
+      "path": "tests/ghost-mode-entry.test.mts",
+      "oldSHA256": "9b10b9fe5e21e794c88439cac5ea33c5f94f6bcd1c6fc561f29fe6f296d3a436",
+      "currentSHA256": "9b10b9fe5e21e794c88439cac5ea33c5f94f6bcd1c6fc561f29fe6f296d3a436"
+    },
+    {
+      "path": "vite.config.ts",
+      "oldSHA256": "8c2b43c03ab0992c1aaf68b78bb7ae26f83f392b9fecd6ddd3950f4d12fde8bd",
+      "currentSHA256": "8c2b43c03ab0992c1aaf68b78bb7ae26f83f392b9fecd6ddd3950f4d12fde8bd"
+    }
+  ]
+}

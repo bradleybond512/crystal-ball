@@ -55,8 +55,11 @@ and independent review before reporting completion.
 
 The standalone #1862 change preserved main's package-lock SHA-256,
 `fa0fc7a76d31ce38c5b03b52e88b4c61956e444dc5171e89fab9a105e02e147f`.
-The #1838 integration preserves that branch's existing happy-dom lockfile instead;
-its SHA-256 is `5466eee89b22fc5ccf1af96878380e196241dee47671c596ceea75fd3220ca8c`.
+The initial #1838 integration preserved that branch's happy-dom lockfile,
+SHA-256 `5466eee89b22fc5ccf1af96878380e196241dee47671c596ceea75fd3220ca8c`.
+The later #1863 integration retains happy-dom and includes esbuild 0.28.2 and
+vite-plugin-pwa 2.0.0; the resulting lockfile SHA-256 is
+`cfcfabb3d4b63614aef5b559fa89130ff128cb1cde3c29295b6203e95d3c9719`.
 No new security exception or dependency-age exception is requested. Release tag
 integrity is a separate known issue, outside this repair. Rollback is reverting
 this metadata/test change; no persistent data migration is involved. Merging,

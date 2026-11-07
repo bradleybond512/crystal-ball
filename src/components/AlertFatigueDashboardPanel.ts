@@ -33,10 +33,10 @@ export class AlertFatigueDashboardPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
-    super({ id: 'alert-fatigue-dashboard', title: 'Alert Fatigue', showCount: true, trackActivity: true });
+    super({ id: 'alert-fatigue-dashboard', title: 'Alert Fatigue', showCount: true, trackActivity: true, presentationRefreshPolicy: 'visible-only' });
     this.render();
     if (typeof setInterval !== 'undefined') {
-      this.refreshTimer = setInterval(() => { this.render(); }, REFRESH_MS);
+      this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     }
   }
 

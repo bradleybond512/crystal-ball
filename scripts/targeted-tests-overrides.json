@@ -1178,5 +1178,17 @@
   ],
   "api/_news-provenance.js": [
     "test:news-resilience"
+  ],
+  "src/components/Panel.ts": [
+    "test:panel-presentation"
+  ],
+  "src/components/AlertFatigueDashboardPanel.ts": [
+    "test:panel-presentation"
+  ],
+  "src/components/CorrelationMapPanel.ts": [
+    "test:panel-presentation"
+  ],
+  "tests/panel-presentation.test.mjs": [
+    "test:panel-presentation"
   ]
 }

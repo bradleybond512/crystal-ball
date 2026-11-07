@@ -1,6 +1,6 @@
 # ACC-510 — Evidence-based domains for news-derived situations
 
-Status: policy, documentation-only draft claim and local implementation approved by Bradley on 2026-11-06. Draft [#1858](https://github.com/bradleybond512/crystal-ball/pull/1858) claims the work. Local implementation and validation are complete; see the [QA report](../validation/ACC-510-NEWS-DOMAIN-EVIDENCE.md). Code publication requires separate approval. Installation, auto-merge and delivery remain paused.
+Status: policy, documentation-only draft claim and local implementation approved by Bradley on 2026-11-06. Draft [#1858](https://github.com/bradleybond512/crystal-ball/pull/1858) claims the work. Local implementation and validation are complete; see the [QA report](../validation/ACC-510-NEWS-DOMAIN-EVIDENCE.md). Code publication was approved and completed. Bradley authorized reconciliation and merging on 2026-11-07. Installation, tags, releases, build dispatch and deployment remain paused.
 
 ## Brief and discovery
 

@@ -59,7 +59,7 @@ Unknown contributes no domain-affinity bonus, domain-diversity bonus, verificati
 
 Unknown situations remain visible. situation-forecaster.ts and situation-personalizer.ts provide information-only behavior, with no hazard-escalation scenarios or hazard-specific instructions. SituationPanel exposes the neutral label and classification reason. Exclude unknown evidence from threat-synthesis cross-domain claims and verify mode-forecast does not turn it into security pressure.
 
-Close the connected forecast path: derive bounded, allowlisted qualified event types from current situation evidence, carry them through Hypothesis, and use them in hypothesis-prediction-bridge. Remove generic-string-only civil-unrest mapping in event-occurrence-contract. Legacy hypotheses containing only generic signalTypes cannot acquire unrest criteria. Preserve typed non-news mappings, geographic/entity requirements and resolver thresholds.
+Close the connected forecast path: derive bounded, allowlisted qualified event types from current situation evidence, carry them through Hypothesis, and use them in hypothesis-prediction-bridge. Derive the existing Hypothesis.domains field from current supported snapshot domains rather than the situation presentation label: protest plus military stays in the existing conflict pool, protest plus economic retains mixed conflict/markets semantics, and unknown contributes no domain. Keep domainForHypothesis and its mixed-domain gate unchanged. Remove generic-string-only civil-unrest mapping in event-occurrence-contract. Legacy hypotheses containing only generic signalTypes cannot acquire unrest criteria. Preserve typed non-news mappings, geographic/entity requirements and resolver thresholds.
 
 ## Persistence and rollback
 
@@ -67,7 +67,7 @@ Use a version-3 situation envelope/key, retaining the existing v2 snapshot untou
 
 Read v3 first; migrate v2/v1 only when v3 is absent. Malformed v3 must not silently revive older inferred labels. During migration, generic snapshots without valid topical provenance become unknown; reconstruct authoritative hints only from known source mappings. Preserve IDs, timestamps, identity retention and dismissed actions. Recompute derived domains, diversity, verification, scenarios and causal output; never invent provenance.
 
-Validate evidence again on restoration. Bound storage and evidence sizes. Rollback restores prior code reading retained v2 history; newer v3-only history stays preserved but unavailable to that older binary. This limitation must remain explicit. No production storage is touched during local implementation/testing.
+Validate evidence again on restoration. Raw evidence for up to 64 articles is transient; persisted results retain at most eight deterministic, source-diverse references plus bounded article/source counts. A recognized supported v1 result is a locally produced assertion that the full input was checked, not a fresh classification of its truncated references. Restore requires coherent version/basis/domain/reason, 2–64 total articles, at least two sources, 2–8 distinct valid references demonstrating source quorum and matching domain, counts consistent with retained references, and original observation-time validity. If all articles are retained, counts must match exactly. Unknown results never become supported by reclassifying retained references. Fresh signal ingress must pass the full classifier and cannot submit a precomputed assertion. Restore cannot independently prove discarded article metadata; this limitation is explicit. Bound storage and evidence sizes. Rollback restores prior code reading retained v2 history; newer v3-only history stays preserved but unavailable to that older binary. This limitation must remain explicit. No production storage is touched during local implementation/testing.
 
 ## Acceptance and validation
 
@@ -104,3 +104,7 @@ Serialize overlapping inference/engine work; delegate in parallel only when file
 ## Approved decisions
 
 Bradley approved the complete-agreement/two-article/two-source policy, explicit unknown behavior, connected forecast-contract correction, v3 persistence/rollback policy, documentation-only draft claim and local implementation. A later code push requires its own reviewable approval. Installation, auto-merge and delivery remain paused.
+
+## Existing CI transport repair
+
+Reuse the separately approved and reviewed metadata-only roadmap transport repair from drafts #1856/#1857 (`7ca713721`): the same workflow/tests and additive mapping are included so this draft can build its historical PR snapshot. No new roadmap policy or permission change is introduced. The prior repair passed 126 roadmap tests, 61 workflow-security tests, 11 mutation reversals and hosted PR validation on both drafts. Final ACC-510 validation will rerun the affected tests.

@@ -15,6 +15,7 @@ import { detectCompoundThreats } from './compound-threat';
 import type { CompoundThreat, HazardSignal } from './compound-threat';
 import { situationReportedPoint, type Situation, type SituationDomain, type CausalTemplate } from './situation-types';
 import { CAUSAL_TEMPLATES } from './situation-forecaster';
+import { isGenericNewsSignalType } from './situation-news-domain';
 import { runClaudeAgent } from './claude-agent';
 import { isFeatureAvailable } from './runtime-config';
 
@@ -80,6 +81,7 @@ const DOMAIN_LABELS: Record<SituationDomain, string> = {
   health: 'Health',
   civil_unrest: 'Civil Unrest',
   compound: 'Compound',
+  unknown: 'Topic unconfirmed',
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -131,7 +133,7 @@ function confidenceToSeverity(confidence: number): HazardSignal['severity'] {
 function groupByRegion(situations: Situation[]): Map<string, Situation[]> {
   const regionMap = new Map<string, Situation[]>();
   for (const sit of situations) {
- if (sit.phase === 'resolved') continue;
+ if (sit.phase === 'resolved' || sit.domain === 'unknown') continue;
  let key: string;
  if (sit.geo.countries.length > 0) {
  key = [...sit.geo.countries].sort((a, b) => a.localeCompare(b)).join(',');
@@ -218,8 +220,7 @@ function buildCluster(
  .map(ct => ct.id);
 
   const avgConfidence = group.reduce((s, g) => s + g.confidence, 0) / group.length;
-  const allSignalTypes = new Set(group.flatMap(s => s.signals.map(sig => sig.type)));
-  const matchedTemplate = findBestTemplate(allSignalTypes);
+  const matchedTemplate = findBestTemplate(group.flatMap(s => s.signals));
 
   return {
  id: genId('cdc'),
@@ -280,13 +281,15 @@ function hazardCategoryToDomain(category: string): SituationDomain {
   return map[category] ?? 'compound';
 }
 
-function findBestTemplate(signalTypes: Set<string>): CausalTemplate | null {
+function findBestTemplate(signals: Situation['signals']): CausalTemplate | null {
   let best: CausalTemplate | null = null;
   let bestScore = 0;
 
   for (const template of CAUSAL_TEMPLATES) {
  const chainTypes = template.links.map(l => l.triggerType);
- const matched = chainTypes.filter(t => signalTypes.has(t)).length;
+ const matched = chainTypes.filter(type => signals.some(signal => signal.type === type
+ && signal.domain !== 'unknown'
+ && (!isGenericNewsSignalType(type) || signal.domain === template.domain))).length;
  const coverage = matched / chainTypes.length;
  if (coverage > bestScore && coverage >= 0.3) {
  bestScore = coverage;

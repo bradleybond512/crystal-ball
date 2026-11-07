@@ -12,6 +12,7 @@
 
 import type { ObservationIdentity } from './alert-identity';
 import type { SituationGeo } from './situation-types';
+import { collectNewsEvidence, type NewsDomainEvidence } from './situation-news-domain';
 
 import {
   SIMILARITY_THRESHOLD,
@@ -63,6 +64,7 @@ interface TopicVelocityPoint {
 // ============================================================================
 
 export interface NewsItemCore {
+  provenance?: import('./news-provenance').NewsProvenance;
   source: string;
   title: string;
   link: string;
@@ -139,6 +141,7 @@ export interface CorrelationSignalCore {
   confidence: number;
   timestamp: Date;
   data: {
+ newsEvidence?: NewsDomainEvidence;
  identity?: ObservationIdentity;
  geo?: SituationGeo;
  source?: string;
@@ -499,6 +502,7 @@ export function detectConvergence(
  timestamp: new Date(),
  data: {
  newsVelocity: recentItems.length,
+ newsEvidence: collectNewsEvidence(event.allItems.filter(item => !Number.isFinite(item.pubDate.getTime()) || now - item.pubDate.getTime() < WINDOW_MS)),
  relatedTopics: types,
  },
  }, {
@@ -695,6 +699,7 @@ export function analyzeCorrelationsCore(
  timestamp: new Date(),
  data: {
  newsVelocity: velocity,
+ newsEvidence: collectNewsEvidence(events.filter(event => containsTopicKeyword(event.primaryTitle.toLowerCase(), topic)).flatMap(event => event.allItems)),
  relatedTopics: [topic],
  baseline,
  multiplier: baseline > 0 ? multiplier : undefined,

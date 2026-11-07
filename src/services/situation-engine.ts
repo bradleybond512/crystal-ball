@@ -19,7 +19,6 @@ import { identifyAlert, identifySignal, createIdentityLedger, hydrateIdentityLed
 import type { IdentityLedger, IdentityLimits } from './alert-identity';
 import type {
   Situation,
-  SituationDomain,
   SituationGeo,
   SituationEngineConfig,
   SituationSignalSnapshot,
@@ -32,7 +31,15 @@ import {
   findSituationForSignal,
   newSituationId,
   currentSituationGeo,
+  recomputeSituationClassification,
+  supportedSituationDomains,
+  isGenericNewsSignalType,
+  classifyDomain,
+  domainHintForAlertSource,
 } from './situation-correlator';
+import { restoreNewsDomainClassification } from './situation-news-domain';
+export { domainHintForAlertSource } from './situation-correlator';
+
 import { projectScenarios } from './situation-forecaster';
 import { personalizeSituation } from './situation-personalizer';
 
@@ -41,24 +48,6 @@ import { personalizeSituation } from './situation-personalizer';
 type SituationListener = (situations: Situation[]) => void;
 
 // ── Engine ────────────────────────────────────────────────────────────────────
-
-export function domainHintForAlertSource(source: string): SituationDomain | undefined {
-  switch (source) {
-    case 'nws': case 'spc': case 'cyclone': case 'gdacs': case 'tsunami': case 'volcano':
-    case 'earthquake': case 'fire': case 'hazard': case 'space-weather': { return 'natural_hazard';
- }
-    case 'cyber': case 'local-ids': { return 'cyber';
- }
-    case 'power-grid': case 'comms-health': case 'resource': case 'aviation-hazard': case 'maritime': { return 'infrastructure';
- }
-    case 'disease': case 'air-quality': case 'radiation': { return 'health';
- }
-    case 'oref': { return 'military';
-    }
-    default: { return undefined;
-    }
-  }
-}
 
 function alertGeo(alert: UnifiedAlert): SituationGeo {
   const common = { label: alert.location?.label ?? '', countries: [], radiusKm: 0 };
@@ -89,17 +78,37 @@ function validPersistedSignal(sig: SituationSignalSnapshot): boolean {
   }) !== null && typeof sig.domain === 'string';
 }
 
+function restoreSignalClassification(input: SituationSignalSnapshot): SituationSignalSnapshot {
+  const sig: SituationSignalSnapshot = { id: input.id, type: input.type, title: input.title,
+    confidence: input.confidence, timestamp: input.timestamp, domain: input.domain,
+    identity: input.identity, source: input.source, entities: input.entities, geo: input.geo };
+  const hint = domainHintForAlertSource(sig.source ?? '');
+  if (hint) sig.domain = hint;
+  else if (isGenericNewsSignalType(sig.type)) {
+    sig.domainClassification = restoreNewsDomainClassification(input.domainClassification, sig.timestamp);
+    sig.domain = sig.domainClassification.domain;
+  } else sig.domain = classifyDomain(sig.type);
+  return sig;
+}
+
+function persistedEntries(parsed: unknown, legacy: boolean, expectedVersion: number): unknown {
+  if (legacy) return parsed;
+  const envelope = parsed as { version?: unknown; situations?: unknown };
+  return envelope?.version === expectedVersion ? envelope.situations : null;
+}
+
 function restoreSituation(value: unknown, legacy: boolean): Situation | null {
   if (!value || typeof value !== 'object') return null;
   const s = value as Situation;
   if (typeof s.id !== 'string' || !s.id || typeof s.title !== 'string' || typeof s.summary !== 'string'
     || !Number.isFinite(s.firstSeen) || !Number.isFinite(s.lastUpdated) || !Number.isFinite(s.confidence)
     || !['emerging', 'developing', 'active', 'de-escalating', 'resolved'].includes(s.phase)
-    || !['military', 'economic', 'natural_hazard', 'cyber', 'infrastructure', 'health', 'civil_unrest', 'compound'].includes(s.domain)
-    || !Array.isArray(s.signals) || !Array.isArray(s.signalIds) || !s.signalIds.every(id => typeof id === 'string')
+    || !['military', 'economic', 'natural_hazard', 'cyber', 'infrastructure', 'health', 'civil_unrest', 'compound', 'unknown'].includes(s.domain)
+    || !Array.isArray(s.signals) || s.signals.length > 4096 || !Array.isArray(s.signalIds) || !s.signalIds.every(id => typeof id === 'string')
     || !Array.isArray(s.scenarios) || !Array.isArray(s.actions) || !s.geo || !Array.isArray(s.geo.countries)
     || !s.geo.countries.every(c => typeof c === 'string') || typeof s.geo.label !== 'string') return null;
   if (!s.signals.every(sig => validPersistedSignal(sig))) return null;
+  s.signals = s.signals.map(sig => restoreSignalClassification(sig));
   const eventTimes = s.signals.map(sig => sig.timestamp).filter(time => Number.isFinite(time));
   s.latestEventAt = eventTimes.length ? Math.max(...eventTimes) : null;
   if (legacy) {
@@ -250,11 +259,11 @@ export class SituationEngine {
 
   private verify(situation: Situation): void {
  const now = Date.now();
- const signals = situation.signals;
+ const signals = situation.signals.filter(s => s.domain !== 'unknown');
 
  const independentSources = SituationEngine.countIndependentSources(signals);
  const temporalCorroboration = SituationEngine.checkTemporalCorroboration(signals);
- const crossDomainVerified = new Set(signals.map(s => s.domain)).size >= 2;
+ const crossDomainVerified = supportedSituationDomains(signals).length >= 2;
  const hasContradictions = SituationEngine.detectContradictions(signals);
  const freshnessScore = SituationEngine.computeFreshness(signals, now);
 
@@ -353,9 +362,9 @@ export class SituationEngine {
  situation: Situation, independentSources: number, verdict: VerificationVerdict,
  temporalCorroboration: boolean, hasContradictions: boolean, now: number,
   ): void {
- const evidenceSources = situation.signals.filter(s => s.confidence > 0.5);
+ const evidenceSources = situation.signals.filter(s => s.domain !== 'unknown' && s.confidence > 0.5);
  const sourceCount = evidenceSources.length;
- if (sourceCount < 2) return;
+ if (sourceCount < 2) { situation.evidence = null; return; }
 
  const avgConfidence = evidenceSources.reduce((s, e) => s + e.confidence, 0) / sourceCount;
  const evidenceVerdict = SituationEngine.classifyEvidenceVerdict(avgConfidence, sourceCount);
@@ -426,9 +435,19 @@ export class SituationEngine {
     const situation = this.situations.find(s => s.id === result.situationId);
     if (!situation) return false;
     this.verify(situation);
-    situation.scenarios = projectScenarios(situation);
-    situation.actions = personalizeSituation(situation);
+    this.refreshProjections(situation);
     return true;
+  }
+
+  private refreshProjections(situation: Situation): void {
+    const previous = situation.actions;
+    situation.scenarios = projectScenarios(situation);
+    situation.actions = personalizeSituation(situation).map(action => {
+      const existing = previous.find(old => old && typeof old.id === 'string' && typeof old.dismissed === 'boolean'
+        && old.category === action.category
+        && old.scenarioId === action.scenarioId && old.headline === action.headline);
+      return existing ? { ...action, id: existing.id, dismissed: existing.dismissed } : action;
+    });
   }
 
   private processBuffer(): void {
@@ -526,9 +545,10 @@ export class SituationEngine {
   private persist(): void {
     try {
       const situations = this.situations.filter(s => s.phase !== 'resolved').slice(0, this.config.maxSituations);
-      const encoded = JSON.stringify({ version: 2, situations, identities: this.identities.snapshot() });
-      localStorage.setItem('wm-situations-v2', encoded);
-      if (localStorage.getItem('wm-situations-v2') !== encoded) throw new Error('Situation persistence verification failed');
+      const encoded = JSON.stringify({ version: 3, situations, identities: this.identities.snapshot() });
+      if (encoded.length > 8 * 1024 * 1024) throw new Error('Situation persistence capacity exceeded');
+      localStorage.setItem('wm-situations-v3', encoded);
+      if (localStorage.getItem('wm-situations-v3') !== encoded) throw new Error('Situation persistence verification failed');
       this.restartProtected = true;
     } catch {
       this.persistenceFailures++;
@@ -538,15 +558,17 @@ export class SituationEngine {
 
   private restore(): void {
     try {
-      const current = localStorage.getItem('wm-situations-v2');
-      const raw = current ?? localStorage.getItem('wm-situations-v1');
-      if (!raw) return;
+      const current = localStorage.getItem('wm-situations-v3');
+      const v2 = current === null ? localStorage.getItem('wm-situations-v2') : null;
+      const raw = current ?? v2 ?? localStorage.getItem('wm-situations-v1');
+      if (raw === null) return;
+      if (raw.length > 8 * 1024 * 1024) throw new Error('Situation persistence capacity exceeded');
       const parsed: unknown = JSON.parse(raw);
       const envelope = parsed as { version?: unknown; situations?: unknown; identities?: unknown };
-      const legacy = !current;
-      const currentEntries = envelope.version === 2 ? envelope.situations : null;
-      const entries = legacy ? parsed : currentEntries;
-      if (!Array.isArray(entries)) { this.restartProtected = false; this.persistenceFailures++; return; }
+      const legacy = current === null && v2 === null;
+      const expectedVersion = current === null ? 2 : 3;
+      const entries = persistedEntries(parsed, legacy, expectedVersion);
+      if (!Array.isArray(entries) || entries.length > 4096) { this.restartProtected = false; this.persistenceFailures++; return; }
       const cutoff = Date.now() - 24 * 60 * 60 * 1000;
       const restored = entries.map(s => restoreSituation(s, legacy));
       if (restored.includes(null)) {
@@ -559,7 +581,14 @@ export class SituationEngine {
         this.persistenceFailures++;
         this.restartProtected = false;
       });
-      if (legacy) this.persist();
+      for (const situation of this.situations) {
+        const legacyGeo = situation.geo;
+        recomputeSituationClassification(situation);
+        if (legacy) situation.geo = legacyGeo;
+        this.verify(situation);
+        this.refreshProjections(situation);
+      }
+      if (current === null && this.restartProtected) this.persist();
     } catch {
       this.persistenceFailures++;
       this.restartProtected = false;

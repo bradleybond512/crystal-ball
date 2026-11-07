@@ -17,12 +17,14 @@ It failed with `EOVERRIDE: Override for esbuild@0.28.2 conflicts with direct
 dependency`. The direct dependency and override previously duplicated `^0.28.1`;
 npm requires direct-dependency override specifications to match exactly.
 
-Use npm's `$esbuild` reference instead of a second literal. The direct requirement
-remains `^0.28.1`; the reference also constrains transitive esbuild requests.
+Use npm's `$esbuild` reference instead of a second literal. The standalone #1862
+repair kept the direct requirement at `^0.28.1`; #1863 subsequently advanced it
+to `^0.28.2`. The reference also constrains transitive esbuild requests.
 Synchronizing two literals would recreate the same failure on the next update;
 removing the override would lose the transitive floor. No schema, runtime,
 workflow, permission, migration or release/install changes are needed. No package
-is added or upgraded, so maintenance, licensing and bundle contents are unchanged.
+was added or upgraded by standalone #1862. The later #1863 upgrade is documented
+below.
 Existing age, provenance, lockfile and lifecycle-script checks remain mandatory.
 
 ## Bounded plan and validation

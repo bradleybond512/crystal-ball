@@ -11,6 +11,7 @@
  */
 
 import { Panel } from './Panel';
+import { trackTransportFetch } from '@/services/synthesis/transport-evidence';
 import { escapeHtml } from '@/utils/sanitize';
 import { renderPanelEmpty, renderPanelError } from './ui/PanelStates';
 import {
@@ -208,6 +209,7 @@ export class MaritimeIntelPanel extends Panel {
       this.refreshThreats(),
       this.refreshLive(),
     ]);
+    if (this.signal.aborted) return;
     this.lastFetchAt = Date.now();
     this.lastFetchError = !darkOk && !freightOk && !threatsOk && !liveOk
       ? 'All endpoints unavailable'
@@ -261,9 +263,11 @@ export class MaritimeIntelPanel extends Panel {
 
   private async refreshLive(): Promise<boolean> {
     try {
-      const resp = await fetch('/api/maritime/vessels', { headers: { Accept: 'application/json' } });
-      if (!resp.ok) return false;
-      const body = (await resp.json()) as LiveVesselsResponse;
+      const body = await trackTransportFetch('vessels', async () => {
+        const resp = await fetch('/api/maritime/vessels', { headers: { Accept: 'application/json' }, signal: this.signal });
+        return resp.ok ? await resp.json() as LiveVesselsResponse : null;
+      }, this.signal);
+      if (!body || this.signal.aborted) return false;
       this.liveVessels = Array.isArray(body.vessels) ? body.vessels : [];
       this.liveSummary = body.summary ?? null;
       this.liveSampleSize = typeof body.sampleSize === 'number' ? body.sampleSize : null;

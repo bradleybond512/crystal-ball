@@ -8,10 +8,10 @@
  *   - https://nasstatus.faa.gov/api/airport-volume   (XML; not parsed)
  */
 
+import { nestedGroundStop } from './_faa-ground-stop.js';
 import {
   degraded,
   envelope,
-  extractItems,
   fetchUpstream,
   jsonResponse,
   parseTimestamp,
@@ -33,7 +33,7 @@ const UPSTREAMS = [
 
 function classifyProgram(raw) {
   const u = (raw ?? '').toUpperCase();
-  if (u.includes('STOP')) return 'ground_stop';
+  if (/^(?:GROUND[ _-]STOP|STOP)$/.test(u)) return 'ground_stop';
   if (u.includes('GROUND') || u.includes('GDP')) return 'ground_delay';
   if (u.includes('ARRIVAL') || u.includes('AAR')) return 'arrival_delay';
   return 'other';
@@ -41,8 +41,18 @@ function classifyProgram(raw) {
 
 function normalizeDelay(item, idx) {
   if (!item || typeof item !== 'object') return null;
+  if ('airportId' in item && 'groundStop' in item) {
+    const stop = nestedGroundStop(item);
+    return stop ? { ...stop, id: `delay-${stop.airport}-${idx}` } : null;
+  }
   const airport = (pickString(item.airport, item.iata, item.icao, item.location) ?? '').toUpperCase();
-  if (!airport) return null;
+  if (!/^[A-Z0-9]{3,4}$/.test(airport)) return null;
+  const start = item.startTime ?? item.startedAt;
+  const end = item.endTime ?? item.endsAt;
+  const startedAt = parseTimestamp(start);
+  const endsAt = parseTimestamp(end);
+  if ((start != null && startedAt === null) || (end != null && endsAt === null)
+    || (startedAt !== null && endsAt !== null && endsAt <= startedAt)) return null;
   return {
     id: `delay-${airport}-${idx}`,
     airport,
@@ -50,9 +60,26 @@ function normalizeDelay(item, idx) {
     avgDelayMinutes: pickFinite(item.avgDelay, item.avg_delay_minutes, item.average_delay_minutes),
     maxDelayMinutes: pickFinite(item.maxDelay, item.max_delay_minutes),
     programType: classifyProgram(pickString(item.eventType, item.programType, item.type)),
-    startedAt: parseTimestamp(item.startTime, item.startedAt),
-    endsAt: parseTimestamp(item.endTime, item.endsAt),
+    startedAt,
+    endsAt,
   };
+}
+
+function parseFeed(payload) {
+  const items = Array.isArray(payload) ? payload : ['delays', 'events', 'data', 'airports']
+    .map(key => payload?.[key]).find(value => Array.isArray(value));
+  if (!items) return null;
+
+  const data = [];
+  let malformed = 0;
+  for (const [idx, item] of items.entries()) {
+    if (typeof item?.airportId === 'string' && /^[A-Z0-9]{3,4}$/.test(item.airportId) && item.groundStop === null) continue;
+    const row = normalizeDelay(item, idx);
+    if (row) data.push(row);
+    else malformed++;
+  }
+  if (!malformed) return envelope(data, SOURCE);
+  return data.length ? { ...envelope(data, SOURCE), degraded: true, reason: 'Invalid airport event rows' } : null;
 }
 
 async function fetchDelays() {
@@ -64,12 +91,9 @@ async function fetchDelays() {
         lastError = `HTTP ${response.status} from ${url}`;
         continue;
       }
-      const payload = await response.json();
-      const items = extractItems(payload, ['delays', 'events', 'data', 'airports']);
-      const data = items
-        .map((item, idx) => normalizeDelay(item, idx))
-        .filter(Boolean);
-      return envelope(data, SOURCE);
+      const result = parseFeed(await response.json());
+      if (result) return result;
+      lastError = 'Unrecognized FAA airport-event response';
     } catch (error) {
       lastError = error?.message ?? String(error);
     }
@@ -80,6 +104,6 @@ async function fetchDelays() {
 export default async function handler(req) {
   const { cors, response } = preflight(req, 'GET, OPTIONS');
   if (response) return response;
-  const result = await withCache(CACHE_KEY, SOURCE, fetchDelays);
+  const result = await withCache(CACHE_KEY, SOURCE, fetchDelays, (payload) => !payload.degraded);
   return jsonResponse(result, 200, cors);
 }

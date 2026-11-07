@@ -1,4 +1,16 @@
 {
+  "api/aviation/_aviation-helpers.js": [
+    "test:ux049"
+  ],
+  "api/aviation/_faa-ground-stop.d.ts": [
+    "test:ux049"
+  ],
+  "api/aviation/_faa-ground-stop.js": [
+    "test:ux049"
+  ],
+  "api/aviation/delays.js": [
+    "test:ux049"
+  ],
   "api/_api-key.js": [
     "test:key-compare",
     "test:api",

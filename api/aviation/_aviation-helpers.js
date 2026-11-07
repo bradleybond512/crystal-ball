@@ -74,12 +74,12 @@ export async function fetchUpstream(url, init = {}) {
   }
 }
 
-export async function withCache(key, source, build) {
+export async function withCache(key, source, build, shouldCache = () => true) {
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.payload;
   try {
     const payload = await build();
-    cache.set(key, { at: Date.now(), payload });
+    if (shouldCache(payload)) cache.set(key, { at: Date.now(), payload });
     return payload;
   } catch (error) {
     return degraded(error?.message ?? String(error), source);

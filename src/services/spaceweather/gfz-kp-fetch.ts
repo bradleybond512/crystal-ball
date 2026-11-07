@@ -12,6 +12,7 @@ import type { KpSample } from './kp-fusion-observations';
 export interface KpFetchResult {
   ok: boolean;
   samples: KpSample[];
+  fetchedAtMs?: number;
 }
 
 /**
@@ -44,9 +45,16 @@ function failed(): KpFetchResult {
   return { ok: false, samples: [] };
 }
 
+function received(samples: KpSample[], fetchedAt: unknown): KpFetchResult {
+  if (samples.length === 0) return failed();
+  return typeof fetchedAt === 'number'
+    ? { ok: true, samples, fetchedAtMs: fetchedAt }
+    : { ok: true, samples };
+}
+
 function withinWindow(samples: KpSample[], now: number): KpSample[] {
   const cutoff = now - KP_FUSION_WINDOW_MS;
-  return samples.filter((s) => s.observedAt >= cutoff);
+  return samples.filter((s) => s.observedAt >= cutoff && s.observedAt <= now);
 }
 
 /** NOAA SWPC estimated planetary Kp, read off the cached status payload. */
@@ -57,8 +65,8 @@ export async function fetchSwpcKp(now: number = Date.now()): Promise<KpFetchResu
       signal: AbortSignal.timeout(RENDERER_TIMEOUT_MS),
     });
     if (!res.ok) return failed();
-    const data = (await res.json()) as { kpPoints?: unknown; degraded?: boolean } | null;
-    if (!data || data.degraded) return failed();
+    const data = (await res.json()) as { kpPoints?: unknown; kpFetchedAt?: unknown; degraded?: boolean; subfeeds?: { kp?: unknown } } | null;
+    if (!data || data.degraded || (data.subfeeds !== undefined && data.subfeeds?.kp !== true)) return failed();
     if (!Array.isArray(data.kpPoints)) return failed();
     const samples: KpSample[] = [];
     for (const point of data.kpPoints as { time_tag?: unknown; kp?: unknown }[]) {
@@ -74,8 +82,7 @@ export async function fetchSwpcKp(now: number = Date.now()): Promise<KpFetchResu
     // An empty series is a failure, not a quiet success: a provider that
     // returns nothing must record ok:false so its health goes down, rather
     // than looking healthy while contributing no votes.
-    if (recent.length === 0) return failed();
-    return { ok: true, samples: recent };
+    return received(recent, data.kpFetchedAt);
   } catch {
     return failed();
   }
@@ -89,7 +96,7 @@ export async function fetchGfzKp(now: number = Date.now()): Promise<KpFetchResul
       signal: AbortSignal.timeout(RENDERER_TIMEOUT_MS),
     });
     if (!res.ok) return failed();
-    const data = (await res.json()) as { samples?: unknown; degraded?: boolean } | null;
+    const data = (await res.json()) as { samples?: unknown; degraded?: boolean; fetchedAt?: unknown } | null;
     if (!data || data.degraded) return failed();
     if (!Array.isArray(data.samples)) return failed();
     const samples: KpSample[] = [];
@@ -101,8 +108,7 @@ export async function fetchGfzKp(now: number = Date.now()): Promise<KpFetchResul
       samples.push({ observedAt, kp });
     }
     const recent = withinWindow(samples, now);
-    if (recent.length === 0) return failed();
-    return { ok: true, samples: recent };
+    return received(recent, data.fetchedAt);
   } catch {
     return failed();
   }

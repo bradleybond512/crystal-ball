@@ -1095,7 +1095,9 @@ Acceptance: Bound total sidecar redirect/request time below the renderer budget 
 
 ### UX-052 — Restrain derived alert interruptions
 
-Status: IN REVIEW — HIGH ASSURANCE
+Status: MONITOR — HIGH ASSURANCE
+Review after: 2026-11-14
+Exit condition: Verify derived pacing and source-warning priority with shared Ghost suppression and warning retirement in the final integrated packaged app after separately authorized delivery.
 Priority: S
 Claim: [Draft PR #1847](https://github.com/bradleybond512/crystal-ball/pull/1847)
 Source findings: PR1731 H15 remainder.
@@ -1286,7 +1288,7 @@ Update the row in the same PR that does the work.
 | UX-049 | Distinguish quiet sensors from missing observations | NOT STARTED — HIGH ASSURANCE | — |
 | UX-050 | Make Ghost Mode suppression unmistakable | MONITOR — HIGH ASSURANCE | #1846 candidate evidence — [Verification and coverage](validation/UX-050-GHOST-MODE.md). Final integrated packaged acceptance remains open; installation/release/deployment paused. |
 | UX-051 | Align RSS request budgets across boundaries | NOT STARTED — HIGH ASSURANCE | — |
-| UX-052 | Restrain derived alert interruptions | IN REVIEW — HIGH ASSURANCE | [Draft #1847](https://github.com/bradleybond512/crystal-ball/pull/1847), [validation and integration evidence](validation/UX-052-DERIVED-ALERTS.md) |
+| UX-052 | Restrain derived alert interruptions | MONITOR — HIGH ASSURANCE | #1847 candidate evidence; [validation and integration evidence](validation/UX-052-DERIVED-ALERTS.md). Final integrated packaged acceptance open; installation/release/deployment paused. |
 | UX-053 | Finish boot without awaiting all data sources | NOT STARTED — HIGH ASSURANCE | — |
 | UX-054 | Cover subproject dependencies in security checks | DONE — HIGH ASSURANCE | #1849; [audit coverage and evidence](validation/UX-054-DEPENDENCY-AUDIT.md). Six npm locks covered; high-severity marketing fixes verified. External MCP pins remain separate. |
 | UX-055 | Surface stale credential validation honestly | NOT STARTED — HIGH ASSURANCE | — |

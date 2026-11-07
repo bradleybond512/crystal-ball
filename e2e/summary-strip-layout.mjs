@@ -34,14 +34,14 @@ import {notificationStack} from ${JSON.stringify(`${repo}/src/components/Notific
 import {BreakingNewsBanner} from ${JSON.stringify(`${repo}/src/components/BreakingNewsBanner.ts`)};
 import {DataCenterPinnedStrip} from ${JSON.stringify(`${repo}/src/components/DataCenterPinnedStrip.ts`)};
 import {set} from '../services/datacenter/datacenter-state';
-import {escapeHtml} from ${JSON.stringify(`${repo}/src/utils/sanitize.ts`)};
+import {CriticalPostureBanner} from ${JSON.stringify(`${repo}/src/components/CriticalPostureBanner.ts`)};
 const trackCriticalBannerAction=()=>{};
-class Subject {ctx={isMobile:false,map:{setCenter:(...x)=>window.lastCenter=x}}; criticalBannerEl=null; ${method} }
+class Subject {ctx={isMobile:false,map:{setCenter:(...x)=>window.lastCenter=x}}; criticalPostureBanner=new CriticalPostureBanner(notificationStack.element,(lat,lon)=>this.ctx.map.setCenter(lat,lon,4),trackCriticalBannerAction); ${method} }
 notificationStack.mount();
 const lower=document.createElement('div');lower.id='lower-row';lower.style.cssText='height:36px;min-height:36px;background:#445';lower.textContent='Existing alert row';notificationStack.element.append(lower);
 window.subject=new Subject();window.breaking=new BreakingNewsBanner();
 window.expand=0;window.dc=new DataCenterPinnedStrip(()=>window.expand++);document.querySelector('.cb-summary-strip').after(window.dc.getElement());
-window.posture={postureLevel:'critical',strikeCapable:true,headline:'Critical posture',totalAircraft:4,summary:'Test region',theaterId:'test',centerLat:0,centerLon:0};
+window.posture={postureLevel:'critical',strikeCapable:true,headline:'Critical posture',totalAircraft:4,summary:'Test region',theaterId:'test',theaterName:'Test region',centerLat:0,centerLon:0};
 window.setDc=(level='warning',stale=false)=>set({id:'test'}, {site:{name:'Test data center'},overall:level,headline:'Readiness state '.repeat(20),actions:[],staleInputs:stale?['weather']:[]});
 window.ready=true;
 `;
@@ -68,21 +68,24 @@ const out = await build({
   ],
 });
 const html = `<!doctype html><link rel="stylesheet" href="/main.css"><style>html,body{margin:0} .fixture-header{height:32px;flex-shrink:0}.fixture-map{height:350px;min-height:350px}.fixture-panels{height:1800px;min-height:1800px}</style><body class="is-desktop-macos"><div id="app"><div class="header fixture-header">Header</div><div class="main-content"><div class="fixture-map">Map</div><div class="cb-summary-strip">Summary</div><div class="fixture-panels">Panels</div></div></div><script src="/entry.js"></script>`;
+const styles = new Map(["main.css", "eew-status-bar.css"].map((name) => [
+  `/${name}`, fs.readFileSync(`${repo}/src/styles/${name}`),
+]));
 const server = http
   .createServer((req, res) => {
     res.setHeader(
       "Content-Type",
       req.url === "/entry.js"
         ? "application/javascript"
-        : req.url === "/main.css"
+        : styles.has(req.url)
           ? "text/css"
           : "text/html",
     );
     res.end(
       req.url === "/entry.js"
         ? out.outputFiles[0].text
-        : req.url === "/main.css"
-          ? fs.readFileSync(`${repo}/src/styles/main.css`)
+        : styles.has(req.url)
+          ? styles.get(req.url)
           : html,
     );
   })
@@ -133,6 +136,24 @@ try {
         right: r.right,
       };
     });
+  await test("posture status is visually clipped and exposed as polite in the accessibility tree", async (p) => {
+    const live = p.locator("[data-posture-announcer]");
+    assert.equal(await live.count(), 1, "the live region is mounted before the first posture update");
+    assert.equal(await live.textContent(), "");
+    const style = await live.evaluate((node) => {
+      const css = getComputedStyle(node);
+      return [css.position, css.width, css.height, css.overflow, css.clip];
+    });
+    assert.deepEqual(style, ["absolute", "1px", "1px", "hidden", "rect(0px, 0px, 0px, 0px)"]);
+    const cdp = await p.context().newCDPSession(p);
+    try {
+      const { nodes } = await cdp.send("Accessibility.getFullAXTree");
+      assert.ok(nodes.some((node) => !node.ignored && node.role?.value === "status"
+        && node.properties?.some((prop) => prop.name === "live" && prop.value.value === "polite")
+        && node.properties?.some((prop) => prop.name === "atomic" && prop.value.value === true)),
+      "the browser exposes an atomic polite status");
+    } finally { await cdp.detach(); }
+  });
   await test("summary remains adjacent to stack at deep scroll", async (p) => {
     await p.locator(".main-content").evaluate((e) => (e.scrollTop = 700));
     await settle(p);

@@ -1,0 +1,66 @@
+{
+  "executionSha": "ec3e3ecb3b020a79e2e62415c740d64bb7dbb57e",
+  "localPendingBaseline": "48751e19484c05fef9f73974ff9d0e71acc38c4e",
+  "notActualMain": true,
+  "backup": "backup/ux044-pre-refresh-15c9ce2f0",
+  "qualifiedSourceCommit": "2dcd7f2effdd347987de6f38c87fdd046ed4f32a",
+  "sourceAndTestContinuity": {
+    "src/components/CriticalPostureBanner.ts": {
+      "qualifiedSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "currentSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "identical": true
+    },
+    "src/components/__tests__/critical-posture-banner.test.mts": {
+      "qualifiedSha256": "65a39ee6d2870a4a1347c7e045e0f26a77bcef501138ad9ea138fc52d248a712",
+      "currentSha256": "65a39ee6d2870a4a1347c7e045e0f26a77bcef501138ad9ea138fc52d248a712",
+      "identical": true
+    },
+    "src/app/panel-layout.ts": {
+      "qualifiedSha256": "c85905265944f1efbe4f35f802202e602e123a0e48034e7aeb4764840d945332",
+      "currentSha256": "c85905265944f1efbe4f35f802202e602e123a0e48034e7aeb4764840d945332",
+      "identical": true
+    },
+    "src/components/SummaryStrip.ts": {
+      "qualifiedSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92",
+      "currentSha256": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92",
+      "identical": true
+    },
+    "src/components/__tests__/summary-strip-announcements.test.mts": {
+      "qualifiedSha256": "ec7c380013344d847abdc0eb1123efe04e645ff475eee13260efd3b5e845210e",
+      "currentSha256": "ec7c380013344d847abdc0eb1123efe04e645ff475eee13260efd3b5e845210e",
+      "identical": true
+    },
+    "src/utils/critical-ui-announcements.ts": {
+      "qualifiedSha256": "c7cee0fb78a913fb3020e6020104b379526981c0966b275565672cc4468ccfde",
+      "currentSha256": "c7cee0fb78a913fb3020e6020104b379526981c0966b275565672cc4468ccfde",
+      "identical": true
+    },
+    "src/styles/eew-status-bar.css": {
+      "qualifiedSha256": "85e5958779e7754a576e111ebf88203ba203a86c387f71f6d3dfa30a05bd2be6",
+      "currentSha256": "85e5958779e7754a576e111ebf88203ba203a86c387f71f6d3dfa30a05bd2be6",
+      "identical": true
+    },
+    "e2e/summary-strip-layout.mjs": {
+      "qualifiedSha256": "13ceb8c762e07a433ad3e5a245b4e55af5299650de684d804ba79d36f1bc170d",
+      "currentSha256": "13ceb8c762e07a433ad3e5a245b4e55af5299650de684d804ba79d36f1bc170d",
+      "identical": true
+    },
+    "tests/ux047/operational-consumers.test.mts": {
+      "qualifiedSha256": "d86251b01af8f22a6e1905fa37763ae93bfa341b3525fb2818d14bbe7c996f6a",
+      "currentSha256": "d86251b01af8f22a6e1905fa37763ae93bfa341b3525fb2818d14bbe7c996f6a",
+      "identical": true
+    }
+  },
+  "mutationSourceHashesRetained": true,
+  "mutationsRerun": false,
+  "reason": "All nine relevant UX044 source/test files unchanged from qualified commit; integration certificate source/test hashes exact.",
+  "focused": {
+    "ux044": "26 pass / 0 fail",
+    "layout": "9 pass / 0 fail",
+    "operationalConsumersAndCalibration": "24 pass / 0 fail",
+    "trustedUx050BudgetRegressions": "2 pass / 0 fail"
+  },
+  "node": "v22.23.1",
+  "logSha256": "51a1e29499e6d83b4318c693dc41a6df36e1c507a58f49311da6dbd3c70cfceb",
+  "upstreamContract": "Retained direct-Node UX050 recipe, trusted runner regression and corrected upstream QA provenance; later1852/1848 evidence not in pending base must survive actual-main transition."
+}

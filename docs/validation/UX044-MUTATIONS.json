@@ -1,0 +1,1887 @@
+{
+  "task": "UX-044",
+  "candidate": {
+    "commit": "3a584617d6f3c293fd3ebc0423ebaf02cc11fd25",
+    "tree": "440abb9df037c6839d3c1b8cc359839ac3ee97ec"
+  },
+  "method": "Each clean detached lane ran its full focused suite before and after testing. Each production-only change was applied alone, inspected as a Git diff, restored, reapplied identically, and verified by an assertion inside the intended named test before restoration. SHA-256 and clean Git status verified after every run. Counts below are actual Node test reporter counts.",
+  "suites": {
+    "lane-postureexact/postureexact": {
+      "argv": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 11,
+      "greenAfter": 11,
+      "failures": 0
+    },
+    "lane-stripexact/stripexact": {
+      "argv": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 14,
+      "greenAfter": 14,
+      "failures": 0
+    },
+    "lane-css/css": {
+      "argv": [
+        "node",
+        "e2e/summary-strip-layout.mjs"
+      ],
+      "greenBefore": 9,
+      "greenAfter": 9,
+      "failures": 0
+    }
+  },
+  "sourceAndTestHashes": {
+    "src/components/CriticalPostureBanner.ts": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+    "src/components/__tests__/critical-posture-banner.test.mts": "65a39ee6d2870a4a1347c7e045e0f26a77bcef501138ad9ea138fc52d248a712",
+    "src/app/panel-layout.ts": "8013ecb65540c279361659d00d637bb82877852bc7a3e05eed41382676a5601e",
+    "src/components/SummaryStrip.ts": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+    "src/components/__tests__/summary-strip-announcements.test.mts": "1cbfedb7ac9cfde58112ae55461971c76035b12e6311dd7ce415bd88b24271d1",
+    "src/utils/critical-ui-announcements.ts": "c7cee0fb78a913fb3020e6020104b379526981c0966b275565672cc4468ccfde",
+    "src/styles/eew-status-bar.css": "85e5958779e7754a576e111ebf88203ba203a86c387f71f6d3dfa30a05bd2be6",
+    "e2e/summary-strip-layout.mjs": "13ceb8c762e07a433ad3e5a245b4e55af5299650de684d804ba79d36f1bc170d"
+  },
+  "reversals": [
+    {
+      "id": "P01",
+      "behavior": "Status is mounted before the first report",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=posture status exists empty",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "posture status exists empty before a warning, has polite atomic semantics and contains no controls"
+      ],
+      "assertion": "error: 'status mounted before the first posture report'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: ~\n  operator: '=='\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..cb751c005 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -27,3 +27,3 @@ export class CriticalPostureBanner {\n     this.status.setAttribute('aria-atomic', 'true');\n-    stack.append(this.status);\n+    ;\n     this.row.innerHTML = `\n",
+      "diffSha256": "69255a16d304eeb5855f69f64e102b2b09d2a7a6dd5022b8bf770ef5590032b6",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "6f2ac1a843395bbd13128d24580ccfe8e3de0320e7cf78a925ef98a064c001af",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P02",
+      "behavior": "Convey role=status on the posture status",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=posture status exists empty",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "posture status exists empty before a warning, has polite atomic semantics and contains no controls"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    null !== 'status'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'status'\n  actual: ~\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..d19ac1d67 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -24,3 +24,3 @@ export class CriticalPostureBanner {\n     this.status.dataset.postureAnnouncer = '';\n-    this.status.setAttribute('role', 'status');\n+    ;\n     this.status.setAttribute('aria-live', 'polite');\n",
+      "diffSha256": "f234912fb2e6b80771dca1b407ad21973e01ef31bff5154a9e9b7ed94bf6de7e",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "1ccb3e27de2fd232e2b98020136b25768d3d57f59b01cf59ab1024ba75112f49",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P03",
+      "behavior": "Convey aria-live=polite on the posture status",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=posture status exists empty",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "posture status exists empty before a warning, has polite atomic semantics and contains no controls"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    null !== 'polite'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'polite'\n  actual: ~\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..eea448eef 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -25,3 +25,3 @@ export class CriticalPostureBanner {\n     this.status.setAttribute('role', 'status');\n-    this.status.setAttribute('aria-live', 'polite');\n+    ;\n     this.status.setAttribute('aria-atomic', 'true');\n",
+      "diffSha256": "534c9116120b50b2f33af19d358fa7371e5f210727d92148e18f997ca95508ca",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "88df6ba8460a283aa1a53aaf5d9893a83ad134d04bd5a9c904bf77bbb0cd3754",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P04",
+      "behavior": "Convey aria-atomic=true on the posture status",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=posture status exists empty",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "posture status exists empty before a warning, has polite atomic semantics and contains no controls"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    null !== 'true'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'true'\n  actual: ~\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..70527dfe0 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -26,3 +26,3 @@ export class CriticalPostureBanner {\n     this.status.setAttribute('aria-live', 'polite');\n-    this.status.setAttribute('aria-atomic', 'true');\n+    ;\n     stack.append(this.status);\n",
+      "diffSha256": "3cc567d6567af7690609188f3fd42c2bdf275e67b4928732bd020f4138dc1425",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "78e9e89ed0d7733de1dec81fb02760c9db936a2dface4119ead7c854b4b3ea65",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P05",
+      "behavior": "Changing only aircraft count keeps visuals current",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=only meaningful posture",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "only meaningful posture transitions mutate the status; returning from an empty state announces onset"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /9 aircraft/. Input:\n    \n    ''\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual: ''\n  operator: 'match'\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..b6313fdac 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -82,3 +82,3 @@ export class CriticalPostureBanner {\n     setText(this.row.querySelector('.banner-headline')!, top.headline);\n-    setText(this.row.querySelector('.banner-stats')!, `${top.totalAircraft} aircraft • ${top.summary}`);\n+    setText(this.row.querySelector('.banner-stats')!, '');\n     this.row.querySelector<HTMLElement>('.banner-strike')!.hidden = !top.strikeCapable;\n",
+      "diffSha256": "3245a3bc5f44ca08ccbd99a7bacaccba04e445c76a2bfd49f7a85918376ba193",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "1ebddd710b9333d72661c12842a41f6dad71781b52bef2420a9954c35dda7a96",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P06",
+      "behavior": "Trigger on severity transitions",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=only meaningful posture",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "only meaningful posture transitions mutate the status; returning from an empty state announces onset"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /Critical posture/. Input:\n    \n    'Elevated posture in Western Pacific. Strike capable.'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual: 'Elevated posture in Western Pacific. Strike capable.'\n  operator: 'match'\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..d87b18e4e 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -90,3 +90,3 @@ export class CriticalPostureBanner {\n \n-    const next = JSON.stringify([top.theaterId, top.postureLevel, top.strikeCapable]);\n+    const next = JSON.stringify([top.theaterId, top.strikeCapable]);\n     if (suppressed) {\n",
+      "diffSha256": "33cfbc5eaabbc1aad83bd6d696d36392d0f6d4a4ddeb215dd178570b61823401",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "fb64dbfa58b2695a52a513cc8c43912c6acd467f9e32f70955c0499b2e77b2d4",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P07",
+      "behavior": "Trigger on strike-capability transitions",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=only meaningful posture",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "only meaningful posture transitions mutate the status; returning from an empty state announces onset"
+      ],
+      "assertion": "error: 'the strike capability transition must announce'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: 0\n  operator: '=='\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..224b4c8b6 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -90,3 +90,3 @@ export class CriticalPostureBanner {\n \n-    const next = JSON.stringify([top.theaterId, top.postureLevel, top.strikeCapable]);\n+    const next = JSON.stringify([top.theaterId, top.postureLevel]);\n     if (suppressed) {\n",
+      "diffSha256": "f4397045e5a3c9063a4777274224d9dfbf5d2fda8cdf6c52ac407f7cf44693bd",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "0e942bdf30fec5d473c8b8a86eeae775dfec2f536d7d5d8ca062ac35dc147751",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P08",
+      "behavior": "Trigger on theater transitions",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=only meaningful posture",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "only meaningful posture transitions mutate the status; returning from an empty state announces onset"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /<i>Other<\\/i>/. Input:\n    \n    'Critical posture in Western Pacific. No strike capability indicated.'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual: 'Critical posture in Western Pacific. No strike capability indicated.'\n  operator: 'match'\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..1303a9a12 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -90,3 +90,3 @@ export class CriticalPostureBanner {\n \n-    const next = JSON.stringify([top.theaterId, top.postureLevel, top.strikeCapable]);\n+    const next = JSON.stringify([top.postureLevel, top.strikeCapable]);\n     if (suppressed) {\n",
+      "diffSha256": "35f299d8e32adb042eda67c13b30de193e12b6278ed13f2e7418e577a0f034ac",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "df1e2fbffc6c7a09c743546cc2e1a906320da92aef7d103562334a45d9091a20",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P09",
+      "behavior": "Report labels remain text and do not inject markup",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=refresh keeps both action",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "refresh keeps both action nodes and activates the current selected theater and coordinates"
+      ],
+      "assertion": "error: 'unexpected element in posture surface'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..a34b4ee70 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -4,3 +4,3 @@ import { criticalAnnouncementsSuppressed, watchCriticalAnnouncementSuppression }\n function setText(element: Element, text: string): void {\n-  if (element.textContent !== text) element.textContent = text;\n+  if (element.textContent !== text) element.innerHTML = text;\n }\n",
+      "diffSha256": "03349eea0e45a88978fbcb216c2bf095e8313d88d1016e6261922dcdaf375313",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "8358aa29a25b5e615896c9f6928fa943936f1f699a5c66ec0d11d70f224ec5fe",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P10",
+      "behavior": "Clear old status and never infer all-clear on warning disappearance",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=only meaningful posture",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "only meaningful posture transitions mutate the status; returning from an empty state announces onset"
+      ],
+      "assertion": "error: |-\n    no unverified all-clear announcement\n    \n    'All clear' !== ''\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ''\n  actual: 'All clear'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..5a344c189 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -73,3 +73,3 @@ export class CriticalPostureBanner {\n     if (!top) {\n-      this.clear(suppressed);\n+      this.clear(suppressed); this.status.textContent = 'All clear';\n       return;\n",
+      "diffSha256": "39fe8c61f58fd9da1b606b71ede34a2aa03a21046d44985a94aca3c55e04b5ac",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "8963db2be3e2a70342fc13ff379d8ddca43e648c758c50743540ac00eae6e5db",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P11",
+      "behavior": "Removed warning can return as a fresh onset",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=only meaningful posture",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "only meaningful posture transitions mutate the status; returning from an empty state announces onset"
+      ],
+      "assertion": "error: 'same material posture can start again after disappearance'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual: ''\n  operator: 'match'\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..3be48b7ca 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -114,3 +114,2 @@ export class CriticalPostureBanner {\n     setText(this.status, '');\n-    this.signature = '';\n     this.rebaseline = rebaseline;\n",
+      "diffSha256": "dc92be6c1d3cbb18e29f733e4189eadb9a3914b1a784b3ab257bb0cdf30e1832",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "54378cbe5f282ca7a7c1a8ffcb1e9efc0a840b1d4284ac2eed1b8a9fff87b9f3",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P12",
+      "behavior": "Keep the focused action nodes in the DOM on poll",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=refresh keeps both action",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "refresh keeps both action nodes and activates the current selected theater and coordinates"
+      ],
+      "assertion": "error: 'View Region focus survived refresh'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..cff059245 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -87,3 +87,3 @@ export class CriticalPostureBanner {\n     button.dataset.lon = String(top.centerLon);\n-    if (this.row.parentElement !== this.stack) this.stack.prepend(this.row);\n+    this.row.remove(); this.stack.prepend(this.row);\n     document.body.classList.add('has-critical-banner');\n",
+      "diffSha256": "92599d926fdc73b2d1471dffcaeafe2abb6da77736e9bdfced890f153661f617",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "ead6bac73092ed7a9f1de91a38f0b107b84d2dc954baa03ef536c1117ecdcb96",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P13",
+      "behavior": "View action always uses latest selected theater and coordinates",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=refresh keeps both action",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "refresh keeps both action nodes and activates the current selected theater and coordinates"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        [\n    +     12,\n    +     130\n    -     0,\n    -     0\n        ]\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0:\n      0: 0\n      1: 0\n  actual:\n    0:\n      0: 12\n      1: 130\n  operator: 'deepStrictEqual'\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..b20b58fa3 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -77,3 +77,3 @@ export class CriticalPostureBanner {\n \n-    this.selected = top;\n+    this.selected ??= top;\n     const critical = top.postureLevel === 'critical';\n",
+      "diffSha256": "25d7835770e0ae727ffa187d12113c7214e8f2ef21faa5cb87a389a3d47e8371",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "d6dc8f84b59a6a3c6be59076581d9020d28c548e98a9a9ea6df3118172acf221",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P14",
+      "behavior": "Zero coordinates reach Map view",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=refresh keeps both action",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "refresh keeps both action nodes and activates the current selected theater and coordinates"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + []\n    - [\n    -   [\n    -     0,\n    -     0\n    -   ]\n    - ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0:\n      0: 0\n      1: 0\n  actual:\n  operator: 'deepStrictEqual'\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..22fb6b1ec 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -41,3 +41,3 @@ export class CriticalPostureBanner {\n       track('view', top.theaterId);\n-      if (Number.isFinite(top.centerLat) && Number.isFinite(top.centerLon)) view(top.centerLat, top.centerLon);\n+      if (top.centerLat && top.centerLon) view(top.centerLat, top.centerLon);\n     });\n",
+      "diffSha256": "ed1241c545991d2b9ba3a3fe1bbafe3bf0b6cd84fb687ddd2d751c9dfe9388ad",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "8675ff87d531ee4b38999d08dc60ec0f253076eec98a86a43470c8c19f1e86ca",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P15",
+      "behavior": "Dismiss button accessible name describes its action",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=refresh keeps both action",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "refresh keeps both action nodes and activates the current selected theater and coordinates"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + '×'\n    - 'Dismiss posture banner'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'Dismiss posture banner'\n  actual: '×'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..5a77d5555 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -36,3 +36,3 @@ export class CriticalPostureBanner {\n       <button type=\"button\" class=\"banner-view\">View Region</button>\n-      <button type=\"button\" class=\"banner-dismiss\" aria-label=\"Dismiss posture banner\">×</button>`;\n+      <button type=\"button\" class=\"banner-dismiss\" aria-label=\"×\">×</button>`;\n     this.row.querySelector('.banner-view')!.addEventListener('click', () => {\n",
+      "diffSha256": "04b085ece1708429f1ba480eef70271eda55d310c5a64b3ac251e6454110a6e6",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "84cb3c911883e0271622df48b6a16bf585e1f0a9608e02a15aa7c761eaaa9269",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P16",
+      "behavior": "Dismiss persists after the clicked update",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=refresh keeps both action",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "refresh keeps both action nodes and activates the current selected theater and coordinates"
+      ],
+      "assertion": "error: |-\n    The expression evaluated to a falsy value:\n    \n      assert.ok(browser.sessionStorage.getItem('banner-dismissed'))\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: ~\n  operator: '=='\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..c0f8e9851 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -47,3 +47,3 @@ export class CriticalPostureBanner {\n       const now = Date.now();\n-      try { sessionStorage.setItem('banner-dismissed', String(now)); }\n+      try { sessionStorage.removeItem('banner-dismissed'); }\n       catch { this.localDismissedAt = now; }\n",
+      "diffSha256": "794587e399f04b72ab331e2044d40960d8a21c351aaef145db7de52de57f838a",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "623bbc6af65221601cc1797fabac2fb037eff56343605436554d05a3fe7b60b5",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P17",
+      "behavior": "Mobile begins suppression and removes banner",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=mobile posture suppression",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "mobile posture suppression does not replay on return"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'Critical posture in Western Pacific. Strike capable.'\n    - ''\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ''\n  actual: 'Critical posture in Western Pacific. Strike capable.'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..852d771bc 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -65,3 +65,3 @@ export class CriticalPostureBanner {\n     if (this.disposed) return;\n-    if (mobile || this.isDismissed()) {\n+    if (this.isDismissed()) {\n       this.clear(true);\n",
+      "diffSha256": "6816b7694b38e5040b6d2d0ced89ef58749b324678bab63d91b88e3cef3644a1",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "681a9970c08d2cbd450dc64d5a69373b0d3657acaa059f2f6c596df6794a630e",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P18",
+      "behavior": "A dismissal suppresses polls through its cooldown",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=dismissed posture suppression",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "dismissed posture suppression does not replay on return"
+      ],
+      "assertion": "error: 'unexpected element in posture surface'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..f2bb6154e 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -65,3 +65,3 @@ export class CriticalPostureBanner {\n     if (this.disposed) return;\n-    if (mobile || this.isDismissed()) {\n+    if (mobile) {\n       this.clear(true);\n",
+      "diffSha256": "feaa90a445d08b9058c20b27c27551213a87cd5da92bfd95af921b49bee73a29",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "99518ba3e2c844812ae93d7947b359fbba5140b7771e390c1934d5e16434ab02",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P19",
+      "behavior": "Returning from a silent state rebaselines without replay",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=dismissed posture suppression",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "dismissed posture suppression does not replay on return"
+      ],
+      "assertion": "error: |-\n    no replay when suppression ends\n    + actual - expected\n    \n    + 'Critical posture in Western Pacific. Strike capable.'\n    - ''\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ''\n  actual: 'Critical posture in Western Pacific. Strike capable.'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..d9882cffd 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -93,3 +93,3 @@ export class CriticalPostureBanner {\n       setText(this.status, '');\n-    } else if (!this.rebaseline && next !== this.signature) {\n+    } else if (next !== this.signature) {\n       const severity = critical ? 'Critical' : 'Elevated';\n",
+      "diffSha256": "e1359e403afae7f0e30cd334062f3b647d00e58cae0f6e40a91c22798e49e621",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "acb8aeaa736e6de4ba718a3a7a7e752b8ea7be51e794b1267b34052ac1e60c67",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P20",
+      "behavior": "Late post-destroy updates cannot rebuild the banner",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=destroy removes the status",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "destroy removes the status and controls, and late reports do not remount them"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..6a20fdd36 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -64,3 +64,3 @@ export class CriticalPostureBanner {\n   render(postures: readonly TheaterPostureSummary[], mobile: boolean): void {\n-    if (this.disposed) return;\n+    ;\n     if (mobile || this.isDismissed()) {\n",
+      "diffSha256": "33bc4bb33f993fbc04c93d397bb2666cf23944884b89c5c31cda27ef2faf5271",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "84d8d8d18e0f37ee487cea3c38bfdabfd4eb3d910bbcb974270636a8bc056f38",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P21",
+      "behavior": "Remove persistent live node during owner teardown",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=destroy removes the status",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "destroy removes the status and controls, and late reports do not remount them"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..306bd59fe 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -122,3 +122,3 @@ export class CriticalPostureBanner {\n     this.clear(true);\n-    this.status.remove();\n+    ;\n   }\n",
+      "diffSha256": "e0b081c6d55aabcf935234676759035de789e4298f1177e9d2ecdffe4e2393d1",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "a153f97e49dbcb9391f94361b4b8385240beedc5381f59514b7265b02dd7d29d",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P22",
+      "behavior": "Production layout forwards the actual mobile state",
+      "file": "src/app/panel-layout.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=panel layout mounts",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "panel layout mounts the status into the live stack, forwards current mobile state and map target, and tears it down"
+      ],
+      "assertion": "error: |-\n    live mobile state is forwarded\n    \n    false !== true\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/app/panel-layout.ts b/src/app/panel-layout.ts\nindex 1fbde0f53..4279c6530 100644\n--- a/src/app/panel-layout.ts\n+++ b/src/app/panel-layout.ts\n@@ -1112,3 +1112,3 @@ export class PanelLayoutManager implements AppModule {\n   renderCriticalBanner(postures: TheaterPostureSummary[]): void {\n-    this.criticalPostureBanner?.render(postures, this.ctx.isMobile);\n+    this.criticalPostureBanner?.render(postures, false);\n   }\n",
+      "diffSha256": "5e37b65b85114fcacaaa22452026c94c749d6c6f3ebe2000184d154bb285eb8a",
+      "originalSha256": "8013ecb65540c279361659d00d637bb82877852bc7a3e05eed41382676a5601e",
+      "mutatedSha256": "06b6dbb9a7c176e6148d5bf7b27eabf61423ecec6eb9f6760548c63da564f1f6",
+      "restoredSha256": "8013ecb65540c279361659d00d637bb82877852bc7a3e05eed41382676a5601e",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P23",
+      "behavior": "Production layout tears down the child before releasing its reference",
+      "file": "src/app/panel-layout.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=panel layout mounts",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "panel layout mounts the status into the live stack, forwards current mobile state and map target, and tears it down"
+      ],
+      "assertion": "error: |-\n    layout releases live status\n    \n    false !== true\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/app/panel-layout.ts b/src/app/panel-layout.ts\nindex 1fbde0f53..811ceba49 100644\n--- a/src/app/panel-layout.ts\n+++ b/src/app/panel-layout.ts\n@@ -906,3 +906,3 @@ export class PanelLayoutManager implements AppModule {\n  this.modeAdvisoryUnsub = null;\n- this.criticalPostureBanner?.destroy();\n+ ;\n  this.criticalPostureBanner = undefined;\n",
+      "diffSha256": "7265a3483a63f980edf25f728b7b6fb6020318fd9b5b31a37e2e36588bc2a843",
+      "originalSha256": "8013ecb65540c279361659d00d637bb82877852bc7a3e05eed41382676a5601e",
+      "mutatedSha256": "5969d94ec1bf6855ac0a610da4d2ca6b04fae2190cb157f9765685a27dea3a15",
+      "restoredSha256": "8013ecb65540c279361659d00d637bb82877852bc7a3e05eed41382676a5601e",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P24",
+      "behavior": "Production map action centers supplied coordinates at expected zoom",
+      "file": "src/app/panel-layout.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=panel layout mounts",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "panel layout mounts the status into the live stack, forwards current mobile state and map target, and tears it down"
+      ],
+      "assertion": "error: |-\n    current target reaches map at the existing zoom\n    + actual - expected\n    \n      [\n        [\n          12,\n          130,\n    +     1\n    -     4\n        ]\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0:\n      0: 12\n      1: 130\n      2: 4\n  actual:\n    0:\n      0: 12\n      1: 130\n      2: 1\n  operator: 'deepStrictEqual'\n",
+      "reversal": "diff --git a/src/app/panel-layout.ts b/src/app/panel-layout.ts\nindex 1fbde0f53..8ae051c7d 100644\n--- a/src/app/panel-layout.ts\n+++ b/src/app/panel-layout.ts\n@@ -1146,3 +1146,3 @@ export class PanelLayoutManager implements AppModule {\n  this.criticalPostureBanner = new CriticalPostureBanner(\n-   notificationStack.element, (lat, lon) => this.ctx.map?.setCenter(lat, lon, 4), trackCriticalBannerAction,\n+   notificationStack.element, (lat, lon) => this.ctx.map?.setCenter(lat, lon, 1), trackCriticalBannerAction,\n  );\n",
+      "diffSha256": "71cae09bc72ea3450bcc0f975322959393b5ed757bbac46b090bdb8fafc09b60",
+      "originalSha256": "8013ecb65540c279361659d00d637bb82877852bc7a3e05eed41382676a5601e",
+      "mutatedSha256": "daa7e1d232b05464fdbaab60d02d1960da1354b4aa5fbf0c26bc88ed358aa1cb",
+      "restoredSha256": "8013ecb65540c279361659d00d637bb82877852bc7a3e05eed41382676a5601e",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P25",
+      "behavior": "Normal stack mounts an empty status before reports arrive",
+      "file": "src/app/panel-layout.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=panel layout mounts",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "panel layout mounts the status into the live stack, forwards current mobile state and map target, and tears it down"
+      ],
+      "assertion": "error: 'production mount creates the empty status'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: ~\n  operator: '=='\n",
+      "reversal": "diff --git a/src/app/panel-layout.ts b/src/app/panel-layout.ts\nindex 1fbde0f53..9f598e423 100644\n--- a/src/app/panel-layout.ts\n+++ b/src/app/panel-layout.ts\n@@ -1145,5 +1145,3 @@ export class PanelLayoutManager implements AppModule {\n  notificationStack.mount(document.body);\n- this.criticalPostureBanner = new CriticalPostureBanner(\n-   notificationStack.element, (lat, lon) => this.ctx.map?.setCenter(lat, lon, 4), trackCriticalBannerAction,\n- );\n+ ;\n \n",
+      "diffSha256": "f90a6d4e25d3b0831b4ae2c03f2e849cb499932f2fd7a4f640b6c3a57ea429cc",
+      "originalSha256": "8013ecb65540c279361659d00d637bb82877852bc7a3e05eed41382676a5601e",
+      "mutatedSha256": "30e969ed14fe06a7f099d8303f9755737ef5fbf71022119de78f873a769aabd9",
+      "restoredSha256": "8013ecb65540c279361659d00d637bb82877852bc7a3e05eed41382676a5601e",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P26",
+      "behavior": "Release posture visibility and mode listeners on teardown",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=destroy removes the status",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "destroy removes the status and controls, and late reports do not remount them"
+      ],
+      "assertion": "error: 'release the suppression listener'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..3a8f858a9 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -120,3 +120,3 @@ export class CriticalPostureBanner {\n     this.disposed = true;\n-    this.stopWatching();\n+    ;\n     this.clear(true);\n",
+      "diffSha256": "7969637d9e242cdc24f741c20b2c0e97aa8f8612f2154e767477e5c3ee146c17",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "18a9a5c3071fda7b114dd535974da8380faf268c0b0d5b5f1ab798668dd6e8a0",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P27",
+      "behavior": "Silence the current status immediately on entering a hidden state",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=visibility round-trip",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "a visibility round-trip between polls clears the old speech and seeds the next update silently"
+      ],
+      "assertion": "error: |-\n    clear immediately when hidden\n    + actual - expected\n    \n    + 'Elevated posture in Western Pacific. Strike capable.'\n    - ''\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ''\n  actual: 'Elevated posture in Western Pacific. Strike capable.'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..04d90b6e2 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -59,3 +59,2 @@ export class CriticalPostureBanner {\n       this.rebaseline = true;\n-      setText(this.status, '');\n     });\n",
+      "diffSha256": "503c2969eb234fbf472023d9d3ad96fd3a4688cfa114b03f71a3a40945faad0b",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "04e8fcb8f560f6fcbc7e9131721f19d662a809ac458125fdb8c5c3112735468d",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P28",
+      "behavior": "Never re-announce a non-material rename on the same theater ID",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=only meaningful posture",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "only meaningful posture transitions mutate the status; returning from an empty state announces onset"
+      ],
+      "assertion": "error: |-\n    stats-only poll must not announce\n    \n    2 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 2\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..019520ac9 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -93,3 +93,3 @@ export class CriticalPostureBanner {\n       setText(this.status, '');\n-    } else if (!this.rebaseline && next !== this.signature) {\n+    } else if (!this.rebaseline) {\n       const severity = critical ? 'Critical' : 'Elevated';\n",
+      "diffSha256": "f22b6500acd8ca3fa3a52fcdf94ceb3a5aba00e554b9359983b977fbca522a78",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "1c98b594aa9de4b28da5122a4efba75a4b7a7d5e4e382e9179de158f3e6e1ee9",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P29",
+      "behavior": "A distinct theater with an equal displayed name produces a separate semantic event",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=only meaningful posture",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "only meaningful posture transitions mutate the status; returning from an empty state announces onset"
+      ],
+      "assertion": "error: 'a distinct selected theater must announce even if its short label matches'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: 0\n  operator: '=='\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..de58b1330 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -96,3 +96,3 @@ export class CriticalPostureBanner {\n       const strike = top.strikeCapable ? 'Strike capable.' : 'No strike capability indicated.';\n-      this.status.textContent = `${severity} posture in ${top.theaterName || top.theaterId}. ${strike}`;\n+      setText(this.status, `${severity} posture in ${top.theaterName || top.theaterId}. ${strike}`);\n     }\n",
+      "diffSha256": "d1bfde6b9a7746e2658e7389127833d31479011ee82d34ddbeca9a4dc13e22ad",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "c943d98ed3b9a5181e4cf69cc10713e42df46bec5ccfee3e4b275f440fd83685",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P30",
+      "behavior": "Announce theater names as text, never HTML",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=only meaningful posture",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "only meaningful posture transitions mutate the status; returning from an empty state announces onset"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /<i>Other<\\/i>/. Input:\n    \n    'Critical posture in Other. No strike capability indicated.'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual: 'Critical posture in Other. No strike capability indicated.'\n  operator: 'match'\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..aa133c7b6 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -96,3 +96,3 @@ export class CriticalPostureBanner {\n       const strike = top.strikeCapable ? 'Strike capable.' : 'No strike capability indicated.';\n-      this.status.textContent = `${severity} posture in ${top.theaterName || top.theaterId}. ${strike}`;\n+      this.status.innerHTML = `${severity} posture in ${top.theaterName || top.theaterId}. ${strike}`;\n     }\n",
+      "diffSha256": "297bd77be853b535ce0d2ccae2c5d8c4a6a2d1ea2f16c3e74139d10f839950d0",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "ffd179231eb95ad3b09f0921c8e30c482c6cb1057f7f3c57500de252869ef220",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "P31",
+      "behavior": "Local dismissal survives unavailable session storage",
+      "file": "src/components/CriticalPostureBanner.ts",
+      "test": "src/components/__tests__/critical-posture-banner.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=dismissal lasts for this window",
+        "src/components/__tests__/critical-posture-banner.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "dismissal lasts for this window when session storage is unavailable"
+      ],
+      "assertion": "error: 'local dismissal survives another poll'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='\n",
+      "reversal": "diff --git a/src/components/CriticalPostureBanner.ts b/src/components/CriticalPostureBanner.ts\nindex d0b6035f8..7a6be8e00 100644\n--- a/src/components/CriticalPostureBanner.ts\n+++ b/src/components/CriticalPostureBanner.ts\n@@ -48,3 +48,3 @@ export class CriticalPostureBanner {\n       try { sessionStorage.setItem('banner-dismissed', String(now)); }\n-      catch { this.localDismissedAt = now; }\n+      catch { /* discard dismissal */ }\n       this.clear(true);\n",
+      "diffSha256": "07e1f4b0fe88e0de54d80e63767b211195b1e4912dac9da3fa1e9b379465edb6",
+      "originalSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "mutatedSha256": "a6b1c71f5a03427bd618f50f06b0e29306bf11e51c9fd5ea7da7e04bc2f570f7",
+      "restoredSha256": "2203c33fd76cd979effadc2927fd2bae439d5c1af46afe74ca9d78fb0ff3dd75",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S01",
+      "behavior": "Expose one status role",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=one pre-mounted",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "one pre-mounted, initially empty triage status announces count transitions including zero"
+      ],
+      "assertion": "error: 'the live region exists before the first update'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: ~\n  operator: '=='\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..1dd56c338 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -140,3 +140,3 @@ export class SummaryStrip {\n     this.live.className = 'critical-ui-announcer';\n-    this.live.setAttribute('role', 'status');\n+    this.live.setAttribute('role', 'note');\n     this.live.setAttribute('aria-live', 'polite');\n",
+      "diffSha256": "b985d3760bbb3d38a7b09d38f96e02d7404cd9d9d2f74cf42896f4b10e241ed5",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "049fbd3229d552100655bac7bef4d5af4904655905ead42691627ce7933032f3",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S02",
+      "behavior": "Polite triage announcement",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=one pre-mounted",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "one pre-mounted, initially empty triage status announces count transitions including zero"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'assertive'\n    - 'polite'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'polite'\n  actual: 'assertive'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..d05d3ed39 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -141,3 +141,3 @@ export class SummaryStrip {\n     this.live.setAttribute('role', 'status');\n-    this.live.setAttribute('aria-live', 'polite');\n+    this.live.setAttribute('aria-live', 'assertive');\n     this.live.setAttribute('aria-atomic', 'true');\n",
+      "diffSha256": "54b3fbddf3ce9b8f70101eb386d2ae6019caf9e5a48c848b8b24065d208f71f3",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "f689423a3923ac6bebeaa1f6cad44f90556b5d8ff3755ff84dc4d03f3011045c",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S03",
+      "behavior": "Announce whole triage tuple",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=one pre-mounted",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "one pre-mounted, initially empty triage status announces count transitions including zero"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    'false' !== 'true'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'true'\n  actual: 'false'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..bfc48b5b7 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -142,3 +142,3 @@ export class SummaryStrip {\n     this.live.setAttribute('aria-live', 'polite');\n-    this.live.setAttribute('aria-atomic', 'true');\n+    this.live.setAttribute('aria-atomic', 'false');\n     const chevron = document.createElement('button');\n",
+      "diffSha256": "41601e87beb4e1a769932ce2751b29a4885c4f2a498fc8c96d428de8f08086de",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "90cdc00ff6ffae500be22d768ed55aba5839cfd6b985cf94922e7ebcaf195a9b",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S04",
+      "behavior": "Announcer is separate from interactive buttons",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=one pre-mounted",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "one pre-mounted, initially empty triage status announces count transitions including zero"
+      ],
+      "assertion": "error: 'the live region stays outside controls'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..610f63bb1 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -148,3 +148,3 @@ export class SummaryStrip {\n     chevron.innerHTML = icon('chevron-down', { size: 12 });\n-    this.el.append(this.segsEl, chevron, this.live);\n+    this.el.append(this.segsEl, chevron); chevron.append(this.live);\n \n",
+      "diffSha256": "ae81ea2b2e5bb113ab7d79176e5a174d59d4076fcc0149f1b5549ae5e08cdc3b",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "6217cef1753df5c3c939244da91e6123af7a6a6e8f7111bbfde70230955908e7",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S05",
+      "behavior": "Unacknowledged counts exclude acknowledged warnings",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=one pre-mounted",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "one pre-mounted, initially empty triage status announces count transitions including zero"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'Unacknowledged alerts: 1 critical, 1 high, 1 medium.'\n    - 'Unacknowledged alerts: 0 critical, 1 high, 1 medium.'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'Unacknowledged alerts: 0 critical, 1 high, 1 medium.'\n  actual: 'Unacknowledged alerts: 1 critical, 1 high, 1 medium.'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..f8bc25f77 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -266,3 +266,3 @@ export class SummaryStrip {\n     for (const alert of unifiedAlertStore.getAll()) {\n-      if (alert.acknowledged) continue;\n+      if (false) continue;\n       total++;\n",
+      "diffSha256": "bab47b2485fd65d3c736551d955881c04799c749693558c113f7fc0f578fabdc",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "9691d722b81d8364bf142c6291f02119ff18f0a892ca0bd23f4b9a84a0e4aaf0",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S06",
+      "behavior": "Low and info alone do not imply inbox is empty",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=one pre-mounted",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "one pre-mounted, initially empty triage status announces count transitions including zero"
+      ],
+      "assertion": "error: |-\n    The input was expected to not match the regular expression /no open alerts/i. Input:\n    \n    'no open alerts'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual: 'no open alerts'\n  operator: 'doesNotMatch'\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..aaeecbe2b 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -280,3 +280,3 @@ export class SummaryStrip {\n     }\n-    const empty = total ? 'no critical, high or medium alerts' : 'no open alerts';\n+    const empty = 'no open alerts';\n     const body = parts.length ? parts.join('<span class=\"cb-stat-sep\" aria-hidden=\"true\">·</span>')\n",
+      "diffSha256": "a2ed3cc1e49c4166feb83e17436627cdab0ef5248d83f136f82c20b8247fe734",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "90c8bee6e9fed90ce3147ad93be3a5c79ae7f57f499e09e684e59c2fa6d9791e",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S07",
+      "behavior": "A change to zero is announced",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=one pre-mounted",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "one pre-mounted, initially empty triage status announces count transitions including zero"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + ''\n    - 'Unacknowledged alerts: 0 critical, 0 high, 0 medium.'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'Unacknowledged alerts: 0 critical, 0 high, 0 medium.'\n  actual: ''\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..04181e405 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -293,3 +293,3 @@ export class SummaryStrip {\n     } else {\n-      if (this.previousTriage !== undefined && message !== this.previousTriage && this.el.isConnected) this.live.textContent = message;\n+      if (this.previousTriage !== undefined && message !== this.previousTriage && this.el.isConnected) this.live.textContent = message === 'Unacknowledged alerts: 0 critical, 0 high, 0 medium.' ? '' : message;\n       this.previousTriage = message;\n",
+      "diffSha256": "382c2845d7401a2619ca66844c97a4558d4c7c14792cfa13e2065630c1405d8f",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "6942e75a870ce483e85e9b74b8844fee58d78a35c01917606ac1c33016ffc182",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S08",
+      "behavior": "Use displayed capped counts as the comparison identity",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=identical polls",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "identical polls, non-triage updates and counts beyond the display cap do not announce"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /99\\+ critical/. Input:\n    \n    'Unacknowledged alerts: 100 critical, 0 high, 0 medium.'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual: 'Unacknowledged alerts: 100 critical, 0 high, 0 medium.'\n  operator: 'match'\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..469145eee 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -274,3 +274,3 @@ export class SummaryStrip {\n       const count = capCount(counts[severity]);\n-      triage.push(`${count} ${severity}`);\n+      triage.push(`${counts[severity]} ${severity}`);\n       if (counts[severity]) {\n",
+      "diffSha256": "cfd099559ccc50f7eb2226e369de83490126b83398a33fc330c0d39a2eb491b6",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "963cab082d20f130940bc7b85ff0ccb60bdfee8bd95038f3c7df066a433e6a92",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S09",
+      "behavior": "Repeat polls must not mutate live text",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=identical polls",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "identical polls, non-triage updates and counts beyond the display cap do not announce"
+      ],
+      "assertion": "error: |-\n    same displayed tuple produces zero live region writes\n    \n    6 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 6\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..5eb52e2f1 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -293,3 +293,3 @@ export class SummaryStrip {\n     } else {\n-      if (this.previousTriage !== undefined && message !== this.previousTriage && this.el.isConnected) this.live.textContent = message;\n+      if (this.previousTriage !== undefined && this.el.isConnected) this.live.textContent = message;\n       this.previousTriage = message;\n",
+      "diffSha256": "4f454d3eaaf4a732f9594446cbcf3594230fb24121bcdb778807ab1fb80f1330",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "d994c585788cccc8e0eb0622232b9d357818c0bf9e68a0a847b57e5e4a32911e",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S10",
+      "behavior": "Polls retain existing interactive DOM nodes",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=polling preserves",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "polling preserves actual action nodes, their focus and their activation handlers"
+      ],
+      "assertion": "error: 'status keeps keyboard focus'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..6ed24f0fd 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -247,2 +247,3 @@ export class SummaryStrip {\n     if (button.title !== title) button.title = title;\n+    button.replaceWith(button.cloneNode(true));\n     if (button.getAttribute(attr) !== name) button.setAttribute(attr, name);\n",
+      "diffSha256": "8ee16ddef9df6eb422d792c6b0eaac3e4f91a91d60ca3f8cdab18b39fac23bb6",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "8ac1e58ca73668b822221021cf8180353986e527f2608e6e31908f81980fd84d",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S11",
+      "behavior": "All segment action callbacks remain connected",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=polling preserves",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "polling preserves actual action nodes, their focus and their activation handlers"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'status',\n    +   'status',\n    -   'alerts',\n        'fresh',\n        'regime'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: 'status'\n    1: 'alerts'\n    2: 'fresh'\n    3: 'regime'\n  actual:\n    0: 'status'\n    1: 'status'\n    2: 'fresh'\n    3: 'regime'\n  operator: 'deepStrictEqual'\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..43aafcd0f 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -350,3 +350,3 @@ export class SummaryStrip {\n       case 'status': { this.deps.onStatusClick(); break; }\n-      case 'alerts': { this.deps.onAlertsClick(); break; }\n+      case 'alerts': { this.deps.onStatusClick(); break; }\n       case 'fresh': { this.deps.onFreshnessClick(); break; }\n",
+      "diffSha256": "7a7021447cd5121f400b51f838be1059f2842ae857584e01b79da4f5458f3cfc",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "3b4f59df315855e2f920af044f0c30729df7a0bf8ef6d6c906ee24fcfec8b349",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S12",
+      "behavior": "Collapsed strip remains silent across data changes",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=collapsed suppresses",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "collapsed suppresses triage changes and resumes silently before the next real change"
+      ],
+      "assertion": "error: |-\n    suppressed changes produce no stale speech\n    + actual - expected\n    \n    + 'Unacknowledged alerts: 1 critical, 0 high, 0 medium.'\n    - ''\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ''\n  actual: 'Unacknowledged alerts: 1 critical, 0 high, 0 medium.'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..5557d8955 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -224,3 +224,3 @@ export class SummaryStrip {\n     this.renderStatus();\n-    if (this.collapsed) return;\n+    if (false) return;\n     this.renderAlerts();\n",
+      "diffSha256": "141e55f21556873fc5d842cc1d7ffb8ea8406ff411f5ff7fc6e60cacc6fb5e7a",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "a292435be2e2fbb9d25fe6ffc06e7f082e8aca14573025bac67d7062dd895dd2",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S13",
+      "behavior": "Hidden document remains silent across data changes",
+      "file": "src/utils/critical-ui-announcements.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=hidden suppresses",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "hidden suppresses triage changes and resumes silently before the next real change"
+      ],
+      "assertion": "error: |-\n    suppressed changes produce no stale speech\n    + actual - expected\n    \n    + 'Unacknowledged alerts: 1 critical, 0 high, 0 medium.'\n    - ''\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ''\n  actual: 'Unacknowledged alerts: 1 critical, 0 high, 0 medium.'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/utils/critical-ui-announcements.ts b/src/utils/critical-ui-announcements.ts\nindex bdc69f54d..d230b1012 100644\n--- a/src/utils/critical-ui-announcements.ts\n+++ b/src/utils/critical-ui-announcements.ts\n@@ -5,3 +5,3 @@ const MODE_KEY = 'wm-app-mode';\n export function criticalAnnouncementsSuppressed(): boolean {\n-  if (document.hidden || isGhostMode()) return true;\n+  if (isGhostMode()) return true;\n   try {\n",
+      "diffSha256": "d2295e613b73b046f5f5093fc7cbf7c7526c5d8ddb58ec54c156270bc3fac0bd",
+      "originalSha256": "c7cee0fb78a913fb3020e6020104b379526981c0966b275565672cc4468ccfde",
+      "mutatedSha256": "1ffd4afbff34a39c5393c88c642a955d403008384847dc4f0d6e75ca63d5bd7d",
+      "restoredSha256": "c7cee0fb78a913fb3020e6020104b379526981c0966b275565672cc4468ccfde",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S14",
+      "behavior": "Ghost mode suppresses even if its local preference has not synced",
+      "file": "src/utils/critical-ui-announcements.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=ghost suppresses",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "ghost suppresses triage changes and resumes silently before the next real change"
+      ],
+      "assertion": "error: |-\n    suppressed changes produce no stale speech\n    + actual - expected\n    \n    + 'Unacknowledged alerts: 1 critical, 0 high, 0 medium.'\n    - ''\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ''\n  actual: 'Unacknowledged alerts: 1 critical, 0 high, 0 medium.'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/utils/critical-ui-announcements.ts b/src/utils/critical-ui-announcements.ts\nindex bdc69f54d..0b833213a 100644\n--- a/src/utils/critical-ui-announcements.ts\n+++ b/src/utils/critical-ui-announcements.ts\n@@ -5,3 +5,3 @@ const MODE_KEY = 'wm-app-mode';\n export function criticalAnnouncementsSuppressed(): boolean {\n-  if (document.hidden || isGhostMode()) return true;\n+  if (document.hidden) return true;\n   try {\n",
+      "diffSha256": "598b66d608e25ae1c8e79eceac121de6167a81719222a82183ad9bdd02ac1188",
+      "originalSha256": "c7cee0fb78a913fb3020e6020104b379526981c0966b275565672cc4468ccfde",
+      "mutatedSha256": "256d066b202e1aa82af76897c0413117ecc7b63b473f350283e08d1c249795cc",
+      "restoredSha256": "c7cee0fb78a913fb3020e6020104b379526981c0966b275565672cc4468ccfde",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S15",
+      "behavior": "Disabled strip never announces",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=disabled suppresses",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "disabled suppresses triage changes and resumes silently before the next real change"
+      ],
+      "assertion": "error: |-\n    suppressed changes produce no stale speech\n    + actual - expected\n    \n    + 'Unacknowledged alerts: 1 critical, 0 high, 0 medium.'\n    - ''\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ''\n  actual: 'Unacknowledged alerts: 1 critical, 0 high, 0 medium.'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..e7891c37e 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -222,3 +222,3 @@ export class SummaryStrip {\n   private renderSegments(): void {\n-    if (!this.enabled) return;\n+    if (false) return;\n     this.renderStatus();\n",
+      "diffSha256": "cb5db960f37c3479181f4905cc0e96daa79b3d7c94d42df4c206f250a2ba44fc",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "ccb71b5fbf984230a98735f67669c9e97aac4364db3e8cfd29339b3930b02d83",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S16",
+      "behavior": "Watcher teardown detaches transient mode and visibility events",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=destroy removes",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "destroy removes listeners and subscriptions"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /1 high/. Input:\n    \n    ''\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual: ''\n  operator: 'match'\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..712be0752 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -174,3 +174,3 @@ export class SummaryStrip {\n   public destroy(): void {\n-    this.stopWatchingSuppression();\n+    ;\n     this.unsubStatus?.();\n",
+      "diffSha256": "135a8c62d5a3d1862625825ec821ec22aaf53c5b1f1381827665c62cbcf8e743",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "429eb5a2edee6127200a6bb1b88a2feaae4d254838cab97630213a2ef407c43a",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S17",
+      "behavior": "Destroy unsubscribes from alerts",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=destroy removes",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "destroy removes listeners and subscriptions"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 2\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 2\n  actual: 1\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..038827b9c 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -177,3 +177,3 @@ export class SummaryStrip {\n     this.unsubStatus = null;\n-    this.unsubAlerts?.();\n+    ;\n     this.unsubAlerts = null;\n",
+      "diffSha256": "409365476733dad3236fe6670500d8a9d4b1b705c05e17f65433e31d56cf0e88",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "c9a5295f42347f0697fb81fdbf0a0bfcee1c3abb9cf31f9fcbb53242abcf9cc5",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S18",
+      "behavior": "Destroy removes the strip from the mounted UI",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=destroy removes",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "destroy removes listeners and subscriptions"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..4720891cf 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -187,3 +187,3 @@ export class SummaryStrip {\n     this.el.removeEventListener('click', this.onClick);\n-    this.el.remove();\n+    ;\n   }\n",
+      "diffSha256": "0d56fcc56cda7219091dd407789e7f5a23a64f23eecbf9f318ed7ef1b215fb75",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "e373a474dabf2cfc34167fdd400cb82b501201e12a3b73fbe5b3aa5e66dea626",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S19",
+      "behavior": "Suppressed triage cannot replay when the visibility gate reopens",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=hidden suppresses",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "hidden suppresses triage changes and resumes silently before the next real change"
+      ],
+      "assertion": "error: |-\n    returning to the surface does not replay suppressed updates\n    + actual - expected\n    \n    + 'Unacknowledged alerts: 1 critical, 0 high, 0 medium.'\n    - ''\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ''\n  actual: 'Unacknowledged alerts: 1 critical, 0 high, 0 medium.'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..5cf7eb196 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -293,3 +293,3 @@ export class SummaryStrip {\n     } else {\n-      if (this.previousTriage !== undefined && message !== this.previousTriage && this.el.isConnected) this.live.textContent = message;\n+      if (message !== this.previousTriage && this.el.isConnected) this.live.textContent = message;\n       this.previousTriage = message;\n",
+      "diffSha256": "3355fe79c129bb1e4dff6162a5b9f0fe595511cf3397f0e07a0dda3599edd92e",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "6bada2207599f0132c6d8015474eef788987740cdc0d71dea835f43943317a51",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S20",
+      "behavior": "Stale persisted Ghost Mode suppresses before UI mode refresh",
+      "file": "src/utils/critical-ui-announcements.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=peer Ghost",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "peer Ghost and storage denial suppress updates; unrelated storage leaves the baseline alone"
+      ],
+      "assertion": "error: |-\n    persisted peer Ghost setting suppresses triage changes\n    + actual - expected\n    \n    + 'Unacknowledged alerts: 1 critical, 0 high, 0 medium.'\n    - ''\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ''\n  actual: 'Unacknowledged alerts: 1 critical, 0 high, 0 medium.'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/utils/critical-ui-announcements.ts b/src/utils/critical-ui-announcements.ts\nindex bdc69f54d..175b320f4 100644\n--- a/src/utils/critical-ui-announcements.ts\n+++ b/src/utils/critical-ui-announcements.ts\n@@ -7,3 +7,3 @@ export function criticalAnnouncementsSuppressed(): boolean {\n   try {\n-    return localStorage.getItem(MODE_KEY) === 'ghost';\n+    return false;\n   } catch {\n",
+      "diffSha256": "7f68c5ba8fdf30a7da401320eb95d6bfca1e72925df261f66f428f15d6f7a44f",
+      "originalSha256": "c7cee0fb78a913fb3020e6020104b379526981c0966b275565672cc4468ccfde",
+      "mutatedSha256": "6596c42dc6047a37d164e048ca5365bdaa43d511dd2c4dfdd3a9b6d4f9a62840",
+      "restoredSha256": "c7cee0fb78a913fb3020e6020104b379526981c0966b275565672cc4468ccfde",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S21",
+      "behavior": "Denied mode-storage read cannot authorize announcements",
+      "file": "src/utils/critical-ui-announcements.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=peer Ghost",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "peer Ghost and storage denial suppress updates; unrelated storage leaves the baseline alone"
+      ],
+      "assertion": "error: |-\n    unreadable mode cannot authorize speech\n    + actual - expected\n    \n    + 'Unacknowledged alerts: 1 critical, 0 high, 2 medium.'\n    - ''\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ''\n  actual: 'Unacknowledged alerts: 1 critical, 0 high, 2 medium.'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/utils/critical-ui-announcements.ts b/src/utils/critical-ui-announcements.ts\nindex bdc69f54d..686339df3 100644\n--- a/src/utils/critical-ui-announcements.ts\n+++ b/src/utils/critical-ui-announcements.ts\n@@ -9,3 +9,3 @@ export function criticalAnnouncementsSuppressed(): boolean {\n   } catch {\n-    return true;\n+    return false;\n   }\n",
+      "diffSha256": "f040ba18fe10e5d6fae1b1ee47877f21245d2898b116295505bde7c1cca4def9",
+      "originalSha256": "c7cee0fb78a913fb3020e6020104b379526981c0966b275565672cc4468ccfde",
+      "mutatedSha256": "34990db6263fd73267be7fbcc9234802399d6150ad33a0901ea888ceeee527e8",
+      "restoredSha256": "c7cee0fb78a913fb3020e6020104b379526981c0966b275565672cc4468ccfde",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S22",
+      "behavior": "Listen for peer mode transitions before next data poll",
+      "file": "src/utils/critical-ui-announcements.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=peer Ghost",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "peer Ghost and storage denial suppress updates; unrelated storage leaves the baseline alone"
+      ],
+      "assertion": "error: |-\n    peer mode change clears pending speech\n    + actual - expected\n    \n    + 'Unacknowledged alerts: 0 critical, 1 high, 0 medium.'\n    - ''\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ''\n  actual: 'Unacknowledged alerts: 0 critical, 1 high, 0 medium.'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/utils/critical-ui-announcements.ts b/src/utils/critical-ui-announcements.ts\nindex bdc69f54d..3cfa677e2 100644\n--- a/src/utils/critical-ui-announcements.ts\n+++ b/src/utils/critical-ui-announcements.ts\n@@ -19,3 +19,3 @@ export function watchCriticalAnnouncementSuppression(onChange: () => void): () =\n   document.addEventListener('wm:mode-changed', onChange);\n-  window.addEventListener('storage', onStorage);\n+  ;\n   return () => {\n",
+      "diffSha256": "0408e16c2d6bf10e6722ad083316379f71e48f209924e486faf71fb6377cf351",
+      "originalSha256": "c7cee0fb78a913fb3020e6020104b379526981c0966b275565672cc4468ccfde",
+      "mutatedSha256": "fd1a6a5d77fe3d264662e9c3222c0178b82735b57188c138201ea298d4cae0d2",
+      "restoredSha256": "c7cee0fb78a913fb3020e6020104b379526981c0966b275565672cc4468ccfde",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S23",
+      "behavior": "Unrelated peer storage does not reset a meaningful announcement",
+      "file": "src/utils/critical-ui-announcements.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=peer Ghost",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "peer Ghost and storage denial suppress updates; unrelated storage leaves the baseline alone"
+      ],
+      "assertion": "error: |-\n    unrelated storage cannot reset the live status\n    + actual - expected\n    \n    + ''\n    - 'Unacknowledged alerts: 1 critical, 0 high, 1 medium.'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'Unacknowledged alerts: 1 critical, 0 high, 1 medium.'\n  actual: ''\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/utils/critical-ui-announcements.ts b/src/utils/critical-ui-announcements.ts\nindex bdc69f54d..b27f851da 100644\n--- a/src/utils/critical-ui-announcements.ts\n+++ b/src/utils/critical-ui-announcements.ts\n@@ -15,3 +15,3 @@ export function watchCriticalAnnouncementSuppression(onChange: () => void): () =\n   const onStorage = (event: StorageEvent): void => {\n-    if (event.key === null || event.key === MODE_KEY) onChange();\n+    onChange();\n   };\n",
+      "diffSha256": "1d91b5d47766768c075878b45eb235feb4781eddda7d2c884732f7e34fbc1b5e",
+      "originalSha256": "c7cee0fb78a913fb3020e6020104b379526981c0966b275565672cc4468ccfde",
+      "mutatedSha256": "e7ef239c4e8036726c68606c1c532bfbb8ff8c101aeeea4fef385d7528a1b9fb",
+      "restoredSha256": "c7cee0fb78a913fb3020e6020104b379526981c0966b275565672cc4468ccfde",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S24",
+      "behavior": "Peer enabled and collapsed updates apply to the actual strip",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=peer strip settings",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "peer strip settings update visibility immediately and never replay hidden counts"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    '' !== 'none'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'none'\n  actual: ''\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..dc2e5d03e 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -162,3 +162,3 @@ export class SummaryStrip {\n     document.addEventListener(SUMMARY_STRIP_TOGGLE_EVENT, this.onToggleEvent);\n-    window.addEventListener('storage', this.onStorage);\n+    ;\n \n",
+      "diffSha256": "6641c5e056394415224caeaf735772e07d1b96da955fcb74b8d87b0aa5dd5492",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "bd1d1d6c7f5bc2cc60225645f507a245c39dfeb370c218ee65f71b9d92129904",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S25",
+      "behavior": "Reports processed while detached never preload a live announcement",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=an update before the strip is attached",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "an update before the strip is attached seeds the baseline without preloading speech"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'Unacknowledged alerts: 0 critical, 1 high, 0 medium.'\n    - ''\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ''\n  actual: 'Unacknowledged alerts: 0 critical, 1 high, 0 medium.'\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..ebc879e7d 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -293,3 +293,3 @@ export class SummaryStrip {\n     } else {\n-      if (this.previousTriage !== undefined && message !== this.previousTriage && this.el.isConnected) this.live.textContent = message;\n+      if (this.previousTriage !== undefined && message !== this.previousTriage) this.live.textContent = message;\n       this.previousTriage = message;\n",
+      "diffSha256": "d3ef2affdc7c6594e4f2f539af7ee753be52eaa6a0b3ef7e0e6add516b8604da",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "d0fdc11becf3a4a81f87632fbe00c7655aae093d32816c6674c4b464106e7ca0",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S26",
+      "behavior": "Identical polls do not replace descendants of the focused action",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=identical renders leave the focused accessible name",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "identical renders leave the focused accessible name, description and control contents untouched"
+      ],
+      "assertion": "error: |-\n    the focused button is not rewritten or renamed on unrelated refreshes\n    \n    15 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 15\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..3f503ad10 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -242,3 +242,3 @@ export class SummaryStrip {\n     this.setSegmentDisplay(button, display, 'fresh');\n-    if (this.bodies.get(button) !== body) {\n+    if (true) {\n       button.innerHTML = body;\n",
+      "diffSha256": "208217a95bfd21afa5181cfe6fb7e36dc4809b5caa713ed3164cb0139d930b0b",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "8e461a5beb1b16f83361f953b960a51af41544be1b44f7efa113f88139fc8a04",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S27",
+      "behavior": "Equivalent accessible descriptions are not written again",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=identical renders leave the focused accessible name",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "identical renders leave the focused accessible name, description and control contents untouched"
+      ],
+      "assertion": "error: |-\n    the focused button is not rewritten or renamed on unrelated refreshes\n    \n    3 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 3\n  operator: 'strictEqual'\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..54fec4eb3 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -247,3 +247,3 @@ export class SummaryStrip {\n     if (button.title !== title) button.title = title;\n-    if (button.getAttribute(attr) !== name) button.setAttribute(attr, name);\n+    button.setAttribute(attr, name);\n   }\n",
+      "diffSha256": "d1da8e278997dda6097db53e4092b3e39e4b8e3cfb4831b53e0f78e764fe8b07",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "79af85773c601138d0ec146843fe9f55e9cb0dcce1790c2442df4c8a1bb80b08",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S28",
+      "behavior": "The disappearing focused regime action transfers focus to freshness",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=a disappearing focused regime",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "a disappearing focused regime moves to freshness; outside focus stays put"
+      ],
+      "assertion": "error: 'freshness is the preceding visible action'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..b7dd2a338 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -233,3 +233,3 @@ export class SummaryStrip {\n     if (display === 'none' && button.isSameNode(document.activeElement)) {\n-      this.el.querySelector<HTMLButtonElement>(`[data-seg=\"${fallback}\"]`)?.focus({ preventScroll: true });\n+      ;\n     }\n",
+      "diffSha256": "0076f07509a34c493a1a1ddd6cacc3a5966af16da092ee2c597378542633e190",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "a4baceee26287648da565cc5314112bf4d4849449aedfef2634b7aa6dfe91789",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S29",
+      "behavior": "A hidden regime never steals outside focus",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=a disappearing focused regime",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "a disappearing focused regime moves to freshness; outside focus stays put"
+      ],
+      "assertion": "error: 'a disappearing unfocused segment cannot pull focus'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..1f0f7840c 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -232,3 +232,3 @@ export class SummaryStrip {\n     if (button.style.display === display) return;\n-    if (display === 'none' && button.isSameNode(document.activeElement)) {\n+    if (display === 'none') {\n       this.el.querySelector<HTMLButtonElement>(`[data-seg=\"${fallback}\"]`)?.focus({ preventScroll: true });\n",
+      "diffSha256": "b45ccc94b189936eac238bffb146a9e98e06798e33362d239e34d1df51a3e5e2",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "f18df5fd0b24235c7795e9bce1eaa8675187e332a9b889b4ef6d00729335f2c1",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S30",
+      "behavior": "Hiding a focused action on peer collapse directs it to the chevron",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=peer collapse moves a disappearing",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "peer collapse moves a disappearing focused action to the chevron only"
+      ],
+      "assertion": "error: 'collapse leaves a focused, operable expand action'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..d81a46437 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -208,3 +208,3 @@ export class SummaryStrip {\n       for (const segment of this.segsEl.querySelectorAll<HTMLButtonElement>('button:not([data-seg=\"status\"])')) {\n-        this.setSegmentDisplay(segment, 'none', 'chevron');\n+        this.setSegmentDisplay(segment, 'none', 'fresh');\n       }\n",
+      "diffSha256": "186ae645940706e5f4e9010628aab5b5d00a2eeec99f636bc6c33d1cffc667bc",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "ab1d2d97fe5cbbf3e07df820733a60ea055f456f3384791b781b727e175fda6b",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "S31",
+      "behavior": "Use actual activeElement if a background webview omits :focus styling",
+      "file": "src/components/SummaryStrip.ts",
+      "test": "src/components/__tests__/summary-strip-announcements.test.mts",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=a disappearing focused regime",
+        "src/components/__tests__/summary-strip-announcements.test.mts"
+      ],
+      "greenBefore": 1,
+      "redPassed": 0,
+      "redFailed": 1,
+      "greenAfter": 1,
+      "failingTests": [
+        "a disappearing focused regime moves to freshness; outside focus stays put"
+      ],
+      "assertion": "error: 'freshness is the preceding visible action'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='\n",
+      "reversal": "diff --git a/src/components/SummaryStrip.ts b/src/components/SummaryStrip.ts\nindex c4914265a..ceb6f419a 100644\n--- a/src/components/SummaryStrip.ts\n+++ b/src/components/SummaryStrip.ts\n@@ -232,3 +232,3 @@ export class SummaryStrip {\n     if (button.style.display === display) return;\n-    if (display === 'none' && button.isSameNode(document.activeElement)) {\n+    if (display === 'none' && button.matches(':focus')) {\n       this.el.querySelector<HTMLButtonElement>(`[data-seg=\"${fallback}\"]`)?.focus({ preventScroll: true });\n",
+      "diffSha256": "9d9a14819f2f7e3fa3cc4ad2737ef73c23f823d8ab65bd3375900df6c39dacb6",
+      "originalSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "mutatedSha256": "1eae852f50c86b7cfebb1a6079ee2debf190316bf6d36165bbef11defc734cbe",
+      "restoredSha256": "d50651d3dbd3299015ece20fe6151ae42ea86affbbdcedcfa3fc000e5214ab52",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "C01",
+      "behavior": "Visually hidden live status retains accessible dimensions and semantics without changing stack layout.",
+      "file": "src/styles/eew-status-bar.css",
+      "test": "e2e/summary-strip-layout.mjs",
+      "command": [
+        "node",
+        "e2e/summary-strip-layout.mjs"
+      ],
+      "greenBefore": 9,
+      "redPassed": 7,
+      "redFailed": 2,
+      "greenAfter": 9,
+      "failingTests": [
+        "posture status is visually clipped and exposed as polite in the accessibility tree Expected values to be strictly deep-equal:",
+        "posture occupies first measured row and removal reclaims space The expression evaluated to a falsy value:"
+      ],
+      "assertion": "ture status is visually clipped and exposed as polite in the accessibility tree Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n+   'static',\n+   '1000px',\n+   '0px',\n+   'visible',\n+   'auto'\n-   'absolute',\n-   '1px',\n-   '1px',\n-   'hidden',\n-   'rect(0px, 0px, 0px, 0px)'\n  ]\n\nGEOMETRY {\"summary\":{\"top\":68,\"bottom\":9",
+      "reversal": "diff --git a/src/styles/eew-status-bar.css b/src/styles/eew-status-bar.css\nindex af83572eb..90849bc23 100644\n--- a/src/styles/eew-status-bar.css\n+++ b/src/styles/eew-status-bar.css\n@@ -191,4 +191,3 @@ body.is-desktop-macos .eew-bar-main {\n \n-.eew-bar-live,\n-.critical-ui-announcer {\n+.eew-bar-live {\n   position: absolute;\n",
+      "diffSha256": "dadb8a8f5ef1c28ca460ada4012d8ee728cc6e0b198ea6fc17781d4c158675cd",
+      "originalSha256": "85e5958779e7754a576e111ebf88203ba203a86c387f71f6d3dfa30a05bd2be6",
+      "mutatedSha256": "2a0d2de44a99db283e9e870548306649b7daac0048fed3a0e2f59bc56f8baecc",
+      "restoredSha256": "85e5958779e7754a576e111ebf88203ba203a86c387f71f6d3dfa30a05bd2be6",
+      "cleanAfterRestore": true
+    }
+  ],
+  "summary": {
+    "expectedAssertionFailures": 63,
+    "unresolved": 0,
+    "namedRedAssertions": 64,
+    "node": "v22.23.1",
+    "uniqueProductAndFixtureFiles": 8
+  }
+}

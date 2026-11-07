@@ -1,6 +1,7 @@
-/* eslint-disable @typescript-eslint/prefer-nullish-coalescing, sonarjs/no-nested-conditional, sonarjs/cognitive-complexity, unicorn/no-nested-ternary, no-console, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-misused-promises, @typescript-eslint/no-empty-function, sonarjs/no-nested-template-literals, unicorn/prefer-top-level-await, unicorn/no-array-reverse */
+/* eslint-disable @typescript-eslint/prefer-nullish-coalescing, sonarjs/no-nested-conditional, sonarjs/cognitive-complexity, unicorn/no-nested-ternary, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-misused-promises, @typescript-eslint/no-empty-function, sonarjs/no-nested-template-literals, unicorn/prefer-top-level-await */
 import './styles/main.css';
 import './styles/settings-window.css';
+import { getCredentialEvidenceDisplay } from '@/services/credential-evidence';
 import { SettingsManager } from '@/services/settings-manager';
 import {
   SETTINGS_CATEGORIES,
@@ -20,6 +21,7 @@ import {
   isFeatureEnabled,
   setFeatureToggle,
   validateSecret,
+  verifyStoredSecretWithApi,
   loadDesktopSecretsWhenReady,
   type RuntimeFeatureDefinition,
   type RuntimeFeatureId,
@@ -36,6 +38,7 @@ import { trackFeatureToggle } from '@/services/analytics';
 
 let activeSection = 'overview';
 let settingsManager: SettingsManager;
+let testedFooter: { key: RuntimeSecretKey; evidence: string; message: string } | undefined;
 let _diagCleanup: (() => void) | null = null;
 
 function setActionStatus(message: string, tone: 'ok' | 'error' = 'ok'): void {
@@ -286,14 +289,13 @@ function renderSecretInput(key: RuntimeSecretKey, _featureId: RuntimeFeatureId):
   const isPlaintext = PLAINTEXT_KEYS.has(key);
   const showGetKey = signupUrl && !state.present && !pending;
 
-  const statusText = pending
- ? (validated === false ? 'Invalid' : 'Staged')
- : state.present ? state.valid ? 'Valid' : 'Looks invalid' : 'Missing';
-  const statusClass = pending
- ? (validated === false ? 'warn' : 'staged')
- : (state.valid ? 'ok' : 'warn');
+  const evidence = getCredentialEvidenceDisplay(key, state.present);
+  const statusText = pending ? (validated === false ? message || 'Check failed' : 'Staged') : evidence.text;
+  const statusClass = pending ? (validated === false ? 'warn' : 'staged') : evidence.state === 'verified' ? 'ok' : '';
+  const status = `<span class="settings-secret-status ${statusClass}" data-evidence="${key}"
+    title="${escapeHtml(pending ? '' : evidence.title)}">${escapeHtml(statusText)}</span>`;
   const inputClass = pending ? (validated === false ? 'invalid' : 'valid-staged') : '';
-  const hintText = pending && validated === false ? (message || 'Invalid value') : null;
+  const hintText = pending && validated === false ? message : null;
 
   if (key === 'OLLAMA_MODEL') {
  const storedModel = pending
@@ -302,7 +304,7 @@ function renderSecretInput(key: RuntimeSecretKey, _featureId: RuntimeFeatureId):
  return `
  <div class="settings-secret-row">
  <div class="settings-secret-label">${escapeHtml(label)}</div>
- <span class="settings-secret-status ${statusClass}">${escapeHtml(statusText)}</span>
+ ${status}
  <select data-model-select data-feature="${_featureId}" class="${inputClass}">
  ${storedModel ? `<option value="${escapeHtml(storedModel)}" selected>${escapeHtml(storedModel)}</option>` : '<option value="" selected disabled>Loading models...</option>'}
  </select>
@@ -321,19 +323,65 @@ function renderSecretInput(key: RuntimeSecretKey, _featureId: RuntimeFeatureId):
   return `
  <div class="settings-secret-row">
  <div class="settings-secret-label">${escapeHtml(label)}</div>
- <span class="settings-secret-status ${statusClass}">${escapeHtml(statusText)}</span>
+ ${status}
  <div class="settings-input-wrapper${showGetKey ? ' has-suffix' : ''}">
  <input type="${isPlaintext ? 'text' : 'password'}" data-secret="${key}" data-feature="${_featureId}"
  placeholder="${pending ? 'Staged' : 'Enter value...'}" autocomplete="off" class="${inputClass}"
  ${pending ? `value="${isPlaintext ? escapeHtml(settingsManager.getPending(key) || '') : MASKED_SENTINEL}"` : (isPlaintext && state.present ? `value="${escapeHtml(getRuntimeConfigSnapshot().secrets[key]?.value || '')}"` : '')}>
  ${getKeyHtml}
  </div>
+ <button type="button" data-test-stored="${key}" ${pending || !state.present ? 'hidden' : ''}>Test saved value</button>
  ${hintText ? `<span class="settings-secret-hint">${escapeHtml(hintText)}</span>` : ''}
  </div>
   `;
 }
 
+function refreshCredentialRows(): void {
+  if (document.hidden) return;
+  if (testedFooter) {
+    const { key, evidence, message } = testedFooter;
+    const current = getCredentialEvidenceDisplay(key, getSecretState(key).present);
+    if (settingsManager.hasPending(key) || current.text !== evidence) {
+      if (document.getElementById('settingsActionStatus')?.textContent === message) setActionStatus('');
+      testedFooter = undefined;
+    }
+  }
+  for (const span of document.querySelectorAll<HTMLElement>('[data-evidence]')) {
+    const key = span.dataset.evidence as RuntimeSecretKey;
+    const pending = settingsManager.hasPending(key);
+    const present = getSecretState(key).present;
+    const button = span.closest('.settings-secret-row')?.querySelector<HTMLButtonElement>('[data-test-stored]');
+    if (button) button.hidden = pending || !present;
+    if (pending) continue;
+    const evidence = getCredentialEvidenceDisplay(key, present);
+    span.textContent = evidence.text;
+    span.title = evidence.title;
+    span.className = 'settings-secret-status' + (evidence.state === 'verified' ? ' ok' : '');
+  }
+}
+
 function initFeatureSectionListeners(area: HTMLElement): void {
+  area.querySelectorAll<HTMLButtonElement>('[data-test-stored]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const key = button.dataset.testStored as RuntimeSecretKey;
+      if (settingsManager.hasPending(key) || !getSecretState(key).present) return;
+      button.disabled = true;
+      try {
+        const result = await verifyStoredSecretWithApi(key);
+        if (button.isConnected && !settingsManager.hasPending(key) && getSecretState(key).present) {
+          const message = `Test at ${new Date().toISOString()} · ${result.message}`;
+          testedFooter = { key, evidence: getCredentialEvidenceDisplay(key, true).text, message };
+          setActionStatus(message, result.outcome === 'rejected' ? 'error' : 'ok');
+        }
+      } catch {
+        setActionStatus('Could not verify the saved value.', 'error');
+      } finally {
+        button.disabled = false;
+        refreshCredentialRows();
+      }
+    });
+  });
+
   area.querySelectorAll<HTMLElement>('[data-feat-toggle-expand]').forEach(header => {
  header.addEventListener('click', (e) => {
  if ((e.target as HTMLElement).closest('[data-click-stop]')) return;
@@ -359,7 +407,12 @@ function initFeatureSectionListeners(area: HTMLElement): void {
  if (settingsManager.hasPending(key) && input.value.startsWith(MASKED_SENTINEL)) {
  input.value = input.value.slice(MASKED_SENTINEL.length);
  }
- settingsManager.setValidation(key, true);
+ const raw = input.value.trim();
+ if (raw && raw !== MASKED_SENTINEL) settingsManager.setPending(key, raw);
+ else settingsManager.deletePending(key);
+ const badge = input.closest('.settings-secret-row')?.querySelector<HTMLElement>('[data-evidence]');
+ if (badge && raw) { badge.textContent = 'Draft'; badge.title = ''; }
+ refreshCredentialRows();
  input.classList.remove('valid-staged', 'invalid');
  const hint = input.closest('.settings-secret-row')?.querySelector('.settings-secret-hint');
  if (hint) hint.remove();
@@ -764,6 +817,11 @@ async function initSettingsWindow(): Promise<void> {
   });
 
   settingsManager = new SettingsManager();
+  const ageTimer = window.setInterval(refreshCredentialRows, 60_000);
+  window.addEventListener('cb:credential-evidence-changed', refreshCredentialRows);
+  window.addEventListener('focus', refreshCredentialRows);
+  document.addEventListener('visibilitychange', refreshCredentialRows);
+  window.addEventListener('pagehide', () => window.clearInterval(ageTimer), { once: true });
 
   renderSection('overview');
 
@@ -802,7 +860,10 @@ async function initSettingsWindow(): Promise<void> {
  searchTimeout = setTimeout(() => handleSearch(searchInput.value), 200);
   });
 
-  document.getElementById('okBtn')?.addEventListener('click', () => {
+  const saveButton = document.querySelector<HTMLButtonElement>('#okBtn');
+  saveButton?.addEventListener('click', () => {
+ if (saveButton.disabled) return;
+ saveButton.disabled = true;
  void (async () => {
  try {
  const contentArea = document.getElementById('contentArea');
@@ -827,13 +888,18 @@ async function initSettingsWindow(): Promise<void> {
  return;
  }
  await settingsManager.commitVerifiedSecrets();
+ if (settingsManager.hasPendingChanges()) {
+ setActionStatus('The draft changed. Review it and save again.', 'error');
+ return;
+ }
  }
 
  setActionStatus(t('modals.settingsWindow.saved'), 'ok');
  closeSettingsWindow();
- } catch (error) {
- console.error('[settings] save error:', error);
- setActionStatus(t('modals.settingsWindow.failed', { error: String(error) }), 'error');
+ } catch {
+ setActionStatus('Settings could not be saved. Your draft is still open.', 'error');
+ } finally {
+ saveButton.disabled = false;
  }
  })();
   });

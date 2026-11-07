@@ -1,0 +1,197 @@
+{
+  "head": "74ac3a192a8334f1ea0d14d4d17b76aad62c10ac",
+  "base": "6dec686846bcf9f12a6de3062ac1b46697d49259",
+  "tmpdir": "/private/var/folders/qt/hq7cydbd06d6g0yksx3mxm3c0000gn/T",
+  "trackedCount": 5913,
+  "status": "repaired pending dependency verification, not actual-main acceptance",
+  "node": "v22.23.1",
+  "baseAfter": "6dec686846bcf9f12a6de3062ac1b46697d49259",
+  "lintCommand": "npm run lint:ci",
+  "lintExit": 0,
+  "lintWrapperExit": 0,
+  "lintResults": [
+    "[lint:baseline] OK \u2014 1015 existing findings, no increases. Debt dropped by 188; run npm run lint:baseline:update to ratchet it down.",
+    "[lint:ci] Linting 45 changed file(s).",
+    "0 errors, 1 warning: nws-alert-row.d.mts ignored because no matching configuration was supplied."
+  ],
+  "aggregateCommand": "bash scripts/agentic-validate.sh --tests 'test:ux018 test:ux058 test:ux052 test:warning-delivery test:notifications test:ux053 test:agentic-pipeline'",
+  "aggregateExit": 0,
+  "aggregateConclusion": "Agentic validation gate passed.",
+  "outcomes": [
+    {
+      "command": "npm run test:ux018",
+      "counts": [
+        "# pass 113",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "command": "npm run test:ux058",
+      "counts": [
+        "# pass 90",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "command": "npm run test:ux052",
+      "counts": [
+        "# pass 117",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "command": "npm run test:warning-delivery",
+      "counts": [
+        "# pass 45",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "command": "npm run test:notifications",
+      "counts": [
+        "# pass 227",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "command": "npm run test:ux053",
+      "counts": [
+        "# pass 1",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 71",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "command": "npm run test:agentic-pipeline",
+      "counts": [
+        "# pass 84",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "command": "npm run lockfile:check",
+      "counts": []
+    },
+    {
+      "command": "npm run lint:strict",
+      "counts": []
+    },
+    {
+      "command": "npm run typecheck:all",
+      "counts": []
+    },
+    {
+      "command": "npm run secrets:scan",
+      "counts": []
+    },
+    {
+      "command": "npm run cross-agent:check",
+      "counts": []
+    },
+    {
+      "command": "npm run docs:check -- --changelog-advisory",
+      "counts": []
+    },
+    {
+      "command": "npm run roadmap:check",
+      "counts": []
+    },
+    {
+      "command": "npm run build",
+      "counts": []
+    }
+  ],
+  "environment": {
+    "marketingSource": "/Users/bradleybond/.codex/worktrees/ux058-reconcile-nov7/crystalball/marketing-site",
+    "matchingPackageSha256": "ae22421663b88098d80c2daa8098ab913b7b6e6565a393aabbc90ab65a3e5628",
+    "matchingLockSha256": "e981f0710a0912e11068ba27fe6227dab1b5f101dcdb9241a0dd33b8f46b7480",
+    "installedLockSha256": "6975c2fe226936341b8ed25556144ee0d1a5ce8618f7f4d079eb6f10863ffff7",
+    "verifiedInstalledPackageEntries": 494,
+    "artifactPath": "src-tauri/sidecar/s2u-xmpp.bundle.mjs",
+    "artifactSha256": "4c5328fdbdf07514d9f04d5bd7815dd99664a23455418026c0c3b97074dc11ce",
+    "artifactBytes": 115898,
+    "artifactGenerator": "scripts/build-sidecar-xmpp.mjs",
+    "preservationPlan": "Move the verified untracked ignored generated bundle to evidence directory before lint:ci, then restore exact SHA256 afterward. No tracked files or lint rules altered.",
+    "restoredSha256": "4c5328fdbdf07514d9f04d5bd7815dd99664a23455418026c0c3b97074dc11ce",
+    "restorationOutput": "src-tauri/sidecar/s2u-xmpp.bundle.mjs: OK\nsrc-tauri/sidecar/s2u-xmpp.bundle.mjs: OK\n",
+    "npmLsExit": 0
+  },
+  "rootObjects": [
+    "040000 tree d2adfd4b37b09d25ef678132f831c0a9f272ae39\t.github",
+    "040000 tree 643298657ac791b23d9060901dbc5976d099eb05\tapi",
+    "100644 blob 7592cb374049e70c9fe83f9356f0f0cb9b83e7cc\tpackage-lock.json",
+    "100644 blob 1cd9d24abace15296cf1ecb0216ab26b42197557\tpackage.json",
+    "040000 tree 3c01322e0c909b5c350e095ef91efbad8eebb1b1\tscripts",
+    "040000 tree b8fcf00ec453598cccb43fe67de156f92ad866a3\tsrc-tauri",
+    "040000 tree 5eb940b3e39809d39bfeb99a24d373eaf9a7196e\tsrc",
+    "040000 tree f218b6d00a2c447d5871f78badb4ea4cf987490e\ttests",
+    "040000 tree ddb496e7a70a086452b91eeb73ad8a00305c099c\ttools",
+    "100644 blob b2eea0835235e1779dd7274d4660105e835e71a7\ttsconfig.api.json",
+    "100644 blob 4a9e00fdc92c4b2d5986628d45e002703eb172c4\ttsconfig.json",
+    "100644 blob 83369e5bbfe43c39c6b8be9f795e4a2a0020e720\tvite.config.ts"
+  ],
+  "inputHashes": {
+    "scripts/targeted-tests.mjs": "b1cf2ebb917248edaa8bb1033b853da14d5b0a0970f58f7522ad17b7a4d83070",
+    "scripts/targeted-tests-overrides.json": "508d56996367beaef6791139816e578ad8bf08d9acf2dcebe28849519c3f5cab",
+    "scripts/targeted-tests-baseline.txt": "b73c23dd3edeffe57e24d699b082c448f624ea56f4f14f907e3aea54d88cd0cb",
+    "scripts/agentic-validate.sh": "867d27d6c6e14ca9c8fb1385b7f5574372b15f61f68fb73e62004de1eaed3d50",
+    "scripts/lint-baseline.mjs": "26629e506df66f888644649452160bfaea8027268314d2e61e5ed15f4b598151",
+    "scripts/lint-changed.mjs": "a22510115432d2347315d3f748735515c19447f63576cc5d32c77181817113c7",
+    "package.json": "e573c510120432fdf65bf7002dd0d725d4a5dcebce2c603d09c0a99842fd4ee0",
+    "package-lock.json": "fa0fc7a76d31ce38c5b03b52e88b4c61956e444dc5171e89fab9a105e02e147f",
+    "vite.config.ts": "8c2b43c03ab0992c1aaf68b78bb7ae26f83f392b9fecd6ddd3950f4d12fde8bd",
+    "src/services/notification-dispatcher.ts": "67c36d15b93e9e077e8588e9fed522b7bd2bdbebe7c6c4f50155395d2f4fdd9c",
+    "src/services/__tests__/notification-dispatcher-trace.test.mts": "d7fc52846b0b21161dfd880d0767c6bb61055e5c3ea9ab766480b873f18a1807"
+  },
+  "trackedManifestSha256": "6102e4184480410dca834294e4a5d99d28e8f0f1a3bf3a48c63503d6458aa1a3",
+  "trackedBytesUnchanged": true,
+  "buildFiles": 674,
+  "buildManifestSha256": "abb29ae6e512fa1db9891af503d5efe57ed65cc58b854749c737bd3201440703",
+  "logHashes": {
+    "lint-ci.log": "67d73956f33fa5faa81e55b484fae457e83c2131975fcd707dec7bdf5304afcc",
+    "lint-artifact-restoration.log": "cc31205513bef7ff447cbf9df21601d22b92d3d4b86c4e7e9008fa52814731c0",
+    "gate.log": "5f6b7062fde15d29af6813ceb7aea20c9c6a38f90966026d6e0f72992738f5f1"
+  },
+  "earlierFocusedRepairProof": {
+    "executionDescription": "Focused checks executed against cleanly resolved staged merge tree before merge commit; HEAD alone was not execution source.",
+    "preMergeHead": "95c8202edfb5a6209c6bd67d1ee233d52d0d1ecb",
+    "pendingDependency": "c26c5b8c6080798477098127ce50e04ca5360da8",
+    "executionTree": "f4a14bc294898b47ac66c72020a68664c1a6bf50",
+    "changedHashes": {
+      "src/services/notification-dispatcher.ts": "67c36d15b93e9e077e8588e9fed522b7bd2bdbebe7c6c4f50155395d2f4fdd9c",
+      "src/services/__tests__/notification-dispatcher-trace.test.mts": "d7fc52846b0b21161dfd880d0767c6bb61055e5c3ea9ab766480b873f18a1807"
+    },
+    "changedExecutablePaths": [
+      "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "src/services/notification-dispatcher.ts"
+    ],
+    "commands": [
+      "npm run test:ux018",
+      "npm run test:ux058",
+      "npm run test:ux052",
+      "npm run test:warning-delivery",
+      "npm run test:notifications",
+      "node --import tsx --test src/services/__tests__/ghost-mode-state.test.mts src/services/__tests__/ghost-notification-policy.test.mts src/services/__tests__/notification-dispatcher-trace.test.mts src/components/__tests__/ghost-mode-notice.test.mts tests/ghost-mode-entry.test.mts src/config/__tests__/story-renderer-chunk.test.mts"
+    ],
+    "logSha256": {
+      "focused.log": "43ae4e48b4810da5fe09ea4d93568b499c37b479f18c700d88e31d2c47dc8798",
+      "ghost-focused.log": "d7db21ff1f719bcce008d307de86712d884875e9b80bd65185181048fa207c62"
+    },
+    "matchingCommittedHead": "bd9a2ca516c5b602090ad89bc7190017410ef4ef",
+    "treeIdenticalAfterCommit": true
+  },
+  "limitations": [
+    "Earlier102 suite execution remains historical; changed dispatcher/test inputs are not byte-identical and are covered by current focused/gate evidence.",
+    "Final actual-main comparison, live candidate snapshot, genuine Sonnet review and hosted checks remain required.",
+    "Seven natural scheduled production passes and matched direct-label coverage remain pending; no live store or installation actions performed."
+  ]
+}

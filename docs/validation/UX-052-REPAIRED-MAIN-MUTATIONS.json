@@ -1,0 +1,64 @@
+{
+  "executionHead": "050f449008cca991a982818582b929d07360393a",
+  "baseline": "31 passed, 0 failed",
+  "cleanBeforeAndAfterEachMutation": true,
+  "sha256Meaning": "Exact original and restored source bytes, not mutated bytes",
+  "mutations": [
+    {
+      "name": "operational-reminder",
+      "file": "src/services/alert-reactions.ts",
+      "sha256": "f7b463d48b3d9559b96d8abea59b1ae6c1ef34331222860697ca7fb58d023d86",
+      "diff": "diff --git a/src/services/alert-reactions.ts b/src/services/alert-reactions.ts\nindex 9f45496df..cef19eed6 100644\n--- a/src/services/alert-reactions.ts\n+++ b/src/services/alert-reactions.ts\n@@ -152,7 +152,7 @@ export function startAlertReactions(): void {\n     if (top.severity === 'critical') {\n       window.setTimeout(() => {\n         const still = unifiedAlertStore.getAll().find(a => a.id === top.id);\n-        if (still && !still.acknowledged && unifiedAlertStore.isOperationalAlert(still) && still.source !== 'correlation') {\n+        if (still && !still.acknowledged && still.source !== 'correlation') {\n           const ch2 = isGhostMode() ? { sound: false, borderFlash: false } : getChannels();\n           if (ch.panelFlash) flashPanel(panelId);\n           if (ch2.borderFlash) flashWindowBorder();\n",
+      "passCount": 30,
+      "failCount": 1,
+      "assertions": [
+        "not ok 28 - critical NWS reminders recheck retirement at execution after five minutes"
+      ]
+    },
+    {
+      "name": "derived-reminder",
+      "file": "src/services/alert-reactions.ts",
+      "sha256": "f7b463d48b3d9559b96d8abea59b1ae6c1ef34331222860697ca7fb58d023d86",
+      "diff": "diff --git a/src/services/alert-reactions.ts b/src/services/alert-reactions.ts\nindex 9f45496df..5e3100c0d 100644\n--- a/src/services/alert-reactions.ts\n+++ b/src/services/alert-reactions.ts\n@@ -152,7 +152,7 @@ export function startAlertReactions(): void {\n     if (top.severity === 'critical') {\n       window.setTimeout(() => {\n         const still = unifiedAlertStore.getAll().find(a => a.id === top.id);\n-        if (still && !still.acknowledged && unifiedAlertStore.isOperationalAlert(still) && still.source !== 'correlation') {\n+        if (still && !still.acknowledged && unifiedAlertStore.isOperationalAlert(still)) {\n           const ch2 = isGhostMode() ? { sound: false, borderFlash: false } : getChannels();\n           if (ch.panelFlash) flashPanel(panelId);\n           if (ch2.borderFlash) flashWindowBorder();\n",
+      "passCount": 30,
+      "failCount": 1,
+      "assertions": [
+        "not ok 4 - an outstanding NWS reminder cannot interrupt after a derived alert replaces that store ID"
+      ]
+    },
+    {
+      "name": "single-ghost-count",
+      "file": "src/services/notification-dispatcher.ts",
+      "sha256": "417257e01d22289d96137b4617a6d01de9c579447eda4c31828ff4f93d01d631",
+      "diff": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 942c2a077..34c0c729a 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -64,7 +64,7 @@ export function actionForSeverity(severity: AlertSeverity): NotificationAction {\n export function holdNotificationForMode(critical: boolean, state = getNotificationModeState()): string | undefined {\n   if (state.preference === 'unknown') return 'mode-unavailable';\n   if (state.mode !== 'ghost') return undefined;\n-  recordGhostSuppression(critical);\n+  // mutant: omit Ghost accounting\n   return 'ghost-mode';\n }\n \n",
+      "passCount": 30,
+      "failCount": 1,
+      "assertions": [
+        "not ok 10 - derived critical respects mute, quiet and Ghost ahead of pacing; NWS still interrupts"
+      ]
+    },
+    {
+      "name": "unknown-hold",
+      "file": "src/services/notification-dispatcher.ts",
+      "sha256": "417257e01d22289d96137b4617a6d01de9c579447eda4c31828ff4f93d01d631",
+      "diff": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 942c2a077..4ce572657 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -62,7 +62,7 @@ export function actionForSeverity(severity: AlertSeverity): NotificationAction {\n }\n \n export function holdNotificationForMode(critical: boolean, state = getNotificationModeState()): string | undefined {\n-  if (state.preference === 'unknown') return 'mode-unavailable';\n+  // mutant: omit unknown hold\n   if (state.mode !== 'ghost') return undefined;\n   recordGhostSuppression(critical);\n   return 'ghost-mode';\n",
+      "passCount": 30,
+      "failCount": 1,
+      "assertions": [
+        "not ok 11 - a privacy storage read failure holds derived notifications"
+      ]
+    },
+    {
+      "name": "ghost-hold",
+      "file": "src/services/notification-dispatcher.ts",
+      "sha256": "417257e01d22289d96137b4617a6d01de9c579447eda4c31828ff4f93d01d631",
+      "diff": "diff --git a/src/services/notification-dispatcher.ts b/src/services/notification-dispatcher.ts\nindex 942c2a077..ab2c6b185 100644\n--- a/src/services/notification-dispatcher.ts\n+++ b/src/services/notification-dispatcher.ts\n@@ -65,7 +65,7 @@ export function holdNotificationForMode(critical: boolean, state = getNotificati\n   if (state.preference === 'unknown') return 'mode-unavailable';\n   if (state.mode !== 'ghost') return undefined;\n   recordGhostSuppression(critical);\n-  return 'ghost-mode';\n+  return undefined;\n }\n \n function permittedBannerApi(): typeof Notification | undefined {\n",
+      "passCount": 29,
+      "failCount": 2,
+      "assertions": [
+        "not ok 10 - derived critical respects mute, quiet and Ghost ahead of pacing; NWS still interrupts",
+        "not ok 13 - a live Ghost choice still suppresses when its storage write failed"
+      ]
+    }
+  ]
+}

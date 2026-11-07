@@ -2,6 +2,7 @@
 import { Panel } from './Panel';
 import {
   getSettings,
+  areNotificationPreferencesAvailable,
   resetSettings,
   updateDomainSettings,
   updateGlobalSettings,
@@ -25,6 +26,7 @@ export function quietWindowMessage(result: GlobalSettingsUpdate): string {
 }
 
 export class NotificationSettingsPanel extends Panel {
+  private focusedControlId = '';
   private settingsChangeListener: (() => void) | null = null;
 
   constructor() {
@@ -35,6 +37,9 @@ export class NotificationSettingsPanel extends Panel {
       trackActivity: false,
       infoTooltip:
         'Per-domain notification mute, severity threshold, delivery channel, and quiet hours.',
+    });
+    this.content.addEventListener('focusin', (event) => {
+      this.focusedControlId = event.target instanceof HTMLElement ? event.target.id : '';
     });
     this.settingsChangeListener = () => this.render();
     document.addEventListener('wm:notification-settings-changed', this.settingsChangeListener);
@@ -63,13 +68,21 @@ export class NotificationSettingsPanel extends Panel {
       (d) => settings.global.masterMute || !settings.domains[d].enabled,
     ).length;
     this.setCount(mutedOrDisabled);
-    this.setContent(this.buildHtml(), () => this.wireHandlers());
+    const hadFocus = this.content.contains(document.activeElement);
+    this.setContent(this.buildHtml(), () => {
+      this.wireHandlers();
+      if (hadFocus && this.focusedControlId && document.activeElement === document.body) {
+        document.getElementById(this.focusedControlId)?.focus({ preventScroll: true });
+      }
+    });
   }
 
   private buildHtml(): string {
     const s = getSettings();
     const g = s.global;
 
+    const available = areNotificationPreferencesAvailable();
+    const status = available ? '' : '<p role="status">Saved notification settings are unavailable. Derived alerts are paused. Changes apply only in this window.</p>';
     const globalSection = `
       <div style="padding:10px 12px;border-bottom:1px solid var(--border-subtle,#333);">
         <div style="font-size:11px;font-weight:700;color:var(--text-secondary,#aaa);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Global</div>
@@ -77,7 +90,7 @@ export class NotificationSettingsPanel extends Panel {
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#ddd;">
             <input type="checkbox" id="ns-master-mute" ${g.masterMute ? 'checked' : ''}
               style="accent-color:var(--accent,#4a9eff);width:14px;height:14px;cursor:pointer;">
-            Mute notifications (critical alerts still come through)
+            Mute notifications (critical authoritative alerts still come through)
           </label>
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#ddd;">
             <input type="checkbox" id="ns-daily-summary" ${g.dailySummaryEnabled ? 'checked' : ''}
@@ -99,17 +112,18 @@ export class NotificationSettingsPanel extends Panel {
     const domainRows = ALL_DOMAINS.map((domain) => {
       const ds = s.domains[domain];
       const label = escapeHtml(DOMAIN_LABELS[domain]);
+      const hold = domain === 'derived' && !available ? 'disabled' : '';
       const disabledStyle = (!ds.enabled || g.masterMute) ? 'opacity:0.5;' : '';
       return `
         <tr style="border-bottom:1px solid var(--border-subtle,#333);${disabledStyle}">
           <td style="padding:6px 8px;font-size:13px;color:#ddd;white-space:nowrap;">${label}</td>
           <td style="padding:6px 8px;text-align:center;">
-            <input type="checkbox" data-domain="${domain}" data-field="enabled"
+            <input type="checkbox" id="ns-${domain}-enabled" data-domain="${domain}" data-field="enabled" aria-label="${label} enabled" ${hold}
               ${ds.enabled ? 'checked' : ''}
               style="accent-color:var(--accent,#4a9eff);width:14px;height:14px;cursor:pointer;">
           </td>
           <td style="padding:6px 8px;">
-            <select data-domain="${domain}" data-field="threshold"
+            <select id="ns-${domain}-threshold" data-domain="${domain}" data-field="threshold" aria-label="${label} minimum severity" ${hold}
               style="background:#222;color:#ddd;border:1px solid var(--border-subtle,#333);border-radius:3px;padding:2px 4px;font-size:12px;cursor:pointer;">
               ${(['info', 'low', 'medium', 'high', 'critical'] as const).map(
                 (sev) => `<option value="${sev}" ${ds.threshold === sev ? 'selected' : ''}>${escapeHtml(sev)}</option>`,
@@ -117,7 +131,7 @@ export class NotificationSettingsPanel extends Panel {
             </select>
           </td>
           <td style="padding:6px 8px;">
-            <select data-domain="${domain}" data-field="channel"
+            <select id="ns-${domain}-channel" data-domain="${domain}" data-field="channel" aria-label="${label} delivery channel" ${hold}
               style="background:#222;color:#ddd;border:1px solid var(--border-subtle,#333);border-radius:3px;padding:2px 4px;font-size:12px;cursor:pointer;">
               <option value="in_app" ${ds.channel === 'in_app' ? 'selected' : ''}>In-App</option>
               <option value="native" ${ds.channel === 'native' ? 'selected' : ''}>Native macOS</option>
@@ -126,7 +140,7 @@ export class NotificationSettingsPanel extends Panel {
           </td>
           <td style="padding:6px 8px;text-align:center;">
             <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;color:var(--text-secondary,#aaa);white-space:nowrap;">
-              <input type="checkbox" data-domain="${domain}" data-field="quietHoursEnabled"
+              <input type="checkbox" id="ns-${domain}-quietHoursEnabled" data-domain="${domain}" data-field="quietHoursEnabled" aria-label="${label} quiet hours" ${hold}
                 ${ds.quietHoursEnabled ? 'checked' : ''}
                 style="accent-color:var(--accent,#4a9eff);width:13px;height:13px;cursor:pointer;">
               Quiet hrs
@@ -173,7 +187,7 @@ export class NotificationSettingsPanel extends Panel {
         </button>
       </div>`;
 
-    return `<div style="font-size:13px;">${globalSection}${tableSection}${footerSection}</div>`;
+    return `<div style="font-size:13px;">${status}${globalSection}${tableSection}${footerSection}</div>`;
   }
 
   private wireHandlers(): void {

@@ -72,6 +72,7 @@ import { FirmsPanel } from '@/components/FirmsPanel';
 import { WatchAreaAlertingPanel } from '@/components/WatchAreaAlertingPanel';
 import { TriageBar } from '@/components/TriageBar';
 import { notificationStack } from '@/components/NotificationStack';
+import { CriticalPostureBanner } from '@/components/CriticalPostureBanner';
 import { EEWStatusBar } from '@/components/EEWStatusBar';
 import { CorrelationAlertBanner } from '@/components/CorrelationAlertBanner';
 import { startSpaceWeatherStatusBarPoller } from '@/services/spaceweather/status-bar-poller';
@@ -126,7 +127,6 @@ import {
   wireModeForecastCalibration,
   settleCalibrationBridges,
 } from '@/services/intelligence/calibration-bridge-wiring';
-import { startNotificationRouter } from '@/services/notification-router';
 import { startSilenceDetector } from '@/services/silence-detector';
 import { startSourceFeedback } from '@/services/source-feedback';
 import { startCorrelationFeedback } from '@/services/correlation-feedback';
@@ -441,7 +441,6 @@ import { PlaybookPanel } from '@/components/PlaybookPanel';
 import { CrossDomainContradictionDetectorPanel } from '@/components/CrossDomainContradictionDetectorPanel';
 import { SmsSettingsPanel } from '@/components/SmsSettingsPanel';
 import { ThreatDashboard } from '@/components/ThreatDashboard';
-import { startThreatAggregator } from '@/services/synthesis/threat-aggregator';
 import { AviationIntelPanel } from '@/components/AviationIntelPanel';
 import { AviationSuperpowerPanel } from '@/components/AviationSuperpowerPanel';
 import { NuclearSuperpowerPanel } from '@/components/NuclearSuperpowerPanel';
@@ -557,7 +556,8 @@ import {
 } from '@/config';
 import { t } from '@/services/i18n';
 import { trackCriticalBannerAction } from '@/services/analytics';
-import { alertFamily, getMode, toggleGhostMode, type AppMode } from '@/services/mode-manager';
+import { getMode, toggleGhostMode, type AppMode } from '@/services/mode-manager';
+import { buildPrimaryCommsMessage } from '@/services/comms-plan';
 import {
   initSituationalMode, setMode as setSituationalMode,
   setAutoMode, getAutoMode, isAutoMode, clearManualMode,
@@ -752,7 +752,7 @@ export class PanelLayoutManager implements AppModule {
   private mountingPanels = new Map<string, Promise<Panel | null>>();
   private isolatedPanelKeys: readonly string[] | null = null;
   private panelDragCleanupHandlers: (() => void)[] = [];
-  private criticalBannerEl: HTMLElement | null = null;
+  private criticalPostureBanner?: CriticalPostureBanner;
   private dcStrip: DataCenterPinnedStrip | null = null;
   private summaryStrip: SummaryStrip | null = null;
   private triageBar: TriageBar | null = null;
@@ -760,7 +760,14 @@ export class PanelLayoutManager implements AppModule {
   private stormMode: PersonalStormMode | null = null;
   private stormMount: HTMLElement | null = null;
   private _onStormDecision: ((e: Event) => void) | null = null;
-  private expirePredictionsTimer: ReturnType<typeof setInterval> | null = null;
+  private calibrationInputsReady = SITE_VARIANT === 'happy';
+  private calibrationScheduler?: { notifyReady(): void; stop(): void };
+
+  markCalibrationInputsReady(): void {
+    if (this.calibrationInputsReady || this.destroyed) return;
+    this.calibrationInputsReady = true;
+    this.calibrationScheduler?.notifyReady();
+  }
   private unsubDcPlaces: (() => void) | null = null;
   private unsubWeatherClearOnPlaces: (() => void) | null = null;
   private safetyCaseUnsub: (() => void) | null = null;
@@ -903,10 +910,8 @@ export class PanelLayoutManager implements AppModule {
  this.personalWeatherUnsub = null;
  this.modeAdvisoryUnsub?.();
  this.modeAdvisoryUnsub = null;
- if (this.criticalBannerEl) {
- this.criticalBannerEl.remove();
- this.criticalBannerEl = null;
- }
+ this.criticalPostureBanner?.destroy();
+ this.criticalPostureBanner = undefined;
  if (this.stalenessBanner) {
  this.stalenessBanner.destroy();
  this.stalenessBanner = null;
@@ -989,10 +994,8 @@ export class PanelLayoutManager implements AppModule {
  // destroy it (and its ResizeObserver) outlive teardown and can't be GC'd.
  this.ctx.map?.destroy();
  this.ctx.map = null;
- if (this.expirePredictionsTimer) {
- clearInterval(this.expirePredictionsTimer);
- this.expirePredictionsTimer = null;
- }
+ this.calibrationScheduler?.stop();
+ this.calibrationScheduler = undefined;
  if (this._lastViewedObserver) {
  this._lastViewedObserver.disconnect();
  this._lastViewedObserver = null;
@@ -1111,74 +1114,7 @@ export class PanelLayoutManager implements AppModule {
   private buildWebLayout(): string { return htmlBuilders.buildWebLayout(this.ctx); }
 
   renderCriticalBanner(postures: TheaterPostureSummary[]): void {
- if (this.ctx.isMobile) {
- if (this.criticalBannerEl) {
- this.criticalBannerEl.remove();
- this.criticalBannerEl = null;
- }
- document.body.classList.remove('has-critical-banner');
- return;
- }
-
- const dismissedAt = sessionStorage.getItem('banner-dismissed');
- if (dismissedAt && Date.now() - Number.parseInt(dismissedAt, 10) < 30 * 60 * 1000) {
- return;
- }
-
- const critical = postures.filter(
- (p) => p.postureLevel === 'critical' || (p.postureLevel === 'elevated' && p.strikeCapable)
- );
-
- if (critical.length === 0) {
- if (this.criticalBannerEl) {
- this.criticalBannerEl.remove();
- this.criticalBannerEl = null;
- document.body.classList.remove('has-critical-banner');
- }
- return;
- }
-
- const top = critical[0]!;
- const isCritical = top.postureLevel === 'critical';
-
- if (!this.criticalBannerEl) {
- this.criticalBannerEl = document.createElement('div');
- this.criticalBannerEl.className = 'critical-posture-banner';
- // Highest-priority row of the notification stack: the stack's
- // ResizeObserver then publishes its height as --notification-stack-h,
- // so content shifts instead of being occluded.
- notificationStack.element.prepend(this.criticalBannerEl);
- }
-
- document.body.classList.add('has-critical-banner');
- this.criticalBannerEl.className = `critical-posture-banner ${isCritical ? 'severity-critical' : 'severity-elevated'}`;
- this.criticalBannerEl.innerHTML = `
- <div class="banner-content">
- <span class="banner-icon">${isCritical ? '🚨' : '⚠️'}</span>
- <span class="banner-headline">${escapeHtml(top.headline)}</span>
- <span class="banner-stats">${top.totalAircraft} aircraft • ${escapeHtml(top.summary)}</span>
- ${top.strikeCapable ? '<span class="banner-strike">STRIKE CAPABLE</span>' : ''}
- </div>
- <button class="banner-view" data-lat="${top.centerLat}" data-lon="${top.centerLon}">View Region</button>
- <button class="banner-dismiss">×</button>
- `;
-
- this.criticalBannerEl.querySelector('.banner-view')?.addEventListener('click', () => {
- console.log('[Banner] View Region clicked:', top.theaterId, 'lat:', top.centerLat, 'lon:', top.centerLon);
- trackCriticalBannerAction('view', top.theaterId);
- if (typeof top.centerLat === 'number' && typeof top.centerLon === 'number') {
- this.ctx.map?.setCenter(top.centerLat, top.centerLon, 4);
- } else {
- console.error('[Banner] Missing coordinates for', top.theaterId);
- }
- });
-
- this.criticalBannerEl.querySelector('.banner-dismiss')?.addEventListener('click', () => {
- trackCriticalBannerAction('dismiss', top.theaterId);
- this.criticalBannerEl?.classList.add('dismissed');
- document.body.classList.remove('has-critical-banner');
- sessionStorage.setItem('banner-dismissed', Date.now().toString());
- });
+    this.criticalPostureBanner?.render(postures, this.ctx.isMobile);
   }
 
   applyPanelSettings(): void {
@@ -1211,6 +1147,9 @@ export class PanelLayoutManager implements AppModule {
  // Mount the notification stack directly below the EEW bar. All secondary
  // banners mount into this container so they flow vertically without overlap.
  notificationStack.mount(document.body);
+ this.criticalPostureBanner = new CriticalPostureBanner(
+   notificationStack.element, (lat, lon) => this.ctx.map?.setCenter(lat, lon, 4), trackCriticalBannerAction,
+ );
 
  // The data-loader dispatches this event on every NWS refresh. One shared
  // mounting path also lets isolated E2E shells exercise the real listener.
@@ -1354,7 +1293,7 @@ export class PanelLayoutManager implements AppModule {
  });
  startEpistemicCalibration();
  startAssumptionExpirySweep();
- this.expirePredictionsTimer = setInterval(() => { try { settleCalibrationBridges(); } catch { /* noop */ } }, 60 * 60 * 1000);
+
  // PR 14 memory hygiene: flag episodic-memory episodes whose backing
  // explanation was refuted by competitive-hypothesis resolution. Best-effort
  // entity-overlap match (see contradictEpisodesForRefutation doc) — never
@@ -1371,7 +1310,6 @@ export class PanelLayoutManager implements AppModule {
  schedule: (cb) => { setTimeout(cb, 0); },
  });
  startEpistemicBridge();
- startNotificationRouter();
  startSilenceDetector();
  startSourceFeedback();
  startCorrelationFeedback();
@@ -2405,7 +2343,6 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['cross-domain-contradiction-detector'] = new CrossDomainContradictionDetectorPanel();
  this.ctx.panels['sms-command-interface'] = new SmsSettingsPanel();
  this.ctx.panels['threat-dashboard'] = new ThreatDashboard();
- startThreatAggregator();
  this.ctx.panels['aviation-intel'] = new AviationIntelPanel();
  this.ctx.panels['aviation-superpower'] = new AviationSuperpowerPanel();
  this.ctx.panels['nuclear-superpower'] = new NuclearSuperpowerPanel();
@@ -2634,37 +2571,34 @@ export class PanelLayoutManager implements AppModule {
  import('@/services/intelligence/observation-store'),
  import('@/services/spc-outlook'),
  import('@/services/cognition/cognition-settings'),
- import('@/services/diagnostics/recurring-loops'),
-]).then(([
+ import('@/services/intelligence/calibration-resolution-scheduler'),
+ ]).then(([
    { eventOccurrenceResolver, marketMoveResolver, warningVerificationResolver },
-   { dispatchOutcomeResolvers },
+   { dispatchMeasuredOutcomeResolvers, hasDueCalibrationWork, isCalibrationSnapshotCurrent },
    { getSpotPriceHistory },
    { query },
    { getLatestStormReportBatch },
    { isCognitionEnabled },
-   { registerRecurringLoop },
+   { startCalibrationResolutionScheduler },
  ]) => {
- registerRecurringLoop(
-   'outcome-resolvers',
-   () => {
-     if (!isCognitionEnabled('outcome-resolvers')) return;
-     const now = Date.now();
-     const stormReports = getLatestStormReportBatch();
-     dispatchOutcomeResolvers({
-       now,
-       spotHistoryFor: (symbol, sinceExclusive, untilInclusive) =>
-         getSpotPriceHistory(symbol, { sinceExclusive, untilInclusive }),
-       queryObservations: (queryInput) => query(queryInput),
-       stormReportBatch: () => stormReports,
-     }, [
-       marketMoveResolver,
-       warningVerificationResolver,
-       eventOccurrenceResolver,
-     ]);
-   },
-   15 * 60_000,
-   { priority: 'low', runImmediately: false },
- );
+   if (this.destroyed || this.ctx.isDestroyed) return;
+   this.calibrationScheduler = startCalibrationResolutionScheduler({
+     isReady: () => this.calibrationInputsReady && isCalibrationSnapshotCurrent(),
+     isBridgeReady: isCalibrationSnapshotCurrent,
+     enabled: () => isCognitionEnabled('outcome-resolvers'),
+     hasDueWork: hasDueCalibrationWork,
+     bridge: settleCalibrationBridges,
+     resolve: (now) => {
+       const stormReports = getLatestStormReportBatch();
+       return dispatchMeasuredOutcomeResolvers({
+         now,
+         spotHistoryFor: (symbol, sinceExclusive, untilInclusive) =>
+           getSpotPriceHistory(symbol, { sinceExclusive, untilInclusive }),
+         queryObservations: (queryInput) => query(queryInput),
+         stormReportBatch: () => stormReports,
+       }, [marketMoveResolver, warningVerificationResolver, eventOccurrenceResolver]);
+     },
+   });
  }).catch((error) => {
  console.error('[boot] outcome resolver wiring failed:', error);
  });
@@ -3258,7 +3192,7 @@ export class PanelLayoutManager implements AppModule {
 
  // Alert Family button (always visible — formerly gated on War mode)
  document.getElementById('alertFamilyBtn')?.addEventListener('click', () => {
- alertFamily();
+ navigator.clipboard.writeText(buildPrimaryCommsMessage('safe')).catch(() => { /* ignore */ });
  const btn = document.getElementById('alertFamilyBtn');
  if (btn) {
  const orig = btn.textContent;

@@ -94,13 +94,13 @@ async function postJsonViaHttp(url, payload) {
   });
 }
 
-function mockHttpsRequestOnce({ statusCode, headers, body, onRequest }) {
+function mockHttpsRequestOnce({ statusCode, headers, body, onRequest, onWrite }) {
   const original = https.request;
   https.request = (options, onResponse) => {
  onRequest?.(options);
  const req = new EventEmitter();
  req.setTimeout = () => {};
- req.write = () => {};
+ req.write = (chunk) => { onWrite?.(chunk); };
  req.destroy = (error) => {
  if (error) req.emit('error', error);
  };
@@ -1240,7 +1240,7 @@ test('rejects unknown key via /api/local-env-update', async () => {
   }
 });
 
-test('accepts ICAO_API_KEY via /api/local-validate-secret', async () => {
+test('reports unsupported ICAO credential probe via /api/local-validate-secret', async () => {
   let probeCount = 0;
   const restoreHttps = mockHttpsRequestOnce({
     statusCode: 200, headers: { 'content-type': 'application/json' }, body: '[]',
@@ -1267,8 +1267,9 @@ test('accepts ICAO_API_KEY via /api/local-validate-secret', async () => {
  });
  assert.equal(response.status, 200);
  const body = await response.json();
- assert.equal(body.valid, true);
- assert.equal(probeCount, 1);
+ assert.equal(body.outcome, 'not-probed');
+ assert.equal(body.reason, 'unsupported-probe');
+ assert.equal(probeCount, 0);
   } finally {
  restoreHttps();
  await app.close();
@@ -1294,14 +1295,15 @@ test('accepts CRYSTALBALL_API_KEY via /api/local-validate-secret', async () => {
  });
  assert.equal(response.status, 200);
  const body = await response.json();
- assert.equal(body.valid, true);
+ assert.equal(body.outcome, 'not-probed');
+ assert.equal(body.reason, 'unsupported-probe');
   } finally {
  await app.close();
  await localApi.cleanup();
   }
 });
 
-test('validates OLLAMA_API_URL via /api/local-validate-secret (reachable endpoint)', async () => {
+test('does not treat local endpoint reachability as credential verification via /api/local-validate-secret (reachable endpoint)', async () => {
   // Stand up a mock Ollama server that responds to /v1/models
   const mockOllama = createServer((req, res) => {
  if (req.url === '/v1/models') {
@@ -1330,8 +1332,8 @@ test('validates OLLAMA_API_URL via /api/local-validate-secret (reachable endpoin
  });
  assert.equal(response.status, 200);
  const body = await response.json();
- assert.equal(body.valid, true);
- assert.equal(body.message, 'Ollama endpoint verified');
+ assert.equal(body.outcome, 'not-probed');
+ assert.equal(body.reason, 'unsupported-probe');
   } finally {
  await app.close();
  await localApi.cleanup();
@@ -1341,7 +1343,7 @@ test('validates OLLAMA_API_URL via /api/local-validate-secret (reachable endpoin
   }
 });
 
-test('validates LM Studio style /v1 base URL via /api/local-validate-secret', async () => {
+test('does not treat LM Studio reachability as credential verification for /v1 base URL via /api/local-validate-secret', async () => {
   const mockOpenAiCompatible = createServer((req, res) => {
  if (req.url === '/v1/models') {
  res.writeHead(200, { 'content-type': 'application/json' });
@@ -1369,8 +1371,8 @@ test('validates LM Studio style /v1 base URL via /api/local-validate-secret', as
  });
  assert.equal(response.status, 200);
  const body = await response.json();
- assert.equal(body.valid, true);
- assert.equal(body.message, 'Ollama endpoint verified');
+ assert.equal(body.outcome, 'not-probed');
+ assert.equal(body.reason, 'unsupported-probe');
   } finally {
  await app.close();
  await localApi.cleanup();
@@ -1380,7 +1382,7 @@ test('validates LM Studio style /v1 base URL via /api/local-validate-secret', as
   }
 });
 
-test('validates OLLAMA_API_URL via native /api/tags fallback', async () => {
+test('does not treat local endpoint reachability as credential verification via native /api/tags fallback', async () => {
   // Mock server that only responds to /api/tags (not /v1/models)
   const mockOllama = createServer((req, res) => {
  if (req.url === '/api/tags') {
@@ -1409,8 +1411,8 @@ test('validates OLLAMA_API_URL via native /api/tags fallback', async () => {
  });
  assert.equal(response.status, 200);
  const body = await response.json();
- assert.equal(body.valid, true);
- assert.equal(body.message, 'Ollama endpoint verified (native API)');
+ assert.equal(body.outcome, 'not-probed');
+ assert.equal(body.reason, 'unsupported-probe');
   } finally {
  await app.close();
  await localApi.cleanup();
@@ -1420,7 +1422,7 @@ test('validates OLLAMA_API_URL via native /api/tags fallback', async () => {
   }
 });
 
-test('validates OLLAMA_MODEL stores model name', async () => {
+test('model name is not provider credential evidence', async () => {
   const localApi = await setupApiDir({});
   const app = await createLocalApiServer({
  port: 0,
@@ -1437,8 +1439,8 @@ test('validates OLLAMA_MODEL stores model name', async () => {
  });
  assert.equal(response.status, 200);
  const body = await response.json();
- assert.equal(body.valid, true);
- assert.equal(body.message, 'Model name stored');
+ assert.equal(body.outcome, 'not-probed');
+ assert.equal(body.reason, 'unsupported-probe');
   } finally {
  await app.close();
  await localApi.cleanup();
@@ -1460,17 +1462,16 @@ test('rejects OLLAMA_API_URL with non-http protocol', async () => {
  headers: { 'Content-Type': 'application/json' },
  body: JSON.stringify({ key: 'OLLAMA_API_URL', value: 'ftp://127.0.0.1:11434' }),
  });
- assert.equal(response.status, 422);
+ assert.equal(response.status, 200);
  const body = await response.json();
- assert.equal(body.valid, false);
- assert.equal(body.message, 'Must be an http(s) URL');
+ assert.deepEqual(body, {outcome:'invalid-format',reason:'invalid-format'});
   } finally {
  await app.close();
  await localApi.cleanup();
   }
 });
 
-test('treats Cloudflare challenge 403 as soft-pass during secret validation', async () => {
+test('treats Cloudflare challenge 403 as unavailable during secret validation', async () => {
   const localApi = await setupApiDir({});
   const restoreHttps = mockHttpsRequestOnce({
  statusCode: 403,
@@ -1494,8 +1495,7 @@ test('treats Cloudflare challenge 403 as soft-pass during secret validation', as
  value: 'dummy-key',
  });
  assert.equal(response.status, 200);
- assert.equal(response.json?.valid, true);
- assert.equal(response.json?.message, 'Groq key stored (Cloudflare blocked verification)');
+ assert.deepEqual(response.json, {outcome:'unavailable',reason:'inconclusive-response'});
   } finally {
  restoreHttps();
  await app.close();
@@ -1503,7 +1503,7 @@ test('treats Cloudflare challenge 403 as soft-pass during secret validation', as
   }
 });
 
-test('does not soft-pass provider auth 403 JSON responses even with cf-ray header', async () => {
+test('provider 403 JSON remains inconclusive even with auth code and cf-ray header', async () => {
   const localApi = await setupApiDir({});
   const restoreHttps = mockHttpsRequestOnce({
  statusCode: 403,
@@ -1511,7 +1511,7 @@ test('does not soft-pass provider auth 403 JSON responses even with cf-ray heade
  'content-type': 'application/json',
  'cf-ray': 'abc123',
  },
- body: JSON.stringify({ error: 'invalid api key' }),
+ body: JSON.stringify({ error: { code: 'invalid_api_key' } }),
   });
 
   const app = await createLocalApiServer({
@@ -1526,9 +1526,8 @@ test('does not soft-pass provider auth 403 JSON responses even with cf-ray heade
  key: 'GROQ_API_KEY',
  value: 'invalid-key',
  });
- assert.equal(response.status, 422);
- assert.equal(response.json?.valid, false);
- assert.equal(response.json?.message, 'Groq rejected this key');
+ assert.equal(response.status, 200);
+ assert.deepEqual(response.json, {outcome:'unavailable',reason:'inconclusive-response'});
   } finally {
  restoreHttps();
  await app.close();
@@ -2497,7 +2496,6 @@ const RENDERER_ONLY_MAP_CREDENTIALS = [
  key: 'GOOGLE_MAPS_API_KEY',
  value: 'google-maps-validation-canary-7f3a',
  responseBody: JSON.stringify({ status: 'OK', routes: [] }),
- expectedMessage: 'Google Maps key verified (Directions API)',
  assertRequest(options) {
  assert.equal(options.hostname, 'maps.googleapis.com');
  const requestUrl = new URL(options.path, 'https://maps.googleapis.com');
@@ -2508,8 +2506,7 @@ const RENDERER_ONLY_MAP_CREDENTIALS = [
   {
  key: 'MAPBOX_API_KEY',
  value: 'mapbox-validation-canary-8b4c',
- responseBody: '{}',
- expectedMessage: 'Mapbox token verified',
+ responseBody: JSON.stringify({type:'FeatureCollection',features:[]}),
  assertRequest(options) {
  assert.equal(options.hostname, 'api.mapbox.com');
  const requestUrl = new URL(options.path, 'https://api.mapbox.com');
@@ -2520,8 +2517,7 @@ const RENDERER_ONLY_MAP_CREDENTIALS = [
   {
  key: 'MAPTILER_API_KEY',
  value: 'maptiler-validation-canary-9c5d',
- responseBody: '{}',
- expectedMessage: 'MapTiler key verified',
+ responseBody: JSON.stringify({version:8,sources:{},layers:[]}),
  assertRequest(options) {
  assert.equal(options.hostname, 'api.maptiler.com');
  const requestUrl = new URL(options.path, 'https://api.maptiler.com');
@@ -2532,8 +2528,7 @@ const RENDERER_ONLY_MAP_CREDENTIALS = [
   {
  key: 'CESIUM_ION_TOKEN',
  value: 'cesium-validation-canary-0d6e',
- responseBody: '{}',
- expectedMessage: 'Cesium ion token verified',
+ responseBody: JSON.stringify({id:1,username:'synthetic-user'}),
  assertRequest(options) {
  assert.equal(options.hostname, 'api.cesium.com');
  assert.equal(options.path, '/v1/me');
@@ -2569,7 +2564,7 @@ for (const credential of RENDERER_ONLY_MAP_CREDENTIALS) {
  credential.assertRequest(requestedOptions);
  assert.equal(response.status, 200);
  const body = await response.json();
- assert.deepEqual(body, { valid: true, message: credential.expectedMessage });
+ assert.deepEqual(body, {outcome:'verified',reason:'provider-accepted'});
  });
  } finally {
  restoreHttps();
@@ -2666,10 +2661,10 @@ test('renderer-only map credential validation never reflects Google provider err
  });
 
  assert.ok(requestedOptions, 'Google validation must reach the provider branch');
- assert.equal(response.status, 422);
+ assert.equal(response.status, 200);
  const text = await response.text();
  assert.doesNotMatch(text, new RegExp(submittedSecret));
- assert.deepEqual(JSON.parse(text), { valid: false, message: 'Google Maps rejected this key' });
+ assert.deepEqual(JSON.parse(text), {outcome:'unavailable',reason:'inconclusive-response'});
  });
   } finally {
  restoreHttps();
@@ -2700,13 +2695,10 @@ test('renderer-only map credential validation fails closed on malformed Google r
  });
 
  assert.ok(requestedOptions, 'Google validation must reach the provider branch');
- assert.equal(response.status, 422);
+ assert.equal(response.status, 200);
  const text = await response.text();
  assert.doesNotMatch(text, new RegExp(submittedSecret));
- assert.deepEqual(JSON.parse(text), {
- valid: false,
- message: 'Google Maps returned an invalid response',
- });
+ assert.deepEqual(JSON.parse(text), {outcome:'unavailable',reason:'inconclusive-response'});
  });
   } finally {
  restoreHttps();
@@ -2740,13 +2732,10 @@ test('renderer-only map credential validation fails closed on unknown Google sta
  });
 
  assert.ok(requestedOptions, 'Google validation must reach the provider branch');
- assert.equal(response.status, 422);
+ assert.equal(response.status, 200);
  const text = await response.text();
  assert.doesNotMatch(text, new RegExp(submittedSecret));
- assert.deepEqual(JSON.parse(text), {
- valid: false,
- message: 'Google Maps returned an invalid response',
- });
+ assert.deepEqual(JSON.parse(text), {outcome:'unavailable',reason:'inconclusive-response'});
  });
   } finally {
  restoreHttps();
@@ -2791,13 +2780,10 @@ for (const status of GOOGLE_DIRECTIONS_NON_SUCCESS_STATUSES) {
  });
 
  assert.ok(requestedOptions, 'Google validation must reach the provider branch');
- assert.equal(response.status, 422);
+ assert.equal(response.status, 200);
  const text = await response.text();
  assert.doesNotMatch(text, new RegExp(submittedSecret));
- assert.deepEqual(JSON.parse(text), {
- valid: false,
- message: 'Google Maps could not verify this key',
- });
+ assert.deepEqual(JSON.parse(text), {outcome:'unavailable',reason:'inconclusive-response'});
  });
  } finally {
  restoreHttps();
@@ -2830,10 +2816,7 @@ test('renderer-only map credential validation accepts Google ZERO_RESULTS as suc
 
  assert.ok(requestedOptions, 'Google validation must reach the provider branch');
  assert.equal(response.status, 200);
- assert.deepEqual(await response.json(), {
- valid: true,
- message: 'Google Maps key verified (Directions API)',
- });
+ assert.deepEqual(await response.json(), {outcome:'verified',reason:'provider-accepted'});
  });
   } finally {
  restoreHttps();
@@ -3165,6 +3148,8 @@ test('/api/airnow/forecast: keyed AirNow primary carries the ActionDay flag', as
 // per-route failure tests run BEFORE the success test that writes the cache),
 // and timestamp/timezone normalization is exact.
 
+function noop() {}
+
 function mockHttpsRouted(route) {
   const original = https.request;
   const calls = [];
@@ -3172,13 +3157,14 @@ function mockHttpsRouted(route) {
     calls.push({ hostname: options.hostname, path: options.path, headers: options.headers ?? {} });
     const spec = route(options) ?? { statusCode: 500, body: 'unmatched request' };
     const req = new EventEmitter();
-    req.setTimeout = () => {};
-    req.write = () => {};
+    req.setTimeout = noop;
+    req.write = noop;
     req.destroy = (error) => { if (error) req.emit('error', error); };
     req.end = () => {
       queueMicrotask(() => {
         if (spec.error) { req.emit('error', spec.error); return; }
         const res = new EventEmitter();
+        res.destroy = noop;
         res.statusCode = spec.statusCode ?? 200;
         res.statusMessage = '';
         res.headers = spec.headers ?? { 'content-type': 'application/json' };
@@ -3988,6 +3974,40 @@ function swpcTag(agoMs) {
   return new Date(Date.now() - agoMs).toISOString().replace(/\.\d{3}Z$/, '');
 }
 
+test('/api/spaceweather/status — Kp acquisition time is frozen through a cache hit and advances on a real revision', async () => {
+  const tag = swpcTag(60_000);
+  let value = 0;
+  let kpCalls = 0;
+  const app = await startRouteApp((options) => {
+    if (!options.path.includes('noaa-planetary-k-index')) return { statusCode: 200, body: '[]' };
+    kpCalls++;
+    return { statusCode: 200, body: JSON.stringify([{ time_tag: tag, Kp: value }]) };
+  });
+  try {
+    const first = await app.getJson('/api/spaceweather/status');
+    assert.ok(Number.isSafeInteger(first.kpFetchedAt));
+    value = 7;
+    const restore1 = shiftClock(60_000);
+    try {
+      const hit = await app.getJson('/api/spaceweather/status');
+      assert.equal(hit.kpFetchedAt, first.kpFetchedAt);
+      assert.equal(hit.kpPoints[0].kp, 0);
+      assert.equal(kpCalls, 1);
+    } finally { restore1(); }
+    const restore2 = shiftClock(6 * 60_000);
+    try {
+      const revision = await app.getJson('/api/spaceweather/status');
+      assert.ok(revision.kpFetchedAt > first.kpFetchedAt);
+      assert.equal(revision.kpPoints[0].kp, 7);
+      assert.equal(revision.kpPoints[0].time_tag, first.kpPoints[0].time_tag);
+      assert.equal(kpCalls, 2);
+    } finally { restore2(); }
+  } finally {
+    _resetSidecarCacheForTests();
+    await app.cleanup();
+  }
+});
+
 test('/api/spaceweather/status — a recovered Kp subfeed is not pinned empty by the healthy xray subfeed', async () => {
   const tag = swpcTag(60_000);
   let kpUp = false;
@@ -4006,6 +4026,7 @@ test('/api/spaceweather/status — a recovered Kp subfeed is not pinned empty by
   try {
     const degraded = await app.getJson('/api/spaceweather/status');
     assert.deepEqual(degraded.kpPoints, [], 'the Kp product is down, so it contributes no points');
+    assert.equal(degraded.kpFetchedAt, null);
     assert.ok(degraded.xray, 'the xray product answered and must still be reported');
 
     kpUp = true;
@@ -4607,4 +4628,84 @@ test('theater posture computes locally without a default cloud request', async (
     await app.close();
     await localApi.cleanup();
   }
+});
+
+test('NWS boundary refuses fabricated CAP identities and issuance and recovers with provider fields', async t => {
+  let clock = Date.now(); t.mock.method(Date, 'now', () => clock);
+  const sent = '2026-11-01T08:00:00Z';
+  const props = { id: 'nws-fixture', sent, onset: '2026-11-01T06:00:00Z', expires: '2026-11-01T10:00:00Z',
+    headline: 'Fixture', description: '', areaDesc: 'Test', event: 'Fixture', severity: 'Severe', urgency: 'Immediate', status: 'Actual', messageType: 'Alert' };
+  let payload = {};
+  let headers = {};
+  const app = await startRouteApp(() => ({ body: JSON.stringify(payload), headers }));
+  try {
+    const feature = { type:'Feature', geometry:null, properties:props };
+    for (const invalid of [{},
+      ...[{id:undefined}, {sent:undefined}, {event:{}}, {areaDesc:[]}, {headline:0}, {onset:'nonsense'}, {severity:'Typo'}, {messageType:'Typo'}].map(fields =>
+        ({ type:'FeatureCollection', features:[{...feature, properties:{...props,...fields}}] })),
+      { type:'FeatureCollection', features:[{...feature, geometry:{type:'Polygon', coordinates:[[[0,0],[1,1]]]}}] }]) {
+      clock += 65_000; payload = invalid;
+      const refused = await app.get('/api/nws-alerts');
+      assert.equal(refused.status, 503);
+    }
+    clock += 65_000; payload = { type:'FeatureCollection', features:[{type:'Feature',geometry:null,properties:props}] };
+    headers = { 'content-length': String(8 * 1024 * 1024 + 1) };
+    const oversized = await app.get('/api/nws-alerts');
+    assert.equal(oversized.status, 503);
+    clock += 65_000; headers = {};
+    const recovered = await app.get('/api/nws-alerts');
+    assert.equal(recovered.status, 200);
+    const inventory = await recovered.json();
+    assert.equal(inventory.completeness, 'complete');
+    const [row] = inventory.alerts;
+    assert.equal(row.id, props.id);
+    assert.equal(row.sent, sent);
+    clock += 65_000; payload = { type: 'FeatureCollection', features: [{ ...feature, properties: { ...props, sent: null } }] };
+    const failedRefresh = await app.get('/api/nws-alerts');
+    assert.equal(failedRefresh.status, 503, 'a failed refresh cannot present the previous warning as current');
+    clock += 65_000; payload = { type:'FeatureCollection', features:[] };
+    const empty = await app.get('/api/nws-alerts');
+    assert.equal(empty.status, 200);
+    const emptyInventory = await empty.json();
+    assert.equal(emptyInventory.completeness, 'complete');
+    assert.deepEqual(emptyInventory.alerts, []);
+  } finally { await app.cleanup(); }
+});
+
+test('stored validation ignores renderer value and companion overrides, emits no secret or provider text', async () => {
+ const previousId=process.env.OPENSKY_CLIENT_ID;
+ const previousSecret=process.env.OPENSKY_CLIENT_SECRET;
+ process.env.OPENSKY_CLIENT_ID='stored-client-canary';
+ process.env.OPENSKY_CLIENT_SECRET='stored-partner-canary'; // secret-scan: allow -- synthetic stored OpenSky verification fixture
+ let outbound='';
+ let count=0;
+ const restoreHttps=mockHttpsRequestOnce({statusCode:200,headers:{'content-type':'application/json'},body:JSON.stringify({access_token:'upstream-token-canary'}),onRequest(options){count++;assert.equal(options.hostname,'auth.opensky-network.org');},onWrite(chunk){outbound+=chunk;}});
+ const localApi=await setupApiDir({});
+ const logs=[];
+ const app=await createLocalApiServer({port:0,apiDir:localApi.apiDir,logger:{log(...args){logs.push(args);},warn(...args){logs.push(args);},error(...args){logs.push(args);}}});
+ try {
+ const {port}=await app.start();
+ const response=await authFetch(`http://127.0.0.1:${port}/api/local-validate-secret`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:'OPENSKY_CLIENT_ID',useStored:true,value:'typed-value-canary',context:{OPENSKY_CLIENT_SECRET:'typed-partner-canary',GROQ_API_KEY:'unrelated-canary',url:'http://169.254.169.254/'}})});
+ assert.equal(response.status,200);
+ assert.deepEqual(await response.json(),{outcome:'verified',reason:'provider-accepted'});
+ assert.equal(count,1);
+ const fields=new URLSearchParams(outbound);
+ assert.equal(fields.get('client_id'),'stored-client-canary');
+ assert.equal(fields.get('client_secret'),'stored-partner-canary');
+ assert.deepEqual([...fields.keys()].sort(),['client_id','client_secret','grant_type']);
+ assert.doesNotMatch(JSON.stringify(logs),/stored-client-canary|stored-partner-canary|typed-value-canary|typed-partner-canary|unrelated-canary|upstream-token-canary/);
+ } finally {
+ restoreHttps();await app.close();await localApi.cleanup();
+ if(previousId===undefined)delete process.env.OPENSKY_CLIENT_ID;else process.env.OPENSKY_CLIENT_ID=previousId;
+ if(previousSecret===undefined)delete process.env.OPENSKY_CLIENT_SECRET;else process.env.OPENSKY_CLIENT_SECRET=previousSecret;
+ }
+});
+
+test('validation rejects machine-local bearer before any provider request',async()=>{
+ let count=0;
+ const restoreHttps=mockHttpsRequestOnce({statusCode:200,headers:{},body:'{}',onRequest(){count++;}});
+ try{await withSecuredSidecar(async port=>{
+ const response=await fetch(`http://127.0.0.1:${port}/api/local-validate-secret`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer wrong-machine-token'},body:JSON.stringify({key:'GROQ_API_KEY',value:'synthetic-secret-canary'})});
+ assert.equal(response.status,401);assert.deepEqual(await response.json(),{error:'Unauthorized'});assert.equal(count,0);
+ });}finally{restoreHttps();}
 });

@@ -72,9 +72,9 @@ export const PANEL_DATA_CONTRACTS: Record<string, PanelContractEntry> = {
   // ── updated-by-data-loader (DataLoader pushes data via update()) ────
   'nws-alerts': {
     contract: 'updated-by-data-loader',
-    updateMethod: 'update',
+    updateMethod: 'updateSnapshot',
     loaderFile: 'src/app/data-loader.ts',
-    reason: 'NWS alerts pushed via DataLoader.loadWeatherAlerts() → setWeatherAlerts on map + update() on panel',
+    reason: 'National snapshots projected through DataLoader.refreshNWSAlerts() and lifecycle expiry updates',
   },
   'gdacs-alerts': {
     contract: 'updated-by-data-loader',

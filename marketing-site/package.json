@@ -46,6 +46,9 @@
       "postcss": "8.5.23",
       "sharp": "0.35.5"
     },
+    "miniflare": {
+      "undici": "7.30.1"
+    },
     "braces": "$braces"
   },
   "type": "module"

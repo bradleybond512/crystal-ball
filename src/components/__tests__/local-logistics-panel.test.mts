@@ -187,13 +187,13 @@ test('Prepare offline enqueues the active exact radius and cleanup unsubscribes'
     coordinator,
   );
   panel.setPlaceId(place.id);
-  await settleRender();
 
   const content = panel.getContentElement();
-  requiredElement<HTMLButtonElement>(content, '[data-logistics-radius="50"]').click();
-  await settleRender();
+  const radius = await requiredElementEventually<HTMLButtonElement>(content, '[data-logistics-radius="50"]');
+  radius.click();
+  await requiredElementEventually(content, '[data-logistics-radius="50"][aria-pressed="true"]');
   requiredElement<HTMLButtonElement>(content, '[data-lifeline-prewarm]').click();
-  await settleRender();
+  await requiredElementEventually(content, '[data-lifeline-prewarm-status="queued"]');
 
   assert.deepEqual(enqueued, [{ placeId: place.id, radiusKm: 50, trigger: 'manual' }]);
   assert.equal(
@@ -514,9 +514,8 @@ test('hotel card fails closed, discloses evidence, and labels a valid call as co
   const panel = mountPanel(async () => makeSnapshot(place, 25, { nodes: [hotel] }));
 
   panel.setPlaceId(place.id);
-  await settleRender();
 
-  const card = requiredElement<HTMLElement>(panel.getContentElement(), '[data-logistics-node-card="hotel-valid-phone"]');
+  const card = await requiredElementEventually<HTMLElement>(panel.getContentElement(), '[data-logistics-node-card="hotel-valid-phone"]');
   const text = card.textContent ?? '';
   assert.match(text, /Directory listing only\. Vacancy, current operation, power, and access are unknown\. Confirm directly with the property before relying on it\./);
   assert.match(text, /Operational: unknown/);

@@ -178,7 +178,8 @@ import { fetchInciwebIncidents } from '@/services/inciweb';
 import { fetchHazmatIncidents } from '@/services/hazmat-incidents';
 import { classifyNewsItem } from '@/services/positive-classifier';
 import { fetchGivingSummary } from '@/services/giving';
-import { fetchNWSAlerts, type NWSAlert } from '@/services/nws-alerts';
+import type { NWSAlert, NWSAlertSnapshot } from '@/services/nws-alerts';
+import { fetchCachedNwsSnapshot, NWS_SNAPSHOT_FRESH_MS } from '@/services/nws-alert-snapshot-cache';
 import { routeWeatherAlert } from '@/services/weather/weather-warning-router';
 import { deliveryPriorityRank } from '@/services/weather/weather-urgency';
 import type { NwsAlertMinimal, AlertPolygon } from '@/services/weather/weather-threat-types';
@@ -211,7 +212,7 @@ import { fetchAllPositiveTopicIntelligence } from '@/services/gdelt-intel';
 import { fetchPositiveGeoEvents, geocodePositiveNewsItems } from '@/services/positive-events-geo';
 import { fetchKindnessData } from '@/services/kindness-data';
 import { getPersistentCache, setPersistentCache } from '@/services/persistent-cache';
-import { withOfflineCache, registerCriticalSources, feedFreshnessFromSnapshot } from '@/services/offline-alert-cache';
+import { withOfflineCache, registerCriticalSources, feedFreshnessFromSnapshot, type CachedSnapshot } from '@/services/offline-alert-cache';
 import {
   getEarthquakeSuccessfulUpdate,
   getFredSuccessfulUpdate,
@@ -294,6 +295,8 @@ import { detectWeatherThreatConvergence } from '@/services/weather-threat-conver
 import { analyzeWeatherImpacts, weatherToSupplyChainSignals } from '@/services/weather-impact';
 import { ingestEvent as ingestCorrelationMatrix, classifyRegion, getGlobalScore as getMatrixGlobalScore } from '@/services/correlation-matrix';
 import { ingestWeatherAnomalySignals, ingestMatrixScoreSignal, anomalyEngine } from '@/services/anomaly-detection';
+import { acquireWarningSession } from '@/services/warning-notification-session';
+import { subscribeSavedPlaces } from '@/services/saved-places';
 import { notificationDispatcher } from '@/services/notification-dispatcher';
 import { initWebhookDispatcher } from '@/services/webhook-dispatcher';
 import { detectStrikePackages } from '@/services/strike-package';
@@ -303,7 +306,7 @@ import { unifiedAlertStore } from '@/services/unified-alerts';
 import { ingestEarthquakesUnified, ingestCyberThreatsUnified } from '@/services/unified-ingestors';
 import {
   normalizeBreakingAlert,
-  normalizeNWSAlert,
+  normalizeSiteWarning,
   normalizeGDACSEvent,
   normalizeTsunamiAlert,
   normalizeResourceAlert,
@@ -368,6 +371,8 @@ import {
   recordDomainObservations,
 } from '@/services/providers/fusion-publish';
 import { usgsEventsToObservations, emscEventsToObservations, geofonEventsToObservations } from '@/services/earthquake/earthquake-fusion-observations';
+import { threatEvidence } from '@/services/synthesis/threat-aggregator';
+import { kpThreatReceipt, SeismicThreatHistory } from '@/services/synthesis/geo-threat-evidence';
 import { fetchUsgsSeismicForFusion } from '@/services/earthquake/usgs-fusion-fetch';
 import { openMeteoAqToObservations, openaqToObservations, airnowToObservations, purpleairToObservations } from '@/services/airquality/airquality-fusion-observations';
 import { fetchAirnowCurrent } from '@/services/airquality/airnow-fusion-fetch';
@@ -429,8 +434,6 @@ const PROTO_TO_CLIENT_LEVEL: Record<ProtoThreatLevel, ClientThreatLevel> = {
   THREAT_LEVEL_CRITICAL: 'critical',
 };
 
-// Stable dedupe key for an NWS alert. Prefers the official alert id (unique
-// per issuance — an updated/re-issued warning gets a fresh id and re-notifies);
 // Convert an NWS GeoJSON geometry (Polygon / MultiPolygon) to an AlertPolygon's
 // ring list so the saved-place matcher can run point-in-polygon. Returns
 // undefined for missing / non-polygon / degenerate geometry.
@@ -465,19 +468,7 @@ function nwsAlertMinimal(alert: NWSAlert): NwsAlertMinimal {
   };
 }
 
-// falls back to a hash of headline+area when the id is missing so a long-lived
-// warning still maps to one stable key across refreshes.
-function weatherAlertDedupeKey(alert: { id?: string; headline?: string; event?: string; areaDesc?: string }): string {
-  if (alert.id) return `nws-${alert.id}`;
-  const basis = `${alert.headline ?? alert.event ?? ''}|${alert.areaDesc ?? ''}`;
-  let hash = 5381;
-  for (const ch of basis) hash = (hash * 33 + (ch.codePointAt(0) ?? 0)) % 2_147_483_647;
-  return `nws-h${hash.toString(36)}`;
-}
 
-// A long-lived NWS warning keeps reappearing in every fetch. Re-notify at most
-// once per this window so the user gets a periodic reminder, not spam each cycle.
-const WEATHER_NOTIFY_DEDUPE_WINDOW_MS = 60 * 60 * 1000;
 
 function protoItemToNewsItem(p: ProtoNewsItem): NewsItem {
   const level = PROTO_TO_CLIENT_LEVEL[p.threat?.level ?? 'THREAT_LEVEL_UNSPECIFIED'];
@@ -492,7 +483,7 @@ function protoItemToNewsItem(p: ProtoNewsItem): NewsItem {
  level,
  category: p.threat.category as import('@/services/threat-classifier').EventCategory,
  confidence: p.threat.confidence,
- source: (p.threat.source || 'keyword') as 'keyword' | 'ml' | 'llm',
+ source: p.threat.source as 'keyword' | 'ml' | 'llm',
  } : undefined,
  ...(p.locationName && { locationName: p.locationName }),
  ...(p.location && { lat: p.location.latitude, lon: p.location.longitude }),
@@ -526,6 +517,7 @@ async function resolveGridInfrastructure(lat: number, lon: number): Promise<Powe
 }
 
 export interface DataLoaderCallbacks {
+  onForecastInputsAttempted?: () => void;
   renderCriticalBanner: (postures: TheaterPostureSummary[]) => void;
 }
 
@@ -542,9 +534,21 @@ interface RssNewsLoadResult {
 export class DataLoaderManager implements AppModule {
   private ctx: AppContext;
   private callbacks: DataLoaderCallbacks;
+  private activeDataWave: Promise<void> | null = null;
+  private releaseWarningSession?: () => void;
+  private warningSettingsEpoch = 0;
+  private unsubscribeWarningPlaces?: () => void;
+  private unsubscribeWarningAnomalies?: () => void;
+  private readonly warningListeners = new AbortController();
   private unsubscribeNewsRuntimeConfig: (() => void) | null = null;
+  private unsubscribeNwsLifecycle: (() => void) | null = null;
+  private lastNwsSnapshot: CachedSnapshot<NWSAlertSnapshot> | null = null;
+  private lastNwsContextSnapshot: NWSAlertSnapshot | null = null;
+  private lastNwsProjection: NWSAlert[] | null = null;
+  private nwsAcquisitionFailed = false;
 
   private mapFlashCache = new Map<string, number>();
+  private readonly seismicThreatHistory = new SeismicThreatHistory();
   private readonly dedupeConflictObservations =
     createConflictObservationDeduper();
   private readonly MAP_FLASH_COOLDOWN_MS = 10 * 60 * 1000;
@@ -617,16 +621,25 @@ export class DataLoaderManager implements AppModule {
  this.callbacks = callbacks;
  this.ctx.newsSnapshot.bindScope(() => this.newsSnapshotConfiguration());
  this.unsubscribeNewsRuntimeConfig = subscribeRuntimeConfig(() => { this.ctx.newsSnapshot.getSnapshot(); });
+ if (SITE_VARIANT === 'full') {
+   unifiedAlertStore.startNwsLifecycle();
+   this.unsubscribeNwsLifecycle = unifiedAlertStore.subscribe(() => this.publishNwsSnapshot());
+ }
   }
 
   init(): void {
+ this.releaseWarningSession ??= acquireWarningSession(() => {
+   notificationDispatcher.cancelPendingPermission();
+   unifiedAlertStore.endNotificationSession();
+ });
+ this.unsubscribeWarningPlaces = subscribeSavedPlaces(() => { this.warningSettingsEpoch++; });
  // Pre-register critical data sources for offline cache status tracking
  registerCriticalSources();
  // Wire AAR auto-creation on mode transitions
  initModeTracking();
 
  // Subscribe to anomaly detections → dispatch critical anomalies as notifications
- anomalyEngine.subscribe((anomaly) => {
+ this.unsubscribeWarningAnomalies = anomalyEngine.subscribe((anomaly) => {
  if (anomaly.severity === 'critical') {
  notificationDispatcher.dispatchAnomalyAlert(anomaly);
  }
@@ -639,13 +652,13 @@ export class DataLoaderManager implements AppModule {
  document.addEventListener('wm:breaking-news', (e: Event) => {
  const alert = (e as CustomEvent<BreakingAlert>).detail;
  if (alert) unifiedAlertStore.ingest([normalizeBreakingAlert(alert)]);
- });
+ }, { signal: this.warningListeners.signal });
 
  // Bridge resource depletion alerts into the unified alert store
  document.addEventListener('wm:resource-alert', (e: Event) => {
  const detail = (e as CustomEvent<ResourceAlertDetail>).detail;
  if (detail) unifiedAlertStore.ingest([normalizeResourceAlert(detail)]);
- });
+ }, { signal: this.warningListeners.signal });
 
  // Disaster-proximate FAA cameras — informs the panel's disaster
  // mode badge so cameras near severe weather are highlighted, but
@@ -659,10 +672,10 @@ export class DataLoaderManager implements AppModule {
  try {
  const [raw, nwsResult, gdacsResult] = await Promise.all([
  fetchFAACameras(),
- withOfflineCache('nws-alerts', () => fetchNWSAlerts(), 1 * 60 * 60 * 1000),
+ fetchCachedNwsSnapshot(),
  withOfflineCache('gdacs-events', () => this.fetchVerifiedGDACSEvents(), 1 * 60 * 60 * 1000),
  ]);
- const proximate = getDisasterProximateCameras(raw, nwsResult.data, gdacsResult.data);
+ const proximate = getDisasterProximateCameras(raw, nwsResult.data.alerts, gdacsResult.data);
  // Panel-side disaster badge only — map keeps the full set.
  (this.ctx.panels['faa-weather-cams'] as FAAWeatherCamsPanel | undefined)?.setDisasterMode(true, proximate);
  } catch { /* non-critical */ }
@@ -670,8 +683,15 @@ export class DataLoaderManager implements AppModule {
   }
 
   destroy(): void {
+ this.warningListeners.abort();
+ this.unsubscribeWarningPlaces?.();
+ this.unsubscribeWarningAnomalies?.();
+ this.releaseWarningSession?.();
  this.unsubscribeNewsRuntimeConfig?.();
  this.unsubscribeNewsRuntimeConfig = null;
+ this.unsubscribeNwsLifecycle?.();
+ this.unsubscribeNwsLifecycle = null;
+ if (SITE_VARIANT === 'full') unifiedAlertStore.stopNwsLifecycle();
  if (this.compoundThreatTimer !== null) {
  clearTimeout(this.compoundThreatTimer);
  this.compoundThreatTimer = null;
@@ -745,7 +765,15 @@ export class DataLoaderManager implements AppModule {
  return !this.ctx.isMobile && !!this.ctx.findingsBadge?.isPopupEnabled();
   }
 
-  async loadAllData(): Promise<void> {
+  loadAllData(): Promise<void> {
+    // Reserve the shared promise before a provider can synchronously request a retry.
+    this.activeDataWave ??= Promise.resolve().then(() => this.runDataWave()).finally(() => {
+      this.activeDataWave = null;
+    });
+    return this.activeDataWave;
+  }
+
+  private async runDataWave(): Promise<void> {
  const runGuarded = async (name: string, fn: () => Promise<void>): Promise<void> => {
  if (this.ctx.isDestroyed || this.ctx.inFlight.has(name)) return;
  this.ctx.inFlight.add(name);
@@ -758,6 +786,7 @@ export class DataLoaderManager implements AppModule {
  }
  } finally {
  this.ctx.inFlight.delete(name);
+ if (name === 'markets' && !this.ctx.isDestroyed) this.callbacks.onForecastInputsAttempted?.();
  }
  };
 
@@ -928,7 +957,7 @@ export class DataLoaderManager implements AppModule {
 
  // Two-wave loading: critical panels first, then deferred.
  const CRITICAL = new Set([
- 'news', 'markets', 'weather', 'nwsAlerts', 'gdacsAlerts', 'intelligence',
+ 'news', 'markets', 'weather', 'nwsAlerts', 'shakeAlert', 'gdacsAlerts', 'intelligence',
  'natural', 'cyberThreats', 'predictions', 'spaceWeather', 'firms',
  ]);
  const critical = tasks.filter(t => CRITICAL.has(t.name));
@@ -941,6 +970,7 @@ export class DataLoaderManager implements AppModule {
  console.error(`[App] ${critical[idx]?.name} load failed:`, result.reason);
  }
  });
+ if (this.ctx.isDestroyed) return;
  const wave2 = await limiter.mapSettled(deferred, t => t.task());
  wave2.forEach((result, idx) => {
  if (result.status === 'rejected') {
@@ -948,6 +978,7 @@ export class DataLoaderManager implements AppModule {
  }
  });
 
+ if (this.ctx.isDestroyed) return;
  this.updateSearchIndex();
  document.dispatchEvent(new CustomEvent('wm:data-refreshed'));
   }
@@ -1187,7 +1218,7 @@ export class DataLoaderManager implements AppModule {
 
  this.publishNewsFeeds(generation, enabledFeeds, items, digest.digest.feedAcquisitions);
 
- ingestHeadlines(items.map(i => ({ title: i.title, pubDate: i.pubDate, source: i.source, link: i.link })));
+ ingestHeadlines(items.map(i => ({ title: i.title, pubDate: i.pubDate, source: i.source, link: i.link, threat: i.threat, provenance: i.provenance })));
 
  const aiCandidates = items
  .filter(i => i.threat?.source === 'keyword')
@@ -2109,6 +2140,7 @@ export class DataLoaderManager implements AppModule {
  // in-flight evaluation (still holding the pre-add set) would otherwise
  // re-confirm clear against a set that never saw the new place. Re-reading this
  // signature before publication lets us detect that and withhold the clear.
+ const warningSettingsEpoch = this.warningSettingsEpoch;
  const placesSignatureAtSnapshot = savedPlacesMatchSignature(savedPlaces);
  // Resolve zones AND capture whether any place's /points lookup failed. A
  // degraded zone picture (some place's zones unknown) must withhold the
@@ -2225,49 +2257,22 @@ export class DataLoaderManager implements AppModule {
    continue;
  }
  pipelineTrace.record(traceId, 'weather', { stage: 'evaluated', detail: { isBigEvent: true, tier: bigEventResult.tier } });
- // Dedupe: a stable per-alert key lets us detect a warning we already
- // notified for. The trace candidateId stays unique per occurrence (the
- // registry rejects duplicate ids), while situationId groups occurrences
- // of the same alert so dedupeMatch can fire on a recent prior dispatch.
- const dispatchAt = Date.now();
- const dedupeKey = weatherAlertDedupeKey(alert);
- const dedupeMatch = registry
-   .bySituation(dedupeKey)
-   .some((e) => {
-     if (e.decision !== 'dispatched') return false;
-     const lastAt = e.events[e.events.length - 1]?.at ?? e.candidate.createdAt;
-     return dispatchAt - lastAt < WEATHER_NOTIFY_DEDUPE_WINDOW_MS;
-   });
+ const warning = normalizeSiteWarning(alert, snapshot.source, weatherFeedState);
  const decision = routeBigEventToLadder(registry, bigEventResult, ladderInput, {
- candidateId: `${dedupeKey}-${dispatchAt}`,
- situationId: dedupeKey,
+ recordDispatch: false,
+ situationId: warning?.id,
  domain: 'weather',
  headline: alert.headline || alert.event,
  summary: alert.areaDesc ? `${alert.event} — ${alert.areaDesc}` : alert.event,
  quietHoursActive,
  quietHoursBypassEnabled: weatherQuietHoursBypass,
- dedupeMatch,
  });
- pipelineTrace.record(traceId, 'weather', { stage: 'routed', detail: { rung: decision.rung, dispatched: decision.dispatched } });
+ pipelineTrace.record(traceId, 'weather', { stage: 'routed', detail: { rung: decision.rung, eligibleForInbox: decision.eligibleForInbox === true } });
  const action = RUNG_ACTION[decision.rung] ?? null;
- if (decision.dispatched && action) {
- notificationDispatcher.dispatchNotification(
- {
- id: alert.id,
- source: 'nws',
- severity: alert.severity === 'Extreme' ? 'critical' : 'high',
- title: alert.event,
- body: alert.headline || alert.areaDesc || alert.event,
- timestamp: Date.now(),
- location: alert.centroid
- ? { lat: alert.centroid[1], lon: alert.centroid[0] }
- : undefined,
- relevanceScore: severityScore,
- acknowledged: false,
- pinned: false,
- },
- action,
- );
+ if (decision.eligibleForInbox && action) {
+   const stillEligible = () => !this.ctx.isDestroyed && !this.warningListeners.signal.aborted
+     && this.warningSettingsEpoch === warningSettingsEpoch;
+   if (warning && stillEligible()) unifiedAlertStore.ingest([warning], { action, live: true, stillEligible });
  }
  } catch (error) {
  console.warn('[data-loader] weather alert routing failed for', alert.id, error);
@@ -2988,6 +2993,9 @@ export class DataLoaderManager implements AppModule {
     // independent clocks would drift by however long the slower leg takes,
     // orphaning any bin that fell in the gap.
     const now = Date.now();
+    if (this.ctx.isDestroyed) return;
+    const swpcAttempt = threatEvidence.begin('space_weather', 'NOAA SWPC Kp');
+    const gfzAttempt = threatEvidence.begin('space_weather', 'GFZ Kp');
     const [swpc, gfz] = await Promise.all([fetchSwpcKp(now), fetchGfzKp(now)]);
     // kpVote derives `ok` from the same array it hands back, so a provider
     // whose rows all get dropped records ok:false instead of green-but-silent.
@@ -2995,6 +3003,12 @@ export class DataLoaderManager implements AppModule {
     const gfzVote = kpVote('gfz-kp', gfz.ok, gfz.samples);
     recordDomainObservations('swpc-kp', swpcVote.observations, swpcVote.ok);
     recordDomainObservations('gfz-kp', gfzVote.observations, gfzVote.ok);
+    for (const [attempt, vote, source] of [[swpcAttempt, swpcVote, swpc], [gfzAttempt, gfzVote, gfz]] as const) {
+      if (this.ctx.isDestroyed) { attempt.cancel(); continue; }
+      const receipt = kpThreatReceipt(vote, Date.now(), source.fetchedAtMs);
+      if (receipt) attempt.report(receipt);
+      else attempt.fail();
+    }
   }
   async loadSpaceflightNews(): Promise<void> { return spaceLoaders.loadSpaceflightNews(this.ctx); }
   async loadSpaceLaunches(): Promise<void> { return spaceLoaders.loadSpaceLaunches(this.ctx); }
@@ -3204,7 +3218,7 @@ export class DataLoaderManager implements AppModule {
    snapshot.source === 'network' && event.retrievedAt !== undefined
      ? { kind: 'verified-response', observedAt: event.retrievedAt }
      : { kind: 'replay' },
- )));
+ )), { live: snapshot.source === 'network', stillEligible: () => !this.ctx.isDestroyed });
 
  // Wire GDACS into correlation matrix
  for (const event of events) {
@@ -3334,18 +3348,71 @@ export class DataLoaderManager implements AppModule {
   async loadSevereWeather(): Promise<void> { return cyberLoaders.loadSevereWeather(this.ctx); }
   async loadShakeAlert(): Promise<void> { return cyberLoaders.loadShakeAlert(this.ctx); }
 
+  private publishNwsSnapshot(): void {
+    if (this.ctx.isDestroyed) return;
+    const panel = this.ctx.panels['nws-alerts'] as NWSAlertsPanel | undefined;
+    const snapshot = this.lastNwsSnapshot;
+    if (!snapshot) {
+      if (this.nwsAcquisitionFailed) {
+        panel?.updateSnapshot({ alerts: [], state: 'unavailable', observedAt: null });
+      }
+      return;
+    }
+    const watermark = unifiedAlertStore.getNwsObservedAt();
+    const older = watermark !== null && snapshot.data.observedAt < watermark;
+    const alerts = unifiedAlertStore.getOperationalNwsAlerts(snapshot.data);
+    const stale = this.nwsAcquisitionFailed || snapshot.isStale || older
+      || Date.now() - snapshot.data.observedAt >= NWS_SNAPSHOT_FRESH_MS
+      || alerts.length !== snapshot.data.alerts.length;
+    panel?.updateSnapshot({ alerts, state: stale ? 'stale' : 'current', observedAt: snapshot.data.observedAt });
+    if (!older && (this.lastNwsContextSnapshot !== snapshot.data
+      || this.lastNwsProjection?.length !== alerts.length
+      || alerts.some((alert, index) => this.lastNwsProjection?.[index]?.id !== alert.id))) {
+      this.lastNwsContextSnapshot = snapshot.data;
+      this.lastNwsProjection = alerts;
+      updateStormPreparednessContext({ nwsAlerts: alerts });
+    }
+  }
+
+  async refreshNWSAlerts(): Promise<void> {
+    try {
+      const snapshot = await fetchCachedNwsSnapshot();
+      if (this.ctx.isDestroyed) return;
+      this.nwsAcquisitionFailed = snapshot.isStale;
+      if (snapshot.source === 'network' && !snapshot.isStale) {
+        const result = unifiedAlertStore.reconcileNwsSnapshot(snapshot.data, { live: snapshot.liveObservation === true, stillEligible: () => !this.ctx.isDestroyed });
+        if (result.disposition === 'invalid') {
+          this.nwsAcquisitionFailed = true;
+          this.publishNwsSnapshot();
+          return;
+        }
+        if (result.disposition === 'older') this.nwsAcquisitionFailed = true;
+      }
+      if (!this.lastNwsSnapshot || snapshot.data.observedAt >= this.lastNwsSnapshot.data.observedAt) {
+        this.lastNwsSnapshot = snapshot;
+      } else {
+        this.nwsAcquisitionFailed = true;
+      }
+      this.publishNwsSnapshot();
+    } catch {
+      if (this.ctx.isDestroyed) return;
+      this.nwsAcquisitionFailed = true;
+      this.publishNwsSnapshot();
+    }
+  }
+
   async loadNWSAlerts(): Promise<void> {
  try {
  const stormContext = getStormPreparednessContext();
- const [alertsResult, spcResult, marineResult, rainfallResult, winterResult] = await Promise.allSettled([
- withOfflineCache('nws-alerts', () => fetchNWSAlerts(), 1 * 60 * 60 * 1000),
+ const [, spcResult, marineResult, rainfallResult, winterResult] = await Promise.allSettled([
+ this.refreshNWSAlerts(),
  fetchSpcSummary(),
  fetchMarineHazards(),
  fetchExcessiveRainfallOutlooks(),
  fetchWinterWeatherOutlooks(),
  ]);
- const alertsSnapshot = alertsResult.status === 'fulfilled' ? alertsResult.value : undefined;
- const alerts = alertsSnapshot ? alertsSnapshot.data : stormContext.nwsAlerts;
+ if (this.ctx.isDestroyed) return;
+ const alerts = getStormPreparednessContext().nwsAlerts;
  const spcSummary = spcResult.status === 'fulfilled' ? spcResult.value : stormContext.spcSummary;
  const marineHazards = marineResult.status === 'fulfilled' ? marineResult.value : stormContext.marineHazards;
  const excessiveRainfallOutlooks = rainfallResult.status === 'fulfilled'
@@ -3355,12 +3422,6 @@ export class DataLoaderManager implements AppModule {
  ? winterResult.value
  : stormContext.winterWeatherOutlooks;
  const minimalAlerts = alerts.map(nwsAlertMinimal);
- (this.ctx.panels['nws-alerts'] as NWSAlertsPanel)?.update(alerts);
- unifiedAlertStore.ingest(alerts.map(alert => normalizeNWSAlert(alert,
-   alertsSnapshot?.source === 'network' && alert.retrievedAt !== undefined
-     ? { kind: 'verified-response', observedAt: alert.retrievedAt }
-     : { kind: 'replay' },
- )));
  recordWarningPredictions(minimalAlerts);
 
  // Route alerts through Personal Storm Mode — find the highest-priority
@@ -3377,6 +3438,7 @@ export class DataLoaderManager implements AppModule {
  // shared adapter — carries radiusKm (near-polygon buffer) AND resolved UGC
  // zones (zone fallback), which this site used to drop on both counts.
  const placeZonesById = await resolveSavedPlaceZones(places);
+ if (this.ctx.isDestroyed) return;
  const weatherPlaces = places.map(p => toMatcherPlace(p, placeZonesById.get(p.id)));
  let bestDecision = undefined;
  for (const minimal of minimalAlerts) {
@@ -3397,6 +3459,7 @@ export class DataLoaderManager implements AppModule {
  // concurrent requests so repeated NWS refreshes cannot stampede providers.
  void import('@/services/lifelines/lifeline-prewarm')
  .then(({ lifelinePrewarmCoordinator }) => {
+   if (this.ctx.isDestroyed) return;
    for (const place of places.filter((candidate) => (
      candidate.offlinePinned || candidate.id === bestDecision?.matchedPlaceId
    ))) {
@@ -3407,16 +3470,16 @@ export class DataLoaderManager implements AppModule {
  }
  } catch { /* saved-places unavailable — non-fatal */ }
 
+ if (this.ctx.isDestroyed) return;
  updateStormPreparednessContext({
- nwsAlerts: alerts,
  spcSummary,
  excessiveRainfallOutlooks,
  winterWeatherOutlooks,
  marineHazards,
  });
  } catch (error) {
+ if (this.ctx.isDestroyed) return;
  console.warn('[nws-alerts] fetch failed', error);
- (this.ctx.panels['nws-alerts'] as NWSAlertsPanel)?.update([]);
  }
   }
 
@@ -4443,10 +4506,10 @@ export class DataLoaderManager implements AppModule {
  try {
  const [raw, nwsResult, gdacsResult] = await Promise.all([
  fetchFAACameras(),
- withOfflineCache('nws-alerts', () => fetchNWSAlerts(), 1 * 60 * 60 * 1000),
+ fetchCachedNwsSnapshot(),
  withOfflineCache('gdacs-events', () => this.fetchVerifiedGDACSEvents(), 1 * 60 * 60 * 1000),
  ]);
- const scored = scoreCamerasAgainstAlerts(raw, nwsResult.data, gdacsResult.data);
+ const scored = scoreCamerasAgainstAlerts(raw, nwsResult.data.alerts, gdacsResult.data);
  this.ctx.map?.setFAACameras(scored);
  (this.ctx.panels['faa-weather-cams'] as FAAWeatherCamsPanel | undefined)?.refresh();
  const alertCams = scored.filter(c => c.alertProximityMi !== null);
@@ -4665,8 +4728,10 @@ export class DataLoaderManager implements AppModule {
    * outrun.
    */
   async loadUsgsSeismic(): Promise<void> {
+ const attempt = threatEvidence.begin('seismic', 'USGS earthquakes');
  try {
- const events = await fetchUsgsSeismicForFusion();
+ const snapshot = await fetchUsgsSeismicForFusion();
+ const { events } = snapshot;
  // ok comes from the ADAPTER's output, not the raw rows: a 200 whose rows
  // the adapter all drops is a format change, and recording it healthy would
  // put a phantom vote behind "verified by N independent sources". Empty is
@@ -4680,7 +4745,14 @@ export class DataLoaderManager implements AppModule {
  // difference is that a quiet internet is common and a silent planet is not.
  const observations = usgsEventsToObservations(events);
  recordDomainObservations('usgs-earthquakes', observations, observations.length > 0);
+ if (this.ctx.isDestroyed) return attempt.cancel();
+ if (!attempt.isCurrent()) return;
+ const receipt = this.seismicThreatHistory.admit(snapshot, Date.now());
+ if (receipt) attempt.report(receipt);
+ else attempt.fail();
  } catch (error) {
+ if (this.ctx.isDestroyed) attempt.cancel();
+ else attempt.fail();
  console.warn('[usgs-seismic] fetch failed', error);
  recordDomainObservations('usgs-earthquakes', [], false);
  }

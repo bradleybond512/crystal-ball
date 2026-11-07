@@ -251,3 +251,23 @@ test('router: the same alert id is sent natively again after a non-delivery, wit
     stop();
   }
 });
+
+test('a disposed pending router cannot subscribe later or disconnect its replacement', async () => {
+  const old = harness([]), current = harness([]);
+  const reactor = await import('../threat-reactor.ts');
+  reactor.__resetForTesting();
+  (globalThis as any).__wmReactorFingerprint = async () => FINGERPRINT;
+  const router = await import(new URL('../notification-router.ts?lifecycle', import.meta.url).href);
+  const stale = router.startNotificationRouter(routerDeps(old));
+  stale();
+  const stop = router.startNotificationRouter(routerDeps(current));
+  const shared = router.startNotificationRouter(routerDeps(current));
+  stale(); stop(); stop();
+  await untilSubscribed(reactor);
+  await ingestCycle(reactor, current, makeThreat({ indicator: 'new-instance' }));
+  assert.equal(old.native.length, 0, 'old router never attaches after disposal');
+  assert.equal(current.native.length, 1, 'second owner keeps exactly one subscription');
+  shared();
+  await ingestCycle(reactor, current, makeThreat({ indicator: 'after-release' }));
+  assert.equal(current.puts, 1, 'last owner released the subscription');
+});

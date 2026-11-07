@@ -112,7 +112,7 @@ export class TriageBar {
     // Any open preset popover belongs to the DOM we're about to replace —
     // close it first so its document-level listeners don't leak.
     this.presetMenuCleanup?.();
-    const all = rankAlerts(unifiedAlertStore.getAll());
+    const all = rankAlerts(unifiedAlertStore.getOperationalAlerts());
     const ranked = this.facet === 'all'
       ? all
       : all.filter(a => SOURCE_DOMAIN[a.source] === this.facet || a.source === 'correlation');

@@ -1,0 +1,74 @@
+{
+  "head": "27626b6d9a47ac6a3075da5ecdc4b7185e02c7db",
+  "stagedTree": "9d0cb54c0ac24460bdff3ccb5bef109f992f2fd5",
+  "mergeHead": "7b278de42a26954f2e4eb5ba60c9af2e6be0e691",
+  "actualMainRefUnmodified": "b7f5483089e30592163647f70626bf925305b62d",
+  "normalHooksNotRun": false,
+  "stagedPaths": [
+    ".agentic/reviews/6f78cebd9918efe6898728b70b7766d6b5f6ea75.json",
+    "docs/validation/UX-044-CRITICAL-ANNOUNCEMENTS.md",
+    "docs/validation/UX-049-ACTUAL-MAIN-CONTINUITY.json",
+    "docs/validation/UX-049-THREAT-COVERAGE.md",
+    "docs/validation/UX044-PREABORT-PENDING-CONTINUITY.json",
+    "src/services/synthesis/__tests__/transport-evidence.test.mts",
+    "src/services/synthesis/transport-evidence.ts"
+  ],
+  "changedExecutableHashes": {
+    "src/services/synthesis/transport-evidence.ts": "4562b19e426224da459d4c260de71dccb59aecf399bdbad3d53c75d667dd2bc2",
+    "src/services/synthesis/__tests__/transport-evidence.test.mts": "bda5567e1be92ae17c2f94ca292582aa278f97f9a7b9409001f74c07ad34b081"
+  },
+  "ownGeometryHashesUnchanged": {
+    "src/components/NotificationStack.ts": "0924eeaa8fa60ae16dfb7e59d60a60380edc6b3394974a3c32c4e02e7283f6a7",
+    "e2e/warning-stack-layout.mjs": "5e722172564b15614748877c5c71fc5235589409499dce3aaa75f6611854430a",
+    "e2e/summary-strip-layout.mjs": "13ceb8c762e07a433ad3e5a245b4e55af5299650de684d804ba79d36f1bc170d",
+    "src/components/__tests__/personal-storm-mode-shelf.test.mts": "0377422178ce6fb138262d858c57bdf66314c3eed7b96cd612fe9987dd7772a9"
+  },
+  "commonMutationReceipt": "/private/tmp/ux055-transport-refresh/continuity-and-mutation.json",
+  "commonReceiptSha256": "4279b60fe26358f865f1a5c63622b92519cb9cd40b57e79f1d88f65b76e1a306",
+  "reusedMutation": {
+    "source": "2a1643eb8af20571ed7b1a5aff78ee973cbb80d5",
+    "green": [
+      14,
+      0
+    ],
+    "red": [
+      8,
+      6
+    ],
+    "restored": [
+      14,
+      0
+    ],
+    "exactSourceAndTestHashesMatch": true,
+    "newMutationRun": false
+  },
+  "freshLight": {
+    "transport": [
+      14,
+      0
+    ],
+    "geometry": [
+      5,
+      0
+    ],
+    "summary": [
+      9,
+      0
+    ]
+  },
+  "logHashes": {
+    "transport.log": "214d8a8ea06446329312ce3a7a96da8364f0be18cb0dc307ad47508925a773ca",
+    "geometry.log": "502bbb133be40e9a48a53a98e21f776a12afd56dd99f3c4aadf3f6d4ede360d1",
+    "summary.log": "52cf63e82de56aa2ed61a5c52c23f90e5adba93f471795b3808353643bb62d98"
+  },
+  "limits": [
+    "Resolved merge committed with normal hooks; evidence-only follow-up does not change tested source",
+    "Old full build/lint receipts do not qualify changed helper/current build",
+    "Fresh unchanged aggregate/build and explicit lint:ci required before review",
+    "Native WebKit/full-app MONITOR unchanged",
+    "No model/verdict/push/merge to main/release/deploy/install"
+  ],
+  "committedSource": "e34b31282f5a286e9bd555d387ad574e4819dd2b",
+  "committedRootTree": "9d0cb54c0ac24460bdff3ccb5bef109f992f2fd5",
+  "normalCommitHooks": "Passed under Node22 and canonical user TMPDIR"
+}

@@ -45,6 +45,45 @@ jobs:
           script: |
             const fs = require('fs');
             const base = 'main';
+            async function readPullMetadata(number) {
+              if (!Number.isSafeInteger(number) || number < 1) throw new Error('invalid PR metadata number');
+              const result = await github.graphql(`
+                query RoadmapPullMetadata($owner: String!, $name: String!, $number: Int!) {
+                  repository(owner: $owner, name: $name) {
+                    pullRequest(number: $number) {
+                      number state baseRefName isDraft title body updatedAt mergedAt
+                    }
+                  }
+                }
+              `, { owner: context.repo.owner, name: context.repo.repo, number });
+              const pull = result?.repository?.pullRequest;
+              const validDate = (value) => {
+                if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value)) return false;
+                const timestamp = Date.parse(value);
+                return Number.isFinite(timestamp)
+                  && new Date(timestamp).toISOString() === (value.length === 20 ? value.replace('Z', '.000Z') : value);
+              };
+              if (result?.errors || !pull || pull.number !== number
+                || !['OPEN', 'CLOSED', 'MERGED'].includes(pull.state)
+                || typeof pull.baseRefName !== 'string' || !pull.baseRefName
+                || typeof pull.isDraft !== 'boolean'
+                || typeof pull.title !== 'string' || pull.title.length > 512
+                || typeof pull.body !== 'string' || pull.body.length > 131072
+                || !validDate(pull.updatedAt)
+                || (pull.state === 'MERGED' ? !validDate(pull.mergedAt) : pull.mergedAt !== null)) {
+                throw new Error(`PR #${number} returned invalid metadata`);
+              }
+              return {
+                number: pull.number,
+                state: pull.state === 'OPEN' ? 'open' : 'closed',
+                base: { ref: pull.baseRefName },
+                draft: pull.isDraft,
+                title: pull.title,
+                body: pull.body,
+                updated_at: pull.updatedAt,
+                merged_at: pull.mergedAt,
+              };
+            }
             const referenced = JSON.parse(fs.readFileSync(process.env.ROADMAP_REFERENCES_PATH, 'utf8'));
             if (!Array.isArray(referenced) || referenced.some((number) => !Number.isSafeInteger(number) || number < 1)) {
               throw new Error('roadmap reference export is invalid');
@@ -70,23 +109,14 @@ jobs:
             const eventType = context.eventName;
             let eventPull = null;
             if (eventType === 'pull_request') {
-              const { data } = await github.rest.pulls.get({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: context.payload.pull_request.number,
-              });
-              eventPull = data;
+              eventPull = await readPullMetadata(context.payload.pull_request.number);
               byNumber.delete(eventPull.number);
               if (eventPull.base.ref === base) byNumber.set(eventPull.number, eventPull);
             }
             for (const number of referenced) {
               if (byNumber.has(number)) continue;
               if (eventPull?.number === number) continue;
-              const { data } = await github.rest.pulls.get({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: number,
-              });
+              const data = await readPullMetadata(number);
               if (data.base.ref === base) byNumber.set(number, data);
             }
             const candidatePrNumbers = [];
@@ -189,6 +219,45 @@ jobs:
           script: |
             const fs = require('fs');
             const base = 'main';
+            async function readPullMetadata(number) {
+              if (!Number.isSafeInteger(number) || number < 1) throw new Error('invalid PR metadata number');
+              const result = await github.graphql(`
+                query RoadmapPullMetadata($owner: String!, $name: String!, $number: Int!) {
+                  repository(owner: $owner, name: $name) {
+                    pullRequest(number: $number) {
+                      number state baseRefName isDraft title body updatedAt mergedAt
+                    }
+                  }
+                }
+              `, { owner: context.repo.owner, name: context.repo.repo, number });
+              const pull = result?.repository?.pullRequest;
+              const validDate = (value) => {
+                if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value)) return false;
+                const timestamp = Date.parse(value);
+                return Number.isFinite(timestamp)
+                  && new Date(timestamp).toISOString() === (value.length === 20 ? value.replace('Z', '.000Z') : value);
+              };
+              if (result?.errors || !pull || pull.number !== number
+                || !['OPEN', 'CLOSED', 'MERGED'].includes(pull.state)
+                || typeof pull.baseRefName !== 'string' || !pull.baseRefName
+                || typeof pull.isDraft !== 'boolean'
+                || typeof pull.title !== 'string' || pull.title.length > 512
+                || typeof pull.body !== 'string' || pull.body.length > 131072
+                || !validDate(pull.updatedAt)
+                || (pull.state === 'MERGED' ? !validDate(pull.mergedAt) : pull.mergedAt !== null)) {
+                throw new Error(`PR #${number} returned invalid metadata`);
+              }
+              return {
+                number: pull.number,
+                state: pull.state === 'OPEN' ? 'open' : 'closed',
+                base: { ref: pull.baseRefName },
+                draft: pull.isDraft,
+                title: pull.title,
+                body: pull.body,
+                updated_at: pull.updatedAt,
+                merged_at: pull.mergedAt,
+              };
+            }
             const referenced = JSON.parse(fs.readFileSync(process.env.ROADMAP_REFERENCES_PATH, 'utf8'));
             if (!Array.isArray(referenced) || referenced.some((number) => !Number.isSafeInteger(number) || number < 1)) {
               throw new Error('roadmap reference export is invalid');
@@ -213,11 +282,7 @@ jobs:
             const byNumber = new Map(open.map((pull) => [pull.number, pull]));
             for (const number of referenced) {
               if (byNumber.has(number)) continue;
-              const { data } = await github.rest.pulls.get({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: number,
-              });
+              const data = await readPullMetadata(number);
               if (data.base.ref === base) byNumber.set(number, data);
             }
             if (byNumber.size > 512) throw new Error('complete PR snapshot exceeds 512 entries');

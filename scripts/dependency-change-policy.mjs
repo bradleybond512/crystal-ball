@@ -35,6 +35,7 @@ export const SENSITIVE_PATTERNS = Object.freeze([
   { re: /^\.github\/CODEOWNERS$/, why: 'code owners' },
   { re: /^\.github\/tools\//, why: 'CI tool pins' },
   { re: /^\.github\/mcp\.json$/, why: 'agent MCP server pins' },
+  { re: /^scripts\/audit-npm-locks\.mjs$/, why: 'supply-chain gate' },
   { re: /^scripts\/check-install-script-drift\.mjs$/, why: 'supply-chain gate' },
   { re: /^scripts\/check-dependency-age\.mjs$/, why: 'supply-chain gate' },
   { re: /^scripts\/dependency-change-policy\.mjs$/, why: 'supply-chain gate' },

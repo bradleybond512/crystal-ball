@@ -1,0 +1,726 @@
+{
+  "task": "UX-053 held-branch rehearsal",
+  "head": "7efdff90cd05a676f90cefa9e9c841b6a8464cc9",
+  "headTree": "cb76564d4e101d2e145923d9f14ac6984f64ad0f",
+  "testedCandidateSnapshot": "6da0dbff0bc3aadda3aa1c864752a164cb004537",
+  "testedCandidateTree": "cb76564d4e101d2e145923d9f14ac6984f64ad0f",
+  "reachableTreeDiff": "",
+  "heldRefs": [
+    {
+      "autoMergeRequest": null,
+      "headRefName": "codex/ux047-warning-freshness-nov1",
+      "headRefOid": "2416345f69c0f42eedc78d309744666a331a9ccf",
+      "isDraft": true,
+      "number": 1844
+    },
+    {
+      "autoMergeRequest": null,
+      "headRefName": "codex/ux050-ghost-suppression",
+      "headRefOid": "8cb24ef20b1a72564e582b9f6627d86f26e7a9eb",
+      "isDraft": true,
+      "number": 1846
+    },
+    {
+      "autoMergeRequest": null,
+      "headRefName": "codex/ux052-derived-interruptions",
+      "headRefOid": "16d2c73aa85e80cb551b08a5900f7c348d305787",
+      "isDraft": true,
+      "number": 1847
+    }
+  ],
+  "originalHeldTree": "40311703dc2f6dfac6549f27aa498aaa2a686129",
+  "resolvedHeldTree": "8683235aa7d5413f26db11332a127def567f8ce8",
+  "fourUnresolvedTree": "91f975f1a917f20fca4c05c00a62ed15d00fe629",
+  "fourResolvedTree": "7633622f9b227f74f8b65489f1091704c13329ee",
+  "conflicts": [
+    "docs/USABILITY_UPLIFT_FOR_CODEX.md",
+    "scripts/targeted-tests-overrides.json",
+    "src/app/data-loader.ts",
+    "src/main.ts"
+  ],
+  "changesAppliedToConflictTree": [
+    "docs/USABILITY_UPLIFT_FOR_CODEX.md",
+    "scripts/targeted-tests-overrides.json",
+    "src/App.ts",
+    "src/app/__tests__/boot-workspace.test.mts",
+    "src/app/__tests__/startup-acquisition.test.mts",
+    "src/app/data-loader.ts",
+    "src/main.ts"
+  ],
+  "cachedIndexPatchReplayVerified": true,
+  "scope": "# UX-053 integration rehearsal\n\nThe published inputs are draft #1844 at `2416345f6`, #1846 at `8cb24ef20` and #1847 at `16d2c73aa`. Their code was combined only in a disposable worktree. The resolved held tree reuses the four previously verified UX-052 reconciliation blobs. The later published commits from the two draft tips changed evidence, verdicts and a separately verified logistics test. The held product source otherwise matches the earlier UX-052 integration.\n\nWhen composing #1848, preserve the normal entry's `appStartup` promise for both the UX-050 early failure notice and the UX-053 actionable retry. Preserve both tracker rows and the union of CI test mappings. Move #1844's existing registration for `nwsAlerts` before the initial source wave and out of the bulk interval list. Keep the five-minute interval, full-variant predicate, in-flight key, Ghost/cadence multipliers, and follow-up timer after success. Keep #1844's authoritative NWS snapshot route and post-fetch disposal checks from both branches. Include a check on rejected late refreshes before changing availability. Adjust the independent acquisition test fixture to provide the actual v1 snapshot and lifecycle interfaces; it observes the extra early projection and retained history independently from the ancillary context.\n\n`lifecycle.mjs` executes the three combined snapshot methods, substituting external leaf dependencies but preserving method and await order. Resolving or rejecting held snapshot, ancillary, zone or prewarm boundaries after disposal produces no late store/panel/prediction/context writes. The active control acquires and projects a snapshot, emits its storm decision, and schedules a matched prewarm.\n\n`build.mjs` instruments the production full web entry and scheduler, intercepting guarded data sources. `browser.mjs` loads the emitted application in fresh Chromium contexts. Clock callbacks are driven at the actual computed interval with deterministic zero jitter. Results are elapsed eligibility boundaries, not a real 25-minute soak. In each run the news leaf stays pending, and the first NWS request has its own independent release. The real refresh scheduler skips a concurrent tick, then executes exactly one refresh on the next eligible tick. Normal cadence is five minutes; saved Ghost cadence is twenty-five minutes. A burst of 100 real derived candidates results in one silent non-sticky synthetic OS constructor in normal mode and zero constructors/100 held counts in Ghost. When the mode-key read is unavailable and app initialization fails, the test inspects the visible failure notice and retry. All source and OS transports are local stubs, external network denied, no real sends or user profiles.\n\nThe artifact certificates identify input and output Git tree hashes, observed checks, test output, fixture hashes and reconciliation patch hashes. Use the patches only with their exact input and conflict trees in a disposable checkout. Any later branch update requires fresh reconciliation and testing.\n\n## Recreate from reviewed inputs\n\nUse a disposable folder for both the held and final worktrees. Resolve each PR head from the certificate. Run `base.sh evidence-dir disposable-dir` in this clone with its historical UX-052 tree available. Confirm the printed held tree. From the detached held commit run `git merge-tree --write-tree HEAD 7efdff90cd05a676f90cefa9e9c841b6a8464cc9`. A conflict exit is expected. Compare the first line to `fourUnresolvedTree`. Run `git read-tree --reset -u <fourUnresolvedTree>`, then `git apply --index <path-to-UX053-INTEGRATION.patch>`. Verify `git write-tree` against `fourResolvedTree` before invoking any check. The separate held-resolution patch can reconstruct the earlier tree when regenerating the inputs on a different clone.",
+  "preliminaryResult": {
+    "firstCompetingLoadAttempt": "Instrumented production web run timed out before the first controlled admission (45s); assertions were not reached. Isolated repeat passed all 29 checks. All exact candidate checks below were repeated.",
+    "preliminaryCode": "790edce9bbd6656a2f6240a196a70b29aedda0d4"
+  },
+  "normalBrowserResults": {
+    "success": true,
+    "expected": "early",
+    "version": "156.0.8078.80",
+    "cases": [
+      {
+        "mode": "normal",
+        "before": {
+          "delays": [
+            300000
+          ],
+          "registrations": 1,
+          "bulk": 0,
+          "nwsCalls": 0,
+          "errs": []
+        },
+        "after": {
+          "delays": [
+            300000,
+            300000,
+            300000
+          ],
+          "registrations": 1,
+          "bulk": 1,
+          "nwsCalls": 1,
+          "errs": []
+        },
+        "burst": {
+          "sent": 1,
+          "muted": 0,
+          "options": [
+            {
+              "silent": true,
+              "sticky": false
+            }
+          ]
+        },
+        "errors": [],
+        "intercepted": 20
+      },
+      {
+        "mode": "ghost",
+        "before": {
+          "delays": [
+            1500000
+          ],
+          "registrations": 1,
+          "bulk": 0,
+          "nwsCalls": 0,
+          "errs": []
+        },
+        "after": {
+          "delays": [
+            1500000,
+            1500000,
+            1500000
+          ],
+          "registrations": 1,
+          "bulk": 1,
+          "nwsCalls": 1,
+          "errs": []
+        },
+        "burst": {
+          "sent": 0,
+          "muted": 100,
+          "options": []
+        },
+        "errors": [],
+        "intercepted": 20
+      },
+      {
+        "mode": "fatal",
+        "errors": [],
+        "intercepted": 1
+      }
+    ],
+    "checks": [
+      {
+        "name": "normal: early NWS timer registered",
+        "actual": 1,
+        "expected": 1
+      },
+      {
+        "name": "normal: bulk remains deferred",
+        "actual": 0,
+        "expected": 0
+      },
+      {
+        "name": "normal: initial NWS interval",
+        "actual": [
+          300000
+        ],
+        "expected": [
+          300000
+        ]
+      },
+      {
+        "name": "normal: in-flight initial NWS prevents concurrent refresh",
+        "actual": 0,
+        "expected": 0
+      },
+      {
+        "name": "normal: eligible NWS refresh executes with unrelated news still stalled",
+        "actual": 1,
+        "expected": 1
+      },
+      {
+        "name": "normal: normal or Ghost cadence retained after both ticks",
+        "actual": [
+          300000,
+          300000,
+          300000
+        ],
+        "expected": [
+          300000,
+          300000,
+          300000
+        ]
+      },
+      {
+        "name": "normal: derived burst policy holds before full wave",
+        "actual": 1,
+        "expected": 1
+      },
+      {
+        "name": "normal: Ghost hold counted once per candidate",
+        "actual": 0,
+        "expected": 0
+      },
+      {
+        "name": "normal: non-sticky silent banner options",
+        "actual": [
+          {
+            "silent": true,
+            "sticky": false
+          }
+        ],
+        "expected": [
+          {
+            "silent": true,
+            "sticky": false
+          }
+        ]
+      },
+      {
+        "name": "normal: NWS exactly once after full wave",
+        "actual": 1,
+        "expected": 1
+      },
+      {
+        "name": "normal: no permission prompts",
+        "actual": 0,
+        "expected": 0
+      },
+      {
+        "name": "normal: no uncaught errors",
+        "actual": [],
+        "expected": []
+      },
+      {
+        "name": "ghost: early NWS timer registered",
+        "actual": 1,
+        "expected": 1
+      },
+      {
+        "name": "ghost: bulk remains deferred",
+        "actual": 0,
+        "expected": 0
+      },
+      {
+        "name": "ghost: initial NWS interval",
+        "actual": [
+          1500000
+        ],
+        "expected": [
+          1500000
+        ]
+      },
+      {
+        "name": "ghost: in-flight initial NWS prevents concurrent refresh",
+        "actual": 0,
+        "expected": 0
+      },
+      {
+        "name": "ghost: eligible NWS refresh executes with unrelated news still stalled",
+        "actual": 1,
+        "expected": 1
+      },
+      {
+        "name": "ghost: normal or Ghost cadence retained after both ticks",
+        "actual": [
+          1500000,
+          1500000,
+          1500000
+        ],
+        "expected": [
+          1500000,
+          1500000,
+          1500000
+        ]
+      },
+      {
+        "name": "ghost: derived burst policy holds before full wave",
+        "actual": 0,
+        "expected": 0
+      },
+      {
+        "name": "ghost: Ghost hold counted once per candidate",
+        "actual": 100,
+        "expected": 100
+      },
+      {
+        "name": "ghost: NWS exactly once after full wave",
+        "actual": 1,
+        "expected": 1
+      },
+      {
+        "name": "ghost: no permission prompts",
+        "actual": 0,
+        "expected": 0
+      },
+      {
+        "name": "ghost: no uncaught errors",
+        "actual": [],
+        "expected": []
+      },
+      {
+        "name": "fatal recovery notice visible",
+        "actual": true,
+        "expected": true
+      },
+      {
+        "name": "fatal boot has one early recovery notice",
+        "actual": 1,
+        "expected": 1
+      },
+      {
+        "name": "combined fatal workspace offers one usable retry",
+        "actual": 1,
+        "expected": 1
+      },
+      {
+        "name": "combined retry visibly available",
+        "actual": true,
+        "expected": true
+      },
+      {
+        "name": "fatal boot acquires no source",
+        "actual": 0,
+        "expected": 0
+      },
+      {
+        "name": "fatal boot makes no notification attempt",
+        "actual": 0,
+        "expected": 0
+      }
+    ]
+  },
+  "heldBrowserControl": {
+    "success": true,
+    "expected": "late",
+    "version": "156.0.8078.80",
+    "cases": [
+      {
+        "mode": "normal",
+        "before": {
+          "delays": [],
+          "registrations": 0,
+          "bulk": 0,
+          "nwsCalls": 0,
+          "errs": []
+        },
+        "after": {
+          "delays": [
+            300000
+          ],
+          "registrations": 1,
+          "bulk": 1,
+          "nwsCalls": 0,
+          "errs": []
+        },
+        "burst": {
+          "sent": 1,
+          "muted": 0,
+          "options": [
+            {
+              "silent": true,
+              "sticky": false
+            }
+          ]
+        },
+        "errors": [],
+        "intercepted": 20
+      },
+      {
+        "mode": "ghost",
+        "before": {
+          "delays": [],
+          "registrations": 0,
+          "bulk": 0,
+          "nwsCalls": 0,
+          "errs": []
+        },
+        "after": {
+          "delays": [
+            1500000
+          ],
+          "registrations": 1,
+          "bulk": 1,
+          "nwsCalls": 0,
+          "errs": []
+        },
+        "burst": {
+          "sent": 0,
+          "muted": 100,
+          "options": []
+        },
+        "errors": [],
+        "intercepted": 20
+      },
+      {
+        "mode": "fatal",
+        "errors": [],
+        "intercepted": 1
+      }
+    ],
+    "checks": [
+      {
+        "name": "normal: early NWS timer registered",
+        "actual": 0,
+        "expected": 0
+      },
+      {
+        "name": "normal: bulk remains deferred",
+        "actual": 0,
+        "expected": 0
+      },
+      {
+        "name": "normal: derived burst policy holds before full wave",
+        "actual": 1,
+        "expected": 1
+      },
+      {
+        "name": "normal: Ghost hold counted once per candidate",
+        "actual": 0,
+        "expected": 0
+      },
+      {
+        "name": "normal: non-sticky silent banner options",
+        "actual": [
+          {
+            "silent": true,
+            "sticky": false
+          }
+        ],
+        "expected": [
+          {
+            "silent": true,
+            "sticky": false
+          }
+        ]
+      },
+      {
+        "name": "normal: NWS exactly once after full wave",
+        "actual": 1,
+        "expected": 1
+      },
+      {
+        "name": "normal: no permission prompts",
+        "actual": 0,
+        "expected": 0
+      },
+      {
+        "name": "normal: no uncaught errors",
+        "actual": [],
+        "expected": []
+      },
+      {
+        "name": "ghost: early NWS timer registered",
+        "actual": 0,
+        "expected": 0
+      },
+      {
+        "name": "ghost: bulk remains deferred",
+        "actual": 0,
+        "expected": 0
+      },
+      {
+        "name": "ghost: derived burst policy holds before full wave",
+        "actual": 0,
+        "expected": 0
+      },
+      {
+        "name": "ghost: Ghost hold counted once per candidate",
+        "actual": 100,
+        "expected": 100
+      },
+      {
+        "name": "ghost: NWS exactly once after full wave",
+        "actual": 1,
+        "expected": 1
+      },
+      {
+        "name": "ghost: no permission prompts",
+        "actual": 0,
+        "expected": 0
+      },
+      {
+        "name": "ghost: no uncaught errors",
+        "actual": [],
+        "expected": []
+      },
+      {
+        "name": "fatal recovery notice visible",
+        "actual": true,
+        "expected": true
+      },
+      {
+        "name": "fatal boot has one early recovery notice",
+        "actual": 1,
+        "expected": 1
+      },
+      {
+        "name": "fatal boot acquires no source",
+        "actual": 0,
+        "expected": 0
+      },
+      {
+        "name": "fatal boot makes no notification attempt",
+        "actual": 0,
+        "expected": 0
+      }
+    ]
+  },
+  "lateNws": {
+    "control": {
+      "checks": [
+        {
+          "name": "live control exercised store,panel,prediction,storm and prewarm",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "refresh leaves no post-teardown external effects",
+          "actual": [],
+          "expected": [],
+          "pass": true
+        },
+        {
+          "name": "refresh preserves prior cache",
+          "actual": null,
+          "expected": null,
+          "pass": true
+        },
+        {
+          "name": "refresh preserves prior evidence state",
+          "actual": false,
+          "expected": false,
+          "pass": true
+        },
+        {
+          "name": "refresh-rejected leaves no post-teardown external effects",
+          "actual": [],
+          "expected": [],
+          "pass": true
+        },
+        {
+          "name": "refresh-rejected preserves prior cache",
+          "actual": null,
+          "expected": null,
+          "pass": true
+        },
+        {
+          "name": "refresh-rejected preserves prior evidence state",
+          "actual": true,
+          "expected": false,
+          "pass": false
+        },
+        {
+          "name": "ancillary leaves no post-teardown external effects",
+          "actual": [
+            "prediction",
+            "route",
+            "storm-event",
+            "context",
+            "prewarm"
+          ],
+          "expected": [],
+          "pass": false
+        },
+        {
+          "name": "zones leaves no post-teardown external effects",
+          "actual": [
+            "route",
+            "storm-event",
+            "context",
+            "prewarm"
+          ],
+          "expected": [],
+          "pass": false
+        },
+        {
+          "name": "prewarm leaves no post-teardown external effects",
+          "actual": [
+            "prewarm"
+          ],
+          "expected": [],
+          "pass": false
+        }
+      ],
+      "failed": 4
+    },
+    "reconciled": {
+      "checks": [
+        {
+          "name": "live control exercised store,panel,prediction,storm and prewarm",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "refresh leaves no post-teardown external effects",
+          "actual": [],
+          "expected": [],
+          "pass": true
+        },
+        {
+          "name": "refresh preserves prior cache",
+          "actual": null,
+          "expected": null,
+          "pass": true
+        },
+        {
+          "name": "refresh preserves prior evidence state",
+          "actual": false,
+          "expected": false,
+          "pass": true
+        },
+        {
+          "name": "refresh-rejected leaves no post-teardown external effects",
+          "actual": [],
+          "expected": [],
+          "pass": true
+        },
+        {
+          "name": "refresh-rejected preserves prior cache",
+          "actual": null,
+          "expected": null,
+          "pass": true
+        },
+        {
+          "name": "refresh-rejected preserves prior evidence state",
+          "actual": false,
+          "expected": false,
+          "pass": true
+        },
+        {
+          "name": "ancillary leaves no post-teardown external effects",
+          "actual": [],
+          "expected": [],
+          "pass": true
+        },
+        {
+          "name": "zones leaves no post-teardown external effects",
+          "actual": [],
+          "expected": [],
+          "pass": true
+        },
+        {
+          "name": "prewarm leaves no post-teardown external effects",
+          "actual": [],
+          "expected": [],
+          "pass": true
+        }
+      ],
+      "failed": 0
+    }
+  },
+  "commands": {
+    "UX053": "npm run test:ux053",
+    "UX047": "npm run test:ux047",
+    "UX050": "npm run test:ux050",
+    "UX052": "npm run test:ux052",
+    "typecheck": "npm run typecheck:all",
+    "cohort": "node_modules/.bin/tsx --test src/services/__tests__/{derived-alert-reactions,derived-notification-policy,ghost-mode-state,ghost-notification-policy,notification-dispatcher-trace,nws-alert-lifecycle}.test.mts tests/ux047/{operational-consumers,nws-ui-loader}.test.mts"
+  },
+  "routerSupplementFixtureSha256": "3088ecc783946afe0573e9e6b35e67fdaf7222197db3e7f5b91d6ea1f46c74d3",
+  "testOutput": {
+    "held-suites": [
+      "# tests 102",
+      "# pass 102",
+      "# fail 0",
+      "# skipped 0"
+    ],
+    "final-ux053": [
+      "# tests 1",
+      "# pass 1",
+      "# fail 0",
+      "# skipped 0",
+      "# tests 69",
+      "# pass 69",
+      "# fail 0",
+      "# skipped 0"
+    ],
+    "final-cohort": [
+      "# tests 102",
+      "# pass 102",
+      "# fail 0",
+      "# skipped 0"
+    ],
+    "final-047": [
+      "# tests 124",
+      "# pass 124",
+      "# fail 0",
+      "# skipped 0"
+    ],
+    "final-050": [
+      "# tests 65",
+      "# pass 65",
+      "# fail 0",
+      "# skipped 0",
+      "# tests 4",
+      "# pass 4",
+      "# fail 0",
+      "# skipped 0",
+      "[pwa:budget] 468 entries, 21.92 MiB",
+      "# tests 2",
+      "# pass 2",
+      "# fail 0",
+      "# skipped 0"
+    ],
+    "final-052": [
+      "# tests 117",
+      "# pass 117",
+      "# fail 0",
+      "# skipped 0"
+    ],
+    "final-router-supplement": [
+      "# tests 18",
+      "# pass 18",
+      "# fail 0",
+      "# skipped 0"
+    ]
+  },
+  "typecheckExit": 0,
+  "artifactSha256": {
+    "base.sh": "d3926ac181e09c54288f0953dc10bf8ece35af489f082cfe564c9bc8cd867be5",
+    "resolve.py": "932209fa366fcb4278d029d791cc5288dde59f2badf88a7ebe065795ba80f567",
+    "lifecycle.mjs": "8c1bacc19143db3c259d06e368580e01019d126fa2b9bf57b292e0af105d9640",
+    "build.mjs": "1e42314acbd6a8133b0ba9996ea30fb55ca0c57e716b9e4285c15542e8475bf7",
+    "browser.mjs": "f65571a0f67fa6ecd1bb7f2fe4e9ce2ba86b5f1d1bf36d3e0fef41776845df75",
+    "pin-final.py": "582e7c4952dc559f93afc2c866ddaa86a358325b4a2b50f6826787d41f1e16d8",
+    "reproduce.md": "a6c5bbab13d81de6e3da034760e86ef708029a92be10341c3e667df1b3ef8d15",
+    "replay-final.sh": "def34a5d4fb2921bc7e97d91265e3f1ea27136cfdeff7f9a9fbb5735b031aa5e",
+    "UX053-INTEGRATION.patch": "1bf5c1002b3d4298fcf009bdaa8d0b662cc6c1e64b067315d2bc51ccee0ee33a",
+    "reconcile-published.patch": "db8610f2fa32ff6eb10fd0a87f0f454d5e1a13e11d4fa67985b3636122f28655",
+    "held-control.json": "bdc080db3b3bb475ba20c21f918a71402d9f76917aa197d0fd63d2f40851e7e0",
+    "reachable-browser.json": "b7d8601a1db57cb296c2e82e19a18237bd1e6a999d1202aa9f97f72a326f23b8",
+    "life-before.json": "b67b75917c832e2a5a69650a8bb1a8c6363b470713b7d165e3922cbaeb2e7db4",
+    "life-integrated.json": "44fd64a23270b7c1f08ef384ba9ab5f9fd938a586883dda1d95be9feb3e75107",
+    "final-typecheck.log": "3b3e27d9fae309fc366c488cecd898cb5c4c542c041e3641d2b9acae10e8cae2",
+    "held-suites.log": "53352e2489bc3f6846918105486b3ae34f3f8c8b26f0db2df7df1ce23a8d03be",
+    "final-ux053.log": "b4cf958d14d4d7a8b53123882f23c392bbfda188c282eb159ab08065eb890523",
+    "final-cohort.log": "19aea86f389b4dd04516517edacdffe3bd70b34a31eed1e9c45260f53046f033",
+    "final-047.log": "3bed7c003e53c855f9304253a3dd601db9324f66a32863de1fc824217a0c4290",
+    "final-050.log": "9b4a4cf652ebdde57837ed0a19306aa448549df58c63bf0605aa769c27137a3d",
+    "final-052.log": "75acf09ebc4ceb5b7c5f0fea21db6bc1554371bf121a80e0f8be13283b1e64d8",
+    "final-router-supplement.log": "9eef1aba43a58e0ac20aff449e4152f64589a80f2a1f3026f9c1d8f4859c02a3"
+  }
+}

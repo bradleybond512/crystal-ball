@@ -38,6 +38,7 @@ import {
   mineLeadLag,
   type InhibitoryLeadLagEdge,
   type LeadLagEdge,
+  type LeadLagMiningResult,
   type MultipleTestingFamily,
 } from './lead-lag';
 import {
@@ -218,7 +219,29 @@ export interface BenchLearnedPairRow {
   emissions: BenchPairEmission[];
 }
 
+export interface BenchBoundaryRecall {
+  from: string;
+  to: string;
+  windowMs: number;
+  support: number;
+  antecedents: number;
+  lift: number | null;
+  zScore: number | null;
+  adjustedPValue: number | null;
+  alpha: number;
+  eligibleOrderedPairs: number;
+  posteriorProbability: number | null;
+  expectedUtility: number | null;
+  admitted: boolean;
+  becameLearnedRule: boolean;
+  bindingGate: 'holm-adjusted-p';
+  alphaUtilization: number | null;
+  posteriorSlack: number | null;
+  utilitySlack: number | null;
+}
+
 export interface CorrelationBenchReport {
+  boundaryRecall: BenchBoundaryRecall[];
   // ── corpus identity (exact-equality drift detection) ──
   replayMode: 'offline-whole-corpus';
   streamCount: number;
@@ -422,6 +445,27 @@ export interface CorrelationBenchReport {
   learnedPairs: BenchLearnedPairRow[];
 }
 
+function boundaryRecallRows(mining: LeadLagMiningResult, learnedIds: Set<string>): BenchBoundaryRecall[] {
+  const family = mining.family!;
+  return mining.candidates
+    .filter(edge => edge.from === 'boundary-a' && edge.to === 'boundary-b' && edge.effect === 'promoting')
+    .map(edge => ({
+      from: edge.from, to: edge.to, windowMs: edge.windowMs,
+      support: edge.support, antecedents: edge.antecedents,
+      lift: finiteOrNull(edge.lift), zScore: finiteOrNull(edge.zScore),
+      adjustedPValue: finiteOrNull(edge.adjustedPValue ?? Number.NaN),
+      alpha: family.alpha, eligibleOrderedPairs: family.eligibleOrderedPairs,
+      posteriorProbability: finiteOrNull(edge.posteriorProbability ?? Number.NaN),
+      expectedUtility: finiteOrNull(edge.expectedUtility ?? Number.NaN),
+      admitted: mining.promoting.some(selected => selected.from === edge.from && selected.to === edge.to && selected.windowMs === edge.windowMs),
+      becameLearnedRule: learnedIds.has(learnedRuleId(edge)),
+      bindingGate: 'holm-adjusted-p',
+      alphaUtilization: finiteOrNull((edge.adjustedPValue ?? Number.NaN) / family.alpha),
+      posteriorSlack: finiteOrNull((edge.posteriorProbability ?? Number.NaN) - .8),
+      utilitySlack: finiteOrNull(edge.expectedUtility ?? Number.NaN),
+    }));
+}
+
 export function runCorrelationBenchmark(): CorrelationBenchReport {
   const observations = allGoldenObservations();
   const truePairs = plantedTruePairKeys();
@@ -550,6 +594,7 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
   );
 
   return {
+    boundaryRecall: boundaryRecallRows(mining, learnedIds),
     replayMode: 'offline-whole-corpus',
     streamCount: GOLDEN_STREAMS.length,
     observationCount: observations.length,

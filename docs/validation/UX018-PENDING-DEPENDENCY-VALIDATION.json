@@ -1,0 +1,1899 @@
+{
+  "executionHead": "838c61bca42cfde125ac33107a97804656e24d36",
+  "baseline": "4b047a1288291fd4f030985b26878c28b28b38d5",
+  "pendingDependency": "6adfee497df1a1b9b5b99b581a63899e1cdeaaba",
+  "node": "v22.23.1",
+  "tmpdir": "/private/var/folders/qt/hq7cydbd06d6g0yksx3mxm3c0000gn/T",
+  "selectedCount": 112,
+  "status": "pending-dependency conservative superset; not actual-main acceptance",
+  "selectorSha256": "b1cf2ebb917248edaa8bb1033b853da14d5b0a0970f58f7522ad17b7a4d83070",
+  "selectorBaseAfter": "4b047a1288291fd4f030985b26878c28b28b38d5",
+  "aggregateCommand": "bash scripts/agentic-validate.sh --tests 'test:ux018 test:ux053 test:ux047 test:ux058 test:ux052'",
+  "aggregateExit": 0,
+  "selectorExit": 0,
+  "aggregateConclusion": "Agentic validation gate passed.",
+  "selectorConclusion": "[targeted-tests] 112 script(s) passed.",
+  "commands": [
+    {
+      "script": "test:acc509",
+      "mainCommand": "tsx --test src/services/__tests__/alert-identity.test.mts src/services/__tests__/unified-alerts-identity.test.mts src/services/__tests__/lsr-alert-identity.test.mts src/services/__tests__/acc509-replay.test.mts tests/intelligence/situation-engine-identity.test.mts tests/intelligence/compound-episode-identity.test.mts tests/intelligence/situation-geography-consumers.test.mts tests/components/situation-panel-delegation.test.mts",
+      "prCommand": "tsx --test src/services/__tests__/alert-identity.test.mts src/services/__tests__/unified-alerts-identity.test.mts src/services/__tests__/lsr-alert-identity.test.mts src/services/__tests__/acc509-replay.test.mts tests/intelligence/situation-engine-identity.test.mts tests/intelligence/compound-episode-identity.test.mts tests/intelligence/situation-geography-consumers.test.mts tests/components/situation-panel-delegation.test.mts"
+    },
+    {
+      "script": "test:acc510",
+      "mainCommand": "tsx --test src/services/__tests__/acc510-news-domain.test.mts src/services/__tests__/acc510-news-producers.test.mts src/services/__tests__/acc510-news-handoff.test.mts src/services/__tests__/acc510-news-replay.test.mts src/services/__tests__/acc510-situation-domains.test.mts src/services/__tests__/acc510-analyst-domain-path.test.mts tests/intelligence/acc510-neutral-consumers.test.mts tests/components/situation-panel-delegation.test.mts",
+      "prCommand": "tsx --test src/services/__tests__/acc510-news-domain.test.mts src/services/__tests__/acc510-news-producers.test.mts src/services/__tests__/acc510-news-handoff.test.mts src/services/__tests__/acc510-news-replay.test.mts src/services/__tests__/acc510-situation-domains.test.mts src/services/__tests__/acc510-analyst-domain-path.test.mts tests/intelligence/acc510-neutral-consumers.test.mts tests/components/situation-panel-delegation.test.mts"
+    },
+    {
+      "script": "test:agentic-pipeline",
+      "mainCommand": "tsx --test tests/agentic-pipeline.test.mjs",
+      "prCommand": "tsx --test tests/agentic-pipeline.test.mjs"
+    },
+    {
+      "script": "test:airquality",
+      "mainCommand": "tsx --test src/services/airquality/__tests__/purpleair-helpers.test.mts src/services/airquality/__tests__/airquality-fusion-observations.test.mts src/services/airquality/__tests__/purpleair-fusion-fetch.test.mts src/services/airquality/__tests__/air-quality-callout-bridge.test.mts && node --test src-tauri/sidecar/__tests__/purpleair-route-guards.test.mjs",
+      "prCommand": "tsx --test src/services/airquality/__tests__/purpleair-helpers.test.mts src/services/airquality/__tests__/airquality-fusion-observations.test.mts src/services/airquality/__tests__/purpleair-fusion-fetch.test.mts src/services/airquality/__tests__/air-quality-callout-bridge.test.mts && node --test src-tauri/sidecar/__tests__/purpleair-route-guards.test.mjs"
+    },
+    {
+      "script": "test:alert-capacity",
+      "mainCommand": "tsx --test src/services/__tests__/unified-alerts-capacity.test.mts",
+      "prCommand": "tsx --test src/services/__tests__/unified-alerts-capacity.test.mts"
+    },
+    {
+      "script": "test:alert-deduplication",
+      "mainCommand": "tsx --test src/services/intelligence/__tests__/alert-deduplication.test.mts",
+      "prCommand": "tsx --test src/services/intelligence/__tests__/alert-deduplication.test.mts"
+    },
+    {
+      "script": "test:algorithms",
+      "mainCommand": "tsx --test src/services/algorithms/__tests__/*.test.mts src/services/__tests__/military-patterns.test.mts",
+      "prCommand": "tsx --test src/services/algorithms/__tests__/*.test.mts src/services/__tests__/military-patterns.test.mts"
+    },
+    {
+      "script": "test:analysis-worker",
+      "mainCommand": "tsx --import ./tests/panels/register-hook.mjs --test tests/services/analysis-worker.test.mts src/services/diagnostics/__tests__/analysis-input.test.mts",
+      "prCommand": "tsx --import ./tests/panels/register-hook.mjs --test tests/services/analysis-worker.test.mts src/services/diagnostics/__tests__/analysis-input.test.mts"
+    },
+    {
+      "script": "test:analytics-consent",
+      "mainCommand": "tsx --test src/services/__tests__/analytics-consent.test.mts src/services/__tests__/analytics-sdk-lifecycle.test.mjs src/components/__tests__/analytics-reset-notice.test.mts src/components/__tests__/shell-a11y-contracts.test.mts",
+      "prCommand": "tsx --test src/services/__tests__/analytics-consent.test.mts src/services/__tests__/analytics-sdk-lifecycle.test.mjs src/components/__tests__/analytics-reset-notice.test.mts src/components/__tests__/shell-a11y-contracts.test.mts"
+    },
+    {
+      "script": "test:analytics-lifecycle",
+      "mainCommand": "tsx --test src/services/__tests__/analytics-sdk-lifecycle.test.mjs src/components/__tests__/analytics-reset-notice.test.mts",
+      "prCommand": "tsx --test src/services/__tests__/analytics-sdk-lifecycle.test.mjs src/components/__tests__/analytics-reset-notice.test.mts"
+    },
+    {
+      "script": "test:briefing-scheduler",
+      "mainCommand": "tsx --test src/services/intelligence/__tests__/briefing-scheduler.test.mts",
+      "prCommand": "tsx --test src/services/intelligence/__tests__/briefing-scheduler.test.mts"
+    },
+    {
+      "script": "test:command-center",
+      "mainCommand": "tsx --test src/services/intelligence/__tests__/command-center-summary.test.mts",
+      "prCommand": "tsx --test src/services/intelligence/__tests__/command-center-summary.test.mts"
+    },
+    {
+      "script": "test:components",
+      "mainCommand": "tsx --test src/components/__tests__/disease-outbreak-tabs.test.mts src/components/__tests__/space-weather-panel.test.mts",
+      "prCommand": "tsx --test src/components/__tests__/disease-outbreak-tabs.test.mts src/components/__tests__/space-weather-panel.test.mts"
+    },
+    {
+      "script": "test:crisis-signature-library",
+      "mainCommand": "tsx --test src/services/intelligence/__tests__/crisis-signature-library.test.mts",
+      "prCommand": "tsx --test src/services/intelligence/__tests__/crisis-signature-library.test.mts"
+    },
+    {
+      "script": "test:crisis-trajectory",
+      "mainCommand": "tsx --test src/services/intelligence/__tests__/crisis-trajectory.test.mts",
+      "prCommand": "tsx --test src/services/intelligence/__tests__/crisis-trajectory.test.mts"
+    },
+    {
+      "script": "test:cross-domain-contradictions",
+      "mainCommand": "tsx --test src/services/intelligence/__tests__/cross-domain-contradiction-detector.test.mts",
+      "prCommand": "tsx --test src/services/intelligence/__tests__/cross-domain-contradiction-detector.test.mts"
+    },
+    {
+      "script": "test:datacenter",
+      "mainCommand": "tsx --test src/services/datacenter/__tests__/datacenter-types.test.mts src/services/datacenter/__tests__/power-posture.test.mts src/services/datacenter/__tests__/weather-posture.test.mts src/services/datacenter/__tests__/readiness-actions.test.mts src/services/datacenter/__tests__/datacenter-posture.test.mts src/services/datacenter/__tests__/site-resolver.test.mts src/services/datacenter/__tests__/datacenter-state.test.mts src/services/datacenter/__tests__/datacenter-view.test.mts src/services/datacenter/__tests__/site-zones.test.mts && node --test tests/datacenter-zone-degrade-wiring.test.mjs",
+      "prCommand": "tsx --test src/services/datacenter/__tests__/datacenter-types.test.mts src/services/datacenter/__tests__/power-posture.test.mts src/services/datacenter/__tests__/weather-posture.test.mts src/services/datacenter/__tests__/readiness-actions.test.mts src/services/datacenter/__tests__/datacenter-posture.test.mts src/services/datacenter/__tests__/site-resolver.test.mts src/services/datacenter/__tests__/datacenter-state.test.mts src/services/datacenter/__tests__/datacenter-view.test.mts src/services/datacenter/__tests__/site-zones.test.mts && node --test tests/datacenter-zone-degrade-wiring.test.mjs"
+    },
+    {
+      "script": "test:datacenter-ownership",
+      "mainCommand": "tsx --test src/services/datacenter/__tests__/site-zones.test.mts tests/datacenter-site-ownership-runtime.test.mts && node --test tests/datacenter-zone-degrade-wiring.test.mjs",
+      "prCommand": "tsx --test src/services/datacenter/__tests__/site-zones.test.mts tests/datacenter-site-ownership-runtime.test.mts && node --test tests/datacenter-zone-degrade-wiring.test.mjs"
+    },
+    {
+      "script": "test:desktop-identity",
+      "mainCommand": "node --test tests/desktop-identity.test.mjs tests/release-metadata.test.mjs tests/release-context.test.mjs tests/release-manifest.test.mjs tests/build-desktop-workflow.test.mjs tests/desktop-package-signing.test.mjs && npm run test:desktop-updater",
+      "prCommand": "node --test tests/desktop-identity.test.mjs tests/release-metadata.test.mjs tests/release-context.test.mjs tests/release-manifest.test.mjs tests/build-desktop-workflow.test.mjs tests/desktop-package-signing.test.mjs && npm run test:desktop-updater"
+    },
+    {
+      "script": "test:desktop-updater",
+      "mainCommand": "node --test tests/desktop-updater-signature.test.mjs tests/desktop-updater-authority.test.mjs tests/updater-identity-native.test.mjs && tsx --test src/app/__tests__/desktop-updater.test.mts",
+      "prCommand": "node --test tests/desktop-updater-signature.test.mjs tests/desktop-updater-authority.test.mjs tests/updater-identity-native.test.mjs && tsx --test src/app/__tests__/desktop-updater.test.mts"
+    },
+    {
+      "script": "test:diagnostics",
+      "mainCommand": "tsx --import ./tests/panels/register-hook.mjs --test src/services/diagnostics/__tests__/*.test.mts tests/services/analysis-worker.test.mts && node --test scripts/checkup-log-audit.test.mjs scripts/claude-auth-core.test.mjs scripts/claude-auth-doctor.test.mjs scripts/doctor-core.test.mjs tools/mcp-server/__tests__/diagnostics-tools.test.mjs src-tauri/sidecar/__tests__/analyst-diagnostics-mirror.test.mjs",
+      "prCommand": "tsx --import ./tests/panels/register-hook.mjs --test src/services/diagnostics/__tests__/*.test.mts tests/services/analysis-worker.test.mts && node --test scripts/checkup-log-audit.test.mjs scripts/claude-auth-core.test.mjs scripts/claude-auth-doctor.test.mjs scripts/doctor-core.test.mjs tools/mcp-server/__tests__/diagnostics-tools.test.mjs src-tauri/sidecar/__tests__/analyst-diagnostics-mirror.test.mjs"
+    },
+    {
+      "script": "test:domain-retirement",
+      "mainCommand": "node --test tests/retired-domain-suite.test.mjs",
+      "prCommand": "node --test tests/retired-domain-suite.test.mjs"
+    },
+    {
+      "script": "test:emergency-pack",
+      "mainCommand": "tsx --test src/services/emergency-pack/__tests__/*.test.mts src/components/__tests__/emergency-pack-view.test.mts src/components/__tests__/emergency-readiness-pack-panel.test.mts",
+      "prCommand": "tsx --test src/services/emergency-pack/__tests__/*.test.mts src/components/__tests__/emergency-pack-view.test.mts src/components/__tests__/emergency-readiness-pack-panel.test.mts"
+    },
+    {
+      "script": "test:emergency-readiness",
+      "mainCommand": "tsx --import ./tests/panels/register-hook.mjs --test src/services/survival/__tests__/snapshot-store.test.mts src/services/lifelines/__tests__/lifeline-runtime.test.mts src/components/__tests__/emergency-readiness-view.test.mts src/components/__tests__/emergency-readiness-panel.test.mts tests/emergency-readiness-panel-wiring.test.mjs",
+      "prCommand": "tsx --import ./tests/panels/register-hook.mjs --test src/services/survival/__tests__/snapshot-store.test.mts src/services/lifelines/__tests__/lifeline-runtime.test.mts src/components/__tests__/emergency-readiness-view.test.mts src/components/__tests__/emergency-readiness-panel.test.mts tests/emergency-readiness-panel-wiring.test.mjs"
+    },
+    {
+      "script": "test:event-store",
+      "mainCommand": "tsx --test src/components/__tests__/event-store-helpers.test.mts && node --test src-tauri/sidecar/__tests__/event-store.test.mjs src-tauri/sidecar/__tests__/event-store-wiring.test.mjs",
+      "prCommand": "tsx --test src/components/__tests__/event-store-helpers.test.mts && node --test src-tauri/sidecar/__tests__/event-store.test.mjs src-tauri/sidecar/__tests__/event-store-wiring.test.mjs"
+    },
+    {
+      "script": "test:evidence-journal",
+      "mainCommand": "node --test src-tauri/sidecar/__tests__/evidence-store.test.mjs src-tauri/sidecar/__tests__/evidence-routes.test.mjs tests/evidence-journal-boundary.test.mjs && tsx --test src/services/intelligence/__tests__/evidence-journal.test.mts src/components/__tests__/evidence-journal-view.test.mts src/components/__tests__/evidence-journal-panel.test.mts",
+      "prCommand": "node --test src-tauri/sidecar/__tests__/evidence-store.test.mjs src-tauri/sidecar/__tests__/evidence-routes.test.mjs tests/evidence-journal-boundary.test.mjs && tsx --test src/services/intelligence/__tests__/evidence-journal.test.mts src/components/__tests__/evidence-journal-view.test.mts src/components/__tests__/evidence-journal-panel.test.mts"
+    },
+    {
+      "script": "test:feed-health",
+      "mainCommand": "tsx --test src/services/diagnostics/__tests__/feed-catalog.test.mts src/components/__tests__/feed-health-panel.test.mts && node --test src-tauri/sidecar/__tests__/feed-tracker.test.mjs",
+      "prCommand": "tsx --test src/services/diagnostics/__tests__/feed-catalog.test.mts src/components/__tests__/feed-health-panel.test.mts && node --test src-tauri/sidecar/__tests__/feed-tracker.test.mjs"
+    },
+    {
+      "script": "test:feed-health-dashboard",
+      "mainCommand": "tsx --test src/components/__tests__/feed-health-dashboard-panel.test.mts",
+      "prCommand": "tsx --test src/components/__tests__/feed-health-dashboard-panel.test.mts"
+    },
+    {
+      "script": "test:fetch-attribution",
+      "mainCommand": "tsx --test src/services/__tests__/fetch-attribution.test.mts src/services/__tests__/fetch-attribution-wiring.test.mts src/services/__tests__/fetch-attribution-port-race.test.mts src/services/__tests__/caller-abort.test.mts src/services/__tests__/cached-fetch-fallback.test.mts",
+      "prCommand": "tsx --test src/services/__tests__/fetch-attribution.test.mts src/services/__tests__/fetch-attribution-wiring.test.mts src/services/__tests__/fetch-attribution-port-race.test.mts src/services/__tests__/caller-abort.test.mts src/services/__tests__/cached-fetch-fallback.test.mts"
+    },
+    {
+      "script": "test:firms",
+      "mainCommand": "tsx --test src/components/__tests__/firms-helpers.test.mts",
+      "prCommand": "tsx --test src/components/__tests__/firms-helpers.test.mts"
+    },
+    {
+      "script": "test:forecast-load",
+      "mainCommand": "tsx --test src/services/intelligence/__tests__/forecast-calibration-load.test.mts src/services/intelligence/__tests__/forecast-calibration-adapter.test.mts",
+      "prCommand": "tsx --test src/services/intelligence/__tests__/forecast-calibration-load.test.mts src/services/intelligence/__tests__/forecast-calibration-adapter.test.mts"
+    },
+    {
+      "script": "test:gdacs-map",
+      "mainCommand": "tsx --test src/services/__tests__/gdacs-map.test.mts src/services/__tests__/api-diagnostic.test.mts src/services/__tests__/data-freshness.test.mts src/services/__tests__/persisted-date-hydration.test.mts",
+      "prCommand": "tsx --test src/services/__tests__/gdacs-map.test.mts src/services/__tests__/api-diagnostic.test.mts src/services/__tests__/data-freshness.test.mts src/services/__tests__/persisted-date-hydration.test.mts"
+    },
+    {
+      "script": "test:health-contract",
+      "mainCommand": "node --test tests/health-contract-suite.test.mjs",
+      "prCommand": "node --test tests/health-contract-suite.test.mjs"
+    },
+    {
+      "script": "test:home-reassurance",
+      "mainCommand": "tsx --test src/services/home-shell/__tests__/briefing-view.test.mts src/components/__tests__/home-shell-reassurance.test.mts",
+      "prCommand": "tsx --test src/services/home-shell/__tests__/briefing-view.test.mts src/components/__tests__/home-shell-reassurance.test.mts"
+    },
+    {
+      "script": "test:imessage",
+      "mainCommand": "node --test tests/imessage-native-boundary.test.mjs && tsx --test src/services/__tests__/imessage-bridge.test.mts src/components/__tests__/imessage-settings.test.mts src/app/__tests__/desktop-imessage.test.mts src/services/seismic/__tests__/eew-imessage.test.mts src/services/notifications/__tests__/imessage-bridge-extended.test.mts src/services/notifications/__tests__/imessage-pause-alerts.test.mts src/components/__tests__/imessage-paused-notice.test.mts src/components/__tests__/imessage-paused-notice-bridge.test.mts",
+      "prCommand": "node --test tests/imessage-native-boundary.test.mjs && tsx --test src/services/__tests__/imessage-bridge.test.mts src/components/__tests__/imessage-settings.test.mts src/app/__tests__/desktop-imessage.test.mts src/services/seismic/__tests__/eew-imessage.test.mts src/services/notifications/__tests__/imessage-bridge-extended.test.mts src/services/notifications/__tests__/imessage-pause-alerts.test.mts src/components/__tests__/imessage-paused-notice.test.mts src/components/__tests__/imessage-paused-notice-bridge.test.mts"
+    },
+    {
+      "script": "test:imessage-native",
+      "mainCommand": "node --test tests/imessage-native-gate.test.mjs",
+      "prCommand": "node --test tests/imessage-native-gate.test.mjs"
+    },
+    {
+      "script": "test:insights",
+      "mainCommand": "tsx --test src/services/insights/__tests__/big-event-detector.test.mts src/services/insights/__tests__/confidence-urgency-matrix.test.mts src/services/insights/__tests__/notification-ladder.test.mts src/services/insights/__tests__/share-packet.test.mts src/services/insights/__tests__/ask-the-data.test.mts src/services/insights/__tests__/ask-context.test.mts src/components/__tests__/ask-the-data-view.test.mts src/services/insights/__tests__/action-briefs.test.mts src/services/insights/__tests__/data-bridge.test.mts src/services/action-guidance/__tests__/earthquake-action-guidance.test.mts",
+      "prCommand": "tsx --test src/services/insights/__tests__/big-event-detector.test.mts src/services/insights/__tests__/confidence-urgency-matrix.test.mts src/services/insights/__tests__/notification-ladder.test.mts src/services/insights/__tests__/share-packet.test.mts src/services/insights/__tests__/ask-the-data.test.mts src/services/insights/__tests__/ask-context.test.mts src/components/__tests__/ask-the-data-view.test.mts src/services/insights/__tests__/action-briefs.test.mts src/services/insights/__tests__/data-bridge.test.mts src/services/action-guidance/__tests__/earthquake-action-guidance.test.mts"
+    },
+    {
+      "script": "test:insights6",
+      "mainCommand": "tsx --test src/services/insights/__tests__/presentation-export.test.mts",
+      "prCommand": "tsx --test src/services/insights/__tests__/presentation-export.test.mts"
+    },
+    {
+      "script": "test:install-scripts",
+      "mainCommand": "node --test tests/install-script-drift.test.mjs tests/main-sync-agent.test.mjs tests/install-mcp-deps.test.mjs tests/desktop-package-signing.test.mjs tests/desktop-build-full.test.mjs scripts/install-crystalball-mcp.test.mjs",
+      "prCommand": "node --test tests/install-script-drift.test.mjs tests/main-sync-agent.test.mjs tests/install-mcp-deps.test.mjs tests/desktop-package-signing.test.mjs tests/desktop-build-full.test.mjs scripts/install-crystalball-mcp.test.mjs"
+    },
+    {
+      "script": "test:intelligence",
+      "mainCommand": "tsx --test src/services/intelligence/__tests__/proxy-outcomes.test.mts src/services/intelligence/__tests__/ood-decay.test.mts src/services/intelligence/__tests__/momentum.test.mts src/services/intelligence/__tests__/learned-cascades.test.mts src/services/intelligence/__tests__/truth-score.test.mts src/services/intelligence/__tests__/evidence-graph.test.mts src/services/intelligence/__tests__/situation-clustering.test.mts src/services/intelligence/__tests__/baseline-deviation.test.mts src/services/intelligence/__tests__/forecast-calibration.test.mts src/services/intelligence/__tests__/resolution-quality-audit.test.mts src/services/intelligence/__tests__/forecast-evaluation.test.mts src/services/intelligence/__tests__/forecast-replay-benchmark.test.mts src/services/intelligence/__tests__/hierarchical-base-rate.test.mts src/services/intelligence/__tests__/outcome-resolvers.test.mts src/services/intelligence/__tests__/conflict-observation-adapters.test.mts src/services/market/__tests__/spot-price-store.test.mts src/services/intelligence/__tests__/proper-scoring.test.mts src/services/intelligence/__tests__/calibration-report.test.mts src/services/intelligence/__tests__/alert-prioritization.test.mts src/services/intelligence/__tests__/kent-hedging.test.mts src/services/intelligence/__tests__/alert-whatif.test.mts src/services/intelligence/__tests__/negative-evidence.test.mts src/services/intelligence/__tests__/compound-risk.test.mts src/services/intelligence/__tests__/watchlist-relevance.test.mts src/services/intelligence/__tests__/playbook-engine.test.mts src/services/intelligence/__tests__/assumption-producers.test.mts src/services/intelligence/adapters/__tests__/weather-forecast-adapter.test.mts src/services/intelligence/adapters/__tests__/flood-gauge-adapter.test.mts src/services/intelligence/adapters/__tests__/river-discharge-adapter.test.mts src/services/intelligence/adapters/__tests__/marine-forecast-adapter.test.mts src/services/intelligence/adapters/__tests__/food-security-adapter.test.mts src/services/intelligence/adapters/__tests__/air-quality-adapter.test.mts src/services/intelligence/__tests__/situation-hypothesis-bridge.test.mts src/services/intelligence/__tests__/forecast-calibration-adapter.test.mts src/services/intelligence/__tests__/hypothesis-prediction-bridge.test.mts src/services/intelligence/__tests__/mode-forecast-prediction-bridge.test.mts src/services/intelligence/__tests__/safety-case-dashboard.test.mts src/services/intelligence/__tests__/bias-scan-cadence.test.mts src/services/intelligence/__tests__/epistemic-calibration.test.mts src/services/intelligence/__tests__/epistemic-bridge.test.mts src/services/intelligence/__tests__/mission-outcome-grader.test.mts src/services/intelligence/__tests__/cascade-registration.test.mts src/services/intelligence/__tests__/assumption-tracker-v2.test.mts src/services/intelligence/__tests__/calibration-bridge-wiring.test.mts src/services/intelligence/__tests__/entity-slug.test.mts",
+      "prCommand": "tsx --test src/services/intelligence/__tests__/proxy-outcomes.test.mts src/services/intelligence/__tests__/ood-decay.test.mts src/services/intelligence/__tests__/momentum.test.mts src/services/intelligence/__tests__/learned-cascades.test.mts src/services/intelligence/__tests__/truth-score.test.mts src/services/intelligence/__tests__/evidence-graph.test.mts src/services/intelligence/__tests__/situation-clustering.test.mts src/services/intelligence/__tests__/baseline-deviation.test.mts src/services/intelligence/__tests__/forecast-calibration.test.mts src/services/intelligence/__tests__/resolution-quality-audit.test.mts src/services/intelligence/__tests__/forecast-evaluation.test.mts src/services/intelligence/__tests__/forecast-replay-benchmark.test.mts src/services/intelligence/__tests__/hierarchical-base-rate.test.mts src/services/intelligence/__tests__/outcome-resolvers.test.mts src/services/intelligence/__tests__/conflict-observation-adapters.test.mts src/services/market/__tests__/spot-price-store.test.mts src/services/intelligence/__tests__/proper-scoring.test.mts src/services/intelligence/__tests__/calibration-report.test.mts src/services/intelligence/__tests__/alert-prioritization.test.mts src/services/intelligence/__tests__/kent-hedging.test.mts src/services/intelligence/__tests__/alert-whatif.test.mts src/services/intelligence/__tests__/negative-evidence.test.mts src/services/intelligence/__tests__/compound-risk.test.mts src/services/intelligence/__tests__/watchlist-relevance.test.mts src/services/intelligence/__tests__/playbook-engine.test.mts src/services/intelligence/__tests__/assumption-producers.test.mts src/services/intelligence/adapters/__tests__/weather-forecast-adapter.test.mts src/services/intelligence/adapters/__tests__/flood-gauge-adapter.test.mts src/services/intelligence/adapters/__tests__/river-discharge-adapter.test.mts src/services/intelligence/adapters/__tests__/marine-forecast-adapter.test.mts src/services/intelligence/adapters/__tests__/food-security-adapter.test.mts src/services/intelligence/adapters/__tests__/air-quality-adapter.test.mts src/services/intelligence/__tests__/situation-hypothesis-bridge.test.mts src/services/intelligence/__tests__/forecast-calibration-adapter.test.mts src/services/intelligence/__tests__/hypothesis-prediction-bridge.test.mts src/services/intelligence/__tests__/mode-forecast-prediction-bridge.test.mts src/services/intelligence/__tests__/safety-case-dashboard.test.mts src/services/intelligence/__tests__/bias-scan-cadence.test.mts src/services/intelligence/__tests__/epistemic-calibration.test.mts src/services/intelligence/__tests__/epistemic-bridge.test.mts src/services/intelligence/__tests__/mission-outcome-grader.test.mts src/services/intelligence/__tests__/cascade-registration.test.mts src/services/intelligence/__tests__/assumption-tracker-v2.test.mts src/services/intelligence/__tests__/calibration-bridge-wiring.test.mts src/services/intelligence/__tests__/entity-slug.test.mts"
+    },
+    {
+      "script": "test:intelligence-timeline",
+      "mainCommand": "tsx --test src/services/intelligence/__tests__/intelligence-timeline.test.mts",
+      "prCommand": "tsx --test src/services/intelligence/__tests__/intelligence-timeline.test.mts"
+    },
+    {
+      "script": "test:lazy-panel-tracker",
+      "mainCommand": "tsx --test tests/lazy-panel-tracker.test.mjs src/app/__tests__/lazy-panel-order.test.mts",
+      "prCommand": "tsx --test tests/lazy-panel-tracker.test.mjs src/app/__tests__/lazy-panel-order.test.mts"
+    },
+    {
+      "script": "test:lifelines",
+      "mainCommand": "node --test api/local-logistics.test.mjs api/grid-outages.test.mjs api/usgs-water-proxy.test.mjs api/__tests__/local-logistics.test.mjs src-tauri/sidecar/__tests__/bounded-provider-responses.test.mjs src-tauri/sidecar/__tests__/local-logistics-route.test.mjs src-tauri/sidecar/__tests__/intel-expansion-cluster3.test.mjs src-tauri/sidecar/__tests__/sidecar-ttl-cache-guards.test.mjs tests/local-logistics-panel.test.mjs tests/lifeline-runtime-wiring.test.mjs tests/place-briefs.test.mjs tests/saved-place-lifeline-pack-wiring.test.mjs tests/water-quality-wiring.test.mjs && tsx --test src/services/lifelines/__tests__/*.test.mts src/services/__tests__/offline-alert-cache.test.mts tests/comms-lifeline-context.test.mts tests/lifeline-evidence-expiry.test.mts tests/local-logistics.test.mts tests/local-logistics-prewarm.test.mts tests/place-briefs-lifelines.test.mts tests/saved-place-lifeline-pack.test.mts tests/saved-place-weather.test.mts tests/water-quality-truth.test.mts src/components/__tests__/feed-health-panel.test.mts src/components/__tests__/local-logistics-panel.test.mts src/components/__tests__/personal-storm-mode-shelf.test.mts src/services/diagnostics/__tests__/feed-catalog.test.mts",
+      "prCommand": "node --test api/local-logistics.test.mjs api/grid-outages.test.mjs api/usgs-water-proxy.test.mjs api/__tests__/local-logistics.test.mjs src-tauri/sidecar/__tests__/bounded-provider-responses.test.mjs src-tauri/sidecar/__tests__/local-logistics-route.test.mjs src-tauri/sidecar/__tests__/intel-expansion-cluster3.test.mjs src-tauri/sidecar/__tests__/sidecar-ttl-cache-guards.test.mjs tests/local-logistics-panel.test.mjs tests/lifeline-runtime-wiring.test.mjs tests/place-briefs.test.mjs tests/saved-place-lifeline-pack-wiring.test.mjs tests/water-quality-wiring.test.mjs && tsx --test src/services/lifelines/__tests__/*.test.mts src/services/__tests__/offline-alert-cache.test.mts tests/comms-lifeline-context.test.mts tests/lifeline-evidence-expiry.test.mts tests/local-logistics.test.mts tests/local-logistics-prewarm.test.mts tests/place-briefs-lifelines.test.mts tests/saved-place-lifeline-pack.test.mts tests/saved-place-weather.test.mts tests/water-quality-truth.test.mts src/components/__tests__/feed-health-panel.test.mts src/components/__tests__/local-logistics-panel.test.mts src/components/__tests__/personal-storm-mode-shelf.test.mts src/services/diagnostics/__tests__/feed-catalog.test.mts"
+    },
+    {
+      "script": "test:lifelines-grid",
+      "mainCommand": "node --test api/grid-outages.test.mjs tests/grid-odin-wiring.test.mjs src-tauri/sidecar/__tests__/intel-expansion-cluster3.test.mjs src-tauri/sidecar/__tests__/sidecar-ttl-cache-guards.test.mjs && tsx --test tests/grid-loader-lifecycle.test.mts src/services/infrastructure/__tests__/grid-monitor.test.mts src/services/infrastructure/__tests__/infrastructure-overlay.test.mts src/services/infrarisks/__tests__/infra-risk-service.test.mts src/services/diagnostics/__tests__/feed-catalog.test.mts src/components/__tests__/feed-health-panel.test.mts",
+      "prCommand": "node --test api/grid-outages.test.mjs tests/grid-odin-wiring.test.mjs src-tauri/sidecar/__tests__/intel-expansion-cluster3.test.mjs src-tauri/sidecar/__tests__/sidecar-ttl-cache-guards.test.mjs && tsx --test tests/grid-loader-lifecycle.test.mts src/services/infrastructure/__tests__/grid-monitor.test.mts src/services/infrastructure/__tests__/infrastructure-overlay.test.mts src/services/infrarisks/__tests__/infra-risk-service.test.mts src/services/diagnostics/__tests__/feed-catalog.test.mts src/components/__tests__/feed-health-panel.test.mts"
+    },
+    {
+      "script": "test:lifelines-map",
+      "mainCommand": "tsx --import ./tests/panels/register-hook.mjs --test tests/lifelines-map.test.mts tests/evacuation-routing.test.mts src/components/__tests__/map-popup-lifeline.test.mts && node --test api/osrm-route.test.mjs src-tauri/sidecar/__tests__/osrm-route.test.mjs tests/lifelines-map-wiring.test.mjs",
+      "prCommand": "tsx --import ./tests/panels/register-hook.mjs --test tests/lifelines-map.test.mts tests/evacuation-routing.test.mts src/components/__tests__/map-popup-lifeline.test.mts && node --test api/osrm-route.test.mjs src-tauri/sidecar/__tests__/osrm-route.test.mjs tests/lifelines-map-wiring.test.mjs"
+    },
+    {
+      "script": "test:little-snitch",
+      "mainCommand": "node --test scripts/export-little-snitch-traffic.test.mjs scripts/install-little-snitch-exporter.test.mjs scripts/little-snitch-log-traffic-helper.test.mjs src-tauri/sidecar/local-api-server.test.mjs && tsx --test src/services/__tests__/little-snitch.test.mts src/components/__tests__/little-snitch-panel-source-state.test.mts",
+      "prCommand": "node --test scripts/export-little-snitch-traffic.test.mjs scripts/install-little-snitch-exporter.test.mjs scripts/little-snitch-log-traffic-helper.test.mjs src-tauri/sidecar/local-api-server.test.mjs && tsx --test src/services/__tests__/little-snitch.test.mts src/components/__tests__/little-snitch-panel-source-state.test.mts"
+    },
+    {
+      "script": "test:map-clarity",
+      "mainCommand": "tsx --test src/components/__tests__/map-clarity-model.test.mts src/components/__tests__/map-feature-list.test.mts && tsx --import ./tests/panels/register-hook.mjs --test --test-force-exit src/components/__tests__/map-popup-faa-camera.test.mts",
+      "prCommand": "tsx --test src/components/__tests__/map-clarity-model.test.mts src/components/__tests__/map-feature-list.test.mts && tsx --import ./tests/panels/register-hook.mjs --test --test-force-exit src/components/__tests__/map-popup-faa-camera.test.mts"
+    },
+    {
+      "script": "test:map-compatibility",
+      "mainCommand": "node --test tests/map-compatibility.test.mjs",
+      "prCommand": "node --test tests/map-compatibility.test.mjs"
+    },
+    {
+      "script": "test:maritime",
+      "mainCommand": "tsx --test src/services/maritime/__tests__/freight-stress.test.mts src/services/maritime/__tests__/chokepoint-monitor.test.mts src/services/maritime/__tests__/chokepoint-aggregator.test.mts src/services/maritime/__tests__/maritime-threats.test.mts src/services/maritime/__tests__/vessel-classifier.test.mts src/services/maritime/__tests__/vessel-globe-helpers.test.mts src/services/__tests__/dark-vessel-gaps.test.mts && node --test src-tauri/sidecar/__tests__/freight-stress-parity.test.mjs src-tauri/sidecar/__tests__/dark-vessel-gaps-parity.test.mjs src-tauri/sidecar/__tests__/maritime-vessels-parity.test.mjs",
+      "prCommand": "tsx --test src/services/maritime/__tests__/freight-stress.test.mts src/services/maritime/__tests__/chokepoint-monitor.test.mts src/services/maritime/__tests__/chokepoint-aggregator.test.mts src/services/maritime/__tests__/maritime-threats.test.mts src/services/maritime/__tests__/vessel-classifier.test.mts src/services/maritime/__tests__/vessel-globe-helpers.test.mts src/services/__tests__/dark-vessel-gaps.test.mts && node --test src-tauri/sidecar/__tests__/freight-stress-parity.test.mjs src-tauri/sidecar/__tests__/dark-vessel-gaps-parity.test.mjs src-tauri/sidecar/__tests__/maritime-vessels-parity.test.mjs"
+    },
+    {
+      "script": "test:mcp-companion",
+      "mainCommand": "node --test tests/mcp-companion-suite.test.mjs tests/mcp-suite-entry.test.mjs",
+      "prCommand": "node --test tests/mcp-companion-suite.test.mjs tests/mcp-suite-entry.test.mjs"
+    },
+    {
+      "script": "test:mcp-untrusted",
+      "mainCommand": "node --test tests/mcp-untrusted-suite.test.mjs",
+      "prCommand": "node --test tests/mcp-untrusted-suite.test.mjs"
+    },
+    {
+      "script": "test:ml-budget",
+      "mainCommand": "tsx --test src/services/__tests__/ml-request-budget.test.mts src/services/__tests__/ml-worker-manager.test.mts src/workers/__tests__/ml-worker-eviction.test.mts",
+      "prCommand": "tsx --test src/services/__tests__/ml-request-budget.test.mts src/services/__tests__/ml-worker-manager.test.mts src/workers/__tests__/ml-worker-eviction.test.mts"
+    },
+    {
+      "script": "test:mode",
+      "mainCommand": "tsx --test src/app/__tests__/mode-manager.test.mts",
+      "prCommand": "tsx --test src/app/__tests__/mode-manager.test.mts"
+    },
+    {
+      "script": "test:native-lows",
+      "mainCommand": "node --test tests/native-lows.test.mjs",
+      "prCommand": "node --test tests/native-lows.test.mjs"
+    },
+    {
+      "script": "test:native-notify",
+      "mainCommand": "node --test tests/native-notify-boundary.test.mjs && tsx --test src/services/__tests__/native-notify.test.mts src/services/__tests__/notification-router.test.mts src/services/__tests__/proximity-alert-delivery.test.mts src/services/notifications/__tests__/push-notifier-history.test.mts src/app/__tests__/desktop-imessage.test.mts src/app/__tests__/desktop-updater.test.mts src/services/__tests__/threat-reactor.test.mts src/services/__tests__/threat-reactor-retry.test.mts",
+      "prCommand": "node --test tests/native-notify-boundary.test.mjs && tsx --test src/services/__tests__/native-notify.test.mts src/services/__tests__/notification-router.test.mts src/services/__tests__/proximity-alert-delivery.test.mts src/services/notifications/__tests__/push-notifier-history.test.mts src/app/__tests__/desktop-imessage.test.mts src/app/__tests__/desktop-updater.test.mts src/services/__tests__/threat-reactor.test.mts src/services/__tests__/threat-reactor-retry.test.mts"
+    },
+    {
+      "script": "test:native-responsiveness",
+      "mainCommand": "node --test tests/native-responsiveness-boundary.test.mjs tests/native-responsiveness-native.test.mjs",
+      "prCommand": "node --test tests/native-responsiveness-boundary.test.mjs tests/native-responsiveness-native.test.mjs"
+    },
+    {
+      "script": "test:news-resilience",
+      "mainCommand": "tsx --test src/services/__tests__/news-provenance.test.mts src/services/__tests__/rss-adapters-tracked.test.mts src/services/news/__tests__/news-snapshot.test.mts tests/components/news-resilience-panels.test.mts && node --test tests/news-route-provenance.test.mjs tests/ux040-news-snapshot-wiring.test.mjs",
+      "prCommand": "tsx --test src/services/__tests__/news-provenance.test.mts src/services/__tests__/rss-adapters-tracked.test.mts src/services/news/__tests__/news-snapshot.test.mts tests/components/news-resilience-panels.test.mts && node --test tests/news-route-provenance.test.mjs tests/ux040-news-snapshot-wiring.test.mjs"
+    },
+    {
+      "script": "test:node-pinning",
+      "mainCommand": "node --test tests/node-pinning-boundary.test.mjs && tsx --test src/services/diagnostics/__tests__/local-engine-status.test.mts",
+      "prCommand": "node --test tests/node-pinning-boundary.test.mjs && tsx --test src/services/diagnostics/__tests__/local-engine-status.test.mts"
+    },
+    {
+      "script": "test:notification-history",
+      "mainCommand": "tsx --test src/services/notifications/__tests__/notification-history-service.test.mts src/services/notifications/__tests__/push-notifier-history.test.mts src/components/__tests__/notification-history-helpers.test.mts src/services/diagnostics/__tests__/sidecar-self-test.test.mts && node --test src-tauri/sidecar/__tests__/self-test-classify.test.mjs",
+      "prCommand": "tsx --test src/services/notifications/__tests__/notification-history-service.test.mts src/services/notifications/__tests__/push-notifier-history.test.mts src/components/__tests__/notification-history-helpers.test.mts src/services/diagnostics/__tests__/sidecar-self-test.test.mts && node --test src-tauri/sidecar/__tests__/self-test-classify.test.mjs"
+    },
+    {
+      "script": "test:notifications",
+      "mainCommand": "tsx --test src/services/notifications/__tests__/eew-tiers.test.mts src/services/notifications/__tests__/notification-ledger.test.mts src/services/notifications/__tests__/push-notifier.test.mts src/services/notifications/__tests__/imessage-bridge-extended.test.mts src/services/notifications/__tests__/voice-alerter.test.mts src/services/notifications/__tests__/event-bridge.test.mts src-tauri/sidecar/__tests__/notification-integration.test.mts src/components/__tests__/notification-panels.test.mts tests/notifications/all-producers.integration.test.mts tests/notifications/notification-ladder.test.mts src/services/insights/__tests__/weather-quiet-hours-wiring.test.mts",
+      "prCommand": "tsx --test src/services/notifications/__tests__/eew-tiers.test.mts src/services/notifications/__tests__/notification-ledger.test.mts src/services/notifications/__tests__/push-notifier.test.mts src/services/notifications/__tests__/imessage-bridge-extended.test.mts src/services/notifications/__tests__/voice-alerter.test.mts src/services/notifications/__tests__/event-bridge.test.mts src-tauri/sidecar/__tests__/notification-integration.test.mts src/components/__tests__/notification-panels.test.mts tests/notifications/all-producers.integration.test.mts tests/notifications/notification-ladder.test.mts src/services/insights/__tests__/weather-quiet-hours-wiring.test.mts"
+    },
+    {
+      "script": "test:openaq",
+      "mainCommand": "tsx --test src/services/airquality/__tests__/openaq-service.test.mts src/components/__tests__/openaq-panel-contract.test.mts src/app/__tests__/openaq-desktop-boundary.test.mts && node --test src-tauri/sidecar/__tests__/openaq-v3-route.test.mjs tests/openaq-local-boundary.test.mjs",
+      "prCommand": "tsx --test src/services/airquality/__tests__/openaq-service.test.mts src/components/__tests__/openaq-panel-contract.test.mts src/app/__tests__/openaq-desktop-boundary.test.mts && node --test src-tauri/sidecar/__tests__/openaq-v3-route.test.mjs tests/openaq-local-boundary.test.mjs"
+    },
+    {
+      "script": "test:panel-presentation",
+      "mainCommand": "tsx --test tests/panel-presentation.test.mjs tests/panel-visibility-regression.test.mjs src/services/correlation/__tests__/causal-chain-view.test.mts src/services/correlation/__tests__/correlation-map-view.test.mts",
+      "prCommand": "tsx --test tests/panel-presentation.test.mjs tests/panel-visibility-regression.test.mjs src/services/correlation/__tests__/causal-chain-view.test.mts src/services/correlation/__tests__/correlation-map-view.test.mts"
+    },
+    {
+      "script": "test:port-publication",
+      "mainCommand": "node --test tests/sidecar-port-publication-suite.test.mjs",
+      "prCommand": "node --test tests/sidecar-port-publication-suite.test.mjs"
+    },
+    {
+      "script": "test:providers",
+      "mainCommand": "tsx --test tests/data-sources-wiring.test.mjs src/services/earthquake/__tests__/usgs-fusion-fetch.test.mts src/services/geo/__tests__/geo-math.test.mts src/services/providers/__tests__/provider-registry.test.mts src/services/providers/__tests__/provider-health.test.mts src/services/providers/__tests__/source-fusion.test.mts src/services/providers/__tests__/provider-bridge.test.mts src/services/providers/__tests__/data-bridge-supersession.test.mts src/services/providers/__tests__/provider-domain-map.test.mts src/services/providers/__tests__/fusion-ingest.test.mts src/services/providers/__tests__/fusion-ingest-key.test.mts src/services/providers/__tests__/fusion-publish.test.mts src/services/providers/__tests__/provider-health-timeline-view.test.mts",
+      "prCommand": "tsx --test tests/data-sources-wiring.test.mjs src/services/earthquake/__tests__/usgs-fusion-fetch.test.mts src/services/geo/__tests__/geo-math.test.mts src/services/providers/__tests__/provider-registry.test.mts src/services/providers/__tests__/provider-health.test.mts src/services/providers/__tests__/source-fusion.test.mts src/services/providers/__tests__/provider-bridge.test.mts src/services/providers/__tests__/data-bridge-supersession.test.mts src/services/providers/__tests__/provider-domain-map.test.mts src/services/providers/__tests__/fusion-ingest.test.mts src/services/providers/__tests__/fusion-ingest-key.test.mts src/services/providers/__tests__/fusion-publish.test.mts src/services/providers/__tests__/provider-health-timeline-view.test.mts"
+    },
+    {
+      "script": "test:pwa-deployment",
+      "mainCommand": "node --test --import tsx tests/deployment-base.test.mts tests/pwa-output.test.mts tests/deploy-config.test.mjs",
+      "prCommand": "node --test --import tsx tests/deployment-base.test.mts tests/pwa-output.test.mts tests/deploy-config.test.mjs"
+    },
+    {
+      "script": "test:quiet-hours",
+      "mainCommand": "tsx --import ./tests/panels/register-hook.mjs --test src/services/notifications/__tests__/quiet-hours.test.mts src/components/__tests__/notification-quiet-hours-panels.test.mts src/services/notifications/__tests__/notification-settings-service.test.mts src/services/__tests__/notification-dispatcher-trace.test.mts src/services/insights/__tests__/weather-quiet-hours-wiring.test.mts src/services/notifications/__tests__/alert-trace.test.mts src/components/__tests__/notification-panels.test.mts",
+      "prCommand": "tsx --import ./tests/panels/register-hook.mjs --test src/services/notifications/__tests__/quiet-hours.test.mts src/components/__tests__/notification-quiet-hours-panels.test.mts src/components/__tests__/notification-settings-unavailable.test.mts src/services/notifications/__tests__/notification-settings-service.test.mts src/services/__tests__/notification-dispatcher-trace.test.mts src/services/insights/__tests__/weather-quiet-hours-wiring.test.mts src/services/notifications/__tests__/alert-trace.test.mts src/components/__tests__/notification-panels.test.mts"
+    },
+    {
+      "script": "test:reasoning",
+      "mainCommand": "tsx --test src/services/__tests__/hypothesis-dedupe.test.mts src/services/__tests__/hypothesis-entities.test.mts src/services/__tests__/hypothesis-feedback.test.mts src/services/__tests__/hypothesis-feedback-mult.test.mts src/services/__tests__/pressure-baselines.test.mts src/services/__tests__/llm-budget.test.mts src/services/__tests__/action-memory.test.mts src/services/__tests__/hypothesis-alternatives.test.mts",
+      "prCommand": "tsx --test src/services/__tests__/hypothesis-dedupe.test.mts src/services/__tests__/hypothesis-entities.test.mts src/services/__tests__/hypothesis-feedback.test.mts src/services/__tests__/hypothesis-feedback-mult.test.mts src/services/__tests__/pressure-baselines.test.mts src/services/__tests__/llm-budget.test.mts src/services/__tests__/action-memory.test.mts src/services/__tests__/hypothesis-alternatives.test.mts"
+    },
+    {
+      "script": "test:review-trail",
+      "mainCommand": "tsx --test src/services/__tests__/panel-attention.test.mts src/services/__tests__/sidebar-heat.test.mts src/components/__tests__/attention-navigator.test.mts src/app/__tests__/panel-attention-wiring.test.mts",
+      "prCommand": "tsx --test src/services/__tests__/panel-attention.test.mts src/services/__tests__/sidebar-heat.test.mts src/components/__tests__/attention-navigator.test.mts src/app/__tests__/panel-attention-wiring.test.mts"
+    },
+    {
+      "script": "test:roadmap-controller",
+      "mainCommand": "node --test tests/roadmap-controller.test.mjs",
+      "prCommand": "node --test tests/roadmap-controller.test.mjs"
+    },
+    {
+      "script": "test:rules-engine",
+      "mainCommand": "tsx --test src/services/intelligence/__tests__/rules-engine.test.mts src/services/intelligence/__tests__/rules-bootstrap.test.mts src/components/__tests__/observation-rules-helpers.test.mts && node --test src-tauri/sidecar/__tests__/rules.test.mjs",
+      "prCommand": "tsx --test src/services/intelligence/__tests__/rules-engine.test.mts src/services/intelligence/__tests__/rules-bootstrap.test.mts src/components/__tests__/observation-rules-helpers.test.mts && node --test src-tauri/sidecar/__tests__/rules.test.mjs"
+    },
+    {
+      "script": "test:satellite",
+      "mainCommand": "tsx --test src/services/__tests__/satellite-weather.test.mts",
+      "prCommand": "tsx --test src/services/__tests__/satellite-weather.test.mts"
+    },
+    {
+      "script": "test:sec-hardening",
+      "mainCommand": "node --test tests/csp-allowlist.test.mjs src-tauri/sidecar/__tests__/faa-cam-ssrf-pinning.test.mjs src-tauri/sidecar/__tests__/webhook-dispatch.test.mjs src-tauri/sidecar/__tests__/ipv4-fetch-redirect.test.mjs src-tauri/sidecar/__tests__/isprivateip-ssrf.test.mjs src-tauri/sidecar/__tests__/ipaws-outage.test.mjs src-tauri/sidecar/__tests__/feed-resilience.test.mjs",
+      "prCommand": "node --test tests/csp-allowlist.test.mjs src-tauri/sidecar/__tests__/faa-cam-ssrf-pinning.test.mjs src-tauri/sidecar/__tests__/webhook-dispatch.test.mjs src-tauri/sidecar/__tests__/ipv4-fetch-redirect.test.mjs src-tauri/sidecar/__tests__/isprivateip-ssrf.test.mjs src-tauri/sidecar/__tests__/ipaws-outage.test.mjs src-tauri/sidecar/__tests__/feed-resilience.test.mjs"
+    },
+    {
+      "script": "test:secret-boundary",
+      "mainCommand": "node --test tests/secret-boundary.test.mjs tests/sidecar-secret-routing-boundary.test.mjs tests/ucdp-local-boundary.test.mjs src-tauri/sidecar/secret-sync.test.mjs && tsx --test src/services/__tests__/secret-boundary.test.mts src/services/__tests__/keychain.test.mts src/components/__tests__/key-dashboard-secret-boundary.test.mts",
+      "prCommand": "node --test tests/secret-boundary.test.mjs tests/sidecar-secret-routing-boundary.test.mjs tests/ucdp-local-boundary.test.mjs src-tauri/sidecar/secret-sync.test.mjs && tsx --test src/services/__tests__/secret-boundary.test.mts src/services/__tests__/keychain.test.mts src/components/__tests__/key-dashboard-secret-boundary.test.mts"
+    },
+    {
+      "script": "test:security",
+      "mainCommand": "tsx --test src/services/security/__tests__/cve-service.test.mts src/services/security/__tests__/vulners-service.test.mts src/components/__tests__/cve-panel-helpers.test.mts && node --test src-tauri/sidecar/__tests__/security-cve-parity.test.mjs",
+      "prCommand": "tsx --test src/services/security/__tests__/cve-service.test.mts src/services/security/__tests__/vulners-service.test.mts src/components/__tests__/cve-panel-helpers.test.mts && node --test src-tauri/sidecar/__tests__/security-cve-parity.test.mjs"
+    },
+    {
+      "script": "test:settings",
+      "mainCommand": "tsx --test src/services/__tests__/key-categories.test.mts src/services/__tests__/key-feature-index.test.mts src/services/__tests__/key-shape-registry.test.mts src/services/__tests__/wizard-state.test.mts",
+      "prCommand": "tsx --test src/services/__tests__/key-categories.test.mts src/services/__tests__/key-feature-index.test.mts src/services/__tests__/key-shape-registry.test.mts src/services/__tests__/wizard-state.test.mts"
+    },
+    {
+      "script": "test:sidecar-ci",
+      "mainCommand": "node --test tests/sidecar-ci-inventory.test.mjs tests/sidecar-ci-suite.test.mjs",
+      "prCommand": "node --test tests/sidecar-ci-inventory.test.mjs tests/sidecar-ci-suite.test.mjs"
+    },
+    {
+      "script": "test:sidecar-fallback",
+      "mainCommand": "node --test tests/sidecar-port-range.test.mjs tests/csp-allowlist.test.mjs",
+      "prCommand": "node --test tests/sidecar-port-range.test.mjs tests/csp-allowlist.test.mjs"
+    },
+    {
+      "script": "test:sidecar-lows",
+      "mainCommand": "node --test --test-timeout=60000 src-tauri/sidecar/__tests__/q20-sidecar-lows.test.mjs src-tauri/sidecar/sms-security.test.mjs src-tauri/sidecar/__tests__/sms-auth.test.mjs",
+      "prCommand": "node --test --test-timeout=60000 src-tauri/sidecar/__tests__/q20-sidecar-lows.test.mjs src-tauri/sidecar/sms-security.test.mjs src-tauri/sidecar/__tests__/sms-auth.test.mjs"
+    },
+    {
+      "script": "test:sidecar-routing",
+      "mainCommand": "node --test tests/sidecar-secret-routing-boundary.test.mjs tests/ucdp-local-boundary.test.mjs tests/openaq-local-boundary.test.mjs && tsx --test src/services/__tests__/cloud-fallback-policy.test.mts src/services/__tests__/runtime-fetch-fallback.test.mts src/services/__tests__/confirmed-port-routing.test.mts src/services/diagnostics/__tests__/local-engine-status.test.mts src/services/diagnostics/__tests__/sidecar-probe-engine.test.mts tests/api-param-classification.test.mts src/services/__tests__/fetch-attribution-port-race.test.mts src/services/__tests__/fetch-attribution.test.mts src/services/__tests__/ucdp-runtime-boundary.test.mts",
+      "prCommand": "node --test tests/sidecar-secret-routing-boundary.test.mjs tests/ucdp-local-boundary.test.mjs tests/openaq-local-boundary.test.mjs && tsx --test src/services/__tests__/cloud-fallback-policy.test.mts src/services/__tests__/runtime-fetch-fallback.test.mts src/services/__tests__/confirmed-port-routing.test.mts src/services/diagnostics/__tests__/local-engine-status.test.mts src/services/diagnostics/__tests__/sidecar-probe-engine.test.mts tests/api-param-classification.test.mts src/services/__tests__/fetch-attribution-port-race.test.mts src/services/__tests__/fetch-attribution.test.mts src/services/__tests__/ucdp-runtime-boundary.test.mts"
+    },
+    {
+      "script": "test:sidecar-supervisor",
+      "mainCommand": "node --test tests/sidecar-supervisor-boundary.test.mjs tests/sidecar-supervisor-native.test.mjs",
+      "prCommand": "node --test tests/sidecar-supervisor-boundary.test.mjs tests/sidecar-supervisor-native.test.mjs"
+    },
+    {
+      "script": "test:signing-phase-a",
+      "mainCommand": "node --test tests/desktop-signing.test.mjs tests/desktop-package-signing.test.mjs tests/main-sync-signing.test.mjs tests/vault-diagnostics-boundary.test.mjs && tsx --test src/services/diagnostics/__tests__/vault-diagnostics.test.mts",
+      "prCommand": "node --test tests/desktop-signing.test.mjs tests/desktop-package-signing.test.mjs tests/main-sync-signing.test.mjs tests/vault-diagnostics-boundary.test.mjs && tsx --test src/services/diagnostics/__tests__/vault-diagnostics.test.mts"
+    },
+    {
+      "script": "test:situations",
+      "mainCommand": "tsx --test src/services/intelligence/__tests__/situation-store.test.mts src/services/intelligence/__tests__/situation-detector.test.mts src/components/__tests__/situation-panel-helpers.test.mts && node --test src-tauri/sidecar/__tests__/situations.test.mjs",
+      "prCommand": "tsx --test src/services/intelligence/__tests__/situation-store.test.mts src/services/intelligence/__tests__/situation-detector.test.mts src/components/__tests__/situation-panel-helpers.test.mts && node --test src-tauri/sidecar/__tests__/situations.test.mjs"
+    },
+    {
+      "script": "test:smoke-engine",
+      "mainCommand": "tsx --test src/services/smoke/__tests__/aqi-category.test.mts src/services/smoke/__tests__/safe-windows.test.mts src/services/smoke/__tests__/arrival-eta.test.mts src/services/smoke/__tests__/forecast-field.test.mts src/services/smoke/__tests__/hrrr-smoke.test.mts src/services/smoke/__tests__/hrrr-smoke-parity.test.mts src/services/smoke/__tests__/fire-detection-sources.test.mts src/services/smoke/__tests__/clean-air-compass.test.mts src/services/smoke/__tests__/activity-guidance.test.mts src/services/smoke/__tests__/clean-room-checklist.test.mts src/services/smoke/__tests__/smoke-fetch.test.mts src/services/smoke/__tests__/smoke-state.test.mts src/services/smoke/__tests__/smoke-headline.test.mts src/services/smoke/__tests__/smoke-callout.test.mts && node --test src-tauri/sidecar/__tests__/hrrr-smoke.test.mjs",
+      "prCommand": "tsx --test src/services/smoke/__tests__/aqi-category.test.mts src/services/smoke/__tests__/safe-windows.test.mts src/services/smoke/__tests__/arrival-eta.test.mts src/services/smoke/__tests__/forecast-field.test.mts src/services/smoke/__tests__/hrrr-smoke.test.mts src/services/smoke/__tests__/hrrr-smoke-parity.test.mts src/services/smoke/__tests__/fire-detection-sources.test.mts src/services/smoke/__tests__/clean-air-compass.test.mts src/services/smoke/__tests__/activity-guidance.test.mts src/services/smoke/__tests__/clean-room-checklist.test.mts src/services/smoke/__tests__/smoke-fetch.test.mts src/services/smoke/__tests__/smoke-state.test.mts src/services/smoke/__tests__/smoke-headline.test.mts src/services/smoke/__tests__/smoke-callout.test.mts && node --test src-tauri/sidecar/__tests__/hrrr-smoke.test.mjs"
+    },
+    {
+      "script": "test:sms",
+      "mainCommand": "node --test src-tauri/sidecar/sms-command-parser.test.mjs src-tauri/sidecar/sms-security.test.mjs src-tauri/sidecar/sms-response-formatter.test.mjs src-tauri/sidecar/__tests__/sms-auth.test.mjs",
+      "prCommand": "node --test src-tauri/sidecar/sms-command-parser.test.mjs src-tauri/sidecar/sms-security.test.mjs src-tauri/sidecar/sms-response-formatter.test.mjs src-tauri/sidecar/__tests__/sms-auth.test.mjs"
+    },
+    {
+      "script": "test:sms-panel",
+      "mainCommand": "tsx --import ./tests/panels/register-hook.mjs --test tests/panels/sms-settings-panel.test.mts",
+      "prCommand": "tsx --import ./tests/panels/register-hook.mjs --test tests/panels/sms-settings-panel.test.mts"
+    },
+    {
+      "script": "test:spaceweather",
+      "mainCommand": "tsx --test src/services/spaceweather/__tests__/swpc-monitor.test.mts src/services/spaceweather/__tests__/globe-overlay.test.mts src/services/spaceweather/__tests__/solar-imagery.test.mts src/services/spaceweather/__tests__/kp-fusion-observations.test.mts && node --test src-tauri/sidecar/__tests__/spaceweather-parity.test.mjs && node --import tsx --test src-tauri/sidecar/__tests__/spaceweather-imagery-parity.test.mjs",
+      "prCommand": "tsx --test src/services/spaceweather/__tests__/swpc-monitor.test.mts src/services/spaceweather/__tests__/globe-overlay.test.mts src/services/spaceweather/__tests__/solar-imagery.test.mts src/services/spaceweather/__tests__/kp-fusion-observations.test.mts && node --test src-tauri/sidecar/__tests__/spaceweather-parity.test.mjs && node --import tsx --test src-tauri/sidecar/__tests__/spaceweather-imagery-parity.test.mjs"
+    },
+    {
+      "script": "test:story-renderer-chunk",
+      "mainCommand": "tsx --test src/config/__tests__/story-renderer-chunk.test.mts",
+      "prCommand": "tsx --test src/config/__tests__/story-renderer-chunk.test.mts"
+    },
+    {
+      "script": "test:strategic-self-improvement",
+      "mainCommand": "tsx --test src/services/diagnostics/__tests__/failure-prediction.test.mts src/services/governance/__tests__/policy-engine.test.mts src/services/governance/__tests__/model-governance.test.mts src/services/experiments/__tests__/experiment-manager.test.mts src/services/ops/__tests__/causal-attribution.test.mts src/services/ops/__tests__/trust-budget.test.mts src/services/ops/__tests__/playbook-engine.test.mts src/services/scenarios/__tests__/scenario-library.test.mts src/services/personal/__tests__/resilience-model.test.mts src/services/quality/__tests__/quality-debt.test.mts src/services/quality/__tests__/self-improvement-scheduler.test.mts",
+      "prCommand": "tsx --test src/services/diagnostics/__tests__/failure-prediction.test.mts src/services/governance/__tests__/policy-engine.test.mts src/services/governance/__tests__/model-governance.test.mts src/services/experiments/__tests__/experiment-manager.test.mts src/services/ops/__tests__/causal-attribution.test.mts src/services/ops/__tests__/trust-budget.test.mts src/services/ops/__tests__/playbook-engine.test.mts src/services/scenarios/__tests__/scenario-library.test.mts src/services/personal/__tests__/resilience-model.test.mts src/services/quality/__tests__/quality-debt.test.mts src/services/quality/__tests__/self-improvement-scheduler.test.mts"
+    },
+    {
+      "script": "test:survival",
+      "mainCommand": "tsx --test src/services/survival/__tests__/survival-types.test.mts src/services/survival/__tests__/threat-projection.test.mts src/services/survival/__tests__/posture-trajectory.test.mts src/services/survival/__tests__/world-branches.test.mts src/services/survival/__tests__/decision-consequence.test.mts src/services/survival/__tests__/grid-down-certify.test.mts src/services/survival/__tests__/offline-playbook.test.mts src/services/survival/__tests__/comms-fallback.test.mts src/services/survival/__tests__/posture-loop-replay.test.mts src/services/survival/__tests__/posture-calibration.test.mts src/services/survival/__tests__/projection-calibration.test.mts src/services/survival/__tests__/retrospective-digest.test.mts src/services/survival/__tests__/retrospective-view.test.mts src/services/survival/__tests__/decision-consequence-view.test.mts src/services/survival/__tests__/offline-playbook-view.test.mts src/services/survival/__tests__/comms-fallback-view.test.mts src/services/survival/__tests__/grid-down-certify-view.test.mts src/services/survival/__tests__/posture-trajectory-view.test.mts src/services/survival/__tests__/world-branches-view.test.mts src/services/survival/__tests__/survival-posture-view.test.mts src/services/survival/__tests__/survival-outlook.test.mts src/services/survival/__tests__/survival-posture.test.mts src/services/survival/__tests__/survival-moves.test.mts src/services/survival/__tests__/survival-plan.test.mts src/services/survival/__tests__/world-snapshot.test.mts src/services/survival/__tests__/snapshot-integrity.test.mts src/services/survival/__tests__/survival-loop.test.mts src/services/survival/__tests__/posture-contributor.test.mts src/services/survival/__tests__/move-provider.test.mts src/services/survival/__tests__/storm-posture-adapter.test.mts src/services/survival/__tests__/supply-contributor.test.mts src/services/survival/__tests__/energy-water-contributor.test.mts src/services/survival/__tests__/grid-energy-adapter.test.mts src/services/__tests__/power-grid-alerts-cache.test.mts src/services/survival/__tests__/financial-contributor.test.mts src/services/survival/__tests__/security-contributor.test.mts src/services/survival/__tests__/mobility-contributor.test.mts src/services/survival/__tests__/comms-contributor.test.mts src/services/survival/__tests__/health-contributor.test.mts src/services/__tests__/disease-intel-cache.test.mts src/services/survival/__tests__/personal-lens.test.mts src/services/survival/__tests__/lens-board.test.mts src/services/survival/__tests__/board-events.test.mts src/services/survival/__tests__/scrubber-view.test.mts src/services/survival/__tests__/time-scrubber.test.mts src/services/survival/__tests__/map-modes.test.mts src/services/survival/__tests__/lens-marker-style.test.mts src/services/survival/__tests__/scrubber-loop.test.mts src/services/survival/__tests__/map-modes-apply.test.mts src/services/survival/__tests__/lens-marker-apply.test.mts src/services/survival/__tests__/survival-map-modes.test.mts src/services/__tests__/internet-outages-cache.test.mts src/services/survival/__tests__/chokepoint-mobility-adapter.test.mts src/services/supply-chain/__tests__/chokepoint-cache.test.mts",
+      "prCommand": "tsx --test src/services/survival/__tests__/survival-types.test.mts src/services/survival/__tests__/threat-projection.test.mts src/services/survival/__tests__/posture-trajectory.test.mts src/services/survival/__tests__/world-branches.test.mts src/services/survival/__tests__/decision-consequence.test.mts src/services/survival/__tests__/grid-down-certify.test.mts src/services/survival/__tests__/offline-playbook.test.mts src/services/survival/__tests__/comms-fallback.test.mts src/services/survival/__tests__/posture-loop-replay.test.mts src/services/survival/__tests__/posture-calibration.test.mts src/services/survival/__tests__/projection-calibration.test.mts src/services/survival/__tests__/retrospective-digest.test.mts src/services/survival/__tests__/retrospective-view.test.mts src/services/survival/__tests__/decision-consequence-view.test.mts src/services/survival/__tests__/offline-playbook-view.test.mts src/services/survival/__tests__/comms-fallback-view.test.mts src/services/survival/__tests__/grid-down-certify-view.test.mts src/services/survival/__tests__/posture-trajectory-view.test.mts src/services/survival/__tests__/world-branches-view.test.mts src/services/survival/__tests__/survival-posture-view.test.mts src/services/survival/__tests__/survival-outlook.test.mts src/services/survival/__tests__/survival-posture.test.mts src/services/survival/__tests__/survival-moves.test.mts src/services/survival/__tests__/survival-plan.test.mts src/services/survival/__tests__/world-snapshot.test.mts src/services/survival/__tests__/snapshot-integrity.test.mts src/services/survival/__tests__/survival-loop.test.mts src/services/survival/__tests__/posture-contributor.test.mts src/services/survival/__tests__/move-provider.test.mts src/services/survival/__tests__/storm-posture-adapter.test.mts src/services/survival/__tests__/supply-contributor.test.mts src/services/survival/__tests__/energy-water-contributor.test.mts src/services/survival/__tests__/grid-energy-adapter.test.mts src/services/__tests__/power-grid-alerts-cache.test.mts src/services/survival/__tests__/financial-contributor.test.mts src/services/survival/__tests__/security-contributor.test.mts src/services/survival/__tests__/mobility-contributor.test.mts src/services/survival/__tests__/comms-contributor.test.mts src/services/survival/__tests__/health-contributor.test.mts src/services/__tests__/disease-intel-cache.test.mts src/services/survival/__tests__/personal-lens.test.mts src/services/survival/__tests__/lens-board.test.mts src/services/survival/__tests__/board-events.test.mts src/services/survival/__tests__/scrubber-view.test.mts src/services/survival/__tests__/time-scrubber.test.mts src/services/survival/__tests__/map-modes.test.mts src/services/survival/__tests__/lens-marker-style.test.mts src/services/survival/__tests__/scrubber-loop.test.mts src/services/survival/__tests__/map-modes-apply.test.mts src/services/survival/__tests__/lens-marker-apply.test.mts src/services/survival/__tests__/survival-map-modes.test.mts src/services/__tests__/internet-outages-cache.test.mts src/services/survival/__tests__/chokepoint-mobility-adapter.test.mts src/services/supply-chain/__tests__/chokepoint-cache.test.mts"
+    },
+    {
+      "script": "test:synthesis",
+      "mainCommand": "tsx --test src/services/synthesis/__tests__/signal-watch.test.mts src/services/synthesis/__tests__/precedent-matcher.test.mts src/services/synthesis/__tests__/leading-indicators.test.mts src/services/synthesis/__tests__/ai-brief-generator.test.mts src/services/synthesis/__tests__/correlation-engine.test.mts && node --test src-tauri/sidecar/__tests__/synthesis-correlations.test.mjs",
+      "prCommand": "tsx --test src/services/synthesis/__tests__/signal-watch.test.mts src/services/synthesis/__tests__/precedent-matcher.test.mts src/services/synthesis/__tests__/leading-indicators.test.mts src/services/synthesis/__tests__/ai-brief-generator.test.mts src/services/synthesis/__tests__/correlation-engine.test.mts && node --test src-tauri/sidecar/__tests__/synthesis-correlations.test.mjs"
+    },
+    {
+      "script": "test:thresholds",
+      "mainCommand": "tsx --test src/services/config/__tests__/alert-thresholds.test.mts src/services/notifications/__tests__/push-notifier.test.mts src/services/notifications/__tests__/push-notifier-thresholds.test.mts",
+      "prCommand": "tsx --test src/services/config/__tests__/alert-thresholds.test.mts src/services/notifications/__tests__/push-notifier.test.mts src/services/notifications/__tests__/push-notifier-thresholds.test.mts"
+    },
+    {
+      "script": "test:ucdp-provider",
+      "mainCommand": "tsx --test server/crystalball/conflict/v1/__tests__/list-ucdp-events.test.mts src/services/conflict/__tests__/ucdp-fetch-behavior.test.mts src/services/__tests__/ucdp-runtime-boundary.test.mts src/components/__tests__/ucdp-events-panel.test.mts src/app/__tests__/ucdp-desktop-boundary.test.mts api/__tests__/ucdp-classifications.test.mjs src-tauri/sidecar/__tests__/ucdp-local-routes.test.mjs tests/ucdp-local-boundary.test.mjs tests/ucdp-loader-freshness.test.mjs",
+      "prCommand": "tsx --test server/crystalball/conflict/v1/__tests__/list-ucdp-events.test.mts src/services/conflict/__tests__/ucdp-fetch-behavior.test.mts src/services/__tests__/ucdp-runtime-boundary.test.mts src/components/__tests__/ucdp-events-panel.test.mts src/app/__tests__/ucdp-desktop-boundary.test.mts api/__tests__/ucdp-classifications.test.mjs src-tauri/sidecar/__tests__/ucdp-local-routes.test.mjs tests/ucdp-local-boundary.test.mjs tests/ucdp-loader-freshness.test.mjs"
+    },
+    {
+      "script": "test:untrusted-html",
+      "mainCommand": "tsx --import ./tests/panels/register-hook.mjs --test src/services/resource-inventory/__tests__/schema.test.mts src/utils/__tests__/finite-number.test.mts src/components/__tests__/resource-inventory-untrusted.test.mts src/components/__tests__/untrusted-numeric-fields.test.mts",
+      "prCommand": "tsx --import ./tests/panels/register-hook.mjs --test src/services/resource-inventory/__tests__/schema.test.mts src/utils/__tests__/finite-number.test.mts src/components/__tests__/resource-inventory-untrusted.test.mts src/components/__tests__/untrusted-numeric-fields.test.mts"
+    },
+    {
+      "script": "test:ux010",
+      "mainCommand": "node --test tests/ux010-location-startup.test.mjs && tsx --test src/services/__tests__/location.test.mts tests/ux010-ephemeral-local-logistics.test.mts tests/ux010-current-location-save.test.mts src/components/__tests__/ux010-current-location-panel.test.mts && npm run build:full && node --test tests/ux010-native-gate.test.mjs",
+      "prCommand": "node --test tests/ux010-location-startup.test.mjs && tsx --test src/services/__tests__/location.test.mts tests/ux010-ephemeral-local-logistics.test.mts tests/ux010-current-location-save.test.mts src/components/__tests__/ux010-current-location-panel.test.mts && npm run build:full && node --test tests/ux010-native-gate.test.mjs"
+    },
+    {
+      "script": "test:ux011",
+      "mainCommand": "tsx --test src/services/weather/__tests__/weather-alerts-parse.test.mts src/services/weather/__tests__/evacuation-hazard-exposure.test.mts src/components/__tests__/evacuation-hazard-exposure-panel.test.mts && node --test tests/evacuation-hazard-exposure-wiring.test.mjs",
+      "prCommand": "tsx --test src/services/weather/__tests__/weather-alerts-parse.test.mts src/services/weather/__tests__/evacuation-hazard-exposure.test.mts src/components/__tests__/evacuation-hazard-exposure-panel.test.mts && node --test tests/evacuation-hazard-exposure-wiring.test.mjs"
+    },
+    {
+      "script": "test:ux018",
+      "mainCommand": null,
+      "prCommand": "tsx --test src/services/intelligence/__tests__/calibration-resolution-scheduler.test.mts tools/mcp-server/__tests__/diagnostics-tools.test.mjs src/services/intelligence/__tests__/outcome-resolvers.test.mts src/services/intelligence/__tests__/resolver-pass-metrics.test.mts src/services/intelligence/__tests__/resolution-run-receipts.test.mts src/services/intelligence/__tests__/forecast-calibration-adapter.test.mts src/services/intelligence/__tests__/calibration-bridge-wiring.test.mts src/services/intelligence/__tests__/resolution-quality-audit.test.mts src/services/algorithms/__tests__/algorithm-diagnostics.test.mts"
+    },
+    {
+      "script": "test:ux026",
+      "mainCommand": "tsx --test src/services/__tests__/digest-alert-projection.test.mts src/services/__tests__/digest-narrative-contract.test.mts src/services/__tests__/nws-alert-retrieval-freshness.test.mts src/components/__tests__/digest-overlay.test.mts tests/ux026-digest-lifecycle.test.mjs tests/ux026-fourth-cycle-runtime.test.mjs",
+      "prCommand": "tsx --test src/services/__tests__/digest-alert-projection.test.mts src/services/__tests__/digest-narrative-contract.test.mts src/services/__tests__/nws-alert-retrieval-freshness.test.mts src/components/__tests__/digest-overlay.test.mts tests/ux026-digest-lifecycle.test.mjs tests/ux026-fourth-cycle-runtime.test.mjs"
+    },
+    {
+      "script": "test:ux032",
+      "mainCommand": "tsx --test src/components/__tests__/unified-settings-keyboard.test.mts",
+      "prCommand": "tsx --test src/components/__tests__/unified-settings-keyboard.test.mts"
+    },
+    {
+      "script": "test:ux047",
+      "mainCommand": "tsx --test tests/nws-provider-snapshot.test.mjs src/services/__tests__/nws-alert-retrieval-freshness.test.mts src/services/__tests__/nws-alert-lifecycle.test.mts tests/ux047/nws-ui-loader.test.mts tests/ux047/nws-snapshot-cache.test.mts tests/ux047/nws-panel.test.mts tests/ux047/operational-consumers.test.mts src/services/__tests__/sidebar-heat.test.mts src/services/native/__tests__/menubar-status.test.mts",
+      "prCommand": "tsx --test tests/nws-provider-snapshot.test.mjs src/services/__tests__/nws-alert-retrieval-freshness.test.mts src/services/__tests__/nws-alert-lifecycle.test.mts tests/ux047/nws-ui-loader.test.mts tests/ux047/nws-snapshot-cache.test.mts tests/ux047/nws-panel.test.mts tests/ux047/operational-consumers.test.mts src/services/__tests__/sidebar-heat.test.mts src/services/native/__tests__/menubar-status.test.mts"
+    },
+    {
+      "script": "test:ux050",
+      "mainCommand": null,
+      "prCommand": "tsx --test src/services/__tests__/ghost-mode-state.test.mts src/services/__tests__/ghost-notification-policy.test.mts src/services/__tests__/notification-dispatcher-trace.test.mts src/components/__tests__/ghost-mode-notice.test.mts tests/ghost-mode-entry.test.mts src/config/__tests__/story-renderer-chunk.test.mts && node --test tests/comms-panel.test.mjs && npm run build:full && npm run pwa:budget && node --experimental-vm-modules --test tests/ghost-mode-bundle.test.mjs"
+    },
+    {
+      "script": "test:ux052",
+      "mainCommand": null,
+      "prCommand": "tsx --import ./tests/panels/register-hook.mjs --test src/services/__tests__/derived-notification-policy.test.mts src/services/__tests__/derived-alert-reactions.test.mts src/services/notifications/__tests__/notification-settings-service.test.mts src/services/notifications/__tests__/alert-trace.test.mts src/services/notifications/__tests__/quiet-hours.test.mts src/components/__tests__/notification-panels.test.mts src/components/__tests__/notification-quiet-hours-panels.test.mts src/components/__tests__/notification-settings-unavailable.test.mts"
+    },
+    {
+      "script": "test:ux053",
+      "mainCommand": null,
+      "prCommand": "node --test tests/vault-intro-scanner.test.mjs && tsx --test src/app/__tests__/boot-workspace.test.mts src/app/__tests__/startup-acquisition.test.mts src/app/__tests__/desktop-imessage.test.mts src/services/__tests__/notification-router.test.mts src/services/__tests__/threat-reactor-retry.test.mts tests/workspace-startup.test.mts"
+    },
+    {
+      "script": "test:ux058",
+      "mainCommand": null,
+      "prCommand": "tsx --test src/services/__tests__/alert-retention-provenance.test.mts src/services/insights/__tests__/notification-ladder.test.mts src/services/__tests__/nws-notification-owner.test.mts src/services/__tests__/warning-inbox-dispositions.test.mts src/components/__tests__/unified-alert-inbox-disposition.test.mts src/services/__tests__/notification-dispatcher-trace.test.mts src/services/__tests__/unified-alerts-warning-delivery.test.mts"
+    },
+    {
+      "script": "test:ux059",
+      "mainCommand": "tsx --test src/services/__tests__/alert-retention-provenance.test.mts src/services/__tests__/unified-alert-retention.test.mts src/services/__tests__/alert-retention-identity.test.mts",
+      "prCommand": "tsx --test src/services/__tests__/alert-retention-provenance.test.mts src/services/__tests__/unified-alert-retention.test.mts src/services/__tests__/alert-retention-identity.test.mts"
+    },
+    {
+      "script": "test:ux060",
+      "mainCommand": "tsx --test tests/ux060-onboarding-digest.test.mjs src/components/__tests__/digest-overlay.test.mts src/components/__tests__/welcome-flow-sources.test.mts",
+      "prCommand": "tsx --test tests/ux060-onboarding-digest.test.mjs src/components/__tests__/digest-overlay.test.mts src/components/__tests__/welcome-flow-sources.test.mts"
+    },
+    {
+      "script": "test:vault-writer",
+      "mainCommand": "node --test tests/vault-writer-boundary.test.mjs tests/vault-writer-native.test.mjs && tsx --test src/services/__tests__/secret-write-pending.test.mts",
+      "prCommand": "node --test tests/vault-writer-boundary.test.mjs tests/vault-writer-native.test.mjs && tsx --test src/services/__tests__/secret-write-pending.test.mts"
+    },
+    {
+      "script": "test:warning-delivery",
+      "mainCommand": "tsx --test src/services/__tests__/notification-dispatcher-trace.test.mts src/services/__tests__/unified-alerts-warning-delivery.test.mts",
+      "prCommand": "tsx --test src/services/__tests__/notification-dispatcher-trace.test.mts src/services/__tests__/unified-alerts-warning-delivery.test.mts"
+    },
+    {
+      "script": "test:watchboard",
+      "mainCommand": "tsx --test src/components/__tests__/watchboard-store-helpers.test.mts && node --test src-tauri/sidecar/__tests__/watchboard-engine.test.mjs",
+      "prCommand": "tsx --test src/components/__tests__/watchboard-store-helpers.test.mts && node --test src-tauri/sidecar/__tests__/watchboard-engine.test.mjs"
+    },
+    {
+      "script": "test:weather",
+      "mainCommand": "tsx --test src/services/weather/__tests__/weather-exposure.test.mts src/services/weather/__tests__/nws-polygon-match.test.mts src/services/weather/__tests__/personal-storm-mode.test.mts src/services/weather/__tests__/spc-outlook.test.mts src/services/weather/__tests__/warning-verification-bridge.test.mts src/services/weather/__tests__/weather-warning-diagnostics.test.mts src/services/weather/__tests__/weather-feed-select.test.mts src/services/weather/__tests__/weather-feed-state.test.mts src/services/weather/__tests__/saved-place-adapter.test.mts src/services/weather/__tests__/personal-weather-status.test.mts src/services/weather/__tests__/ring-geometry.test.mts src/services/weather/__tests__/weather-alerts-parse.test.mts src/services/weather/__tests__/weather-unevaluable-alert.test.mts src/services/weather/__tests__/weather-feed-toctou.test.mts src/services/weather/__tests__/weather-ugc-fetch.test.mts src/services/weather/__tests__/saved-place-signature.test.mts src/services/weather/__tests__/classify-hazard.test.mts src/services/weather/__tests__/nws-hazards.test.mts src/services/weather/__tests__/self-test-fixture.test.mts src/services/weather/__tests__/weather-urgency.test.mts src/services/weather/__tests__/weather-warning-router.test.mts src/services/weather/__tests__/weather-fusion-observations.test.mts src/components/__tests__/personal-storm-mode-view.test.mts src/components/__tests__/personal-storm-mode-shelf.test.mts",
+      "prCommand": "tsx --test src/services/weather/__tests__/weather-exposure.test.mts src/services/weather/__tests__/nws-polygon-match.test.mts src/services/weather/__tests__/personal-storm-mode.test.mts src/services/weather/__tests__/spc-outlook.test.mts src/services/weather/__tests__/warning-verification-bridge.test.mts src/services/weather/__tests__/weather-warning-diagnostics.test.mts src/services/weather/__tests__/weather-feed-select.test.mts src/services/weather/__tests__/weather-feed-state.test.mts src/services/weather/__tests__/saved-place-adapter.test.mts src/services/weather/__tests__/personal-weather-status.test.mts src/services/weather/__tests__/ring-geometry.test.mts src/services/weather/__tests__/weather-alerts-parse.test.mts src/services/weather/__tests__/weather-unevaluable-alert.test.mts src/services/weather/__tests__/weather-feed-toctou.test.mts src/services/weather/__tests__/weather-ugc-fetch.test.mts src/services/weather/__tests__/saved-place-signature.test.mts src/services/weather/__tests__/classify-hazard.test.mts src/services/weather/__tests__/nws-hazards.test.mts src/services/weather/__tests__/self-test-fixture.test.mts src/services/weather/__tests__/weather-urgency.test.mts src/services/weather/__tests__/weather-warning-router.test.mts src/services/weather/__tests__/weather-fusion-observations.test.mts src/components/__tests__/personal-storm-mode-view.test.mts src/components/__tests__/personal-storm-mode-shelf.test.mts"
+    },
+    {
+      "script": "test:webcams",
+      "mainCommand": "tsx --test src/services/webcams/__tests__/webcam-aggregator.test.mts src/services/webcams/__tests__/webcam-health.test.mts src/services/webcams/__tests__/flight-rule.test.mts src/services/webcams/__tests__/metar-parser.test.mts src/services/webcams/__tests__/station-matcher.test.mts src/services/webcams/__tests__/dot511-adapter.test.mts src/services/webcams/__tests__/volcano-cam-catalog.test.mts src/services/webcams/__tests__/nps-adapter.test.mts src/services/webcams/__tests__/alertwildfire-adapter.test.mts src/services/webcams/__tests__/streamgauge-adapter.test.mts src/services/webcams/__tests__/windy-adapter.test.mts src/services/webcams/__tests__/noaa-coastal-catalog.test.mts src/services/webcams/__tests__/health-view.test.mts src/services/webcams/__tests__/youtube-live-registry.test.mts src/services/webcams/__tests__/probe-backoff.test.mts src/services/webcams/__tests__/pinned-store.test.mts src/services/webcams/__tests__/webcam-config-loader.test.mts src/services/webcams/__tests__/caltrans-config.test.mts src/services/webcams/__tests__/tfl-config.test.mts src/services/webcams/__tests__/singapore-config.test.mts src/services/webcams/__tests__/airnow-visibility-catalog.test.mts src/services/webcams/__tests__/geonet-config.test.mts src/services/webcams/__tests__/hazecam-catalog.test.mts src/services/webcams/__tests__/live-video-refresh.test.mts src/services/webcams/__tests__/webcam-pick.test.mts src/services/webcams/__tests__/webcam-viewer.test.mts src/services/webcams/__tests__/webcam-globe-layer.test.mts src/services/webcams/__tests__/frame-resolver.test.mts && tsx --import ./tests/panels/register-hook.mjs --test --test-force-exit src/components/__tests__/live-webcams-panel.test.mts src/components/__tests__/map-popup-faa-camera.test.mts",
+      "prCommand": "tsx --test src/services/webcams/__tests__/webcam-aggregator.test.mts src/services/webcams/__tests__/webcam-health.test.mts src/services/webcams/__tests__/flight-rule.test.mts src/services/webcams/__tests__/metar-parser.test.mts src/services/webcams/__tests__/station-matcher.test.mts src/services/webcams/__tests__/dot511-adapter.test.mts src/services/webcams/__tests__/volcano-cam-catalog.test.mts src/services/webcams/__tests__/nps-adapter.test.mts src/services/webcams/__tests__/alertwildfire-adapter.test.mts src/services/webcams/__tests__/streamgauge-adapter.test.mts src/services/webcams/__tests__/windy-adapter.test.mts src/services/webcams/__tests__/noaa-coastal-catalog.test.mts src/services/webcams/__tests__/health-view.test.mts src/services/webcams/__tests__/youtube-live-registry.test.mts src/services/webcams/__tests__/probe-backoff.test.mts src/services/webcams/__tests__/pinned-store.test.mts src/services/webcams/__tests__/webcam-config-loader.test.mts src/services/webcams/__tests__/caltrans-config.test.mts src/services/webcams/__tests__/tfl-config.test.mts src/services/webcams/__tests__/singapore-config.test.mts src/services/webcams/__tests__/airnow-visibility-catalog.test.mts src/services/webcams/__tests__/geonet-config.test.mts src/services/webcams/__tests__/hazecam-catalog.test.mts src/services/webcams/__tests__/live-video-refresh.test.mts src/services/webcams/__tests__/webcam-pick.test.mts src/services/webcams/__tests__/webcam-viewer.test.mts src/services/webcams/__tests__/webcam-globe-layer.test.mts src/services/webcams/__tests__/frame-resolver.test.mts && tsx --import ./tests/panels/register-hook.mjs --test --test-force-exit src/components/__tests__/live-webcams-panel.test.mts src/components/__tests__/map-popup-faa-camera.test.mts"
+    },
+    {
+      "script": "test:wildfire",
+      "mainCommand": "tsx --test src/services/__tests__/fire-intel-service.test.mts",
+      "prCommand": "tsx --test src/services/__tests__/fire-intel-service.test.mts"
+    },
+    {
+      "script": "test:workflow-security",
+      "mainCommand": "node --test tests/workflow-injection.test.mjs tests/dependency-change-gate.test.mjs tests/lint-workflow.test.mjs tests/build-desktop-workflow.test.mjs tests/github-automation-hardening.test.mjs tests/agent-merge-workflow.test.mjs tests/workflow-action-pinning.test.mjs tests/workflow-security-boundaries.test.mjs tests/auto-tag-auth.test.mjs tests/workflow-expression-runtime.test.mjs",
+      "prCommand": "node --test tests/workflow-injection.test.mjs tests/dependency-change-gate.test.mjs tests/lint-workflow.test.mjs tests/build-desktop-workflow.test.mjs tests/github-automation-hardening.test.mjs tests/agent-merge-workflow.test.mjs tests/workflow-action-pinning.test.mjs tests/workflow-security-boundaries.test.mjs tests/auto-tag-auth.test.mjs tests/workflow-expression-runtime.test.mjs"
+    }
+  ],
+  "outcomes": [
+    {
+      "script": "test:acc509:",
+      "executionHeader": "[trusted:main] test:acc509: tsx --test src/services/__tests__/alert-identity.test.mts src/services/__tests__/unified-alerts-identity.test.mts src/services/__tests__/lsr-alert-identity.test.mts src/services/__tests__/acc509-replay.test.mts tests/intelligence/situation-engine-identity.test.mts tests/intelligence/compound-episode-identity.test.mts tests/intelligence/situation-geography-consumers.test.mts tests/components/situation-panel-delegation.test.mts",
+      "reportedCounts": [
+        "# pass 126",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:acc510:",
+      "executionHeader": "[trusted:main] test:acc510: tsx --test src/services/__tests__/acc510-news-domain.test.mts src/services/__tests__/acc510-news-producers.test.mts src/services/__tests__/acc510-news-handoff.test.mts src/services/__tests__/acc510-news-replay.test.mts src/services/__tests__/acc510-situation-domains.test.mts src/services/__tests__/acc510-analyst-domain-path.test.mts tests/intelligence/acc510-neutral-consumers.test.mts tests/components/situation-panel-delegation.test.mts",
+      "reportedCounts": [
+        "# pass 85",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:agentic-pipeline",
+      "executionHeader": "npm run test:agentic-pipeline",
+      "reportedCounts": [
+        "# pass 82",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:airquality:",
+      "executionHeader": "[trusted:main] test:airquality: tsx --test src/services/airquality/__tests__/purpleair-helpers.test.mts src/services/airquality/__tests__/airquality-fusion-observations.test.mts src/services/airquality/__tests__/purpleair-fusion-fetch.test.mts src/services/airquality/__tests__/air-quality-callout-bridge.test.mts && node --test src-tauri/sidecar/__tests__/purpleair-route-guards.test.mjs",
+      "reportedCounts": [
+        "# pass 66",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 7",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:alert-capacity:",
+      "executionHeader": "[trusted:main] test:alert-capacity: tsx --test src/services/__tests__/unified-alerts-capacity.test.mts",
+      "reportedCounts": [
+        "# pass 11",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:alert-deduplication:",
+      "executionHeader": "[trusted:main] test:alert-deduplication: tsx --test src/services/intelligence/__tests__/alert-deduplication.test.mts",
+      "reportedCounts": [
+        "# pass 46",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:algorithms:",
+      "executionHeader": "[trusted:main] test:algorithms: tsx --test src/services/algorithms/__tests__/*.test.mts src/services/__tests__/military-patterns.test.mts",
+      "reportedCounts": [
+        "# pass 308",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:analysis-worker:",
+      "executionHeader": "[trusted:main] test:analysis-worker: tsx --import ./tests/panels/register-hook.mjs --test tests/services/analysis-worker.test.mts src/services/diagnostics/__tests__/analysis-input.test.mts",
+      "reportedCounts": [
+        "# pass 22",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:analytics-consent:",
+      "executionHeader": "[trusted:main] test:analytics-consent: tsx --test src/services/__tests__/analytics-consent.test.mts src/services/__tests__/analytics-sdk-lifecycle.test.mjs src/components/__tests__/analytics-reset-notice.test.mts src/components/__tests__/shell-a11y-contracts.test.mts",
+      "reportedCounts": [
+        "# pass 40",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:analytics-lifecycle:",
+      "executionHeader": "[trusted:main] test:analytics-lifecycle: tsx --test src/services/__tests__/analytics-sdk-lifecycle.test.mjs src/components/__tests__/analytics-reset-notice.test.mts",
+      "reportedCounts": [
+        "# pass 19",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:briefing-scheduler:",
+      "executionHeader": "[trusted:main] test:briefing-scheduler: tsx --test src/services/intelligence/__tests__/briefing-scheduler.test.mts",
+      "reportedCounts": [
+        "# pass 18",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:command-center:",
+      "executionHeader": "[trusted:main] test:command-center: tsx --test src/services/intelligence/__tests__/command-center-summary.test.mts",
+      "reportedCounts": [
+        "# pass 33",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:components:",
+      "executionHeader": "[trusted:main] test:components: tsx --test src/components/__tests__/disease-outbreak-tabs.test.mts src/components/__tests__/space-weather-panel.test.mts",
+      "reportedCounts": [
+        "# pass 41",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:crisis-signature-library:",
+      "executionHeader": "[trusted:main] test:crisis-signature-library: tsx --test src/services/intelligence/__tests__/crisis-signature-library.test.mts",
+      "reportedCounts": [
+        "# pass 62",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:crisis-trajectory:",
+      "executionHeader": "[trusted:main] test:crisis-trajectory: tsx --test src/services/intelligence/__tests__/crisis-trajectory.test.mts",
+      "reportedCounts": [
+        "# pass 43",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:cross-domain-contradictions:",
+      "executionHeader": "[trusted:main] test:cross-domain-contradictions: tsx --test src/services/intelligence/__tests__/cross-domain-contradiction-detector.test.mts",
+      "reportedCounts": [
+        "# pass 35",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:datacenter",
+      "executionHeader": "npm run test:datacenter",
+      "reportedCounts": [
+        "# pass 44",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 2",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:datacenter-ownership",
+      "executionHeader": "npm run test:datacenter-ownership",
+      "reportedCounts": [
+        "# pass 35",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 2",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:desktop-identity",
+      "executionHeader": "npm run test:desktop-identity",
+      "reportedCounts": [
+        "# pass 37",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 15",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 24",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:desktop-updater:",
+      "executionHeader": "[trusted:main] test:desktop-updater: node --test tests/desktop-updater-signature.test.mjs tests/desktop-updater-authority.test.mjs tests/updater-identity-native.test.mjs && tsx --test src/app/__tests__/desktop-updater.test.mts",
+      "reportedCounts": [
+        "# pass 15",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 24",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:diagnostics:",
+      "executionHeader": "[trusted:main] test:diagnostics: tsx --import ./tests/panels/register-hook.mjs --test src/services/diagnostics/__tests__/*.test.mts tests/services/analysis-worker.test.mts && node --test scripts/checkup-log-audit.test.mjs scripts/claude-auth-core.test.mjs scripts/claude-auth-doctor.test.mjs scripts/doctor-core.test.mjs tools/mcp-server/__tests__/diagnostics-tools.test.mjs src-tauri/sidecar/__tests__/analyst-diagnostics-mirror.test.mjs",
+      "reportedCounts": [
+        "# pass 442",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 64",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:domain-retirement",
+      "executionHeader": "npm run test:domain-retirement",
+      "reportedCounts": [
+        "# pass 2",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:emergency-pack:",
+      "executionHeader": "[trusted:main] test:emergency-pack: tsx --test src/services/emergency-pack/__tests__/*.test.mts src/components/__tests__/emergency-pack-view.test.mts src/components/__tests__/emergency-readiness-pack-panel.test.mts",
+      "reportedCounts": [
+        "# pass 232",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:emergency-readiness:",
+      "executionHeader": "[trusted:main] test:emergency-readiness: tsx --import ./tests/panels/register-hook.mjs --test src/services/survival/__tests__/snapshot-store.test.mts src/services/lifelines/__tests__/lifeline-runtime.test.mts src/components/__tests__/emergency-readiness-view.test.mts src/components/__tests__/emergency-readiness-panel.test.mts tests/emergency-readiness-panel-wiring.test.mjs",
+      "reportedCounts": [
+        "# pass 36",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:event-store:",
+      "executionHeader": "[trusted:main] test:event-store: tsx --test src/components/__tests__/event-store-helpers.test.mts && node --test src-tauri/sidecar/__tests__/event-store.test.mjs src-tauri/sidecar/__tests__/event-store-wiring.test.mjs",
+      "reportedCounts": [
+        "# pass 68",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 15",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:evidence-journal:",
+      "executionHeader": "[trusted:main] test:evidence-journal: node --test src-tauri/sidecar/__tests__/evidence-store.test.mjs src-tauri/sidecar/__tests__/evidence-routes.test.mjs tests/evidence-journal-boundary.test.mjs && tsx --test src/services/intelligence/__tests__/evidence-journal.test.mts src/components/__tests__/evidence-journal-view.test.mts src/components/__tests__/evidence-journal-panel.test.mts",
+      "reportedCounts": [
+        "# pass 40",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 68",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:feed-health:",
+      "executionHeader": "[trusted:main] test:feed-health: tsx --test src/services/diagnostics/__tests__/feed-catalog.test.mts src/components/__tests__/feed-health-panel.test.mts && node --test src-tauri/sidecar/__tests__/feed-tracker.test.mjs",
+      "reportedCounts": [
+        "# pass 34",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 6",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:feed-health-dashboard:",
+      "executionHeader": "[trusted:main] test:feed-health-dashboard: tsx --test src/components/__tests__/feed-health-dashboard-panel.test.mts",
+      "reportedCounts": [
+        "# pass 25",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:fetch-attribution:",
+      "executionHeader": "[trusted:main] test:fetch-attribution: tsx --test src/services/__tests__/fetch-attribution.test.mts src/services/__tests__/fetch-attribution-wiring.test.mts src/services/__tests__/fetch-attribution-port-race.test.mts src/services/__tests__/caller-abort.test.mts src/services/__tests__/cached-fetch-fallback.test.mts",
+      "reportedCounts": [
+        "# pass 30",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:firms:",
+      "executionHeader": "[trusted:main] test:firms: tsx --test src/components/__tests__/firms-helpers.test.mts",
+      "reportedCounts": [
+        "# pass 59",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:forecast-load:",
+      "executionHeader": "[trusted:main] test:forecast-load: tsx --test src/services/intelligence/__tests__/forecast-calibration-load.test.mts src/services/intelligence/__tests__/forecast-calibration-adapter.test.mts",
+      "reportedCounts": [
+        "# pass 238",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:gdacs-map:",
+      "executionHeader": "[trusted:main] test:gdacs-map: tsx --test src/services/__tests__/gdacs-map.test.mts src/services/__tests__/api-diagnostic.test.mts src/services/__tests__/data-freshness.test.mts src/services/__tests__/persisted-date-hydration.test.mts",
+      "reportedCounts": [
+        "# pass 41",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:health-contract",
+      "executionHeader": "npm run test:health-contract",
+      "reportedCounts": [
+        "# pass 2",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:home-reassurance:",
+      "executionHeader": "[trusted:main] test:home-reassurance: tsx --test src/services/home-shell/__tests__/briefing-view.test.mts src/components/__tests__/home-shell-reassurance.test.mts",
+      "reportedCounts": [
+        "# pass 27",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:imessage:",
+      "executionHeader": "[trusted:main] test:imessage: node --test tests/imessage-native-boundary.test.mjs && tsx --test src/services/__tests__/imessage-bridge.test.mts src/components/__tests__/imessage-settings.test.mts src/app/__tests__/desktop-imessage.test.mts src/services/seismic/__tests__/eew-imessage.test.mts src/services/notifications/__tests__/imessage-bridge-extended.test.mts src/services/notifications/__tests__/imessage-pause-alerts.test.mts src/components/__tests__/imessage-paused-notice.test.mts src/components/__tests__/imessage-paused-notice-bridge.test.mts",
+      "reportedCounts": [
+        "# pass 6",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 114",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:imessage-native",
+      "executionHeader": "npm run test:imessage-native",
+      "reportedCounts": [
+        "# pass 1",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:insights:",
+      "executionHeader": "[trusted:main] test:insights: tsx --test src/services/insights/__tests__/big-event-detector.test.mts src/services/insights/__tests__/confidence-urgency-matrix.test.mts src/services/insights/__tests__/notification-ladder.test.mts src/services/insights/__tests__/share-packet.test.mts src/services/insights/__tests__/ask-the-data.test.mts src/services/insights/__tests__/ask-context.test.mts src/components/__tests__/ask-the-data-view.test.mts src/services/insights/__tests__/action-briefs.test.mts src/services/insights/__tests__/data-bridge.test.mts src/services/action-guidance/__tests__/earthquake-action-guidance.test.mts",
+      "reportedCounts": [
+        "# pass 133",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:insights6:",
+      "executionHeader": "[trusted:main] test:insights6: tsx --test src/services/insights/__tests__/presentation-export.test.mts",
+      "reportedCounts": [
+        "# pass 23",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:install-scripts",
+      "executionHeader": "npm run test:install-scripts",
+      "reportedCounts": [
+        "# pass 62",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:intelligence:",
+      "executionHeader": "[trusted:main] test:intelligence: tsx --test src/services/intelligence/__tests__/proxy-outcomes.test.mts src/services/intelligence/__tests__/ood-decay.test.mts src/services/intelligence/__tests__/momentum.test.mts src/services/intelligence/__tests__/learned-cascades.test.mts src/services/intelligence/__tests__/truth-score.test.mts src/services/intelligence/__tests__/evidence-graph.test.mts src/services/intelligence/__tests__/situation-clustering.test.mts src/services/intelligence/__tests__/baseline-deviation.test.mts src/services/intelligence/__tests__/forecast-calibration.test.mts src/services/intelligence/__tests__/resolution-quality-audit.test.mts src/services/intelligence/__tests__/forecast-evaluation.test.mts src/services/intelligence/__tests__/forecast-replay-benchmark.test.mts src/services/intelligence/__tests__/hierarchical-base-rate.test.mts src/services/intelligence/__tests__/outcome-resolvers.test.mts src/services/intelligence/__tests__/conflict-observation-adapters.test.mts src/services/market/__tests__/spot-price-store.test.mts src/services/intelligence/__tests__/proper-scoring.test.mts src/services/intelligence/__tests__/calibration-report.test.mts src/services/intelligence/__tests__/alert-prioritization.test.mts src/services/intelligence/__tests__/kent-hedging.test.mts src/services/intelligence/__tests__/alert-whatif.test.mts src/services/intelligence/__tests__/negative-evidence.test.mts src/services/intelligence/__tests__/compound-risk.test.mts src/services/intelligence/__tests__/watchlist-relevance.test.mts src/services/intelligence/__tests__/playbook-engine.test.mts src/services/intelligence/__tests__/assumption-producers.test.mts src/services/intelligence/adapters/__tests__/weather-forecast-adapter.test.mts src/services/intelligence/adapters/__tests__/flood-gauge-adapter.test.mts src/services/intelligence/adapters/__tests__/river-discharge-adapter.test.mts src/services/intelligence/adapters/__tests__/marine-forecast-adapter.test.mts src/services/intelligence/adapters/__tests__/food-security-adapter.test.mts src/services/intelligence/adapters/__tests__/air-quality-adapter.test.mts src/services/intelligence/__tests__/situation-hypothesis-bridge.test.mts src/services/intelligence/__tests__/forecast-calibration-adapter.test.mts src/services/intelligence/__tests__/hypothesis-prediction-bridge.test.mts src/services/intelligence/__tests__/mode-forecast-prediction-bridge.test.mts src/services/intelligence/__tests__/safety-case-dashboard.test.mts src/services/intelligence/__tests__/bias-scan-cadence.test.mts src/services/intelligence/__tests__/epistemic-calibration.test.mts src/services/intelligence/__tests__/epistemic-bridge.test.mts src/services/intelligence/__tests__/mission-outcome-grader.test.mts src/services/intelligence/__tests__/cascade-registration.test.mts src/services/intelligence/__tests__/assumption-tracker-v2.test.mts src/services/intelligence/__tests__/calibration-bridge-wiring.test.mts src/services/intelligence/__tests__/entity-slug.test.mts",
+      "reportedCounts": [
+        "# pass 597",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:intelligence-timeline:",
+      "executionHeader": "[trusted:main] test:intelligence-timeline: tsx --test src/services/intelligence/__tests__/intelligence-timeline.test.mts",
+      "reportedCounts": [
+        "# pass 28",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:lazy-panel-tracker:",
+      "executionHeader": "[trusted:main] test:lazy-panel-tracker: tsx --test tests/lazy-panel-tracker.test.mjs src/app/__tests__/lazy-panel-order.test.mts",
+      "reportedCounts": [
+        "# pass 14",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:lifelines:",
+      "executionHeader": "[trusted:main] test:lifelines: node --test api/local-logistics.test.mjs api/grid-outages.test.mjs api/usgs-water-proxy.test.mjs api/__tests__/local-logistics.test.mjs src-tauri/sidecar/__tests__/bounded-provider-responses.test.mjs src-tauri/sidecar/__tests__/local-logistics-route.test.mjs src-tauri/sidecar/__tests__/intel-expansion-cluster3.test.mjs src-tauri/sidecar/__tests__/sidecar-ttl-cache-guards.test.mjs tests/local-logistics-panel.test.mjs tests/lifeline-runtime-wiring.test.mjs tests/place-briefs.test.mjs tests/saved-place-lifeline-pack-wiring.test.mjs tests/water-quality-wiring.test.mjs && tsx --test src/services/lifelines/__tests__/*.test.mts src/services/__tests__/offline-alert-cache.test.mts tests/comms-lifeline-context.test.mts tests/lifeline-evidence-expiry.test.mts tests/local-logistics.test.mts tests/local-logistics-prewarm.test.mts tests/place-briefs-lifelines.test.mts tests/saved-place-lifeline-pack.test.mts tests/saved-place-weather.test.mts tests/water-quality-truth.test.mts src/components/__tests__/feed-health-panel.test.mts src/components/__tests__/local-logistics-panel.test.mts src/components/__tests__/personal-storm-mode-shelf.test.mts src/services/diagnostics/__tests__/feed-catalog.test.mts",
+      "reportedCounts": [
+        "# pass 155",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 183",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:lifelines-grid:",
+      "executionHeader": "[trusted:main] test:lifelines-grid: node --test api/grid-outages.test.mjs tests/grid-odin-wiring.test.mjs src-tauri/sidecar/__tests__/intel-expansion-cluster3.test.mjs src-tauri/sidecar/__tests__/sidecar-ttl-cache-guards.test.mjs && tsx --test tests/grid-loader-lifecycle.test.mts src/services/infrastructure/__tests__/grid-monitor.test.mts src/services/infrastructure/__tests__/infrastructure-overlay.test.mts src/services/infrarisks/__tests__/infra-risk-service.test.mts src/services/diagnostics/__tests__/feed-catalog.test.mts src/components/__tests__/feed-health-panel.test.mts",
+      "reportedCounts": [
+        "# pass 99",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 138",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:lifelines-map:",
+      "executionHeader": "[trusted:main] test:lifelines-map: tsx --import ./tests/panels/register-hook.mjs --test tests/lifelines-map.test.mts tests/evacuation-routing.test.mts src/components/__tests__/map-popup-lifeline.test.mts && node --test api/osrm-route.test.mjs src-tauri/sidecar/__tests__/osrm-route.test.mjs tests/lifelines-map-wiring.test.mjs",
+      "reportedCounts": [
+        "# pass 33",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 13",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:little-snitch:",
+      "executionHeader": "[trusted:main] test:little-snitch: node --test scripts/export-little-snitch-traffic.test.mjs scripts/install-little-snitch-exporter.test.mjs scripts/little-snitch-log-traffic-helper.test.mjs src-tauri/sidecar/local-api-server.test.mjs && tsx --test src/services/__tests__/little-snitch.test.mts src/components/__tests__/little-snitch-panel-source-state.test.mts",
+      "reportedCounts": [
+        "# pass 210",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 17",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:map-clarity:",
+      "executionHeader": "[trusted:main] test:map-clarity: tsx --test src/components/__tests__/map-clarity-model.test.mts src/components/__tests__/map-feature-list.test.mts && tsx --import ./tests/panels/register-hook.mjs --test --test-force-exit src/components/__tests__/map-popup-faa-camera.test.mts",
+      "reportedCounts": [
+        "# pass 27",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 7",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:map-compatibility",
+      "executionHeader": "npm run test:map-compatibility",
+      "reportedCounts": [
+        "# pass 9",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:maritime:",
+      "executionHeader": "[trusted:main] test:maritime: tsx --test src/services/maritime/__tests__/freight-stress.test.mts src/services/maritime/__tests__/chokepoint-monitor.test.mts src/services/maritime/__tests__/chokepoint-aggregator.test.mts src/services/maritime/__tests__/maritime-threats.test.mts src/services/maritime/__tests__/vessel-classifier.test.mts src/services/maritime/__tests__/vessel-globe-helpers.test.mts src/services/__tests__/dark-vessel-gaps.test.mts && node --test src-tauri/sidecar/__tests__/freight-stress-parity.test.mjs src-tauri/sidecar/__tests__/dark-vessel-gaps-parity.test.mjs src-tauri/sidecar/__tests__/maritime-vessels-parity.test.mjs",
+      "reportedCounts": [
+        "# pass 131",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 29",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:mcp-companion",
+      "executionHeader": "npm run test:mcp-companion",
+      "reportedCounts": [
+        "# pass 10",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:mcp-untrusted",
+      "executionHeader": "npm run test:mcp-untrusted",
+      "reportedCounts": [
+        "# pass 1",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:ml-budget:",
+      "executionHeader": "[trusted:main] test:ml-budget: tsx --test src/services/__tests__/ml-request-budget.test.mts src/services/__tests__/ml-worker-manager.test.mts src/workers/__tests__/ml-worker-eviction.test.mts",
+      "reportedCounts": [
+        "# pass 31",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:mode:",
+      "executionHeader": "[trusted:main] test:mode: tsx --test src/app/__tests__/mode-manager.test.mts",
+      "reportedCounts": [
+        "# pass 19",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:native-lows",
+      "executionHeader": "npm run test:native-lows",
+      "reportedCounts": [
+        "# pass 2",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:native-notify:",
+      "executionHeader": "[trusted:main] test:native-notify: node --test tests/native-notify-boundary.test.mjs && tsx --test src/services/__tests__/native-notify.test.mts src/services/__tests__/notification-router.test.mts src/services/__tests__/proximity-alert-delivery.test.mts src/services/notifications/__tests__/push-notifier-history.test.mts src/app/__tests__/desktop-imessage.test.mts src/app/__tests__/desktop-updater.test.mts src/services/__tests__/threat-reactor.test.mts src/services/__tests__/threat-reactor-retry.test.mts",
+      "reportedCounts": [
+        "# pass 5",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 89",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:native-responsiveness",
+      "executionHeader": "npm run test:native-responsiveness",
+      "reportedCounts": [
+        "# pass 15",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:news-resilience:",
+      "executionHeader": "[trusted:main] test:news-resilience: tsx --test src/services/__tests__/news-provenance.test.mts src/services/__tests__/rss-adapters-tracked.test.mts src/services/news/__tests__/news-snapshot.test.mts tests/components/news-resilience-panels.test.mts && node --test tests/news-route-provenance.test.mjs tests/ux040-news-snapshot-wiring.test.mjs",
+      "reportedCounts": [
+        "# pass 35",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 50",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:node-pinning:",
+      "executionHeader": "[trusted:main] test:node-pinning: node --test tests/node-pinning-boundary.test.mjs && tsx --test src/services/diagnostics/__tests__/local-engine-status.test.mts",
+      "reportedCounts": [
+        "# pass 5",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 6",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:notification-history:",
+      "executionHeader": "[trusted:main] test:notification-history: tsx --test src/services/notifications/__tests__/notification-history-service.test.mts src/services/notifications/__tests__/push-notifier-history.test.mts src/components/__tests__/notification-history-helpers.test.mts src/services/diagnostics/__tests__/sidecar-self-test.test.mts && node --test src-tauri/sidecar/__tests__/self-test-classify.test.mjs",
+      "reportedCounts": [
+        "# pass 30",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 8",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:notifications:",
+      "executionHeader": "[trusted:main] test:notifications: tsx --test src/services/notifications/__tests__/eew-tiers.test.mts src/services/notifications/__tests__/notification-ledger.test.mts src/services/notifications/__tests__/push-notifier.test.mts src/services/notifications/__tests__/imessage-bridge-extended.test.mts src/services/notifications/__tests__/voice-alerter.test.mts src/services/notifications/__tests__/event-bridge.test.mts src-tauri/sidecar/__tests__/notification-integration.test.mts src/components/__tests__/notification-panels.test.mts tests/notifications/all-producers.integration.test.mts tests/notifications/notification-ladder.test.mts src/services/insights/__tests__/weather-quiet-hours-wiring.test.mts",
+      "reportedCounts": [
+        "# pass 227",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:openaq:",
+      "executionHeader": "[trusted:main] test:openaq: tsx --test src/services/airquality/__tests__/openaq-service.test.mts src/components/__tests__/openaq-panel-contract.test.mts src/app/__tests__/openaq-desktop-boundary.test.mts && node --test src-tauri/sidecar/__tests__/openaq-v3-route.test.mjs tests/openaq-local-boundary.test.mjs",
+      "reportedCounts": [
+        "# pass 32",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 39",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:panel-presentation",
+      "executionHeader": "npm run test:panel-presentation",
+      "reportedCounts": [
+        "# pass 41",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:port-publication",
+      "executionHeader": "npm run test:port-publication",
+      "reportedCounts": [
+        "# pass 2",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:providers:",
+      "executionHeader": "[trusted:main] test:providers: tsx --test tests/data-sources-wiring.test.mjs src/services/earthquake/__tests__/usgs-fusion-fetch.test.mts src/services/geo/__tests__/geo-math.test.mts src/services/providers/__tests__/provider-registry.test.mts src/services/providers/__tests__/provider-health.test.mts src/services/providers/__tests__/source-fusion.test.mts src/services/providers/__tests__/provider-bridge.test.mts src/services/providers/__tests__/data-bridge-supersession.test.mts src/services/providers/__tests__/provider-domain-map.test.mts src/services/providers/__tests__/fusion-ingest.test.mts src/services/providers/__tests__/fusion-ingest-key.test.mts src/services/providers/__tests__/fusion-publish.test.mts src/services/providers/__tests__/provider-health-timeline-view.test.mts",
+      "reportedCounts": [
+        "# pass 157",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:pwa-deployment",
+      "executionHeader": "npm run test:pwa-deployment",
+      "reportedCounts": [
+        "# pass 26",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:quiet-hours:",
+      "executionHeader": "[trusted:main] test:quiet-hours: tsx --import ./tests/panels/register-hook.mjs --test src/services/notifications/__tests__/quiet-hours.test.mts src/components/__tests__/notification-quiet-hours-panels.test.mts src/services/notifications/__tests__/notification-settings-service.test.mts src/services/__tests__/notification-dispatcher-trace.test.mts src/services/insights/__tests__/weather-quiet-hours-wiring.test.mts src/services/notifications/__tests__/alert-trace.test.mts src/components/__tests__/notification-panels.test.mts",
+      "reportedCounts": [
+        "# pass 149",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:reasoning:",
+      "executionHeader": "[trusted:main] test:reasoning: tsx --test src/services/__tests__/hypothesis-dedupe.test.mts src/services/__tests__/hypothesis-entities.test.mts src/services/__tests__/hypothesis-feedback.test.mts src/services/__tests__/hypothesis-feedback-mult.test.mts src/services/__tests__/pressure-baselines.test.mts src/services/__tests__/llm-budget.test.mts src/services/__tests__/action-memory.test.mts src/services/__tests__/hypothesis-alternatives.test.mts",
+      "reportedCounts": [
+        "# pass 45",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:review-trail:",
+      "executionHeader": "[trusted:main] test:review-trail: tsx --test src/services/__tests__/panel-attention.test.mts src/services/__tests__/sidebar-heat.test.mts src/components/__tests__/attention-navigator.test.mts src/app/__tests__/panel-attention-wiring.test.mts",
+      "reportedCounts": [
+        "# pass 24",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:roadmap-controller:",
+      "executionHeader": "[trusted:main] test:roadmap-controller: node --test tests/roadmap-controller.test.mjs",
+      "reportedCounts": [
+        "# pass 126",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:rules-engine:",
+      "executionHeader": "[trusted:main] test:rules-engine: tsx --test src/services/intelligence/__tests__/rules-engine.test.mts src/services/intelligence/__tests__/rules-bootstrap.test.mts src/components/__tests__/observation-rules-helpers.test.mts && node --test src-tauri/sidecar/__tests__/rules.test.mjs",
+      "reportedCounts": [
+        "# pass 42",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 10",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:satellite:",
+      "executionHeader": "[trusted:main] test:satellite: tsx --test src/services/__tests__/satellite-weather.test.mts",
+      "reportedCounts": [
+        "# pass 6",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:sec-hardening:",
+      "executionHeader": "[trusted:main] test:sec-hardening: node --test tests/csp-allowlist.test.mjs src-tauri/sidecar/__tests__/faa-cam-ssrf-pinning.test.mjs src-tauri/sidecar/__tests__/webhook-dispatch.test.mjs src-tauri/sidecar/__tests__/ipv4-fetch-redirect.test.mjs src-tauri/sidecar/__tests__/isprivateip-ssrf.test.mjs src-tauri/sidecar/__tests__/ipaws-outage.test.mjs src-tauri/sidecar/__tests__/feed-resilience.test.mjs",
+      "reportedCounts": [
+        "# pass 74",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:secret-boundary:",
+      "executionHeader": "[trusted:main] test:secret-boundary: node --test tests/secret-boundary.test.mjs tests/sidecar-secret-routing-boundary.test.mjs tests/ucdp-local-boundary.test.mjs src-tauri/sidecar/secret-sync.test.mjs && tsx --test src/services/__tests__/secret-boundary.test.mts src/services/__tests__/keychain.test.mts src/components/__tests__/key-dashboard-secret-boundary.test.mts",
+      "reportedCounts": [
+        "# pass 21",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 15",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:security:",
+      "executionHeader": "[trusted:main] test:security: tsx --test src/services/security/__tests__/cve-service.test.mts src/services/security/__tests__/vulners-service.test.mts src/components/__tests__/cve-panel-helpers.test.mts && node --test src-tauri/sidecar/__tests__/security-cve-parity.test.mjs",
+      "reportedCounts": [
+        "# pass 36",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 9",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:settings:",
+      "executionHeader": "[trusted:main] test:settings: tsx --test src/services/__tests__/key-categories.test.mts src/services/__tests__/key-feature-index.test.mts src/services/__tests__/key-shape-registry.test.mts src/services/__tests__/wizard-state.test.mts",
+      "reportedCounts": [
+        "# pass 19",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:sidecar-ci",
+      "executionHeader": "npm run test:sidecar-ci",
+      "reportedCounts": [
+        "# pass 13",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:sidecar-fallback:",
+      "executionHeader": "[trusted:main] test:sidecar-fallback: node --test tests/sidecar-port-range.test.mjs tests/csp-allowlist.test.mjs",
+      "reportedCounts": [
+        "# pass 24",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:sidecar-lows:",
+      "executionHeader": "[trusted:main] test:sidecar-lows: node --test --test-timeout=60000 src-tauri/sidecar/__tests__/q20-sidecar-lows.test.mjs src-tauri/sidecar/sms-security.test.mjs src-tauri/sidecar/__tests__/sms-auth.test.mjs",
+      "reportedCounts": [
+        "# pass 89",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:sidecar-routing:",
+      "executionHeader": "[trusted:main] test:sidecar-routing: node --test tests/sidecar-secret-routing-boundary.test.mjs tests/ucdp-local-boundary.test.mjs tests/openaq-local-boundary.test.mjs && tsx --test src/services/__tests__/cloud-fallback-policy.test.mts src/services/__tests__/runtime-fetch-fallback.test.mts src/services/__tests__/confirmed-port-routing.test.mts src/services/diagnostics/__tests__/local-engine-status.test.mts src/services/diagnostics/__tests__/sidecar-probe-engine.test.mts tests/api-param-classification.test.mts src/services/__tests__/fetch-attribution-port-race.test.mts src/services/__tests__/fetch-attribution.test.mts src/services/__tests__/ucdp-runtime-boundary.test.mts",
+      "reportedCounts": [
+        "# pass 10",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 64",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:sidecar-supervisor",
+      "executionHeader": "npm run test:sidecar-supervisor",
+      "reportedCounts": [
+        "# pass 12",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:signing-phase-a:",
+      "executionHeader": "[trusted:main] test:signing-phase-a: node --test tests/desktop-signing.test.mjs tests/desktop-package-signing.test.mjs tests/main-sync-signing.test.mjs tests/vault-diagnostics-boundary.test.mjs && tsx --test src/services/diagnostics/__tests__/vault-diagnostics.test.mts",
+      "reportedCounts": [
+        "# pass 22",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 4",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:situations:",
+      "executionHeader": "[trusted:main] test:situations: tsx --test src/services/intelligence/__tests__/situation-store.test.mts src/services/intelligence/__tests__/situation-detector.test.mts src/components/__tests__/situation-panel-helpers.test.mts && node --test src-tauri/sidecar/__tests__/situations.test.mjs",
+      "reportedCounts": [
+        "# pass 40",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 10",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:smoke-engine:",
+      "executionHeader": "[trusted:main] test:smoke-engine: tsx --test src/services/smoke/__tests__/aqi-category.test.mts src/services/smoke/__tests__/safe-windows.test.mts src/services/smoke/__tests__/arrival-eta.test.mts src/services/smoke/__tests__/forecast-field.test.mts src/services/smoke/__tests__/hrrr-smoke.test.mts src/services/smoke/__tests__/hrrr-smoke-parity.test.mts src/services/smoke/__tests__/fire-detection-sources.test.mts src/services/smoke/__tests__/clean-air-compass.test.mts src/services/smoke/__tests__/activity-guidance.test.mts src/services/smoke/__tests__/clean-room-checklist.test.mts src/services/smoke/__tests__/smoke-fetch.test.mts src/services/smoke/__tests__/smoke-state.test.mts src/services/smoke/__tests__/smoke-headline.test.mts src/services/smoke/__tests__/smoke-callout.test.mts && node --test src-tauri/sidecar/__tests__/hrrr-smoke.test.mjs",
+      "reportedCounts": [
+        "# pass 91",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 16",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:sms:",
+      "executionHeader": "[trusted:main] test:sms: node --test src-tauri/sidecar/sms-command-parser.test.mjs src-tauri/sidecar/sms-security.test.mjs src-tauri/sidecar/sms-response-formatter.test.mjs src-tauri/sidecar/__tests__/sms-auth.test.mjs",
+      "reportedCounts": [
+        "# pass 101",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:sms-panel",
+      "executionHeader": "npm run test:sms-panel",
+      "reportedCounts": [
+        "# pass 14",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:spaceweather:",
+      "executionHeader": "[trusted:main] test:spaceweather: tsx --test src/services/spaceweather/__tests__/swpc-monitor.test.mts src/services/spaceweather/__tests__/globe-overlay.test.mts src/services/spaceweather/__tests__/solar-imagery.test.mts src/services/spaceweather/__tests__/kp-fusion-observations.test.mts && node --test src-tauri/sidecar/__tests__/spaceweather-parity.test.mjs && node --import tsx --test src-tauri/sidecar/__tests__/spaceweather-imagery-parity.test.mjs",
+      "reportedCounts": [
+        "# pass 77",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 18",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 5",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:story-renderer-chunk:",
+      "executionHeader": "[trusted:main] test:story-renderer-chunk: tsx --test src/config/__tests__/story-renderer-chunk.test.mts",
+      "reportedCounts": [
+        "# pass 6",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:strategic-self-improvement:",
+      "executionHeader": "[trusted:main] test:strategic-self-improvement: tsx --test src/services/diagnostics/__tests__/failure-prediction.test.mts src/services/governance/__tests__/policy-engine.test.mts src/services/governance/__tests__/model-governance.test.mts src/services/experiments/__tests__/experiment-manager.test.mts src/services/ops/__tests__/causal-attribution.test.mts src/services/ops/__tests__/trust-budget.test.mts src/services/ops/__tests__/playbook-engine.test.mts src/services/scenarios/__tests__/scenario-library.test.mts src/services/personal/__tests__/resilience-model.test.mts src/services/quality/__tests__/quality-debt.test.mts src/services/quality/__tests__/self-improvement-scheduler.test.mts",
+      "reportedCounts": [
+        "# pass 130",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:survival:",
+      "executionHeader": "[trusted:main] test:survival: tsx --test src/services/survival/__tests__/survival-types.test.mts src/services/survival/__tests__/threat-projection.test.mts src/services/survival/__tests__/posture-trajectory.test.mts src/services/survival/__tests__/world-branches.test.mts src/services/survival/__tests__/decision-consequence.test.mts src/services/survival/__tests__/grid-down-certify.test.mts src/services/survival/__tests__/offline-playbook.test.mts src/services/survival/__tests__/comms-fallback.test.mts src/services/survival/__tests__/posture-loop-replay.test.mts src/services/survival/__tests__/posture-calibration.test.mts src/services/survival/__tests__/projection-calibration.test.mts src/services/survival/__tests__/retrospective-digest.test.mts src/services/survival/__tests__/retrospective-view.test.mts src/services/survival/__tests__/decision-consequence-view.test.mts src/services/survival/__tests__/offline-playbook-view.test.mts src/services/survival/__tests__/comms-fallback-view.test.mts src/services/survival/__tests__/grid-down-certify-view.test.mts src/services/survival/__tests__/posture-trajectory-view.test.mts src/services/survival/__tests__/world-branches-view.test.mts src/services/survival/__tests__/survival-posture-view.test.mts src/services/survival/__tests__/survival-outlook.test.mts src/services/survival/__tests__/survival-posture.test.mts src/services/survival/__tests__/survival-moves.test.mts src/services/survival/__tests__/survival-plan.test.mts src/services/survival/__tests__/world-snapshot.test.mts src/services/survival/__tests__/snapshot-integrity.test.mts src/services/survival/__tests__/survival-loop.test.mts src/services/survival/__tests__/posture-contributor.test.mts src/services/survival/__tests__/move-provider.test.mts src/services/survival/__tests__/storm-posture-adapter.test.mts src/services/survival/__tests__/supply-contributor.test.mts src/services/survival/__tests__/energy-water-contributor.test.mts src/services/survival/__tests__/grid-energy-adapter.test.mts src/services/__tests__/power-grid-alerts-cache.test.mts src/services/survival/__tests__/financial-contributor.test.mts src/services/survival/__tests__/security-contributor.test.mts src/services/survival/__tests__/mobility-contributor.test.mts src/services/survival/__tests__/comms-contributor.test.mts src/services/survival/__tests__/health-contributor.test.mts src/services/__tests__/disease-intel-cache.test.mts src/services/survival/__tests__/personal-lens.test.mts src/services/survival/__tests__/lens-board.test.mts src/services/survival/__tests__/board-events.test.mts src/services/survival/__tests__/scrubber-view.test.mts src/services/survival/__tests__/time-scrubber.test.mts src/services/survival/__tests__/map-modes.test.mts src/services/survival/__tests__/lens-marker-style.test.mts src/services/survival/__tests__/scrubber-loop.test.mts src/services/survival/__tests__/map-modes-apply.test.mts src/services/survival/__tests__/lens-marker-apply.test.mts src/services/survival/__tests__/survival-map-modes.test.mts src/services/__tests__/internet-outages-cache.test.mts src/services/survival/__tests__/chokepoint-mobility-adapter.test.mts src/services/supply-chain/__tests__/chokepoint-cache.test.mts",
+      "reportedCounts": [
+        "# pass 660",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:synthesis:",
+      "executionHeader": "[trusted:main] test:synthesis: tsx --test src/services/synthesis/__tests__/signal-watch.test.mts src/services/synthesis/__tests__/precedent-matcher.test.mts src/services/synthesis/__tests__/leading-indicators.test.mts src/services/synthesis/__tests__/ai-brief-generator.test.mts src/services/synthesis/__tests__/correlation-engine.test.mts && node --test src-tauri/sidecar/__tests__/synthesis-correlations.test.mjs",
+      "reportedCounts": [
+        "# pass 104",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 11",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:thresholds:",
+      "executionHeader": "[trusted:main] test:thresholds: tsx --test src/services/config/__tests__/alert-thresholds.test.mts src/services/notifications/__tests__/push-notifier.test.mts src/services/notifications/__tests__/push-notifier-thresholds.test.mts",
+      "reportedCounts": [
+        "# pass 53",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:ucdp-provider:",
+      "executionHeader": "[trusted:main] test:ucdp-provider: tsx --test server/crystalball/conflict/v1/__tests__/list-ucdp-events.test.mts src/services/conflict/__tests__/ucdp-fetch-behavior.test.mts src/services/__tests__/ucdp-runtime-boundary.test.mts src/components/__tests__/ucdp-events-panel.test.mts src/app/__tests__/ucdp-desktop-boundary.test.mts api/__tests__/ucdp-classifications.test.mjs src-tauri/sidecar/__tests__/ucdp-local-routes.test.mjs tests/ucdp-local-boundary.test.mjs tests/ucdp-loader-freshness.test.mjs",
+      "reportedCounts": [
+        "# pass 64",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:untrusted-html:",
+      "executionHeader": "[trusted:main] test:untrusted-html: tsx --import ./tests/panels/register-hook.mjs --test src/services/resource-inventory/__tests__/schema.test.mts src/utils/__tests__/finite-number.test.mts src/components/__tests__/resource-inventory-untrusted.test.mts src/components/__tests__/untrusted-numeric-fields.test.mts",
+      "reportedCounts": [
+        "# pass 66",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:ux010:",
+      "executionHeader": "[trusted:main] test:ux010: node --test tests/ux010-location-startup.test.mjs && tsx --test src/services/__tests__/location.test.mts tests/ux010-ephemeral-local-logistics.test.mts tests/ux010-current-location-save.test.mts src/components/__tests__/ux010-current-location-panel.test.mts && npm run build:full && node --test tests/ux010-native-gate.test.mjs",
+      "reportedCounts": [
+        "# pass 5",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 36",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 1",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:ux011:",
+      "executionHeader": "[trusted:main] test:ux011: tsx --test src/services/weather/__tests__/weather-alerts-parse.test.mts src/services/weather/__tests__/evacuation-hazard-exposure.test.mts src/components/__tests__/evacuation-hazard-exposure-panel.test.mts && node --test tests/evacuation-hazard-exposure-wiring.test.mjs",
+      "reportedCounts": [
+        "# pass 58",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 4",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:ux018",
+      "executionHeader": "npm run test:ux018",
+      "reportedCounts": [
+        "# pass 113",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:ux026:",
+      "executionHeader": "[trusted:main] test:ux026: tsx --test src/services/__tests__/digest-alert-projection.test.mts src/services/__tests__/digest-narrative-contract.test.mts src/services/__tests__/nws-alert-retrieval-freshness.test.mts src/components/__tests__/digest-overlay.test.mts tests/ux026-digest-lifecycle.test.mjs tests/ux026-fourth-cycle-runtime.test.mjs",
+      "reportedCounts": [
+        "# pass 125",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:ux032:",
+      "executionHeader": "[trusted:main] test:ux032: tsx --test src/components/__tests__/unified-settings-keyboard.test.mts",
+      "reportedCounts": [
+        "# pass 16",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:ux047:",
+      "executionHeader": "[trusted:main] test:ux047: tsx --test tests/nws-provider-snapshot.test.mjs src/services/__tests__/nws-alert-retrieval-freshness.test.mts src/services/__tests__/nws-alert-lifecycle.test.mts tests/ux047/nws-ui-loader.test.mts tests/ux047/nws-snapshot-cache.test.mts tests/ux047/nws-panel.test.mts tests/ux047/operational-consumers.test.mts src/services/__tests__/sidebar-heat.test.mts src/services/native/__tests__/menubar-status.test.mts",
+      "reportedCounts": [
+        "# pass 124",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:ux050",
+      "executionHeader": "npm run test:ux050",
+      "reportedCounts": [
+        "# pass 89",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 4",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 2",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:ux052",
+      "executionHeader": "npm run test:ux052",
+      "reportedCounts": [
+        "# pass 117",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:ux053",
+      "executionHeader": "npm run test:ux053",
+      "reportedCounts": [
+        "# pass 1",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 71",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:ux058",
+      "executionHeader": "npm run test:ux058",
+      "reportedCounts": [
+        "# pass 89",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:ux059:",
+      "executionHeader": "[trusted:main] test:ux059: tsx --test src/services/__tests__/alert-retention-provenance.test.mts src/services/__tests__/unified-alert-retention.test.mts src/services/__tests__/alert-retention-identity.test.mts",
+      "reportedCounts": [
+        "# pass 32",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:ux060:",
+      "executionHeader": "[trusted:main] test:ux060: tsx --test tests/ux060-onboarding-digest.test.mjs src/components/__tests__/digest-overlay.test.mts src/components/__tests__/welcome-flow-sources.test.mts",
+      "reportedCounts": [
+        "# pass 36",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:vault-writer:",
+      "executionHeader": "[trusted:main] test:vault-writer: node --test tests/vault-writer-boundary.test.mjs tests/vault-writer-native.test.mjs && tsx --test src/services/__tests__/secret-write-pending.test.mts",
+      "reportedCounts": [
+        "# pass 9",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 4",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:warning-delivery:",
+      "executionHeader": "[trusted:main] test:warning-delivery: tsx --test src/services/__tests__/notification-dispatcher-trace.test.mts src/services/__tests__/unified-alerts-warning-delivery.test.mts",
+      "reportedCounts": [
+        "# pass 44",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:watchboard:",
+      "executionHeader": "[trusted:main] test:watchboard: tsx --test src/components/__tests__/watchboard-store-helpers.test.mts && node --test src-tauri/sidecar/__tests__/watchboard-engine.test.mjs",
+      "reportedCounts": [
+        "# pass 46",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 8",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:weather:",
+      "executionHeader": "[trusted:main] test:weather: tsx --test src/services/weather/__tests__/weather-exposure.test.mts src/services/weather/__tests__/nws-polygon-match.test.mts src/services/weather/__tests__/personal-storm-mode.test.mts src/services/weather/__tests__/spc-outlook.test.mts src/services/weather/__tests__/warning-verification-bridge.test.mts src/services/weather/__tests__/weather-warning-diagnostics.test.mts src/services/weather/__tests__/weather-feed-select.test.mts src/services/weather/__tests__/weather-feed-state.test.mts src/services/weather/__tests__/saved-place-adapter.test.mts src/services/weather/__tests__/personal-weather-status.test.mts src/services/weather/__tests__/ring-geometry.test.mts src/services/weather/__tests__/weather-alerts-parse.test.mts src/services/weather/__tests__/weather-unevaluable-alert.test.mts src/services/weather/__tests__/weather-feed-toctou.test.mts src/services/weather/__tests__/weather-ugc-fetch.test.mts src/services/weather/__tests__/saved-place-signature.test.mts src/services/weather/__tests__/classify-hazard.test.mts src/services/weather/__tests__/nws-hazards.test.mts src/services/weather/__tests__/self-test-fixture.test.mts src/services/weather/__tests__/weather-urgency.test.mts src/services/weather/__tests__/weather-warning-router.test.mts src/services/weather/__tests__/weather-fusion-observations.test.mts src/components/__tests__/personal-storm-mode-view.test.mts src/components/__tests__/personal-storm-mode-shelf.test.mts",
+      "reportedCounts": [
+        "# pass 411",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:webcams:",
+      "executionHeader": "[trusted:main] test:webcams: tsx --test src/services/webcams/__tests__/webcam-aggregator.test.mts src/services/webcams/__tests__/webcam-health.test.mts src/services/webcams/__tests__/flight-rule.test.mts src/services/webcams/__tests__/metar-parser.test.mts src/services/webcams/__tests__/station-matcher.test.mts src/services/webcams/__tests__/dot511-adapter.test.mts src/services/webcams/__tests__/volcano-cam-catalog.test.mts src/services/webcams/__tests__/nps-adapter.test.mts src/services/webcams/__tests__/alertwildfire-adapter.test.mts src/services/webcams/__tests__/streamgauge-adapter.test.mts src/services/webcams/__tests__/windy-adapter.test.mts src/services/webcams/__tests__/noaa-coastal-catalog.test.mts src/services/webcams/__tests__/health-view.test.mts src/services/webcams/__tests__/youtube-live-registry.test.mts src/services/webcams/__tests__/probe-backoff.test.mts src/services/webcams/__tests__/pinned-store.test.mts src/services/webcams/__tests__/webcam-config-loader.test.mts src/services/webcams/__tests__/caltrans-config.test.mts src/services/webcams/__tests__/tfl-config.test.mts src/services/webcams/__tests__/singapore-config.test.mts src/services/webcams/__tests__/airnow-visibility-catalog.test.mts src/services/webcams/__tests__/geonet-config.test.mts src/services/webcams/__tests__/hazecam-catalog.test.mts src/services/webcams/__tests__/live-video-refresh.test.mts src/services/webcams/__tests__/webcam-pick.test.mts src/services/webcams/__tests__/webcam-viewer.test.mts src/services/webcams/__tests__/webcam-globe-layer.test.mts src/services/webcams/__tests__/frame-resolver.test.mts && tsx --import ./tests/panels/register-hook.mjs --test --test-force-exit src/components/__tests__/live-webcams-panel.test.mts src/components/__tests__/map-popup-faa-camera.test.mts",
+      "reportedCounts": [
+        "# pass 235",
+        "# fail 0",
+        "# skipped 0",
+        "# pass 12",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:wildfire:",
+      "executionHeader": "[trusted:main] test:wildfire: tsx --test src/services/__tests__/fire-intel-service.test.mts",
+      "reportedCounts": [
+        "# pass 20",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    {
+      "script": "test:workflow-security",
+      "executionHeader": "npm run test:workflow-security",
+      "reportedCounts": [
+        "# pass 61",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    }
+  ],
+  "rootObjects": [
+    "040000 tree d2adfd4b37b09d25ef678132f831c0a9f272ae39\t.github",
+    "040000 tree 643298657ac791b23d9060901dbc5976d099eb05\tapi",
+    "100644 blob 7592cb374049e70c9fe83f9356f0f0cb9b83e7cc\tpackage-lock.json",
+    "100644 blob 8e0416daacfba3428249479ac21576f79a679f9e\tpackage.json",
+    "040000 tree 3c01322e0c909b5c350e095ef91efbad8eebb1b1\tscripts",
+    "040000 tree b8fcf00ec453598cccb43fe67de156f92ad866a3\tsrc-tauri",
+    "040000 tree ac970b06441e8f2cc411cb8ce4811841baee90e6\tsrc",
+    "040000 tree 384225a2fab1d81ba7e5cc062baf94e4acfe3c54\ttests",
+    "040000 tree ddb496e7a70a086452b91eeb73ad8a00305c099c\ttools",
+    "100644 blob b2eea0835235e1779dd7274d4660105e835e71a7\ttsconfig.api.json",
+    "100644 blob 4a9e00fdc92c4b2d5986628d45e002703eb172c4\ttsconfig.json",
+    "100644 blob 83369e5bbfe43c39c6b8be9f795e4a2a0020e720\tvite.config.ts"
+  ],
+  "gateInputHashes": [
+    "b1cf2ebb917248edaa8bb1033b853da14d5b0a0970f58f7522ad17b7a4d83070  scripts/targeted-tests.mjs",
+    "508d56996367beaef6791139816e578ad8bf08d9acf2dcebe28849519c3f5cab  scripts/targeted-tests-overrides.json",
+    "b73c23dd3edeffe57e24d699b082c448f624ea56f4f14f907e3aea54d88cd0cb  scripts/targeted-tests-baseline.txt",
+    "867d27d6c6e14ca9c8fb1385b7f5574372b15f61f68fb73e62004de1eaed3d50  scripts/agentic-validate.sh",
+    "4fb93d6b26ded2b5d6a63b1aa5429d2e3c89602be632f74a224b9b784ae7dc6d  package.json",
+    "fa0fc7a76d31ce38c5b03b52e88b4c61956e444dc5171e89fab9a105e02e147f  package-lock.json",
+    "8c2b43c03ab0992c1aaf68b78bb7ae26f83f392b9fecd6ddd3950f4d12fde8bd  vite.config.ts",
+    "9a3725c22dcf9d866ce71bcd656a3abf2ce56bcb997b237cbfa6363621d65916  tsconfig.json",
+    "55ed797fc8dfc16e2ad18f8d3eebceaa56ec1863cef976a96a3e7ad7dafc15fe  tsconfig.api.json"
+  ],
+  "trackedManifestSha256": "a5a77b60a27366d26e6fb61477b4c6d5d51b6c1eb46093054dc6e9fc12f65082",
+  "trackedFileCount": 5890,
+  "trackedBytesUnchanged": true,
+  "buildManifestSha256": "1b54abffba990dcb792a2dd9c44e34c3931a2179583f49f3001b09c637c3e1de",
+  "buildFileCount": 674,
+  "logHashes": {
+    "selector.log": "42baca709140628ecbe0164825ba7d90b9f23f4b3d740f5c57ba8d7ba2261772",
+    "gate.log": "288917d7c568dd619a8fcd1e1c9f2ec7c661300ccd96d29c79918aca727817f7",
+    "selection.log": "760d21864c1e5f99aaebfc8dcd65ef060d8fb667a62c242370316d82e9871eda"
+  },
+  "freshSharedMutations": [
+    {
+      "id": "SCHED18",
+      "file": "src/app/data-loader.ts",
+      "before": {
+        "exit": 0,
+        "counts": [
+          "# pass 1",
+          "# fail 0"
+        ]
+      },
+      "red": {
+        "exit": 1,
+        "counts": [
+          "# pass 0",
+          "# fail 1"
+        ]
+      },
+      "after": {
+        "exit": 0,
+        "counts": [
+          "# pass 1",
+          "# fail 0"
+        ]
+      },
+      "sha256": "8e4d18b6c3a2166c1bc4ae31608a1bd527d7e248e54b2891b4b958e38f6e8d40",
+      "restoredSha256": "8e4d18b6c3a2166c1bc4ae31608a1bd527d7e248e54b2891b4b958e38f6e8d40",
+      "appliedDiff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex c698fb0a5..a76f0f1b0 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -783,7 +783,7 @@ export class DataLoaderManager implements AppModule {\n  }\n  } finally {\n  this.ctx.inFlight.delete(name);\n- if (name === 'markets' && !this.ctx.isDestroyed) this.callbacks.onForecastInputsAttempted?.();\n+ if (name === 'news' && !this.ctx.isDestroyed) this.callbacks.onForecastInputsAttempted?.();\n  }\n  };\n \n",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "SCHED19",
+      "file": "src/app/data-loader.ts",
+      "before": {
+        "exit": 0,
+        "counts": [
+          "# pass 1",
+          "# fail 0"
+        ]
+      },
+      "red": {
+        "exit": 1,
+        "counts": [
+          "# pass 0",
+          "# fail 1"
+        ]
+      },
+      "after": {
+        "exit": 0,
+        "counts": [
+          "# pass 1",
+          "# fail 0"
+        ]
+      },
+      "sha256": "8e4d18b6c3a2166c1bc4ae31608a1bd527d7e248e54b2891b4b958e38f6e8d40",
+      "restoredSha256": "8e4d18b6c3a2166c1bc4ae31608a1bd527d7e248e54b2891b4b958e38f6e8d40",
+      "appliedDiff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex c698fb0a5..b50aa0678 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -783,7 +783,7 @@ export class DataLoaderManager implements AppModule {\n  }\n  } finally {\n  this.ctx.inFlight.delete(name);\n- if (name === 'markets' && !this.ctx.isDestroyed) this.callbacks.onForecastInputsAttempted?.();\n+ if (name === 'markets') this.callbacks.onForecastInputsAttempted?.();\n  }\n  };\n \n",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "SCHED20",
+      "file": "src/app/panel-layout.ts",
+      "before": {
+        "exit": 0,
+        "counts": [
+          "# pass 1",
+          "# fail 0"
+        ]
+      },
+      "red": {
+        "exit": 1,
+        "counts": [
+          "# pass 0",
+          "# fail 1"
+        ]
+      },
+      "after": {
+        "exit": 0,
+        "counts": [
+          "# pass 1",
+          "# fail 0"
+        ]
+      },
+      "sha256": "a507e1bcf2a07244d55ede0de0f7053fca9b72eb059c804ca3b164d904eababc",
+      "restoredSha256": "a507e1bcf2a07244d55ede0de0f7053fca9b72eb059c804ca3b164d904eababc",
+      "appliedDiff": "diff --git a/src/app/panel-layout.ts b/src/app/panel-layout.ts\nindex 712d9c6c9..6e8e00186 100644\n--- a/src/app/panel-layout.ts\n+++ b/src/app/panel-layout.ts\n@@ -2648,7 +2648,7 @@ export class PanelLayoutManager implements AppModule {\n    { isCognitionEnabled },\n    { startCalibrationResolutionScheduler },\n  ]) => {\n-   if (this.destroyed || this.ctx.isDestroyed) return;\n+   if (false) return;\n    this.calibrationScheduler = startCalibrationResolutionScheduler({\n      isReady: () => this.calibrationInputsReady && isCalibrationSnapshotCurrent(),\n      isBridgeReady: isCalibrationSnapshotCurrent,\n",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "SCHED21",
+      "file": "src/app/panel-layout.ts",
+      "before": {
+        "exit": 0,
+        "counts": [
+          "# pass 1",
+          "# fail 0"
+        ]
+      },
+      "red": {
+        "exit": 1,
+        "counts": [
+          "# pass 0",
+          "# fail 1"
+        ]
+      },
+      "after": {
+        "exit": 0,
+        "counts": [
+          "# pass 1",
+          "# fail 0"
+        ]
+      },
+      "sha256": "a507e1bcf2a07244d55ede0de0f7053fca9b72eb059c804ca3b164d904eababc",
+      "restoredSha256": "a507e1bcf2a07244d55ede0de0f7053fca9b72eb059c804ca3b164d904eababc",
+      "appliedDiff": "diff --git a/src/app/panel-layout.ts b/src/app/panel-layout.ts\nindex 712d9c6c9..d2c3b0d4d 100644\n--- a/src/app/panel-layout.ts\n+++ b/src/app/panel-layout.ts\n@@ -996,7 +996,7 @@ export class PanelLayoutManager implements AppModule {\n  // destroy it (and its ResizeObserver) outlive teardown and can't be GC'd.\n  this.ctx.map?.destroy();\n  this.ctx.map = null;\n- this.calibrationScheduler?.stop();\n+ void this.calibrationScheduler;\n  this.calibrationScheduler = undefined;\n  if (this._lastViewedObserver) {\n  this._lastViewedObserver.disconnect();\n",
+      "cleanAfterRestore": true
+    },
+    {
+      "id": "SCHED22",
+      "file": "src/App.ts",
+      "before": {
+        "exit": 0,
+        "counts": [
+          "# pass 1",
+          "# fail 0"
+        ]
+      },
+      "red": {
+        "exit": 1,
+        "counts": [
+          "# pass 0",
+          "# fail 1"
+        ]
+      },
+      "after": {
+        "exit": 0,
+        "counts": [
+          "# pass 1",
+          "# fail 0"
+        ]
+      },
+      "sha256": "846e61212e9fd2510ae9ec9f65153c6737b4024ffea378d0043bcb1cb9d89303",
+      "restoredSha256": "846e61212e9fd2510ae9ec9f65153c6737b4024ffea378d0043bcb1cb9d89303",
+      "appliedDiff": "diff --git a/src/App.ts b/src/App.ts\nindex 0ed43fa49..4b6bcbb1a 100644\n--- a/src/App.ts\n+++ b/src/App.ts\n@@ -323,7 +323,7 @@ export class App {\n  this.desktopNotifications = new DesktopNotifications(this.state);\n \n  this.dataLoader = new DataLoaderManager(this.state, {\n- onForecastInputsAttempted: () => this.panelLayout.markCalibrationInputsReady(),\n+ onForecastInputsAttempted: () => {},\n  renderCriticalBanner: (postures) => this.panelLayout.renderCriticalBanner(postures),\n  });\n \n",
+      "cleanAfterRestore": true
+    }
+  ],
+  "limitations": [
+    "Pending local dependency baseline, not actual-main candidate acceptance.",
+    "After actual-main transition compare selected commands and source/test/build/selector bytes; execute added or affected coverage.",
+    "Seven natural scheduled production passes and matched direct-label coverage remain pending separately authorized installation.",
+    "No Claude review, push, ready, closeout, merge, installation, production-store changes, or deployment performed."
+  ]
+}

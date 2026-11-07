@@ -322,7 +322,7 @@ test('NotificationStack exposes and measures the alert shelf below EEW chrome', 
       'notification shelf should anchor at var(--below-eew)',
     );
     assert.ok(stack.element.classList.contains('alert-shelf'));
-    assert.equal(stack.element.style.maxHeight, 'calc(100dvh - var(--below-eew))');
+    assert.equal(stack.element.style.maxHeight, 'calc((100dvh - var(--below-eew)) * 0.4)');
     assert.equal(stack.element.style.overflowY, 'auto');
 
     const stormMount = happyWindow.document.createElement('div');

@@ -1,0 +1,1571 @@
+{
+  "version": 1,
+  "now": 1793966400000,
+  "provenance": "Synthetic frozen regression corpus, not a production accuracy estimate. Labels set before ACC-510 production edits. Source identifiers measure diversity, never proven independence.",
+  "cases": [
+    {
+      "id": "earnings",
+      "title": "Company earnings exceed expectations",
+      "groundTruthUnrest": false,
+      "expectedDomain": "economic",
+      "expectedReason": "supported",
+      "type": "velocity_spike",
+      "relatedTopics": [
+        "Company earnings exceed expectations"
+      ],
+      "articles": [
+        {
+          "articleId": "article-1",
+          "sourceId": "source-1",
+          "publishedAt": 1793966340000,
+          "category": "economic",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-2",
+          "sourceId": "source-2",
+          "publishedAt": 1793966340000,
+          "category": "economic",
+          "confidence": 0.8,
+          "method": "keyword"
+        }
+      ]
+    },
+    {
+      "id": "sports",
+      "title": "Football team wins cup after late goal",
+      "groundTruthUnrest": false,
+      "expectedDomain": "unknown",
+      "expectedReason": "unsupported_category",
+      "type": "keyword_spike",
+      "relatedTopics": [
+        "Football team wins cup after late goal"
+      ],
+      "articles": [
+        {
+          "articleId": "article-1",
+          "sourceId": "source-1",
+          "publishedAt": 1793966340000,
+          "category": "general",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-2",
+          "sourceId": "source-2",
+          "publishedAt": 1793966340000,
+          "category": "general",
+          "confidence": 0.8,
+          "method": "keyword"
+        }
+      ]
+    },
+    {
+      "id": "technology",
+      "title": "New phone launch attracts queues",
+      "groundTruthUnrest": false,
+      "expectedDomain": "unknown",
+      "expectedReason": "unsupported_category",
+      "type": "velocity_spike",
+      "relatedTopics": [
+        "New phone launch attracts queues"
+      ],
+      "articles": [
+        {
+          "articleId": "article-1",
+          "sourceId": "source-1",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-2",
+          "sourceId": "source-2",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        }
+      ]
+    },
+    {
+      "id": "routine-weather",
+      "title": "Sunny weekend weather forecast",
+      "groundTruthUnrest": false,
+      "expectedDomain": "unknown",
+      "expectedReason": "unsupported_category",
+      "type": "velocity_spike",
+      "relatedTopics": [
+        "Sunny weekend weather forecast"
+      ],
+      "articles": [
+        {
+          "articleId": "article-1",
+          "sourceId": "source-1",
+          "publishedAt": 1793966340000,
+          "category": "general",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-2",
+          "sourceId": "source-2",
+          "publishedAt": 1793966340000,
+          "category": "general",
+          "confidence": 0.8,
+          "method": "keyword"
+        }
+      ]
+    },
+    {
+      "id": "severe-weather",
+      "title": "Flood damages homes after record rainfall",
+      "groundTruthUnrest": false,
+      "expectedDomain": "natural_hazard",
+      "expectedReason": "supported",
+      "type": "velocity_spike",
+      "relatedTopics": [
+        "Flood damages homes after record rainfall"
+      ],
+      "articles": [
+        {
+          "articleId": "article-1",
+          "sourceId": "source-1",
+          "publishedAt": 1793966340000,
+          "category": "disaster",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-2",
+          "sourceId": "source-2",
+          "publishedAt": 1793966340000,
+          "category": "disaster",
+          "confidence": 0.8,
+          "method": "keyword"
+        }
+      ]
+    },
+    {
+      "id": "ambiguous-strike",
+      "title": "Striker scores decisive strike in final",
+      "groundTruthUnrest": false,
+      "expectedDomain": "unknown",
+      "expectedReason": "unsupported_category",
+      "type": "keyword_spike",
+      "relatedTopics": [
+        "Striker scores decisive strike in final"
+      ],
+      "articles": [
+        {
+          "articleId": "article-1",
+          "sourceId": "source-1",
+          "publishedAt": 1793966340000,
+          "category": "general",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-2",
+          "sourceId": "source-2",
+          "publishedAt": 1793966340000,
+          "category": "general",
+          "confidence": 0.8,
+          "method": "keyword"
+        }
+      ]
+    },
+    {
+      "id": "source-type-convergence",
+      "title": "News and market sources converge",
+      "groundTruthUnrest": false,
+      "expectedDomain": "unknown",
+      "expectedReason": "incomplete_evidence",
+      "type": "convergence",
+      "relatedTopics": [
+        "news",
+        "markets",
+        "predictions"
+      ],
+      "articles": null
+    },
+    {
+      "id": "mixed-protest-tech",
+      "title": "Transit protest occurs beside technology launch",
+      "groundTruthUnrest": true,
+      "expectedDomain": "unknown",
+      "expectedReason": "unsupported_category",
+      "type": "convergence",
+      "relatedTopics": [
+        "Transit protest occurs beside technology launch"
+      ],
+      "articles": [
+        {
+          "articleId": "article-1",
+          "sourceId": "source-1",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-2",
+          "sourceId": "source-2",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-3",
+          "sourceId": "source-3",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        }
+      ]
+    },
+    {
+      "id": "missing-metadata",
+      "title": "Research paper coverage rises without classifications",
+      "groundTruthUnrest": false,
+      "expectedDomain": "unknown",
+      "expectedReason": "incomplete_evidence",
+      "type": "velocity_spike",
+      "relatedTopics": [
+        "Research paper coverage rises without classifications"
+      ],
+      "articles": null
+    },
+    {
+      "id": "invalid-confidence",
+      "title": "Technology coverage has invalid classification confidence",
+      "groundTruthUnrest": false,
+      "expectedDomain": "unknown",
+      "expectedReason": "invalid_evidence",
+      "type": "velocity_spike",
+      "relatedTopics": [
+        "Technology coverage has invalid classification confidence"
+      ],
+      "articles": [
+        {
+          "articleId": "article-1",
+          "sourceId": "source-1",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-2",
+          "sourceId": "source-2",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 2,
+          "method": "keyword"
+        }
+      ]
+    },
+    {
+      "id": "invalid-method",
+      "title": "Technology coverage has an unknown classifier method",
+      "groundTruthUnrest": false,
+      "expectedDomain": "unknown",
+      "expectedReason": "invalid_evidence",
+      "type": "velocity_spike",
+      "relatedTopics": [
+        "Technology coverage has an unknown classifier method"
+      ],
+      "articles": [
+        {
+          "articleId": "article-1",
+          "sourceId": "source-1",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-2",
+          "sourceId": "source-2",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "untrusted"
+        }
+      ]
+    },
+    {
+      "id": "duplicate-article",
+      "title": "One research article is repeated by an aggregator",
+      "groundTruthUnrest": false,
+      "expectedDomain": "unknown",
+      "expectedReason": "insufficient_evidence",
+      "type": "velocity_spike",
+      "relatedTopics": [
+        "One research article is repeated by an aggregator"
+      ],
+      "articles": [
+        {
+          "articleId": "article-1",
+          "sourceId": "source-1",
+          "publishedAt": 1793966340000,
+          "category": "economic",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-1",
+          "sourceId": "source-1",
+          "publishedAt": 1793966340000,
+          "category": "economic",
+          "confidence": 0.8,
+          "method": "keyword"
+        }
+      ]
+    },
+    {
+      "id": "future-evidence",
+      "title": "Planned protest has not happened at replay time",
+      "groundTruthUnrest": false,
+      "expectedDomain": "unknown",
+      "expectedReason": "invalid_evidence",
+      "type": "velocity_spike",
+      "relatedTopics": [
+        "Planned protest has not happened at replay time"
+      ],
+      "articles": [
+        {
+          "articleId": "article-1",
+          "sourceId": "source-1",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-2",
+          "sourceId": "source-2",
+          "publishedAt": 1793966460000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        }
+      ]
+    },
+    {
+      "id": "overflow-technology",
+      "title": "Technology launch has sixty-five contributing articles",
+      "groundTruthUnrest": false,
+      "expectedDomain": "unknown",
+      "expectedReason": "evidence_overflow",
+      "type": "velocity_spike",
+      "relatedTopics": [
+        "Technology launch has sixty-five contributing articles"
+      ],
+      "articles": [
+        {
+          "articleId": "article-0",
+          "sourceId": "source-0",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-1",
+          "sourceId": "source-1",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-2",
+          "sourceId": "source-2",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-3",
+          "sourceId": "source-3",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-4",
+          "sourceId": "source-4",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-5",
+          "sourceId": "source-5",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-6",
+          "sourceId": "source-6",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-7",
+          "sourceId": "source-7",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-8",
+          "sourceId": "source-8",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-9",
+          "sourceId": "source-9",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-10",
+          "sourceId": "source-10",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-11",
+          "sourceId": "source-11",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-12",
+          "sourceId": "source-12",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-13",
+          "sourceId": "source-13",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-14",
+          "sourceId": "source-14",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-15",
+          "sourceId": "source-15",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-16",
+          "sourceId": "source-16",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-17",
+          "sourceId": "source-17",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-18",
+          "sourceId": "source-18",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-19",
+          "sourceId": "source-19",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-20",
+          "sourceId": "source-20",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-21",
+          "sourceId": "source-21",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-22",
+          "sourceId": "source-22",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-23",
+          "sourceId": "source-23",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-24",
+          "sourceId": "source-24",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-25",
+          "sourceId": "source-25",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-26",
+          "sourceId": "source-26",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-27",
+          "sourceId": "source-27",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-28",
+          "sourceId": "source-28",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-29",
+          "sourceId": "source-29",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-30",
+          "sourceId": "source-30",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-31",
+          "sourceId": "source-31",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-32",
+          "sourceId": "source-32",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-33",
+          "sourceId": "source-33",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-34",
+          "sourceId": "source-34",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-35",
+          "sourceId": "source-35",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-36",
+          "sourceId": "source-36",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-37",
+          "sourceId": "source-37",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-38",
+          "sourceId": "source-38",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-39",
+          "sourceId": "source-39",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-40",
+          "sourceId": "source-40",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-41",
+          "sourceId": "source-41",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-42",
+          "sourceId": "source-42",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-43",
+          "sourceId": "source-43",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-44",
+          "sourceId": "source-44",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-45",
+          "sourceId": "source-45",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-46",
+          "sourceId": "source-46",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-47",
+          "sourceId": "source-47",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-48",
+          "sourceId": "source-48",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-49",
+          "sourceId": "source-49",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-50",
+          "sourceId": "source-50",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-51",
+          "sourceId": "source-51",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-52",
+          "sourceId": "source-52",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-53",
+          "sourceId": "source-53",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-54",
+          "sourceId": "source-54",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-55",
+          "sourceId": "source-55",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-56",
+          "sourceId": "source-56",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-57",
+          "sourceId": "source-57",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-58",
+          "sourceId": "source-58",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-59",
+          "sourceId": "source-59",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-60",
+          "sourceId": "source-60",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-61",
+          "sourceId": "source-61",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-62",
+          "sourceId": "source-62",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-63",
+          "sourceId": "source-63",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-64",
+          "sourceId": "source-64",
+          "publishedAt": 1793966340000,
+          "category": "tech",
+          "confidence": 0.8,
+          "method": "keyword"
+        }
+      ]
+    },
+    {
+      "id": "actual-protest",
+      "title": "Thousands protest a new tax in the capital",
+      "groundTruthUnrest": true,
+      "expectedDomain": "civil_unrest",
+      "expectedReason": "supported",
+      "type": "velocity_spike",
+      "relatedTopics": [
+        "Thousands protest a new tax in the capital"
+      ],
+      "articles": [
+        {
+          "articleId": "article-1",
+          "sourceId": "source-1",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-2",
+          "sourceId": "source-2",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        }
+      ]
+    },
+    {
+      "id": "actual-riot",
+      "title": "Rioters set vehicles alight after a public rally",
+      "groundTruthUnrest": true,
+      "expectedDomain": "civil_unrest",
+      "expectedReason": "supported",
+      "type": "convergence",
+      "relatedTopics": [
+        "Rioters set vehicles alight after a public rally"
+      ],
+      "articles": [
+        {
+          "articleId": "article-1",
+          "sourceId": "source-1",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-2",
+          "sourceId": "source-2",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        }
+      ]
+    },
+    {
+      "id": "labor-unrest",
+      "title": "Workers walk out in a nationwide labor strike",
+      "groundTruthUnrest": true,
+      "expectedDomain": "civil_unrest",
+      "expectedReason": "supported",
+      "type": "keyword_spike",
+      "relatedTopics": [
+        "Workers walk out in a nationwide labor strike"
+      ],
+      "articles": [
+        {
+          "articleId": "article-1",
+          "sourceId": "source-1",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-2",
+          "sourceId": "source-2",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        }
+      ]
+    },
+    {
+      "id": "one-source-unrest",
+      "title": "One local outlet reports a genuine town protest",
+      "groundTruthUnrest": true,
+      "expectedDomain": "unknown",
+      "expectedReason": "insufficient_evidence",
+      "type": "velocity_spike",
+      "relatedTopics": [
+        "One local outlet reports a genuine town protest"
+      ],
+      "articles": [
+        {
+          "articleId": "article-1",
+          "sourceId": "local-outlet",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-2",
+          "sourceId": "local-outlet",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        }
+      ]
+    },
+    {
+      "id": "conflicting-supported",
+      "title": "Protest and economic reports share one topic burst",
+      "groundTruthUnrest": true,
+      "expectedDomain": "unknown",
+      "expectedReason": "conflicting_evidence",
+      "type": "velocity_spike",
+      "relatedTopics": [
+        "Protest and economic reports share one topic burst"
+      ],
+      "articles": [
+        {
+          "articleId": "article-1",
+          "sourceId": "source-1",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-2",
+          "sourceId": "source-2",
+          "publishedAt": 1793966340000,
+          "category": "economic",
+          "confidence": 0.8,
+          "method": "keyword"
+        }
+      ]
+    },
+    {
+      "id": "overflow-unrest",
+      "title": "Large genuine protest has sixty-five contributing reports",
+      "groundTruthUnrest": true,
+      "expectedDomain": "unknown",
+      "expectedReason": "evidence_overflow",
+      "type": "velocity_spike",
+      "relatedTopics": [
+        "Large genuine protest has sixty-five contributing reports"
+      ],
+      "articles": [
+        {
+          "articleId": "article-0",
+          "sourceId": "source-0",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-1",
+          "sourceId": "source-1",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-2",
+          "sourceId": "source-2",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-3",
+          "sourceId": "source-3",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-4",
+          "sourceId": "source-4",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-5",
+          "sourceId": "source-5",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-6",
+          "sourceId": "source-6",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-7",
+          "sourceId": "source-7",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-8",
+          "sourceId": "source-8",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-9",
+          "sourceId": "source-9",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-10",
+          "sourceId": "source-10",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-11",
+          "sourceId": "source-11",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-12",
+          "sourceId": "source-12",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-13",
+          "sourceId": "source-13",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-14",
+          "sourceId": "source-14",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-15",
+          "sourceId": "source-15",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-16",
+          "sourceId": "source-16",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-17",
+          "sourceId": "source-17",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-18",
+          "sourceId": "source-18",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-19",
+          "sourceId": "source-19",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-20",
+          "sourceId": "source-20",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-21",
+          "sourceId": "source-21",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-22",
+          "sourceId": "source-22",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-23",
+          "sourceId": "source-23",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-24",
+          "sourceId": "source-24",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-25",
+          "sourceId": "source-25",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-26",
+          "sourceId": "source-26",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-27",
+          "sourceId": "source-27",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-28",
+          "sourceId": "source-28",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-29",
+          "sourceId": "source-29",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-30",
+          "sourceId": "source-30",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-31",
+          "sourceId": "source-31",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-32",
+          "sourceId": "source-32",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-33",
+          "sourceId": "source-33",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-34",
+          "sourceId": "source-34",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-35",
+          "sourceId": "source-35",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-36",
+          "sourceId": "source-36",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-37",
+          "sourceId": "source-37",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-38",
+          "sourceId": "source-38",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-39",
+          "sourceId": "source-39",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-40",
+          "sourceId": "source-40",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-41",
+          "sourceId": "source-41",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-42",
+          "sourceId": "source-42",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-43",
+          "sourceId": "source-43",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-44",
+          "sourceId": "source-44",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-45",
+          "sourceId": "source-45",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-46",
+          "sourceId": "source-46",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-47",
+          "sourceId": "source-47",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-48",
+          "sourceId": "source-48",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-49",
+          "sourceId": "source-49",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-50",
+          "sourceId": "source-50",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-51",
+          "sourceId": "source-51",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-52",
+          "sourceId": "source-52",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-53",
+          "sourceId": "source-53",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-54",
+          "sourceId": "source-54",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-55",
+          "sourceId": "source-55",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-56",
+          "sourceId": "source-56",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-57",
+          "sourceId": "source-57",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-58",
+          "sourceId": "source-58",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-59",
+          "sourceId": "source-59",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-60",
+          "sourceId": "source-60",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-61",
+          "sourceId": "source-61",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-62",
+          "sourceId": "source-62",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-63",
+          "sourceId": "source-63",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        },
+        {
+          "articleId": "article-64",
+          "sourceId": "source-64",
+          "publishedAt": 1793966340000,
+          "category": "protest",
+          "confidence": 0.8,
+          "method": "keyword"
+        }
+      ]
+    }
+  ]
+}

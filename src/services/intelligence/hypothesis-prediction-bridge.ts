@@ -32,6 +32,7 @@ import { slugifyEntity } from './entity-slug';
 import {
   EVENT_OCCURRENCE_DOMAINS,
   eventOccurrenceTypesForSignals,
+  allowlistedEventOccurrenceTypes,
 } from './event-occurrence-contract';
 
 const WINDOW_MS = 6 * 60 * 60 * 1000;        // dedupe bucket
@@ -199,9 +200,9 @@ export function eventOccurrenceCriteriaFor(
       .filter(Boolean),
   )].slice(0, 8);
   if (entitySlugs.length !== 1) return undefined;
-  const eventTypes = eventOccurrenceTypesForSignals(
-    hypothesis.signalTypes ?? [],
-  );
+  const eventTypes = hypothesis.qualifiedEventTypes === undefined
+    ? eventOccurrenceTypesForSignals(hypothesis.signalTypes ?? [])
+    : allowlistedEventOccurrenceTypes(hypothesis.qualifiedEventTypes);
   if (eventTypes.length === 0) return undefined;
   return {
     kind: 'event_occurrence',

@@ -1,0 +1,976 @@
+{
+  "implementation": "92259e7f2f415c551ffb05751c934d47c23ce871",
+  "implementationTree": "5f42a0b44c8fdba0e6aaa77284baa884202c4410",
+  "detachedExecution": {
+    "dispatch": {
+      "testedCommit": "08d1998a1bfaee7b1f33bd6e28287457ccee41ec",
+      "tree": "5f42a0b44c8fdba0e6aaa77284baa884202c4410",
+      "restoredGitStatus": ""
+    },
+    "settings": {
+      "testedCommit": "08d1998a1bfaee7b1f33bd6e28287457ccee41ec",
+      "tree": "5f42a0b44c8fdba0e6aaa77284baa884202c4410",
+      "restoredGitStatus": ""
+    },
+    "reactions": {
+      "testedCommit": "08d1998a1bfaee7b1f33bd6e28287457ccee41ec",
+      "tree": "5f42a0b44c8fdba0e6aaa77284baa884202c4410",
+      "restoredGitStatus": ""
+    },
+    "permissions": {
+      "testedCommit": "92259e7f2f415c551ffb05751c934d47c23ce871",
+      "tree": "5f42a0b44c8fdba0e6aaa77284baa884202c4410",
+      "restoredGitStatus": ""
+    }
+  },
+  "suites": {
+    "dispatch": {
+      "command": "node --import tsx --import ./tests/panels/register-hook.mjs --test --test-reporter=tap src/services/__tests__/derived-notification-policy.test.mts",
+      "baseline": "10 pass / 0 fail",
+      "restored": "10 pass / 0 fail"
+    },
+    "quiet": {
+      "command": "node --import tsx --import ./tests/panels/register-hook.mjs --test --test-reporter=tap src/services/notifications/__tests__/quiet-hours.test.mts",
+      "baseline": "18 pass / 0 fail",
+      "restored": "18 pass / 0 fail"
+    },
+    "settings-panel": {
+      "command": "node --import tsx --import ./tests/panels/register-hook.mjs --test --test-reporter=tap src/components/__tests__/notification-quiet-hours-panels.test.mts",
+      "baseline": "5 pass / 0 fail",
+      "restored": "5 pass / 0 fail"
+    },
+    "unavailable-panel": {
+      "command": "node --import tsx --import ./tests/panels/register-hook.mjs --test --test-reporter=tap src/components/__tests__/notification-settings-unavailable.test.mts",
+      "baseline": "1 pass / 0 fail",
+      "restored": "1 pass / 0 fail"
+    },
+    "reactions": {
+      "command": "node --import tsx --import ./tests/panels/register-hook.mjs --test --test-reporter=tap src/services/__tests__/derived-alert-reactions.test.mts",
+      "baseline": "4 pass / 0 fail",
+      "restored": "4 pass / 0 fail"
+    },
+    "permissions": {
+      "command": "node --import tsx --import ./tests/panels/register-hook.mjs --test --test-reporter=tap src/services/__tests__/derived-notification-policy.test.mts",
+      "baseline": "10 pass / 0 fail",
+      "restored": "10 pass / 0 fail"
+    }
+  },
+  "mutations": [
+    {
+      "id": "DISPATCH01",
+      "behavior": "Classify all correlation sources through the shared Derived policy",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -131,3 +131,3 @@ function alertSourceToDomain(source: AlertSource): NotificationDomain {\n     }\n-    case 'correlation': { return 'derived';\n+    case 'correlation': { return 'cyber';\n     }\n",
+      "appliedDiffSha256": "43987a714307c3dae27aa1c203ba6a45c2a119bb3ccaf4fcf8d420edc5d1d5ae",
+      "mutatedSha256": "8d11ad5b42a23e50e569e7aa0c1ee0ab31afc2e7572c62293b0c8c9a95c4f981",
+      "red": "0 pass / 10 fail",
+      "failingTests": [
+        "100 critical candidates keep source identity and severity while only one silent banner interrupts",
+        "elapsed-time cooldown and fixed title expiry survive severity changes and a distinct-title flood",
+        "reserves before constructor reentry and records constructor failure as an attempted banner",
+        "unavailable or ungranted permission never prompts, replays, or consumes a title slot",
+        "in-app channel and passive actions do not claim an outward delivery or reserve a slot",
+        "derived critical respects mute, quiet and Ghost ahead of pacing; NWS still interrupts",
+        "a privacy storage read failure holds derived notifications",
+        "unreadable permission and ungroupable titles fail closed without blocking a later candidate",
+        "a live Ghost choice still suppresses when its storage write failed",
+        "opaque notification tags rotate within a per-window bound across hourly floods"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    100 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 100\n  operator: 'strictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH02",
+      "behavior": "Record Derived cases in reasoning diagnostics",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -140,3 +140,3 @@ function traceDomainFor(domain: NotificationDomain): Parameters<NotificationTrac\n   switch (domain) {\n-    case 'derived': { return 'reasoning'; }\n+    case 'derived': { return 'cyber'; }\n     case 'weather': { return 'weather'; }\n",
+      "appliedDiffSha256": "6c8b0288110fd63fc15daaa58bd99dcece7c3147940b26037893dc133db4c19c",
+      "mutatedSha256": "c8d804c38725bc84e074f40c0a4c3cb2548f70952db56fcece8ca8b5006ca335",
+      "red": "9 pass / 1 fail",
+      "failingTests": [
+        "100 critical candidates keep source identity and severity while only one silent banner interrupts"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    0 !== 100\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 100\n  actual: 0\n  operator: 'strictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH03",
+      "behavior": "Do not classify inferred critical severity as an authoritative safety warning",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -190,3 +190,3 @@ function createDispatchTrace(\n       userRelevance: normalizedTraceScore(alert.relevanceScore),\n-      safetyCritical: domain !== 'derived' && alert.severity === 'critical',\n+      safetyCritical: alert.severity === 'critical',\n       createdAt: Date.now(),\n",
+      "appliedDiffSha256": "7f94b9a70a5d59461d72a6e846a80e2587bc483bccccf35c12978dc8539fda56",
+      "mutatedSha256": "f3b874600a73c751747f5238c6e561d1db146025fc45dcd0f78e60cebe599280",
+      "red": "9 pass / 1 fail",
+      "failingTests": [
+        "100 critical candidates keep source identity and severity while only one silent banner interrupts"
+      ],
+      "assertion": "error: |-\n    The expression evaluated to a falsy value:\n    \n      assert.ok(entries.every(e => e.candidate.urgency === 'critical' && e.candidate.safetyCritical === false))\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH04",
+      "behavior": "Hold when the privacy storage read fails",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -74,3 +74,3 @@ function modeHoldForDispatch(derived: boolean): string | undefined {\n   } catch {\n-    return derived ? 'mode-unavailable' : undefined;\n+    return undefined;\n   }\n",
+      "appliedDiffSha256": "42edd556162804d4b564ce18d2d993084535bde44518a03dce2cf302aefc97eb",
+      "mutatedSha256": "b6a4f4ed1e88ef11b7a0736453a2a61aec3d39f67964a60cf0c4b996144907c8",
+      "red": "9 pass / 1 fail",
+      "failingTests": [
+        "a privacy storage read failure holds derived notifications"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH05",
+      "behavior": "Hold on saved Ghost before processing Derived candidates",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -72,3 +72,3 @@ function modeHoldForDispatch(derived: boolean): string | undefined {\n   try {\n-    return localStorage.getItem(MODE_STORAGE_KEY) === 'ghost' ? 'ghost-mode' : undefined;\n+    return undefined;\n   } catch {\n",
+      "appliedDiffSha256": "619739f729363330c2246b88c812fe09fec089b5f34b213f99474524094eb596",
+      "mutatedSha256": "c5d03eb4a3e93aad905dc264a08cb9461349f77ef827c1740f9d2fba1b94fbb4",
+      "red": "8 pass / 2 fail",
+      "failingTests": [
+        "derived critical respects mute, quiet and Ghost ahead of pacing; NWS still interrupts",
+        "a privacy storage read failure holds derived notifications"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   'domain-quiet-hours': 2,\n    -   'domain-quiet-hours': 1,\n    -   'ghost-mode': 1,\n        'master-mute': 1\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    master-mute: 1\n    domain-quiet-hours: 1\n    ghost-mode: 1\n  actual:\n    master-mute: 1\n    domain-quiet-hours: 2\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH06",
+      "behavior": "Prevent outward transport for in-app-only preferences",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -305,3 +305,3 @@ class NotificationDispatcher {\n   private dispatchDerived(alert: UnifiedAlert, action: NotificationAction, trace?: DispatchTrace): void {\n-    if (getSettings().domains.derived.channel === 'in_app' || action === 'badge') {\n+    if (action === 'badge') {\n       suppressTrace(trace, action === 'badge' ? 'badge-only' : 'in-app-only');\n",
+      "appliedDiffSha256": "1e6eba802ba417140f44973b3634a3ee0ed87a9e5fc73aa8f39b6416fc21643b",
+      "mutatedSha256": "04729a48c2c747399ccae5535828b6643b2ab5ea8fc336ab8a93a31744df0212",
+      "red": "9 pass / 1 fail",
+      "failingTests": [
+        "in-app channel and passive actions do not claim an outward delivery or reserve a slot"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH07",
+      "behavior": "Badge-only remains a passive action",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -305,3 +305,3 @@ class NotificationDispatcher {\n   private dispatchDerived(alert: UnifiedAlert, action: NotificationAction, trace?: DispatchTrace): void {\n-    if (getSettings().domains.derived.channel === 'in_app' || action === 'badge') {\n+    if (getSettings().domains.derived.channel === 'in_app') {\n       suppressTrace(trace, action === 'badge' ? 'badge-only' : 'in-app-only');\n",
+      "appliedDiffSha256": "dabfc445eb71610a71d9e8c37ab482194653361d55c77ca58c9741e293063e7c",
+      "mutatedSha256": "53e6951695f080d089e944c00abceb37c60005f2236764d31b1882a342a8d6a9",
+      "red": "9 pass / 1 fail",
+      "failingTests": [
+        "in-app channel and passive actions do not claim an outward delivery or reserve a slot"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH08",
+      "behavior": "Refuse oversized input before canonicalization",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -312,3 +312,3 @@ class NotificationDispatcher {\n     // stays visible on its existing in-app surface.\n-    const title = alert.title.length <= 1024\n+    const title = true\n       ? alert.title.normalize('NFC').trim().replace(/\\s+/gu, ' ').toLowerCase()\n",
+      "appliedDiffSha256": "1cf3a2ffbf0edeb754bebe56e9e3b58e0c6fa50c4bfecee9ee077008f5e604b2",
+      "mutatedSha256": "e24ca6a10e80c619b8308476cfc5302437caca6e33906461bfbae15bcb52ad94",
+      "red": "9 pass / 1 fail",
+      "failingTests": [
+        "unreadable permission and ungroupable titles fail closed without blocking a later candidate"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   'derived-cooldown': 1,\n    +   'derived-title-unavailable': 1,\n    -   'derived-title-unavailable': 2,\n        'permission-unavailable': 1\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    permission-unavailable: 1\n    derived-title-unavailable: 2\n  actual:\n    permission-unavailable: 1\n    derived-title-unavailable: 1\n    der",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH09",
+      "behavior": "Blank normalized title cannot reserve or interrupt",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -315,3 +315,3 @@ class NotificationDispatcher {\n       : '';\n-    if (!title) {\n+    if (false) {\n       suppressTrace(trace, 'derived-title-unavailable');\n",
+      "appliedDiffSha256": "9787c9432e35a17fed9b227afb7c15a18e7483d0c1640d7e240c0f7197d877c9",
+      "mutatedSha256": "534b68307a00704b7262368077df4912fd5ccfd8a0b7343eca42a52b9b077e35",
+      "red": "9 pass / 1 fail",
+      "failingTests": [
+        "unreadable permission and ungroupable titles fail closed without blocking a later candidate"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   'derived-cooldown': 1,\n    +   'derived-duplicate-title': 1,\n    -   'derived-title-unavailable': 2,\n        'permission-unavailable': 1\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    permission-unavailable: 1\n    derived-title-unavailable: 2\n  actual:\n    permission-unavailable: 1\n    derived-duplicate-title: 1\n    derived",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH10",
+      "behavior": "Normalize outer whitespace before coalescing",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -313,3 +313,3 @@ class NotificationDispatcher {\n     const title = alert.title.length <= 1024\n-      ? alert.title.normalize('NFC').trim().replace(/\\s+/gu, ' ').toLowerCase()\n+      ? alert.title.normalize('NFC').replace(/\\s+/gu, ' ').toLowerCase()\n       : '';\n",
+      "appliedDiffSha256": "883470b43f5a5e625655a5d95add7f29c1f030b45fc134519fd2f8d036955be1",
+      "mutatedSha256": "eb23d0d3d7da2a04bd3a19127c41cf31d27e5970a9a10c9f98a26bc0c302bc98",
+      "red": "8 pass / 2 fail",
+      "failingTests": [
+        "100 critical candidates keep source identity and severity while only one silent banner interrupts",
+        "unreadable permission and ungroupable titles fail closed without blocking a later candidate"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   'derived-cooldown': 50,\n    +   'derived-duplicate-title': 49\n    -   'derived-duplicate-title': 99\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    derived-duplicate-title: 99\n  actual:\n    derived-cooldown: 50\n    derived-duplicate-title: 49\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH11",
+      "behavior": "Normalize internal whitespace before coalescing",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -313,3 +313,3 @@ class NotificationDispatcher {\n     const title = alert.title.length <= 1024\n-      ? alert.title.normalize('NFC').trim().replace(/\\s+/gu, ' ').toLowerCase()\n+      ? alert.title.normalize('NFC').trim().toLowerCase()\n       : '';\n",
+      "appliedDiffSha256": "8d5867e18963cf3818601a5e7d298ad62dcd53fc035c3b13fe2a0a74446884cf",
+      "mutatedSha256": "e3aafc60cc13d6870bff206554ee5d0ccc95d8a665ef8384c673332955040d1b",
+      "red": "9 pass / 1 fail",
+      "failingTests": [
+        "100 critical candidates keep source identity and severity while only one silent banner interrupts"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   'derived-cooldown': 50,\n    +   'derived-duplicate-title': 49\n    -   'derived-duplicate-title': 99\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    derived-duplicate-title: 99\n  actual:\n    derived-cooldown: 50\n    derived-duplicate-title: 49\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH12",
+      "behavior": "Normalize title case before coalescing",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -313,3 +313,3 @@ class NotificationDispatcher {\n     const title = alert.title.length <= 1024\n-      ? alert.title.normalize('NFC').trim().replace(/\\s+/gu, ' ').toLowerCase()\n+      ? alert.title.normalize('NFC').trim().replace(/\\s+/gu, ' ')\n       : '';\n",
+      "appliedDiffSha256": "3c94bbdffe846e1ce6a0e79683a3f5facce04e6a26ddcab413c98fc921ea0488",
+      "mutatedSha256": "5e76cf155fbdf71d6cf421acfca9b6d7f79536d011381adcc14a62d9abc16c98",
+      "red": "8 pass / 2 fail",
+      "failingTests": [
+        "100 critical candidates keep source identity and severity while only one silent banner interrupts",
+        "elapsed-time cooldown and fixed title expiry survive severity changes and a distinct-title flood"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   'derived-cooldown': 50,\n    +   'derived-duplicate-title': 49\n    -   'derived-duplicate-title': 99\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    derived-duplicate-title: 99\n  actual:\n    derived-cooldown: 50\n    derived-duplicate-title: 49\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH13",
+      "behavior": "Retain distinguishing digits in group identity",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -313,3 +313,3 @@ class NotificationDispatcher {\n     const title = alert.title.length <= 1024\n-      ? alert.title.normalize('NFC').trim().replace(/\\s+/gu, ' ').toLowerCase()\n+      ? alert.title.replace(/\\d+/gu, '').normalize('NFC').trim().replace(/\\s+/gu, ' ').toLowerCase()\n       : '';\n",
+      "appliedDiffSha256": "4771e8a5307bba21ee3e385607f4196e63e74741948f7fd701572d4f1307a8ed",
+      "mutatedSha256": "0f761f8e3bedfd2445b40a278048b4f2a306c99ef10c37c7b70d94963cb760da",
+      "red": "8 pass / 2 fail",
+      "failingTests": [
+        "elapsed-time cooldown and fixed title expiry survive severity changes and a distinct-title flood",
+        "opaque notification tags rotate within a per-window bound across hourly floods"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    2 !== 3\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 3\n  actual: 2\n  operator: 'strictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH14",
+      "behavior": "A repeat must not refresh an existing title window",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -331,2 +331,3 @@ class NotificationDispatcher {\n     if (this.derivedTitles.has(title)) {\n+      this.derivedTitles.set(title, now);\n       suppressTrace(trace, 'derived-duplicate-title');\n",
+      "appliedDiffSha256": "1bf72af9ef0a8167cadfbde52f323e5eed035d7cddf8c23f097acf5b6de55b06",
+      "mutatedSha256": "5ebe40b57db7a169d769d125600fac49454769fbdb23a0f1aebccd36e526f514",
+      "red": "9 pass / 1 fail",
+      "failingTests": [
+        "elapsed-time cooldown and fixed title expiry survive severity changes and a distinct-title flood"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    2 !== 3\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 3\n  actual: 2\n  operator: 'strictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH15",
+      "behavior": "Wall-clock adjustments must not control elapsed windows",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -326,3 +326,3 @@ class NotificationDispatcher {\n \n-    const now = performance.now();\n+    const now = Date.now();\n     for (const [key, admitted] of this.derivedTitles) {\n",
+      "appliedDiffSha256": "6350f1c1c3b3ef4f89cf81f1b40793deadf281da8c30b8cccdd95aeb24460ead",
+      "mutatedSha256": "27b7c5652d417138362c34bee2e710258bc9c5f47cf1a95752d9d11111a58b3a",
+      "red": "8 pass / 2 fail",
+      "failingTests": [
+        "elapsed-time cooldown and fixed title expiry survive severity changes and a distinct-title flood",
+        "opaque notification tags rotate within a per-window bound across hourly floods"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 3\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 3\n  actual: 1\n  operator: 'strictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH16",
+      "behavior": "Expire once the exact 30-minute limit is reached",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -328,3 +328,3 @@ class NotificationDispatcher {\n     for (const [key, admitted] of this.derivedTitles) {\n-      if (now - admitted >= DERIVED_TITLE_WINDOW_MS) this.derivedTitles.delete(key);\n+      if (now - admitted > DERIVED_TITLE_WINDOW_MS) this.derivedTitles.delete(key);\n     }\n",
+      "appliedDiffSha256": "2837097556d2ad15c80f534ee77b9c85a7370e27a2a47fc6e2b73a8c7e14f123",
+      "mutatedSha256": "58ce5fecdbff85a53147048c91dd181daef0fcff23adc4ec8c53c9a5be04b124",
+      "red": "9 pass / 1 fail",
+      "failingTests": [
+        "elapsed-time cooldown and fixed title expiry survive severity changes and a distinct-title flood"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    2 !== 3\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 3\n  actual: 2\n  operator: 'strictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH17",
+      "behavior": "Hold distinct titles strictly before the two-minute mark",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -334,3 +334,3 @@ class NotificationDispatcher {\n     }\n-    if (now - this.lastDerivedAttempt < RATE_LIMIT_MS || this.derivedTitles.size >= MAX_DERIVED_GROUPS) {\n+    if (now - this.lastDerivedAttempt <= RATE_LIMIT_MS || this.derivedTitles.size >= MAX_DERIVED_GROUPS) {\n       suppressTrace(trace, 'derived-cooldown');\n",
+      "appliedDiffSha256": "1df5f7cdc003517df4466f17382855bf341883466b8198232f268e409cdaa430",
+      "mutatedSha256": "c2c46b4d853959c3d478cb15cfe973337753a2e232604a74ff00624ba052632a",
+      "red": "8 pass / 2 fail",
+      "failingTests": [
+        "elapsed-time cooldown and fixed title expiry survive severity changes and a distinct-title flood",
+        "opaque notification tags rotate within a per-window bound across hourly floods"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    2 !== 3\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 3\n  actual: 2\n  operator: 'strictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH18",
+      "behavior": "Duplicate-title suppression precedes domain-wide cooldown",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -330,3 +330,3 @@ class NotificationDispatcher {\n     }\n-    if (this.derivedTitles.has(title)) {\n+    if (false) {\n       suppressTrace(trace, 'derived-duplicate-title');\n",
+      "appliedDiffSha256": "0fd51d1cc76a8192b5029a531a2ea2d0c4a6f2a18920a2c608712a2a843dbab7",
+      "mutatedSha256": "b71e94e4564ce30ddb380e0967543658334fcde286c851cb9cf56e9e83129b8a",
+      "red": "7 pass / 3 fail",
+      "failingTests": [
+        "100 critical candidates keep source identity and severity while only one silent banner interrupts",
+        "elapsed-time cooldown and fixed title expiry survive severity changes and a distinct-title flood",
+        "reserves before constructor reentry and records constructor failure as an attempted banner"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   'derived-cooldown': 99\n    -   'derived-duplicate-title': 99\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    derived-duplicate-title: 99\n  actual:\n    derived-cooldown: 99\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH19",
+      "behavior": "Require granted browser permission",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -81,3 +81,3 @@ function permittedBannerApi(): typeof Notification | undefined {\n     const api = window.Notification;\n-    return api?.permission === 'granted' ? api : undefined;\n+    return api;\n   } catch {\n",
+      "appliedDiffSha256": "b121b37ccd76a39f27ff2c42e8bddf4c772500944df2e89c731a09ff6756def7",
+      "mutatedSha256": "90272e0c3a1b5704884b7f0df0e92022f11127b1aa1e510506bc1f884fe90c7f",
+      "red": "8 pass / 2 fail",
+      "failingTests": [
+        "unavailable or ungranted permission never prompts, replays, or consumes a title slot",
+        "unreadable permission and ungroupable titles fail closed without blocking a later candidate"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH20",
+      "behavior": "Quiet the OS banner independently of source severity",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -348,3 +348,3 @@ class NotificationDispatcher {\n       this.derivedTagSlot = (this.derivedTagSlot + 1) % MAX_DERIVED_GROUPS;\n-      new Banner(alert.title, { body: alert.body, tag, silent: true, requireInteraction: false });\n+      new Banner(alert.title, { body: alert.body, tag, silent: false, requireInteraction: false });\n       recordNativeResult(trace, { delivered: true, surface: 'banner' });\n",
+      "appliedDiffSha256": "4a34e285a1e581b7039ab7859eca41512c8b0b4a0fbeca880224bb199b3c1f8e",
+      "mutatedSha256": "5a917a2f9044f600d476f0137f08f818d70c6d2146db83312c29f858166f7c91",
+      "red": "9 pass / 1 fail",
+      "failingTests": [
+        "100 critical candidates keep source identity and severity while only one silent banner interrupts"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    false !== true\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: 'strictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH21",
+      "behavior": "Never ask for continuing user interaction",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -348,3 +348,3 @@ class NotificationDispatcher {\n       this.derivedTagSlot = (this.derivedTagSlot + 1) % MAX_DERIVED_GROUPS;\n-      new Banner(alert.title, { body: alert.body, tag, silent: true, requireInteraction: false });\n+      new Banner(alert.title, { body: alert.body, tag, silent: true, requireInteraction: true });\n       recordNativeResult(trace, { delivered: true, surface: 'banner' });\n",
+      "appliedDiffSha256": "56994f6b1d58340aba23a4caa137fd03a907a0fea0d298b537aefed1f93c6880",
+      "mutatedSha256": "5e630096ce226303d1fb16ece7abe0693bc613e28049cf86feae6673f8d9df35",
+      "red": "9 pass / 1 fail",
+      "failingTests": [
+        "100 critical candidates keep source identity and severity while only one silent banner interrupts"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH22",
+      "behavior": "Use an opaque tag independent of private source content",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -348,3 +348,3 @@ class NotificationDispatcher {\n       this.derivedTagSlot = (this.derivedTagSlot + 1) % MAX_DERIVED_GROUPS;\n-      new Banner(alert.title, { body: alert.body, tag, silent: true, requireInteraction: false });\n+      new Banner(alert.title, { body: alert.body, tag: alert.id, silent: true, requireInteraction: false });\n       recordNativeResult(trace, { delivered: true, surface: 'banner' });\n",
+      "appliedDiffSha256": "9fd03fe64ac866484ff74d5ff4b31cb1178f38cb9dbf39d331baaa30002d0dee",
+      "mutatedSha256": "8f55a0bbea0db0ad1ad7c39eab12f1360e73d6a484f135f4b59407b3b4da8827",
+      "red": "8 pass / 2 fail",
+      "failingTests": [
+        "100 critical candidates keep source identity and severity while only one silent banner interrupts",
+        "opaque notification tags rotate within a per-window bound across hourly floods"
+      ],
+      "assertion": "error: |-\n    The expression evaluated to a falsy value:\n    \n      assert.ok(calls[0]?.tag && !/private|synthetic/i.test(calls[0].tag))\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH23",
+      "behavior": "Record failed banner construction as actual failure",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -351,3 +351,3 @@ class NotificationDispatcher {\n     } catch {\n-      recordNativeResult(trace, { delivered: false, surface: 'failed', error: 'notification-delivery-failed' });\n+      recordNativeResult(trace, { delivered: true, surface: 'banner' });\n     }\n",
+      "appliedDiffSha256": "dab1689dff030ebb9624a5cecc518a3f6fa7857d5105c4234e1a8ca4e313c8a2",
+      "mutatedSha256": "b853595bcdb5860ccff6930e9497878b10b45cf6141e4fe85aeb13e45658cb51",
+      "red": "9 pass / 1 fail",
+      "failingTests": [
+        "reserves before constructor reentry and records constructor failure as an attempted banner"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   delivered: true,\n    +   surface: 'banner'\n    -   delivered: false,\n    -   error: 'notification-delivery-failed',\n    -   surface: 'failed'\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    delivered: false\n    surface: 'failed'\n    error: 'notification-delivery-failed'\n  actual:\n    delivered: true\n    surface: 'banner'\n  o",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH24",
+      "behavior": "Mark a successful banner as actually delivered",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -349,3 +349,2 @@ class NotificationDispatcher {\n       new Banner(alert.title, { body: alert.body, tag, silent: true, requireInteraction: false });\n-      recordNativeResult(trace, { delivered: true, surface: 'banner' });\n     } catch {\n",
+      "appliedDiffSha256": "7f2826c83484659cfa6a5b7df75db43a15f3cc1037b12693265c3fa02eb910b2",
+      "mutatedSha256": "32e25f29c4d364b13654682b1cf0afdf6387cc40af3bc0af3ed5b1ea363c6eaa",
+      "red": "9 pass / 1 fail",
+      "failingTests": [
+        "100 critical candidates keep source identity and severity while only one silent banner interrupts"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + undefined\n    - {\n    -   delivered: true,\n    -   surface: 'banner'\n    - }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    delivered: true\n    surface: 'banner'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH25",
+      "behavior": "Reserve the title and domain synchronously before reentry",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -341,4 +341,2 @@ class NotificationDispatcher {\n     // must not unleash a retry storm.\n-    this.lastDerivedAttempt = now;\n-    this.derivedTitles.set(title, now);\n     dispatchTrace(trace, 'banner', false);\n@@ -349,2 +347,4 @@ class NotificationDispatcher {\n       new Banner(alert.title, { body: alert.body, tag, silent: true, requireInteraction: false });\n+      this.lastDerivedAttempt = now;\n+      this.derivedTitles.set(title, now);\n       recordNativeResult(trace, { delivered: true, surface: 'banner' });\n",
+      "appliedDiffSha256": "73c3d7ac6dcd38f52b1c05bcd17e1fc110202eb0fe77afe03072794160da2633",
+      "mutatedSha256": "28afa8b6c4ce815eed057d5ec772d8d690d8dba526615d97ad6676128687f486",
+      "red": "9 pass / 1 fail",
+      "failingTests": [
+        "reserves before constructor reentry and records constructor failure as an attempted banner"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    2 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 2\n  operator: 'strictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH26",
+      "behavior": "Live Ghost wins even when its last write failed",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -70,3 +70,3 @@ export function actionForSeverity(severity: AlertSeverity): NotificationAction {\n function modeHoldForDispatch(derived: boolean): string | undefined {\n-  if (derived && isWindowInGhostMode()) return 'ghost-mode';\n+  \n   try {\n",
+      "appliedDiffSha256": "f1139d7acc9c9e6d310fc5bc331d6e67a16a7eb89ca09d5ec324a97ee6005279",
+      "mutatedSha256": "8186e283daee156f8e4016088016561ee5837d8267d35566a3d47046b0bc126f",
+      "red": "9 pass / 1 fail",
+      "failingTests": [
+        "a live Ghost choice still suppresses when its storage write failed"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n    + {}\n    - {\n    -   'ghost-mode': 1\n    - }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    ghost-mode: 1\n  actual:\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH27",
+      "behavior": "Treat canonically equivalent Unicode titles as duplicates",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -313,3 +313,3 @@ class NotificationDispatcher {\n     const title = alert.title.length <= 1024\n-      ? alert.title.normalize('NFC').trim().replace(/\\s+/gu, ' ').toLowerCase()\n+      ? alert.title.trim().replace(/\\s+/gu, ' ').toLowerCase()\n       : '';\n",
+      "appliedDiffSha256": "94c5aea0c53946426b3f17b7482bb04adfc1b04c1f94515325aba620526a5bf1",
+      "mutatedSha256": "cda3332f1e4dc22140596b723614082b53d9478ea7163dfae8a960b9d651c1a3",
+      "red": "9 pass / 1 fail",
+      "failingTests": [
+        "100 critical candidates keep source identity and severity while only one silent banner interrupts"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   'derived-cooldown': 50,\n    +   'derived-duplicate-title': 49\n    -   'derived-duplicate-title': 99\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    derived-duplicate-title: 99\n  actual:\n    derived-cooldown: 50\n    derived-duplicate-title: 49\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH28",
+      "behavior": "Rotate a bounded pool of native tags",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -347,3 +347,3 @@ class NotificationDispatcher {\n       const tag = `wm-derived-${this.derivedTagPrefix}-${this.derivedTagSlot}`;\n-      this.derivedTagSlot = (this.derivedTagSlot + 1) % MAX_DERIVED_GROUPS;\n+      this.derivedTagSlot = this.derivedTagSlot + 1;\n       new Banner(alert.title, { body: alert.body, tag, silent: true, requireInteraction: false });\n",
+      "appliedDiffSha256": "40e775dcb30ecae66c66106465c2f2e8b05b59d6bef9dc3b7aebce2a6e4a8902",
+      "mutatedSha256": "c298ab5c4e089442e557ce3ecb7a3a1152c3317b2bb38771f74115b72b7476a6",
+      "red": "9 pass / 1 fail",
+      "failingTests": [
+        "opaque notification tags rotate within a per-window bound across hourly floods"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    32 !== 16\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 16\n  actual: 32\n  operator: 'strictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH29",
+      "behavior": "Separate tag namespaces by window",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -345,3 +345,3 @@ class NotificationDispatcher {\n     try {\n-      this.derivedTagPrefix ??= crypto.randomUUID();\n+      this.derivedTagPrefix = 'fixed';\n       const tag = `wm-derived-${this.derivedTagPrefix}-${this.derivedTagSlot}`;\n",
+      "appliedDiffSha256": "6e55ad5a74690a8f4a3e69e514fb23b41a3db229016ca8455cbbb01bc598aed8",
+      "mutatedSha256": "344e10c87c3059c307b8c50c0ea27b35148844c40ab7f3827b0c542868624982",
+      "red": "9 pass / 1 fail",
+      "failingTests": [
+        "opaque notification tags rotate within a per-window bound across hourly floods"
+      ],
+      "assertion": "error: |-\n    The expression evaluated to a falsy value:\n    \n      assert.ok(!tags.includes(calls.at(-1)?.tag))\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "DISPATCH30",
+      "behavior": "Expose accurate in-app versus badge suppression reasons",
+      "suite": "dispatch",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -306,3 +306,3 @@ class NotificationDispatcher {\n     if (getSettings().domains.derived.channel === 'in_app' || action === 'badge') {\n-      suppressTrace(trace, action === 'badge' ? 'badge-only' : 'in-app-only');\n+      suppressTrace(trace, 'in-app-only');\n       return;\n",
+      "appliedDiffSha256": "128be8ac21ac24742e47a3c3c11c0381ae69fc8e51dc578a483c61b014b32359",
+      "mutatedSha256": "ec03f709d29ab654c2ded5ba9c58aa51b2e65ad8eae5cb9eeb2c7762a9026f92",
+      "red": "9 pass / 1 fail",
+      "failingTests": [
+        "in-app channel and passive actions do not claim an outward delivery or reserve a slot"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   'in-app-only': 2,\n    -   'badge-only': 1,\n    -   'in-app-only': 1,\n        'silent-action': 1\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    in-app-only: 1\n    badge-only: 1\n    silent-action: 1\n  actual:\n    in-app-only: 2\n    silent-action: 1\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "SETTINGS01",
+      "behavior": "Require fresh high severity",
+      "suite": "quiet",
+      "file": "src/services/notifications/notification-settings-service.ts",
+      "diff": "@@ -93,3 +93,3 @@ function buildDefaultSettings(): NotificationSettings {\n   }\n-  domains.derived = { ...DEFAULT_DOMAIN_SETTINGS, threshold: 'high', quietHoursEnabled: true };\n+  domains.derived = { ...DEFAULT_DOMAIN_SETTINGS, threshold: 'medium', quietHoursEnabled: true };\n   return {\n",
+      "appliedDiffSha256": "900d600a5e0a1f67e5b17e7194f861a699495cf5a7634a5f54c3d706449c5ae7",
+      "mutatedSha256": "2884cf09f0d0ba40984a8af0a3610b9dbe4b71cb5469106001629cc7f37b1aa9",
+      "red": "17 pass / 1 fail",
+      "failingTests": [
+        "fresh derived defaults honor critical quiet hours and mute independently of NWS"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n        channel: 'both',\n        enabled: true,\n        quietHoursEnabled: true,\n    +   threshold: 'medium'\n    -   threshold: 'high'\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    enabled: true\n    threshold: 'high'\n    channel: 'both'\n    quietHoursEnabled: true\n  actual:\n    enabled: true\n    threshold: 'medium'\n    channel: 'b",
+      "restoredSha256": "ddd150be6e7a929dbeab2fcdd3aacaf4396d1949c59d0c1f49d81457a9a2455d"
+    },
+    {
+      "id": "SETTINGS02",
+      "behavior": "Protect fresh quiet hours",
+      "suite": "quiet",
+      "file": "src/services/notifications/notification-settings-service.ts",
+      "diff": "@@ -93,3 +93,3 @@ function buildDefaultSettings(): NotificationSettings {\n   }\n-  domains.derived = { ...DEFAULT_DOMAIN_SETTINGS, threshold: 'high', quietHoursEnabled: true };\n+  domains.derived = { ...DEFAULT_DOMAIN_SETTINGS, threshold: 'high', quietHoursEnabled: false };\n   return {\n",
+      "appliedDiffSha256": "0824045f5cbde4edabd9ae275a575a9e501c112b6af5dd08f0cbb586015d8f48",
+      "mutatedSha256": "2f79066bcdf9aaaa13d7d359a24ecdddd4a491cc3253a92faeb598d22d7e22c3",
+      "red": "15 pass / 3 fail",
+      "failingTests": [
+        "migration carries the Preferences window into weather only, once",
+        "fresh derived defaults honor critical quiet hours and mute independently of NWS",
+        "legacy Cyber restrictions become a one-time independent derived preference"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n        channel: 'both',\n        enabled: true,\n    +   quietHoursEnabled: false,\n    -   quietHoursEnabled: true,\n        threshold: 'high'\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    enabled: true\n    threshold: 'high'\n    channel: 'both'\n    quietHoursEnabled: true\n  actual:\n    enabled: true\n    threshold: 'high'\n    channel",
+      "restoredSha256": "ddd150be6e7a929dbeab2fcdd3aacaf4396d1949c59d0c1f49d81457a9a2455d"
+    },
+    {
+      "id": "SETTINGS03",
+      "behavior": "Critical authoritative mute override excludes Derived",
+      "suite": "quiet",
+      "file": "src/services/notifications/notification-settings-service.ts",
+      "diff": "@@ -282,3 +282,3 @@ export function evaluateNotificationPreference(\n   if (domain === 'derived' && !preferencesAvailable) return { allowed: false, reason: 'preferences-unavailable' };\n-  const bypassMute = severity === 'critical' && domain !== 'derived';\n+  const bypassMute = severity === 'critical';\n   if (global.masterMute && !bypassMute) return { allowed: false, reason: 'master-mute' };\n",
+      "appliedDiffSha256": "0e9d8e5e49916408218e90eea8e14c7ad9dc56d9aa8487d39ae6a3753aa1635c",
+      "mutatedSha256": "adc26e8c285a164c52d338edcad73ae4befb0d731c1bfdebb0845a1819f9160e",
+      "red": "17 pass / 1 fail",
+      "failingTests": [
+        "fresh derived defaults honor critical quiet hours and mute independently of NWS"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'allowed'\n    - 'domain-quiet-hours'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'domain-quiet-hours'\n  actual: 'allowed'\n  operator: 'strictEqual'",
+      "restoredSha256": "ddd150be6e7a929dbeab2fcdd3aacaf4396d1949c59d0c1f49d81457a9a2455d"
+    },
+    {
+      "id": "SETTINGS04",
+      "behavior": "Critical Derived obeys master mute even outside quiet hours",
+      "suite": "quiet",
+      "file": "src/services/notifications/notification-settings-service.ts",
+      "diff": "@@ -283,3 +283,3 @@ export function evaluateNotificationPreference(\n   const bypassMute = severity === 'critical' && domain !== 'derived';\n-  if (global.masterMute && !bypassMute) return { allowed: false, reason: 'master-mute' };\n+  if (global.masterMute && severity !== 'critical') return { allowed: false, reason: 'master-mute' };\n \n",
+      "appliedDiffSha256": "917b11fa8e39329dcbd5dd3e8b27a3da7b29c165fc43d55c8442346eb7bf01a9",
+      "mutatedSha256": "f8ca731d9b45ddcc33e34b08603f476a148efdc172439b9db461a921600772e5",
+      "red": "17 pass / 1 fail",
+      "failingTests": [
+        "fresh derived defaults honor critical quiet hours and mute independently of NWS"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'allowed'\n    - 'master-mute'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'master-mute'\n  actual: 'allowed'\n  operator: 'strictEqual'",
+      "restoredSha256": "ddd150be6e7a929dbeab2fcdd3aacaf4396d1949c59d0c1f49d81457a9a2455d"
+    },
+    {
+      "id": "SETTINGS05",
+      "behavior": "Carry forward disabled Cyber",
+      "suite": "quiet",
+      "file": "src/services/notifications/notification-settings-service.ts",
+      "diff": "@@ -146,3 +146,3 @@ function mergeWithDefaults(saved: SavedSettings | null): NotificationSettings {\n     const { enabled, threshold, channel } = saved.domains.cyber;\n-    domains.derived = { ...domains.derived, enabled, channel, threshold: threshold === 'critical' ? 'critical' : 'high' };\n+    domains.derived = { ...domains.derived, enabled: true, channel, threshold: threshold === 'critical' ? 'critical' : 'high' };\n   }\n",
+      "appliedDiffSha256": "f5b6ed7b545dab6e553ae81b9b3db43e39a7fa6d4a26375589df6af89d7daecb",
+      "mutatedSha256": "b78ea8b41e2fda3fed072393ef964aec55f5b96695b84a4584229a3d3bbf536e",
+      "red": "17 pass / 1 fail",
+      "failingTests": [
+        "legacy Cyber restrictions become a one-time independent derived preference"
+      ],
+      "assertion": "error: |-\n    initialized on upgrade\n    + actual - expected\n    \n      {\n        channel: 'in_app',\n    +   enabled: true,\n    -   enabled: false,\n        quietHoursEnabled: true,\n        threshold: 'critical'\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    enabled: false\n    threshold: 'critical'\n    channel: 'in_app'\n    quietHoursEnabled: true\n  actual:\n    enabled: true\n    threshold: 'critical'\n    channel: 'in_app'",
+      "restoredSha256": "ddd150be6e7a929dbeab2fcdd3aacaf4396d1949c59d0c1f49d81457a9a2455d"
+    },
+    {
+      "id": "SETTINGS06",
+      "behavior": "Carry forward critical Cyber threshold",
+      "suite": "quiet",
+      "file": "src/services/notifications/notification-settings-service.ts",
+      "diff": "@@ -146,3 +146,3 @@ function mergeWithDefaults(saved: SavedSettings | null): NotificationSettings {\n     const { enabled, threshold, channel } = saved.domains.cyber;\n-    domains.derived = { ...domains.derived, enabled, channel, threshold: threshold === 'critical' ? 'critical' : 'high' };\n+    domains.derived = { ...domains.derived, enabled, channel, threshold: 'high' };\n   }\n",
+      "appliedDiffSha256": "9648a6c8cc72e27e3c04ccbde7a8b8843fdc42f2df9acbc5774d241aa7aae593",
+      "mutatedSha256": "f4680ed58e4b1e6d7153756c2b0c92d68539004cb1a75dd20c238bf310a1ee21",
+      "red": "17 pass / 1 fail",
+      "failingTests": [
+        "legacy Cyber restrictions become a one-time independent derived preference"
+      ],
+      "assertion": "error: |-\n    initialized on upgrade\n    + actual - expected\n    \n      {\n        channel: 'in_app',\n        enabled: false,\n        quietHoursEnabled: true,\n    +   threshold: 'high'\n    -   threshold: 'critical'\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    enabled: false\n    threshold: 'critical'\n    channel: 'in_app'\n    quietHoursEnabled: true\n  actual:\n    enabled: false\n    threshold: 'high'\n    channel: 'in_app'",
+      "restoredSha256": "ddd150be6e7a929dbeab2fcdd3aacaf4396d1949c59d0c1f49d81457a9a2455d"
+    },
+    {
+      "id": "SETTINGS07",
+      "behavior": "Carry forward narrow Cyber channel",
+      "suite": "quiet",
+      "file": "src/services/notifications/notification-settings-service.ts",
+      "diff": "@@ -146,3 +146,3 @@ function mergeWithDefaults(saved: SavedSettings | null): NotificationSettings {\n     const { enabled, threshold, channel } = saved.domains.cyber;\n-    domains.derived = { ...domains.derived, enabled, channel, threshold: threshold === 'critical' ? 'critical' : 'high' };\n+    domains.derived = { ...domains.derived, enabled, channel: 'both', threshold: threshold === 'critical' ? 'critical' : 'high' };\n   }\n",
+      "appliedDiffSha256": "b4eae5f59ea131e98eacd50022dbcf6dbe0a8090cb4fa1db3d0ae982626b1f72",
+      "mutatedSha256": "f52440c52a503c9022a4254c36124bef5b7961c6b6503f027669b44f9665e39b",
+      "red": "17 pass / 1 fail",
+      "failingTests": [
+        "legacy Cyber restrictions become a one-time independent derived preference"
+      ],
+      "assertion": "error: |-\n    initialized on upgrade\n    + actual - expected\n    \n      {\n    +   channel: 'both',\n    -   channel: 'in_app',\n        enabled: false,\n        quietHoursEnabled: true,\n        threshold: 'critical'\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    enabled: false\n    threshold: 'critical'\n    channel: 'in_app'\n    quietHoursEnabled: true\n  actual:\n    enabled: false\n    threshold: 'critical'\n    channel: 'both'",
+      "restoredSha256": "ddd150be6e7a929dbeab2fcdd3aacaf4396d1949c59d0c1f49d81457a9a2455d"
+    },
+    {
+      "id": "SETTINGS08",
+      "behavior": "Prefer established Derived policy over later Cyber edits",
+      "suite": "quiet",
+      "file": "src/services/notifications/notification-settings-service.ts",
+      "diff": "@@ -142,3 +142,3 @@ function mergeWithDefaults(saved: SavedSettings | null): NotificationSettings {\n   }\n-  if (validDomain(saved.domains?.derived)) {\n+  if (false) {\n     domains.derived = { ...saved.domains.derived };\n",
+      "appliedDiffSha256": "08c50710f0ab78892671380e75fd7a38ff338030111c3bb9d10eac93419c4b1c",
+      "mutatedSha256": "959760e38afa2ba4fdf8c8145513c5f7125b50123307f6aff70e0cdeeb0d9d80",
+      "red": "17 pass / 1 fail",
+      "failingTests": [
+        "legacy Cyber restrictions become a one-time independent derived preference"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n    +   channel: 'both',\n    +   enabled: true,\n    -   channel: 'in_app',\n    -   enabled: false,\n        quietHoursEnabled: true,\n    +   threshold: 'high'\n    -   threshold: 'critical'\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    enabled: false\n    threshold: 'critical'\n    channel: 'in_app'\n    quietHoursEnabled: true\n  actua",
+      "restoredSha256": "ddd150be6e7a929dbeab2fcdd3aacaf4396d1949c59d0c1f49d81457a9a2455d"
+    },
+    {
+      "id": "SETTINGS09",
+      "behavior": "Persist newly independent Derived field",
+      "suite": "quiet",
+      "file": "src/services/notifications/notification-settings-service.ts",
+      "diff": "@@ -207,3 +207,3 @@ function initialSettings(): NotificationSettings {\n     settings = migrated ?? settings;\n-    if ((migrated || (saved && !saved.domains.derived)) && !saveToStorage(settings)) return settings;\n+    if (migrated && !saveToStorage(settings)) return settings;\n     if (needsWeatherMigration) localStorage.setItem(QUIET_HOURS_MIGRATION_KEY, '1');\n",
+      "appliedDiffSha256": "b4b9d814b4e25f5cb3cf848ae038f9e9b01aef06068fede2df170fbd7c6cc027",
+      "mutatedSha256": "26b1bb33965d1956182679be148b6750f798ea8025d214c4e92b654a1d003bc6",
+      "red": "17 pass / 1 fail",
+      "failingTests": [
+        "legacy Cyber restrictions become a one-time independent derived preference"
+      ],
+      "assertion": "error: |-\n    initialized on upgrade\n    + actual - expected\n    \n    + undefined\n    - {\n    -   channel: 'in_app',\n    -   enabled: false,\n    -   quietHoursEnabled: true,\n    -   threshold: 'critical'\n    - }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    enabled: false\n    threshold: 'critical'\n    channel: 'in_app'\n    quietHoursEnabled: true\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "ddd150be6e7a929dbeab2fcdd3aacaf4396d1949c59d0c1f49d81457a9a2455d"
+    },
+    {
+      "id": "SETTINGS10",
+      "behavior": "Never let the fresh Derived quiet setting prevent weather migration",
+      "suite": "quiet",
+      "file": "src/services/notifications/notification-settings-service.ts",
+      "diff": "@@ -179,3 +179,3 @@ export function migratePreferencesQuietHours(\n   if (weather?.quietHoursOverride === true) return null;\n-  if (LEGACY_DOMAINS.some((domain) => settings.domains[domain].quietHoursEnabled)) return null;\n+  if (Object.values(settings.domains).some((value) => value.quietHoursEnabled)) return null;\n   const start = hourToQuietTime(prefs.quietHours.startHour);\n",
+      "appliedDiffSha256": "7468fc99b97710f22ab63dd06bc92c6856e317f24115a36c65a9e7d0ee7b095a",
+      "mutatedSha256": "1f53a1dd5852e331ce634ccd0b60051f6a756dcb5493194551109b9242c082d1",
+      "red": "17 pass / 1 fail",
+      "failingTests": [
+        "migration carries the Preferences window into weather only, once"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n    +   '22:00',\n    +   '07:00'\n    -   '21:00',\n    -   '06:00'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: '21:00'\n    1: '06:00'\n  actual:\n    0: '22:00'\n    1: '07:00'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "ddd150be6e7a929dbeab2fcdd3aacaf4396d1949c59d0c1f49d81457a9a2455d"
+    },
+    {
+      "id": "SETTINGS11",
+      "behavior": "Unreadable or invalid policy holds derived outward decision",
+      "suite": "quiet",
+      "file": "src/services/notifications/notification-settings-service.ts",
+      "diff": "@@ -281,3 +281,3 @@ export function evaluateNotificationPreference(\n   const { global, domains } = currentSettings;\n-  if (domain === 'derived' && !preferencesAvailable) return { allowed: false, reason: 'preferences-unavailable' };\n+  if (false) return { allowed: false, reason: 'preferences-unavailable' };\n   const bypassMute = severity === 'critical' && domain !== 'derived';\n",
+      "appliedDiffSha256": "51888270dced8b2a9e9397f63f43a56957adcbef586a5fd3c572c2722e90795d",
+      "mutatedSha256": "72b67bcccd8908753eef81f9c20bcd934d3749ddd977e5e7cf49b84424585e92",
+      "red": "16 pass / 2 fail",
+      "failingTests": [
+        "malformed or unsupported saved policy holds derived and preserves stored bytes",
+        "settings read error holds derived without trying to write even after an edit"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'allowed'\n    - 'preferences-unavailable'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'preferences-unavailable'\n  actual: 'allowed'\n  operator: 'strictEqual'",
+      "restoredSha256": "ddd150be6e7a929dbeab2fcdd3aacaf4396d1949c59d0c1f49d81457a9a2455d"
+    },
+    {
+      "id": "SETTINGS12",
+      "behavior": "Do not overwrite unreadable or invalid stored settings on edit/reset",
+      "suite": "quiet",
+      "file": "src/services/notifications/notification-settings-service.ts",
+      "diff": "@@ -124,3 +124,3 @@ function validSavedSettings(saved: SavedSettings): boolean {\n function saveToStorage(settings: NotificationSettings): boolean {\n-  if (!preferencesAvailable) return false;\n+  \n   try {\n",
+      "appliedDiffSha256": "d6b04230ecb1a17db0746ecd5ff0cda608a26c0e8efaa77dab99e3c26e6b30c1",
+      "mutatedSha256": "98eeda8dc4694e1a308906db4516a6889ade1329675f13706a37adaaf7d3cdc3",
+      "red": "16 pass / 2 fail",
+      "failingTests": [
+        "malformed or unsupported saved policy holds derived and preserves stored bytes",
+        "settings read error holds derived without trying to write even after an edit"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + '{\"version\":1,\"global\":{\"masterMute\":false,\"quietHoursStart\":\"22:00\",\"quietHoursEnd\":\"07:00\",\"dailySummaryEnabled\":false},\"domains\":{\"earthquakes\":{\"enabled\":true,\"threshold\":\"medium\",\"channel\":\"both\",\"quietHoursEnabled\":false},\"wildfire\":{\"enabled\":true,\"threshold\":\"medium\",\"channel\":\"both\",\"quietHoursEnabled\":false},\"aviation\":{\"enabled\":true,\"threshold\":\"medium\",\"ch",
+      "restoredSha256": "ddd150be6e7a929dbeab2fcdd3aacaf4396d1949c59d0c1f49d81457a9a2455d"
+    },
+    {
+      "id": "SETTINGS13",
+      "behavior": "Validate required master mute flag in persisted settings",
+      "suite": "quiet",
+      "file": "src/services/notifications/notification-settings-service.ts",
+      "diff": "@@ -117,3 +117,3 @@ function validDomain(value: DomainSettings | undefined): value is DomainSettings\n function validSavedSettings(saved: SavedSettings): boolean {\n-  return typeof saved.global?.masterMute === 'boolean' && typeof saved.global.dailySummaryEnabled === 'boolean'\n+  return true\n     && validateQuietWindow(saved.global.quietHoursStart, saved.global.quietHoursEnd) === 'ok'\n",
+      "appliedDiffSha256": "cd2d944f2b59aa8079e25f65e753fec6b0303d579247c2f47ef29848791997db",
+      "mutatedSha256": "f0b21e63a914be48f19d2afd47f5ed204f377b0cbb57c993c9ad5fda2f38faa7",
+      "red": "17 pass / 1 fail",
+      "failingTests": [
+        "malformed or unsupported saved policy holds derived and preserves stored bytes"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'master-mute'\n    - 'preferences-unavailable'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'preferences-unavailable'\n  actual: 'master-mute'\n  operator: 'strictEqual'",
+      "restoredSha256": "ddd150be6e7a929dbeab2fcdd3aacaf4396d1949c59d0c1f49d81457a9a2455d"
+    },
+    {
+      "id": "SETTINGS14",
+      "behavior": "Reject malformed Derived values on load",
+      "suite": "quiet",
+      "file": "src/services/notifications/notification-settings-service.ts",
+      "diff": "@@ -120,3 +120,3 @@ function validSavedSettings(saved: SavedSettings): boolean {\n     && LEGACY_DOMAINS.every((domain) => validDomain(saved.domains?.[domain]))\n-    && (saved.domains.derived === undefined || validDomain(saved.domains.derived));\n+    && true;\n }\n",
+      "appliedDiffSha256": "419c0321cedd9b4e38e07439bcf4098e9096a08825203c46898f82b2f72b9383",
+      "mutatedSha256": "94b90007f17a5595d50bfe26a055cbb0d7afa5ce7613e40611ae3317d6bde8fe",
+      "red": "17 pass / 1 fail",
+      "failingTests": [
+        "malformed or unsupported saved policy holds derived and preserves stored bytes"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'allowed'\n    - 'preferences-unavailable'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'preferences-unavailable'\n  actual: 'allowed'\n  operator: 'strictEqual'",
+      "restoredSha256": "ddd150be6e7a929dbeab2fcdd3aacaf4396d1949c59d0c1f49d81457a9a2455d"
+    },
+    {
+      "id": "SETTINGS15",
+      "behavior": "Reject malformed legacy Cyber settings on load",
+      "suite": "quiet",
+      "file": "src/services/notifications/notification-settings-service.ts",
+      "diff": "@@ -119,3 +119,3 @@ function validSavedSettings(saved: SavedSettings): boolean {\n     && validateQuietWindow(saved.global.quietHoursStart, saved.global.quietHoursEnd) === 'ok'\n-    && LEGACY_DOMAINS.every((domain) => validDomain(saved.domains?.[domain]))\n+    && true\n     && (saved.domains.derived === undefined || validDomain(saved.domains.derived));\n",
+      "appliedDiffSha256": "0515f5bb4355f3d08b630ae59b6068292a092310c921c07099fde114e0293652",
+      "mutatedSha256": "22c1647fed3ca2d51dc85d6aa449231c03e6e7c5b0114d4073258fde09c214fc",
+      "red": "17 pass / 1 fail",
+      "failingTests": [
+        "malformed or unsupported saved policy holds derived and preserves stored bytes"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'allowed'\n    - 'preferences-unavailable'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'preferences-unavailable'\n  actual: 'allowed'\n  operator: 'strictEqual'",
+      "restoredSha256": "ddd150be6e7a929dbeab2fcdd3aacaf4396d1949c59d0c1f49d81457a9a2455d"
+    },
+    {
+      "id": "SETTINGS16",
+      "behavior": "Reject out-of-range saved quiet-window inputs",
+      "suite": "quiet",
+      "file": "src/services/notifications/notification-settings-service.ts",
+      "diff": "@@ -118,3 +118,3 @@ function validSavedSettings(saved: SavedSettings): boolean {\n   return typeof saved.global?.masterMute === 'boolean' && typeof saved.global.dailySummaryEnabled === 'boolean'\n-    && validateQuietWindow(saved.global.quietHoursStart, saved.global.quietHoursEnd) === 'ok'\n+    && true\n     && LEGACY_DOMAINS.every((domain) => validDomain(saved.domains?.[domain]))\n",
+      "appliedDiffSha256": "274594647c007faac22c975b44e9f2164a0b524d759f566fed97b703b7b478ab",
+      "mutatedSha256": "8ee33ec3cc752e6fe12b556f4ec6397486516baf22e330e6db9d9f93d8b0c8c3",
+      "red": "17 pass / 1 fail",
+      "failingTests": [
+        "malformed or unsupported saved policy holds derived and preserves stored bytes"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'allowed'\n    - 'preferences-unavailable'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'preferences-unavailable'\n  actual: 'allowed'\n  operator: 'strictEqual'",
+      "restoredSha256": "ddd150be6e7a929dbeab2fcdd3aacaf4396d1949c59d0c1f49d81457a9a2455d"
+    },
+    {
+      "id": "SETTINGS17",
+      "behavior": "Expose a working independently editable Derived row",
+      "suite": "settings-panel",
+      "file": "src/components/notification-settings-helpers.ts",
+      "diff": "@@ -39,3 +39,2 @@ export const SETTINGS_DOMAINS: readonly NotificationDomain[] = [\n   'supply',\n-  'derived',\n ];\n",
+      "appliedDiffSha256": "955c69b7e206394e1822f0f330a99286e718f06cb6ae2124faf7cb8cd043d820",
+      "mutatedSha256": "75bfc8e249575989dbd5245b4b2b91c5e9cb3643a7b6d90e67b8e74ff6ca74cd",
+      "red": "4 pass / 1 fail",
+      "failingTests": [
+        "changing the Derived alerts channel updates only that settings row"
+      ],
+      "assertion": "error: 'Derived alerts has its own delivery control'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: ~\n  operator: '=='",
+      "restoredSha256": "1c2e84657278e230a735196157d7aa76016dac1e2769f76396971ab1b001f2eb"
+    },
+    {
+      "id": "SETTINGS18",
+      "behavior": "Identify the domain in the delivery selector accessible name",
+      "suite": "settings-panel",
+      "file": "src/components/NotificationSettingsPanel.ts",
+      "diff": "@@ -133,3 +133,3 @@ export class NotificationSettingsPanel extends Panel {\n           <td style=\"padding:6px 8px;\">\n-            <select id=\"ns-${domain}-channel\" data-domain=\"${domain}\" data-field=\"channel\" aria-label=\"${label} delivery channel\" ${hold}\n+            <select id=\"ns-${domain}-channel\" data-domain=\"${domain}\" data-field=\"channel\" aria-label=\"Delivery channel\" ${hold}\n               style=\"background:#222;color:#ddd;border:1px solid var(--border-subtle,#333);border-radius:3px;padding:2px 4px;font-size:12px;cursor:pointer;\">\n",
+      "appliedDiffSha256": "1cf612932ccc931641bb943eec6bdf98ea9dab934440f47de040fc561df2022d",
+      "mutatedSha256": "cf16779306719f586261ddd95a14f0d710a93421d9252ba84ede95e17e648e43",
+      "red": "4 pass / 1 fail",
+      "failingTests": [
+        "changing the Derived alerts channel updates only that settings row"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'Delivery channel'\n    - 'Derived alerts delivery channel'\n         ^\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'Derived alerts delivery channel'\n  actual: 'Delivery channel'\n  operator: 'strictEqual'",
+      "restoredSha256": "8363a7ab8e854ab8f05abace8a5c18c2cb8e5015b72d6a9b02a89b7745440104"
+    },
+    {
+      "id": "SETTINGS19",
+      "behavior": "Explain the authoritative-only exception on the master mute control",
+      "suite": "settings-panel",
+      "file": "src/components/NotificationSettingsPanel.ts",
+      "diff": "@@ -92,3 +92,3 @@ export class NotificationSettingsPanel extends Panel {\n               style=\"accent-color:var(--accent,#4a9eff);width:14px;height:14px;cursor:pointer;\">\n-            Mute notifications (critical authoritative alerts still come through)\n+            Mute notifications (critical alerts still come through)\n           </label>\n",
+      "appliedDiffSha256": "c7dc524c3417520eb6c9c075fa53938f669c67abe3d2ce346d5c46865ab2121f",
+      "mutatedSha256": "0ad59b0c165d9a23abcd780c26078f51e82afe5c6480ad63ddddbce6d3d56f3b",
+      "red": "4 pass / 1 fail",
+      "failingTests": [
+        "the mute control distinguishes authoritative critical warnings from derived alerts"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /critical authoritative alerts still come through/i. Input:\n    \n    '\\n' +\n      '      \\n' +\n      '        Global\\n' +\n      '        \\n' +\n      '          \\n' +\n      '            \\n' +\n      '            Mute notifications (critical alerts still come through)\\n' +\n      '          \\n' +\n      '          \\n' +\n      '            \\n' +\n      '            Daily summary\\n' +\n      '",
+      "restoredSha256": "8363a7ab8e854ab8f05abace8a5c18c2cb8e5015b72d6a9b02a89b7745440104"
+    },
+    {
+      "id": "SETTINGS20",
+      "behavior": "Describe a held policy in the mounted settings UI",
+      "suite": "unavailable-panel",
+      "file": "src/components/NotificationSettingsPanel.ts",
+      "diff": "@@ -189,3 +189,3 @@ export class NotificationSettingsPanel extends Panel {\n \n-    return `<div style=\"font-size:13px;\">${status}${globalSection}${tableSection}${footerSection}</div>`;\n+    return `<div style=\"font-size:13px;\">${globalSection}${tableSection}${footerSection}</div>`;\n   }\n",
+      "appliedDiffSha256": "7a8e94e6732a8120644cd2622765ac74c1d6adf0fb1f06ad80b29ab3518b9654",
+      "mutatedSha256": "12081923991adf20fc7b6de96ca53d50a9eebcb4868e2f88b38732e622811292",
+      "red": "0 pass / 1 fail",
+      "failingTests": [
+        "unreadable saved preferences explain the hold and disable derived delivery controls"
+      ],
+      "assertion": "error: |-\n    The input did not match the regular expression /Derived alerts are paused/. Input:\n    \n    ''\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual: ''\n  operator: 'match'",
+      "restoredSha256": "8363a7ab8e854ab8f05abace8a5c18c2cb8e5015b72d6a9b02a89b7745440104"
+    },
+    {
+      "id": "SETTINGS21",
+      "behavior": "Disable only Derived delivery controls during policy hold",
+      "suite": "unavailable-panel",
+      "file": "src/components/NotificationSettingsPanel.ts",
+      "diff": "@@ -114,3 +114,3 @@ export class NotificationSettingsPanel extends Panel {\n       const label = escapeHtml(DOMAIN_LABELS[domain]);\n-      const hold = domain === 'derived' && !available ? 'disabled' : '';\n+      const hold = '';\n       const disabledStyle = (!ds.enabled || g.masterMute) ? 'opacity:0.5;' : '';\n",
+      "appliedDiffSha256": "dafcf3ea142df6f94efcb308225be48ee4207fe6557445340ba393f4b1a1faec",
+      "mutatedSha256": "6d7f19624b5b18d727dcacd319021bbbe96c892739d0b016c1bab29b189b03ed",
+      "red": "0 pass / 1 fail",
+      "failingTests": [
+        "unreadable saved preferences explain the hold and disable derived delivery controls"
+      ],
+      "assertion": "error: |-\n    The expression evaluated to a falsy value:\n    \n      assert.ok(Array.from(controls).every((control) => control.disabled))\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='",
+      "restoredSha256": "8363a7ab8e854ab8f05abace8a5c18c2cb8e5015b72d6a9b02a89b7745440104"
+    },
+    {
+      "id": "SETTINGS22",
+      "behavior": "Restore keyboard focus on the edited control after redraw",
+      "suite": "settings-panel",
+      "file": "src/components/NotificationSettingsPanel.ts",
+      "diff": "@@ -74,3 +74,3 @@ export class NotificationSettingsPanel extends Panel {\n       if (hadFocus && this.focusedControlId && document.activeElement === document.body) {\n-        document.getElementById(this.focusedControlId)?.focus({ preventScroll: true });\n+        void 0;\n       }\n",
+      "appliedDiffSha256": "adca17cdbd50e12cef491f9d1a12260ecef1244e690a4aff68233c534f01ff3f",
+      "mutatedSha256": "00a7058d8733940b115d9f8567b90b3fa06831ee4c46d325e09064778fb4a5e0",
+      "red": "4 pass / 1 fail",
+      "failingTests": [
+        "changing the Derived alerts channel updates only that settings row"
+      ],
+      "assertion": "error: |-\n    keyboard focus stays on the edited control\n    + actual - expected\n    \n    + null\n    - 'Derived alerts delivery channel'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'Derived alerts delivery channel'\n  actual: ~\n  operator: 'strictEqual'",
+      "restoredSha256": "8363a7ab8e854ab8f05abace8a5c18c2cb8e5015b72d6a9b02a89b7745440104"
+    },
+    {
+      "id": "REACTIONS01",
+      "behavior": "Keep only authoritative active feedback candidates before ranking",
+      "suite": "reactions",
+      "file": "src/services/alert-reactions.ts",
+      "diff": "@@ -135,3 +135,3 @@ export function startAlertReactions(): void {\n       // Inferred alerts stay on the map; only source alerts compete for attention.\n-      if (a.source !== 'correlation' && score > topScore) { topScore = score; top = a; }\n+      if (score > topScore) { topScore = score; top = a; }\n     }\n",
+      "appliedDiffSha256": "e3339c5d45edcd9e89882f854a7ff994d8e81a14f4d20379e08ef4953c14210f",
+      "mutatedSha256": "7384f1116ab531ab99fd8bc2d7b473adbe980241995e9a9a7e0018f7d2ff24a4",
+      "red": "1 pass / 3 fail",
+      "failingTests": [
+        "critical derived batch remains visible at original severity without flashes, sound or a reminder",
+        "higher-ranked derived item leaves the NWS reaction and reminder available in a mixed batch",
+        "a hot derived item does not promote a below-threshold warning into an interruption"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n    +   '[data-panel=\"situation-awareness\"]',\n    -   '[data-panel=\"unified-alert-inbox\"]',\n        'window'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: '[data-panel=\"unified-alert-inbox\"]'\n    1: 'window'\n  actual:\n    0: '[data-panel=\"situation-awareness\"]'\n    1: 'window'\n  operator: 'deepStrictEqual'",
+      "restoredSha256": "bc7baeb96ef502f02e4e6a2f41ba3d4df76ee0f4404c5298effca6ee528e2760"
+    },
+    {
+      "id": "REACTIONS02",
+      "behavior": "Check current source when an authoritative reminder timer fires",
+      "suite": "reactions",
+      "file": "src/services/alert-reactions.ts",
+      "diff": "@@ -153,3 +153,3 @@ export function startAlertReactions(): void {\n         const still = unifiedAlertStore.getAll().find(a => a.id === top.id);\n-        if (still && !still.acknowledged && still.source !== 'correlation') {\n+        if (still && !still.acknowledged) {\n           const ch2 = isGhostMode() ? { sound: false, borderFlash: false } : getChannels();\n",
+      "appliedDiffSha256": "53907d0977e67cdad57026552e0a3cd03fc0be60d4e739e8534f11429629e0a4",
+      "mutatedSha256": "33f29e6eb6e68526029217ad6795ba5d135b6284a67d573a3b3768d2479166eb",
+      "red": "3 pass / 1 fail",
+      "failingTests": [
+        "an outstanding NWS reminder cannot interrupt after a derived alert replaces that store ID"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        '[data-panel=\"unified-alert-inbox\"]',\n        'window',\n    +   '[data-panel=\"unified-alert-inbox\"]',\n    +   'window'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: '[data-panel=\"unified-alert-inbox\"]'\n    1: 'window'\n  actual:\n    0: '[data-panel=\"unified-alert-inbox\"]'\n    1: 'window'\n    2: '[data-panel=\"unified-aler",
+      "restoredSha256": "bc7baeb96ef502f02e4e6a2f41ba3d4df76ee0f4404c5298effca6ee528e2760"
+    },
+    {
+      "id": "REACTIONS03",
+      "behavior": "Preserve passive map display for full-severity Derived events",
+      "suite": "reactions",
+      "file": "src/services/alert-reactions.ts",
+      "diff": "@@ -126,3 +126,3 @@ export function startAlertReactions(): void {\n         publishMap = true;\n-        if (a.location) pulses.push({\n+        if (a.location && a.source !== 'correlation') pulses.push({\n           id: a.id,\n",
+      "appliedDiffSha256": "c368bffde4dfde46c85bababbbb63abe1ef8d8ffe007656eb8dffee89bc3a122",
+      "mutatedSha256": "b4530a4e9b5f4cf9ec418697b37616f326ec51094b8723783efc06f18b9a74a2",
+      "red": "1 pass / 3 fail",
+      "failingTests": [
+        "critical derived batch remains visible at original severity without flashes, sound or a reminder",
+        "higher-ranked derived item leaves the NWS reaction and reminder available in a mixed batch",
+        "a hot derived item does not promote a below-threshold warning into an interruption"
+      ],
+      "assertion": "error: |-\n    The expression evaluated to a falsy value:\n    \n      assert.ok(mapRows.some(row => row.id === derived.id && row.severity === 'critical'))\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='",
+      "restoredSha256": "bc7baeb96ef502f02e4e6a2f41ba3d4df76ee0f4404c5298effca6ee528e2760"
+    },
+    {
+      "id": "REACTIONS04",
+      "behavior": "A hot Derived event cannot promote a below-threshold authoritative reaction",
+      "suite": "reactions",
+      "file": "src/services/alert-reactions.ts",
+      "diff": "@@ -123,3 +123,3 @@ export function startAlertReactions(): void {\n       logEvent({ kind: 'ingest', alertId: a.id, source: a.source, severity: a.severity, score });\n-      if (score < REACT_THRESHOLD) continue;\n+      \n       if (ch.mapPulse) {\n",
+      "appliedDiffSha256": "95164843845385b8cd08c6ecc4ac46ec881d36d3aaf1dc1063c472e98230ab2d",
+      "mutatedSha256": "38d6656a7dd79ec5f2fa12fff46abe6ab1671471fa254a7c66ebf371c693923d",
+      "red": "3 pass / 1 fail",
+      "failingTests": [
+        "a hot derived item does not promote a below-threshold warning into an interruption"
+      ],
+      "assertion": "error: |-\n    The expression evaluated to a falsy value:\n    \n      assert.ok(!mapRows.some(row => row.id === advisory.id))\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='",
+      "restoredSha256": "bc7baeb96ef502f02e4e6a2f41ba3d4df76ee0f4404c5298effca6ee528e2760"
+    },
+    {
+      "id": "PERMISSIONS01",
+      "behavior": "Never prompt automatically for Derived banners",
+      "suite": "permissions",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -81,2 +81,3 @@ function permittedBannerApi(): typeof Notification | undefined {\n     const api = window.Notification;\n+    if (api?.permission === 'default') void api.requestPermission();\n     return api?.permission === 'granted' ? api : undefined;\n",
+      "appliedDiffSha256": "2820d9fb9c72634da495101879b45c814becdf30f6127b2456db1de229ec505c",
+      "mutatedSha256": "6423c0a889076fa734fb7882eec2cce8e589ce0ab11cb2fe0a8cc93cea318c69",
+      "red": "9 pass / 1 fail",
+      "failingTests": [
+        "unavailable or ungranted permission never prompts, replays, or consumes a title slot"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    },
+    {
+      "id": "PERMISSIONS02",
+      "behavior": "Permission rejection must not consume an interruption slot",
+      "suite": "permissions",
+      "file": "src/services/notification-dispatcher.ts",
+      "diff": "@@ -322,2 +322,3 @@ class NotificationDispatcher {\n     if (!Banner) {\n+      this.derivedTitles.set(title, performance.now());\n       suppressTrace(trace, 'permission-unavailable');\n",
+      "appliedDiffSha256": "ee7f5ce660aba8ef1d35dcb12f8738c70a1c0f88d636993862947e97c83032fe",
+      "mutatedSha256": "a897399ca892a7e0d3fd90872d30a2e62df6a5dc222a271e274217bf94ec80bc",
+      "red": "8 pass / 2 fail",
+      "failingTests": [
+        "unavailable or ungranted permission never prompts, replays, or consumes a title slot",
+        "unreadable permission and ungroupable titles fail closed without blocking a later candidate"
+      ],
+      "assertion": "error: |-\n    Expected values to be strictly equal:\n    \n    0 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 0\n  operator: 'strictEqual'",
+      "restoredSha256": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222"
+    }
+  ],
+  "verifiedProductionAndTestFiles": {
+    "src/services/notification-dispatcher.ts": "1c77ed78301361356fd8db8aa49af31d3faa1caebf9147c81178ced5f6123222",
+    "src/services/__tests__/derived-notification-policy.test.mts": "9bd42962b40de4eb365842764852711d54e8d61fd3f5283631fce316beb1875d",
+    "src/services/notifications/notification-settings-service.ts": "ddd150be6e7a929dbeab2fcdd3aacaf4396d1949c59d0c1f49d81457a9a2455d",
+    "src/services/notifications/__tests__/quiet-hours.test.mts": "ef29435ff7e2fa3e30184679992a6587a6370c4e63e731187907277af75af744",
+    "src/components/notification-settings-helpers.ts": "1c2e84657278e230a735196157d7aa76016dac1e2769f76396971ab1b001f2eb",
+    "src/components/__tests__/notification-quiet-hours-panels.test.mts": "9bf926da667aa8078f0e865c268f84e680a7b7d5efd95b5699f8f5a69f036c61",
+    "src/components/NotificationSettingsPanel.ts": "8363a7ab8e854ab8f05abace8a5c18c2cb8e5015b72d6a9b02a89b7745440104",
+    "src/components/__tests__/notification-settings-unavailable.test.mts": "d4fcf65121567c93a01eecbf40804e109c94a130ce605e1c30f0564158f85a37",
+    "src/services/alert-reactions.ts": "bc7baeb96ef502f02e4e6a2f41ba3d4df76ee0f4404c5298effca6ee528e2760",
+    "src/services/__tests__/derived-alert-reactions.test.mts": "f98b0097534aab501e88577e22957f78b270552696aa4c4272731f7df208a719"
+  },
+  "proofProtocol": "Each reversal started from clean detached HEAD. Inspected git diff individually, reran exact hash-verified edit, required its named assertion to fail, then restored original SHA256 and verified an empty git status. Restored all focused suites.",
+  "node": "v22.23.1",
+  "counts": {
+    "killed": 58,
+    "total": 58
+  }
+}

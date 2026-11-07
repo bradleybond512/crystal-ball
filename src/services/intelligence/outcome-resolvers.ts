@@ -7,6 +7,7 @@ import type {
   ResolutionMetadata,
   WarningVerificationCriteria,
 } from './forecast-calibration';
+import { emptyResolverPassMetrics, FORECAST_RESOLUTION_GRACE_MS, type ResolverPassMetrics } from './resolver-pass-metrics';
 import { RESOLVER_EXPIRY_GRACE_MS } from './forecast-calibration';
 import type { SpotPriceObservation } from '../market/spot-price-store';
 import { pointInPolygon } from '../weather/nws-polygon-match';
@@ -567,21 +568,20 @@ function warningDirectVerdict(
   };
 }
 
-function hasCompleteStormReportCoverage(
-  batch: StormReportBatch,
-  prediction: PredictionRecord,
-  now: number,
-): boolean {
+function hasObservedStormReportInterval(batch: StormReportBatch, now: number): boolean {
+  return Number.isFinite(batch.coverageStart)
+    && Number.isFinite(batch.coverageEnd)
+    && Number.isFinite(batch.fetchedAt)
+    && batch.coverageStart <= batch.coverageEnd
+    && batch.coverageEnd <= batch.fetchedAt
+    && batch.fetchedAt <= now;
+}
+
+function hasCompleteStormReportCoverage(batch: StormReportBatch, prediction: PredictionRecord): boolean {
   return batch.complete === true
     && batch.reports.every((report) => validStormReport(report))
-    && Number.isFinite(batch.fetchedAt)
-    && Number.isFinite(batch.coverageStart)
-    && Number.isFinite(batch.coverageEnd)
-    && batch.fetchedAt >= prediction.resolveBy
-    && batch.fetchedAt <= now
     && batch.coverageStart <= prediction.predictedAt
-    && batch.coverageEnd >= prediction.resolveBy
-    && batch.coverageEnd <= batch.fetchedAt;
+    && batch.coverageEnd >= prediction.resolveBy;
 }
 
 export const warningVerificationResolver: OutcomeResolver = {
@@ -598,7 +598,7 @@ export const warningVerificationResolver: OutcomeResolver = {
       return null;
     }
     const batch = context.stormReportBatch?.();
-    if (!batch || !Array.isArray(batch.reports)) return null;
+    if (!batch || !Array.isArray(batch.reports) || !hasObservedStormReportInterval(batch, context.now)) return null;
 
     const eligibleReports: StormReportObservation[] = [];
     for (const report of batch.reports) {
@@ -607,7 +607,8 @@ export const warningVerificationResolver: OutcomeResolver = {
         || !criteria.reportTypes.includes(report.type)
         || report.reportedAt < prediction.predictedAt
         || report.reportedAt > prediction.resolveBy
-        || report.reportedAt > context.now
+        || report.reportedAt < batch.coverageStart
+        || report.reportedAt > batch.coverageEnd
       ) {
         continue;
       }
@@ -620,7 +621,7 @@ export const warningVerificationResolver: OutcomeResolver = {
 
     if (
       context.now < prediction.resolveBy
-      || !hasCompleteStormReportCoverage(batch, prediction, context.now)
+      || !hasCompleteStormReportCoverage(batch, prediction)
     ) {
       return null;
     }
@@ -643,39 +644,93 @@ export const warningVerificationResolver: OutcomeResolver = {
   },
 };
 
-export function runOutcomeResolvers(
-  store: Pick<ForecastCalibrationStore, 'all' | 'resolve' | 'expire'>,
+function hasValidCriteria(prediction: PredictionRecord): boolean {
+  const criteria = prediction.criteria;
+  switch (criteria?.kind) {
+    case 'market_move': { return validMarketCriteria(prediction, criteria); }
+    case 'event_occurrence': { return validEventCriteria(prediction, criteria); }
+    case 'warning_verification': { return validWarningCriteria(prediction, criteria); }
+    default: { return false; }
+  }
+}
+
+type ResolverStore = Pick<ForecastCalibrationStore, 'all' | 'resolve' | 'expire'>;
+
+function countDecision(metrics: ResolverPassMetrics, prediction: PredictionRecord, now: number, hasDecision: boolean): boolean {
+  if (!hasValidCriteria(prediction) || prediction.predictedAt > now) {
+    metrics.invalidCriteria++;
+    return false;
+  }
+  if (hasDecision) {
+    metrics.opportunities++;
+    const overdue = prediction.resolveBy < now;
+    metrics.eligibleOverdueBefore += Number(overdue);
+    return overdue;
+  }
+  if (now < prediction.resolveBy) metrics.windowOpen++;
+  else metrics.awaitingEvidence++;
+  return false;
+}
+
+function countWritten(metrics: ResolverPassMetrics, verdict: ResolverVerdict | null): void {
+  if (!verdict) {
+    metrics.expired++;
+    return;
+  }
+  const origin = verdict.metadata?.provenance?.kind;
+  if (origin === 'direct' || origin === 'proxy') metrics[origin]++;
+  else metrics.unattributed++;
+}
+
+function attemptResolution(
+  store: ResolverStore,
+  prediction: PredictionRecord,
   context: ResolverContext,
   resolvers: readonly OutcomeResolver[],
-): number {
-  let resolved = 0;
+  metrics: ResolverPassMetrics,
+): boolean {
+  const resolver = prediction.criteria && resolvers.find(candidate => candidate.canResolve(prediction));
+  if (!resolver) {
+    metrics.unsupported++;
+    return false;
+  }
+  const verdict = resolver.resolve(prediction, context);
+  const hasDecision = Boolean(verdict) || context.now > prediction.resolveBy + RESOLVER_EXPIRY_GRACE_MS;
+  const eligibleOverdue = countDecision(metrics, prediction, context.now, hasDecision);
+  if (!hasDecision) return false;
+
+  const changed = verdict
+    ? store.resolve(prediction.id, verdict.outcome, context.now, verdict.metadata)
+    : store.expire(prediction.id, context.now, `unresolved:${resolver.id} no in-window verdict after resolver grace`);
+  if (changed) {
+    countWritten(metrics, verdict);
+  } else {
+    metrics.rejectedWrites++;
+    metrics.eligibleOverdueAfter += Number(eligibleOverdue);
+  }
+  return changed;
+}
+
+export function measureOutcomeResolvers(store: ResolverStore, context: ResolverContext, resolvers: readonly OutcomeResolver[]): ResolverPassMetrics {
+  const metrics = emptyResolverPassMetrics();
   for (const prediction of store.all()) {
-    if (prediction.status !== 'pending' || !prediction.criteria) continue;
-    for (const resolver of resolvers) {
-      if (!resolver.canResolve(prediction)) continue;
-      const verdict = resolver.resolve(prediction, context);
-      if (
-        verdict
-        && store.resolve(
-          prediction.id,
-          verdict.outcome,
-          context.now,
-          verdict.metadata,
-        )
-      ) {
-        resolved += 1;
-      } else if (
-        !verdict
-        && context.now > prediction.resolveBy + RESOLVER_EXPIRY_GRACE_MS
-      ) {
-        store.expire(
-          prediction.id,
-          context.now,
-          `unresolved:${resolver.id} no in-window verdict after resolver grace`,
-        );
-      }
-      break;
+    if (prediction.status !== 'pending') continue;
+    metrics.pending++;
+    const lateBy = context.now - prediction.resolveBy;
+    const raw = Number(lateBy > 0);
+    const diagnostic = Number(lateBy > FORECAST_RESOLUTION_GRACE_MS);
+    metrics.rawOverdueBefore += raw;
+    metrics.diagnosticOverdueBefore += diagnostic;
+    metrics.pastExpiryGrace += Number(lateBy > RESOLVER_EXPIRY_GRACE_MS);
+    if (!attemptResolution(store, prediction, context, resolvers, metrics)) {
+      metrics.rawOverdueAfter += raw;
+      metrics.diagnosticOverdueAfter += diagnostic;
     }
   }
-  return resolved;
+  return metrics;
+}
+
+export function runOutcomeResolvers(store: ResolverStore, context: ResolverContext, resolvers: readonly OutcomeResolver[]): number {
+  const metrics = measureOutcomeResolvers(store, context, resolvers);
+  return metrics.direct + metrics.proxy + metrics.unattributed;
 }

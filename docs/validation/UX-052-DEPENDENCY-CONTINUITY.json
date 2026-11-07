@@ -1,0 +1,108 @@
+{
+  "previousTip": "7cbe1f622b06b582be59b6741e31fdd5f855699f",
+  "previousDependency": "bb4055611754fc1f07bd212fe1175541f3fad051",
+  "pendingDependency": "142069b7046b435b7dbc8b9e01245b50f28f5aca",
+  "rebasedTip": "ff07b3fa8426e103852c9e5e3a6a5c2a2d529a0b",
+  "trees": {
+    "src": {
+      "previous": "77ab1936e6af3abfb6d003b4f2b1186442cab754",
+      "current": "77ab1936e6af3abfb6d003b4f2b1186442cab754"
+    },
+    "src-tauri": {
+      "previous": "360d24ae0f5985c0b234779411625bf98f908d59",
+      "current": "360d24ae0f5985c0b234779411625bf98f908d59"
+    },
+    "api": {
+      "previous": "643298657ac791b23d9060901dbc5976d099eb05",
+      "current": "643298657ac791b23d9060901dbc5976d099eb05"
+    }
+  },
+  "featureFiles": [
+    {
+      "path": "src/components/AlertRulesTuningPanel.ts",
+      "previousSHA256": "90560e4a47785ef926729d8da0a1ba826ae8f0840adc53f0856202926588b15d",
+      "currentSHA256": "90560e4a47785ef926729d8da0a1ba826ae8f0840adc53f0856202926588b15d"
+    },
+    {
+      "path": "src/components/NotificationSettingsPanel.ts",
+      "previousSHA256": "8363a7ab8e854ab8f05abace8a5c18c2cb8e5015b72d6a9b02a89b7745440104",
+      "currentSHA256": "8363a7ab8e854ab8f05abace8a5c18c2cb8e5015b72d6a9b02a89b7745440104"
+    },
+    {
+      "path": "src/components/OperatorModePanel.ts",
+      "previousSHA256": "4f67d4353e782ed17d279acf5f05851159fcec566340275c9c5e5c0ba08ba0fc",
+      "currentSHA256": "4f67d4353e782ed17d279acf5f05851159fcec566340275c9c5e5c0ba08ba0fc"
+    },
+    {
+      "path": "src/components/__tests__/local-logistics-panel.test.mts",
+      "previousSHA256": "c80bfebccfb8d9692abd189da4354283d42db4d62eb4dacf34c7df9d81291e84",
+      "currentSHA256": "c80bfebccfb8d9692abd189da4354283d42db4d62eb4dacf34c7df9d81291e84"
+    },
+    {
+      "path": "src/components/__tests__/notification-panels.test.mts",
+      "previousSHA256": "9eed1eeb38da82776063ac2b5c6aee56dc68030ceba4cc83a5c40389d9d10014",
+      "currentSHA256": "9eed1eeb38da82776063ac2b5c6aee56dc68030ceba4cc83a5c40389d9d10014"
+    },
+    {
+      "path": "src/components/__tests__/notification-quiet-hours-panels.test.mts",
+      "previousSHA256": "9bf926da667aa8078f0e865c268f84e680a7b7d5efd95b5699f8f5a69f036c61",
+      "currentSHA256": "9bf926da667aa8078f0e865c268f84e680a7b7d5efd95b5699f8f5a69f036c61"
+    },
+    {
+      "path": "src/components/__tests__/notification-settings-unavailable.test.mts",
+      "previousSHA256": "d4fcf65121567c93a01eecbf40804e109c94a130ce605e1c30f0564158f85a37",
+      "currentSHA256": "d4fcf65121567c93a01eecbf40804e109c94a130ce605e1c30f0564158f85a37"
+    },
+    {
+      "path": "src/components/notification-settings-helpers.ts",
+      "previousSHA256": "1c2e84657278e230a735196157d7aa76016dac1e2769f76396971ab1b001f2eb",
+      "currentSHA256": "1c2e84657278e230a735196157d7aa76016dac1e2769f76396971ab1b001f2eb"
+    },
+    {
+      "path": "src/services/__tests__/derived-alert-reactions.test.mts",
+      "previousSHA256": "f98b0097534aab501e88577e22957f78b270552696aa4c4272731f7df208a719",
+      "currentSHA256": "f98b0097534aab501e88577e22957f78b270552696aa4c4272731f7df208a719"
+    },
+    {
+      "path": "src/services/__tests__/derived-notification-policy.test.mts",
+      "previousSHA256": "d5c93641a774aa21a913578e14874e9d9ecc5cc723b70e91de90bc5ff9c82b01",
+      "currentSHA256": "d5c93641a774aa21a913578e14874e9d9ecc5cc723b70e91de90bc5ff9c82b01"
+    },
+    {
+      "path": "src/services/__tests__/ghost-notification-policy.test.mts",
+      "previousSHA256": "6ee42a6f0e5720dc7d99ac445b9a2d1b0771d5d9d3bdc86d95c83ece890affd6",
+      "currentSHA256": "6ee42a6f0e5720dc7d99ac445b9a2d1b0771d5d9d3bdc86d95c83ece890affd6"
+    },
+    {
+      "path": "src/services/alert-reactions.ts",
+      "previousSHA256": "f7b463d48b3d9559b96d8abea59b1ae6c1ef34331222860697ca7fb58d023d86",
+      "currentSHA256": "f7b463d48b3d9559b96d8abea59b1ae6c1ef34331222860697ca7fb58d023d86"
+    },
+    {
+      "path": "src/services/notification-dispatcher.ts",
+      "previousSHA256": "417257e01d22289d96137b4617a6d01de9c579447eda4c31828ff4f93d01d631",
+      "currentSHA256": "417257e01d22289d96137b4617a6d01de9c579447eda4c31828ff4f93d01d631"
+    },
+    {
+      "path": "src/services/notifications/__tests__/alert-trace.test.mts",
+      "previousSHA256": "2e14c2f275d25be5e49fdc3960f5b58bf51626be4030eefdd44b1040572e1eb4",
+      "currentSHA256": "2e14c2f275d25be5e49fdc3960f5b58bf51626be4030eefdd44b1040572e1eb4"
+    },
+    {
+      "path": "src/services/notifications/__tests__/notification-settings-service.test.mts",
+      "previousSHA256": "316fa900ca995caa847cec9996322d1cac64456f8173c5d3d6c1b6b9850dcf44",
+      "currentSHA256": "316fa900ca995caa847cec9996322d1cac64456f8173c5d3d6c1b6b9850dcf44"
+    },
+    {
+      "path": "src/services/notifications/__tests__/quiet-hours.test.mts",
+      "previousSHA256": "ef29435ff7e2fa3e30184679992a6587a6370c4e63e731187907277af75af744",
+      "currentSHA256": "ef29435ff7e2fa3e30184679992a6587a6370c4e63e731187907277af75af744"
+    },
+    {
+      "path": "src/services/notifications/notification-settings-service.ts",
+      "previousSHA256": "ddd150be6e7a929dbeab2fcdd3aacaf4396d1949c59d0c1f49d81457a9a2455d",
+      "currentSHA256": "ddd150be6e7a929dbeab2fcdd3aacaf4396d1949c59d0c1f49d81457a9a2455d"
+    }
+  ],
+  "validation": "No full test rerun in this metadata/base transition. Prior feature gate remains historical; final actual-main validation and exact-head Sonnet review remain required."
+}

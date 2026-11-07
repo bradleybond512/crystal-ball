@@ -12,6 +12,7 @@
  *     (not NaN) so JSON serialization stays clean.
  */
 
+import { nestedGroundStop } from '../../../api/aviation/_faa-ground-stop.js';
 import type {
   AirportGroundDelay,
   AviationNotam,
@@ -405,6 +406,11 @@ export function normalizeDelays(payload: unknown): AirportGroundDelay[] {
   for (const item of items) {
     if (!item || typeof item !== 'object') continue;
     const r = item as Record<string, unknown>;
+    if ('airportId' in r && 'groundStop' in r) {
+      const stop = nestedGroundStop(r);
+      if (stop) out.push(stop);
+      continue;
+    }
     const airport = (pickString(r.airport, r.iata, r.icao, r.location) ?? '').toUpperCase();
     if (!airport) continue;
     out.push({
@@ -422,7 +428,7 @@ export function normalizeDelays(payload: unknown): AirportGroundDelay[] {
 
 function classifyProgram(raw: string): AirportGroundDelay['programType'] {
   const u = raw.toUpperCase();
-  if (u.includes('STOP')) return 'ground_stop';
+  if (/^(?:GROUND[ _-]STOP|STOP)$/.test(u)) return 'ground_stop';
   if (u.includes('GROUND') || u.includes('GDP')) return 'ground_delay';
   if (u.includes('ARRIVAL') || u.includes('AAR')) return 'arrival_delay';
   return 'other';

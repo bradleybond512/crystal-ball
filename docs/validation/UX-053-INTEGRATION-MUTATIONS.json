@@ -1,0 +1,24 @@
+[
+  {
+    "name": "boot-promise",
+    "file": "src/main.ts",
+    "sha256": "d4109d69218b44393158db55d543740743ac78e30addf262a27666855871bb8b",
+    "diff": "diff --git a/src/main.ts b/src/main.ts\nindex f32fce2eb..6ac3ad2a6 100644\n--- a/src/main.ts\n+++ b/src/main.ts\n@@ -353,7 +353,7 @@ if (urlParams.get('settings') === '1') {\n     clearChunkReloadGuard(chunkReloadStorageKey);\n     try { window.getSelection()?.removeAllRanges(); } catch { /* stray boot text-selection */ }\n   };\n-  appStartup = boot();\n+  // mutant: no exported boot promise\n   void appStartup.catch((error: unknown) => {\n     console.error('[boot] workspace startup failed:', error);\n     showWorkspaceStartupFailure(document, () => window.location.reload());\n",
+    "passCount": 29,
+    "failCount": 1,
+    "assertions": [
+      "not ok 9 - main exposes the real workspace boot promise to the Ghost recovery entry"
+    ]
+  },
+  {
+    "name": "ancillary-teardown",
+    "file": "src/app/data-loader.ts",
+    "sha256": "3e9e419495973052b42d8dc68de6311e97ae44c0110b67eadc2c0a6d5777eec0",
+    "diff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex 7c646101c..1a2b421cb 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -3419,7 +3419,6 @@ export class DataLoaderManager implements AppModule {\n  fetchExcessiveRainfallOutlooks(),\n  fetchWinterWeatherOutlooks(),\n  ]);\n- if (this.ctx.isDestroyed) return;\n  const alerts = getStormPreparednessContext().nwsAlerts;\n  const spcSummary = spcResult.status === 'fulfilled' ? spcResult.value : stormContext.spcSummary;\n  const marineHazards = marineResult.status === 'fulfilled' ? marineResult.value : stormContext.marineHazards;\n",
+    "passCount": 29,
+    "failCount": 1,
+    "assertions": [
+      "not ok 15 - late NWS acquisition cannot publish to the next app after destroy"
+    ]
+  }
+]

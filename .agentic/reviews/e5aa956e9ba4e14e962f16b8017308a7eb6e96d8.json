@@ -1,0 +1,9 @@
+{
+  "reviewedSha": "e5aa956e9ba4e14e962f16b8017308a7eb6e96d8",
+  "reviewer": "claude",
+  "model": "claude-sonnet-4-6",
+  "verdict": "approve",
+  "blockingFindings": 0,
+  "reviewedAt": "2026-11-03T06:25:15.288Z",
+  "evidence": "## Conclusion\n\n**Model:** claude-sonnet-4-6\n\n**Reviewed SHA:** `e5aa956e9ba4e14e962f16b8017308a7eb6e96d8` against base `cd459dfec514c80e2fcc3f0d7965ea6ef76a7b6a`\n\n**Blocking findings: 0**\n\nThe implementation correctly wires Ghost Mode suppression end-to-end: early hydration via `entry.ts` before the application graph, shared state between the dispatcher and both shell surfaces, precise count semantics (single recording point, correct exclusions, bounded, non-persistent), generation-stamped delivery-boundary rechecks preventing Ghost-entry/exit races on pending permissions, and bidirectional keyboard focus transfer across shell switches. All 100 mutations failed as expected. 93 checks pass per engine in both Chromium and native Tauri/WebKit. The SHA gap between mutation proof commit (`d641f0c0f`) and PR tip (`e5aa956e`) is consistent with documentation-only additions and does not represent a behavior-affecting change."
+}

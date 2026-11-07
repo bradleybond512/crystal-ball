@@ -31,6 +31,7 @@ import {
 } from './mode-forecast-prediction-bridge';
 import { settleExpiredShortagePredictions } from '../shortage/shortage-calibration-bridge';
 import { expirePendingPredictions } from './forecast-calibration-adapter';
+import type { BridgePassMetrics } from './resolver-pass-metrics';
 import type { ModeAdvisory } from '../mode-forecast';
 
 interface ModeWiringDeps {
@@ -78,9 +79,12 @@ const LIVE_SETTLE_DEPS: SettleDeps = {
  *  its own try/catch — one bridge throwing must not skip the other bridge's
  *  settle or the generic sweep. The generic sweep always runs, even with the
  *  switch off — it is not bridge-specific and must never stop. */
-export function settleCalibrationBridges(deps: SettleDeps = LIVE_SETTLE_DEPS): void {
-  if (!deps.enabled()) { deps.expirePending(); return; }
-  try { deps.settleShortage(); } catch { /* the other settler and the generic sweep must still run */ }
-  try { deps.settleAdvisory(); } catch { /* same — never let one bridge block the other */ }
-  deps.expirePending();
+export function settleCalibrationBridges(deps: SettleDeps = LIVE_SETTLE_DEPS): BridgePassMetrics {
+  const result: BridgePassMetrics = { enabled: deps.enabled(), shortageExpired: 0, advisoryExpired: 0, legacyExpired: 0, failed: false };
+  if (result.enabled) {
+    try { result.shortageExpired = deps.settleShortage(); } catch { result.failed = true; }
+    try { result.advisoryExpired = deps.settleAdvisory(); } catch { result.failed = true; }
+  }
+  result.legacyExpired = deps.expirePending();
+  return result;
 }

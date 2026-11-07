@@ -181,6 +181,7 @@ const USER_AUTHORIZED_SUPPRESSIONS = new Set([
   'master-mute',
   'domain-disabled',
   'ghost-mode',
+  'in-app-only',
 ]);
 
 export function createNotificationTraceRegistry(

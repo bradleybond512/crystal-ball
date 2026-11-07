@@ -1,3 +1,4 @@
+import { qualifiedEventOccurrenceTypes, type EventOccurrenceType } from './intelligence/event-occurrence-contract';
 /**
  * Analyst Loop — Cross-Domain Reasoning Orchestrator
  *
@@ -87,6 +88,7 @@ export interface Hypothesis {
   entitySlugs?: string[];
   /** Structured signal types used to declare resolvable event criteria. */
   signalTypes?: string[];
+  qualifiedEventTypes?: EventOccurrenceType[];
 }
 
 export interface AnalystSnapshot {
@@ -318,9 +320,11 @@ function fromSituations(situations: Situation[]): Hypothesis[] {
     confidence: s.confidence,
     risk: confidenceToRisk(s.confidence),
     region: s.geo.label,
-    domains: [factDomainForSituationDomain(s.domain)],
+    domains: [...new Set(s.signals.filter(signal => signal.domain !== 'unknown')
+      .map(signal => factDomainForSituationDomain(signal.domain)))],
     entitySlugs: [...new Set(s.geo.countries.map((country) => slugifyEntity(country)).filter(Boolean))],
     signalTypes: [...new Set(s.signals.map((signal) => signal.type))],
+    qualifiedEventTypes: qualifiedEventOccurrenceTypes(s.signals),
     timestamp: Date.now(),
     evidence: [{
       source: 'situation-engine',

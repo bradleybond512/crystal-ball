@@ -92,6 +92,7 @@ export async function loadSevereWeather(ctx: AppContext): Promise<void> {
 export async function loadShakeAlert(ctx: AppContext): Promise<void> {
   try {
     const status = await fetchShakemapEvents();
+    if (ctx.isDestroyed) return;
     (ctx.panels.shakealert as ShakeAlertPanel | undefined)?.update(status);
   } catch (error) {
     // eslint-disable-next-line no-console

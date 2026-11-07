@@ -1,0 +1,3327 @@
+{
+  "task": "UX-053",
+  "baseline": "cd459dfec514c80e2fcc3f0d7965ea6ef76a7b6a",
+  "candidate": "982f8e42a53e3caa6796e20e9578ff022a842da5",
+  "measurements": "Navigation-relative performance.now() milliseconds from manually held source experiments. Medians and ranges describe these runs; they are not field performance estimates. Keyboard measurement is when a synthetic Ctrl+K opened the actual search input after the source observation; onboarding uses an actual focus and click followed by a changed step. The eligible route timestamp bounds the receipt of the injected breaking event. Whole-wave promises intentionally remain held until after observations. NWS and breaking-news are separate paths.",
+  "fixtures": "Production full application entry, layout and acquisition scheduler. Instrumented guarded leaves settle synthetically except held news and the real NWS pipeline supplied isolated response bodies. Cold uses a fresh profile with a known completed onboarding decision. Warm reloads that same profile. A separate first-run case does not seed onboarding. Web uses Chromium with WebGL unavailable (supported SVG fallback), isolated localhost assets, intercepted external requests and disabled SW/HTTP cache. Desktop uses the true Tauri runtime and incognito WKWebView in a signed uninstalled QA host with actual vault intro, local assets and tightened test-egress CSP. Stubbed native invoke, fetch, audio, browser Notification and no configured relay. No physical delivery, real providers, field timing or installed profile tested.",
+  "warnings": "Fresh verified means the real normalized fixture is retained in the unified store with nonexpired nws-expiry evidence and the real NWS panel receives it. Malformed/unavailable/cached have an errored freshness state. Main-based NWS handling can still display an expired warning row (expiry predates response); it is not fresh evidence for a current threat. Structural completeness/dismissal belongs to held UX-047. An eligible breaking event is a separate synthetic ingress, verified at transport capture, not a real warning transmission.",
+  "harnessIssues": [
+    "Initial Chromium baseline with software WebGL timed out in its 120 s bound under concurrent CPU/GPU load; second diagnostic run was stopped. Recorded measurements for both revisions use the same intentionally WebGL-disabled Chrome configuration.",
+    "Initial candidate build probe anchored on the pre-refactor router assignment. Rebuilt with the anchor on the same call, which is unique in both trees. Neither issue is a passing sample."
+  ],
+  "fixtureHashes": {
+    "make.sh": "7f71e8ca0ce23bb605f1f1d431e2450a0e519b39263a99c65ce64801ae20fa3f",
+    "web.mjs": "3b8bd5212e9d5855b3b1bdb8e7dc98558dd493670d13152a656105738c983796",
+    "certificate.py": "8835c48f5724ef527af478ec05fbc53c3f5354ee228063d792fed1190d745f00",
+    "native.py": "2a162c05016cee54ddca3958ff8c8f9da1c62f13fa7c2d141119a93220034e17",
+    "build.mjs": "9c738bb177c31fe4bf8ffc20b9239d47d89ac04cebc584f28db21c1d9135df5d",
+    "web-debug.mjs": "89e420998d63c04542c506a3b8d71e0e08d8f96a36b3a4658f99f79b3d21edd3",
+    "guard.js": "223aa81ee1fde4fdbe4dee152d766fb77e10f8b8800aa5651e8ec213e2ad8757"
+  },
+  "data": {
+    "baseline": {
+      "web": {
+        "buildInputs": {
+          "commit": "cd459dfec514c80e2fcc3f0d7965ea6ef76a7b6a",
+          "variant": "full",
+          "desktop": "0",
+          "hashes": {
+            "src/services/tauri-bridge.ts": {
+              "before": "5b8097afec09b2aee95ed2115c118146b807417462582d91a3126e70736696e4",
+              "after": "2c5c00fd09076c69f76e32a6f4a1217b31378ae9ea59b5f5590675d00160157a"
+            },
+            "src/App.ts": {
+              "before": "d0d343abb9c47015db845efc03323fe28da0f4a1ae97d9049dd20f2b9a2ef9ff",
+              "after": "f301cf75d6e5465ef6549456115e2a3d5fea4d2ee0e59e9ec79bcda78bdfdcec"
+            },
+            "src/app/vault-intro.ts": {
+              "before": "504e50b36595b23d8f851bdf230c2abf4f7cf6144d174ac08f54ce9caf57a1a3",
+              "after": "87cf7566f92ae957b9ba962c6120f9c41bd879e2d521a0de797855310bd318c6"
+            },
+            "src/services/mode-manager.ts": {
+              "before": "1b465bb0908c654ca4b6403458e429ea67b1677517ccbe4dbdf0c088a8353d4e",
+              "after": "b2d41a0fd90c0bf6b028379ac33f9a0c3bb2dc13d9e0eda35ce8b398774b8136"
+            },
+            "src/services/data-freshness.ts": {
+              "before": "fb03a6269a745a6a026004ac88a0da8f86460d67d01835606058cb4614150658",
+              "after": "01c1a0559f46bab0cee39b0d1839fa1d132b5a5e6eb7f2398877d75a9c4766a4"
+            },
+            "src/app/data-loader.ts": {
+              "before": "22d4482dcc8fa7f52f29200d3739450692ef07d9329a3b0a8f850e85410a1350",
+              "after": "dd746e9b0840f61499213b546540f66c47821ef69bc440e580d824da3a668481"
+            },
+            "src/services/log-bridge.ts": {
+              "before": "4f1e5ab6225699bb94fac0fb3d93b65bf5a833ef05347a1553ac1d057d982a09",
+              "after": "0cdf7b1b093c5c8f43fe456d1326f0386a6bf968c0bb1c8339481cf2aab032a3"
+            },
+            "src/services/nws-alerts.ts": {
+              "before": "7fb96963d81390596eacf7dae6c0ec4ba74267aa55bdaae2d56ff0dc8455a994",
+              "after": "f983f1ce5370b15b47f8142b9a77cbc6ac3f2b02cde75468563fdbf9b8095729"
+            },
+            "src/services/unified-alerts.ts": {
+              "before": "ff12d3afb53ee0f595b6e2a95c3d7f7b21f905d652247261879547a1940aa6f2",
+              "after": "39a0a65f8e1ef3f6d9847bef8c8fd9d387973cda6d674654706a9bba2da32e69"
+            },
+            "src/components/NWSAlertsPanel.ts": {
+              "before": "f8582f5f4526b6ea810154b1574e492716ba6317b6d08b1ee294b11599514cf0",
+              "after": "caf1d983de99e57993d8ea3aedcbad89a5071ecc67de8343fdb4937ce865ed8c"
+            }
+          },
+          "entry": "/assets/main-_17RBDZc.js",
+          "styles": [
+            "/assets/maplibre-CKRTiAqP.css",
+            "/assets/main-DCgk6rev.css"
+          ]
+        },
+        "receiptHashes": {
+          "pair1": "f1300fbd3aeb641d537f4ce289c7a538c7c501ad3a013197853602e1eb065720",
+          "pair2": "2c6c60d0ab544a22acd296d2720cdfb04c379107df4cacf999e11c772c65daa9",
+          "pair3": "8e790e29ba7307cfd29b6ee4d58a33b68ac792e1edabf4afb1cb3b3543c7a879",
+          "cached": "478746c5b9879b2c44eb5109182d9f37a009f2d112b9df102ff6e07c6bd1ae20",
+          "malformed": "80a26dcd9dcf6e4c0bf7a202d3ea1152ae7cdec435cbd74060acbe9658a73afa",
+          "expired": "5c19f480caf9706309f4ea754e1bb4259750d5e681896d6f962a9a8b70ddbaad",
+          "unavailable": "c8799d31b9c98ad65252775bc3d6691138a76f50975543c26887a86443115801",
+          "empty": "d658386366448aefdd83007b11fa69e38f827822128e99656c24769201e73402",
+          "first-run": "9c3ae909771780441acd69625dba1ef507cb6f4d2ee8b23f40c0507eabc98e07",
+          "fatal": "96f3a36da66ee76b4218e099f4bc077fd43fded38e52d4aa120d3ca9841b7266"
+        },
+        "timingSamples": [
+          {
+            "case": "pair1",
+            "profile": "fresh-storage",
+            "timesMs": {
+              "news-held": 2831,
+              "nws-admitted": 2831,
+              "warning-processed": 3837,
+              "interactive-promise": 4993,
+              "first-keyboard-action": 4133,
+              "eligible-route-probed": 4501,
+              "release-news": 4989,
+              "shake-admitted": 4990,
+              "whole-wave": 4990
+            },
+            "earlyDelivery": false,
+            "activeAtProbe": 10,
+            "capturedAtPhase6": "nws-expiry",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36"
+          },
+          {
+            "case": "pair1",
+            "profile": "reused-storage",
+            "timesMs": {
+              "news-held": 2536,
+              "nws-admitted": 2536,
+              "warning-processed": 3757,
+              "interactive-promise": 6875,
+              "first-keyboard-action": 4748,
+              "eligible-route-probed": 5796,
+              "release-news": 6873,
+              "shake-admitted": 6873,
+              "whole-wave": 6874
+            },
+            "earlyDelivery": false,
+            "activeAtProbe": 10,
+            "capturedAtPhase6": "nws-expiry",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36"
+          },
+          {
+            "case": "pair2",
+            "profile": "fresh-storage",
+            "timesMs": {
+              "news-held": 1106,
+              "nws-admitted": 1106,
+              "warning-processed": 2274,
+              "interactive-promise": 5320,
+              "first-keyboard-action": 3145,
+              "eligible-route-probed": 4133,
+              "release-news": 5316,
+              "shake-admitted": 5317,
+              "whole-wave": 5317
+            },
+            "earlyDelivery": false,
+            "activeAtProbe": 10,
+            "capturedAtPhase6": "nws-expiry",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36"
+          },
+          {
+            "case": "pair2",
+            "profile": "reused-storage",
+            "timesMs": {
+              "news-held": 2227,
+              "nws-admitted": 2227,
+              "warning-processed": 3511,
+              "interactive-promise": 6520,
+              "first-keyboard-action": 4333,
+              "eligible-route-probed": 5545,
+              "release-news": 6518,
+              "shake-admitted": 6518,
+              "whole-wave": 6518
+            },
+            "earlyDelivery": false,
+            "activeAtProbe": 10,
+            "capturedAtPhase6": "nws-expiry",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36"
+          },
+          {
+            "case": "pair3",
+            "profile": "fresh-storage",
+            "timesMs": {
+              "news-held": 1070,
+              "nws-admitted": 1070,
+              "warning-processed": 2217,
+              "interactive-promise": 4656,
+              "first-keyboard-action": 2984,
+              "eligible-route-probed": 3889,
+              "release-news": 4654,
+              "shake-admitted": 4654,
+              "whole-wave": 4654
+            },
+            "earlyDelivery": false,
+            "activeAtProbe": 10,
+            "capturedAtPhase6": "nws-expiry",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36"
+          },
+          {
+            "case": "pair3",
+            "profile": "reused-storage",
+            "timesMs": {
+              "news-held": 2132,
+              "nws-admitted": 2132,
+              "warning-processed": 3267,
+              "interactive-promise": 7448,
+              "first-keyboard-action": 4294,
+              "eligible-route-probed": 6031,
+              "release-news": 7446,
+              "shake-admitted": 7447,
+              "whole-wave": 7447
+            },
+            "earlyDelivery": false,
+            "activeAtProbe": 10,
+            "capturedAtPhase6": "nws-expiry",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36"
+          }
+        ],
+        "controls": {
+          "cached": {
+            "first": {
+              "admissions": 10,
+              "newsDone": false,
+              "shake": false,
+              "interactive": false,
+              "readyWhilePending": false,
+              "overlayGone": true,
+              "panel": true,
+              "store": [
+                {
+                  "id": "nws-fixture-warning-cold",
+                  "evidence": null,
+                  "expiry": null
+                }
+              ],
+              "source": {
+                "error": true,
+                "lastUpdate": null
+              },
+              "outbound": []
+            },
+            "after": {
+              "admissions": 88,
+              "newsDone": true,
+              "shake": true,
+              "interactive": true,
+              "readyWhilePending": false,
+              "overlayGone": true,
+              "panel": true,
+              "store": [
+                {
+                  "id": "nws-fixture-warning-cold",
+                  "evidence": null,
+                  "expiry": null
+                }
+              ],
+              "source": {
+                "error": true,
+                "lastUpdate": null
+              },
+              "outbound": [
+                "[CRITICAL] qa-breaking after-wave \u2014 QA"
+              ]
+            },
+            "checks": {
+              "ghostBlocked": true,
+              "deniedBlocked": true,
+              "noHeldReplay": true
+            }
+          },
+          "malformed": {
+            "first": {
+              "admissions": 10,
+              "newsDone": false,
+              "shake": false,
+              "interactive": false,
+              "readyWhilePending": false,
+              "overlayGone": true,
+              "panel": false,
+              "store": [],
+              "source": {
+                "error": true,
+                "lastUpdate": null
+              },
+              "outbound": []
+            },
+            "after": {
+              "admissions": 88,
+              "newsDone": true,
+              "shake": true,
+              "interactive": true,
+              "readyWhilePending": false,
+              "overlayGone": true,
+              "panel": false,
+              "store": [],
+              "source": {
+                "error": true,
+                "lastUpdate": null
+              },
+              "outbound": [
+                "[CRITICAL] qa-breaking after-wave \u2014 QA"
+              ]
+            },
+            "checks": {
+              "ghostBlocked": true,
+              "deniedBlocked": true,
+              "noHeldReplay": true
+            }
+          },
+          "expired": {
+            "first": {
+              "admissions": 10,
+              "newsDone": false,
+              "shake": false,
+              "interactive": false,
+              "readyWhilePending": false,
+              "overlayGone": true,
+              "panel": true,
+              "store": [
+                {
+                  "id": "nws-fixture-warning-cold",
+                  "evidence": "nws-expiry",
+                  "expiry": 1793722642614
+                }
+              ],
+              "source": {
+                "error": false,
+                "lastUpdate": "2026-11-03T16:18:23.166Z"
+              },
+              "outbound": []
+            },
+            "after": {
+              "admissions": 88,
+              "newsDone": true,
+              "shake": true,
+              "interactive": true,
+              "readyWhilePending": false,
+              "overlayGone": true,
+              "panel": true,
+              "store": [
+                {
+                  "id": "nws-fixture-warning-cold",
+                  "evidence": "nws-expiry",
+                  "expiry": 1793722642614
+                }
+              ],
+              "source": {
+                "error": false,
+                "lastUpdate": "2026-11-03T16:18:23.166Z"
+              },
+              "outbound": [
+                "[CRITICAL] qa-breaking after-wave \u2014 QA"
+              ]
+            },
+            "checks": {
+              "ghostBlocked": true,
+              "deniedBlocked": true,
+              "noHeldReplay": true
+            }
+          },
+          "unavailable": {
+            "first": {
+              "admissions": 10,
+              "newsDone": false,
+              "shake": false,
+              "interactive": false,
+              "readyWhilePending": false,
+              "overlayGone": true,
+              "panel": false,
+              "store": [],
+              "source": {
+                "error": true,
+                "lastUpdate": null
+              },
+              "outbound": []
+            },
+            "after": {
+              "admissions": 88,
+              "newsDone": true,
+              "shake": true,
+              "interactive": true,
+              "readyWhilePending": false,
+              "overlayGone": true,
+              "panel": false,
+              "store": [],
+              "source": {
+                "error": true,
+                "lastUpdate": null
+              },
+              "outbound": [
+                "[CRITICAL] qa-breaking after-wave \u2014 QA"
+              ]
+            },
+            "checks": {
+              "ghostBlocked": true,
+              "deniedBlocked": true,
+              "noHeldReplay": true
+            }
+          },
+          "empty": {
+            "first": {
+              "admissions": 10,
+              "newsDone": false,
+              "shake": false,
+              "interactive": false,
+              "readyWhilePending": false,
+              "overlayGone": true,
+              "panel": false,
+              "store": [],
+              "source": {
+                "error": false,
+                "lastUpdate": "2026-11-03T16:18:41.738Z"
+              },
+              "outbound": []
+            },
+            "after": {
+              "admissions": 88,
+              "newsDone": true,
+              "shake": true,
+              "interactive": true,
+              "readyWhilePending": false,
+              "overlayGone": true,
+              "panel": false,
+              "store": [],
+              "source": {
+                "error": false,
+                "lastUpdate": "2026-11-03T16:18:41.738Z"
+              },
+              "outbound": [
+                "[CRITICAL] qa-breaking after-wave \u2014 QA"
+              ]
+            },
+            "checks": {
+              "ghostBlocked": true,
+              "deniedBlocked": true,
+              "noHeldReplay": true
+            }
+          },
+          "first-run": {
+            "first": {
+              "admissions": 10,
+              "newsDone": false,
+              "shake": false,
+              "interactive": false,
+              "readyWhilePending": false,
+              "overlayGone": true,
+              "panel": true,
+              "store": [
+                {
+                  "id": "nws-fixture-warning-cold",
+                  "evidence": "nws-expiry",
+                  "expiry": 1793726378791
+                }
+              ],
+              "source": {
+                "error": false,
+                "lastUpdate": "2026-11-03T16:19:39.627Z"
+              },
+              "outbound": []
+            },
+            "after": {
+              "admissions": 88,
+              "newsDone": true,
+              "shake": true,
+              "interactive": true,
+              "readyWhilePending": false,
+              "overlayGone": true,
+              "panel": true,
+              "store": [
+                {
+                  "id": "nws-fixture-warning-cold",
+                  "evidence": "nws-expiry",
+                  "expiry": 1793726378791
+                }
+              ],
+              "source": {
+                "error": false,
+                "lastUpdate": "2026-11-03T16:19:39.627Z"
+              },
+              "outbound": [
+                "[CRITICAL] qa-breaking after-wave \u2014 QA"
+              ]
+            },
+            "checks": {
+              "firstRunStep": {
+                "focused": true,
+                "advanced": true,
+                "complete": false
+              },
+              "ghostBlocked": true,
+              "deniedBlocked": true,
+              "noHeldReplay": true
+            }
+          },
+          "fatal": {
+            "actionable": null,
+            "alert": null
+          }
+        },
+        "summary": {
+          "fresh-storage": {
+            "news-held": {
+              "n": 3,
+              "minimum": 1070,
+              "median": 1106,
+              "maximum": 2831
+            },
+            "nws-admitted": {
+              "n": 3,
+              "minimum": 1070,
+              "median": 1106,
+              "maximum": 2831
+            },
+            "warning-processed": {
+              "n": 3,
+              "minimum": 2217,
+              "median": 2274,
+              "maximum": 3837
+            },
+            "interactive-promise": {
+              "n": 3,
+              "minimum": 4656,
+              "median": 4993,
+              "maximum": 5320
+            },
+            "first-keyboard-action": {
+              "n": 3,
+              "minimum": 2984,
+              "median": 3145,
+              "maximum": 4133
+            },
+            "eligible-route-probed": {
+              "n": 3,
+              "minimum": 3889,
+              "median": 4133,
+              "maximum": 4501
+            },
+            "release-news": {
+              "n": 3,
+              "minimum": 4654,
+              "median": 4989,
+              "maximum": 5316
+            },
+            "shake-admitted": {
+              "n": 3,
+              "minimum": 4654,
+              "median": 4990,
+              "maximum": 5317
+            },
+            "whole-wave": {
+              "n": 3,
+              "minimum": 4654,
+              "median": 4990,
+              "maximum": 5317
+            }
+          },
+          "reused-storage": {
+            "news-held": {
+              "n": 3,
+              "minimum": 2132,
+              "median": 2227,
+              "maximum": 2536
+            },
+            "nws-admitted": {
+              "n": 3,
+              "minimum": 2132,
+              "median": 2227,
+              "maximum": 2536
+            },
+            "warning-processed": {
+              "n": 3,
+              "minimum": 3267,
+              "median": 3511,
+              "maximum": 3757
+            },
+            "interactive-promise": {
+              "n": 3,
+              "minimum": 6520,
+              "median": 6875,
+              "maximum": 7448
+            },
+            "first-keyboard-action": {
+              "n": 3,
+              "minimum": 4294,
+              "median": 4333,
+              "maximum": 4748
+            },
+            "eligible-route-probed": {
+              "n": 3,
+              "minimum": 5545,
+              "median": 5796,
+              "maximum": 6031
+            },
+            "release-news": {
+              "n": 3,
+              "minimum": 6518,
+              "median": 6873,
+              "maximum": 7446
+            },
+            "shake-admitted": {
+              "n": 3,
+              "minimum": 6518,
+              "median": 6873,
+              "maximum": 7447
+            },
+            "whole-wave": {
+              "n": 3,
+              "minimum": 6518,
+              "median": 6874,
+              "maximum": 7447
+            }
+          }
+        }
+      },
+      "desktop": {
+        "buildInputs": {
+          "commit": "cd459dfec514c80e2fcc3f0d7965ea6ef76a7b6a",
+          "variant": "full",
+          "desktop": "1",
+          "hashes": {
+            "src/services/tauri-bridge.ts": {
+              "before": "5b8097afec09b2aee95ed2115c118146b807417462582d91a3126e70736696e4",
+              "after": "2c5c00fd09076c69f76e32a6f4a1217b31378ae9ea59b5f5590675d00160157a"
+            },
+            "src/App.ts": {
+              "before": "d0d343abb9c47015db845efc03323fe28da0f4a1ae97d9049dd20f2b9a2ef9ff",
+              "after": "f301cf75d6e5465ef6549456115e2a3d5fea4d2ee0e59e9ec79bcda78bdfdcec"
+            },
+            "src/app/vault-intro.ts": {
+              "before": "504e50b36595b23d8f851bdf230c2abf4f7cf6144d174ac08f54ce9caf57a1a3",
+              "after": "87cf7566f92ae957b9ba962c6120f9c41bd879e2d521a0de797855310bd318c6"
+            },
+            "src/services/mode-manager.ts": {
+              "before": "1b465bb0908c654ca4b6403458e429ea67b1677517ccbe4dbdf0c088a8353d4e",
+              "after": "b2d41a0fd90c0bf6b028379ac33f9a0c3bb2dc13d9e0eda35ce8b398774b8136"
+            },
+            "src/services/data-freshness.ts": {
+              "before": "fb03a6269a745a6a026004ac88a0da8f86460d67d01835606058cb4614150658",
+              "after": "01c1a0559f46bab0cee39b0d1839fa1d132b5a5e6eb7f2398877d75a9c4766a4"
+            },
+            "src/services/log-bridge.ts": {
+              "before": "4f1e5ab6225699bb94fac0fb3d93b65bf5a833ef05347a1553ac1d057d982a09",
+              "after": "0cdf7b1b093c5c8f43fe456d1326f0386a6bf968c0bb1c8339481cf2aab032a3"
+            },
+            "src/app/data-loader.ts": {
+              "before": "22d4482dcc8fa7f52f29200d3739450692ef07d9329a3b0a8f850e85410a1350",
+              "after": "dd746e9b0840f61499213b546540f66c47821ef69bc440e580d824da3a668481"
+            },
+            "src/components/NWSAlertsPanel.ts": {
+              "before": "f8582f5f4526b6ea810154b1574e492716ba6317b6d08b1ee294b11599514cf0",
+              "after": "caf1d983de99e57993d8ea3aedcbad89a5071ecc67de8343fdb4937ce865ed8c"
+            },
+            "src/services/unified-alerts.ts": {
+              "before": "ff12d3afb53ee0f595b6e2a95c3d7f7b21f905d652247261879547a1940aa6f2",
+              "after": "39a0a65f8e1ef3f6d9847bef8c8fd9d387973cda6d674654706a9bba2da32e69"
+            },
+            "src/services/nws-alerts.ts": {
+              "before": "7fb96963d81390596eacf7dae6c0ec4ba74267aa55bdaae2d56ff0dc8455a994",
+              "after": "f983f1ce5370b15b47f8142b9a77cbc6ac3f2b02cde75468563fdbf9b8095729"
+            }
+          },
+          "entry": "/assets/main--VDTKzF9.js",
+          "styles": [
+            "/assets/maplibre-CKRTiAqP.css",
+            "/assets/main-DCgk6rev.css"
+          ]
+        },
+        "receiptHashes": {
+          "pair1": "23bd17cd1d6abd9d62b4558b98671e053988d70585ab46ea3362a92b90b858a6",
+          "pair2": "9048ad30554976860a527f31a32bb256a923282e0341725a39b6bba424da9111",
+          "pair3": "a91285bcb0d131313025dd18c5e2265a46df1047b04198bbf59ba314a7bea315",
+          "cached": "8847480207a8b75358c930f99101f51ead275f9b9697aa77882e6e1371342785",
+          "malformed": "91fd52f8eb40ea342533f2ba6bdd12ebd5289454f7a577602d6585d07155d3fb",
+          "expired": "31396f0b57e9f0245897a53c68666db490989303cf2e61e847ff61ca6f62f102",
+          "unavailable": "48038a718a1ab7a5f2906605eb69bbd250dbde478e2c90e261da9cd78f30a1bb",
+          "empty": "3c481bb6c01acda1288ac6a93659194c6d979e89c5a4fe4360ebb5d133764419",
+          "first-run": "ff80a72be7d4d2fca5d5bd9bccf84a7e546b2ddab50ba1cace1faa3ee014613d",
+          "fatal": "0a97fd233a858379f656fc9dc42d2232452482793226eb278caa275be409802b"
+        },
+        "timingSamples": [
+          {
+            "case": "pair1",
+            "profile": "fresh-storage",
+            "timesMs": {
+              "news-held": 2166,
+              "nws-admitted": 2166,
+              "warning-processed": 2262,
+              "interactive-promise": 19056,
+              "intro-gone": 11498,
+              "first-keyboard-action": 11671,
+              "eligible-route-probed": 15728,
+              "release-news": 19022,
+              "shake-admitted": 19030,
+              "whole-wave": 19035
+            },
+            "earlyDelivery": false,
+            "activeAtProbe": 10,
+            "capturedAtPhase6": "nws-expiry",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)"
+          },
+          {
+            "case": "pair1",
+            "profile": "reused-storage",
+            "timesMs": {
+              "news-held": 6415,
+              "nws-admitted": 6416,
+              "warning-processed": 6498,
+              "interactive-promise": 19067,
+              "intro-gone": 14475,
+              "first-keyboard-action": 14666,
+              "eligible-route-probed": 17107,
+              "release-news": 19061,
+              "shake-admitted": 19063,
+              "whole-wave": 19064
+            },
+            "earlyDelivery": false,
+            "activeAtProbe": 10,
+            "capturedAtPhase6": "nws-expiry",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)"
+          },
+          {
+            "case": "pair2",
+            "profile": "fresh-storage",
+            "timesMs": {
+              "news-held": 1388,
+              "nws-admitted": 1388,
+              "warning-processed": 1477,
+              "interactive-promise": 13756,
+              "intro-gone": 9486,
+              "first-keyboard-action": 9618,
+              "eligible-route-probed": 11832,
+              "release-news": 13753,
+              "shake-admitted": 13753,
+              "whole-wave": 13754
+            },
+            "earlyDelivery": false,
+            "activeAtProbe": 10,
+            "capturedAtPhase6": "nws-expiry",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)"
+          },
+          {
+            "case": "pair2",
+            "profile": "reused-storage",
+            "timesMs": {
+              "news-held": 1450,
+              "nws-admitted": 1450,
+              "warning-processed": 1511,
+              "interactive-promise": 16337,
+              "intro-gone": 10204,
+              "first-keyboard-action": 10339,
+              "eligible-route-probed": 13070,
+              "release-news": 16331,
+              "shake-admitted": 16332,
+              "whole-wave": 16334
+            },
+            "earlyDelivery": false,
+            "activeAtProbe": 10,
+            "capturedAtPhase6": "nws-expiry",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)"
+          },
+          {
+            "case": "pair3",
+            "profile": "fresh-storage",
+            "timesMs": {
+              "news-held": 1900,
+              "nws-admitted": 1900,
+              "warning-processed": 1974,
+              "interactive-promise": 14490,
+              "intro-gone": 10402,
+              "first-keyboard-action": 10506,
+              "eligible-route-probed": 12561,
+              "release-news": 14484,
+              "shake-admitted": 14486,
+              "whole-wave": 14487
+            },
+            "earlyDelivery": false,
+            "activeAtProbe": 10,
+            "capturedAtPhase6": "nws-expiry",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)"
+          },
+          {
+            "case": "pair3",
+            "profile": "reused-storage",
+            "timesMs": {
+              "news-held": 1404,
+              "nws-admitted": 1404,
+              "warning-processed": 1466,
+              "interactive-promise": 20247,
+              "intro-gone": 11612,
+              "first-keyboard-action": 11766,
+              "eligible-route-probed": 17232,
+              "release-news": 20238,
+              "shake-admitted": 20240,
+              "whole-wave": 20242
+            },
+            "earlyDelivery": false,
+            "activeAtProbe": 10,
+            "capturedAtPhase6": "nws-expiry",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)"
+          }
+        ],
+        "controls": {
+          "cached": {
+            "first": {
+              "admissions": 10,
+              "interactive": false,
+              "newsDone": false,
+              "outbound": [],
+              "overlayGone": true,
+              "panel": true,
+              "readyWhilePending": true,
+              "shake": false,
+              "source": {
+                "error": true,
+                "lastUpdate": null
+              },
+              "store": [
+                {
+                  "evidence": null,
+                  "expiry": null,
+                  "id": "nws-fixture-warning-cold"
+                }
+              ]
+            },
+            "after": {
+              "admissions": 88,
+              "interactive": true,
+              "newsDone": true,
+              "outbound": [
+                "[CRITICAL] qa-breaking after-wave \u2014 QA"
+              ],
+              "overlayGone": true,
+              "panel": true,
+              "readyWhilePending": true,
+              "shake": true,
+              "source": {
+                "error": true,
+                "lastUpdate": null
+              },
+              "store": [
+                {
+                  "evidence": null,
+                  "expiry": null,
+                  "id": "nws-fixture-warning-cold"
+                }
+              ]
+            },
+            "checks": {
+              "ghostBlocked": true,
+              "noHeldReplay": true
+            }
+          },
+          "malformed": {
+            "first": {
+              "admissions": 10,
+              "interactive": false,
+              "newsDone": false,
+              "outbound": [],
+              "overlayGone": true,
+              "panel": false,
+              "readyWhilePending": true,
+              "shake": false,
+              "source": {
+                "error": true,
+                "lastUpdate": null
+              },
+              "store": []
+            },
+            "after": {
+              "admissions": 88,
+              "interactive": true,
+              "newsDone": true,
+              "outbound": [
+                "[CRITICAL] qa-breaking after-wave \u2014 QA"
+              ],
+              "overlayGone": true,
+              "panel": false,
+              "readyWhilePending": true,
+              "shake": true,
+              "source": {
+                "error": true,
+                "lastUpdate": null
+              },
+              "store": []
+            },
+            "checks": {
+              "ghostBlocked": true,
+              "noHeldReplay": true
+            }
+          },
+          "expired": {
+            "first": {
+              "admissions": 10,
+              "interactive": false,
+              "newsDone": false,
+              "outbound": [],
+              "overlayGone": true,
+              "panel": true,
+              "readyWhilePending": true,
+              "shake": false,
+              "source": {
+                "error": false,
+                "lastUpdate": "2026-11-03T16:17:32.076Z"
+              },
+              "store": [
+                {
+                  "evidence": "nws-expiry",
+                  "expiry": 1793722591347,
+                  "id": "nws-fixture-warning-cold"
+                }
+              ]
+            },
+            "after": {
+              "admissions": 88,
+              "interactive": true,
+              "newsDone": true,
+              "outbound": [
+                "[CRITICAL] qa-breaking after-wave \u2014 QA"
+              ],
+              "overlayGone": true,
+              "panel": true,
+              "readyWhilePending": true,
+              "shake": true,
+              "source": {
+                "error": false,
+                "lastUpdate": "2026-11-03T16:17:32.076Z"
+              },
+              "store": [
+                {
+                  "evidence": "nws-expiry",
+                  "expiry": 1793722591347,
+                  "id": "nws-fixture-warning-cold"
+                }
+              ]
+            },
+            "checks": {
+              "ghostBlocked": true,
+              "noHeldReplay": true
+            }
+          },
+          "unavailable": {
+            "first": {
+              "admissions": 10,
+              "interactive": false,
+              "newsDone": false,
+              "outbound": [],
+              "overlayGone": true,
+              "panel": false,
+              "readyWhilePending": true,
+              "shake": false,
+              "source": {
+                "error": true,
+                "lastUpdate": null
+              },
+              "store": []
+            },
+            "after": {
+              "admissions": 88,
+              "interactive": true,
+              "newsDone": true,
+              "outbound": [
+                "[CRITICAL] qa-breaking after-wave \u2014 QA"
+              ],
+              "overlayGone": true,
+              "panel": false,
+              "readyWhilePending": true,
+              "shake": true,
+              "source": {
+                "error": true,
+                "lastUpdate": null
+              },
+              "store": []
+            },
+            "checks": {
+              "ghostBlocked": true,
+              "noHeldReplay": true
+            }
+          },
+          "empty": {
+            "first": {
+              "admissions": 10,
+              "interactive": false,
+              "newsDone": false,
+              "outbound": [],
+              "overlayGone": true,
+              "panel": false,
+              "readyWhilePending": true,
+              "shake": false,
+              "source": {
+                "error": false,
+                "lastUpdate": "2026-11-03T16:18:08.609Z"
+              },
+              "store": []
+            },
+            "after": {
+              "admissions": 88,
+              "interactive": true,
+              "newsDone": true,
+              "outbound": [
+                "[CRITICAL] qa-breaking after-wave \u2014 QA"
+              ],
+              "overlayGone": true,
+              "panel": false,
+              "readyWhilePending": true,
+              "shake": true,
+              "source": {
+                "error": false,
+                "lastUpdate": "2026-11-03T16:18:08.609Z"
+              },
+              "store": []
+            },
+            "checks": {
+              "ghostBlocked": true,
+              "noHeldReplay": true
+            }
+          },
+          "first-run": {
+            "first": {
+              "admissions": 10,
+              "interactive": false,
+              "newsDone": false,
+              "outbound": [],
+              "overlayGone": true,
+              "panel": true,
+              "readyWhilePending": true,
+              "shake": false,
+              "source": {
+                "error": false,
+                "lastUpdate": "2026-11-03T16:19:31.370Z"
+              },
+              "store": [
+                {
+                  "evidence": "nws-expiry",
+                  "expiry": 1793726370437,
+                  "id": "nws-fixture-warning-cold"
+                }
+              ]
+            },
+            "after": {
+              "admissions": 88,
+              "interactive": true,
+              "newsDone": true,
+              "outbound": [
+                "[CRITICAL] qa-breaking after-wave \u2014 QA"
+              ],
+              "overlayGone": true,
+              "panel": true,
+              "readyWhilePending": true,
+              "shake": true,
+              "source": {
+                "error": false,
+                "lastUpdate": "2026-11-03T16:19:31.370Z"
+              },
+              "store": [
+                {
+                  "evidence": "nws-expiry",
+                  "expiry": 1793726370437,
+                  "id": "nws-fixture-warning-cold"
+                }
+              ]
+            },
+            "checks": {
+              "firstRunStep": {
+                "advanced": true,
+                "complete": false,
+                "focused": true
+              },
+              "ghostBlocked": true,
+              "noHeldReplay": true
+            }
+          },
+          "fatal": {
+            "actionable": null,
+            "alert": null
+          }
+        },
+        "summary": {
+          "fresh-storage": {
+            "news-held": {
+              "n": 3,
+              "minimum": 1388,
+              "median": 1900,
+              "maximum": 2166
+            },
+            "nws-admitted": {
+              "n": 3,
+              "minimum": 1388,
+              "median": 1900,
+              "maximum": 2166
+            },
+            "warning-processed": {
+              "n": 3,
+              "minimum": 1477,
+              "median": 1974,
+              "maximum": 2262
+            },
+            "interactive-promise": {
+              "n": 3,
+              "minimum": 13756,
+              "median": 14490,
+              "maximum": 19056
+            },
+            "intro-gone": {
+              "n": 3,
+              "minimum": 9486,
+              "median": 10402,
+              "maximum": 11498
+            },
+            "first-keyboard-action": {
+              "n": 3,
+              "minimum": 9618,
+              "median": 10506,
+              "maximum": 11671
+            },
+            "eligible-route-probed": {
+              "n": 3,
+              "minimum": 11832,
+              "median": 12561,
+              "maximum": 15728
+            },
+            "release-news": {
+              "n": 3,
+              "minimum": 13753,
+              "median": 14484,
+              "maximum": 19022
+            },
+            "shake-admitted": {
+              "n": 3,
+              "minimum": 13753,
+              "median": 14486,
+              "maximum": 19030
+            },
+            "whole-wave": {
+              "n": 3,
+              "minimum": 13754,
+              "median": 14487,
+              "maximum": 19035
+            }
+          },
+          "reused-storage": {
+            "news-held": {
+              "n": 3,
+              "minimum": 1404,
+              "median": 1450,
+              "maximum": 6415
+            },
+            "nws-admitted": {
+              "n": 3,
+              "minimum": 1404,
+              "median": 1450,
+              "maximum": 6416
+            },
+            "warning-processed": {
+              "n": 3,
+              "minimum": 1466,
+              "median": 1511,
+              "maximum": 6498
+            },
+            "interactive-promise": {
+              "n": 3,
+              "minimum": 16337,
+              "median": 19067,
+              "maximum": 20247
+            },
+            "intro-gone": {
+              "n": 3,
+              "minimum": 10204,
+              "median": 11612,
+              "maximum": 14475
+            },
+            "first-keyboard-action": {
+              "n": 3,
+              "minimum": 10339,
+              "median": 11766,
+              "maximum": 14666
+            },
+            "eligible-route-probed": {
+              "n": 3,
+              "minimum": 13070,
+              "median": 17107,
+              "maximum": 17232
+            },
+            "release-news": {
+              "n": 3,
+              "minimum": 16331,
+              "median": 19061,
+              "maximum": 20238
+            },
+            "shake-admitted": {
+              "n": 3,
+              "minimum": 16332,
+              "median": 19063,
+              "maximum": 20240
+            },
+            "whole-wave": {
+              "n": 3,
+              "minimum": 16334,
+              "median": 19064,
+              "maximum": 20242
+            }
+          }
+        },
+        "hostSha256": "1c62e924cd42a056956d73d32230e389a523b06dba0137775e7211537bd2d846"
+      }
+    },
+    "candidate": {
+      "web": {
+        "buildInputs": {
+          "commit": "982f8e42a53e3caa6796e20e9578ff022a842da5",
+          "variant": "full",
+          "desktop": "0",
+          "hashes": {
+            "src/services/tauri-bridge.ts": {
+              "before": "5b8097afec09b2aee95ed2115c118146b807417462582d91a3126e70736696e4",
+              "after": "2c5c00fd09076c69f76e32a6f4a1217b31378ae9ea59b5f5590675d00160157a"
+            },
+            "src/App.ts": {
+              "before": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+              "after": "880c3521d67e2ce266a8e26a8494b766179e8ff585c1e2a27ad9d416f0412bfb"
+            },
+            "src/app/vault-intro.ts": {
+              "before": "1911c1640e6f09c1e513959a1dbd95c5ebde1592f059787f648e354289d8a00a",
+              "after": "7e4743722acc145792b28e948e8deb65f28505d69921415e79ce9122803a7842"
+            },
+            "src/services/data-freshness.ts": {
+              "before": "fb03a6269a745a6a026004ac88a0da8f86460d67d01835606058cb4614150658",
+              "after": "01c1a0559f46bab0cee39b0d1839fa1d132b5a5e6eb7f2398877d75a9c4766a4"
+            },
+            "src/services/mode-manager.ts": {
+              "before": "1b465bb0908c654ca4b6403458e429ea67b1677517ccbe4dbdf0c088a8353d4e",
+              "after": "b2d41a0fd90c0bf6b028379ac33f9a0c3bb2dc13d9e0eda35ce8b398774b8136"
+            },
+            "src/app/data-loader.ts": {
+              "before": "fdd429f51168f40bdda4129fa081efb3446604759998aa758a5c04f54b6c4a9a",
+              "after": "84a98670a6ec5f576bfa56ab50154aa13de152eadc99530d30eb8fe94a465bc4"
+            },
+            "src/services/log-bridge.ts": {
+              "before": "4f1e5ab6225699bb94fac0fb3d93b65bf5a833ef05347a1553ac1d057d982a09",
+              "after": "0cdf7b1b093c5c8f43fe456d1326f0386a6bf968c0bb1c8339481cf2aab032a3"
+            },
+            "src/services/nws-alerts.ts": {
+              "before": "7fb96963d81390596eacf7dae6c0ec4ba74267aa55bdaae2d56ff0dc8455a994",
+              "after": "f983f1ce5370b15b47f8142b9a77cbc6ac3f2b02cde75468563fdbf9b8095729"
+            },
+            "src/services/unified-alerts.ts": {
+              "before": "ff12d3afb53ee0f595b6e2a95c3d7f7b21f905d652247261879547a1940aa6f2",
+              "after": "39a0a65f8e1ef3f6d9847bef8c8fd9d387973cda6d674654706a9bba2da32e69"
+            },
+            "src/components/NWSAlertsPanel.ts": {
+              "before": "f8582f5f4526b6ea810154b1574e492716ba6317b6d08b1ee294b11599514cf0",
+              "after": "caf1d983de99e57993d8ea3aedcbad89a5071ecc67de8343fdb4937ce865ed8c"
+            }
+          },
+          "entry": "/assets/main-Cnd3itIB.js",
+          "styles": [
+            "/assets/maplibre-CKRTiAqP.css",
+            "/assets/main-DCgk6rev.css"
+          ]
+        },
+        "receiptHashes": {
+          "pair1": "8be72e349f02b0591445d2a6dcd96188415500a124c2658933b66aa2fef23378",
+          "pair2": "c474f01a1612d620d9a500c7f1a5a18038d0d4560f7a6f5208046191f7fb98d6",
+          "pair3": "1ce5f7a4e21668fab12e3d4988c0611d7e8d77ee2d96bfbf78be72d4e372a0e0",
+          "cached": "63e782f0d2359bc88a27dace4a659ab854f8b4bb7f31112f76d06cc82d77193a",
+          "malformed": "2a1cd29d4aa36db9b430e516d69a678f3ba4f9522aab05c9ad8ff6851cedb957",
+          "expired": "d99cde13385300592f0e646c23c8a9d9366cbd3c38c4e68a0516a2d6dd31f8f0",
+          "unavailable": "631df0cbfe0576ead3b518029b9ec5adacf43fbac491e395114f746ca7944320",
+          "empty": "5ce31b8978be961899712b39b9572c95980a9704f064bd8d5ae9ae59d93e1cc1",
+          "first-run": "146ec66f9c42a7036876c5fa6a7191c4e66813cb589e8d22f2489e350ce69fda",
+          "fatal": "e71617473b107c9f714e2b94b9e2d05fcd3873272e0e952832556ea208042b66"
+        },
+        "timingSamples": [
+          {
+            "case": "pair1",
+            "profile": "fresh-storage",
+            "timesMs": {
+              "news-held": 2485,
+              "nws-admitted": 2485,
+              "warning-processed": 3668,
+              "interactive-promise": 2486,
+              "first-keyboard-action": 3953,
+              "eligible-route-probed": 4388,
+              "release-news": 4810,
+              "shake-admitted": 2485,
+              "whole-wave": 4812
+            },
+            "earlyDelivery": true,
+            "activeAtProbe": 11,
+            "capturedAtPhase6": "nws-expiry",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36"
+          },
+          {
+            "case": "pair1",
+            "profile": "reused-storage",
+            "timesMs": {
+              "news-held": 1399,
+              "nws-admitted": 1399,
+              "warning-processed": 2959,
+              "interactive-promise": 1399,
+              "first-keyboard-action": 4535,
+              "eligible-route-probed": 5923,
+              "release-news": 7639,
+              "shake-admitted": 1399,
+              "whole-wave": 7640
+            },
+            "earlyDelivery": true,
+            "activeAtProbe": 11,
+            "capturedAtPhase6": "nws-expiry",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36"
+          },
+          {
+            "case": "pair2",
+            "profile": "fresh-storage",
+            "timesMs": {
+              "news-held": 1379,
+              "nws-admitted": 1379,
+              "warning-processed": 2353,
+              "interactive-promise": 1380,
+              "first-keyboard-action": 2622,
+              "eligible-route-probed": 2970,
+              "release-news": 3453,
+              "shake-admitted": 1379,
+              "whole-wave": 3454
+            },
+            "earlyDelivery": true,
+            "activeAtProbe": 11,
+            "capturedAtPhase6": "nws-expiry",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36"
+          },
+          {
+            "case": "pair2",
+            "profile": "reused-storage",
+            "timesMs": {
+              "news-held": 3296,
+              "nws-admitted": 3297,
+              "warning-processed": 5002,
+              "interactive-promise": 3297,
+              "first-keyboard-action": 6342,
+              "eligible-route-probed": 8009,
+              "release-news": 9153,
+              "shake-admitted": 3297,
+              "whole-wave": 9156
+            },
+            "earlyDelivery": true,
+            "activeAtProbe": 11,
+            "capturedAtPhase6": "nws-expiry",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36"
+          },
+          {
+            "case": "pair3",
+            "profile": "fresh-storage",
+            "timesMs": {
+              "news-held": 2647,
+              "nws-admitted": 2647,
+              "warning-processed": 3907,
+              "interactive-promise": 2649,
+              "first-keyboard-action": 4249,
+              "eligible-route-probed": 4668,
+              "release-news": 5077,
+              "shake-admitted": 2647,
+              "whole-wave": 5078
+            },
+            "earlyDelivery": true,
+            "activeAtProbe": 11,
+            "capturedAtPhase6": "nws-expiry",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36"
+          },
+          {
+            "case": "pair3",
+            "profile": "reused-storage",
+            "timesMs": {
+              "news-held": 4546,
+              "nws-admitted": 4546,
+              "warning-processed": 5828,
+              "interactive-promise": 4546,
+              "first-keyboard-action": 6891,
+              "eligible-route-probed": 8486,
+              "release-news": 9911,
+              "shake-admitted": 4546,
+              "whole-wave": 9912
+            },
+            "earlyDelivery": true,
+            "activeAtProbe": 11,
+            "capturedAtPhase6": "nws-expiry",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36"
+          }
+        ],
+        "controls": {
+          "cached": {
+            "first": {
+              "admissions": 11,
+              "newsDone": false,
+              "shake": true,
+              "interactive": true,
+              "readyWhilePending": false,
+              "overlayGone": true,
+              "panel": true,
+              "store": [
+                {
+                  "id": "nws-fixture-warning-cold",
+                  "evidence": null,
+                  "expiry": null
+                }
+              ],
+              "source": {
+                "error": true,
+                "lastUpdate": null
+              },
+              "outbound": [
+                "[CRITICAL] qa-breaking while-held \u2014 QA"
+              ]
+            },
+            "after": {
+              "admissions": 88,
+              "newsDone": true,
+              "shake": true,
+              "interactive": true,
+              "readyWhilePending": false,
+              "overlayGone": true,
+              "panel": true,
+              "store": [
+                {
+                  "id": "nws-fixture-warning-cold",
+                  "evidence": null,
+                  "expiry": null
+                }
+              ],
+              "source": {
+                "error": true,
+                "lastUpdate": null
+              },
+              "outbound": [
+                "[CRITICAL] qa-breaking while-held \u2014 QA",
+                "[CRITICAL] qa-breaking after-wave \u2014 QA"
+              ]
+            },
+            "checks": {
+              "ghostBlocked": true,
+              "deniedBlocked": true,
+              "noHeldReplay": true
+            }
+          },
+          "malformed": {
+            "first": {
+              "admissions": 11,
+              "newsDone": false,
+              "shake": true,
+              "interactive": true,
+              "readyWhilePending": false,
+              "overlayGone": true,
+              "panel": false,
+              "store": [],
+              "source": {
+                "error": true,
+                "lastUpdate": null
+              },
+              "outbound": [
+                "[CRITICAL] qa-breaking while-held \u2014 QA"
+              ]
+            },
+            "after": {
+              "admissions": 88,
+              "newsDone": true,
+              "shake": true,
+              "interactive": true,
+              "readyWhilePending": false,
+              "overlayGone": true,
+              "panel": false,
+              "store": [],
+              "source": {
+                "error": true,
+                "lastUpdate": null
+              },
+              "outbound": [
+                "[CRITICAL] qa-breaking while-held \u2014 QA",
+                "[CRITICAL] qa-breaking after-wave \u2014 QA"
+              ]
+            },
+            "checks": {
+              "ghostBlocked": true,
+              "deniedBlocked": true,
+              "noHeldReplay": true
+            }
+          },
+          "expired": {
+            "first": {
+              "admissions": 11,
+              "newsDone": false,
+              "shake": true,
+              "interactive": true,
+              "readyWhilePending": false,
+              "overlayGone": true,
+              "panel": true,
+              "store": [
+                {
+                  "id": "nws-fixture-warning-cold",
+                  "evidence": "nws-expiry",
+                  "expiry": 1793723123854
+                }
+              ],
+              "source": {
+                "error": false,
+                "lastUpdate": "2026-11-03T16:26:24.640Z"
+              },
+              "outbound": [
+                "[CRITICAL] qa-breaking while-held \u2014 QA"
+              ]
+            },
+            "after": {
+              "admissions": 88,
+              "newsDone": true,
+              "shake": true,
+              "interactive": true,
+              "readyWhilePending": false,
+              "overlayGone": true,
+              "panel": true,
+              "store": [
+                {
+                  "id": "nws-fixture-warning-cold",
+                  "evidence": "nws-expiry",
+                  "expiry": 1793723123854
+                }
+              ],
+              "source": {
+                "error": false,
+                "lastUpdate": "2026-11-03T16:26:24.640Z"
+              },
+              "outbound": [
+                "[CRITICAL] qa-breaking while-held \u2014 QA",
+                "[CRITICAL] qa-breaking after-wave \u2014 QA"
+              ]
+            },
+            "checks": {
+              "ghostBlocked": true,
+              "deniedBlocked": true,
+              "noHeldReplay": true
+            }
+          },
+          "unavailable": {
+            "first": {
+              "admissions": 11,
+              "newsDone": false,
+              "shake": true,
+              "interactive": true,
+              "readyWhilePending": false,
+              "overlayGone": true,
+              "panel": false,
+              "store": [],
+              "source": {
+                "error": true,
+                "lastUpdate": null
+              },
+              "outbound": [
+                "[CRITICAL] qa-breaking while-held \u2014 QA"
+              ]
+            },
+            "after": {
+              "admissions": 88,
+              "newsDone": true,
+              "shake": true,
+              "interactive": true,
+              "readyWhilePending": false,
+              "overlayGone": true,
+              "panel": false,
+              "store": [],
+              "source": {
+                "error": true,
+                "lastUpdate": null
+              },
+              "outbound": [
+                "[CRITICAL] qa-breaking while-held \u2014 QA",
+                "[CRITICAL] qa-breaking after-wave \u2014 QA"
+              ]
+            },
+            "checks": {
+              "ghostBlocked": true,
+              "deniedBlocked": true,
+              "noHeldReplay": true
+            }
+          },
+          "empty": {
+            "first": {
+              "admissions": 11,
+              "newsDone": false,
+              "shake": true,
+              "interactive": true,
+              "readyWhilePending": false,
+              "overlayGone": true,
+              "panel": false,
+              "store": [],
+              "source": {
+                "error": false,
+                "lastUpdate": "2026-11-03T16:26:40.019Z"
+              },
+              "outbound": [
+                "[CRITICAL] qa-breaking while-held \u2014 QA"
+              ]
+            },
+            "after": {
+              "admissions": 88,
+              "newsDone": true,
+              "shake": true,
+              "interactive": true,
+              "readyWhilePending": false,
+              "overlayGone": true,
+              "panel": false,
+              "store": [],
+              "source": {
+                "error": false,
+                "lastUpdate": "2026-11-03T16:26:40.019Z"
+              },
+              "outbound": [
+                "[CRITICAL] qa-breaking while-held \u2014 QA",
+                "[CRITICAL] qa-breaking after-wave \u2014 QA"
+              ]
+            },
+            "checks": {
+              "ghostBlocked": true,
+              "deniedBlocked": true,
+              "noHeldReplay": true
+            }
+          },
+          "first-run": {
+            "first": {
+              "admissions": 11,
+              "newsDone": false,
+              "shake": true,
+              "interactive": true,
+              "readyWhilePending": false,
+              "overlayGone": true,
+              "panel": true,
+              "store": [
+                {
+                  "id": "nws-fixture-warning-cold",
+                  "evidence": "nws-expiry",
+                  "expiry": 1793726805517
+                }
+              ],
+              "source": {
+                "error": false,
+                "lastUpdate": "2026-11-03T16:26:46.108Z"
+              },
+              "outbound": []
+            },
+            "after": {
+              "admissions": 88,
+              "newsDone": true,
+              "shake": true,
+              "interactive": true,
+              "readyWhilePending": false,
+              "overlayGone": true,
+              "panel": true,
+              "store": [
+                {
+                  "id": "nws-fixture-warning-cold",
+                  "evidence": "nws-expiry",
+                  "expiry": 1793726805517
+                }
+              ],
+              "source": {
+                "error": false,
+                "lastUpdate": "2026-11-03T16:26:46.108Z"
+              },
+              "outbound": [
+                "[CRITICAL] qa-breaking after-wave \u2014 QA"
+              ]
+            },
+            "checks": {
+              "firstRunStep": {
+                "focused": true,
+                "advanced": true,
+                "complete": false
+              },
+              "ghostBlocked": true,
+              "deniedBlocked": true,
+              "noHeldReplay": true
+            }
+          },
+          "fatal": {
+            "actionable": "Reload workspace",
+            "alert": "Crystal Ball could not open this workspace."
+          }
+        },
+        "summary": {
+          "fresh-storage": {
+            "news-held": {
+              "n": 3,
+              "minimum": 1379,
+              "median": 2485,
+              "maximum": 2647
+            },
+            "nws-admitted": {
+              "n": 3,
+              "minimum": 1379,
+              "median": 2485,
+              "maximum": 2647
+            },
+            "warning-processed": {
+              "n": 3,
+              "minimum": 2353,
+              "median": 3668,
+              "maximum": 3907
+            },
+            "interactive-promise": {
+              "n": 3,
+              "minimum": 1380,
+              "median": 2486,
+              "maximum": 2649
+            },
+            "first-keyboard-action": {
+              "n": 3,
+              "minimum": 2622,
+              "median": 3953,
+              "maximum": 4249
+            },
+            "eligible-route-probed": {
+              "n": 3,
+              "minimum": 2970,
+              "median": 4388,
+              "maximum": 4668
+            },
+            "release-news": {
+              "n": 3,
+              "minimum": 3453,
+              "median": 4810,
+              "maximum": 5077
+            },
+            "shake-admitted": {
+              "n": 3,
+              "minimum": 1379,
+              "median": 2485,
+              "maximum": 2647
+            },
+            "whole-wave": {
+              "n": 3,
+              "minimum": 3454,
+              "median": 4812,
+              "maximum": 5078
+            }
+          },
+          "reused-storage": {
+            "news-held": {
+              "n": 3,
+              "minimum": 1399,
+              "median": 3296,
+              "maximum": 4546
+            },
+            "nws-admitted": {
+              "n": 3,
+              "minimum": 1399,
+              "median": 3297,
+              "maximum": 4546
+            },
+            "warning-processed": {
+              "n": 3,
+              "minimum": 2959,
+              "median": 5002,
+              "maximum": 5828
+            },
+            "interactive-promise": {
+              "n": 3,
+              "minimum": 1399,
+              "median": 3297,
+              "maximum": 4546
+            },
+            "first-keyboard-action": {
+              "n": 3,
+              "minimum": 4535,
+              "median": 6342,
+              "maximum": 6891
+            },
+            "eligible-route-probed": {
+              "n": 3,
+              "minimum": 5923,
+              "median": 8009,
+              "maximum": 8486
+            },
+            "release-news": {
+              "n": 3,
+              "minimum": 7639,
+              "median": 9153,
+              "maximum": 9911
+            },
+            "shake-admitted": {
+              "n": 3,
+              "minimum": 1399,
+              "median": 3297,
+              "maximum": 4546
+            },
+            "whole-wave": {
+              "n": 3,
+              "minimum": 7640,
+              "median": 9156,
+              "maximum": 9912
+            }
+          }
+        }
+      },
+      "desktop": {
+        "buildInputs": {
+          "commit": "982f8e42a53e3caa6796e20e9578ff022a842da5",
+          "variant": "full",
+          "desktop": "1",
+          "hashes": {
+            "src/services/tauri-bridge.ts": {
+              "before": "5b8097afec09b2aee95ed2115c118146b807417462582d91a3126e70736696e4",
+              "after": "2c5c00fd09076c69f76e32a6f4a1217b31378ae9ea59b5f5590675d00160157a"
+            },
+            "src/services/mode-manager.ts": {
+              "before": "1b465bb0908c654ca4b6403458e429ea67b1677517ccbe4dbdf0c088a8353d4e",
+              "after": "b2d41a0fd90c0bf6b028379ac33f9a0c3bb2dc13d9e0eda35ce8b398774b8136"
+            },
+            "src/App.ts": {
+              "before": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+              "after": "880c3521d67e2ce266a8e26a8494b766179e8ff585c1e2a27ad9d416f0412bfb"
+            },
+            "src/app/vault-intro.ts": {
+              "before": "1911c1640e6f09c1e513959a1dbd95c5ebde1592f059787f648e354289d8a00a",
+              "after": "7e4743722acc145792b28e948e8deb65f28505d69921415e79ce9122803a7842"
+            },
+            "src/services/data-freshness.ts": {
+              "before": "fb03a6269a745a6a026004ac88a0da8f86460d67d01835606058cb4614150658",
+              "after": "01c1a0559f46bab0cee39b0d1839fa1d132b5a5e6eb7f2398877d75a9c4766a4"
+            },
+            "src/app/data-loader.ts": {
+              "before": "fdd429f51168f40bdda4129fa081efb3446604759998aa758a5c04f54b6c4a9a",
+              "after": "84a98670a6ec5f576bfa56ab50154aa13de152eadc99530d30eb8fe94a465bc4"
+            },
+            "src/services/log-bridge.ts": {
+              "before": "4f1e5ab6225699bb94fac0fb3d93b65bf5a833ef05347a1553ac1d057d982a09",
+              "after": "0cdf7b1b093c5c8f43fe456d1326f0386a6bf968c0bb1c8339481cf2aab032a3"
+            },
+            "src/services/nws-alerts.ts": {
+              "before": "7fb96963d81390596eacf7dae6c0ec4ba74267aa55bdaae2d56ff0dc8455a994",
+              "after": "f983f1ce5370b15b47f8142b9a77cbc6ac3f2b02cde75468563fdbf9b8095729"
+            },
+            "src/services/unified-alerts.ts": {
+              "before": "ff12d3afb53ee0f595b6e2a95c3d7f7b21f905d652247261879547a1940aa6f2",
+              "after": "39a0a65f8e1ef3f6d9847bef8c8fd9d387973cda6d674654706a9bba2da32e69"
+            },
+            "src/components/NWSAlertsPanel.ts": {
+              "before": "f8582f5f4526b6ea810154b1574e492716ba6317b6d08b1ee294b11599514cf0",
+              "after": "caf1d983de99e57993d8ea3aedcbad89a5071ecc67de8343fdb4937ce865ed8c"
+            }
+          },
+          "entry": "/assets/main-BlWSSJnY.js",
+          "styles": [
+            "/assets/maplibre-CKRTiAqP.css",
+            "/assets/main-DCgk6rev.css"
+          ]
+        },
+        "receiptHashes": {
+          "pair1": "65396b953ad227deaa2a480bf41f79f7cff74e7beca035335b8ba5e00109e2d7",
+          "pair2": "522accf05fd0670c26ce54353ee69e573393f3af77080c58a98f8f1000c0c4b8",
+          "pair3": "0ffef16b70fb9f8d55957d9c5360940fb55f7bd0690a390ea03acc2cf22fb7a3",
+          "cached": "c7c59f169092e421422d077d095dbd0903fb985a34dcdefc313fd81bd7f13292",
+          "malformed": "af75ad6c70eef6c543df4552fb53c9403cc9f3c605e518bdd6516d6110b072b7",
+          "expired": "0e69221d945618e9105e528b7d0f9215a7b8188703ff18d1c527c7c607edcc9c",
+          "unavailable": "db74e00ebf9872e6014809af9a5a0caa5d5cce6498cea21f915f24a2a3d2c7fe",
+          "empty": "ac753c30cdcb7d561ea6dbd871ad91f52b12f27ae7fcbddc0f29db3c2f9d5ab3",
+          "first-run": "c2b6c7081cf7f5e32539a0ffe31e7433140bd1c5a654a3b2984309f07c200e7e",
+          "fatal": "61abe288e18ad25f03119d0c5cfcbb161c85a72649034e1ae8c19233dd881066"
+        },
+        "timingSamples": [
+          {
+            "case": "pair1",
+            "profile": "fresh-storage",
+            "timesMs": {
+              "news-held": 1780,
+              "nws-admitted": 1780,
+              "warning-processed": 1856,
+              "interactive-promise": 1782,
+              "intro-gone": 7747,
+              "first-keyboard-action": 7891,
+              "eligible-route-probed": 10036,
+              "release-news": 11959,
+              "shake-admitted": 1780,
+              "whole-wave": 11961
+            },
+            "earlyDelivery": true,
+            "activeAtProbe": 11,
+            "capturedAtPhase6": "nws-expiry",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)"
+          },
+          {
+            "case": "pair1",
+            "profile": "reused-storage",
+            "timesMs": {
+              "news-held": 1739,
+              "nws-admitted": 1739,
+              "warning-processed": 1797,
+              "interactive-promise": 1739,
+              "intro-gone": 13635,
+              "first-keyboard-action": 13819,
+              "eligible-route-probed": 19287,
+              "release-news": 21982,
+              "shake-admitted": 1739,
+              "whole-wave": 21984
+            },
+            "earlyDelivery": true,
+            "activeAtProbe": 11,
+            "capturedAtPhase6": "nws-expiry",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)"
+          },
+          {
+            "case": "pair2",
+            "profile": "fresh-storage",
+            "timesMs": {
+              "news-held": 1511,
+              "nws-admitted": 1511,
+              "warning-processed": 1581,
+              "interactive-promise": 1512,
+              "intro-gone": 7575,
+              "first-keyboard-action": 7677,
+              "eligible-route-probed": 9791,
+              "release-news": 11743,
+              "shake-admitted": 1511,
+              "whole-wave": 11745
+            },
+            "earlyDelivery": true,
+            "activeAtProbe": 11,
+            "capturedAtPhase6": "nws-expiry",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)"
+          },
+          {
+            "case": "pair2",
+            "profile": "reused-storage",
+            "timesMs": {
+              "news-held": 1363,
+              "nws-admitted": 1363,
+              "warning-processed": 1409,
+              "interactive-promise": 1364,
+              "intro-gone": 10291,
+              "first-keyboard-action": 10442,
+              "eligible-route-probed": 13323,
+              "release-news": 16321,
+              "shake-admitted": 1363,
+              "whole-wave": 16323
+            },
+            "earlyDelivery": true,
+            "activeAtProbe": 11,
+            "capturedAtPhase6": "nws-expiry",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)"
+          },
+          {
+            "case": "pair3",
+            "profile": "fresh-storage",
+            "timesMs": {
+              "news-held": 1430,
+              "nws-admitted": 1430,
+              "warning-processed": 1509,
+              "interactive-promise": 1431,
+              "intro-gone": 8030,
+              "first-keyboard-action": 8229,
+              "eligible-route-probed": 12036,
+              "release-news": 15170,
+              "shake-admitted": 1430,
+              "whole-wave": 15176
+            },
+            "earlyDelivery": true,
+            "activeAtProbe": 11,
+            "capturedAtPhase6": "nws-expiry",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)"
+          },
+          {
+            "case": "pair3",
+            "profile": "reused-storage",
+            "timesMs": {
+              "news-held": 3836,
+              "nws-admitted": 3836,
+              "warning-processed": 3910,
+              "interactive-promise": 3837,
+              "intro-gone": 9645,
+              "first-keyboard-action": 9800,
+              "eligible-route-probed": 13230,
+              "release-news": 16695,
+              "shake-admitted": 3836,
+              "whole-wave": 16702
+            },
+            "earlyDelivery": true,
+            "activeAtProbe": 11,
+            "capturedAtPhase6": "nws-expiry",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)"
+          }
+        ],
+        "controls": {
+          "cached": {
+            "first": {
+              "admissions": 11,
+              "interactive": true,
+              "newsDone": false,
+              "outbound": [
+                "[CRITICAL] qa-breaking while-held \u2014 QA"
+              ],
+              "overlayGone": true,
+              "panel": true,
+              "readyWhilePending": false,
+              "shake": true,
+              "source": {
+                "error": true,
+                "lastUpdate": null
+              },
+              "store": [
+                {
+                  "evidence": null,
+                  "expiry": null,
+                  "id": "nws-fixture-warning-cold"
+                }
+              ]
+            },
+            "after": {
+              "admissions": 88,
+              "interactive": true,
+              "newsDone": true,
+              "outbound": [
+                "[CRITICAL] qa-breaking while-held \u2014 QA",
+                "[CRITICAL] qa-breaking after-wave \u2014 QA"
+              ],
+              "overlayGone": true,
+              "panel": true,
+              "readyWhilePending": false,
+              "shake": true,
+              "source": {
+                "error": true,
+                "lastUpdate": null
+              },
+              "store": [
+                {
+                  "evidence": null,
+                  "expiry": null,
+                  "id": "nws-fixture-warning-cold"
+                }
+              ]
+            },
+            "checks": {
+              "ghostBlocked": true,
+              "noHeldReplay": true
+            }
+          },
+          "malformed": {
+            "first": {
+              "admissions": 11,
+              "interactive": true,
+              "newsDone": false,
+              "outbound": [
+                "[CRITICAL] qa-breaking while-held \u2014 QA"
+              ],
+              "overlayGone": true,
+              "panel": false,
+              "readyWhilePending": false,
+              "shake": true,
+              "source": {
+                "error": true,
+                "lastUpdate": null
+              },
+              "store": []
+            },
+            "after": {
+              "admissions": 88,
+              "interactive": true,
+              "newsDone": true,
+              "outbound": [
+                "[CRITICAL] qa-breaking while-held \u2014 QA",
+                "[CRITICAL] qa-breaking after-wave \u2014 QA"
+              ],
+              "overlayGone": true,
+              "panel": false,
+              "readyWhilePending": false,
+              "shake": true,
+              "source": {
+                "error": true,
+                "lastUpdate": null
+              },
+              "store": []
+            },
+            "checks": {
+              "ghostBlocked": true,
+              "noHeldReplay": true
+            }
+          },
+          "expired": {
+            "first": {
+              "admissions": 11,
+              "interactive": true,
+              "newsDone": false,
+              "outbound": [
+                "[CRITICAL] qa-breaking while-held \u2014 QA"
+              ],
+              "overlayGone": true,
+              "panel": true,
+              "readyWhilePending": false,
+              "shake": true,
+              "source": {
+                "error": false,
+                "lastUpdate": "2026-11-03T16:30:01.019Z"
+              },
+              "store": [
+                {
+                  "evidence": "nws-expiry",
+                  "expiry": 1793723340277,
+                  "id": "nws-fixture-warning-cold"
+                }
+              ]
+            },
+            "after": {
+              "admissions": 88,
+              "interactive": true,
+              "newsDone": true,
+              "outbound": [
+                "[CRITICAL] qa-breaking while-held \u2014 QA",
+                "[CRITICAL] qa-breaking after-wave \u2014 QA"
+              ],
+              "overlayGone": true,
+              "panel": true,
+              "readyWhilePending": false,
+              "shake": true,
+              "source": {
+                "error": false,
+                "lastUpdate": "2026-11-03T16:30:01.019Z"
+              },
+              "store": [
+                {
+                  "evidence": "nws-expiry",
+                  "expiry": 1793723340277,
+                  "id": "nws-fixture-warning-cold"
+                }
+              ]
+            },
+            "checks": {
+              "ghostBlocked": true,
+              "noHeldReplay": true
+            }
+          },
+          "unavailable": {
+            "first": {
+              "admissions": 11,
+              "interactive": true,
+              "newsDone": false,
+              "outbound": [
+                "[CRITICAL] qa-breaking while-held \u2014 QA"
+              ],
+              "overlayGone": true,
+              "panel": false,
+              "readyWhilePending": false,
+              "shake": true,
+              "source": {
+                "error": true,
+                "lastUpdate": null
+              },
+              "store": []
+            },
+            "after": {
+              "admissions": 88,
+              "interactive": true,
+              "newsDone": true,
+              "outbound": [
+                "[CRITICAL] qa-breaking while-held \u2014 QA",
+                "[CRITICAL] qa-breaking after-wave \u2014 QA"
+              ],
+              "overlayGone": true,
+              "panel": false,
+              "readyWhilePending": false,
+              "shake": true,
+              "source": {
+                "error": true,
+                "lastUpdate": null
+              },
+              "store": []
+            },
+            "checks": {
+              "ghostBlocked": true,
+              "noHeldReplay": true
+            }
+          },
+          "empty": {
+            "first": {
+              "admissions": 11,
+              "interactive": true,
+              "newsDone": false,
+              "outbound": [
+                "[CRITICAL] qa-breaking while-held \u2014 QA"
+              ],
+              "overlayGone": true,
+              "panel": false,
+              "readyWhilePending": false,
+              "shake": true,
+              "source": {
+                "error": false,
+                "lastUpdate": "2026-11-03T16:30:48.645Z"
+              },
+              "store": []
+            },
+            "after": {
+              "admissions": 88,
+              "interactive": true,
+              "newsDone": true,
+              "outbound": [
+                "[CRITICAL] qa-breaking while-held \u2014 QA",
+                "[CRITICAL] qa-breaking after-wave \u2014 QA"
+              ],
+              "overlayGone": true,
+              "panel": false,
+              "readyWhilePending": false,
+              "shake": true,
+              "source": {
+                "error": false,
+                "lastUpdate": "2026-11-03T16:30:48.645Z"
+              },
+              "store": []
+            },
+            "checks": {
+              "ghostBlocked": true,
+              "noHeldReplay": true
+            }
+          },
+          "first-run": {
+            "first": {
+              "admissions": 11,
+              "interactive": true,
+              "newsDone": false,
+              "outbound": [],
+              "overlayGone": true,
+              "panel": true,
+              "readyWhilePending": false,
+              "shake": true,
+              "source": {
+                "error": false,
+                "lastUpdate": "2026-11-03T16:31:10.505Z"
+              },
+              "store": [
+                {
+                  "evidence": "nws-expiry",
+                  "expiry": 1793727069731,
+                  "id": "nws-fixture-warning-cold"
+                }
+              ]
+            },
+            "after": {
+              "admissions": 88,
+              "interactive": true,
+              "newsDone": true,
+              "outbound": [
+                "[CRITICAL] qa-breaking after-wave \u2014 QA"
+              ],
+              "overlayGone": true,
+              "panel": true,
+              "readyWhilePending": false,
+              "shake": true,
+              "source": {
+                "error": false,
+                "lastUpdate": "2026-11-03T16:31:10.505Z"
+              },
+              "store": [
+                {
+                  "evidence": "nws-expiry",
+                  "expiry": 1793727069731,
+                  "id": "nws-fixture-warning-cold"
+                }
+              ]
+            },
+            "checks": {
+              "firstRunStep": {
+                "advanced": true,
+                "complete": false,
+                "focused": true
+              },
+              "ghostBlocked": true,
+              "noHeldReplay": true
+            }
+          },
+          "fatal": {
+            "actionable": "Reload workspace",
+            "alert": "Crystal Ball could not open this workspace."
+          }
+        },
+        "summary": {
+          "fresh-storage": {
+            "news-held": {
+              "n": 3,
+              "minimum": 1430,
+              "median": 1511,
+              "maximum": 1780
+            },
+            "nws-admitted": {
+              "n": 3,
+              "minimum": 1430,
+              "median": 1511,
+              "maximum": 1780
+            },
+            "warning-processed": {
+              "n": 3,
+              "minimum": 1509,
+              "median": 1581,
+              "maximum": 1856
+            },
+            "interactive-promise": {
+              "n": 3,
+              "minimum": 1431,
+              "median": 1512,
+              "maximum": 1782
+            },
+            "intro-gone": {
+              "n": 3,
+              "minimum": 7575,
+              "median": 7747,
+              "maximum": 8030
+            },
+            "first-keyboard-action": {
+              "n": 3,
+              "minimum": 7677,
+              "median": 7891,
+              "maximum": 8229
+            },
+            "eligible-route-probed": {
+              "n": 3,
+              "minimum": 9791,
+              "median": 10036,
+              "maximum": 12036
+            },
+            "release-news": {
+              "n": 3,
+              "minimum": 11743,
+              "median": 11959,
+              "maximum": 15170
+            },
+            "shake-admitted": {
+              "n": 3,
+              "minimum": 1430,
+              "median": 1511,
+              "maximum": 1780
+            },
+            "whole-wave": {
+              "n": 3,
+              "minimum": 11745,
+              "median": 11961,
+              "maximum": 15176
+            }
+          },
+          "reused-storage": {
+            "news-held": {
+              "n": 3,
+              "minimum": 1363,
+              "median": 1739,
+              "maximum": 3836
+            },
+            "nws-admitted": {
+              "n": 3,
+              "minimum": 1363,
+              "median": 1739,
+              "maximum": 3836
+            },
+            "warning-processed": {
+              "n": 3,
+              "minimum": 1409,
+              "median": 1797,
+              "maximum": 3910
+            },
+            "interactive-promise": {
+              "n": 3,
+              "minimum": 1364,
+              "median": 1739,
+              "maximum": 3837
+            },
+            "intro-gone": {
+              "n": 3,
+              "minimum": 9645,
+              "median": 10291,
+              "maximum": 13635
+            },
+            "first-keyboard-action": {
+              "n": 3,
+              "minimum": 9800,
+              "median": 10442,
+              "maximum": 13819
+            },
+            "eligible-route-probed": {
+              "n": 3,
+              "minimum": 13230,
+              "median": 13323,
+              "maximum": 19287
+            },
+            "release-news": {
+              "n": 3,
+              "minimum": 16321,
+              "median": 16695,
+              "maximum": 21982
+            },
+            "shake-admitted": {
+              "n": 3,
+              "minimum": 1363,
+              "median": 1739,
+              "maximum": 3836
+            },
+            "whole-wave": {
+              "n": 3,
+              "minimum": 16323,
+              "median": 16702,
+              "maximum": 21984
+            }
+          }
+        },
+        "hostSha256": "1c62e924cd42a056956d73d32230e389a523b06dba0137775e7211537bd2d846"
+      }
+    }
+  },
+  "nativePolicy": {
+    "hostConfiguredCspSha256": "e963ce01eb00b757264c9ae773098405c995e2e999048ec6d16a05dca54c2d67",
+    "staticFixtureHtmlSha256": "f61d4fac67146607c32abfbb39ccbeed3585c5ae2dfa56e3a7295f85b6a47006",
+    "incognito": true,
+    "signedHostCheckedAtLaunch": true,
+    "qaOnlyNativeCommand": "qa_result",
+    "hostSourceHashes": {
+      "index.html": "f61d4fac67146607c32abfbb39ccbeed3585c5ae2dfa56e3a7295f85b6a47006",
+      "setup.py": "0bdabee981eadce34949ff4861ec81d5b85dddfd63191808c1fe66d3c119f19f",
+      "bootstrap.sh": "1cd8a9c06ba3f28361112137c1540f0eeda9736b19081f413a1a7c640d26133d",
+      "main.rs": "e0b14aca6d7e9c662e7a76435fa65fcac3190086d6a11e1aa1ac5761a889bec9",
+      "guard.js": "3ec22938601c0d8673969a37c762127acf1b4ea66c9459e320801c7ece6fd752"
+    }
+  },
+  "reachableProductCommit": "7efdff90cd05a676f90cefa9e9c841b6a8464cc9",
+  "snapshotTree": "cb76564d4e101d2e145923d9f14ac6984f64ad0f",
+  "reachableTree": "cb76564d4e101d2e145923d9f14ac6984f64ad0f",
+  "allDifferentPaths": [],
+  "independentKeyboardTiming": {
+    "qualifier": "Companion input-first experiment. Each fresh browser process/context has onboarding marked complete to test an eligible workspace. Poll (35 ms target, event loop permitting) for the existing phase-5 events/URL wiring breadcrumb, which follows registration of search keyboard listeners. On desktop also wait for the actual vault DOM removal. Synchronously dispatch the Ctrl+K event and poll the real search DOM; neither attempt nor observed response waits for NWS, news completion, or the App.init promise. These times are the first triggered/observed action in this fixture, not an exact lower bound on input or physical key latency. News remains held until after keyboard/search, current NWS and an independent eligible route inspection. Timing may vary under concurrent builds.",
+    "guardSha256": "26b26cf0abd9494e38376b7f0779f0e782577e1211e3f6b8333fda9a6ffa7b35",
+    "stages": {
+      "baseline": {
+        "web": {
+          "receiptSha256": {
+            "pair1.json": "4ce8599be6b3a6004823499958e75762850d92709fe63494034e24e8753f3472",
+            "pair2.json": "47713dd1dab1b09e3335266141cdab5377ff6713934870fd0547b40c02a141a7",
+            "pair3.json": "3370f2b97bf391bb9ac961e6f6d515eed7d5357e8899bcca591745692053b8ec"
+          },
+          "samples": [
+            {
+              "profile": "fresh-storage",
+              "pair": 1,
+              "ms": {
+                "attempt-keyboard-action": 2348,
+                "first-keyboard-action": 2399,
+                "interactive-promise": 8715,
+                "nws-admitted": 1674,
+                "warning-processed": 5534,
+                "eligible-route-probed": 6333,
+                "release-news": 8707,
+                "whole-wave": 8710,
+                "shake-admitted": 8708
+              }
+            },
+            {
+              "profile": "reused-storage",
+              "pair": 1,
+              "ms": {
+                "attempt-keyboard-action": 6515,
+                "first-keyboard-action": 6538,
+                "interactive-promise": 8053,
+                "nws-admitted": 5576,
+                "warning-processed": 7157,
+                "eligible-route-probed": 7442,
+                "release-news": 8050,
+                "whole-wave": 8051,
+                "shake-admitted": 8051
+              }
+            },
+            {
+              "profile": "fresh-storage",
+              "pair": 2,
+              "ms": {
+                "attempt-keyboard-action": 2386,
+                "first-keyboard-action": 2416,
+                "interactive-promise": 4296,
+                "nws-admitted": 1792,
+                "warning-processed": 3298,
+                "eligible-route-probed": 3575,
+                "release-news": 4292,
+                "whole-wave": 4293,
+                "shake-admitted": 4292
+              }
+            },
+            {
+              "profile": "reused-storage",
+              "pair": 2,
+              "ms": {
+                "attempt-keyboard-action": 7692,
+                "first-keyboard-action": 7715,
+                "interactive-promise": 13018,
+                "nws-admitted": 7199,
+                "warning-processed": 9975,
+                "eligible-route-probed": 11576,
+                "release-news": 13000,
+                "whole-wave": 13002,
+                "shake-admitted": 13000
+              }
+            },
+            {
+              "profile": "fresh-storage",
+              "pair": 3,
+              "ms": {
+                "attempt-keyboard-action": 1557,
+                "first-keyboard-action": 1604,
+                "interactive-promise": 106223,
+                "nws-admitted": 1077,
+                "warning-processed": 3556,
+                "eligible-route-probed": 5076,
+                "release-news": 106189,
+                "whole-wave": 106204,
+                "shake-admitted": 106192
+              }
+            },
+            {
+              "profile": "reused-storage",
+              "pair": 3,
+              "ms": {
+                "attempt-keyboard-action": 4520,
+                "first-keyboard-action": 4536,
+                "interactive-promise": 10327,
+                "nws-admitted": 4046,
+                "warning-processed": 6932,
+                "eligible-route-probed": 7866,
+                "release-news": 10325,
+                "whole-wave": 10325,
+                "shake-admitted": 10325
+              }
+            }
+          ],
+          "summary": {
+            "fresh-storage": {
+              "attempt-keyboard-action": {
+                "n": 3,
+                "min": 1557,
+                "median": 2348,
+                "max": 2386
+              },
+              "first-keyboard-action": {
+                "n": 3,
+                "min": 1604,
+                "median": 2399,
+                "max": 2416
+              },
+              "interactive-promise": {
+                "n": 3,
+                "min": 4296,
+                "median": 8715,
+                "max": 106223
+              },
+              "nws-admitted": {
+                "n": 3,
+                "min": 1077,
+                "median": 1674,
+                "max": 1792
+              },
+              "warning-processed": {
+                "n": 3,
+                "min": 3298,
+                "median": 3556,
+                "max": 5534
+              },
+              "eligible-route-probed": {
+                "n": 3,
+                "min": 3575,
+                "median": 5076,
+                "max": 6333
+              },
+              "release-news": {
+                "n": 3,
+                "min": 4292,
+                "median": 8707,
+                "max": 106189
+              },
+              "whole-wave": {
+                "n": 3,
+                "min": 4293,
+                "median": 8710,
+                "max": 106204
+              },
+              "shake-admitted": {
+                "n": 3,
+                "min": 4292,
+                "median": 8708,
+                "max": 106192
+              }
+            },
+            "reused-storage": {
+              "attempt-keyboard-action": {
+                "n": 3,
+                "min": 4520,
+                "median": 6515,
+                "max": 7692
+              },
+              "first-keyboard-action": {
+                "n": 3,
+                "min": 4536,
+                "median": 6538,
+                "max": 7715
+              },
+              "interactive-promise": {
+                "n": 3,
+                "min": 8053,
+                "median": 10327,
+                "max": 13018
+              },
+              "nws-admitted": {
+                "n": 3,
+                "min": 4046,
+                "median": 5576,
+                "max": 7199
+              },
+              "warning-processed": {
+                "n": 3,
+                "min": 6932,
+                "median": 7157,
+                "max": 9975
+              },
+              "eligible-route-probed": {
+                "n": 3,
+                "min": 7442,
+                "median": 7866,
+                "max": 11576
+              },
+              "release-news": {
+                "n": 3,
+                "min": 8050,
+                "median": 10325,
+                "max": 13000
+              },
+              "whole-wave": {
+                "n": 3,
+                "min": 8051,
+                "median": 10325,
+                "max": 13002
+              },
+              "shake-admitted": {
+                "n": 3,
+                "min": 8051,
+                "median": 10325,
+                "max": 13000
+              }
+            }
+          },
+          "bundleFiles": {
+            "index.html": "f61d4fac67146607c32abfbb39ccbeed3585c5ae2dfa56e3a7295f85b6a47006",
+            "renderer.js": "17abc42bcab51f2529895d937d748b1d17190d909ce6d4ae90c31f3f3396ebb4",
+            "assets/main-_17RBDZc.js": "d007a6ca1549c7972caee60794167a9d33281bb26d6a8219c465abb7b0bcfdcf"
+          }
+        },
+        "desktop": {
+          "receiptSha256": {
+            "pair1.json": "91223ffda3425f0682237959a9be15fe9ce18b38be123bef1ff5c3a459550110",
+            "pair2.json": "03463ca3eb54d2a345ab7bc524c47dd28cf907d787be1a1b227ded9c3dcf8ddc",
+            "pair3.json": "46c9b72dfe00ca24d8a815dd807b7598ea9ef132a35770c3259ea3a14569eec3"
+          },
+          "samples": [
+            {
+              "profile": "fresh-storage",
+              "pair": 1,
+              "ms": {
+                "attempt-keyboard-action": 9973,
+                "first-keyboard-action": 10039,
+                "interactive-promise": 15716,
+                "nws-admitted": 2225,
+                "warning-processed": 2314,
+                "eligible-route-probed": 12918,
+                "release-news": 15703,
+                "whole-wave": 15710,
+                "intro-gone": 9968,
+                "shake-admitted": 15706
+              }
+            },
+            {
+              "profile": "reused-storage",
+              "pair": 1,
+              "ms": {
+                "attempt-keyboard-action": 10516,
+                "first-keyboard-action": 10620,
+                "interactive-promise": 15286,
+                "nws-admitted": 2949,
+                "warning-processed": 3023,
+                "eligible-route-probed": 12855,
+                "release-news": 15278,
+                "whole-wave": 15281,
+                "intro-gone": 10491,
+                "shake-admitted": 15279
+              }
+            },
+            {
+              "profile": "fresh-storage",
+              "pair": 2,
+              "ms": {
+                "attempt-keyboard-action": 11130,
+                "first-keyboard-action": 11177,
+                "interactive-promise": 17316,
+                "nws-admitted": 2899,
+                "warning-processed": 3011,
+                "eligible-route-probed": 14046,
+                "release-news": 17303,
+                "whole-wave": 17310,
+                "intro-gone": 11121,
+                "shake-admitted": 17308
+              }
+            },
+            {
+              "profile": "reused-storage",
+              "pair": 2,
+              "ms": {
+                "attempt-keyboard-action": 11316,
+                "first-keyboard-action": 11376,
+                "interactive-promise": 16600,
+                "nws-admitted": 2080,
+                "warning-processed": 2138,
+                "eligible-route-probed": 13935,
+                "release-news": 16592,
+                "whole-wave": 16596,
+                "intro-gone": 11299,
+                "shake-admitted": 16593
+              }
+            },
+            {
+              "profile": "fresh-storage",
+              "pair": 3,
+              "ms": {
+                "attempt-keyboard-action": 11009,
+                "first-keyboard-action": 11052,
+                "interactive-promise": 15526,
+                "nws-admitted": 2732,
+                "warning-processed": 2872,
+                "eligible-route-probed": 13358,
+                "release-news": 15520,
+                "whole-wave": 15522,
+                "intro-gone": 10972,
+                "shake-admitted": 15521
+              }
+            },
+            {
+              "profile": "reused-storage",
+              "pair": 3,
+              "ms": {
+                "attempt-keyboard-action": 10983,
+                "first-keyboard-action": 11036,
+                "interactive-promise": 19881,
+                "nws-admitted": 1541,
+                "warning-processed": 1615,
+                "eligible-route-probed": 16595,
+                "release-news": 19872,
+                "whole-wave": 19876,
+                "intro-gone": 10956,
+                "shake-admitted": 19875
+              }
+            }
+          ],
+          "summary": {
+            "fresh-storage": {
+              "attempt-keyboard-action": {
+                "n": 3,
+                "min": 9973,
+                "median": 11009,
+                "max": 11130
+              },
+              "first-keyboard-action": {
+                "n": 3,
+                "min": 10039,
+                "median": 11052,
+                "max": 11177
+              },
+              "interactive-promise": {
+                "n": 3,
+                "min": 15526,
+                "median": 15716,
+                "max": 17316
+              },
+              "nws-admitted": {
+                "n": 3,
+                "min": 2225,
+                "median": 2732,
+                "max": 2899
+              },
+              "warning-processed": {
+                "n": 3,
+                "min": 2314,
+                "median": 2872,
+                "max": 3011
+              },
+              "eligible-route-probed": {
+                "n": 3,
+                "min": 12918,
+                "median": 13358,
+                "max": 14046
+              },
+              "release-news": {
+                "n": 3,
+                "min": 15520,
+                "median": 15703,
+                "max": 17303
+              },
+              "whole-wave": {
+                "n": 3,
+                "min": 15522,
+                "median": 15710,
+                "max": 17310
+              },
+              "intro-gone": {
+                "n": 3,
+                "min": 9968,
+                "median": 10972,
+                "max": 11121
+              },
+              "shake-admitted": {
+                "n": 3,
+                "min": 15521,
+                "median": 15706,
+                "max": 17308
+              }
+            },
+            "reused-storage": {
+              "attempt-keyboard-action": {
+                "n": 3,
+                "min": 10516,
+                "median": 10983,
+                "max": 11316
+              },
+              "first-keyboard-action": {
+                "n": 3,
+                "min": 10620,
+                "median": 11036,
+                "max": 11376
+              },
+              "interactive-promise": {
+                "n": 3,
+                "min": 15286,
+                "median": 16600,
+                "max": 19881
+              },
+              "nws-admitted": {
+                "n": 3,
+                "min": 1541,
+                "median": 2080,
+                "max": 2949
+              },
+              "warning-processed": {
+                "n": 3,
+                "min": 1615,
+                "median": 2138,
+                "max": 3023
+              },
+              "eligible-route-probed": {
+                "n": 3,
+                "min": 12855,
+                "median": 13935,
+                "max": 16595
+              },
+              "release-news": {
+                "n": 3,
+                "min": 15278,
+                "median": 16592,
+                "max": 19872
+              },
+              "whole-wave": {
+                "n": 3,
+                "min": 15281,
+                "median": 16596,
+                "max": 19876
+              },
+              "intro-gone": {
+                "n": 3,
+                "min": 10491,
+                "median": 10956,
+                "max": 11299
+              },
+              "shake-admitted": {
+                "n": 3,
+                "min": 15279,
+                "median": 16593,
+                "max": 19875
+              }
+            }
+          },
+          "bundleFiles": {
+            "index.html": "f61d4fac67146607c32abfbb39ccbeed3585c5ae2dfa56e3a7295f85b6a47006",
+            "renderer.js": "ffdb1c783f30e4c3bdd6a53cb09cc1e22616c06bd7a0ba1f5b6f2175a12198f9",
+            "assets/main--VDTKzF9.js": "6efad63a59d6473b95b5c5619700547c522b9030dd3dd2d9e782b83bf4ab31ea"
+          }
+        }
+      },
+      "final": {
+        "web": {
+          "receiptSha256": {
+            "pair1.json": "defe1e49c5e0086b442f02e2efecc727279c66ba841a8a89c4bd4d0fb7405287",
+            "pair2.json": "4c9bf74c366f813c09c143ee55484a612955ed670628d8c6a7af5feb7086ef6d",
+            "pair3.json": "c2a5d1632dc59058c862a641818bff002ca689677b2eb8d6a722b8d8b5b87e36"
+          },
+          "samples": [
+            {
+              "profile": "fresh-storage",
+              "pair": 1,
+              "ms": {
+                "attempt-keyboard-action": 3043,
+                "first-keyboard-action": 3153,
+                "interactive-promise": 2214,
+                "nws-admitted": 2213,
+                "warning-processed": 4248,
+                "eligible-route-probed": 4575,
+                "release-news": 5378,
+                "whole-wave": 5379,
+                "shake-admitted": 2213
+              }
+            },
+            {
+              "profile": "reused-storage",
+              "pair": 1,
+              "ms": {
+                "attempt-keyboard-action": 4029,
+                "first-keyboard-action": 4046,
+                "interactive-promise": 3513,
+                "nws-admitted": 3512,
+                "warning-processed": 5821,
+                "eligible-route-probed": 7176,
+                "release-news": 8946,
+                "whole-wave": 8946,
+                "shake-admitted": 3512
+              }
+            },
+            {
+              "profile": "fresh-storage",
+              "pair": 2,
+              "ms": {
+                "attempt-keyboard-action": 1491,
+                "first-keyboard-action": 1507,
+                "interactive-promise": 1129,
+                "nws-admitted": 1128,
+                "warning-processed": 2853,
+                "eligible-route-probed": 3683,
+                "release-news": 4463,
+                "whole-wave": 4464,
+                "shake-admitted": 1128
+              }
+            },
+            {
+              "profile": "reused-storage",
+              "pair": 2,
+              "ms": {
+                "attempt-keyboard-action": 1577,
+                "first-keyboard-action": 1590,
+                "interactive-promise": 1254,
+                "nws-admitted": 1254,
+                "warning-processed": 2642,
+                "eligible-route-probed": 4031,
+                "release-news": 6958,
+                "whole-wave": 6959,
+                "shake-admitted": 1254
+              }
+            },
+            {
+              "profile": "fresh-storage",
+              "pair": 3,
+              "ms": {
+                "attempt-keyboard-action": 1400,
+                "first-keyboard-action": 1417,
+                "interactive-promise": 996,
+                "nws-admitted": 995,
+                "warning-processed": 2794,
+                "eligible-route-probed": 3670,
+                "release-news": 5988,
+                "whole-wave": 5988,
+                "shake-admitted": 995
+              }
+            },
+            {
+              "profile": "reused-storage",
+              "pair": 3,
+              "ms": {
+                "attempt-keyboard-action": 1246,
+                "first-keyboard-action": 1259,
+                "interactive-promise": 946,
+                "nws-admitted": 946,
+                "warning-processed": 2205,
+                "eligible-route-probed": 3128,
+                "release-news": 5863,
+                "whole-wave": 5864,
+                "shake-admitted": 946
+              }
+            }
+          ],
+          "summary": {
+            "fresh-storage": {
+              "attempt-keyboard-action": {
+                "n": 3,
+                "min": 1400,
+                "median": 1491,
+                "max": 3043
+              },
+              "first-keyboard-action": {
+                "n": 3,
+                "min": 1417,
+                "median": 1507,
+                "max": 3153
+              },
+              "interactive-promise": {
+                "n": 3,
+                "min": 996,
+                "median": 1129,
+                "max": 2214
+              },
+              "nws-admitted": {
+                "n": 3,
+                "min": 995,
+                "median": 1128,
+                "max": 2213
+              },
+              "warning-processed": {
+                "n": 3,
+                "min": 2794,
+                "median": 2853,
+                "max": 4248
+              },
+              "eligible-route-probed": {
+                "n": 3,
+                "min": 3670,
+                "median": 3683,
+                "max": 4575
+              },
+              "release-news": {
+                "n": 3,
+                "min": 4463,
+                "median": 5378,
+                "max": 5988
+              },
+              "whole-wave": {
+                "n": 3,
+                "min": 4464,
+                "median": 5379,
+                "max": 5988
+              },
+              "shake-admitted": {
+                "n": 3,
+                "min": 995,
+                "median": 1128,
+                "max": 2213
+              }
+            },
+            "reused-storage": {
+              "attempt-keyboard-action": {
+                "n": 3,
+                "min": 1246,
+                "median": 1577,
+                "max": 4029
+              },
+              "first-keyboard-action": {
+                "n": 3,
+                "min": 1259,
+                "median": 1590,
+                "max": 4046
+              },
+              "interactive-promise": {
+                "n": 3,
+                "min": 946,
+                "median": 1254,
+                "max": 3513
+              },
+              "nws-admitted": {
+                "n": 3,
+                "min": 946,
+                "median": 1254,
+                "max": 3512
+              },
+              "warning-processed": {
+                "n": 3,
+                "min": 2205,
+                "median": 2642,
+                "max": 5821
+              },
+              "eligible-route-probed": {
+                "n": 3,
+                "min": 3128,
+                "median": 4031,
+                "max": 7176
+              },
+              "release-news": {
+                "n": 3,
+                "min": 5863,
+                "median": 6958,
+                "max": 8946
+              },
+              "whole-wave": {
+                "n": 3,
+                "min": 5864,
+                "median": 6959,
+                "max": 8946
+              },
+              "shake-admitted": {
+                "n": 3,
+                "min": 946,
+                "median": 1254,
+                "max": 3512
+              }
+            }
+          },
+          "bundleFiles": {
+            "index.html": "f61d4fac67146607c32abfbb39ccbeed3585c5ae2dfa56e3a7295f85b6a47006",
+            "renderer.js": "45cca0788123a65a720aaa043297d0c7f471dbceb2c7c5216ac23292d4845cb8",
+            "assets/main-Cnd3itIB.js": "be9f793ae232a83bffe5574970e4c07b9ce395629b95bca4ad499713c51448a3"
+          }
+        },
+        "desktop": {
+          "receiptSha256": {
+            "pair1.json": "c5356e29910f3d4317a1f6addfc4b9732a4f4a8b2948d1d0a66b783a79b62071",
+            "pair2.json": "3e0688d64dfccf065eaceb60449554c565f08e2eb778aa6d18c64cdf5e646314",
+            "pair3.json": "3a99366b51626ba04df30c8a5cfb3077c0127b5d92f2ee3e8fac88377c0ae9f8"
+          },
+          "samples": [
+            {
+              "profile": "fresh-storage",
+              "pair": 1,
+              "ms": {
+                "attempt-keyboard-action": 7800,
+                "first-keyboard-action": 7833,
+                "interactive-promise": 1882,
+                "nws-admitted": 1881,
+                "warning-processed": 1961,
+                "eligible-route-probed": 9809,
+                "release-news": 11693,
+                "whole-wave": 11694,
+                "intro-gone": 7762,
+                "shake-admitted": 1881
+              }
+            },
+            {
+              "profile": "reused-storage",
+              "pair": 1,
+              "ms": {
+                "attempt-keyboard-action": 11974,
+                "first-keyboard-action": 12025,
+                "interactive-promise": 1297,
+                "nws-admitted": 1296,
+                "warning-processed": 1345,
+                "eligible-route-probed": 16926,
+                "release-news": 21445,
+                "whole-wave": 21449,
+                "intro-gone": 11930,
+                "shake-admitted": 1296
+              }
+            },
+            {
+              "profile": "fresh-storage",
+              "pair": 2,
+              "ms": {
+                "attempt-keyboard-action": 12998,
+                "first-keyboard-action": 13032,
+                "interactive-promise": 1311,
+                "nws-admitted": 1310,
+                "warning-processed": 1383,
+                "eligible-route-probed": 16862,
+                "release-news": 19314,
+                "whole-wave": 19316,
+                "intro-gone": 12959,
+                "shake-admitted": 1310
+              }
+            },
+            {
+              "profile": "reused-storage",
+              "pair": 2,
+              "ms": {
+                "attempt-keyboard-action": 11064,
+                "first-keyboard-action": 11095,
+                "interactive-promise": 1719,
+                "nws-admitted": 1718,
+                "warning-processed": 1777,
+                "eligible-route-probed": 13991,
+                "release-news": 16447,
+                "whole-wave": 16450,
+                "intro-gone": 11033,
+                "shake-admitted": 1718
+              }
+            },
+            {
+              "profile": "fresh-storage",
+              "pair": 3,
+              "ms": {
+                "attempt-keyboard-action": 8810,
+                "first-keyboard-action": 8842,
+                "interactive-promise": 1287,
+                "nws-admitted": 1285,
+                "warning-processed": 1356,
+                "eligible-route-probed": 11273,
+                "release-news": 13709,
+                "whole-wave": 13710,
+                "intro-gone": 8785,
+                "shake-admitted": 1285
+              }
+            },
+            {
+              "profile": "reused-storage",
+              "pair": 3,
+              "ms": {
+                "attempt-keyboard-action": 9286,
+                "first-keyboard-action": 9317,
+                "interactive-promise": 4091,
+                "nws-admitted": 4090,
+                "warning-processed": 4151,
+                "eligible-route-probed": 11129,
+                "release-news": 12956,
+                "whole-wave": 12957,
+                "intro-gone": 9262,
+                "shake-admitted": 4090
+              }
+            }
+          ],
+          "summary": {
+            "fresh-storage": {
+              "attempt-keyboard-action": {
+                "n": 3,
+                "min": 7800,
+                "median": 8810,
+                "max": 12998
+              },
+              "first-keyboard-action": {
+                "n": 3,
+                "min": 7833,
+                "median": 8842,
+                "max": 13032
+              },
+              "interactive-promise": {
+                "n": 3,
+                "min": 1287,
+                "median": 1311,
+                "max": 1882
+              },
+              "nws-admitted": {
+                "n": 3,
+                "min": 1285,
+                "median": 1310,
+                "max": 1881
+              },
+              "warning-processed": {
+                "n": 3,
+                "min": 1356,
+                "median": 1383,
+                "max": 1961
+              },
+              "eligible-route-probed": {
+                "n": 3,
+                "min": 9809,
+                "median": 11273,
+                "max": 16862
+              },
+              "release-news": {
+                "n": 3,
+                "min": 11693,
+                "median": 13709,
+                "max": 19314
+              },
+              "whole-wave": {
+                "n": 3,
+                "min": 11694,
+                "median": 13710,
+                "max": 19316
+              },
+              "intro-gone": {
+                "n": 3,
+                "min": 7762,
+                "median": 8785,
+                "max": 12959
+              },
+              "shake-admitted": {
+                "n": 3,
+                "min": 1285,
+                "median": 1310,
+                "max": 1881
+              }
+            },
+            "reused-storage": {
+              "attempt-keyboard-action": {
+                "n": 3,
+                "min": 9286,
+                "median": 11064,
+                "max": 11974
+              },
+              "first-keyboard-action": {
+                "n": 3,
+                "min": 9317,
+                "median": 11095,
+                "max": 12025
+              },
+              "interactive-promise": {
+                "n": 3,
+                "min": 1297,
+                "median": 1719,
+                "max": 4091
+              },
+              "nws-admitted": {
+                "n": 3,
+                "min": 1296,
+                "median": 1718,
+                "max": 4090
+              },
+              "warning-processed": {
+                "n": 3,
+                "min": 1345,
+                "median": 1777,
+                "max": 4151
+              },
+              "eligible-route-probed": {
+                "n": 3,
+                "min": 11129,
+                "median": 13991,
+                "max": 16926
+              },
+              "release-news": {
+                "n": 3,
+                "min": 12956,
+                "median": 16447,
+                "max": 21445
+              },
+              "whole-wave": {
+                "n": 3,
+                "min": 12957,
+                "median": 16450,
+                "max": 21449
+              },
+              "intro-gone": {
+                "n": 3,
+                "min": 9262,
+                "median": 11033,
+                "max": 11930
+              },
+              "shake-admitted": {
+                "n": 3,
+                "min": 1296,
+                "median": 1718,
+                "max": 4090
+              }
+            }
+          },
+          "bundleFiles": {
+            "index.html": "f61d4fac67146607c32abfbb39ccbeed3585c5ae2dfa56e3a7295f85b6a47006",
+            "renderer.js": "c5b3cbfcdbfd0750c1efe9ed83067fb85cb4df933589ce941239cd7afd808b78",
+            "assets/main-BlWSSJnY.js": "f3c95e359b6af28e461f086629a96e3826f2808cade060a69badf128a127c633"
+          }
+        }
+      }
+    }
+  }
+}

@@ -539,7 +539,11 @@ to refresh, not immutable acceptance thresholds.
 
 Dependencies: UX-017
 
+Status: MONITOR — HIGH ASSURANCE
 Priority: A
+Review after: 2026-11-14
+Exit condition: Seven consecutive scheduled passes with real eligible opportunities and zero eligible overdue outcomes, classified late causes, improved direct-label coverage in comparable cohorts, and accounting for every proxy or unresolved outcome.
+Evidence: #1853 — [local resolver verification](validation/UX-018-RESOLVER-RUNS.md). Seven scheduled production passes and comparable direct-label coverage remain pending.
 
 - **Change surface:** `src/services/intelligence/prediction-resolver.ts`,
   `prediction-resolution-cadence.ts`, `outcome-resolvers.ts`, and the resolution
@@ -900,16 +904,19 @@ source-fusion program, requiring domain evidence before tolerance changes.
 
 ### UX-033 — Keep content reachable during stacked warnings
 
-Status: NOT STARTED
+Status: MONITOR
+Exit condition: Verify stacked-warning scrolling, keyboard actions, content/navigation reachability and resize/dismiss behavior in installed macOS/WebKit; retain the validated bounded cap.
+Review after: 2026-11-21
 Priority: S
 Source findings: PR1731 H1.
+Implementation update (2026-11-07): PR #1839 caps the measured warning shelf at 40% of the viewport remaining below EEW. Chromium geometry: 5 pass / 0 fail; clean-tree mutation: 0 pass / 5 fail; summary-strip: 8 pass / 0 fail; weather: 411 pass / 0 fail. Full agentic gate passed. The bounded code slice passed independent Sonnet review; installed macOS/WebKit acceptance remains open. MONITOR records the validated slice, not native acceptance or overall completion. Evidence: [UX-033-WARNING-STACK-CAP.md](validation/UX-033-WARNING-STACK-CAP.md).
 
 Acceptance: Cap the measured notification stack and its reserved space together. At small window sizes, stacked warnings remain scrollable while content and navigation remain reachable.
 
 ### UX-034 — Assign ownership of top-of-window surfaces
 
 Status: MONITOR — partial layout prerequisite in #1730
-Evidence: #1730 — measured posture row, corrected offsets and data-center strip styling.
+Evidence: #1730 — measured posture row, corrected offsets and data-center strip styling. Draft PR #1861 — bounded shelf-follow repair on actual main `5b08d9e8`: [UX034-BREAKING-STACK-FOLLOW.md](validation/UX034-BREAKING-STACK-FOLLOW.md). Qualified `ab0725e3a` tests/build/lint and mutation evidence are reused by verified exact input/build continuity, not fresh full executions; UX044 and UX033 cap remain preserved and browser coverage stays in existing Accessibility CI. Source `b82ae87f` received a genuine zero-blocker Sonnet review; this candidate-evidence metadata correction requires fresh review and hosted checks. Native/full-app/broader-rail acceptance remains open.
 Exit condition: Complete the top-of-window rail inventory and verify remaining overlap and native macOS/WebKit acceptance; keep UX-033 stack-height capping separate.
 Reviewed 2026-10-16: PR #1730 and the merged Settings layering/scroll prerequisite #1801 leave the full top-of-window rail inventory, remaining overlap acceptance and Bradley's native macOS/WebKit verification open; UX-033 stack-height capping remains separate. The date below is a provisional manual progress check, not an acceptance forecast; on actual completion evidence, record the UTC assessment date and refresh any outstanding reminder to at most 30 days later, before merge if stale.
 Review after: 2026-11-15
@@ -919,9 +926,15 @@ Acceptance: Inventory each rail as measured content or an intentional overlay; v
 
 ### UX-035 — Gate background panel work by actual need
 
-Status: NOT STARTED — HIGH ASSURANCE
+Status: MONITOR — HIGH ASSURANCE
 Priority: B
+Review after: 2026-11-14
+Exit condition: Document native background/foreground and broader application acceptance after separately authorized delivery; until then retain the bounded two-panel scope and open acceptance.
 Source findings: PR1731 H3.
+
+Landed: [#1859](https://github.com/bradleybond512/crystal-ball/pull/1859) at `8bc006af2f80fdebb6398917c60b39d9797980b4` on 2026-11-07. [Design](plans/2026-11-06-ux035-hidden-presentation.md). Scope is the two profiled Alert Fatigue and Correlation Map presentation timers; broader application acceptance remains open. The reviewed two-panel code slice is merged. Installation, tags, releases, build dispatch and deployment remain paused.
+
+Evidence: [Local QA, profile and browser results](validation/UX-035-HIDDEN-PRESENTATION.md): 45 selected suites passed, 19 behavior mutations caught; three matched profiles reduce invisible builds from 200 to zero with one queued recovery. Native background and application-wide acceptance remain open.
 
 Acceptance: Profile foreground/background behavior before selecting panels. Reduce invisible presentation work while preserving safety monitoring and data dependencies; do not blanket-disable off-screen acquisition.
 
@@ -943,7 +956,7 @@ Acceptance: Inventory intentional stacking contexts and introduce a reviewed rat
 
 ### UX-038 — Constrain video-channel link construction
 
-Status: NOT STARTED — HIGH ASSURANCE
+Status: DONE — HIGH ASSURANCE; PR #1840 — fixed-origin error-link helper, behavioral tests and mutation proofs ([QA](validation/UX-038-LINK-SAFETY.md))
 Priority: S
 Source findings: PR1731 L1.
 
@@ -998,7 +1011,10 @@ Acceptance: Measure fan-out cost and update subscriber contracts without losing 
 
 ### UX-044 — Announce critical UI changes accessibly
 
-Status: NOT STARTED
+Status: MONITOR
+Evidence: #1854 — [browser and native verification](validation/UX-044-CRITICAL-ANNOUNCEMENTS.md). Candidate implementation only; manual VoiceOver/NVDA spoken-output and final macOS accessibility-notification acceptance remain open.
+Review after: 2026-11-08
+Exit condition: Record actual screen-reader spoken-output and final macOS accessibility-notification acceptance for the identified surfaces, including suppression, repeat updates and keyboard focus.
 Priority: A
 Source findings: PR1731 L3.
 
@@ -1031,7 +1047,15 @@ Implementation, local gates and independent substantive review pass. Final integ
 
 ### UX-047 — Keep national weather warnings current
 
-Status: NOT STARTED — HIGH ASSURANCE
+Status: MONITOR — HIGH ASSURANCE
+Owner: Codex (`codex/ux047-warning-freshness-nov1`); draft claim #1844.
+Approval: November 2 UTC; complete national snapshots, five-minute base refresh,
+offline/restart lifecycle and preserved history/user state.
+Design: [approved implementation plan](plans/2026-11-02-ux047-national-warning-lifecycle.md).
+Evidence: #1844 — [local validation, 57 mutation proofs and review](validation/UX-047-NATIONAL-WARNINGS.md). [Native port-collision repair and acceptance](validation/UX-047-FALLBACK-PORTS.md) cover acquisition, restart and range exhaustion on the repaired checkpoint.
+Review after: 2026-11-14
+Candidate evidence PR #1844; local integration validation and independent review govern merge. Historical isolated native receipts do not establish final integrated installed-app acceptance.
+Exit condition: Verify the integrated packaged app across offline expiry/restart and normal startup, preserving user state; installation, release and deployment remain paused.
 Priority: S
 Source findings: PR1731 H12/H13/H14.
 
@@ -1051,19 +1075,31 @@ Evidence: #1740 — [live contract, regression and mutation results](validation/
 
 ### UX-049 — Distinguish quiet sensors from missing observations
 
-Status: NOT STARTED — HIGH ASSURANCE
+Status: DONE — HIGH ASSURANCE
 Priority: S
 Source findings: PR1731 H21.
 
+Claim: #1845 (`codex/ux049-sensor-coverage`).
+
+[Approved coverage design and reproduced failure](plans/2026-11-02-ux049-threat-sensor-coverage.md). Bradley approved the four-source implementation on November 2, 2026.
+
 Acceptance: Carry real observation/fetch age and coverage into threat summaries. A failed or stale domain cannot become a freshly checked quiet sensor because aggregation ran. Check all-domain reassurance and partial coverage.
+
+Evidence: #1845 — [verification, source coverage and live probe limits](validation/UX-049-THREAT-COVERAGE.md). Local implementation and validation cover the approved four sources. Final review and required CI govern delivery.
 
 ### UX-050 — Make Ghost Mode suppression unmistakable
 
-Status: NOT STARTED — HIGH ASSURANCE
+Status: MONITOR — HIGH ASSURANCE
+Review after: 2026-11-14
+Exit condition: Verify shared suppression state, unknown-preference hold and notice accounting in the final integrated packaged app after separately authorized delivery. Historical isolated renderer receipts remain feature-head evidence.
 Priority: S
 Source findings: PR1731 H20.
 
+Claim: #1846. Bradley approved the [critical-notification policy and implementation design](plans/2026-11-02-ux050-ghost-suppression.md) on November 2, 2026.
+
 Acceptance: Approve explicit policy for critical alerts versus privacy/silence preferences; show persistent mode and suppression accounting. Do not silently bypass an existing user-selected privacy mode.
+
+Evidence: #1846 — [Ghost Mode behavior, verification and limitations](validation/UX-050-GHOST-MODE.md). Local acceptance covers the shared dispatcher, eligible analyst nudges and both shell notices. Final review and CI govern delivery.
 
 ### UX-051 — Align RSS request budgets across boundaries
 
@@ -1075,31 +1111,39 @@ Acceptance: Bound total sidecar redirect/request time below the renderer budget 
 
 ### UX-052 — Restrain derived alert interruptions
 
-Status: NOT STARTED — HIGH ASSURANCE
+Status: MONITOR — HIGH ASSURANCE
+Review after: 2026-11-14
+Exit condition: Verify derived pacing and source-warning priority with shared Ghost suppression and warning retirement in the final integrated packaged app after separately authorized delivery.
 Priority: S
+Claim: [Draft PR #1847](https://github.com/bradleybond512/crystal-ball/pull/1847)
 Source findings: PR1731 H15 remainder.
 
 Acceptance: Separate derived-notification policy from authoritative warnings; define domain, cooldown, quiet-hour and burst accounting rules. Coordinate with ACC-509; do not change inference severity to mask delivery defects.
 
 ### UX-053 — Finish boot without awaiting all data sources
 
-Status: NOT STARTED — HIGH ASSURANCE
+Status: MONITOR — HIGH ASSURANCE
+Review after: 2026-11-14
+Exit condition: Verify final integrated packaged startup, early warning processing and cancellation with Ghost recovery; historical isolated timing receipts are not installed-app acceptance.
 Priority: S
+Claim: [Draft #1848](https://github.com/bradleybond512/crystal-ball/pull/1848)
 Source findings: PR1731 P0.
 
 Acceptance: Define usable first-screen readiness separately from background acquisition; preserve initialization dependencies and failure visibility. Measure cold/warm boot and warning readiness, not only completion of one promise.
 
 ### UX-054 — Cover subproject dependencies in security checks
 
-Status: NOT STARTED — HIGH ASSURANCE
+Status: DONE — HIGH ASSURANCE
 Priority: S
+Evidence: [#1849](https://github.com/bradleybond512/crystal-ball/pull/1849); [six-lock audit, adversarial controls and dependency assessment](validation/UX-054-DEPENDENCY-AUDIT.md). The candidate completes the bounded audit coverage; lower-severity findings remain visible, and external MCP pin hardening remains separate. No branch-protection, installation or delivery change is included.
 Source findings: PR1731 M10.
 
 Acceptance: Inventory all maintained lockfiles and exposed tools; add appropriately scoped audit coverage and resolve confirmed reachable issues without weakening thresholds.
 
 ### UX-055 — Surface stale credential validation honestly
 
-Status: NOT STARTED — HIGH ASSURANCE
+Status: DONE — HIGH ASSURANCE
+Evidence: candidate #1851 — [implementation, controlled verification and mutation results](validation/UX-055-CREDENTIAL-VALIDATION.md).
 Priority: S
 Source findings: PR1731 M11.
 
@@ -1125,7 +1169,10 @@ Acceptance: Inspect the six reported timer writers; remove redundant writes whil
 
 ### UX-058 — Account for deferred and updated warnings
 
-Status: NOT STARTED — HIGH ASSURANCE
+Status: MONITOR — HIGH ASSURANCE
+Review after: 2026-11-14
+Exit condition: Verify final integrated packaged held-warning accounting, permission cancellation and no replay across warning retirement and Ghost transitions; historical receipts are not installed-app acceptance.
+Evidence: #1852 — [implementation and verification](validation/UX-058-DEFERRED-WARNINGS.md); [local dependency integration](validation/UX-058-LOCAL-INTEGRATION.md).
 Priority: S
 Source findings: PR1731 H19 follow-up and UX-045 scope limits.
 
@@ -1236,7 +1283,7 @@ Update the row in the same PR that does the work.
 | UX-015 | New outage provider integration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-016 | Timeline controller + cursor wiring | NOT STARTED — HIGH ASSURANCE | — |
 | UX-017 | Complete Mac main-sync toolchain repair | DONE | #1693 |
-| UX-018 | Timely authoritative forecast resolution | NOT STARTED | — |
+| UX-018 | Timely authoritative forecast resolution | MONITOR — HIGH ASSURANCE | [Local evidence](validation/UX-018-RESOLVER-RUNS.md) · [Draft #1853](https://github.com/bradleybond512/crystal-ball/pull/1853) |
 | UX-019 | Safe forecast algorithm recalibration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-020 | Entity and analog evidence growth | NOT STARTED | — |
 | UX-021 | Optional-feed classification and recovery | WAITING | #1692 |
@@ -1247,30 +1294,30 @@ Update the row in the same PR that does the work.
 | UX-027 | Evidence-scoped Home reassurance | DONE | #1707 |
 | UX-031 | Reliable system appearance lifecycle | MONITOR | #1720 |
 | UX-032 | Settings keyboard containment | MONITOR | #1723 |
-| UX-033 | Keep content reachable during stacked warnings | NOT STARTED | — |
-| UX-034 | Assign ownership of top-of-window surfaces | MONITOR | #1730 |
-| UX-035 | Gate background panel work by actual need | NOT STARTED — HIGH ASSURANCE | — |
+| UX-033 | Keep content reachable during stacked warnings | MONITOR | #1839 — bounded cap and Chromium geometry validated; installed macOS/WebKit acceptance remains open. |
+| UX-034 | Assign ownership of top-of-window surfaces | MONITOR | #1730, #1861 |
+| UX-035 | Gate background panel work by actual need | MONITOR — HIGH ASSURANCE | #1859 merged; bounded two-panel slice validated ([QA](validation/UX-035-HIDDEN-PRESENTATION.md)). Native background and broader acceptance remain open; installation/release/deployment paused. |
 | UX-036 | Spread refresh work and honor battery policy | NOT STARTED — HIGH ASSURANCE | — |
 | UX-037 | Prevent new unowned stacking levels | NOT STARTED | — |
-| UX-038 | Constrain video-channel link construction | NOT STARTED — HIGH ASSURANCE | — |
+| UX-038 | Constrain video-channel link construction | DONE — HIGH ASSURANCE | PR #1840 — two fixed-origin error links; 12 behavioral/helper tests, 46 HLS regressions, five clean-tree mutations and full validation ([QA](validation/UX-038-LINK-SAFETY.md)). |
 | UX-040 | Expose unavailable and stale feed outcomes | MONITOR — HIGH ASSURANCE | #1841 — merged bounded news/status slice; broader acceptance remains open |
 | UX-042 | Construct panels when needed without losing coverage | MONITOR | #1714 |
 | UX-043 | Reduce repeated alert subscriber scans | NOT STARTED | — |
-| UX-044 | Announce critical UI changes accessibly | NOT STARTED | — |
+| UX-044 | Announce critical UI changes accessibly | MONITOR | [Evidence](validation/UX-044-CRITICAL-ANNOUNCEMENTS.md) · [Draft #1854](https://github.com/bradleybond512/crystal-ball/pull/1854) |
 | UX-045 | Keep advisories from suppressing warnings | DONE | #1733 |
 | UX-046 | Preserve alert priorities at capacity | DONE — HIGH ASSURANCE | #1734 |
-| UX-047 | Keep national weather warnings current | NOT STARTED — HIGH ASSURANCE | — |
+| UX-047 | Keep national weather warnings current | MONITOR — HIGH ASSURANCE | #1844 candidate evidence; [local validation](validation/UX-047-NATIONAL-WARNINGS.md) and [historical isolated native receipts](validation/UX-047-FALLBACK-PORTS.md). Integrated packaged acceptance remains open; installation/release/deployment paused. |
 | UX-048 | Restore verified GDACS ingestion | DONE — HIGH ASSURANCE | #1740 — approved five-feed repair; [validation](validation/UX-048-GDACS.md) and [alert burst performance evidence](validation/UX-048-PERFORMANCE.md); final review/CI govern delivery |
-| UX-049 | Distinguish quiet sensors from missing observations | NOT STARTED — HIGH ASSURANCE | — |
-| UX-050 | Make Ghost Mode suppression unmistakable | NOT STARTED — HIGH ASSURANCE | — |
+| UX-049 | Distinguish quiet sensors from missing observations | DONE — HIGH ASSURANCE | #1845 — [Evidence and verified scope](validation/UX-049-THREAT-COVERAGE.md) |
+| UX-050 | Make Ghost Mode suppression unmistakable | MONITOR — HIGH ASSURANCE | #1846 candidate evidence — [Verification and coverage](validation/UX-050-GHOST-MODE.md). Final integrated packaged acceptance remains open; installation/release/deployment paused. |
 | UX-051 | Align RSS request budgets across boundaries | NOT STARTED — HIGH ASSURANCE | — |
-| UX-052 | Restrain derived alert interruptions | NOT STARTED — HIGH ASSURANCE | — |
-| UX-053 | Finish boot without awaiting all data sources | NOT STARTED — HIGH ASSURANCE | — |
-| UX-054 | Cover subproject dependencies in security checks | NOT STARTED — HIGH ASSURANCE | — |
-| UX-055 | Surface stale credential validation honestly | NOT STARTED — HIGH ASSURANCE | — |
+| UX-052 | Restrain derived alert interruptions | MONITOR — HIGH ASSURANCE | #1847 candidate evidence; [validation and integration evidence](validation/UX-052-DERIVED-ALERTS.md). Final integrated packaged acceptance open; installation/release/deployment paused. |
+| UX-053 | Finish boot without awaiting all data sources | MONITOR — HIGH ASSURANCE | #1848 candidate evidence; [startup timings, tests and integration](validation/UX-053-BOOT-READINESS.md). Final integrated packaged acceptance open; installation/release/deployment paused. |
+| UX-054 | Cover subproject dependencies in security checks | DONE — HIGH ASSURANCE | #1849; [audit coverage and evidence](validation/UX-054-DEPENDENCY-AUDIT.md). Six npm locks covered; high-severity marketing fixes verified. External MCP pins remain separate. |
+| UX-055 | Surface stale credential validation honestly | DONE — HIGH ASSURANCE | [Evidence](validation/UX-055-CREDENTIAL-VALIDATION.md) · [Candidate #1851](https://github.com/bradleybond512/crystal-ball/pull/1851) |
 | UX-056 | Bound retained storage without losing user evidence | NOT STARTED — HIGH ASSURANCE | — |
 | UX-057 | Persist panel state only when it changes | NOT STARTED | — |
-| UX-058 | Account for deferred and updated warnings | NOT STARTED — HIGH ASSURANCE | — |
+| UX-058 | Account for deferred and updated warnings | MONITOR — HIGH ASSURANCE | [Evidence](validation/UX-058-DEFERRED-WARNINGS.md) · [Draft #1852](https://github.com/bradleybond512/crystal-ball/pull/1852) |
 | UX-059 | Retain active alerts using authoritative lifecycle evidence | DONE | #1739; [evidence](validation/UX-059-RETENTION.md); ACC-509 integration hold |
 | UX-060 | Preserve onboarding keyboard ownership against proactive digest | DONE | #1735 |
 | UX-061 | Truthful, restrained map presentation | DONE | #1802; [bounded evidence](validation/MAP-CLARITY-CLEANUP.md); native acceptance recorded separately |

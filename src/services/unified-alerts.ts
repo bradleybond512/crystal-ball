@@ -8,11 +8,17 @@
 
 import type { EvidencePack } from './evidence-pack';
 import { alertDB } from './alert-store';
-import { notificationDispatcher, actionForSeverity } from './notification-dispatcher';
+import { WarningInboxSession } from './warning-inbox-session';
+import { notificationDispatcher, actionForSeverity, type NotificationAction } from './notification-dispatcher';
 import type { AlertExplanation } from './intelligence/explainer';
 import { createIdentityLedger, hydrateIdentityLedger, identifyAlert } from './alert-identity';
 import { mergeAlertRetentionEvidence, shouldRetainAlert, validateAlertRetentionEvidence } from './alert-retention';
 import type { AlertRetentionEvidence } from './alert-retention';
+import { normalizeNWSAlert } from './alert-normalizer';
+import { MAX_NWS_SNAPSHOT_ALERTS } from './nws-alert-snapshot';
+import type { NWSAlert, NWSAlertSnapshot } from './nws-alert-snapshot';
+import { nwsOperationalState, prepareNwsLifecycle, validateNwsLifecycleState } from './nws-alert-lifecycle';
+import type { NwsLifecycleMember, NwsLifecycleState, NwsOperationalState } from './nws-alert-lifecycle';
 
 export type AlertSource =
   | 'breaking-news'
@@ -132,6 +138,12 @@ const STORAGE_KEY = 'wm-unified-alerts-v2';
 const USER_LOCATION_KEY = 'crystalball-user-location';
 const MAX_ALERTS = 500;
 
+interface AlertIngestOptions {
+  live?: boolean;
+  stillEligible?: () => boolean;
+  action?: NotificationAction;
+}
+
 interface AlertIdentityState {
   notificationConsidered: boolean;
   acknowledged: boolean;
@@ -239,6 +251,7 @@ function stampDistances(alerts: UnifiedAlert[]): void {
  */
 class UnifiedAlertStore {
   private alerts = new Map<string, UnifiedAlert>();
+  private readonly warningSession = new WarningInboxSession(MAX_ALERTS);
   private identities = createIdentityLedger(isIdentityState);
   private identityLimits: Parameters<typeof createIdentityLedger>[1];
   private lastPersisted: string | undefined;
@@ -255,11 +268,23 @@ class UnifiedAlertStore {
   private notifyTimer: ReturnType<typeof setTimeout> | null = null;
   private notifyDirty = false;
   private lastNotifyAt = 0;
+  private nwsLifecycle: NwsLifecycleState | null = null;
+  private nwsMembers: Map<string, NwsLifecycleMember> | null = null;
+  private nwsExpiryDeadlines: number[] = [];
+  private nwsExpiryCursor = 0;
+  private nwsExpiryTimer: ReturnType<typeof setTimeout> | null = null;
+  private nwsLifecycleRunning = false;
+  private nwsLifecycleInitialized = false;
+  private readonly onNwsVisibility = () => {
+    if (document.visibilityState !== 'hidden') this.checkNwsExpiry();
+  };
 
   constructor(options: { identityLimits?: Exclude<Parameters<typeof createIdentityLedger>[1], undefined> } = {}) {
     this.identityLimits = options.identityLimits;
     this.identities = createIdentityLedger(isIdentityState, this.identityLimits);
     this.loadFromStorage();
+    this.refreshNwsExpiryDeadlines();
+    this.startNwsLifecycle();
     if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       const flush = () => this.flushNow();
       window.addEventListener('pagehide', flush);
@@ -386,7 +411,7 @@ class UnifiedAlertStore {
   }
 
   /** Add or update alerts. Deduplicates by id. Stamps distance, dispatches notifications for new alerts. */
-  ingest(incoming: UnifiedAlert[]): void {
+  ingest(incoming: UnifiedAlert[], options: AlertIngestOptions = {}): void {
     stampDistances(incoming);
     const now = Date.now();
     this.identities.expire(now);
@@ -396,16 +421,28 @@ class UnifiedAlertStore {
       if (identity) protectedKeys.add(identity.key);
     }
     let changed = false;
-    const newAlerts: UnifiedAlert[] = [];
+    const newAlerts: Array<{ alert: UnifiedAlert; guard: (afterPermission?: boolean) => boolean }> = [];
+    const admittedAlerts: UnifiedAlert[] = [];
     this.identities.withProtectedAdmissions(now, protectedKeys, (admit) => {
       for (const alert of incoming) {
+        if (alert.source === 'nws' && this.nwsMembers && this.getNwsOperationalState(alert, now) !== 'active') continue;
+        admittedAlerts.push(alert);
         const live = this.alerts.get(alert.id);
+        if (live && options.live === false) continue;
         const existing = live?.source === alert.source ? live : undefined;
+        if (live && (!existing || this.expiredWarning(live))) this.warningSession.remove(alert.id);
         const previousEvidence = validateAlertRetentionEvidence(alert.source, existing?.retentionEvidence, now);
         const incomingEvidence = validateAlertRetentionEvidence(alert.source, alert.retentionEvidence, now);
-        const olderIssuance = previousEvidence?.kind === 'nws-expiry' && incomingEvidence?.kind === 'nws-expiry'
-          && incomingEvidence.issuedAt < previousEvidence.issuedAt;
-        const keepExisting = existing && (alert.timestamp < existing.timestamp || olderIssuance);
+        const member = alert.source === 'nws' ? this.nwsMembers?.get(alert.id) : undefined;
+        const currentNwsEvidence = incomingEvidence?.kind === 'nws-expiry'
+          && incomingEvidence.observedAt === this.nwsLifecycle?.observedAt
+          && incomingEvidence.issuedAt === member?.issuedAt
+          && incomingEvidence.expiresAt === member?.expiresAt;
+        const nwsIssuances = previousEvidence?.kind === 'nws-expiry' && incomingEvidence?.kind === 'nws-expiry';
+        const keepExisting = existing && (nwsIssuances
+          ? incomingEvidence.issuedAt < previousEvidence.issuedAt
+            || (incomingEvidence.issuedAt === previousEvidence.issuedAt && existing.severity !== alert.severity)
+          : !currentNwsEvidence && alert.timestamp < existing.timestamp);
         const report = keepExisting ? existing : alert;
         let materialUnchanged = false;
         if (existing && previousEvidence && !incomingEvidence) {
@@ -415,8 +452,9 @@ class UnifiedAlertStore {
         }
         const retained = {
           ...withoutRetentionEvidence(report),
-          ...retentionFields(mergeAlertRetentionEvidence(alert.source, previousEvidence, incomingEvidence,
-            !!keepExisting || materialUnchanged, now)),
+          ...retentionFields(currentNwsEvidence ? incomingEvidence
+            : mergeAlertRetentionEvidence(alert.source, previousEvidence, incomingEvidence,
+              !!keepExisting || materialUnchanged, now)),
         };
         const identity = identifyAlert(retained);
         const previous = identity ? this.identities.get(identity.key) : undefined;
@@ -432,28 +470,73 @@ class UnifiedAlertStore {
         const considered = !!existing || previous?.value.notificationConsidered === true;
         if (identity) {
           const status = admit(identity, identityState(restored, true));
-          if (status === 'capacity') this.capacityFailures++;
-          else if (status === 'invalid') this.invalidIdentities++;
-          else {
+          if (status === 'capacity' || status === 'invalid') {
+            this.warningSession.remove(alert.id);
+            if (status === 'capacity') this.capacityFailures++;
+            else this.invalidIdentities++;
+          } else {
+            const live = options.live !== false && !keepExisting;
+            const issue = incomingEvidence?.kind === 'nws-expiry' ? incomingEvidence.issuedAt
+              : restored.source !== 'nws' && restored.timestamp <= now ? restored.timestamp : undefined;
+            if (this.expiredWarning(restored)) this.warningSession.remove(alert.id);
+            else this.warningSession.observe(restored, status === 'accepted', live, issue);
             if (status === 'duplicate' && !this.identities.updateValue(identity.key, identityState(restored, true))) this.capacityFailures++;
           }
         } else {
+          this.warningSession.remove(alert.id);
           this.invalidIdentities++;
         }
-        if (!existing && !considered) newAlerts.push(restored);
+        if (!existing && !considered) {
+          newAlerts.push({ alert: restored, guard: this.createNotificationGuard(restored) });
+        }
       }
     });
     if (changed) {
-      for (const alert of incoming) this.pendingArchive.push(alert);
+      for (const alert of admittedAlerts) this.pendingArchive.push(alert);
+      if (!this.nwsMembers && admittedAlerts.some(alert => alert.source === 'nws')) this.refreshNwsExpiryDeadlines();
       if (this.alerts.size > MAX_ALERTS * 2) this.prune();
       this.scheduleFlush();
     }
     // The complete data/identity envelope precedes consideration by the dispatcher.
     // A failed write preserves source-warning eligibility and in-memory deduplication.
     if (newAlerts.length > 0) this.persist();
-    for (const alert of newAlerts) {
-      notificationDispatcher.dispatchNotification(alert, actionForSeverity(alert.severity));
+    if (options.live === false) return;
+    for (const { alert, guard } of newAlerts) {
+      const eligible = (afterPermission = true) => guard(afterPermission) && (options.stillEligible?.() ?? true);
+      const result = notificationDispatcher.dispatchNotification(alert, options.action ?? actionForSeverity(alert.severity), eligible);
+      if (result === 'held-cooldown' && eligible()) this.warningSession.hold(alert);
     }
+  }
+
+  getHeldWarningCount(): number { return this.warningSession.heldCount; }
+
+  getDisposition(alert: UnifiedAlert) {
+    const current = this.alerts.get(alert.id);
+    if (!current || current.source !== alert.source) return;
+    if (this.expiredWarning(current)) {
+      this.warningSession.remove(alert.id);
+      return;
+    }
+    return this.warningSession.disposition(current);
+  }
+
+  private expiredWarning(alert: UnifiedAlert): boolean {
+    const evidence = alert.retentionEvidence;
+    return (evidence?.kind === 'nws-expiry' && evidence.expiresAt <= Date.now()) || !this.isOperationalAlert(alert);
+  }
+
+  private createNotificationGuard(alert: UnifiedAlert): (afterPermission?: boolean) => boolean {
+    const sameRevision = this.warningSession.guard(alert);
+    return (afterPermission = true) => {
+      const current = this.alerts.get(alert.id);
+      if (!current || current.source !== alert.source || current.acknowledged || this.expiredWarning(current)) return false;
+      if (current.snoozedUntil !== undefined && current.snoozedUntil > Date.now()) return false;
+      return sameRevision ? sameRevision() : !afterPermission && current === alert;
+    };
+  }
+
+  endNotificationSession(): void {
+    this.warningSession.reset();
   }
 
   getIdentityDiagnostics(): {
@@ -474,6 +557,136 @@ class UnifiedAlertStore {
 
   getAll(): UnifiedAlert[] {
     return [...this.alerts.values()];
+  }
+
+  getNwsObservedAt(): number | null {
+    return this.nwsLifecycle?.observedAt ?? null;
+  }
+
+  getNwsOperationalState(alert: UnifiedAlert, now = Date.now()): NwsOperationalState {
+    return nwsOperationalState(alert, this.nwsMembers, now);
+  }
+
+  isOperationalAlert(alert: UnifiedAlert, now = Date.now()): boolean {
+    return alert.source !== 'nws' || this.getNwsOperationalState(alert, now) !== 'inactive';
+  }
+
+  getOperationalAlerts(now = Date.now()): UnifiedAlert[] {
+    return this.getAll().filter(alert => this.isOperationalAlert(alert, now));
+  }
+
+  getOperationalNwsAlerts(snapshot: NWSAlertSnapshot, now = Date.now()): NWSAlert[] {
+    if (!snapshot || snapshot.schemaVersion !== 1 || snapshot.scope !== 'national-active'
+      || snapshot.completeness !== 'complete' || !Number.isSafeInteger(snapshot.observedAt)
+      || snapshot.observedAt < 0 || snapshot.observedAt > now || !Array.isArray(snapshot.alerts)
+      || snapshot.alerts.length > MAX_NWS_SNAPSHOT_ALERTS) return [];
+    const ids = new Set<string>();
+    const active: NWSAlert[] = [];
+    for (const alert of snapshot.alerts) {
+      if (!alert || typeof alert.id !== 'string' || !alert.id || ids.has(alert.id)
+        || alert.status !== 'Actual' || (alert.messageType !== 'Alert' && alert.messageType !== 'Update')) return [];
+      ids.add(alert.id);
+      const issuedAt = Date.parse(alert.sent);
+      const expiresAt = Date.parse(alert.expires);
+      if (!Number.isFinite(issuedAt) || !Number.isFinite(expiresAt)
+        || issuedAt > snapshot.observedAt || expiresAt <= issuedAt) return [];
+      if (expiresAt <= now) continue;
+      const member = this.nwsMembers?.get(`nws-${alert.id}`);
+      if (!this.nwsMembers || (member?.issuedAt === issuedAt && member.expiresAt === expiresAt)) active.push(alert);
+    }
+    return active;
+  }
+
+  reconcileNwsSnapshot(snapshot: NWSAlertSnapshot, options: AlertIngestOptions = {}): {
+    disposition: 'applied' | 'unchanged' | 'older' | 'invalid'; activeCount: number;
+  } {
+    const now = Date.now();
+    const currentActiveCount = () => this.nwsLifecycle?.members.filter(member => member.expiresAt > now).length ?? 0;
+    const prepared = prepareNwsLifecycle(snapshot, now);
+    if (!prepared) return { disposition: 'invalid', activeCount: currentActiveCount() };
+    if (this.nwsLifecycle) {
+      if (prepared.state.observedAt < this.nwsLifecycle.observedAt) {
+        return { disposition: 'older', activeCount: currentActiveCount() };
+      }
+      if (prepared.state.observedAt === this.nwsLifecycle.observedAt) {
+        return { disposition: JSON.stringify(prepared.state.members) === JSON.stringify(this.nwsLifecycle.members)
+          ? 'unchanged' : 'invalid', activeCount: currentActiveCount() };
+      }
+    }
+    this.setNwsLifecycle(prepared.state);
+    this.ingest(prepared.snapshot.alerts.map(alert => normalizeNWSAlert(alert, {
+      kind: 'verified-response', observedAt: prepared.state.observedAt,
+    })), options);
+    this.persist();
+    this.scheduleFlush();
+    this.armNwsExpiry();
+    return { disposition: 'applied', activeCount: currentActiveCount() };
+  }
+
+  private setNwsLifecycle(state: NwsLifecycleState): void {
+    this.nwsLifecycle = state;
+    this.nwsMembers = new Map(state.members.map(member => [member.id, member]));
+    for (const row of this.alerts.values()) if (!this.isOperationalAlert(row)) this.warningSession.remove(row.id);
+    this.refreshNwsExpiryDeadlines();
+  }
+
+  private refreshNwsExpiryDeadlines(): void {
+    const now = Date.now();
+    const expiries = this.nwsLifecycle ? this.nwsLifecycle.members.map(member => member.expiresAt)
+      : [...this.alerts.values()].flatMap(alert => {
+        const evidence = validateAlertRetentionEvidence(alert.source, alert.retentionEvidence, now);
+        return alert.source === 'nws' && evidence?.kind === 'nws-expiry' ? [evidence.expiresAt] : [];
+      });
+    this.nwsExpiryDeadlines = [...new Set(expiries)].sort((a, b) => a - b);
+    this.nwsExpiryCursor = 0;
+    this.advanceNwsExpiry(now);
+    this.armNwsExpiry();
+  }
+
+  private advanceNwsExpiry(now: number): boolean {
+    const prior = this.nwsExpiryCursor;
+    while (this.nwsExpiryCursor < this.nwsExpiryDeadlines.length
+      && this.nwsExpiryDeadlines[this.nwsExpiryCursor]! <= now) this.nwsExpiryCursor++;
+    return this.nwsExpiryCursor !== prior;
+  }
+
+  private checkNwsExpiry(): void {
+    if (!this.nwsLifecycleRunning) return;
+    if (this.advanceNwsExpiry(Date.now())) this.scheduleNotify();
+    this.armNwsExpiry();
+  }
+
+  private armNwsExpiry(): void {
+    if (this.nwsExpiryTimer !== null) clearTimeout(this.nwsExpiryTimer);
+    this.nwsExpiryTimer = null;
+    const next = this.nwsExpiryDeadlines[this.nwsExpiryCursor];
+    if (!this.nwsLifecycleRunning || next === undefined) return;
+    this.nwsExpiryTimer = setTimeout(() => {
+      this.nwsExpiryTimer = null;
+      this.checkNwsExpiry();
+    }, Math.max(1, Math.min(60_000, next - Date.now())));
+    const timer = this.nwsExpiryTimer as ReturnType<typeof setTimeout> & { unref?: () => void };
+    timer.unref?.();
+  }
+
+  startNwsLifecycle(): void {
+    if (this.nwsLifecycleRunning) return;
+    this.nwsLifecycleRunning = true;
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+      document.addEventListener('visibilitychange', this.onNwsVisibility);
+    }
+    if (this.nwsLifecycleInitialized && this.advanceNwsExpiry(Date.now())) this.scheduleNotify();
+    this.nwsLifecycleInitialized = true;
+    this.armNwsExpiry();
+  }
+
+  stopNwsLifecycle(): void {
+    this.nwsLifecycleRunning = false;
+    if (this.nwsExpiryTimer !== null) clearTimeout(this.nwsExpiryTimer);
+    this.nwsExpiryTimer = null;
+    if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
+      document.removeEventListener('visibilitychange', this.onNwsVisibility);
+    }
   }
 
   getUnacknowledgedCount(): number {
@@ -524,6 +737,7 @@ class UnifiedAlertStore {
   snooze(id: string, ms: number): void {
     const alert = this.alerts.get(id);
     if (alert) {
+      this.warningSession.revoke(id);
       alert.snoozedUntil = Date.now() + ms;
       this.rememberUserState(alert);
       this.scheduleFlush();
@@ -554,8 +768,10 @@ class UnifiedAlertStore {
     const now = Date.now();
     // Remove old unpinned alerts
     for (const [id, alert] of this.alerts) {
+      if (this.expiredWarning(alert)) this.warningSession.remove(id);
       if (!shouldRetainAlert(alert, now)) {
         this.alerts.delete(id);
+        this.warningSession.remove(id);
       }
     }
     // Cap size — evict unpinned acknowledged, then unpinned unacknowledged, then pinned.
@@ -565,6 +781,7 @@ class UnifiedAlertStore {
       const toDrop = sorted.slice(0, sorted.length - MAX_ALERTS);
       for (const alert of toDrop) {
         this.alerts.delete(alert.id);
+        this.warningSession.remove(alert.id);
       }
     }
   }
@@ -574,6 +791,7 @@ class UnifiedAlertStore {
       this.identities.expire(Date.now());
       const serialized = JSON.stringify({
         version: 2, alerts: this.entriesForPersist(), identities: this.identities.snapshot(),
+        ...(this.nwsLifecycle ? { nwsLifecycle: this.nwsLifecycle } : {}),
       });
       if (serialized === this.lastPersisted && !this.storageFailure) return;
       localStorage.setItem(STORAGE_KEY, serialized);
@@ -614,6 +832,11 @@ class UnifiedAlertStore {
             && (parsed.identities as Record<string, unknown>).version === 1
             && Array.isArray((parsed.identities as Record<string, unknown>).entries)) {
             entries = parsed.alerts;
+            if (parsed.nwsLifecycle !== undefined) {
+              const lifecycle = validateNwsLifecycleState(parsed.nwsLifecycle, now);
+              if (lifecycle) this.setNwsLifecycle(lifecycle);
+              else this.storageFailure = true;
+            }
             this.identities = hydrateIdentityLedger(parsed.identities, now, isIdentityState, this.identityLimits);
             const rawEntries = (parsed.identities as { entries: unknown[] }).entries;
             const configuredAge = this.identityLimits?.maxAgeMs;

@@ -58,6 +58,16 @@ function input(overrides: Partial<BigEventInput> = {}): BigEventInput {
 
 // ── Dispatch path ──────────────────────────────────────────────────────
 
+test('inbox-owned weather proposal records its rung without claiming a system dispatch', () => {
+  const reg = createNotificationTraceRegistry({ now: () => NOW });
+  const decision = routeBigEventToLadder(reg, critical(), input(), { domain: 'weather', recordDispatch: false, now: () => NOW });
+  assert.equal(decision.eligibleForInbox, true);
+  assert.equal(decision.dispatched, false);
+  const entry = reg.get(decision.candidateId)!;
+  assert.equal(entry.decision, 'pending');
+  assert.equal(entry.events.at(-1)?.kind, 'rung_selected');
+});
+
 test('emergency tier → announcement rung, dispatched, registry sees full lifecycle', () => {
   resetNotificationLadderState();
   const reg = createNotificationTraceRegistry({ now: () => NOW });

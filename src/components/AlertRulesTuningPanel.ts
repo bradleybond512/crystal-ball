@@ -37,6 +37,7 @@ const DOMAIN_LABELS: Record<NotificationDomain, string> = {
   weather: 'Weather',
   cyber: 'Cyber',
   supply: 'Supply',
+  derived: 'Derived alerts',
 };
 
 const PRESETS: { id: AlertRulesPreset; label: string; description: string }[] = [

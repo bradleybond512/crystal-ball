@@ -1,0 +1,603 @@
+UX-035 mutation certificate
+Frozen revision: c2d55f49a084cce9dca2af6155fcc07d034bf820
+Proof worktree: /Users/bradleybond/.codex/worktrees/ux035-mutation-proof/crystalball
+Command for every baseline/mutant/restored run: /opt/homebrew/opt/node@22/bin/node --test --test-reporter=spec tests/panel-presentation.test.mjs
+Environment: PATH=/opt/homebrew/opt/node@22/bin:$PATH; TMPDIR canonicalized through realpath.
+Baseline: 21 pass / 0 fail
+Every mutation began with empty git status --short, matched exactly one source span, produced an inspected applied diff, restored exact shasum -a 256, and ended with empty git status --short. The runner asserts these before recording each successful case. All 21 applied diffs were also inspected after execution.
+
+01-alert-timer
+File: src/components/AlertFatigueDashboardPanel.ts
+Result: 21 pass / 0 fail -> 17 pass / 4 fail; exit 1
+Before: 738e4045b55d21f96ad71b881c6d7021c26017726a20f1be831426ebcad56494  src/components/AlertFatigueDashboardPanel.ts
+Restored: 738e4045b55d21f96ad71b881c6d7021c26017726a20f1be831426ebcad56494  src/components/AlertFatigueDashboardPanel.ts
+Applied diff: 01-alert-timer.diff; raw log: 01-alert-timer.log
+test at tests/panel-presentation.test.mjs:183:3
+✖ AlertFatigueDashboardPanel: constructor remains direct, including initially hidden documents (349.77825ms)
+  AssertionError [ERR_ASSERTION]: initial hidden document must suppress periodic computation
+  
+  201 !== 1
+test at tests/panel-presentation.test.mjs:197:3
+✖ AlertFatigueDashboardPanel: 200 visible callbacks compute 200 times, invisible stages compute zero and resume once (198.982583ms)
+  AssertionError [ERR_ASSERTION]: offscreen must not build HTML
+  
+  401 !== 201
+test at tests/panel-presentation.test.mjs:224:3
+✖ AlertFatigueDashboardPanel: destruction clears interval and rejects captured late timer and observer callbacks (159.833791ms)
+  AssertionError [ERR_ASSERTION]: destroyed panel must not execute captured or pending work
+  
+  3 !== 2
+test at tests/panel-presentation.test.mjs:389:1
+✖ Alert Fatigue resume reads newly recorded alerts and current rolling window, preserving escaped output (163.711959ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  2 !== 3
+
+02-correlation-timer
+File: src/components/CorrelationMapPanel.ts
+Result: 21 pass / 0 fail -> 17 pass / 4 fail; exit 1
+Before: 277ff73e06def7a496ec51b7d73b32f7eb5a506cbe456b66d0440e6b846348d7  src/components/CorrelationMapPanel.ts
+Restored: 277ff73e06def7a496ec51b7d73b32f7eb5a506cbe456b66d0440e6b846348d7  src/components/CorrelationMapPanel.ts
+Applied diff: 02-correlation-timer.diff; raw log: 02-correlation-timer.log
+test at tests/panel-presentation.test.mjs:183:3
+✖ CorrelationMapPanel: constructor remains direct, including initially hidden documents (411.117875ms)
+  AssertionError [ERR_ASSERTION]: initial hidden document must suppress periodic computation
+  
+  201 !== 1
+test at tests/panel-presentation.test.mjs:197:3
+✖ CorrelationMapPanel: 200 visible callbacks compute 200 times, invisible stages compute zero and resume once (621.06025ms)
+  AssertionError [ERR_ASSERTION]: offscreen must not build HTML
+  
+  401 !== 201
+test at tests/panel-presentation.test.mjs:224:3
+✖ CorrelationMapPanel: destruction clears interval and rejects captured late timer and observer callbacks (173.85275ms)
+  AssertionError [ERR_ASSERTION]: destroyed panel must not execute captured or pending work
+  
+  3 !== 2
+test at tests/panel-presentation.test.mjs:425:1
+✖ Correlation Map resumes current store rows and ages while preserving delegated expansion (191.433083ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  3 !== 4
+
+03-alert-opt-in
+File: src/components/AlertFatigueDashboardPanel.ts
+Result: 21 pass / 0 fail -> 18 pass / 3 fail; exit 1
+Before: 738e4045b55d21f96ad71b881c6d7021c26017726a20f1be831426ebcad56494  src/components/AlertFatigueDashboardPanel.ts
+Restored: 738e4045b55d21f96ad71b881c6d7021c26017726a20f1be831426ebcad56494  src/components/AlertFatigueDashboardPanel.ts
+Applied diff: 03-alert-opt-in.diff; raw log: 03-alert-opt-in.log
+test at tests/panel-presentation.test.mjs:183:3
+✖ AlertFatigueDashboardPanel: constructor remains direct, including initially hidden documents (352.9885ms)
+  AssertionError [ERR_ASSERTION]: initial hidden document must suppress periodic computation
+  
+  201 !== 1
+test at tests/panel-presentation.test.mjs:197:3
+✖ AlertFatigueDashboardPanel: 200 visible callbacks compute 200 times, invisible stages compute zero and resume once (176.731708ms)
+  AssertionError [ERR_ASSERTION]: background resume must drain exactly one refresh
+  
+  202 !== 203
+test at tests/panel-presentation.test.mjs:224:3
+✖ AlertFatigueDashboardPanel: destruction clears interval and rejects captured late timer and observer callbacks (158.520417ms)
+  AssertionError [ERR_ASSERTION]: destroyed panel must not execute captured or pending work
+  
+  2 !== 1
+
+04-correlation-opt-in
+File: src/components/CorrelationMapPanel.ts
+Result: 21 pass / 0 fail -> 18 pass / 3 fail; exit 1
+Before: 277ff73e06def7a496ec51b7d73b32f7eb5a506cbe456b66d0440e6b846348d7  src/components/CorrelationMapPanel.ts
+Restored: 277ff73e06def7a496ec51b7d73b32f7eb5a506cbe456b66d0440e6b846348d7  src/components/CorrelationMapPanel.ts
+Applied diff: 04-correlation-opt-in.diff; raw log: 04-correlation-opt-in.log
+test at tests/panel-presentation.test.mjs:183:3
+✖ CorrelationMapPanel: constructor remains direct, including initially hidden documents (415.019125ms)
+  AssertionError [ERR_ASSERTION]: initial hidden document must suppress periodic computation
+  
+  201 !== 1
+test at tests/panel-presentation.test.mjs:197:3
+✖ CorrelationMapPanel: 200 visible callbacks compute 200 times, invisible stages compute zero and resume once (410.811416ms)
+  AssertionError [ERR_ASSERTION]: background resume must drain exactly one refresh
+  
+  202 !== 203
+test at tests/panel-presentation.test.mjs:224:3
+✖ CorrelationMapPanel: destruction clears interval and rejects captured late timer and observer callbacks (173.334792ms)
+  AssertionError [ERR_ASSERTION]: destroyed panel must not execute captured or pending work
+  
+  2 !== 1
+
+05-document-eligibility
+File: src/components/Panel.ts
+Result: 21 pass / 0 fail -> 11 pass / 10 fail; exit 1
+Before: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Restored: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Applied diff: 05-document-eligibility.diff; raw log: 05-document-eligibility.log
+test at tests/panel-presentation.test.mjs:183:3
+✖ AlertFatigueDashboardPanel: constructor remains direct, including initially hidden documents (328.570875ms)
+  AssertionError [ERR_ASSERTION]: IO while backgrounded cannot drain
+  
+  2 !== 1
+test at tests/panel-presentation.test.mjs:197:3
+✖ AlertFatigueDashboardPanel: 200 visible callbacks compute 200 times, invisible stages compute zero and resume once (194.159167ms)
+  AssertionError [ERR_ASSERTION]: background must not build HTML
+  
+  402 !== 202
+test at tests/panel-presentation.test.mjs:183:3
+✖ CorrelationMapPanel: constructor remains direct, including initially hidden documents (189.967667ms)
+  AssertionError [ERR_ASSERTION]: IO while backgrounded cannot drain
+  
+  2 !== 1
+test at tests/panel-presentation.test.mjs:197:3
+✖ CorrelationMapPanel: 200 visible callbacks compute 200 times, invisible stages compute zero and resume once (614.329458ms)
+  AssertionError [ERR_ASSERTION]: background must not build HTML
+  
+  402 !== 202
+test at tests/panel-presentation.test.mjs:253:1
+✖ hidden IO waits for foreground and offscreen foreground waits for intersection (3.508208ms)
+  AssertionError [ERR_ASSERTION]: background IO must not run presentation
+  
+  1 !== 0
+test at tests/panel-presentation.test.mjs:274:1
+✖ disable before IO is immediate; show uses the last observation and current document visibility (6.3575ms)
+  AssertionError [ERR_ASSERTION]: show cannot override background document
+  
+  2 !== 1
+test at tests/panel-presentation.test.mjs:301:1
+✖ no-IO fallback still observes document and explicit visibility, including initial hidden state (3.934917ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + [
+  +   'initial'
+  + ]
+  - []
+test at tests/panel-presentation.test.mjs:317:1
+✖ a newly eligible callback supersedes older pending work before visibility event delivery (3.104458ms)
+  AssertionError [ERR_ASSERTION]: gate reads current visibility synchronously
+  + actual - expected
+  
+    [
+  +   'stale',
+      'current'
+    ]
+test at tests/panel-presentation.test.mjs:480:3
+✖ foreground drains isolate failure, do not retry on duplicate transitions, and recover on next request (2.88275ms)
+  Error: presentation failure
+test at tests/panel-presentation.test.mjs:498:1
+✖ foreground recovery keeps pending work isolated between two opted-in panels and one legacy panel (2.862125ms)
+  Error: first panel failed
+
+06-explicit-hidden
+File: src/components/Panel.ts
+Result: 21 pass / 0 fail -> 15 pass / 6 fail; exit 1
+Before: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Restored: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Applied diff: 06-explicit-hidden.diff; raw log: 06-explicit-hidden.log
+test at tests/panel-presentation.test.mjs:197:3
+✖ AlertFatigueDashboardPanel: 200 visible callbacks compute 200 times, invisible stages compute zero and resume once (193.2425ms)
+  AssertionError [ERR_ASSERTION]: disabled before IO must not build HTML
+  
+  403 !== 203
+test at tests/panel-presentation.test.mjs:197:3
+✖ CorrelationMapPanel: 200 visible callbacks compute 200 times, invisible stages compute zero and resume once (597.379083ms)
+  AssertionError [ERR_ASSERTION]: disabled before IO must not build HTML
+  
+  403 !== 203
+test at tests/panel-presentation.test.mjs:274:1
+✖ disable before IO is immediate; show uses the last observation and current document visibility (6.781375ms)
+  AssertionError [ERR_ASSERTION]: hidden class suppresses stale true IO
+  
+  1 !== 0
+test at tests/panel-presentation.test.mjs:301:1
+✖ no-IO fallback still observes document and explicit visibility, including initial hidden state (4.019083ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+      'initial',
+  +   'disabled'
+    ]
+test at tests/panel-presentation.test.mjs:333:1
+✖ drain clears pending before executing, retains reentrant replacement, and isolates callback errors (2.7535ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+      'first',
+  +   'reentrant'
+    ]
+test at tests/panel-presentation.test.mjs:480:3
+✖ show drains isolate failure, do not retry on duplicate transitions, and recover on next request (2.530916ms)
+  Error: presentation failure
+
+07-first-observation
+File: src/components/Panel.ts
+Result: 21 pass / 0 fail -> 20 pass / 1 fail; exit 1
+Before: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Restored: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Applied diff: 07-first-observation.diff; raw log: 07-first-observation.log
+test at tests/panel-presentation.test.mjs:240:1
+✖ opt-in waits for first IO result, keeps only latest callback, and drains once on first true delivery (4.406875ms)
+  AssertionError [ERR_ASSERTION]: optimistic intersection must not run work before observation
+  + actual - expected
+  
+  + [
+  +   'old',
+  +   'latest'
+  + ]
+  - []
+
+08-intersection
+File: src/components/Panel.ts
+Result: 21 pass / 0 fail -> 13 pass / 8 fail; exit 1
+Before: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Restored: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Applied diff: 08-intersection.diff; raw log: 08-intersection.log
+test at tests/panel-presentation.test.mjs:197:3
+✖ AlertFatigueDashboardPanel: 200 visible callbacks compute 200 times, invisible stages compute zero and resume once (197.441583ms)
+  AssertionError [ERR_ASSERTION]: offscreen must not build HTML
+  
+  401 !== 201
+test at tests/panel-presentation.test.mjs:197:3
+✖ CorrelationMapPanel: 200 visible callbacks compute 200 times, invisible stages compute zero and resume once (610.859625ms)
+  AssertionError [ERR_ASSERTION]: offscreen must not build HTML
+  
+  401 !== 201
+test at tests/panel-presentation.test.mjs:253:1
+✖ hidden IO waits for foreground and offscreen foreground waits for intersection (5.92275ms)
+  AssertionError [ERR_ASSERTION]: foreground cannot drain an offscreen panel
+  
+  2 !== 1
+test at tests/panel-presentation.test.mjs:274:1
+✖ disable before IO is immediate; show uses the last observation and current document visibility (4.092ms)
+  AssertionError [ERR_ASSERTION]: show cannot override last offscreen observation
+  
+  2 !== 1
+test at tests/panel-presentation.test.mjs:333:1
+✖ drain clears pending before executing, retains reentrant replacement, and isolates callback errors (2.617792ms)
+  Error: presentation failure
+test at tests/panel-presentation.test.mjs:354:1
+✖ destroy discards pending work and all direct, show, foreground and late IO paths stay inert (2.354ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  1 !== 0
+test at tests/panel-presentation.test.mjs:389:1
+✖ Alert Fatigue resume reads newly recorded alerts and current rolling window, preserving escaped output (155.900708ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  2 !== 3
+test at tests/panel-presentation.test.mjs:425:1
+✖ Correlation Map resumes current store rows and ages while preserving delegated expansion (189.214625ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  3 !== 4
+
+09-no-io-fallback
+File: src/components/Panel.ts
+Result: 21 pass / 0 fail -> 20 pass / 1 fail; exit 1
+Before: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Restored: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Applied diff: 09-no-io-fallback.diff; raw log: 09-no-io-fallback.log
+test at tests/panel-presentation.test.mjs:301:1
+✖ no-IO fallback still observes document and explicit visibility, including initial hidden state (4.794042ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + []
+  - [
+  -   'initial'
+  - ]
+
+10-io-drain
+File: src/components/Panel.ts
+Result: 21 pass / 0 fail -> 14 pass / 7 fail; exit 1
+Before: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Restored: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Applied diff: 10-io-drain.diff; raw log: 10-io-drain.log
+test at tests/panel-presentation.test.mjs:197:3
+✖ AlertFatigueDashboardPanel: 200 visible callbacks compute 200 times, invisible stages compute zero and resume once (180.412917ms)
+  AssertionError [ERR_ASSERTION]: offscreen resume must drain exactly one refresh
+  
+  201 !== 202
+test at tests/panel-presentation.test.mjs:197:3
+✖ CorrelationMapPanel: 200 visible callbacks compute 200 times, invisible stages compute zero and resume once (396.967459ms)
+  AssertionError [ERR_ASSERTION]: offscreen resume must drain exactly one refresh
+  
+  201 !== 202
+test at tests/panel-presentation.test.mjs:240:1
+✖ opt-in waits for first IO result, keeps only latest callback, and drains once on first true delivery (3.499875ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + []
+  - [
+  -   'latest'
+  - ]
+test at tests/panel-presentation.test.mjs:253:1
+✖ hidden IO waits for foreground and offscreen foreground waits for intersection (3.306709ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  1 !== 2
+test at tests/panel-presentation.test.mjs:333:1
+✖ drain clears pending before executing, retains reentrant replacement, and isolates callback errors (3.21875ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + []
+  - [
+  -   'first'
+  - ]
+test at tests/panel-presentation.test.mjs:389:1
+✖ Alert Fatigue resume reads newly recorded alerts and current rolling window, preserving escaped output (158.153542ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  1 !== 2
+test at tests/panel-presentation.test.mjs:425:1
+✖ Correlation Map resumes current store rows and ages while preserving delegated expansion (193.076666ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  2 !== 3
+
+11-foreground-drain
+File: src/components/Panel.ts
+Result: 21 pass / 0 fail -> 12 pass / 9 fail; exit 1
+Before: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Restored: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Applied diff: 11-foreground-drain.diff; raw log: 11-foreground-drain.log
+test at tests/panel-presentation.test.mjs:183:3
+✖ AlertFatigueDashboardPanel: constructor remains direct, including initially hidden documents (330.862458ms)
+  AssertionError [ERR_ASSERTION]: foreground must drain once without another IO event
+  
+  1 !== 2
+test at tests/panel-presentation.test.mjs:197:3
+✖ AlertFatigueDashboardPanel: 200 visible callbacks compute 200 times, invisible stages compute zero and resume once (177.185917ms)
+  AssertionError [ERR_ASSERTION]: background resume must drain exactly one refresh
+  
+  202 !== 203
+test at tests/panel-presentation.test.mjs:183:3
+✖ CorrelationMapPanel: constructor remains direct, including initially hidden documents (189.668ms)
+  AssertionError [ERR_ASSERTION]: foreground must drain once without another IO event
+  
+  1 !== 2
+test at tests/panel-presentation.test.mjs:197:3
+✖ CorrelationMapPanel: 200 visible callbacks compute 200 times, invisible stages compute zero and resume once (396.588041ms)
+  AssertionError [ERR_ASSERTION]: background resume must drain exactly one refresh
+  
+  202 !== 203
+test at tests/panel-presentation.test.mjs:253:1
+✖ hidden IO waits for foreground and offscreen foreground waits for intersection (2.762459ms)
+  AssertionError [ERR_ASSERTION]: foreground drains with no fresh IO
+  
+  0 !== 1
+test at tests/panel-presentation.test.mjs:274:1
+✖ disable before IO is immediate; show uses the last observation and current document visibility (6.325917ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  1 !== 2
+test at tests/panel-presentation.test.mjs:301:1
+✖ no-IO fallback still observes document and explicit visibility, including initial hidden state (4.061084ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + []
+  - [
+  -   'initial'
+  - ]
+test at tests/panel-presentation.test.mjs:480:3
+✖ foreground drains isolate failure, do not retry on duplicate transitions, and recover on next request (2.978791ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  0 !== 1
+test at tests/panel-presentation.test.mjs:498:1
+✖ foreground recovery keeps pending work isolated between two opted-in panels and one legacy panel (3.342959ms)
+  AssertionError [ERR_ASSERTION]: one failed panel cannot block another or drain legacy work
+  + actual - expected
+  
+  + []
+  - [
+  -   'first',
+  -   'second-latest'
+  - ]
+
+12-show-drain
+File: src/components/Panel.ts
+Result: 21 pass / 0 fail -> 15 pass / 6 fail; exit 1
+Before: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Restored: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Applied diff: 12-show-drain.diff; raw log: 12-show-drain.log
+test at tests/panel-presentation.test.mjs:197:3
+✖ AlertFatigueDashboardPanel: 200 visible callbacks compute 200 times, invisible stages compute zero and resume once (175.365584ms)
+  AssertionError [ERR_ASSERTION]: disabled before IO resume must drain exactly one refresh
+  
+  203 !== 204
+test at tests/panel-presentation.test.mjs:197:3
+✖ CorrelationMapPanel: 200 visible callbacks compute 200 times, invisible stages compute zero and resume once (389.562667ms)
+  AssertionError [ERR_ASSERTION]: disabled before IO resume must drain exactly one refresh
+  
+  203 !== 204
+test at tests/panel-presentation.test.mjs:274:1
+✖ disable before IO is immediate; show uses the last observation and current document visibility (6.648541ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  0 !== 1
+test at tests/panel-presentation.test.mjs:301:1
+✖ no-IO fallback still observes document and explicit visibility, including initial hidden state (4.193542ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+      'initial',
+  -   'disabled',
+      'visible'
+    ]
+test at tests/panel-presentation.test.mjs:333:1
+✖ drain clears pending before executing, retains reentrant replacement, and isolates callback errors (3.18425ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+      'first',
+  -   'reentrant'
+    ]
+test at tests/panel-presentation.test.mjs:480:3
+✖ show drains isolate failure, do not retry on duplicate transitions, and recover on next request (2.326ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  0 !== 1
+
+13-latest-pending
+File: src/components/Panel.ts
+Result: 21 pass / 0 fail -> 19 pass / 2 fail; exit 1
+Before: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Restored: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Applied diff: 13-latest-pending.diff; raw log: 13-latest-pending.log
+test at tests/panel-presentation.test.mjs:240:1
+✖ opt-in waits for first IO result, keeps only latest callback, and drains once on first true delivery (4.032958ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+  +   'old'
+  -   'latest'
+    ]
+test at tests/panel-presentation.test.mjs:498:1
+✖ foreground recovery keeps pending work isolated between two opted-in panels and one legacy panel (2.950083ms)
+  AssertionError [ERR_ASSERTION]: one failed panel cannot block another or drain legacy work
+  + actual - expected
+  
+    [
+      'first',
+  +   'second-old'
+  -   'second-latest'
+    ]
+
+14-immediate-clearing
+File: src/components/Panel.ts
+Result: 21 pass / 0 fail -> 20 pass / 1 fail; exit 1
+Before: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Restored: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Applied diff: 14-immediate-clearing.diff; raw log: 14-immediate-clearing.log
+test at tests/panel-presentation.test.mjs:317:1
+✖ a newly eligible callback supersedes older pending work before visibility event delivery (6.409417ms)
+  AssertionError [ERR_ASSERTION]: superseded callback must not replay
+  + actual - expected
+  
+    [
+      'current',
+  +   'stale'
+    ]
+
+15-reentrant-clearing
+File: src/components/Panel.ts
+Result: 21 pass / 0 fail -> 20 pass / 1 fail; exit 1
+Before: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Restored: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Applied diff: 15-reentrant-clearing.diff; raw log: 15-reentrant-clearing.log
+test at tests/panel-presentation.test.mjs:333:1
+✖ drain clears pending before executing, retains reentrant replacement, and isolates callback errors (3.945416ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+      'first',
+  -   'reentrant'
+    ]
+
+16-destroy-clearing
+File: src/components/Panel.ts
+Result: 21 pass / 0 fail -> 20 pass / 1 fail; exit 1
+Before: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Restored: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Applied diff: 16-destroy-clearing.diff; raw log: 16-destroy-clearing.log
+test at tests/panel-presentation.test.mjs:354:1
+✖ destroy discards pending work and all direct, show, foreground and late IO paths stay inert (3.327666ms)
+  AssertionError [ERR_ASSERTION]: destroy must release queued closure
+  + actual - expected
+  
+  + [Function (anonymous)]
+  - null
+
+17-direct-destroy-guard
+File: src/components/Panel.ts
+Result: 21 pass / 0 fail -> 20 pass / 1 fail; exit 1
+Before: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Restored: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Applied diff: 17-direct-destroy-guard.diff; raw log: 17-direct-destroy-guard.log
+test at tests/panel-presentation.test.mjs:354:1
+✖ destroy discards pending work and all direct, show, foreground and late IO paths stay inert (3.031833ms)
+  AssertionError [ERR_ASSERTION]: post-destroy requests cannot retain closures
+  + actual - expected
+  
+  + [Function (anonymous)]
+  - null
+
+18-drain-error-isolation
+File: src/components/Panel.ts
+Result: 21 pass / 0 fail -> 18 pass / 3 fail; exit 1
+Before: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Restored: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Applied diff: 18-drain-error-isolation.diff; raw log: 18-drain-error-isolation.log
+test at tests/panel-presentation.test.mjs:333:1
+✖ drain clears pending before executing, retains reentrant replacement, and isolates callback errors (3.245292ms)
+  AssertionError [ERR_ASSERTION]: Got unwanted exception.
+  Actual message: "presentation failure"
+test at tests/panel-presentation.test.mjs:480:3
+✖ show drains isolate failure, do not retry on duplicate transitions, and recover on next request (2.406917ms)
+  AssertionError [ERR_ASSERTION]: Got unwanted exception.
+  Actual message: "presentation failure"
+test at tests/panel-presentation.test.mjs:498:1
+✖ foreground recovery keeps pending work isolated between two opted-in panels and one legacy panel (3.883333ms)
+  AssertionError [ERR_ASSERTION]: one failed panel cannot block another or drain legacy work
+  + actual - expected
+  
+    [
+      'first',
+  -   'second-latest'
+    ]
+
+19-legacy-isolation
+File: src/components/Panel.ts
+Result: 21 pass / 0 fail -> 19 pass / 2 fail; exit 1
+Before: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Restored: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Applied diff: 19-legacy-isolation.diff; raw log: 19-legacy-isolation.log
+test at tests/panel-presentation.test.mjs:371:1
+✖ non-opted-in panels preserve optimistic, explicit-hide and legacy resume semantics (3.582208ms)
+  AssertionError [ERR_ASSERTION]: legacy foreground must not gain a presentation drain
+  + actual - expected
+  
+  + []
+  - [
+  -   'before IO',
+  -   'explicit hide'
+  - ]
+test at tests/panel-presentation.test.mjs:498:1
+✖ foreground recovery keeps pending work isolated between two opted-in panels and one legacy panel (3.137292ms)
+  AssertionError [ERR_ASSERTION]: one failed panel cannot block another or drain legacy work
+  + actual - expected
+  
+    [
+      'first',
+      'second-latest',
+  +   'legacy'
+    ]
+
+20-redundant-alive-predicate
+File: src/components/Panel.ts
+Result: 21 pass / 0 fail -> 21 pass / 0 fail; exit 0
+Before: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Restored: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Applied diff: 20-redundant-alive-predicate.diff; raw log: 20-redundant-alive-predicate.log
+Expected possible survivor: direct destroy guard + pending clearing already prevent execution.
+SURVIVOR: 21 pass / 0 fail. Not credited as a killed mutation or independent guard proof. Other guards still prevent presentation callbacks; no production source changed to manufacture a failure.
+
+21-redundant-io-destroy-guard
+File: src/components/Panel.ts
+Result: 21 pass / 0 fail -> 21 pass / 0 fail; exit 0
+Before: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Restored: 8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de  src/components/Panel.ts
+Applied diff: 21-redundant-io-destroy-guard.diff; raw log: 21-redundant-io-destroy-guard.log
+Expected possible survivor: downstream eligibility and pending clearing already prevent presentation execution.
+SURVIVOR: 21 pass / 0 fail. Not credited as a killed mutation or independent guard proof. Other guards still prevent presentation callbacks; no production source changed to manufacture a failure.
+
+Restored final run: 21 pass / 0 fail; status clean
+19 killed behavior mutations, each with expected assertion failures. Mutants 05/06/08 additionally execute deliberately throwing deferred callbacks immediately, producing 2/1/1 intentional callback errors respectively; these count in actual fail totals and remain in the raw logs above. No syntax or harness setup failures. 2 explicitly retained redundant-guard survivors.
+No source/test edits, commits, pushes or installations were performed by the mutation runner. The only production changes were temporary mutations in the detached proof worktree and all were restored.

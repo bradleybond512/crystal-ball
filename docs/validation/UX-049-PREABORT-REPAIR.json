@@ -1,0 +1,1051 @@
+{
+  "executionHead": "0118e8e78a087fc053976c3ecfadd2e62bd7ca9a",
+  "actualMain": "b7f5483089e30592163647f70626bf925305b62d",
+  "changedExecutablePaths": [
+    "src/services/synthesis/transport-evidence.ts",
+    "src/services/synthesis/__tests__/transport-evidence.test.mts"
+  ],
+  "mutation": {
+    "execution": "0118e8e78a087fc053976c3ecfadd2e62bd7ca9a",
+    "file": "src/services/synthesis/transport-evidence.ts",
+    "beforeSha256": "4562b19e426224da459d4c260de71dccb59aecf399bdbad3d53c75d667dd2bc2",
+    "restoredSha256": "4562b19e426224da459d4c260de71dccb59aecf399bdbad3d53c75d667dd2bc2",
+    "baseline": {
+      "pass": 14,
+      "fail": 0
+    },
+    "mutated": {
+      "pass": 8,
+      "fail": 6
+    },
+    "restored": {
+      "pass": 14,
+      "fail": 0
+    },
+    "diff": "diff --git a/src/services/synthesis/transport-evidence.ts b/src/services/synthesis/transport-evidence.ts\nindex c5ba611f6..0b13beb1a 100644\n--- a/src/services/synthesis/transport-evidence.ts\n+++ b/src/services/synthesis/transport-evidence.ts\n@@ -102,7 +102,6 @@ export async function trackTransportFetch<T>(\n   source: keyof typeof transportSources, fetchData: () => Promise<T>, signal: AbortSignal,\n ): Promise<T> {\n   // A cancelled caller still owns its fetch result, but must not replace evidence ownership.\n-  if (signal.aborted) return fetchData();\n   const { domain, label, receipt } = transportSources[source];\n   const attempt = threatEvidence.begin(domain, label);\n   signal.addEventListener('abort', attempt.cancel, { once: true });\n"
+  },
+  "affectedCommands": [
+    {
+      "name": "test:acc509",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/alert-identity.test.mts",
+            "src/services/__tests__/unified-alerts-identity.test.mts",
+            "src/services/__tests__/lsr-alert-identity.test.mts",
+            "src/services/__tests__/acc509-replay.test.mts",
+            "tests/intelligence/situation-engine-identity.test.mts",
+            "tests/intelligence/compound-episode-identity.test.mts",
+            "tests/intelligence/situation-geography-consumers.test.mts",
+            "tests/components/situation-panel-delegation.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:acc510",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/acc510-news-domain.test.mts",
+            "src/services/__tests__/acc510-news-producers.test.mts",
+            "src/services/__tests__/acc510-news-handoff.test.mts",
+            "src/services/__tests__/acc510-news-replay.test.mts",
+            "src/services/__tests__/acc510-situation-domains.test.mts",
+            "src/services/__tests__/acc510-analyst-domain-path.test.mts",
+            "tests/intelligence/acc510-neutral-consumers.test.mts",
+            "tests/components/situation-panel-delegation.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:alert-capacity",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/unified-alerts-capacity.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:algorithms",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/algorithms/__tests__/*.test.mts",
+            "src/services/__tests__/military-patterns.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:analytics-consent",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/analytics-consent.test.mts",
+            "src/services/__tests__/analytics-sdk-lifecycle.test.mjs",
+            "src/components/__tests__/analytics-reset-notice.test.mts",
+            "src/components/__tests__/shell-a11y-contracts.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:analytics-lifecycle",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/analytics-sdk-lifecycle.test.mjs",
+            "src/components/__tests__/analytics-reset-notice.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:fetch-attribution",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/fetch-attribution.test.mts",
+            "src/services/__tests__/fetch-attribution-wiring.test.mts",
+            "src/services/__tests__/fetch-attribution-port-race.test.mts",
+            "src/services/__tests__/caller-abort.test.mts",
+            "src/services/__tests__/cached-fetch-fallback.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:gdacs-map",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/gdacs-map.test.mts",
+            "src/services/__tests__/api-diagnostic.test.mts",
+            "src/services/__tests__/data-freshness.test.mts",
+            "src/services/__tests__/persisted-date-hydration.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:imessage",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+          "args": [
+            "--test",
+            "tests/imessage-native-boundary.test.mjs"
+          ]
+        },
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/imessage-bridge.test.mts",
+            "src/components/__tests__/imessage-settings.test.mts",
+            "src/app/__tests__/desktop-imessage.test.mts",
+            "src/services/seismic/__tests__/eew-imessage.test.mts",
+            "src/services/notifications/__tests__/imessage-bridge-extended.test.mts",
+            "src/services/notifications/__tests__/imessage-pause-alerts.test.mts",
+            "src/components/__tests__/imessage-paused-notice.test.mts",
+            "src/components/__tests__/imessage-paused-notice-bridge.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:lifelines",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+          "args": [
+            "--test",
+            "api/local-logistics.test.mjs",
+            "api/grid-outages.test.mjs",
+            "api/usgs-water-proxy.test.mjs",
+            "api/__tests__/local-logistics.test.mjs",
+            "src-tauri/sidecar/__tests__/bounded-provider-responses.test.mjs",
+            "src-tauri/sidecar/__tests__/local-logistics-route.test.mjs",
+            "src-tauri/sidecar/__tests__/intel-expansion-cluster3.test.mjs",
+            "src-tauri/sidecar/__tests__/sidecar-ttl-cache-guards.test.mjs",
+            "tests/local-logistics-panel.test.mjs",
+            "tests/lifeline-runtime-wiring.test.mjs",
+            "tests/place-briefs.test.mjs",
+            "tests/saved-place-lifeline-pack-wiring.test.mjs",
+            "tests/water-quality-wiring.test.mjs"
+          ]
+        },
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/lifelines/__tests__/*.test.mts",
+            "src/services/__tests__/offline-alert-cache.test.mts",
+            "tests/comms-lifeline-context.test.mts",
+            "tests/lifeline-evidence-expiry.test.mts",
+            "tests/local-logistics.test.mts",
+            "tests/local-logistics-prewarm.test.mts",
+            "tests/place-briefs-lifelines.test.mts",
+            "tests/saved-place-lifeline-pack.test.mts",
+            "tests/saved-place-weather.test.mts",
+            "tests/water-quality-truth.test.mts",
+            "src/components/__tests__/feed-health-panel.test.mts",
+            "src/components/__tests__/local-logistics-panel.test.mts",
+            "src/components/__tests__/personal-storm-mode-shelf.test.mts",
+            "src/services/diagnostics/__tests__/feed-catalog.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:little-snitch",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+          "args": [
+            "--test",
+            "scripts/export-little-snitch-traffic.test.mjs",
+            "scripts/install-little-snitch-exporter.test.mjs",
+            "scripts/little-snitch-log-traffic-helper.test.mjs",
+            "src-tauri/sidecar/local-api-server.test.mjs"
+          ]
+        },
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/little-snitch.test.mts",
+            "src/components/__tests__/little-snitch-panel-source-state.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:maritime",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/maritime/__tests__/freight-stress.test.mts",
+            "src/services/maritime/__tests__/chokepoint-monitor.test.mts",
+            "src/services/maritime/__tests__/chokepoint-aggregator.test.mts",
+            "src/services/maritime/__tests__/maritime-threats.test.mts",
+            "src/services/maritime/__tests__/vessel-classifier.test.mts",
+            "src/services/maritime/__tests__/vessel-globe-helpers.test.mts",
+            "src/services/__tests__/dark-vessel-gaps.test.mts"
+          ]
+        },
+        {
+          "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+          "args": [
+            "--test",
+            "src-tauri/sidecar/__tests__/freight-stress-parity.test.mjs",
+            "src-tauri/sidecar/__tests__/dark-vessel-gaps-parity.test.mjs",
+            "src-tauri/sidecar/__tests__/maritime-vessels-parity.test.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:ml-budget",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/ml-request-budget.test.mts",
+            "src/services/__tests__/ml-worker-manager.test.mts",
+            "src/workers/__tests__/ml-worker-eviction.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:native-notify",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+          "args": [
+            "--test",
+            "tests/native-notify-boundary.test.mjs"
+          ]
+        },
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/native-notify.test.mts",
+            "src/services/__tests__/notification-router.test.mts",
+            "src/services/__tests__/proximity-alert-delivery.test.mts",
+            "src/services/notifications/__tests__/push-notifier-history.test.mts",
+            "src/app/__tests__/desktop-imessage.test.mts",
+            "src/app/__tests__/desktop-updater.test.mts",
+            "src/services/__tests__/threat-reactor.test.mts",
+            "src/services/__tests__/threat-reactor-retry.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:news-resilience",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/news-provenance.test.mts",
+            "src/services/__tests__/rss-adapters-tracked.test.mts",
+            "src/services/news/__tests__/news-snapshot.test.mts",
+            "tests/components/news-resilience-panels.test.mts"
+          ]
+        },
+        {
+          "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+          "args": [
+            "--test",
+            "tests/news-route-provenance.test.mjs",
+            "tests/ux040-news-snapshot-wiring.test.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:quiet-hours",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--import",
+            "./tests/panels/register-hook.mjs",
+            "--test",
+            "src/services/notifications/__tests__/quiet-hours.test.mts",
+            "src/components/__tests__/notification-quiet-hours-panels.test.mts",
+            "src/components/__tests__/notification-settings-unavailable.test.mts",
+            "src/services/notifications/__tests__/notification-settings-service.test.mts",
+            "src/services/__tests__/notification-dispatcher-trace.test.mts",
+            "src/services/insights/__tests__/weather-quiet-hours-wiring.test.mts",
+            "src/services/notifications/__tests__/alert-trace.test.mts",
+            "src/components/__tests__/notification-panels.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:reasoning",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/hypothesis-dedupe.test.mts",
+            "src/services/__tests__/hypothesis-entities.test.mts",
+            "src/services/__tests__/hypothesis-feedback.test.mts",
+            "src/services/__tests__/hypothesis-feedback-mult.test.mts",
+            "src/services/__tests__/pressure-baselines.test.mts",
+            "src/services/__tests__/llm-budget.test.mts",
+            "src/services/__tests__/action-memory.test.mts",
+            "src/services/__tests__/hypothesis-alternatives.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:review-trail",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/panel-attention.test.mts",
+            "src/services/__tests__/sidebar-heat.test.mts",
+            "src/components/__tests__/attention-navigator.test.mts",
+            "src/app/__tests__/panel-attention-wiring.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:satellite",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/satellite-weather.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:secret-boundary",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+          "args": [
+            "--test",
+            "tests/secret-boundary.test.mjs",
+            "tests/sidecar-secret-routing-boundary.test.mjs",
+            "tests/ucdp-local-boundary.test.mjs",
+            "src-tauri/sidecar/secret-sync.test.mjs"
+          ]
+        },
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/secret-boundary.test.mts",
+            "src/services/__tests__/keychain.test.mts",
+            "src/components/__tests__/key-dashboard-secret-boundary.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:settings",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/key-categories.test.mts",
+            "src/services/__tests__/key-feature-index.test.mts",
+            "src/services/__tests__/key-shape-registry.test.mts",
+            "src/services/__tests__/wizard-state.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:sidecar-routing",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+          "args": [
+            "--test",
+            "tests/sidecar-secret-routing-boundary.test.mjs",
+            "tests/ucdp-local-boundary.test.mjs",
+            "tests/openaq-local-boundary.test.mjs"
+          ]
+        },
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/cloud-fallback-policy.test.mts",
+            "src/services/__tests__/runtime-fetch-fallback.test.mts",
+            "src/services/__tests__/confirmed-port-routing.test.mts",
+            "src/services/diagnostics/__tests__/local-engine-status.test.mts",
+            "src/services/diagnostics/__tests__/sidecar-probe-engine.test.mts",
+            "tests/api-param-classification.test.mts",
+            "src/services/__tests__/fetch-attribution-port-race.test.mts",
+            "src/services/__tests__/fetch-attribution.test.mts",
+            "src/services/__tests__/ucdp-runtime-boundary.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:survival",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/survival/__tests__/survival-types.test.mts",
+            "src/services/survival/__tests__/threat-projection.test.mts",
+            "src/services/survival/__tests__/posture-trajectory.test.mts",
+            "src/services/survival/__tests__/world-branches.test.mts",
+            "src/services/survival/__tests__/decision-consequence.test.mts",
+            "src/services/survival/__tests__/grid-down-certify.test.mts",
+            "src/services/survival/__tests__/offline-playbook.test.mts",
+            "src/services/survival/__tests__/comms-fallback.test.mts",
+            "src/services/survival/__tests__/posture-loop-replay.test.mts",
+            "src/services/survival/__tests__/posture-calibration.test.mts",
+            "src/services/survival/__tests__/projection-calibration.test.mts",
+            "src/services/survival/__tests__/retrospective-digest.test.mts",
+            "src/services/survival/__tests__/retrospective-view.test.mts",
+            "src/services/survival/__tests__/decision-consequence-view.test.mts",
+            "src/services/survival/__tests__/offline-playbook-view.test.mts",
+            "src/services/survival/__tests__/comms-fallback-view.test.mts",
+            "src/services/survival/__tests__/grid-down-certify-view.test.mts",
+            "src/services/survival/__tests__/posture-trajectory-view.test.mts",
+            "src/services/survival/__tests__/world-branches-view.test.mts",
+            "src/services/survival/__tests__/survival-posture-view.test.mts",
+            "src/services/survival/__tests__/survival-outlook.test.mts",
+            "src/services/survival/__tests__/survival-posture.test.mts",
+            "src/services/survival/__tests__/survival-moves.test.mts",
+            "src/services/survival/__tests__/survival-plan.test.mts",
+            "src/services/survival/__tests__/world-snapshot.test.mts",
+            "src/services/survival/__tests__/snapshot-integrity.test.mts",
+            "src/services/survival/__tests__/survival-loop.test.mts",
+            "src/services/survival/__tests__/posture-contributor.test.mts",
+            "src/services/survival/__tests__/move-provider.test.mts",
+            "src/services/survival/__tests__/storm-posture-adapter.test.mts",
+            "src/services/survival/__tests__/supply-contributor.test.mts",
+            "src/services/survival/__tests__/energy-water-contributor.test.mts",
+            "src/services/survival/__tests__/grid-energy-adapter.test.mts",
+            "src/services/__tests__/power-grid-alerts-cache.test.mts",
+            "src/services/survival/__tests__/financial-contributor.test.mts",
+            "src/services/survival/__tests__/security-contributor.test.mts",
+            "src/services/survival/__tests__/mobility-contributor.test.mts",
+            "src/services/survival/__tests__/comms-contributor.test.mts",
+            "src/services/survival/__tests__/health-contributor.test.mts",
+            "src/services/__tests__/disease-intel-cache.test.mts",
+            "src/services/survival/__tests__/personal-lens.test.mts",
+            "src/services/survival/__tests__/lens-board.test.mts",
+            "src/services/survival/__tests__/board-events.test.mts",
+            "src/services/survival/__tests__/scrubber-view.test.mts",
+            "src/services/survival/__tests__/time-scrubber.test.mts",
+            "src/services/survival/__tests__/map-modes.test.mts",
+            "src/services/survival/__tests__/lens-marker-style.test.mts",
+            "src/services/survival/__tests__/scrubber-loop.test.mts",
+            "src/services/survival/__tests__/map-modes-apply.test.mts",
+            "src/services/survival/__tests__/lens-marker-apply.test.mts",
+            "src/services/survival/__tests__/survival-map-modes.test.mts",
+            "src/services/__tests__/internet-outages-cache.test.mts",
+            "src/services/survival/__tests__/chokepoint-mobility-adapter.test.mts",
+            "src/services/supply-chain/__tests__/chokepoint-cache.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:synthesis",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/synthesis/__tests__/signal-watch.test.mts",
+            "src/services/synthesis/__tests__/precedent-matcher.test.mts",
+            "src/services/synthesis/__tests__/leading-indicators.test.mts",
+            "src/services/synthesis/__tests__/ai-brief-generator.test.mts",
+            "src/services/synthesis/__tests__/correlation-engine.test.mts"
+          ]
+        },
+        {
+          "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+          "args": [
+            "--test",
+            "src-tauri/sidecar/__tests__/synthesis-correlations.test.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:ucdp-provider",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "server/crystalball/conflict/v1/__tests__/list-ucdp-events.test.mts",
+            "src/services/conflict/__tests__/ucdp-fetch-behavior.test.mts",
+            "src/services/__tests__/ucdp-runtime-boundary.test.mts",
+            "src/components/__tests__/ucdp-events-panel.test.mts",
+            "src/app/__tests__/ucdp-desktop-boundary.test.mts",
+            "api/__tests__/ucdp-classifications.test.mjs",
+            "src-tauri/sidecar/__tests__/ucdp-local-routes.test.mjs",
+            "tests/ucdp-local-boundary.test.mjs",
+            "tests/ucdp-loader-freshness.test.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:ux010",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+          "args": [
+            "--test",
+            "tests/ux010-location-startup.test.mjs"
+          ]
+        },
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/location.test.mts",
+            "tests/ux010-ephemeral-local-logistics.test.mts",
+            "tests/ux010-current-location-save.test.mts",
+            "src/components/__tests__/ux010-current-location-panel.test.mts"
+          ]
+        },
+        {
+          "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+          "args": [
+            "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/typescript/bin/tsc"
+          ],
+          "env": {
+            "TERM": "dumb",
+            "SHELL": "/bin/zsh",
+            "HOMEBREW_REPOSITORY": "/opt/homebrew",
+            "TMPDIR": "/private/var/folders/qt/hq7cydbd06d6g0yksx3mxm3c0000gn/T",
+            "CODEX_APPLY_PATCH_PRESERVE_LINE_ENDINGS": "1",
+            "FPATH": "/opt/homebrew/share/zsh/site-functions:/opt/homebrew/share/zsh/site-functions:/usr/local/share/zsh/site-functions:/usr/share/zsh/site-functions:/usr/share/zsh/5.9/functions",
+            "NO_COLOR": "1",
+            "LC_ALL": "C.UTF-8",
+            "USER": "bradleybond",
+            "PAGER": "cat",
+            "PATH": "/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/opt/local/bin:/opt/local/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Applications/Little Snitch.app/Contents/Components:/Applications/VMware Fusion.app/Contents/Public:/opt/homebrew/bin:/opt/homebrew/sbin:/Users/bradleybond/.local/bin:/Users/bradleybond/.codex/tmp/arg0-macos/codex-arg0htH4I6:/Applications/ChatGPT.app/Contents/Resources/codex-cli/codex-path:/Users/bradleybond/bin:/opt/homebrew/opt/libpcap/bin:/opt/local/bin:/opt/local/sbin:/Users/bradleybond/.cargo/bin:/Users/bradleybond/.lmstudio/bin",
+            "CODEX_THREAD_ID": "01a1b5fe-382b-700e-9b50-94bf60097001",
+            "PWD": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball",
+            "LANG": "C.UTF-8",
+            "CODEX_TOOL_CALL_ID": "exec-12f9ff55-78c8-4e21-b089-c962f6478987",
+            "CODEX_CI": "1",
+            "CODEX_VERSION": "0.0.0",
+            "SHLVL": "1",
+            "HOME": "/Users/bradleybond",
+            "HOMEBREW_PREFIX": "/opt/homebrew",
+            "GH_PAGER": "cat",
+            "LOGNAME": "bradleybond",
+            "LC_CTYPE": "C.UTF-8",
+            "NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S": "8e86beb821b9afc846211798e0113bd4b9e79312dfcd135eb447bdb154f64071",
+            "INFOPATH": "/opt/homebrew/share/info:/opt/homebrew/share/info:",
+            "HOMEBREW_CELLAR": "/opt/homebrew/Cellar",
+            "GIT_PAGER": "cat",
+            "CODEX_SESSION_ID": "01a1a84d-2641-7094-af64-c408a8f320f0",
+            "CLAUDE_CODE_DISABLE_1M_CONTEXT": "1",
+            "COLORTERM": "",
+            "__CF_USER_TEXT_ENCODING": "0x1F5:0x0:0x0",
+            "VITE_VARIANT": "full"
+          }
+        },
+        {
+          "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+          "args": [
+            "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/vite/bin/vite.js",
+            "build"
+          ],
+          "env": {
+            "TERM": "dumb",
+            "SHELL": "/bin/zsh",
+            "HOMEBREW_REPOSITORY": "/opt/homebrew",
+            "TMPDIR": "/private/var/folders/qt/hq7cydbd06d6g0yksx3mxm3c0000gn/T",
+            "CODEX_APPLY_PATCH_PRESERVE_LINE_ENDINGS": "1",
+            "FPATH": "/opt/homebrew/share/zsh/site-functions:/opt/homebrew/share/zsh/site-functions:/usr/local/share/zsh/site-functions:/usr/share/zsh/site-functions:/usr/share/zsh/5.9/functions",
+            "NO_COLOR": "1",
+            "LC_ALL": "C.UTF-8",
+            "USER": "bradleybond",
+            "PAGER": "cat",
+            "PATH": "/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/opt/local/bin:/opt/local/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Applications/Little Snitch.app/Contents/Components:/Applications/VMware Fusion.app/Contents/Public:/opt/homebrew/bin:/opt/homebrew/sbin:/Users/bradleybond/.local/bin:/Users/bradleybond/.codex/tmp/arg0-macos/codex-arg0htH4I6:/Applications/ChatGPT.app/Contents/Resources/codex-cli/codex-path:/Users/bradleybond/bin:/opt/homebrew/opt/libpcap/bin:/opt/local/bin:/opt/local/sbin:/Users/bradleybond/.cargo/bin:/Users/bradleybond/.lmstudio/bin",
+            "CODEX_THREAD_ID": "01a1b5fe-382b-700e-9b50-94bf60097001",
+            "PWD": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball",
+            "LANG": "C.UTF-8",
+            "CODEX_TOOL_CALL_ID": "exec-12f9ff55-78c8-4e21-b089-c962f6478987",
+            "CODEX_CI": "1",
+            "CODEX_VERSION": "0.0.0",
+            "SHLVL": "1",
+            "HOME": "/Users/bradleybond",
+            "HOMEBREW_PREFIX": "/opt/homebrew",
+            "GH_PAGER": "cat",
+            "LOGNAME": "bradleybond",
+            "LC_CTYPE": "C.UTF-8",
+            "NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S": "8e86beb821b9afc846211798e0113bd4b9e79312dfcd135eb447bdb154f64071",
+            "INFOPATH": "/opt/homebrew/share/info:/opt/homebrew/share/info:",
+            "HOMEBREW_CELLAR": "/opt/homebrew/Cellar",
+            "GIT_PAGER": "cat",
+            "CODEX_SESSION_ID": "01a1a84d-2641-7094-af64-c408a8f320f0",
+            "CLAUDE_CODE_DISABLE_1M_CONTEXT": "1",
+            "COLORTERM": "",
+            "__CF_USER_TEXT_ENCODING": "0x1F5:0x0:0x0",
+            "VITE_VARIANT": "full"
+          }
+        },
+        {
+          "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+          "args": [
+            "--test",
+            "tests/ux010-native-gate.test.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:ux026",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/digest-alert-projection.test.mts",
+            "src/services/__tests__/digest-narrative-contract.test.mts",
+            "src/services/__tests__/nws-alert-retrieval-freshness.test.mts",
+            "src/components/__tests__/digest-overlay.test.mts",
+            "tests/ux026-digest-lifecycle.test.mjs",
+            "tests/ux026-fourth-cycle-runtime.test.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:ux047",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "tests/nws-provider-snapshot.test.mjs",
+            "src/services/__tests__/nws-alert-retrieval-freshness.test.mts",
+            "src/services/__tests__/nws-alert-lifecycle.test.mts",
+            "tests/ux047/nws-ui-loader.test.mts",
+            "tests/ux047/nws-snapshot-cache.test.mts",
+            "tests/ux047/nws-panel.test.mts",
+            "tests/ux047/operational-consumers.test.mts",
+            "src/services/__tests__/sidebar-heat.test.mts",
+            "src/services/native/__tests__/menubar-status.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:ux049",
+      "owner": "PR",
+      "stages": [
+        {
+          "bin": "npm",
+          "args": [
+            "run",
+            "test:ux049"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:ux050",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/ghost-mode-state.test.mts",
+            "src/services/__tests__/ghost-notification-policy.test.mts",
+            "src/services/__tests__/notification-dispatcher-trace.test.mts",
+            "src/components/__tests__/ghost-mode-notice.test.mts",
+            "tests/ghost-mode-entry.test.mts",
+            "src/config/__tests__/story-renderer-chunk.test.mts"
+          ]
+        },
+        {
+          "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+          "args": [
+            "--test",
+            "tests/comms-panel.test.mjs"
+          ]
+        },
+        {
+          "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+          "args": [
+            "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/typescript/bin/tsc"
+          ],
+          "env": {
+            "TERM": "dumb",
+            "SHELL": "/bin/zsh",
+            "HOMEBREW_REPOSITORY": "/opt/homebrew",
+            "TMPDIR": "/private/var/folders/qt/hq7cydbd06d6g0yksx3mxm3c0000gn/T",
+            "CODEX_APPLY_PATCH_PRESERVE_LINE_ENDINGS": "1",
+            "FPATH": "/opt/homebrew/share/zsh/site-functions:/opt/homebrew/share/zsh/site-functions:/usr/local/share/zsh/site-functions:/usr/share/zsh/site-functions:/usr/share/zsh/5.9/functions",
+            "NO_COLOR": "1",
+            "LC_ALL": "C.UTF-8",
+            "USER": "bradleybond",
+            "PAGER": "cat",
+            "PATH": "/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/opt/local/bin:/opt/local/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Applications/Little Snitch.app/Contents/Components:/Applications/VMware Fusion.app/Contents/Public:/opt/homebrew/bin:/opt/homebrew/sbin:/Users/bradleybond/.local/bin:/Users/bradleybond/.codex/tmp/arg0-macos/codex-arg0htH4I6:/Applications/ChatGPT.app/Contents/Resources/codex-cli/codex-path:/Users/bradleybond/bin:/opt/homebrew/opt/libpcap/bin:/opt/local/bin:/opt/local/sbin:/Users/bradleybond/.cargo/bin:/Users/bradleybond/.lmstudio/bin",
+            "CODEX_THREAD_ID": "01a1b5fe-382b-700e-9b50-94bf60097001",
+            "PWD": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball",
+            "LANG": "C.UTF-8",
+            "CODEX_TOOL_CALL_ID": "exec-12f9ff55-78c8-4e21-b089-c962f6478987",
+            "CODEX_CI": "1",
+            "CODEX_VERSION": "0.0.0",
+            "SHLVL": "1",
+            "HOME": "/Users/bradleybond",
+            "HOMEBREW_PREFIX": "/opt/homebrew",
+            "GH_PAGER": "cat",
+            "LOGNAME": "bradleybond",
+            "LC_CTYPE": "C.UTF-8",
+            "NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S": "8e86beb821b9afc846211798e0113bd4b9e79312dfcd135eb447bdb154f64071",
+            "INFOPATH": "/opt/homebrew/share/info:/opt/homebrew/share/info:",
+            "HOMEBREW_CELLAR": "/opt/homebrew/Cellar",
+            "GIT_PAGER": "cat",
+            "CODEX_SESSION_ID": "01a1a84d-2641-7094-af64-c408a8f320f0",
+            "CLAUDE_CODE_DISABLE_1M_CONTEXT": "1",
+            "COLORTERM": "",
+            "__CF_USER_TEXT_ENCODING": "0x1F5:0x0:0x0",
+            "VITE_VARIANT": "full"
+          }
+        },
+        {
+          "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+          "args": [
+            "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/vite/bin/vite.js",
+            "build"
+          ],
+          "env": {
+            "TERM": "dumb",
+            "SHELL": "/bin/zsh",
+            "HOMEBREW_REPOSITORY": "/opt/homebrew",
+            "TMPDIR": "/private/var/folders/qt/hq7cydbd06d6g0yksx3mxm3c0000gn/T",
+            "CODEX_APPLY_PATCH_PRESERVE_LINE_ENDINGS": "1",
+            "FPATH": "/opt/homebrew/share/zsh/site-functions:/opt/homebrew/share/zsh/site-functions:/usr/local/share/zsh/site-functions:/usr/share/zsh/site-functions:/usr/share/zsh/5.9/functions",
+            "NO_COLOR": "1",
+            "LC_ALL": "C.UTF-8",
+            "USER": "bradleybond",
+            "PAGER": "cat",
+            "PATH": "/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/opt/local/bin:/opt/local/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Applications/Little Snitch.app/Contents/Components:/Applications/VMware Fusion.app/Contents/Public:/opt/homebrew/bin:/opt/homebrew/sbin:/Users/bradleybond/.local/bin:/Users/bradleybond/.codex/tmp/arg0-macos/codex-arg0htH4I6:/Applications/ChatGPT.app/Contents/Resources/codex-cli/codex-path:/Users/bradleybond/bin:/opt/homebrew/opt/libpcap/bin:/opt/local/bin:/opt/local/sbin:/Users/bradleybond/.cargo/bin:/Users/bradleybond/.lmstudio/bin",
+            "CODEX_THREAD_ID": "01a1b5fe-382b-700e-9b50-94bf60097001",
+            "PWD": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball",
+            "LANG": "C.UTF-8",
+            "CODEX_TOOL_CALL_ID": "exec-12f9ff55-78c8-4e21-b089-c962f6478987",
+            "CODEX_CI": "1",
+            "CODEX_VERSION": "0.0.0",
+            "SHLVL": "1",
+            "HOME": "/Users/bradleybond",
+            "HOMEBREW_PREFIX": "/opt/homebrew",
+            "GH_PAGER": "cat",
+            "LOGNAME": "bradleybond",
+            "LC_CTYPE": "C.UTF-8",
+            "NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S": "8e86beb821b9afc846211798e0113bd4b9e79312dfcd135eb447bdb154f64071",
+            "INFOPATH": "/opt/homebrew/share/info:/opt/homebrew/share/info:",
+            "HOMEBREW_CELLAR": "/opt/homebrew/Cellar",
+            "GIT_PAGER": "cat",
+            "CODEX_SESSION_ID": "01a1a84d-2641-7094-af64-c408a8f320f0",
+            "CLAUDE_CODE_DISABLE_1M_CONTEXT": "1",
+            "COLORTERM": "",
+            "__CF_USER_TEXT_ENCODING": "0x1F5:0x0:0x0",
+            "VITE_VARIANT": "full"
+          }
+        },
+        {
+          "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+          "args": [
+            "scripts/check-precache-budget.mjs"
+          ]
+        },
+        {
+          "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+          "args": [
+            "--experimental-vm-modules",
+            "--test",
+            "tests/ghost-mode-bundle.test.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:ux052",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--import",
+            "./tests/panels/register-hook.mjs",
+            "--test",
+            "src/services/__tests__/derived-notification-policy.test.mts",
+            "src/services/__tests__/derived-alert-reactions.test.mts",
+            "src/services/notifications/__tests__/notification-settings-service.test.mts",
+            "src/services/notifications/__tests__/alert-trace.test.mts",
+            "src/services/notifications/__tests__/quiet-hours.test.mts",
+            "src/components/__tests__/notification-panels.test.mts",
+            "src/components/__tests__/notification-quiet-hours-panels.test.mts",
+            "src/components/__tests__/notification-settings-unavailable.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:ux053",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+          "args": [
+            "--test",
+            "tests/vault-intro-scanner.test.mjs"
+          ]
+        },
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/app/__tests__/boot-workspace.test.mts",
+            "src/app/__tests__/startup-acquisition.test.mts",
+            "src/app/__tests__/desktop-imessage.test.mts",
+            "src/services/__tests__/notification-router.test.mts",
+            "src/services/__tests__/threat-reactor-retry.test.mts",
+            "tests/workspace-startup.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:ux058",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/alert-retention-provenance.test.mts",
+            "src/services/insights/__tests__/notification-ladder.test.mts",
+            "src/services/__tests__/nws-notification-owner.test.mts",
+            "src/services/__tests__/warning-inbox-dispositions.test.mts",
+            "src/components/__tests__/unified-alert-inbox-disposition.test.mts",
+            "src/services/__tests__/notification-dispatcher-trace.test.mts",
+            "src/services/__tests__/unified-alerts-warning-delivery.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:ux059",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/alert-retention-provenance.test.mts",
+            "src/services/__tests__/unified-alert-retention.test.mts",
+            "src/services/__tests__/alert-retention-identity.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:vault-writer",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+          "args": [
+            "--test",
+            "tests/vault-writer-boundary.test.mjs",
+            "tests/vault-writer-native.test.mjs"
+          ]
+        },
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/secret-write-pending.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:warning-delivery",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/notification-dispatcher-trace.test.mts",
+            "src/services/__tests__/unified-alerts-warning-delivery.test.mts"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "test:wildfire",
+      "owner": "main",
+      "stages": [
+        {
+          "bin": "/Users/bradleybond/.codex/worktrees/ux049-sensor-coverage/crystalball/node_modules/.bin/tsx",
+          "args": [
+            "--test",
+            "src/services/__tests__/fire-intel-service.test.mts"
+          ]
+        }
+      ]
+    }
+  ],
+  "affectedScriptCount": 37,
+  "allAffectedScriptsExit": 0,
+  "allInputHashesUnchangedAfterAggregate": true,
+  "lint": {
+    "executionHead": "0118e8e78a087fc053976c3ecfadd2e62bd7ca9a",
+    "marketingNpmLsExit": 0,
+    "rulesAndBaselineUnchanged": true,
+    "artifactBeforeSha256": "4c5328fdbdf07514d9f04d5bd7815dd99664a23455418026c0c3b97074dc11ce",
+    "mode": 33188,
+    "lintExit": 0,
+    "artifactRestoredSha256": "4c5328fdbdf07514d9f04d5bd7815dd99664a23455418026c0c3b97074dc11ce"
+  },
+  "lintBaselineExisting": 1015,
+  "lintChangedFiles": 30,
+  "lintErrors": 0,
+  "lintWarnings": 1,
+  "aggregateCommand": "bash scripts/agentic-validate.sh --tests test:ux049",
+  "aggregateExit": 0,
+  "aggregateRunnerCounts": [
+    {
+      "pass": 145,
+      "fail": 0
+    },
+    {
+      "pass": 23,
+      "fail": 0
+    }
+  ],
+  "priorReview": {
+    "source": "9ba29f177d524b1da528ae217d19cf1092ab1146",
+    "model": "claude-sonnet-4-6",
+    "costUSD": 1.3505445,
+    "blockers": 0,
+    "nonblockingFinding": "Pre-aborted transport fetch leaves pending evidence",
+    "conclusionSha256": "a07a1a4081162d05b4c27c9afef979ff54d73c0ca0fb6cb268308c5e3183b481"
+  },
+  "triage": "Actual helper gap confirmed. The first review construction-race explanation was not established because initial refresh starts synchronously; the one-cycle duration guarantee was also not established. A retained destroyed Maritime content element can trigger its existing retry handler. Narrow repair handles pre-aborted calls before begin, preserving an existing pending token or settled record without changing panel lifecycle or fetch result/rejection. Prior review remains unedited."
+}

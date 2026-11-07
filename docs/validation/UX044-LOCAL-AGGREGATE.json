@@ -1,0 +1,44 @@
+{
+  "executionSha": "2dcd7f2effdd347987de6f38c87fdd046ed4f32a",
+  "localPendingBaseline": "71559607401f95bdd62fbc3002a9a3192cf63ced",
+  "notActualMain": true,
+  "command": "bash scripts/agentic-validate.sh --tests 'test:ux044 test:summary-strip-layout test:ux047 test:ux058'",
+  "node": "v22.23.1",
+  "npm": "10.9.8",
+  "tmpdir": "/private/var/folders/qt/hq7cydbd06d6g0yksx3mxm3c0000gn/T",
+  "exit": 0,
+  "output": "Agentic validation gate passed.",
+  "counts": {
+    "test:ux044": {
+      "pass": 26,
+      "fail": 0
+    },
+    "test:summary-strip-layout": {
+      "pass": 9,
+      "fail": 0
+    },
+    "test:ux047": {
+      "pass": 124,
+      "fail": 0
+    },
+    "test:ux058": {
+      "pass": 89,
+      "fail": 0
+    }
+  },
+  "sourceHashes": {
+    "scripts/agentic-validate.sh": "867d27d6c6e14ca9c8fb1385b7f5574372b15f61f68fb73e62004de1eaed3d50",
+    "src/components/SummaryStrip.ts": "6e2bba466f5cb5e946840e04bbe1f1a83a6cb8e0a9f486b8e9200076510a5a92",
+    "src/app/panel-layout.ts": "c85905265944f1efbe4f35f802202e602e123a0e48034e7aeb4764840d945332",
+    "src/components/__tests__/summary-strip-announcements.test.mts": "ec7c380013344d847abdc0eb1123efe04e645ff475eee13260efd3b5e845210e",
+    "tests/ux047/operational-consumers.test.mts": "d86251b01af8f22a6e1905fa37763ae93bfa341b3525fb2818d14bbe7c996f6a"
+  },
+  "logSha256": "f9b505782cf80574b4b642f577b8fefccd3fe682eef8e2ac4a2d8c4d403d1833",
+  "cleanBeforeAndAfter": true,
+  "limitations": [
+    "No large selector run for this pending chain",
+    "Aggregate roadmap check is structural, not a fresh live snapshot",
+    "Actual screen-reader speech and final macOS accessibility-notification acceptance remain pending",
+    "No fresh Sonnet review, hosted checks or publication"
+  ]
+}

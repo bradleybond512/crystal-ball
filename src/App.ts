@@ -75,6 +75,9 @@ export type { CountryBriefSignals } from '@/app/app-context';
 
 export class App {
   private state: AppContext;
+  private startup?: Promise<void>;
+  private interactive = false;
+  private releaseNotificationRouter?: () => void;
   private pendingDeepLinkCountry: string | null = null;
   private panelRetryTimer: number | null = null;
   private onPanelRetry: (() => void) | null = null;
@@ -320,6 +323,7 @@ export class App {
  this.desktopNotifications = new DesktopNotifications(this.state);
 
  this.dataLoader = new DataLoaderManager(this.state, {
+ onForecastInputsAttempted: () => this.panelLayout.markCalibrationInputsReady(),
  renderCriticalBanner: (postures) => this.panelLayout.renderCriticalBanner(postures),
  });
 
@@ -364,7 +368,16 @@ export class App {
  });
   }
 
-  public async init(): Promise<void> {
+  public init(): Promise<void> {
+    this.startup ??= this.initialize();
+    return this.startup;
+  }
+
+  public openWorkspace(): void {
+    if (this.interactive && !this.state.isDestroyed) this.desktopNotifications.openWorkspace();
+  }
+
+  private async initialize(): Promise<void> {
  const initStart = performance.now();
  const uiOnlyE2E = import.meta.env.VITE_E2E === '1'
  && new URLSearchParams(window.location.search).get('e2e') === 'ui-only';
@@ -373,15 +386,20 @@ export class App {
  // Tauri; in web builds the invokeTauri calls no-op but the client-side
  // breadcrumb buffer remains available for diagnostics copy-outs.
  const { installLogBridge, bootTrace, resetBootTrace } = await import('@/services/log-bridge');
+ if (this.state.isDestroyed) return;
  installLogBridge();
  resetBootTrace();
  bootTrace('init:start');
  await initDB();
+ if (this.state.isDestroyed) return;
  await initI18n();
- cyberReactorUnsubscribe = startNotificationRouter();
+ if (this.state.isDestroyed) return;
+ this.releaseNotificationRouter = startNotificationRouter();
+ cyberReactorUnsubscribe = this.releaseNotificationRouter;
  const aiFlow = getAiFlowSettings();
  if (shouldInitializeBrowserMl(uiOnlyE2E, aiFlow)) {
  await mlWorker.init();
+ if (this.state.isDestroyed) return;
  if (BETA_MODE) mlWorker.loadModel('summarization-beta').catch(() => {});
  }
 
@@ -405,8 +423,10 @@ export class App {
 
  // Hydrate in-memory cache from bootstrap endpoint (before panels construct and fetch)
  await fetchBootstrapData();
+ if (this.state.isDestroyed) return;
 
  const resolvedRegion = await resolveUserRegion();
+ if (this.state.isDestroyed) return;
  this.state.resolvedLocation = resolvedRegion;
 
  // Relocate the large reasoning stores from localStorage to IndexedDB and warm
@@ -417,20 +437,26 @@ export class App {
  bootTrace('preload:stores:start');
  try {
  await preloadIdbBackedStores();
+ if (this.state.isDestroyed) return;
  installIdbStorageRouting();
  } catch { /* non-fatal */ }
+ if (this.state.isDestroyed) return;
  try {
  const algorithmLedger = getAlgorithmEvaluationLedger();
  await startAlgorithmLedgerPersistence({ ledger: algorithmLedger });
+ if (this.state.isDestroyed) return;
  syncForecastEvaluations(
  getCalibrationStore().all(),
  algorithmLedger,
  );
  await persistAlgorithmLedger({ ledger: algorithmLedger });
  } catch (error) {
- console.warn('[algorithm-outcome-grading] startup wiring failed:', error);
+ if (!this.state.isDestroyed) console.warn('[algorithm-outcome-grading] startup wiring failed:', error);
  }
+ if (this.state.isDestroyed) return;
  bootTrace('preload:stores:done');
+ this.desktopNotifications.init();
+ bootTrace('breaking-news:listener-attached');
 
  // Phase 1: Layout (creates map + panels — they'll find hydrated data)
  const bootLayoutT = typeof performance === 'undefined' ? 0 : performance.now();
@@ -447,6 +473,7 @@ export class App {
  // Happy variant: pre-populate panels from persistent cache for instant render
  if (SITE_VARIANT === 'happy') {
  await this.dataLoader.hydrateHappyPanelsFromCache();
+ if (this.state.isDestroyed) return;
  }
 
  // Phase 2: Shared UI components
@@ -522,10 +549,22 @@ export class App {
  // so run both concurrently instead of gating the whole first data wave on it.
  bootTrace('phase6:data-load:start');
  this.dataLoader.syncDataFreshnessWithLayers();
+ this.interactive = true;
+ bootTrace('workspace:controls-wired');
+ void this.finishInitialLoad(initStart, uiOnlyE2E, bootTrace).catch((error: unknown) => {
+   if (this.state.isDestroyed) return;
+   bootTrace('phase6:data-load:failed');
+   console.error('[boot] initial acquisition failed:', error);
+   this.eventHandlers.showToast('Startup data could not finish loading. Reload to retry.');
+ });
+  }
+
+  private async finishInitialLoad(initStart: number, uiOnlyE2E: boolean, bootTrace: (label: string) => void): Promise<void> {
  bootTrace('phase6:data-load:awaiting');
  if (!uiOnlyE2E) {
  await Promise.all([preloadCountryGeometry(), this.dataLoader.loadAllData()]);
  }
+ if (this.state.isDestroyed) return;
  bootTrace('phase6:data-load:done');
 
  if (!uiOnlyE2E) startLearning();
@@ -552,7 +591,7 @@ export class App {
  // Phase 8: Deep links + update checks
  this.handleDeepLinks();
  this.desktopUpdater.init();
- this.desktopNotifications.init();
+ this.desktopNotifications.sourcesSettled();
 
  // Analytics
  trackEvent('wm_app_loaded', {
@@ -563,7 +602,10 @@ export class App {
   }
 
  public destroy(): void {
+ if (this.state.isDestroyed) return;
  this.state.isDestroyed = true;
+ this.releaseNotificationRouter?.();
+ if (cyberReactorUnsubscribe === this.releaseNotificationRouter) cyberReactorUnsubscribe = null;
  this.state.newsSnapshot.destroy();
  this.releaseGodsVisionControls();
 
@@ -626,6 +668,7 @@ export class App {
 
  let attempts = 0;
  const checkAndOpen = () => {
+ if (this.state.isDestroyed) return;
  if (dataFreshness.hasSufficientData() && this.state.latestClusters.length > 0) {
  this.countryIntel.openCountryStory(countryCode.toUpperCase(), countryName);
  return;
@@ -653,6 +696,7 @@ export class App {
  const cName = CountryIntelManager.resolveCountryName(deepLinkCountry);
  let attempts = 0;
  const checkAndOpenBrief = () => {
+ if (this.state.isDestroyed) return;
  if (dataFreshness.hasSufficientData()) {
  this.countryIntel.openCountryBriefByCode(deepLinkCountry, cName);
  return;
@@ -726,6 +770,7 @@ export class App {
  // Safety-critical: drives the status chip + storm posture, so it must keep
  // refreshing even when the weather map layer is toggled off.
  { name: 'weather', fn: () => this.dataLoader.loadWeatherAlerts(), intervalMs: 10 * 60 * 1000 },
+ { name: 'nwsAlerts', fn: () => this.dataLoader.refreshNWSAlerts(), intervalMs: 5 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'fred', fn: () => this.dataLoader.loadFredData(), intervalMs: 30 * 60 * 1000 },
  { name: 'oil', fn: () => this.dataLoader.loadOilAnalytics(), intervalMs: 30 * 60 * 1000 },
  { name: 'spending', fn: () => this.dataLoader.loadGovernmentSpending(), intervalMs: 60 * 60 * 1000 },

@@ -102,6 +102,7 @@ export interface PredictionRecord {
   criteria?: ResolutionCriteria;
   /** ms timestamp the prediction was resolved (or expired). */
   resolvedAt?: number;
+  outcomeRegime?: 'calm' | 'shifted';
   /** Human-readable resolution explanation. Direct evidence begins with
    *  `direct:`; indirect evidence begins with `proxy:`. */
   resolutionNote?: string;
@@ -228,11 +229,13 @@ export function perSourceMultipliers(
 
 export interface ForecastCalibrationStore {
   record: (prediction: PredictionRecord) => void;
+  revision: () => number;
   resolve: (
     id: string,
     outcome: boolean,
     when?: number,
     metadata?: ResolutionMetadata,
+    outcomeRegime?: PredictionRecord['outcomeRegime'],
   ) => boolean;
   expire: (id: string, when?: number, note?: string) => boolean;
   /** Auto-mark overdue legacy predictions without criteria as expired.
@@ -249,6 +252,7 @@ export interface ForecastCalibrationStore {
 
 export function createForecastCalibrationStore(): ForecastCalibrationStore {
   const store = new Map<string, PredictionRecord>();
+  let revision = 0;
 
   function record(prediction: PredictionRecord): void {
     const existing = store.get(prediction.id);
@@ -259,6 +263,7 @@ export function createForecastCalibrationStore(): ForecastCalibrationStore {
       return;
     }
     store.set(prediction.id, cloneRecord(prediction));
+    revision += 1;
   }
 
   function resolve(
@@ -266,6 +271,7 @@ export function createForecastCalibrationStore(): ForecastCalibrationStore {
     outcome: boolean,
     when?: number,
     metadata?: ResolutionMetadata,
+    outcomeRegime?: PredictionRecord['outcomeRegime'],
   ): boolean {
     const prev = store.get(id);
     if (!prev) return false;
@@ -278,11 +284,14 @@ export function createForecastCalibrationStore(): ForecastCalibrationStore {
       ...prev,
       status: outcome ? 'resolved_true' : 'resolved_false',
       resolvedAt,
+      outcomeRegime: Number.isFinite(resolvedAt) && resolvedAt > 0
+        && (outcomeRegime === 'calm' || outcomeRegime === 'shifted') ? outcomeRegime : undefined,
       resolutionNote: metadata?.note,
       resolutionProvenance: metadata
         ? cloneResolutionProvenance(metadata.provenance)
         : undefined,
     });
+    revision += 1;
     return true;
   }
 
@@ -295,6 +304,7 @@ export function createForecastCalibrationStore(): ForecastCalibrationStore {
         count += 1;
       }
     }
+    if (count > 0) revision += 1;
     return count;
   }
 
@@ -307,6 +317,7 @@ export function createForecastCalibrationStore(): ForecastCalibrationStore {
       resolvedAt: when ?? Date.now(),
       resolutionNote: note,
     });
+    revision += 1;
     return true;
   }
 
@@ -321,6 +332,7 @@ export function createForecastCalibrationStore(): ForecastCalibrationStore {
 
   return {
     record,
+    revision: () => revision,
     resolve,
     expire,
     expirePending,
@@ -333,6 +345,7 @@ export function createForecastCalibrationStore(): ForecastCalibrationStore {
     loadJson(records) {
       store.clear();
       for (const r of records) store.set(r.id, cloneRecord(r));
+      revision += 1;
     },
   };
 }
@@ -384,6 +397,9 @@ function cloneResolutionCriteria(
 function cloneRecord(record: PredictionRecord): PredictionRecord {
   return {
     ...record,
+    outcomeRegime: (record.status === 'resolved_true' || record.status === 'resolved_false')
+      && Number.isFinite(record.resolvedAt) && record.resolvedAt! > 0
+      && (record.outcomeRegime === 'calm' || record.outcomeRegime === 'shifted') ? record.outcomeRegime : undefined,
     criteria: record.criteria
       ? cloneResolutionCriteria(record.criteria)
       : undefined,

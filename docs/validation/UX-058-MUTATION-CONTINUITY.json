@@ -1,0 +1,113 @@
+{
+  "historicalCandidate": {
+    "commit": "5b5af7afef469585814d49651c91eb6fb1dbfdb2",
+    "tree": "341e87cbc7f2f36093e3516e973d0009a3247be4"
+  },
+  "currentSourceHead": "48a7a6fd83d527ae0c3d524864a3bc2d25c71e2c",
+  "unchangedFiles": {
+    "src/services/__tests__/warning-inbox-dispositions.test.mts": {
+      "historical": "b1e6e6dde9e66ae7aaacfc9c0c5259c870aac8b6eaf646469ac93df42c305011",
+      "current": "b1e6e6dde9e66ae7aaacfc9c0c5259c870aac8b6eaf646469ac93df42c305011"
+    },
+    "src/services/warning-inbox-session.ts": {
+      "historical": "06158e5d30dd4fcaa504eca167482a00cdf1f2cd600f9a804dd992d0a2b1481b",
+      "current": "06158e5d30dd4fcaa504eca167482a00cdf1f2cd600f9a804dd992d0a2b1481b"
+    },
+    "src/components/UnifiedAlertInboxPanel.ts": {
+      "historical": "8f178477514078844cfd4fd6b02a9b0e952b8fd1cf9895208787e5924da75552",
+      "current": "8f178477514078844cfd4fd6b02a9b0e952b8fd1cf9895208787e5924da75552"
+    },
+    "src/components/__tests__/unified-alert-inbox-disposition.test.mts": {
+      "historical": "fe25902915f1f913d41bee9f4626e9443a5191b2253f8da3f4f5d10bf4282671",
+      "current": "fe25902915f1f913d41bee9f4626e9443a5191b2253f8da3f4f5d10bf4282671"
+    },
+    "src/services/diagnostics/notification-trace.ts": {
+      "historical": "d02293644e3971f81d31114528e1ef2b2db00b27e0f66f873e732fadee0954b4",
+      "current": "d02293644e3971f81d31114528e1ef2b2db00b27e0f66f873e732fadee0954b4"
+    },
+    "src/services/weather.ts": {
+      "historical": "aa19283bd0e02ff0a137c8003388cd9b0ad5ba5a09afba0552eec0bb04db20ff",
+      "current": "aa19283bd0e02ff0a137c8003388cd9b0ad5ba5a09afba0552eec0bb04db20ff"
+    },
+    "src/services/warning-notification-session.ts": {
+      "historical": "60cdbb5053792aadb26ab9c5775c862635086988ad2a1b009fd5e9d4cf557a74",
+      "current": "60cdbb5053792aadb26ab9c5775c862635086988ad2a1b009fd5e9d4cf557a74"
+    },
+    "src/services/insights/notification-ladder.ts": {
+      "historical": "94180493cf8a81a6df1b9da66f24e350606e293837636aef8ba703ea0a9a2fb0",
+      "current": "94180493cf8a81a6df1b9da66f24e350606e293837636aef8ba703ea0a9a2fb0"
+    },
+    "src/services/insights/__tests__/notification-ladder.test.mts": {
+      "historical": "92df6fee624b04c02bf30569f0a306cfd41b78280288fd32f08654ff2e27bb03",
+      "current": "92df6fee624b04c02bf30569f0a306cfd41b78280288fd32f08654ff2e27bb03"
+    },
+    "src-tauri/sidecar/feed-resilience.mjs": {
+      "historical": "5e08f053ac0d2c23166eb1cd9d67d6b08fdef8e81c721ff163caae0142a4fa88",
+      "current": "5e08f053ac0d2c23166eb1cd9d67d6b08fdef8e81c721ff163caae0142a4fa88"
+    },
+    "scripts/check-sidecar-bundle.mjs": {
+      "historical": "8aefafecc43c4cf5c57b175231b9d863c01c3db53f72edbef1a6cd0426258ce0",
+      "current": "8aefafecc43c4cf5c57b175231b9d863c01c3db53f72edbef1a6cd0426258ce0"
+    }
+  },
+  "changedFilesNotClaimedWholeFileIdentical": {
+    "src/services/unified-alerts.ts": {
+      "historical": "5d738d5e39df0f9e9cfc54506df336db39776b0e1a296e149c167ef0b83586f8",
+      "current": "fa00a094f001fb2af022c388f2976277ab5eec07e42f1c3f238470f683788d16"
+    },
+    "src/components/Panel.ts": {
+      "historical": "07bb2e4dfbfa58fb1e1955144c28b64b9101e209b5af57b333d2ac69b1fc7877",
+      "current": "4bd44736a4daf82d9469a598e028e000339028442e3bf9d18ec7bc785b18c963"
+    },
+    "src/services/notification-dispatcher.ts": {
+      "historical": "e7407e9032281bc6727a7ccf1583fca77a3e8a77fa482ea5054eef4cb4d74fb5",
+      "current": "524a92bbe806aca326148d0109018b06cdc4e31694abd3c93e32945ba933810f"
+    },
+    "src/services/__tests__/notification-dispatcher-trace.test.mts": {
+      "historical": "2474db03464949d3b9052f5294ab0a7d387b4b4c257d0468725c0867f3cdd941",
+      "current": "ca6aaab376435be99040083c2d884744663c52e34aa690c9ff747aff1fc8c123"
+    },
+    "src/services/notifications/notification-settings-service.ts": {
+      "historical": "4bd38e0093a4ba993264a64d6bd66e1999a32cf464b030432275026f9b825c66",
+      "current": "7dcce2e81e00f74878477308c1bbca2000f41f29d75fb1fb6200617297ab6ad4"
+    },
+    "src/services/__tests__/nws-notification-owner.test.mts": {
+      "historical": "3be988c99242a313a1fd7a626c6dcd2ebe875c9207650641a02014ebc7cf0d3c",
+      "current": "c419d1512dcaf37c09ab6fb45e92f8cae3d79d2f40a948304aa7d63eecf4e872"
+    },
+    "src/services/alert-normalizer.ts": {
+      "historical": "62771ff741e7d7e4ece05edf75b8668d04ec2f4642a57377bbb1b7c7751825b6",
+      "current": "7cebbf9f89edad4c2866b8ce42af3d29e949b67e4081a3aae4ce930a1926028f"
+    },
+    "src/services/nws-alerts.ts": {
+      "historical": "4f63020bb42097b7b0b6cec4b1da97c6fead3f4b3220f8c4a48213f61088718c",
+      "current": "1f59a4d46afde8754e1cd4f3bbe5a6307fcd60f19da9f05eaa6bda5cdee6f009"
+    },
+    "src/app/data-loader.ts": {
+      "historical": "c72f1ac756b8ed32abee561ecdb9655e94b0ffde21c9362be4beae538d4ea38d",
+      "current": "a2dd03d665dbaae06da8e39c1698a6f63b78a1ba19667f9d1139be924a6844be"
+    },
+    "src/services/__tests__/alert-retention-provenance.test.mts": {
+      "historical": "8b0a541b4405e9b290170130581328e280758c5e0899aab55e66a3ba59f1686b",
+      "current": "9fb23d2cae0007fd94c49e8d6af7d388c3789d143047272f6c02164c3b7f278c"
+    },
+    "src-tauri/sidecar/local-api-server.test.mjs": {
+      "historical": "0785ddefb1d7fe48442522fbc012af4cd9aaaebbb68d6ab7bb42d0de185de8f1",
+      "current": "38b48d670df3531844d4bd4cc3be12d2a10dd6538bf1168a4f9f5732a3d7a133"
+    },
+    "src-tauri/sidecar/local-api-server.mjs": {
+      "historical": "b5ddc882e0e0c84474807d8ace03a3bf0fc52801383aa55b06b5cd255b23b6ea",
+      "current": "37fea01f1ac57d3e7e286a6569a82a092fc4e7763ae6eef17353b1fbd70e5a4e"
+    },
+    "src-tauri/sidecar/nws-alert-row.mjs": {
+      "historical": "ea937d60b209f577731a32c6d5a41dc9c01be74ec5986f7f40e1fdc357b8609e",
+      "current": "07c3291e503590744b23fc86310ab297966577a85d85aee70330963a8d885c31"
+    },
+    "src-tauri/tauri.conf.json": {
+      "historical": "271a0aeb0b74309c0b3b930a927ce33491c3d2e12130ca6420add32572edb1f7",
+      "current": "4be34a63580665f82faf010c3688965a30a2b104e2c879bb0209f1ad1c1c2fe2"
+    }
+  },
+  "currentIntegrationMutationHashesMatch": true,
+  "scope": "Original95 code reversals and packaging mutation are historical feature evidence, not proof that their whole source tree equals this integration. Current identity-cap mutation certifies shared validator bound; current92-suite run covers integrated warning snapshots, shared Ghost/derived policies, and startup teardown."
+}

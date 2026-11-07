@@ -15,7 +15,9 @@ import {
   THREAT_LEVELS_EVENT,
   emptyAggregatedThreats,
   type AggregatedThreats,
-  type DomainThreat,
+  startThreatAggregator,
+  type CoveredThreat,
+  type ThreatSource,
   type ThreatDomain,
   type ThreatLevel,
   type ThreatLevelsEventDetail,
@@ -92,6 +94,7 @@ function ensureCssInjected(): void {
 
 export class ThreatDashboard extends Panel {
   private latest: AggregatedThreats = emptyAggregatedThreats();
+  private readonly poller: ReturnType<typeof startThreatAggregator>;
   private listener: ((event: Event) => void) | null = null;
   /** Whether the user has expanded the all-quiet disclosure. Survives re-renders. */
   private quietExpanded = false;
@@ -103,14 +106,18 @@ export class ThreatDashboard extends Panel {
       showCount: true,
       trackActivity: true,
       infoTooltip:
-        'At-a-glance threat level for all 11 monitored domains. Updates every 30s. Click a card to jump to that domain.',
+        'Threats and source coverage across 11 domains. Evidence ages update every 30 seconds. Select a card to open its domain.',
     });
     ensureCssInjected();
+    // The base heartbeat dates renders. Only source evidence can date this dashboard.
+    this.heartbeatEl?.remove();
+    this.heartbeatEl = null;
     this.subscribe();
-    this.render();
+    this.poller = startThreatAggregator();
   }
 
   public destroy(): void {
+    this.poller.stop();
     super.destroy();
     if (this.listener && typeof document !== 'undefined') {
       document.removeEventListener(THREAT_LEVELS_EVENT, this.listener);
@@ -130,44 +137,58 @@ export class ThreatDashboard extends Panel {
   }
 
   private render(): void {
+    const rows = Object.values(this.latest);
+    const reporting = rows.filter(row => row.sources.some(source => source.reporting));
+    const partial = reporting.filter(row => row.coverage === 'partial').length;
+    const coverageLabel = `${reporting.length} of ${DOMAINS.length} domains reporting`;
     const elevatedOrHigher = countElevatedOrHigher(this.latest);
     this.setCount(elevatedOrHigher);
+    if (this.countEl) this.countEl.title = 'Domains with current elevated or higher signals';
     const cards = DOMAINS.map((meta) => this.renderCard(meta, this.latest[meta.domain]));
     const grid = `<div style="
           display:grid;
-          grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
+          grid-template-columns:repeat(auto-fit, minmax(min(100%, 220px), 1fr));
           gap:8px;
         ">
           ${cards.join('')}
         </div>`;
-    const allQuiet = DOMAINS.every((meta) => this.latest[meta.domain].level === 'NONE');
+    const allQuiet = rows.every(row => row.coverage === 'complete' && row.level === 'NONE');
     const domainsWord = elevatedOrHigher === 1 ? 'domain' : 'domains';
     const expandedHtml = `
       <div style="padding:8px;">
+        <div style="margin-bottom:8px;font-weight:600;">${coverageLabel}${partial ? ` · ${partial} partial` : ''}</div>
         ${grid}
         <div style="margin-top:10px;font-size:11px;opacity:0.6;">
-          ${elevatedOrHigher} ${domainsWord} above baseline. Click a card to jump.
+          ${elevatedOrHigher} ${domainsWord} with current elevated or higher signals. Click a card to jump.
         </div>
       </div>
     `;
-    const html = allQuiet ? this.renderAllQuiet(grid) : expandedHtml;
-    this.setContent(html, () => this.wireClickHandlers());
+    const html = allQuiet ? this.renderAllQuiet(grid, coverageLabel) : expandedHtml;
+    const content = this.getContentElement();
+    const active = document.activeElement;
+    const restoreFocus = active instanceof HTMLElement && content.contains(active) ? active : null;
+    this.setContent(html, () => {
+      this.wireClickHandlers();
+      if (!restoreFocus || document.activeElement !== document.body) return;
+      const domain = DOMAINS.find(meta => meta.domain === restoreFocus.dataset.domain);
+      const summary = content.querySelector<HTMLElement>('summary');
+      const target = domain && (!allQuiet || this.quietExpanded)
+        ? content.querySelector<HTMLElement>(`[data-domain="${domain.domain}"]`)
+        : summary ?? content.querySelector<HTMLElement>('[data-domain]');
+      target?.focus({ preventScroll: true });
+    });
   }
 
-  /** Every sensor reports NONE — collapse the grid behind one quiet line. */
-  private renderAllQuiet(grid: string): string {
-    const lastChecked = Math.max(0, ...DOMAINS.map((meta) => this.latest[meta.domain].lastUpdatedMs || 0));
-    const checkedLabel = lastChecked > 0
-      ? `checked ${formatRelativeTime(lastChecked)}`
-      : 'awaiting first check';
+  private renderAllQuiet(grid: string, coverageLabel: string): string {
+    const oldest = Math.min(...DOMAINS.map((meta) => this.latest[meta.domain].lastUpdatedMs));
     return `
       <div style="padding:8px;">
         <details class="threat-dashboard-quiet"${this.quietExpanded ? ' open' : ''}>
           <summary style="cursor:pointer;display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 2px;">
             <span style="width:8px;height:8px;border-radius:50%;background:${LEVEL_COLOR.LOW};flex:none;"></span>
             <span style="font-weight:600;">All sensors quiet</span>
-            <span style="opacity:0.6;">· ${escapeHtml(checkedLabel)}</span>
-            <span style="margin-left:auto;font-size:10px;opacity:0.5;text-transform:uppercase;letter-spacing:0.04em;">${DOMAINS.length} sensors</span>
+            <span style="opacity:0.6;">· oldest evidence ${formatRelativeTime(oldest)}</span>
+            <span style="margin-left:auto;font-size:10px;opacity:0.5;text-transform:uppercase;letter-spacing:0.04em;">${coverageLabel}</span>
           </summary>
           <div style="margin-top:8px;">${grid}</div>
         </details>
@@ -175,11 +196,17 @@ export class ThreatDashboard extends Panel {
     `;
   }
 
-  private renderCard(meta: DomainMeta, threat: DomainThreat): string {
+  private renderCard(meta: DomainMeta, threat: CoveredThreat): string {
     const color = LEVEL_COLOR[threat.level];
     const background = LEVEL_BACKGROUND[threat.level];
-    const pulseClass = pulseClassFor(threat.level);
-    const updated = formatRelativeTime(threat.lastUpdatedMs);
+    const pulseClass = threat.lastKnown ? '' : pulseClassFor(threat.level);
+    const status = COVERAGE_LABEL[threat.coverage];
+    const quietOrGap = threat.coverage === 'complete' ? 'Quiet' : status;
+    const signalAge = threat.lastKnown ? 'Last known' : null;
+    const signal = [signalAge, threat.signalSource, threat.topAlert].filter(Boolean).join(' · ');
+    const scope = threat.coverage === 'partial' ? PARTIAL_SCOPE[meta.domain] : '';
+    const evidence = threat.sources.map(source =>
+      `<div>${escapeHtml(describeSource(source, threat.signalSource))}</div>`).join('');
     return `
       <div
         class="threat-dashboard-card ${pulseClass}"
@@ -189,6 +216,7 @@ export class ThreatDashboard extends Panel {
         tabindex="0"
         style="
           padding:10px;
+          overflow-wrap:anywhere;
           border-radius:6px;
           border:1px solid ${color};
           background:${background};
@@ -209,13 +237,15 @@ export class ThreatDashboard extends Panel {
               font-weight:700;
               letter-spacing:0.5px;
             "
-          >${escapeHtml(threat.level)}</span>
+          >${escapeHtml(threat.level === 'NONE' ? quietOrGap : threat.level)}</span>
         </div>
         <div style="margin-top:6px;font-size:11px;opacity:0.85;min-height:14px;">
-          ${threat.topAlert ? escapeHtml(threat.topAlert) : '—'}
+          ${threat.topAlert ? `<div>${escapeHtml(signal)}</div>` : ''}
+          ${threat.level === 'NONE' ? '' : escapeHtml(status)}
+          ${scope ? `<div>${escapeHtml(scope)}</div>` : ''}
         </div>
-        <div style="margin-top:4px;font-size:10px;opacity:0.55;">
-          ${escapeHtml(updated)}
+        <div style="margin-top:4px;font-size:11px;">
+          ${evidence}
         </div>
       </div>
     `;
@@ -225,7 +255,7 @@ export class ThreatDashboard extends Panel {
     const root = this.getContentElement();
     const quiet = root.querySelector<HTMLDetailsElement>('details.threat-dashboard-quiet');
     quiet?.addEventListener('toggle', () => {
-      this.quietExpanded = quiet.open;
+      if (root.contains(quiet)) this.quietExpanded = quiet.open;
     });
     for (const card of root.querySelectorAll<HTMLElement>('.threat-dashboard-card')) {
       card.addEventListener('click', () => navigateToPanel(card.dataset.targetPanel));
@@ -237,6 +267,37 @@ export class ThreatDashboard extends Panel {
       });
     }
   }
+}
+
+const COVERAGE_LABEL: Record<CoveredThreat['coverage'], string> = {
+  unknown: 'No observations',
+  partial: 'Partial coverage',
+  complete: 'Complete coverage',
+  stale: 'Stale evidence',
+  unavailable: 'Unavailable',
+};
+
+const PARTIAL_SCOPE: Partial<Record<ThreatDomain, string>> = {
+  seismic: 'USGS feed coverage varies by time window and magnitude.',
+  space_weather: 'Kp readings only. Flare coverage unavailable.',
+  aviation: 'SIGMETs and FAA ground stops provide partial coverage.',
+  maritime: 'AIS position reports cover a sample in four risk zones.',
+};
+
+function describeSource(source: ThreatSource, headlineSource: string | null): string {
+  const parts = [source.source];
+  if (source.signal && source.source !== headlineSource) {
+    if (!source.reporting) parts.push('Last known');
+    parts.push(source.signal.level);
+    if (source.signal.topAlert) parts.push(source.signal.topAlert);
+  }
+  if (source.evidenceAtMs !== null && source.ageKind) {
+    parts.push(`${source.ageKind} ${formatRelativeTime(source.evidenceAtMs)}`);
+  }
+  if (source.state !== 'current') parts.push(source.state);
+  if (source.lastAttempt === 'failed') parts.push('refresh failed');
+  else if (source.lastAttempt === 'pending' && source.state !== 'pending') parts.push('refresh pending');
+  return parts.join(' · ');
 }
 
 function pulseClassFor(level: ThreatLevel): string {
@@ -256,7 +317,7 @@ function navigateToPanel(targetPanelKey: string | undefined): void {
 function countElevatedOrHigher(threats: AggregatedThreats): number {
   let n = 0;
   for (const t of Object.values(threats)) {
-    if (t.level === 'ELEVATED' || t.level === 'HIGH' || t.level === 'CRITICAL') n += 1;
+    if (!t.lastKnown && (t.level === 'ELEVATED' || t.level === 'HIGH' || t.level === 'CRITICAL')) n += 1;
   }
   return n;
 }

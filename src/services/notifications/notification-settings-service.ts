@@ -15,7 +15,8 @@ export type NotificationDomain =
   | 'geopolitical'
   | 'weather'
   | 'cyber'
-  | 'supply';
+  | 'supply'
+  | 'derived';
 
 export interface DomainSettings {
   enabled: boolean;
@@ -41,8 +42,10 @@ export type NotificationPreferenceReason =
   | 'allowed'
   | 'master-mute'
   | 'domain-disabled'
+  | 'settings-unavailable'
   | 'below-threshold'
-  | 'domain-quiet-hours';
+  | 'domain-quiet-hours'
+  | 'preferences-unavailable';
 
 /** `invalid`/`equal` windows are refused at save time (R4-BUG-003). */
 export type GlobalSettingsUpdate = { ok: true } | { ok: false; reason: 'invalid' | 'equal' };
@@ -56,7 +59,7 @@ const STORAGE_KEY = 'wm-notification-settings-v1';
 
 const SEVERITY_ORDER: NotificationSeverity[] = ['info', 'low', 'medium', 'high', 'critical'];
 
-const ALL_DOMAINS: NotificationDomain[] = [
+const LEGACY_DOMAINS: Exclude<NotificationDomain, 'derived'>[] = [
   'earthquakes',
   'wildfire',
   'aviation',
@@ -86,9 +89,10 @@ const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
 
 function buildDefaultSettings(): NotificationSettings {
   const domains = {} as Record<NotificationDomain, DomainSettings>;
-  for (const domain of ALL_DOMAINS) {
+  for (const domain of LEGACY_DOMAINS) {
     domains[domain] = { ...DEFAULT_DOMAIN_SETTINGS };
   }
+  domains.derived = { ...DEFAULT_DOMAIN_SETTINGS, threshold: 'high', quietHoursEnabled: true };
   return {
     version: 1,
     global: { ...DEFAULT_GLOBAL_SETTINGS },
@@ -96,34 +100,72 @@ function buildDefaultSettings(): NotificationSettings {
   };
 }
 
-function loadFromStorage(): NotificationSettings | null {
+type SavedSettings = Omit<NotificationSettings, 'domains'> & {
+  domains: Omit<NotificationSettings['domains'], 'derived'> & { derived?: DomainSettings };
+};
+
+let preferencesAvailable = true;
+
+export function areNotificationPreferencesAvailable(): boolean {
+  return preferencesAvailable;
+}
+
+let lastPersisted: string | null;
+let unreadableSettings = false;
+
+function parseSaved(raw: string | null): NotificationSettings | null {
+  if (raw === null) { unreadableSettings = false; return null; }
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
     const parsed = JSON.parse(raw) as NotificationSettings;
-    if (parsed.version !== 1) return null;
-    return parsed;
+    unreadableSettings = parsed?.version !== 1 || !parsed.domains || typeof parsed.domains !== 'object' || Array.isArray(parsed.domains);
+    return unreadableSettings ? null : parsed;
   } catch {
+    unreadableSettings = true;
     return null;
   }
+
 }
 
-function saveToStorage(settings: NotificationSettings): void {
+function validDomain(value: DomainSettings | undefined): value is DomainSettings {
+  return typeof value?.enabled === 'boolean' && typeof value.quietHoursEnabled === 'boolean'
+    && SEVERITY_ORDER.includes(value.threshold) && ['in_app', 'native', 'both'].includes(value.channel);
+}
+
+function validSavedSettings(saved: SavedSettings): boolean {
+  return typeof saved.global?.masterMute === 'boolean' && typeof saved.global.dailySummaryEnabled === 'boolean'
+    && validateQuietWindow(saved.global.quietHoursStart, saved.global.quietHoursEnd) === 'ok'
+    && LEGACY_DOMAINS.every((domain) => validDomain(saved.domains?.[domain]))
+    && (saved.domains.derived === undefined || validDomain(saved.domains.derived));
+}
+
+function saveToStorage(settings: NotificationSettings): boolean {
+  if (!preferencesAvailable) return false;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    const raw = JSON.stringify(settings);
+    localStorage.setItem(STORAGE_KEY, raw);
+    lastPersisted = raw;
+    unreadableSettings = false;
+    return true;
   } catch {
-    // Private browsing or storage quota exceeded — operate in-memory only
+    return false; // Private browsing or quota: use the established settings in memory.
   }
 }
 
-function mergeWithDefaults(saved: NotificationSettings | null): NotificationSettings {
+function mergeWithDefaults(saved: SavedSettings | null): NotificationSettings {
   const defaults = buildDefaultSettings();
   if (!saved) return defaults;
   const domains = { ...defaults.domains };
-  for (const domain of ALL_DOMAINS) {
-    if (saved.domains?.[domain]) {
-      domains[domain] = { ...DEFAULT_DOMAIN_SETTINGS, ...saved.domains[domain] };
+  for (const domain of LEGACY_DOMAINS) {
+    if (Object.prototype.hasOwnProperty.call(saved.domains, domain)) {
+      const row = saved.domains[domain];
+      domains[domain] = { ...DEFAULT_DOMAIN_SETTINGS, ...row, channel: row?.channel };
     }
+  }
+  if (validDomain(saved.domains?.derived)) {
+    domains.derived = { ...saved.domains.derived };
+  } else if (validDomain(saved.domains?.cyber)) {
+    const { enabled, threshold, channel } = saved.domains.cyber;
+    domains.derived = { ...domains.derived, enabled, channel, threshold: threshold === 'critical' ? 'critical' : 'high' };
   }
   return {
     version: 1,
@@ -156,7 +198,7 @@ export function migratePreferencesQuietHours(
     ? (prefs.domains as (Record<string, unknown> | null)[]).find((d) => d?.domain === 'weather')
     : undefined;
   if (weather?.quietHoursOverride === true) return null;
-  if (ALL_DOMAINS.some((domain) => settings.domains[domain].quietHoursEnabled)) return null;
+  if (LEGACY_DOMAINS.some((domain) => settings.domains[domain].quietHoursEnabled)) return null;
   const start = hourToQuietTime(prefs.quietHours.startHour);
   const end = hourToQuietTime(prefs.quietHours.endHour);
   if (!start || !end || validateQuietWindow(start, end) !== 'ok') return null;
@@ -168,19 +210,54 @@ export function migratePreferencesQuietHours(
 }
 
 function initialSettings(): NotificationSettings {
-  const settings = mergeWithDefaults(loadFromStorage());
+  let settings = buildDefaultSettings();
   try {
-    if (localStorage.getItem(QUIET_HOURS_MIGRATION_KEY) !== null) return settings;
-    const migrated = migratePreferencesQuietHours(settings, localStorage.getItem(PREFERENCES_KEY));
-    if (migrated) saveToStorage(migrated);
-    localStorage.setItem(QUIET_HOURS_MIGRATION_KEY, '1');
-    return migrated ?? settings;
+    const raw = localStorage.getItem(STORAGE_KEY);
+    lastPersisted = raw;
+    const saved = parseSaved(raw);
+    if (raw !== null) {
+      if (saved?.version === 1) settings = mergeWithDefaults(saved);
+      if (saved?.version !== 1 || !validSavedSettings(saved)) {
+        preferencesAvailable = false;
+        return settings;
+      }
+    }
+    const needsWeatherMigration = localStorage.getItem(QUIET_HOURS_MIGRATION_KEY) === null;
+    const migrated = needsWeatherMigration
+      ? migratePreferencesQuietHours(settings, localStorage.getItem(PREFERENCES_KEY))
+      : null;
+    settings = migrated ?? settings;
+    if ((migrated || (saved && !saved.domains.derived)) && !saveToStorage(settings)) return settings;
+    if (needsWeatherMigration) localStorage.setItem(QUIET_HOURS_MIGRATION_KEY, '1');
   } catch {
-    return settings; // No storage: nothing to migrate.
+    preferencesAvailable = false;
   }
+  return settings;
 }
 
 let currentSettings: NotificationSettings = initialSettings();
+
+function refreshStoredSettings(): void {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw === lastPersisted) return;
+    lastPersisted = raw;
+    const saved = parseSaved(raw);
+    preferencesAvailable = !unreadableSettings && (!saved || validSavedSettings(saved));
+    currentSettings = mergeWithDefaults(saved);
+  } catch { /* keep the in-memory settings if storage is unavailable */ }
+}
+
+export function nativeChannelHold(domain: NotificationDomain): string | undefined {
+  const channel = getSettings().domains?.[domain]?.channel;
+  if (unreadableSettings || !preferencesAvailable) return 'channel-unavailable';
+  if (channel === 'both' || channel === 'native') return;
+  return channel === 'in_app' ? 'in-app-only' : 'channel-unavailable';
+}
+
+export function isNotificationSettingsStorageKey(key: string | null): boolean {
+  return key === null || key === STORAGE_KEY;
+}
 
 function emitChange(): void {
   if (typeof document !== 'undefined') {
@@ -191,6 +268,7 @@ function emitChange(): void {
 }
 
 export function getSettings(): NotificationSettings {
+  refreshStoredSettings();
   return currentSettings;
 }
 
@@ -198,6 +276,7 @@ export function updateDomainSettings(
   domain: NotificationDomain,
   patch: Partial<DomainSettings>,
 ): void {
+  refreshStoredSettings();
   currentSettings = {
     ...currentSettings,
     domains: {
@@ -210,6 +289,7 @@ export function updateDomainSettings(
 }
 
 export function updateGlobalSettings(patch: Partial<GlobalSettings>): GlobalSettingsUpdate {
+  refreshStoredSettings();
   const global = { ...currentSettings.global, ...patch };
   if ('quietHoursStart' in patch || 'quietHoursEnd' in patch) {
     const validity = validateQuietWindow(global.quietHoursStart, global.quietHoursEnd);
@@ -245,19 +325,21 @@ export function evaluateNotificationPreference(
   severity: NotificationSeverity,
   now: Date = new Date(),
 ): NotificationPreferenceDecision {
-  const { global, domains } = currentSettings;
-  // Life-safety critical alerts come through a forgotten mute (R4-BUG-003).
-  if (global.masterMute && severity !== 'critical') return { allowed: false, reason: 'master-mute' };
+  const { global, domains } = getSettings();
+  if (domain === 'derived' && !preferencesAvailable) return { allowed: false, reason: 'preferences-unavailable' };
+  const bypassMute = severity === 'critical' && domain !== 'derived';
+  if (global.masterMute && !bypassMute) return { allowed: false, reason: 'master-mute' };
 
   const domainSettings = domains[domain];
+  if (!domainSettings || typeof domainSettings.enabled !== 'boolean') return { allowed: false, reason: 'settings-unavailable' };
   if (!domainSettings.enabled) return { allowed: false, reason: 'domain-disabled' };
 
   const severityIndex = Math.max(0, SEVERITY_ORDER.indexOf(severity));
-  const thresholdIndex = Math.max(0, SEVERITY_ORDER.indexOf(domainSettings.threshold));
+  const thresholdIndex = SEVERITY_ORDER.indexOf(domainSettings.threshold);
+  if (thresholdIndex === -1 || typeof domainSettings.quietHoursEnabled !== 'boolean') return { allowed: false, reason: 'settings-unavailable' };
   if (severityIndex < thresholdIndex) return { allowed: false, reason: 'below-threshold' };
 
-  // Critical always bypasses quiet hours
-  if (severity !== 'critical' && isDomainInQuietHours(domain, now)) {
+  if (!bypassMute && isDomainInQuietHours(domain, now)) {
     return { allowed: false, reason: 'domain-quiet-hours' };
   }
 

@@ -546,3 +546,46 @@ function evaluationProjectionFixture() {
     },
   };
 }
+
+test('mirrored resolver-run evidence exposes bounded typed counters, with no extra fields or invented counts', async () => {
+  const at = 1_800_000_000_000;
+  const times = { dueAt: at, startedAt: at, completedAt: at + 1, outcome: 'completed', readiness: 'ready' };
+  const bridgeMetrics = { enabled: true, shortageExpired: 1, advisoryExpired: 0, legacyExpired: 2, failed: false, label: 'raw-prediction' };
+  const typedMetrics = Object.fromEntries(['pending','rawOverdueBefore','rawOverdueAfter','diagnosticOverdueBefore','diagnosticOverdueAfter',
+    'pastExpiryGrace','eligibleOverdueBefore','eligibleOverdueAfter','opportunities','unsupported','invalidCriteria','awaitingEvidence','windowOpen',
+    'rejectedWrites','expired','direct','proxy','unattributed','persistenceFailures'].map(k => [k, 0]));
+  typedMetrics.opportunities = 1;
+  const input = {
+    requiredScheduledRuns: 7, historicalLateCauseUnknown: 12, consecutiveQualifyingScheduledRuns: 0, label: 'raw-summary',
+    receipts: [
+      { ...times, sequence: 1, kind: 'scheduled', metrics: { ...typedMetrics, headline: 'raw-headline' }, id: 'raw-id' },
+      { ...times, sequence: 2, kind: 'bridge', metrics: bridgeMetrics },
+      { ...times, sequence: 3, kind: 'catchup', metrics: { ...typedMetrics, direct: -1 }, failure: 'raw-failure' },
+      { ...times, sequence: 4, kind: 'raw-kind', metrics: typedMetrics },
+    ],
+  };
+  const read = async (resolverRuns) => {
+    const tools = makeDiagnosticsTools(fakeClient({ '/api/analyst-state': {
+      available: true, algorithmDiagnostics: { forecastCalibration: { resolverRuns } },
+    } }));
+    const result = await tools.get_algorithm_diagnostics({});
+    return result.diagnostics.forecastCalibration.resolverRuns;
+  };
+  const output = await read(input);
+  assert.doesNotMatch(JSON.stringify(output), /raw-/);
+  assert.equal(output.receipts.length, 3);
+  assert.equal(output.historicalLateCauseUnknown, 12);
+  assert.deepEqual(output.receipts[0].metrics, typedMetrics);
+  assert.equal(output.receipts[1].metrics.legacyExpired, 2);
+  assert.equal(output.receipts[2].metrics, null);
+  assert.equal(output.consecutiveQualifyingScheduledRuns, null);
+  assert.equal((await read({ ...input, receipts: Array(17).fill(input.receipts[0]) })), null);
+  const clean = Array.from({ length: 7 }, (_, index) => {
+    const dueAt = at + index * 15 * 60_000;
+    return { ...times, dueAt, startedAt: dueAt, completedAt: dueAt + 1, sequence: index + 1,
+      kind: 'scheduled', metrics: { ...typedMetrics } };
+  });
+  assert.equal((await read({ ...input, consecutiveQualifyingScheduledRuns: 7, receipts: clean })).consecutiveQualifyingScheduledRuns, 7);
+  clean[3].metrics.opportunities = 0;
+  assert.equal((await read({ ...input, consecutiveQualifyingScheduledRuns: 7, receipts: clean })).consecutiveQualifyingScheduledRuns, null);
+});

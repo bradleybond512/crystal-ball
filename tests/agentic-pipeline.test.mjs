@@ -1307,3 +1307,35 @@ test('PR overrides CLI: a declaration and package rewrite cannot replace a main-
   assert.match(result.stdout, /\[trusted:main\] test:providers: node --test tests\/trusted\.test\.mjs/);
   assert.match(result.stdout, /2 script\(s\) passed/);
 });
+
+test('the main-owned UX-050 command expands its build and PWA budget without npm or a shell', () => {
+  const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
+  const env = { SENTINEL: 'kept', VITE_VARIANT: 'tech' };
+  const stages = commandToStages(scripts['test:ux050'], '/repo/node_modules/.bin', scripts, env);
+  assert.equal(scripts['pwa:budget'], 'node scripts/check-precache-budget.mjs');
+  assert.equal(stages.length, 6);
+  assert.deepEqual(stages[0], {
+    bin: '/repo/node_modules/.bin/tsx',
+    args: ['--test', 'src/services/__tests__/ghost-mode-state.test.mts',
+      'src/services/__tests__/ghost-notification-policy.test.mts',
+      'src/services/__tests__/notification-dispatcher-trace.test.mts',
+      'src/components/__tests__/ghost-mode-notice.test.mts', 'tests/ghost-mode-entry.test.mts',
+      'src/config/__tests__/story-renderer-chunk.test.mts'],
+  });
+  assert.deepEqual(stages[1], { bin: process.execPath, args: ['--test', 'tests/comms-panel.test.mjs'] });
+  assert.deepEqual(stages[2], { bin: process.execPath, args: ['/repo/node_modules/typescript/bin/tsc'], env: { ...env, VITE_VARIANT: 'full' } });
+  assert.deepEqual(stages[3], { bin: process.execPath, args: ['/repo/node_modules/vite/bin/vite.js', 'build'], env: { ...env, VITE_VARIANT: 'full' } });
+  assert.deepEqual(stages[4], { bin: process.execPath, args: ['scripts/check-precache-budget.mjs'] });
+  assert.deepEqual(stages[5], { bin: process.execPath, args: ['--experimental-vm-modules', '--test', 'tests/ghost-mode-bundle.test.mjs'] });
+});
+
+test('the PWA budget alias does not broaden npm or shell admission', () => {
+  const scripts = { 'pwa:budget': 'node scripts/check-precache-budget.mjs' };
+  assert.equal(isRunnerAllowlisted('npm run pwa:budget'), false);
+  for (const command of ['npm run pwa:budget', 'npm  run pwa:budget', 'npm run pwa:budget -- extra',
+    'npm --prefix . run pwa:budget', 'npm run pwa:other', 'npm exec pwa:budget',
+    'npm run pwa:budget && sh -c true']) {
+    assert.throws(() => commandToStages(command, '/repo/node_modules/.bin', scripts),
+      /untrusted stage runner/, command);
+  }
+});

@@ -1,0 +1,193 @@
+{
+  "executionHead": "e31d2a3cbc41e7f903ec0894ddecab5ab2d15be3",
+  "pendingDependencyBase": "fd012930d4ab000c8a111692e42a1720720af72d",
+  "mutations": [
+    {
+      "name": "seismic-owner",
+      "path": "src/app/data-loader.ts",
+      "command": [
+        "node",
+        "--test",
+        "tests/data-sources-wiring.test.mjs"
+      ],
+      "beforeSha256": "c52c403301962ffda60e279e15384647015aac9b3dadbdf08d11ffbccec0a79a",
+      "restoredSha256": "c52c403301962ffda60e279e15384647015aac9b3dadbdf08d11ffbccec0a79a",
+      "baseline": {
+        "pass": [
+          23
+        ],
+        "fail": [
+          0
+        ]
+      },
+      "mutation": {
+        "pass": [
+          22
+        ],
+        "fail": [
+          1
+        ]
+      },
+      "appliedDiff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex 68335865a..10863f028 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -4746,7 +4746,7 @@ export class DataLoaderManager implements AppModule {\n  const observations = usgsEventsToObservations(events);\n  recordDomainObservations('usgs-earthquakes', observations, observations.length > 0);\n  if (this.ctx.isDestroyed) return attempt.cancel();\n- if (!attempt.isCurrent()) return;\n+ // mutation: accept retired seismic attempt\n  const receipt = this.seismicThreatHistory.admit(snapshot, Date.now());\n  if (receipt) attempt.report(receipt);\n  else attempt.fail();\n",
+      "failingAssertions": [
+        "    not ok 6 - dashboard seismic and Kp receipts come from the live acquisitions and each failed leg is reported",
+        "      error: |-",
+        "not ok 4 - fused-domain loaders stay inside their freshness contracts",
+        "  error: '1 subtest failed'"
+      ],
+      "restoredClean": true
+    },
+    {
+      "name": "kp-revision-clock",
+      "path": "src/app/data-loader.ts",
+      "command": [
+        "node",
+        "--test",
+        "tests/data-sources-wiring.test.mjs"
+      ],
+      "beforeSha256": "c52c403301962ffda60e279e15384647015aac9b3dadbdf08d11ffbccec0a79a",
+      "restoredSha256": "c52c403301962ffda60e279e15384647015aac9b3dadbdf08d11ffbccec0a79a",
+      "baseline": {
+        "pass": [
+          23
+        ],
+        "fail": [
+          0
+        ]
+      },
+      "mutation": {
+        "pass": [
+          22
+        ],
+        "fail": [
+          1
+        ]
+      },
+      "appliedDiff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex 68335865a..5df168e83 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -3005,7 +3005,7 @@ export class DataLoaderManager implements AppModule {\n     recordDomainObservations('gfz-kp', gfzVote.observations, gfzVote.ok);\n     for (const [attempt, vote, source] of [[swpcAttempt, swpcVote, swpc], [gfzAttempt, gfzVote, gfz]] as const) {\n       if (this.ctx.isDestroyed) { attempt.cancel(); continue; }\n-      const receipt = kpThreatReceipt(vote, Date.now(), source.fetchedAtMs);\n+      const receipt = kpThreatReceipt(vote, Date.now());\n       if (receipt) attempt.report(receipt);\n       else attempt.fail();\n     }\n",
+      "failingAssertions": [
+        "    not ok 6 - dashboard seismic and Kp receipts come from the live acquisitions and each failed leg is reported",
+        "      error: |-",
+        "not ok 4 - fused-domain loaders stay inside their freshness contracts",
+        "  error: '1 subtest failed'"
+      ],
+      "restoredClean": true
+    },
+    {
+      "name": "sidecar-cache-age",
+      "path": "src-tauri/sidecar/local-api-server.mjs",
+      "command": [
+        "node",
+        "--test",
+        "--test-name-pattern=Kp acquisition time",
+        "src-tauri/sidecar/local-api-server.test.mjs"
+      ],
+      "beforeSha256": "23f5a5a87492354ed515a5223f459bd6ae9879d88a0b8a400ad4753ad24863d9",
+      "restoredSha256": "23f5a5a87492354ed515a5223f459bd6ae9879d88a0b8a400ad4753ad24863d9",
+      "baseline": {
+        "pass": [
+          1
+        ],
+        "fail": [
+          0
+        ]
+      },
+      "mutation": {
+        "pass": [
+          0
+        ],
+        "fail": [
+          1
+        ]
+      },
+      "appliedDiff": "diff --git a/src-tauri/sidecar/local-api-server.mjs b/src-tauri/sidecar/local-api-server.mjs\nindex 734db3957..d915adfb7 100644\n--- a/src-tauri/sidecar/local-api-server.mjs\n+++ b/src-tauri/sidecar/local-api-server.mjs\n@@ -4362,7 +4362,7 @@ export async function fetchSpaceweatherStatusSidecar() {\n   // \"this product is QUIET\" \u2014 an empty kpPoints means very different things in\n   // those two cases, and they were previously indistinguishable.\n   status.subfeeds = { xray: xray.ok, kp: kp.ok, cme: cme.ok };\n-  status.kpFetchedAt = kp.ok ? kp.fetchedAt : null;\n+  status.kpFetchedAt = kp.ok ? Date.now() : null;\n   // `degraded` stays reserved for a TOTAL outage. fetchSwpcKp reads it as\n   // \"don't trust this payload at all\", so raising it for a CME-only failure\n   // would take the Kp voter down over an unrelated product's outage.\n",
+      "failingAssertions": [
+        "not ok 1 - /api/spaceweather/status \u2014 Kp acquisition time is frozen through a cache hit and advances on a real revision",
+        "  error: |-"
+      ],
+      "restoredClean": true
+    },
+    {
+      "name": "layout-poller-owner",
+      "path": "src/app/panel-layout.ts",
+      "command": [
+        "./node_modules/.bin/tsx",
+        "--test",
+        "--test-name-pattern=panel layout leaves",
+        "src/components/__tests__/threat-dashboard-coverage.test.mts"
+      ],
+      "beforeSha256": "211d85e05fdb75fe7a008de1755a3a25f2757787c52784ae80b2d933f30431ec",
+      "restoredSha256": "211d85e05fdb75fe7a008de1755a3a25f2757787c52784ae80b2d933f30431ec",
+      "baseline": {
+        "pass": [
+          1
+        ],
+        "fail": [
+          0
+        ]
+      },
+      "mutation": {
+        "pass": [
+          0
+        ],
+        "fail": [
+          1
+        ]
+      },
+      "appliedDiff": "diff --git a/src/app/panel-layout.ts b/src/app/panel-layout.ts\nindex 3561dc820..0c6caf700 100644\n--- a/src/app/panel-layout.ts\n+++ b/src/app/panel-layout.ts\n@@ -2408,6 +2408,7 @@ export class PanelLayoutManager implements AppModule {\n  this.ctx.panels['cross-domain-contradiction-detector'] = new CrossDomainContradictionDetectorPanel();\n  this.ctx.panels['sms-command-interface'] = new SmsSettingsPanel();\n  this.ctx.panels['threat-dashboard'] = new ThreatDashboard();\n+ startThreatAggregator();\n  this.ctx.panels['aviation-intel'] = new AviationIntelPanel();\n  this.ctx.panels['aviation-superpower'] = new AviationSuperpowerPanel();\n  this.ctx.panels['nuclear-superpower'] = new NuclearSuperpowerPanel();\n",
+      "failingAssertions": [
+        "not ok 1 - panel layout leaves the threat poller lifetime exclusively to the dashboard",
+        "  error: 'layout must not create an unowned second threat producer'"
+      ],
+      "restoredClean": true
+    },
+    {
+      "name": "startup-harness",
+      "path": "src/app/__tests__/startup-acquisition.test.mts",
+      "command": [
+        "./node_modules/.bin/tsx",
+        "--test",
+        "src/app/__tests__/startup-acquisition.test.mts"
+      ],
+      "beforeSha256": "702167f3cf78311c409bd613d760a1e6d235afbef8b1505a77efa0795840e584",
+      "restoredSha256": "702167f3cf78311c409bd613d760a1e6d235afbef8b1505a77efa0795840e584",
+      "baseline": {
+        "pass": [
+          10
+        ],
+        "fail": [
+          0
+        ]
+      },
+      "mutation": {
+        "pass": [
+          1
+        ],
+        "fail": [
+          9
+        ]
+      },
+      "appliedDiff": "diff --git a/src/app/__tests__/startup-acquisition.test.mts b/src/app/__tests__/startup-acquisition.test.mts\nindex 3f91bdab8..a98d9df7f 100644\n--- a/src/app/__tests__/startup-acquisition.test.mts\n+++ b/src/app/__tests__/startup-acquisition.test.mts\n@@ -36,7 +36,7 @@ function fixture(variant = 'full', overrides: Record<string, unknown> = {}) {\n   document.addEventListener('wm:data-refreshed', () => facts.push('published'));\n   const deps: Record<string, unknown> = {\n     '@/config': { SITE_VARIANT: variant },\n-    '@/services/synthesis/geo-threat-evidence': geoThreatEvidence,\n+    // mutation: omit the genuine evidence dependency\n     '@/services/unified-alerts': { unifiedAlertStore: { startNwsLifecycle() {}, subscribe: () => () => {} } },\n     '@/utils': { debounce: () => () => {} },\n     '@/utils/concurrency-limiter': { createConcurrencyLimiter: measuredLimiter },\n",
+      "failingAssertions": [
+        "not ok 1 - ShakeAlert and NWS start with news held, only for the full variant",
+        "  error: 'geo_threat_evidence_1.SeismicThreatHistory is not a constructor'",
+        "not ok 2 - a reentrant or concurrent refresh joins one complete wave and a later refresh runs again",
+        "  error: 'geo_threat_evidence_1.SeismicThreatHistory is not a constructor'",
+        "not ok 3 - destroying an app during either wave prevents late search or refresh publication",
+        "  error: 'geo_threat_evidence_1.SeismicThreatHistory is not a constructor'",
+        "not ok 4 - an orchestration failure reaches all waiting callers and leaves a fresh attempt eligible",
+        "  error: 'geo_threat_evidence_1.SeismicThreatHistory is not a constructor'",
+        "not ok 5 - fresh NWS updates ready panels, store, storm event and matched-place prewarm on a live owner",
+        "  error: 'geo_threat_evidence_1.SeismicThreatHistory is not a constructor'",
+        "not ok 6 - late NWS acquisition cannot publish to the next app after destroy",
+        "  error: 'geo_threat_evidence_1.SeismicThreatHistory is not a constructor'",
+        "not ok 7 - destroy during saved-place resolution preserves earlier NWS evidence without any late storm state",
+        "  error: 'geo_threat_evidence_1.SeismicThreatHistory is not a constructor'",
+        "not ok 8 - disposal from a storm event cannot queue a late prewarm or publish context",
+        "  error: 'geo_threat_evidence_1.SeismicThreatHistory is not a constructor'",
+        "not ok 9 - a disposed NWS owner never resets the panel through its failure fallback",
+        "  error: 'geo_threat_evidence_1.SeismicThreatHistory is not a constructor'"
+      ],
+      "restoredClean": true
+    }
+  ]
+}

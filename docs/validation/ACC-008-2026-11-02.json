@@ -1,0 +1,800 @@
+{
+  "schemaVersion": 1,
+  "scope": "retained_installed_working_set",
+  "measurementUtc": "2026-11-02T00:07:25.253Z",
+  "manifestRecordedUtc": "2026-11-02T00:07:25.263Z",
+  "installedRelease": "2.25.147",
+  "evaluationCodeRevision": "590a9eeec5a1a599bcc00dff105575e8b9f628d0",
+  "installedEvaluationRevision": null,
+  "stores": {
+    "calibration": {
+      "status": "available"
+    },
+    "runs": {
+      "status": "available"
+    },
+    "comparisons": {
+      "status": "available"
+    },
+    "champion": {
+      "status": "missing"
+    }
+  },
+  "retained": {
+    "inputCount": 500,
+    "acceptedCount": 500,
+    "excludedCount": 0,
+    "resolved": 424,
+    "origins": {
+      "direct": 49,
+      "proxy": 375,
+      "manual": 0
+    },
+    "duplicateOutcomeCount": 0,
+    "metricPopulation": "retained_records_including_duplicates_and_reported_quality_defects",
+    "quality": {
+      "malformed": 0,
+      "labelLeakage": 0,
+      "contradictoryEvidence": 0,
+      "uncertainProxy": 375,
+      "lateResolutions": 274
+    },
+    "overduePending": 0,
+    "byForecaster": [
+      {
+        "forecaster": "analyst-loop",
+        "modelVersion": "2.0.0",
+        "total": 64,
+        "resolved": 26,
+        "pending": 1,
+        "expired": 37,
+        "origins": {
+          "direct": 0,
+          "proxy": 26,
+          "manual": 0
+        },
+        "positive": 0,
+        "negative": 26,
+        "metrics": {
+          "all": {
+            "status": "ok",
+            "sampleSize": 26,
+            "value": 0.7225
+          },
+          "direct": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          },
+          "proxy": {
+            "status": "ok",
+            "sampleSize": 26,
+            "value": 0.7225
+          },
+          "manual": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          }
+        }
+      },
+      {
+        "forecaster": "hierarchical-base-rate",
+        "modelVersion": "1.0.0",
+        "total": 139,
+        "resolved": 115,
+        "pending": 1,
+        "expired": 23,
+        "origins": {
+          "direct": 14,
+          "proxy": 101,
+          "manual": 0
+        },
+        "positive": 57,
+        "negative": 58,
+        "metrics": {
+          "all": {
+            "status": "ok",
+            "sampleSize": 115,
+            "value": 0.4888649394908798
+          },
+          "direct": {
+            "status": "insufficient_evidence",
+            "sampleSize": 14,
+            "minSampleSize": 20
+          },
+          "proxy": {
+            "status": "ok",
+            "sampleSize": 101,
+            "value": 0.5566209733567714
+          },
+          "manual": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          }
+        }
+      },
+      {
+        "forecaster": "mode-forecast:disaster",
+        "modelVersion": "1.0.0",
+        "total": 43,
+        "resolved": 43,
+        "pending": 0,
+        "expired": 0,
+        "origins": {
+          "direct": 0,
+          "proxy": 43,
+          "manual": 0
+        },
+        "positive": 43,
+        "negative": 0,
+        "metrics": {
+          "all": {
+            "status": "ok",
+            "sampleSize": 43,
+            "value": 0.15562633968827083
+          },
+          "direct": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          },
+          "proxy": {
+            "status": "ok",
+            "sampleSize": 43,
+            "value": 0.15562633968827083
+          },
+          "manual": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          }
+        }
+      },
+      {
+        "forecaster": "mode-forecast:security",
+        "modelVersion": "1.0.0",
+        "total": 39,
+        "resolved": 36,
+        "pending": 0,
+        "expired": 3,
+        "origins": {
+          "direct": 0,
+          "proxy": 36,
+          "manual": 0
+        },
+        "positive": 36,
+        "negative": 0,
+        "metrics": {
+          "all": {
+            "status": "ok",
+            "sampleSize": 36,
+            "value": 0.13391314925393127
+          },
+          "direct": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          },
+          "proxy": {
+            "status": "ok",
+            "sampleSize": 36,
+            "value": 0.13391314925393127
+          },
+          "manual": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          }
+        }
+      },
+      {
+        "forecaster": "nws-warning",
+        "modelVersion": "1.0.0",
+        "total": 215,
+        "resolved": 204,
+        "pending": 0,
+        "expired": 11,
+        "origins": {
+          "direct": 35,
+          "proxy": 169,
+          "manual": 0
+        },
+        "positive": 35,
+        "negative": 169,
+        "metrics": {
+          "all": {
+            "status": "ok",
+            "sampleSize": 204,
+            "value": 0.4213725490196076
+          },
+          "direct": {
+            "status": "ok",
+            "sampleSize": 35,
+            "value": 0.08999999999999998
+          },
+          "proxy": {
+            "status": "ok",
+            "sampleSize": 169,
+            "value": 0.4899999999999993
+          },
+          "manual": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          }
+        }
+      }
+    ]
+  },
+  "paired": {
+    "temporalPolicy": "before_earliest_structured_evidence_or_legacy_resolved_at",
+    "availability": "available",
+    "inputCount": 301,
+    "acceptedCount": 115,
+    "exclusions": {
+      "malformed_or_unsupported": 1,
+      "unmatched_identity": 185
+    },
+    "rows": [
+      {
+        "forecaster": "analyst-loop",
+        "modelVersion": "2.0.0",
+        "baselineModel": "hierarchical-base-rate",
+        "baselineVersion": "1.0.0",
+        "domain": "other",
+        "horizon": "1h-6h",
+        "origin": "proxy",
+        "count": 14,
+        "productionBrier": {
+          "status": "insufficient_evidence",
+          "sampleSize": 14,
+          "minSampleSize": 20
+        },
+        "baselineBrier": {
+          "status": "insufficient_evidence",
+          "sampleSize": 14,
+          "minSampleSize": 20
+        },
+        "skill": {
+          "status": "insufficient_evidence",
+          "sampleSize": 14,
+          "minSampleSize": 20
+        }
+      },
+      {
+        "forecaster": "mode-forecast:disaster",
+        "modelVersion": "1.0.0",
+        "baselineModel": "hierarchical-base-rate",
+        "baselineVersion": "1.0.0",
+        "domain": "humanitarian",
+        "horizon": "1d-7d",
+        "origin": "proxy",
+        "count": 43,
+        "productionBrier": {
+          "status": "ok",
+          "sampleSize": 43,
+          "value": 0.15562633968827091
+        },
+        "baselineBrier": {
+          "status": "ok",
+          "sampleSize": 43,
+          "value": 0.0007216170440701832
+        },
+        "skill": {
+          "status": "ok",
+          "sampleSize": 43,
+          "value": -214.6633369002506
+        }
+      },
+      {
+        "forecaster": "nws-warning",
+        "modelVersion": "1.0.0",
+        "baselineModel": "hierarchical-base-rate",
+        "baselineVersion": "1.0.0",
+        "domain": "weather",
+        "horizon": "<1h",
+        "origin": "direct",
+        "count": 1,
+        "productionBrier": {
+          "status": "insufficient_evidence",
+          "sampleSize": 1,
+          "minSampleSize": 20
+        },
+        "baselineBrier": {
+          "status": "insufficient_evidence",
+          "sampleSize": 1,
+          "minSampleSize": 20
+        },
+        "skill": {
+          "status": "insufficient_evidence",
+          "sampleSize": 1,
+          "minSampleSize": 20
+        }
+      },
+      {
+        "forecaster": "nws-warning",
+        "modelVersion": "1.0.0",
+        "baselineModel": "hierarchical-base-rate",
+        "baselineVersion": "1.0.0",
+        "domain": "weather",
+        "horizon": "<1h",
+        "origin": "proxy",
+        "count": 19,
+        "productionBrier": {
+          "status": "insufficient_evidence",
+          "sampleSize": 19,
+          "minSampleSize": 20
+        },
+        "baselineBrier": {
+          "status": "insufficient_evidence",
+          "sampleSize": 19,
+          "minSampleSize": 20
+        },
+        "skill": {
+          "status": "insufficient_evidence",
+          "sampleSize": 19,
+          "minSampleSize": 20
+        }
+      },
+      {
+        "forecaster": "nws-warning",
+        "modelVersion": "1.0.0",
+        "baselineModel": "hierarchical-base-rate",
+        "baselineVersion": "1.0.0",
+        "domain": "weather",
+        "horizon": "1h-6h",
+        "origin": "direct",
+        "count": 13,
+        "productionBrier": {
+          "status": "insufficient_evidence",
+          "sampleSize": 13,
+          "minSampleSize": 20
+        },
+        "baselineBrier": {
+          "status": "insufficient_evidence",
+          "sampleSize": 13,
+          "minSampleSize": 20
+        },
+        "skill": {
+          "status": "insufficient_evidence",
+          "sampleSize": 13,
+          "minSampleSize": 20
+        }
+      },
+      {
+        "forecaster": "nws-warning",
+        "modelVersion": "1.0.0",
+        "baselineModel": "hierarchical-base-rate",
+        "baselineVersion": "1.0.0",
+        "domain": "weather",
+        "horizon": "1h-6h",
+        "origin": "proxy",
+        "count": 25,
+        "productionBrier": {
+          "status": "ok",
+          "sampleSize": 25,
+          "value": 0.49000000000000005
+        },
+        "baselineBrier": {
+          "status": "ok",
+          "sampleSize": 25,
+          "value": 0.9930416008657009
+        },
+        "skill": {
+          "status": "ok",
+          "sampleSize": 25,
+          "value": 0.5065664927100393
+        }
+      }
+    ]
+  },
+  "champion": {
+    "availability": "unavailable",
+    "reason": "registry_missing"
+  },
+  "manifest": {
+    "proofWindowEligible": false,
+    "reasons": [
+      "retained_working_set_only",
+      "installed_evaluation_revision_unavailable",
+      "production_window_not_assessed"
+    ],
+    "missingModelVersionCount": 0,
+    "unknownForecasterCount": 0,
+    "cohorts": [
+      {
+        "forecaster": "analyst-loop",
+        "modelVersion": "2.0.0",
+        "domain": "other",
+        "horizon": "1h-6h",
+        "total": 64,
+        "resolved": 26,
+        "pending": 1,
+        "expired": 37,
+        "origins": {
+          "direct": 0,
+          "proxy": 26,
+          "manual": 0
+        },
+        "positive": 0,
+        "negative": 26,
+        "metrics": {
+          "all": {
+            "status": "ok",
+            "sampleSize": 26,
+            "value": 0.7225
+          },
+          "direct": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          },
+          "proxy": {
+            "status": "ok",
+            "sampleSize": 26,
+            "value": 0.7225
+          },
+          "manual": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          }
+        }
+      },
+      {
+        "forecaster": "hierarchical-base-rate",
+        "modelVersion": "1.0.0",
+        "domain": "conflict",
+        "horizon": "1d-7d",
+        "total": 1,
+        "resolved": 0,
+        "pending": 0,
+        "expired": 1,
+        "origins": {
+          "direct": 0,
+          "proxy": 0,
+          "manual": 0
+        },
+        "positive": 0,
+        "negative": 0,
+        "metrics": {
+          "all": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          },
+          "direct": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          },
+          "proxy": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          },
+          "manual": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          }
+        }
+      },
+      {
+        "forecaster": "hierarchical-base-rate",
+        "modelVersion": "1.0.0",
+        "domain": "humanitarian",
+        "horizon": "1d-7d",
+        "total": 43,
+        "resolved": 43,
+        "pending": 0,
+        "expired": 0,
+        "origins": {
+          "direct": 0,
+          "proxy": 43,
+          "manual": 0
+        },
+        "positive": 43,
+        "negative": 0,
+        "metrics": {
+          "all": {
+            "status": "ok",
+            "sampleSize": 43,
+            "value": 0.0007216170440701829
+          },
+          "direct": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          },
+          "proxy": {
+            "status": "ok",
+            "sampleSize": 43,
+            "value": 0.0007216170440701829
+          },
+          "manual": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          }
+        }
+      },
+      {
+        "forecaster": "hierarchical-base-rate",
+        "modelVersion": "1.0.0",
+        "domain": "other",
+        "horizon": "1h-6h",
+        "total": 37,
+        "resolved": 14,
+        "pending": 1,
+        "expired": 22,
+        "origins": {
+          "direct": 0,
+          "proxy": 14,
+          "manual": 0
+        },
+        "positive": 0,
+        "negative": 14,
+        "metrics": {
+          "all": {
+            "status": "insufficient_evidence",
+            "sampleSize": 14,
+            "minSampleSize": 20
+          },
+          "direct": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          },
+          "proxy": {
+            "status": "insufficient_evidence",
+            "sampleSize": 14,
+            "minSampleSize": 20
+          },
+          "manual": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          }
+        }
+      },
+      {
+        "forecaster": "hierarchical-base-rate",
+        "modelVersion": "1.0.0",
+        "domain": "weather",
+        "horizon": "<1h",
+        "total": 20,
+        "resolved": 20,
+        "pending": 0,
+        "expired": 0,
+        "origins": {
+          "direct": 1,
+          "proxy": 19,
+          "manual": 0
+        },
+        "positive": 1,
+        "negative": 19,
+        "metrics": {
+          "all": {
+            "status": "ok",
+            "sampleSize": 20,
+            "value": 0.9058351894557551
+          },
+          "direct": {
+            "status": "insufficient_evidence",
+            "sampleSize": 1,
+            "minSampleSize": 20
+          },
+          "proxy": {
+            "status": "insufficient_evidence",
+            "sampleSize": 19,
+            "minSampleSize": 20
+          },
+          "manual": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          }
+        }
+      },
+      {
+        "forecaster": "hierarchical-base-rate",
+        "modelVersion": "1.0.0",
+        "domain": "weather",
+        "horizon": "1h-6h",
+        "total": 38,
+        "resolved": 38,
+        "pending": 0,
+        "expired": 0,
+        "origins": {
+          "direct": 13,
+          "proxy": 25,
+          "manual": 0
+        },
+        "positive": 13,
+        "negative": 25,
+        "metrics": {
+          "all": {
+            "status": "ok",
+            "sampleSize": 38,
+            "value": 0.6533217391104297
+          },
+          "direct": {
+            "status": "insufficient_evidence",
+            "sampleSize": 13,
+            "minSampleSize": 20
+          },
+          "proxy": {
+            "status": "ok",
+            "sampleSize": 25,
+            "value": 0.9930416008657006
+          },
+          "manual": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          }
+        }
+      },
+      {
+        "forecaster": "mode-forecast:disaster",
+        "modelVersion": "1.0.0",
+        "domain": "humanitarian",
+        "horizon": "1d-7d",
+        "total": 43,
+        "resolved": 43,
+        "pending": 0,
+        "expired": 0,
+        "origins": {
+          "direct": 0,
+          "proxy": 43,
+          "manual": 0
+        },
+        "positive": 43,
+        "negative": 0,
+        "metrics": {
+          "all": {
+            "status": "ok",
+            "sampleSize": 43,
+            "value": 0.15562633968827083
+          },
+          "direct": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          },
+          "proxy": {
+            "status": "ok",
+            "sampleSize": 43,
+            "value": 0.15562633968827083
+          },
+          "manual": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          }
+        }
+      },
+      {
+        "forecaster": "mode-forecast:security",
+        "modelVersion": "1.0.0",
+        "domain": "conflict",
+        "horizon": "1d-7d",
+        "total": 39,
+        "resolved": 36,
+        "pending": 0,
+        "expired": 3,
+        "origins": {
+          "direct": 0,
+          "proxy": 36,
+          "manual": 0
+        },
+        "positive": 36,
+        "negative": 0,
+        "metrics": {
+          "all": {
+            "status": "ok",
+            "sampleSize": 36,
+            "value": 0.13391314925393127
+          },
+          "direct": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          },
+          "proxy": {
+            "status": "ok",
+            "sampleSize": 36,
+            "value": 0.13391314925393127
+          },
+          "manual": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          }
+        }
+      },
+      {
+        "forecaster": "nws-warning",
+        "modelVersion": "1.0.0",
+        "domain": "weather",
+        "horizon": "<1h",
+        "total": 78,
+        "resolved": 78,
+        "pending": 0,
+        "expired": 0,
+        "origins": {
+          "direct": 4,
+          "proxy": 74,
+          "manual": 0
+        },
+        "positive": 4,
+        "negative": 74,
+        "metrics": {
+          "all": {
+            "status": "ok",
+            "sampleSize": 78,
+            "value": 0.4694871794871791
+          },
+          "direct": {
+            "status": "insufficient_evidence",
+            "sampleSize": 4,
+            "minSampleSize": 20
+          },
+          "proxy": {
+            "status": "ok",
+            "sampleSize": 74,
+            "value": 0.4899999999999996
+          },
+          "manual": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          }
+        }
+      },
+      {
+        "forecaster": "nws-warning",
+        "modelVersion": "1.0.0",
+        "domain": "weather",
+        "horizon": "1h-6h",
+        "total": 137,
+        "resolved": 126,
+        "pending": 0,
+        "expired": 11,
+        "origins": {
+          "direct": 31,
+          "proxy": 95,
+          "manual": 0
+        },
+        "positive": 31,
+        "negative": 95,
+        "metrics": {
+          "all": {
+            "status": "ok",
+            "sampleSize": 126,
+            "value": 0.3915873015873021
+          },
+          "direct": {
+            "status": "ok",
+            "sampleSize": 31,
+            "value": 0.09
+          },
+          "proxy": {
+            "status": "ok",
+            "sampleSize": 95,
+            "value": 0.4900000000000001
+          },
+          "manual": {
+            "status": "insufficient_evidence",
+            "sampleSize": 0,
+            "minSampleSize": 20
+          }
+        }
+      }
+    ]
+  },
+  "modelReadiness": "not_established_by_retained_working_set"
+}

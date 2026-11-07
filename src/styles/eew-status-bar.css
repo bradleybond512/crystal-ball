@@ -189,7 +189,8 @@ body.is-desktop-macos .eew-bar-main {
 .eew-bar-tier-TIER_4_SEVERE  { border-left: 3px solid #dc2626; padding-left: 8px; }
 .eew-bar-tier-TIER_5_EXTREME { border-left: 3px solid #9f1239; padding-left: 8px; }
 
-.eew-bar-live {
+.eew-bar-live,
+.critical-ui-announcer {
   position: absolute;
   width: 1px;
   height: 1px;

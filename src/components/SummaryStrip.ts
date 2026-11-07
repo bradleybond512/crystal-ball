@@ -18,6 +18,7 @@
  * (Settings → General → Overview) can remove it entirely.
  */
 
+import { criticalAnnouncementsSuppressed, watchCriticalAnnouncementSuppression } from '@/utils/critical-ui-announcements';
 import { escapeHtml } from '@/utils/sanitize';
 import { icon } from './ui/icons';
 import { unifiedAlertStore, type AlertSeverity } from '@/services/unified-alerts';
@@ -90,15 +91,36 @@ function capCount(n: number): string {
 export class SummaryStrip {
   private readonly el: HTMLElement;
   private readonly segsEl: HTMLElement;
+  private readonly live: HTMLElement;
+  private readonly stopWatchingSuppression: () => void;
+  private previousTriage?: string;
+  private readonly bodies = new WeakMap<HTMLButtonElement, string>();
+  private enabled = isSummaryStripEnabled();
   private collapsed: boolean;
   private status: StatusBarState | null = null;
   private unsubStatus: (() => void) | null = null;
   private unsubAlerts: (() => void) | null = null;
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private readonly onRegimeEvent = (): void => this.renderSegments();
-  private readonly onToggleEvent = (): void => {
-    this.applyEnabled();
+  private readonly rebaseline = (): void => {
+    this.previousTriage = undefined;
+    if (this.live.textContent) this.live.textContent = '';
     this.renderSegments();
+  };
+
+  private readonly onToggleEvent = (event: Event): void => {
+    this.enabled = (event as CustomEvent<{ enabled?: boolean }>).detail?.enabled ?? isSummaryStripEnabled();
+    this.applyEnabled();
+    this.rebaseline();
+  };
+
+  private readonly onStorage = (event: StorageEvent): void => {
+    if (event.key !== null && event.key !== ENABLED_KEY && event.key !== COLLAPSED_KEY) return;
+    this.enabled = isSummaryStripEnabled();
+    this.collapsed = this.readCollapsed();
+    this.applyEnabled();
+    this.applyCollapsed();
+    this.rebaseline();
   };
 
   constructor(private readonly deps: SummaryStripDeps) {
@@ -109,15 +131,27 @@ export class SummaryStrip {
     this.el.setAttribute('aria-label', 'At a glance summary');
     this.segsEl = document.createElement('div');
     this.segsEl.className = 'cb-summary-strip-segs';
+    this.segsEl.innerHTML = `
+      <button type="button" class="cb-summary-strip-seg" data-seg="status" title="System status — open Safety Case"></button>
+      <button type="button" class="cb-summary-strip-seg" data-seg="alerts" aria-description="Open Alert Inbox."></button>
+      <button type="button" class="cb-summary-strip-seg" data-seg="fresh" aria-description="Open System Status."></button>
+      <button type="button" class="cb-summary-strip-seg" data-seg="regime"></button>`;
+    this.live = document.createElement('span');
+    this.live.className = 'critical-ui-announcer';
+    this.live.setAttribute('role', 'status');
+    this.live.setAttribute('aria-live', 'polite');
+    this.live.setAttribute('aria-atomic', 'true');
     const chevron = document.createElement('button');
     chevron.type = 'button';
     chevron.className = 'cb-summary-strip-chevron';
     chevron.dataset.seg = 'chevron';
-    this.el.append(this.segsEl, chevron);
+    chevron.innerHTML = icon('chevron-down', { size: 12 });
+    this.el.append(this.segsEl, chevron, this.live);
 
     // One delegated listener for every segment + the chevron.
-    this.el.addEventListener('click', (e) => this.onClick(e));
+    this.el.addEventListener('click', this.onClick);
 
+    this.stopWatchingSuppression = watchCriticalAnnouncementSuppression(this.rebaseline);
     this.unsubStatus = deps.subscribeStatus((state) => {
       this.status = state;
       this.renderSegments();
@@ -126,6 +160,7 @@ export class SummaryStrip {
     this.refreshTimer = setInterval(() => this.renderSegments(), REFRESH_MS);
     document.addEventListener(REGIME_SHIFT_EVENT, this.onRegimeEvent);
     document.addEventListener(SUMMARY_STRIP_TOGGLE_EVENT, this.onToggleEvent);
+    window.addEventListener('storage', this.onStorage);
 
     this.applyEnabled();
     this.applyCollapsed();
@@ -137,6 +172,7 @@ export class SummaryStrip {
   }
 
   public destroy(): void {
+    this.stopWatchingSuppression();
     this.unsubStatus?.();
     this.unsubStatus = null;
     this.unsubAlerts?.();
@@ -147,6 +183,8 @@ export class SummaryStrip {
     }
     document.removeEventListener(REGIME_SHIFT_EVENT, this.onRegimeEvent);
     document.removeEventListener(SUMMARY_STRIP_TOGGLE_EVENT, this.onToggleEvent);
+    window.removeEventListener('storage', this.onStorage);
+    this.el.removeEventListener('click', this.onClick);
     this.el.remove();
   }
 
@@ -161,14 +199,18 @@ export class SummaryStrip {
   }
 
   private applyEnabled(): void {
-    this.el.style.display = isSummaryStripEnabled() ? '' : 'none';
+    this.el.style.display = this.enabled ? '' : 'none';
   }
 
   private applyCollapsed(): void {
     this.el.classList.toggle('is-collapsed', this.collapsed);
+    if (this.collapsed) {
+      for (const segment of this.segsEl.querySelectorAll<HTMLButtonElement>('button:not([data-seg="status"])')) {
+        this.setSegmentDisplay(segment, 'none', 'chevron');
+      }
+    }
     const chevron = this.el.querySelector<HTMLElement>('.cb-summary-strip-chevron');
     if (chevron) {
-      chevron.innerHTML = icon('chevron-down', { size: 12 });
       chevron.setAttribute('aria-expanded', String(!this.collapsed));
       chevron.setAttribute('aria-label', this.collapsed ? 'Expand summary strip' : 'Collapse summary strip');
       chevron.title = this.collapsed ? 'Expand' : 'Collapse';
@@ -178,18 +220,35 @@ export class SummaryStrip {
   // ── Rendering ─────────────────────────────────────────────────────────
 
   private renderSegments(): void {
-    if (!isSummaryStripEnabled()) return;
-    this.segsEl.innerHTML = this.collapsed
-      ? this.statusSegHtml(true)
-      : [
-        this.statusSegHtml(false),
-        this.alertsSegHtml(),
-        this.freshnessSegHtml(),
-        this.regimeSegHtml(),
-      ].filter((s) => s.length > 0).join('');
+    if (!this.enabled) return;
+    this.renderStatus();
+    if (this.collapsed) return;
+    this.renderAlerts();
+    this.renderFreshness();
+    this.renderRegime();
   }
 
-  private statusSegHtml(dotOnly: boolean): string {
+  private setSegmentDisplay(button: HTMLButtonElement, display: string, fallback: 'fresh' | 'chevron'): void {
+    if (button.style.display === display) return;
+    if (display === 'none' && button.isSameNode(document.activeElement)) {
+      this.el.querySelector<HTMLButtonElement>(`[data-seg="${fallback}"]`)?.focus({ preventScroll: true });
+    }
+    button.style.display = display;
+  }
+
+  private updateSegment(key: string, body: string, title: string, attr: 'aria-label' | 'aria-description', name: string): void {
+    const button = this.segsEl.querySelector<HTMLButtonElement>(`[data-seg="${key}"]`)!;
+    const display = body ? '' : 'none';
+    this.setSegmentDisplay(button, display, 'fresh');
+    if (this.bodies.get(button) !== body) {
+      button.innerHTML = body;
+      this.bodies.set(button, body);
+    }
+    if (button.title !== title) button.title = title;
+    if (button.getAttribute(attr) !== name) button.setAttribute(attr, name);
+  }
+
+  private renderStatus(): void {
     const state = this.status;
     const color = STATUS_COLOR_TOKEN[state?.color ?? 'gray'];
     // Before the first derived state arrives, stay non-committal ("—") rather
@@ -197,27 +256,47 @@ export class SummaryStrip {
     // yet evaluated. Once state exists, the composite label (incl. weather) wins.
     const label = state?.label ?? '—';
     const dot = `<span class="cb-summary-strip-dot" style="background:${color};" aria-hidden="true"></span>`;
-    const text = dotOnly ? '' : `<span class="cb-summary-strip-status" style="color:${color};">${escapeHtml(label)}</span>`;
-    return `<button type="button" class="cb-summary-strip-seg" data-seg="status" title="System status — open Safety Case" aria-label="System status: ${escapeHtml(label)}. Open Safety Case panel.">${dot}${text}</button>`;
+    const text = this.collapsed ? '' : `<span class="cb-summary-strip-status" style="color:${color};">${escapeHtml(label)}</span>`;
+    this.updateSegment('status', dot + text, 'System status — open Safety Case', 'aria-label', `System status: ${label}. Open Safety Case panel.`);
   }
 
-  private alertsSegHtml(): string {
-    const unacked = unifiedAlertStore.getAll().filter((a) => !a.acknowledged);
+  private renderAlerts(): void {
+    const counts = { critical: 0, high: 0, medium: 0 };
+    let total = 0;
+    for (const alert of unifiedAlertStore.getOperationalAlerts()) {
+      if (alert.acknowledged) continue;
+      total++;
+      if (alert.severity === 'critical' || alert.severity === 'high' || alert.severity === 'medium') counts[alert.severity]++;
+    }
     const parts: string[] = [];
-    for (const sev of ['critical', 'high', 'medium'] as const) {
-      const n = unacked.filter((a) => a.severity === sev).length;
-      if (n > 0) {
-        const shortSeverity = sev === 'medium' ? 'med' : sev.slice(0, 4);
-        parts.push(`<strong class="cb-stat-value" style="color:${ALERT_SEV_TOKEN[sev]};">${capCount(n)}</strong> ${shortSeverity}`);
+    const triage: string[] = [];
+    for (const severity of ['critical', 'high', 'medium'] as const) {
+      const count = capCount(counts[severity]);
+      triage.push(`${count} ${severity}`);
+      if (counts[severity]) {
+        const short = severity === 'medium' ? 'med' : severity.slice(0, 4);
+        parts.push(`<strong class="cb-stat-value" style="color:${ALERT_SEV_TOKEN[severity]};">${count}</strong> ${short}`);
       }
     }
-    const body = parts.length > 0
-      ? parts.join('<span class="cb-stat-sep" aria-hidden="true">·</span>')
-      : '<span class="cb-summary-strip-muted">no open alerts</span>';
-    return `<button type="button" class="cb-summary-strip-seg" data-seg="alerts" title="${unacked.length} unacknowledged alerts — open Alert Inbox" aria-description="${unacked.length} unacknowledged alerts. Open Alert Inbox.">${body}</button>`;
+    const empty = total ? 'no critical, high or medium alerts' : 'no open alerts';
+    const body = parts.length ? parts.join('<span class="cb-stat-sep" aria-hidden="true">·</span>')
+      : `<span class="cb-summary-strip-muted">${empty}</span>`;
+    this.updateSegment('alerts', body, `${total} unacknowledged alerts — open Alert Inbox`, 'aria-description', `${total} unacknowledged alerts. Open Alert Inbox.`);
+
+    this.announceTriage('Unacknowledged alerts: ' + triage.join(', ') + '.');
   }
 
-  private freshnessSegHtml(): string {
+  private announceTriage(message: string): void {
+    if (criticalAnnouncementsSuppressed()) {
+      if (this.live.textContent) this.live.textContent = '';
+      this.previousTriage = undefined;
+    } else {
+      if (this.previousTriage !== undefined && message !== this.previousTriage && this.el.isConnected) this.live.textContent = message;
+      this.previousTriage = message;
+    }
+  }
+
+  private renderFreshness(): void {
     let body = '<span class="cb-summary-strip-muted">no data yet</span>';
     let detail = 'Data freshness — open System Status';
     try {
@@ -234,10 +313,10 @@ export class SummaryStrip {
         detail = `Data freshness across ${ages.length} sources — median ${median}, worst ${worst}. Open System Status.`;
       }
     } catch { /* freshness registry unavailable — keep the muted fallback */ }
-    return `<button type="button" class="cb-summary-strip-seg" data-seg="fresh" title="${escapeHtml(detail)}" aria-description="${escapeHtml(detail)}">${body}</button>`;
+    this.updateSegment('fresh', body, detail, 'aria-description', detail);
   }
 
-  private regimeSegHtml(): string {
+  private renderRegime(): void {
     let count = 0;
     try {
       // Empty when the BOCPD kill-switch is off — segment self-gates.
@@ -245,14 +324,15 @@ export class SummaryStrip {
     } catch {
       count = 0;
     }
-    if (count === 0) return '';
     const label = count === 1 ? 'regime shift' : 'regime shifts';
-    return `<button type="button" class="cb-summary-strip-seg" data-seg="regime" title="${count} active ${label} — open Analyst HUD" aria-label="${count} active ${label}. Open Analyst HUD."><strong class="cb-stat-value" style="color:var(--sev-elevated, #fb923c);">${capCount(count)}</strong> ${label}</button>`;
+    const detail = `${count} active ${label}`;
+    const body = count ? `<strong class="cb-stat-value" style="color:var(--sev-elevated, #fb923c);">${capCount(count)}</strong> ${label}` : '';
+    this.updateSegment('regime', body, detail + ' — open Analyst HUD', 'aria-label', detail + '. Open Analyst HUD.');
   }
 
   // ── Events ────────────────────────────────────────────────────────────
 
-  private onClick(event: MouseEvent): void {
+  private readonly onClick = (event: MouseEvent): void => {
     const target = event.target as HTMLElement | null;
     const seg = target?.closest<HTMLElement>('[data-seg]');
     if (!seg) return;
@@ -264,7 +344,7 @@ export class SummaryStrip {
           localStorage.setItem(COLLAPSED_KEY, this.collapsed ? '1' : '0');
         } catch { /* non-persistent is fine */ }
         this.applyCollapsed();
-        this.renderSegments();
+        this.rebaseline();
         break;
       }
       case 'status': { this.deps.onStatusClick(); break; }
@@ -273,5 +353,5 @@ export class SummaryStrip {
       case 'regime': { this.deps.onRegimeClick(); break; }
       default: { break; }
     }
-  }
+  };
 }

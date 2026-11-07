@@ -9,6 +9,7 @@ import type { UnifiedAlert, AlertSeverity } from './unified-alerts';
 import { validateAlertRetentionEvidence, type AlertObservationContext } from './alert-retention';
 import type { BreakingAlert } from './breaking-news-alerts';
 import type { CorrelationSignal } from './correlation';
+import type { WeatherAlert, WeatherFeedState } from './weather';
 import type { NWSAlert } from './nws-alerts';
 import type { TsunamiAlert } from './tsunami-alerts';
 import type { GDACSEvent } from './gdacs';
@@ -126,6 +127,25 @@ function observationTime(retrievedAt: number | undefined, context: AlertObservat
   return retrievedAt;
 }
 
+export function normalizeSiteWarning(
+  alert: WeatherAlert, source: string, state: WeatherFeedState, now = Date.now(),
+): UnifiedAlert | undefined {
+  if (source !== 'network' || state.mode !== 'live' || !alert.capId || !alert.status || !alert.messageType
+    || state.timestamp === null || !Number.isFinite(alert.sent?.getTime()) || !Number.isFinite(alert.expires.getTime())
+    || alert.expires.getTime() <= now) return;
+  const evidence = validateAlertRetentionEvidence('nws', {
+    kind: 'nws-expiry', observedAt: state.timestamp, issuedAt: alert.sent!.getTime(), expiresAt: alert.expires.getTime(),
+  }, now);
+  if (!evidence) return;
+  const onset = alert.reportedOnset?.getTime();
+  return normalizeNWSAlert({
+    id: alert.capId, status: alert.status, messageType: alert.messageType, event: alert.event, headline: alert.headline,
+    description: alert.description, areaDesc: alert.areaDesc, severity: alert.severity, urgency: 'Unknown',
+    centroid: alert.centroid ?? null, retrievedAt: state.timestamp, sent: alert.sent!.toISOString(),
+    onset: Number.isFinite(onset) ? alert.reportedOnset!.toISOString() : undefined, expires: alert.expires.toISOString(),
+  }, { kind: 'verified-response', observedAt: state.timestamp });
+}
+
 export function normalizeNWSAlert(alert: NWSAlert, context: AlertObservationContext = UNKNOWN_OBSERVATION): UnifiedAlert {
   const retentionEvidence = alert.status === 'Actual' && (alert.messageType === 'Alert' || alert.messageType === 'Update')
     ? validateAlertRetentionEvidence('nws', {
@@ -142,7 +162,7 @@ export function normalizeNWSAlert(alert: NWSAlert, context: AlertObservationCont
  severity: NWS_SEVERITY_MAP[alert.severity] ?? 'info',
  title: alert.event,
  body: alert.headline,
- timestamp: new Date(alert.onset ?? alert.sent).getTime(),
+ timestamp: new Date(alert.sent).getTime(),
  location: alert.centroid
  ? { lat: alert.centroid[1], lon: alert.centroid[0], label: alert.areaDesc }
  : undefined,

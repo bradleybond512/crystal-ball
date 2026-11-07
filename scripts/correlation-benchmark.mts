@@ -54,6 +54,7 @@ import { runCorrelationBenchmark } from '../src/services/correlation/bench-corre
 import {
   CORRELATION_BENCH_V11_TO_V12_MIGRATION,
   CORRELATION_BENCH_V12_TO_V13_MIGRATION,
+  validateCorrelationBenchV13ToV14Migration,
   validateCorrelationBenchV12ToV13Migration,
   compareCorrelationBenchReseedToPrevious,
   compareCorrelationBenchToBaseline,
@@ -140,6 +141,8 @@ function main(): void {
         prev,
         CORRELATION_BENCH_V12_TO_V13_MIGRATION,
       );
+    } else if (prev.schemaVersion === 13) {
+      comparison = validateCorrelationBenchV13ToV14Migration(report, prev);
     } else {
       comparison = compareCorrelationBenchReseedToPrevious(report, prev);
     }

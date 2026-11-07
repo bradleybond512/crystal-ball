@@ -33,6 +33,7 @@ import { attentionWeight, nextActiveHour } from '@/services/cognition/operator-m
 export interface RouteToLadderOptions {
   /** Stable id for this candidate. Defaults to `bigEvent-${at}-${i}`. */
   candidateId?: string;
+  recordDispatch?: boolean;
   /** Upstream alert / situation id. */
   situationId?: string;
   domain: NotificationDomain;
@@ -73,6 +74,7 @@ export interface LadderDecision {
   rung: NotificationRung;
   /** Was this candidate dispatched? False = suppressed. */
   dispatched: boolean;
+  eligibleForInbox?: boolean;
   reason: string;
   /** True = the candidate is safety-critical and was suppressed. The
    *  notification trace registry will surface this as
@@ -197,6 +199,11 @@ export function routeBigEventToLadder(
   }
 
   const rung = pickRung(result.deliveryPriority, safetyCritical);
+  if (options.recordDispatch === false) {
+    registry.recordEvent(candidateId, { kind: 'rung_selected', reason: 'Rung selected for inbox consideration.', detail: { rung } });
+    return { candidateId, rung, dispatched: false, eligibleForInbox: true, reason: 'Inbox owns notification consideration.',
+      unsafeSuppression: false, explanation: options.explanation };
+  }
   registry.dispatch(candidateId, rung, at);
   return {
     candidateId,

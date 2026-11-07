@@ -200,26 +200,46 @@ function workflowPr(number, {
   };
 }
 
-function validateSnapshotScript() {
+function metadataResponse(pull) {
+  return { repository: { pullRequest: {
+    number: pull.number,
+    state: pull.merged_at ? 'MERGED' : pull.state.toUpperCase(),
+    baseRefName: pull.base.ref,
+    isDraft: pull.draft,
+    title: pull.title,
+    body: pull.body,
+    updatedAt: pull.updated_at,
+    mergedAt: pull.merged_at,
+  } } };
+}
+
+function snapshotScript(job) {
   const workflow = readFileSync(join(root, '.github/workflows/roadmap-controller.yml'), 'utf8');
-  const validateJob = workflow.slice(0, workflow.indexOf('\n  watchdog:'));
-  const match = validateJob.match(
+  const jobSource = job === 'validate'
+    ? workflow.slice(0, workflow.indexOf('\n  watchdog:'))
+    : workflow.slice(workflow.indexOf('\n  watchdog:'));
+  const match = jobSource.match(
     /      - name: Build bounded PR snapshot[\s\S]*?          script: \|\n([\s\S]*?)(?=\n      - name:)/,
   );
-  assert.ok(match, 'validate-job snapshot script was not found');
+  assert.ok(match, `${job}-job snapshot script was not found`);
   return match[1].split('\n').map((line) => line.slice(12)).join('\n');
 }
 
-async function runValidateSnapshotScript({
+async function runSnapshotScript({
+  job = 'validate',
   referenced = [],
   open = [],
   currentByNumber = new Map(),
-  eventName = 'pull_request',
+  responses = new Map(),
+  compareStatuses = new Map(),
+  eventName = job === 'watchdog' ? 'schedule' : 'pull_request',
   eventPull = workflowPr(1),
+  metadataCalls = [],
   writes = [],
 } = {}) {
   let written;
-  const getCalls = [];
+  const listCalls = [];
+  const compareCalls = [];
   const fs = {
     readFileSync(path) {
       assert.equal(path, '/tmp/roadmap-references.json');
@@ -232,22 +252,40 @@ async function runValidateSnapshotScript({
     },
   };
   const github = {
+    async graphql(query, variables) {
+      metadataCalls.push(variables.number);
+      assert.equal(variables.owner, 'owner');
+      assert.equal(variables.name, 'repo');
+      const fields = query.match(/pullRequest\(number: \$number\)\s*\{([^}]+)\}/)?.[1].trim().split(/\s+/);
+      assert.deepEqual(fields?.sort(), [
+        'baseRefName', 'body', 'isDraft', 'mergedAt', 'number', 'state', 'title', 'updatedAt',
+      ]);
+      const number = variables.number;
+      const value = responses.has(number) ? responses.get(number) : currentByNumber.get(number);
+      if (value instanceof Error) throw value;
+      if (responses.has(number)) return value;
+      assert.ok(value, `missing mocked current PR #${number}`);
+      return metadataResponse(value);
+    },
     rest: {
       pulls: {
-        async list() {
-          return { data: open };
+        async list({ owner, repo, state, base, per_page, page }) {
+          assert.deepEqual({ owner, repo, state, base, per_page }, {
+            owner: 'owner', repo: 'repo', state: 'open', base: 'main', per_page: 100,
+          });
+          listCalls.push(page);
+          return { data: open.slice((page - 1) * per_page, page * per_page) };
         },
-        async get({ pull_number: number }) {
-          getCalls.push(number);
-          const value = currentByNumber.get(number);
-          if (value instanceof Error) throw value;
-          assert.ok(value, `missing mocked current PR #${number}`);
-          return { data: value };
+        async get() {
+          throw new Error('REST single-PR lookup forbidden: HTTP 422 too many files changed');
         },
       },
       repos: {
-        async compareCommits() {
-          throw new Error('compareCommits was not expected');
+        async compareCommits({ owner, repo, base, head }) {
+          assert.deepEqual({ owner, repo, head }, { owner: 'owner', repo: 'repo', head: 'merge-head' });
+          compareCalls.push(base);
+          assert.ok(compareStatuses.has(base), `unexpected comparison ${base}`);
+          return { data: { status: compareStatuses.get(base) } };
         },
       },
     },
@@ -260,7 +298,7 @@ async function runValidateSnapshotScript({
       : { merge_group: { head_sha: 'merge-head' } },
   };
 
-  await runInNewContext(`(async () => {\n${validateSnapshotScript()}\n})()`, {
+  await runInNewContext(`(async () => {\n${snapshotScript(job)}\n})()`, {
     require(name) {
       assert.equal(name, 'fs');
       return fs;
@@ -277,7 +315,9 @@ async function runValidateSnapshotScript({
 
   return {
     snapshot: written === undefined ? undefined : JSON.parse(written),
-    getCalls,
+    metadataCalls,
+    listCalls,
+    compareCalls,
     writes,
   };
 }
@@ -551,12 +591,12 @@ test('post-merge pull_request reruns snapshot current state without provisional 
     state: 'closed',
     mergedAt: '2026-08-24T11:30:00.000Z',
   });
-  const { snapshot: result, getCalls } = await runValidateSnapshotScript({
+  const { snapshot: result, metadataCalls } = await runSnapshotScript({
     eventPull: workflowPr(77),
     currentByNumber: new Map([[77, current]]),
   });
 
-  assert.deepEqual(getCalls, [77]);
+  assert.deepEqual(metadataCalls, [77]);
   assert.deepEqual(result.candidatePrNumbers, []);
   assert.deepEqual(result.pullRequests.map(({ number, state }) => ({ number, state })), [
     { number: 77, state: 'MERGED' },
@@ -565,12 +605,12 @@ test('post-merge pull_request reruns snapshot current state without provisional 
 
 test('an open pull_request event remains a current main candidate', async () => {
   const current = workflowPr(76);
-  const { snapshot: result, getCalls } = await runValidateSnapshotScript({
+  const { snapshot: result, metadataCalls } = await runSnapshotScript({
     eventPull: workflowPr(76, { state: 'closed', base: 'release' }),
     currentByNumber: new Map([[76, current]]),
   });
 
-  assert.deepEqual(getCalls, [76]);
+  assert.deepEqual(metadataCalls, [76]);
   assert.deepEqual(result.candidatePrNumbers, [76]);
   assert.deepEqual(result.pullRequests.map(({ number, state, base }) => ({ number, state, base })), [
     { number: 76, state: 'OPEN', base: 'main' },
@@ -579,13 +619,13 @@ test('an open pull_request event remains a current main candidate', async () => 
 
 test('a referenced closed-unmerged event PR is evidence but is not provisional evidence', async () => {
   const current = workflowPr(10, { state: 'closed' });
-  const { snapshot: result, getCalls } = await runValidateSnapshotScript({
+  const { snapshot: result, metadataCalls } = await runSnapshotScript({
     referenced: [10],
     eventPull: workflowPr(10),
     currentByNumber: new Map([[10, current]]),
   });
 
-  assert.deepEqual(getCalls, [10]);
+  assert.deepEqual(metadataCalls, [10]);
   assert.deepEqual(result.candidatePrNumbers, []);
   assert.equal(result.pullRequests.find(({ number }) => number === 10)?.state, 'CLOSED');
   const report = reconcileRoadmaps(parse(), result, {
@@ -594,28 +634,172 @@ test('a referenced closed-unmerged event PR is evidence but is not provisional e
   assert.ok(report.blocking.some((message) => /ACC-001.*evidence PR #10.*not merged/.test(message)));
 });
 
-test('a retargeted pull_request event is excluded using its current REST base', async () => {
+test('a retargeted pull_request event is excluded using its current metadata base', async () => {
   const current = workflowPr(88, { base: 'release' });
-  const { snapshot: result, getCalls } = await runValidateSnapshotScript({
+  const { snapshot: result, metadataCalls } = await runSnapshotScript({
     referenced: [88],
     open: [workflowPr(88)],
     eventPull: workflowPr(88),
     currentByNumber: new Map([[88, current]]),
   });
 
-  assert.deepEqual(getCalls, [88]);
+  assert.deepEqual(metadataCalls, [88]);
   assert.deepEqual(result.candidatePrNumbers, []);
   assert.deepEqual(result.pullRequests, []);
 });
 
-test('a pull_request REST lookup failure writes no partial snapshot', async () => {
+test('a pull_request metadata lookup failure writes no partial snapshot', async () => {
   const writes = [];
-  await assert.rejects(runValidateSnapshotScript({
+  await assert.rejects(runSnapshotScript({
     eventPull: workflowPr(89),
     currentByNumber: new Map([[89, new Error('current PR lookup failed')]]),
     writes,
   }), /current PR lookup failed/);
   assert.deepEqual(writes, []);
+});
+
+for (const number of [0, '90', 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+  test(`validate rejects malformed event PR number ${JSON.stringify(number)} before metadata lookup`, async () => {
+    const metadataCalls = [];
+    const writes = [];
+    await assert.rejects(runSnapshotScript({
+      eventPull: workflowPr(number), metadataCalls, writes,
+    }), /^Error: invalid PR metadata number$/);
+    assert.deepEqual(metadataCalls, []);
+    assert.deepEqual(writes, []);
+  });
+}
+
+for (const job of ['validate', 'watchdog']) {
+  test(`${job} includes every referenced PR using metadata despite oversized diffs`, async () => {
+    const merged = workflowPr(1533, {
+      state: 'closed', mergedAt: '2026-07-28T04:05:19Z', title: 'ACC-001 evidence',
+    });
+    const closed = workflowPr(1534, { state: 'closed' });
+    const open = workflowPr(1535);
+    const result = await runSnapshotScript({
+      job, eventName: 'workflow_dispatch', referenced: [1535, 1534, 1533, 1533], open: [open],
+      currentByNumber: new Map([[1533, merged], [1534, closed]]),
+    });
+    assert.deepEqual(result.metadataCalls, [1534, 1533]);
+    assert.deepEqual(result.snapshot.pullRequests, [merged, closed, open].map((pull) => ({
+      number: pull.number, state: pull.merged_at ? 'MERGED' : pull.state.toUpperCase(),
+      base: pull.base.ref, draft: pull.draft, title: pull.title, body: pull.body,
+      updatedAt: pull.updated_at, mergedAt: pull.merged_at,
+    })));
+    assert.deepEqual(result.snapshot.candidatePrNumbers, []);
+    assert.deepEqual(validateSnapshot(result.snapshot), []);
+    assert.equal(result.writes.length, 1);
+  });
+
+  test(`${job} excludes references currently targeting another base`, async () => {
+    const result = await runSnapshotScript({
+      job, eventName: 'workflow_dispatch', referenced: [90],
+      currentByNumber: new Map([[90, workflowPr(90, { base: 'release' })]]),
+    });
+    assert.deepEqual(result.metadataCalls, [90]);
+    assert.deepEqual(result.snapshot.pullRequests, []);
+  });
+
+  const valid = metadataResponse(workflowPr(90));
+  const malformed = [
+    ['null response', null],
+    ['missing repository', {}],
+    ['null repository', { repository: null }],
+    ['missing PR', { repository: {} }],
+    ['null PR', { repository: { pullRequest: null } }],
+    ['partial errors', { ...valid, errors: [{ message: 'partial response' }] }],
+    ['transport failure', new Error('metadata transport failure')],
+    ['GraphQL partial error', Object.assign(new Error('GraphQL query failed'), { data: valid })],
+  ];
+  for (const [field, value] of [
+    ['number', 91], ['number', '90'], ['state', 'UNKNOWN'], ['state', 'open'],
+    ['baseRefName', null], ['baseRefName', ''], ['isDraft', 'false'], ['isDraft', null],
+    ['title', null], ['title', 12], ['title', 'x'.repeat(513)],
+    ['body', null], ['body', {}], ['body', 'x'.repeat(131073)],
+    ['updatedAt', null], ['updatedAt', 'yesterday'], ['updatedAt', '2026-02-30T11:00:00Z'],
+    ['mergedAt', 'bad'], ['mergedAt', '2026-08-24T11:00:00Z'], ['state', 'MERGED'],
+  ]) {
+    malformed.push([`invalid ${field} ${String(value).slice(0, 30)}`, {
+      repository: { pullRequest: { ...valid.repository.pullRequest, [field]: value } },
+    }]);
+  }
+  for (const field of Object.keys(valid.repository.pullRequest)) {
+    const pull = { ...valid.repository.pullRequest };
+    delete pull[field];
+    malformed.push([`missing ${field}`, { repository: { pullRequest: pull } }]);
+  }
+  for (const [label, response] of malformed) {
+    test(`${job} rejects ${label} without writing a partial snapshot`, async () => {
+      const writes = [];
+      await assert.rejects(runSnapshotScript({
+        job, eventName: 'workflow_dispatch', referenced: [89, 90],
+        currentByNumber: new Map([[89, workflowPr(89)]]),
+        responses: new Map([[90, response]]), writes,
+      }), response instanceof Error ? (error) => error === response : /metadata/);
+      assert.deepEqual(writes, []);
+    });
+  }
+
+  test(`${job} accepts exact metadata field limits and preserves text as data`, async () => {
+    const pull = workflowPr(90, {
+      title: 'x'.repeat(512), body: '${{ secrets.GITHUB_TOKEN }}; `exit 1`'.padEnd(131072, 'x'),
+    });
+    const result = await runSnapshotScript({
+      job, eventName: 'workflow_dispatch', referenced: [90], currentByNumber: new Map([[90, pull]]),
+    });
+    assert.equal(result.snapshot.pullRequests[0].title, pull.title);
+    assert.equal(result.snapshot.pullRequests[0].body, pull.body);
+  });
+
+  test(`${job} paginates 256 open PRs and rejects a 257th before writing`, async () => {
+    const open = Array.from({ length: 257 }, (_, index) => workflowPr(index + 1));
+    const result = await runSnapshotScript({ job, eventName: 'workflow_dispatch', open: open.slice(0, 256) });
+    assert.deepEqual(result.listCalls, [1, 2, 3]);
+    assert.equal(result.snapshot.pullRequests.length, 256);
+    assert.deepEqual(result.metadataCalls, []);
+    const writes = [];
+    await assert.rejects(runSnapshotScript({ job, eventName: 'workflow_dispatch', open, writes }), /256-PR/);
+    assert.deepEqual(writes, []);
+  });
+
+  test(`${job} rejects malformed and excessive reference exports without writing`, async () => {
+    for (const referenced of [null, {}, [0], ['90'], [1.5], Array(257).fill(90)]) {
+      const writes = [];
+      await assert.rejects(runSnapshotScript({ job, eventName: 'workflow_dispatch', referenced, writes }), /reference/);
+      assert.deepEqual(writes, []);
+    }
+  });
+
+  test(`${job} preserves the 512-entry combined snapshot boundary`, async () => {
+    const open = Array.from({ length: 256 }, (_, index) => workflowPr(index + 1));
+    const referenced = Array.from({ length: 256 }, (_, index) => index + 257);
+    const currentByNumber = new Map(referenced.map((number) => [number, workflowPr(number, { state: 'closed' })]));
+    const result = await runSnapshotScript({ job, eventName: 'workflow_dispatch', referenced, open, currentByNumber });
+    assert.equal(result.snapshot.pullRequests.length, 512);
+    assert.equal(result.metadataCalls.length, 256);
+  });
+}
+
+test('validate rejects a 513-entry snapshot created by the current event without writing', async () => {
+  const open = Array.from({ length: 256 }, (_, index) => workflowPr(index + 1));
+  const referenced = Array.from({ length: 256 }, (_, index) => index + 257);
+  const currentByNumber = new Map([...referenced, 513].map((number) => [number, workflowPr(number)]));
+  const writes = [];
+  await assert.rejects(runSnapshotScript({ referenced, open, currentByNumber, eventPull: workflowPr(513), writes }), /512/);
+  assert.deepEqual(writes, []);
+});
+
+test('merge-group candidacy still uses head comparisons and metadata for closed references', async () => {
+  const result = await runSnapshotScript({
+    eventName: 'merge_group', open: [workflowPr(1), workflowPr(2), workflowPr(3)], referenced: [90],
+    currentByNumber: new Map([[90, workflowPr(90, { state: 'closed' })]]),
+    compareStatuses: new Map([['head-1', 'ahead'], ['head-2', 'identical'], ['head-3', 'diverged']]),
+  });
+  assert.deepEqual(result.compareCalls, ['head-1', 'head-2', 'head-3']);
+  assert.deepEqual(result.snapshot.candidatePrNumbers, [1, 2]);
+  assert.deepEqual(result.metadataCalls, [90]);
+  assert.equal(result.snapshot.pullRequests.length, 4);
 });
 
 test('candidate PR claims are one-to-one and synchronized with roadmap state', () => {

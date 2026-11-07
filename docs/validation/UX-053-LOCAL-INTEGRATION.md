@@ -55,3 +55,27 @@ This local checkpoint was replayed onto `ebc362760e5eeff52381e65010a7a0a661941f2
 No new full test run is claimed for this history/metadata transition. The original
 local tip is preserved on `codex/ux053-preserved-local-base-nov7`. Actual-main
 reconciliation, live candidate snapshot and exact-head Sonnet review remain open.
+
+## Conservative validation with the repaired main-owned selector
+
+The earlier run on `7b5c2c3548d61a7882d062bf9f97510fd9148723` aborted before
+UX050 because the old main-owned recipe contained an unsupported npm budget
+alias. That run did not establish an aggregate pass or certify its unrun tail.
+After repair #1860 landed, this branch retained its direct Node budget recipe
+and was replayed onto explicitly pending local #1847 source
+`ce44f2b1b8b0802513d2008af64d474aa27384ac`, not claimed as canonical main.
+
+All **76 scripts genuinely passed** in a fresh conservative run on actual
+execution `fed58f603631f6ec4b1a4faefc9e068c2348061b`. The trusted selector was
+copied from actual main `2cf7670ca47e65fd3acf1dd0f61fcd54e76afa81`; Node 22 and
+the canonical user TMPDIR were used. This includes complete trusted UX050 and
+all suites beyond the formerly aborted stage. All tracked input hashes were
+verified unchanged after execution. No production changes were needed.
+[Selected list, root objects and hashes](UX-053-SUPERSET-CONTINUITY.json) retain
+accurate execution provenance separately from later evidence commits.
+
+This is a pending-dependency superset, not final-main acceptance. After #1847
+lands, compare fresh actual-main required selection and relevant input hashes,
+run any missing/changed coverage, obtain a fresh candidate snapshot and an
+actual exact-head Sonnet review. Native MONITOR acceptance and all release /
+installation holds remain open. No new full aggregate gate is claimed here.

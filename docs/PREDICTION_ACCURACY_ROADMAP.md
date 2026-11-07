@@ -943,7 +943,7 @@ These tasks retain their detailed designs in
 | ACC-507 | DONE | Bounded cross-event correlation ingestion and liveness proof | ACC-502 (DONE) |
 | ACC-508 | TODO | Near-threshold coupling recall gate | ACC-503 (DONE), ACC-504 (DONE) |
 | ACC-509 | DONE | Stable situation identity under delayed and repeated input | #1738; #1743 performance follow-up; [evidence](validation/ACC-509-IDENTITY.md); UX-059 integration hold |
-| ACC-510 | TODO | Evidence-based domain for news-derived situations | ACC-509 |
+| ACC-510 | IN REVIEW | Evidence-based domain for news-derived situations | ACC-509 (DONE) |
 
 Safety invariant: learned inhibitory evidence remains shadow-only and cannot
 change operational scores, confidence, posture, alerts, or delivery rungs.
@@ -1996,7 +1996,9 @@ in UX-059 must coordinate with this store path. No accuracy-gate weakening.
 
 ### ACC-510 — Evidence-based domain for news-derived situations
 
-Status: `TODO`
+Status: `IN REVIEW`
+
+Claim: `codex/acc510-news-domain`, documentation-only draft claim. [Approved design](plans/2026-11-06-acc510-news-domain-evidence.md). Local implementation is authorized; code publication, installation, auto-merge and delivery remain paused.
 
 Priority: A
 

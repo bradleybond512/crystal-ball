@@ -1,0 +1,379 @@
+{
+  "method": "Three isolated renderer realms with frozen time; real resolver, store, aggregate diagnostics, registration and same-origin Web Lock coordination. Baseline and repair have identical weather/domain/horizon/version and evaluation times. Observation transport is synthetic, stored historical labels are immutable controls. Synthetic streak is an application mechanic, not installed-build acceptance.",
+  "source": "d80a048066b28ccc2219ef749461d46b90a2a4df",
+  "tree": "346dc1c32021b6a9b4b233f90f075f27df198bf1",
+  "engines": {
+    "chromium-web": {
+      "pass": 33,
+      "fail": 0,
+      "checks": {
+        "immutable source": true,
+        "engine": true,
+        "synthetic transport confinement": true,
+        "no fixture error": true,
+        "baseline had four falsely accepted temporal controls": true,
+        "futureBatch refused": true,
+        "badAcquisition refused": true,
+        "reportAfterAcquisition refused": true,
+        "afterReportCoverageStart refused": true,
+        "valid partial positive still direct": true,
+        "complete negative still proxy": true,
+        "incomplete negative not inferred": true,
+        "post-window report excluded": true,
+        "existing direct proxy manual and LLM records unchanged": true,
+        "baseline startup and resume missed due work": true,
+        "cold inputs block work": true,
+        "unrelated hydration does not trigger": true,
+        "pending market wave blocks work": true,
+        "first ready wave catches up once": true,
+        "seven consecutive natural synthetic runs": true,
+        "scheduled exposure and clock integrity": true,
+        "hourly and typed both complete at the same synthetic deadline": true,
+        "disabled and hidden do not add typed provider lookups": true,
+        "interruption breaks streak": true,
+        "visible due resume coalesces across toggles": true,
+        "more than 16 windows stays bounded": true,
+        "idle scheduled windows cannot certify production": true,
+        "failed provider pass neither settles new record nor counts as success": true,
+        "next healthy scheduled window recovers": true,
+        "disposal stops typed work": true,
+        "two same-origin peers perform one due lookup": true,
+        "aggregate snapshots do not contain raw IDs/claims/references/errors": true,
+        "receipts contain only aggregate numeric, boolean or fixed enum values": true
+      },
+      "matchedSyntheticWeather": {
+        "matureCases": 8,
+        "forecaster": "nws-warning",
+        "horizonMs": 3000,
+        "algorithmVersion": "synthetic-v1",
+        "beforeDirect": 5,
+        "afterDirect": 1,
+        "unsupportedDirectPrevented": 4
+      },
+      "fixtureCounts": {
+        "startup": 1,
+        "seven": 8,
+        "streak": 7,
+        "emptyRing": 16,
+        "peerCalls": [
+          1,
+          0
+        ]
+      }
+    },
+    "chromium-desktop": {
+      "pass": 33,
+      "fail": 0,
+      "checks": {
+        "immutable source": true,
+        "engine": true,
+        "synthetic transport confinement": true,
+        "no fixture error": true,
+        "baseline had four falsely accepted temporal controls": true,
+        "futureBatch refused": true,
+        "badAcquisition refused": true,
+        "reportAfterAcquisition refused": true,
+        "afterReportCoverageStart refused": true,
+        "valid partial positive still direct": true,
+        "complete negative still proxy": true,
+        "incomplete negative not inferred": true,
+        "post-window report excluded": true,
+        "existing direct proxy manual and LLM records unchanged": true,
+        "baseline startup and resume missed due work": true,
+        "cold inputs block work": true,
+        "unrelated hydration does not trigger": true,
+        "pending market wave blocks work": true,
+        "first ready wave catches up once": true,
+        "seven consecutive natural synthetic runs": true,
+        "scheduled exposure and clock integrity": true,
+        "hourly and typed both complete at the same synthetic deadline": true,
+        "disabled and hidden do not add typed provider lookups": true,
+        "interruption breaks streak": true,
+        "visible due resume coalesces across toggles": true,
+        "more than 16 windows stays bounded": true,
+        "idle scheduled windows cannot certify production": true,
+        "failed provider pass neither settles new record nor counts as success": true,
+        "next healthy scheduled window recovers": true,
+        "disposal stops typed work": true,
+        "two same-origin peers perform one due lookup": true,
+        "aggregate snapshots do not contain raw IDs/claims/references/errors": true,
+        "receipts contain only aggregate numeric, boolean or fixed enum values": true
+      },
+      "matchedSyntheticWeather": {
+        "matureCases": 8,
+        "forecaster": "nws-warning",
+        "horizonMs": 3000,
+        "algorithmVersion": "synthetic-v1",
+        "beforeDirect": 5,
+        "afterDirect": 1,
+        "unsupportedDirectPrevented": 4
+      },
+      "fixtureCounts": {
+        "startup": 1,
+        "seven": 8,
+        "streak": 7,
+        "emptyRing": 16,
+        "peerCalls": [
+          1,
+          0
+        ]
+      }
+    },
+    "wkwebview-desktop": {
+      "pass": 33,
+      "fail": 0,
+      "checks": {
+        "immutable source": true,
+        "engine": true,
+        "synthetic transport confinement": true,
+        "no fixture error": true,
+        "baseline had four falsely accepted temporal controls": true,
+        "futureBatch refused": true,
+        "badAcquisition refused": true,
+        "reportAfterAcquisition refused": true,
+        "afterReportCoverageStart refused": true,
+        "valid partial positive still direct": true,
+        "complete negative still proxy": true,
+        "incomplete negative not inferred": true,
+        "post-window report excluded": true,
+        "existing direct proxy manual and LLM records unchanged": true,
+        "baseline startup and resume missed due work": true,
+        "cold inputs block work": true,
+        "unrelated hydration does not trigger": true,
+        "pending market wave blocks work": true,
+        "first ready wave catches up once": true,
+        "seven consecutive natural synthetic runs": true,
+        "scheduled exposure and clock integrity": true,
+        "hourly and typed both complete at the same synthetic deadline": true,
+        "disabled and hidden do not add typed provider lookups": true,
+        "interruption breaks streak": true,
+        "visible due resume coalesces across toggles": true,
+        "more than 16 windows stays bounded": true,
+        "idle scheduled windows cannot certify production": true,
+        "failed provider pass neither settles new record nor counts as success": true,
+        "next healthy scheduled window recovers": true,
+        "disposal stops typed work": true,
+        "two same-origin peers perform one due lookup": true,
+        "aggregate snapshots do not contain raw IDs/claims/references/errors": true,
+        "receipts contain only aggregate numeric, boolean or fixed enum values": true
+      },
+      "matchedSyntheticWeather": {
+        "matureCases": 8,
+        "forecaster": "nws-warning",
+        "horizonMs": 3000,
+        "algorithmVersion": "synthetic-v1",
+        "beforeDirect": 5,
+        "afterDirect": 1,
+        "unsupportedDirectPrevented": 4
+      },
+      "fixtureCounts": {
+        "startup": 1,
+        "seven": 8,
+        "streak": 7,
+        "emptyRing": 16,
+        "peerCalls": [
+          1,
+          0
+        ]
+      }
+    }
+  },
+  "reachableImplementation": "8b1643d849b400e34079bed9072d4d73c4fa5d82",
+  "reachableImplementationTree": "346dc1c32021b6a9b4b233f90f075f27df198bf1",
+  "verifiedProduct": "8b1643d849b400e34079bed9072d4d73c4fa5d82",
+  "matchedResolverReplay": {
+    "before": {
+      "cohort": {
+        "sourceId": "nws-warning",
+        "domain": "weather",
+        "horizonMs": 9000,
+        "modelVersion": "unrecorded",
+        "resolverVersion": "warning-verification-v1",
+        "predictedAt": 1000,
+        "resolveBy": 10000,
+        "now": 10001
+      },
+      "denominator": 11,
+      "outcomes": [
+        {
+          "name": "future acquisition",
+          "origin": "direct",
+          "outcome": true,
+          "observation": "observed"
+        },
+        {
+          "name": "missing acquisition",
+          "origin": "direct",
+          "outcome": true,
+          "observation": "observed"
+        },
+        {
+          "name": "missing coverage start",
+          "origin": "direct",
+          "outcome": true,
+          "observation": "observed"
+        },
+        {
+          "name": "missing coverage end",
+          "origin": "direct",
+          "outcome": true,
+          "observation": "observed"
+        },
+        {
+          "name": "coverage past acquisition",
+          "origin": "direct",
+          "outcome": true,
+          "observation": "observed"
+        },
+        {
+          "name": "report before coverage",
+          "origin": "direct",
+          "outcome": true,
+          "observation": "observed"
+        },
+        {
+          "name": "report after coverage",
+          "origin": "direct",
+          "outcome": true,
+          "observation": "observed"
+        },
+        {
+          "name": "valid partial inclusive boundary",
+          "origin": "direct",
+          "outcome": true,
+          "observation": "outside"
+        },
+        {
+          "name": "valid complete positive",
+          "origin": "direct",
+          "outcome": true,
+          "observation": "observed"
+        },
+        {
+          "name": "valid complete negative",
+          "origin": "proxy",
+          "outcome": false,
+          "observation": "coverage:0-10001"
+        },
+        {
+          "name": "incomplete without observations",
+          "origin": "pending",
+          "outcome": null,
+          "observation": null
+        }
+      ]
+    },
+    "after": {
+      "cohort": {
+        "sourceId": "nws-warning",
+        "domain": "weather",
+        "horizonMs": 9000,
+        "modelVersion": "unrecorded",
+        "resolverVersion": "warning-verification-v1",
+        "predictedAt": 1000,
+        "resolveBy": 10000,
+        "now": 10001
+      },
+      "denominator": 11,
+      "outcomes": [
+        {
+          "name": "future acquisition",
+          "origin": "pending",
+          "outcome": null,
+          "observation": null
+        },
+        {
+          "name": "missing acquisition",
+          "origin": "pending",
+          "outcome": null,
+          "observation": null
+        },
+        {
+          "name": "missing coverage start",
+          "origin": "pending",
+          "outcome": null,
+          "observation": null
+        },
+        {
+          "name": "missing coverage end",
+          "origin": "pending",
+          "outcome": null,
+          "observation": null
+        },
+        {
+          "name": "coverage past acquisition",
+          "origin": "pending",
+          "outcome": null,
+          "observation": null
+        },
+        {
+          "name": "report before coverage",
+          "origin": "pending",
+          "outcome": null,
+          "observation": null
+        },
+        {
+          "name": "report after coverage",
+          "origin": "pending",
+          "outcome": null,
+          "observation": null
+        },
+        {
+          "name": "valid partial inclusive boundary",
+          "origin": "direct",
+          "outcome": true,
+          "observation": "observed"
+        },
+        {
+          "name": "valid complete positive",
+          "origin": "direct",
+          "outcome": true,
+          "observation": "observed"
+        },
+        {
+          "name": "valid complete negative",
+          "origin": "proxy",
+          "outcome": false,
+          "observation": "coverage:0-10001"
+        },
+        {
+          "name": "incomplete without observations",
+          "origin": "pending",
+          "outcome": null,
+          "observation": null
+        }
+      ]
+    }
+  },
+  "providerShape": {
+    "url": "https://mesonet.agron.iastate.edu/geojson/lsr.geojson?hours=24",
+    "sampledAt": "2026-11-04T05:39:41.326131+00:00",
+    "receivedAt": "2026-11-04T05:39:41.968584+00:00",
+    "httpStatus": 200,
+    "type": "FeatureCollection",
+    "rows": 181,
+    "featurePropertyNames": [
+      "city",
+      "county",
+      "lat",
+      "lon",
+      "magf",
+      "magnitude",
+      "product_id",
+      "qualifier",
+      "remark",
+      "source",
+      "st",
+      "state",
+      "type",
+      "typetext",
+      "unit",
+      "valid",
+      "wfo"
+    ],
+    "geometryTypes": [
+      "Point"
+    ],
+    "sizeBytes": 90769
+  }
+}

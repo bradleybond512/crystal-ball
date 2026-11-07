@@ -4,6 +4,7 @@ import {
   buildAlgorithmDiagnosticsSnapshot,
   type BuildAlgorithmDiagnosticsInput,
 } from '../algorithm-diagnostics.ts';
+import { recordResolutionRun, resetResolutionRunSession } from '../../intelligence/resolution-run-receipts.ts';
 import type { PredictionRecord } from '../../intelligence/forecast-calibration.ts';
 import {
   __resetCorrelationLivenessForTests,
@@ -697,4 +698,24 @@ test('weather verification diagnostics expose stale and malformed report evidenc
       complete: false,
     },
   );
+});
+
+test('forecast diagnostics expose actual resolver receipts and distinguish an empty session', () => {
+  resetResolutionRunSession();
+  const read = () => buildAlgorithmDiagnosticsSnapshot(baseInput()).forecastCalibration.resolverRuns;
+  assert.deepEqual(read(), { requiredScheduledRuns: 7, consecutiveQualifyingScheduledRuns: 0, receipts: [], historicalLateCauseUnknown: 0 });
+  const input = baseInput();
+  const template = input.forecastPredictions![0]!;
+  const late = { ...template, status: 'resolved_true' as const, resolveBy: NOW - HOUR, resolvedAt: NOW };
+  const past = buildAlgorithmDiagnosticsSnapshot({ ...input, forecastPredictions: [late] }).forecastCalibration;
+  assert.equal(past.resolverRuns.historicalLateCauseUnknown, 1, 'inventory age cannot identify why the historical label was late');
+  recordResolutionRun({
+    kind: 'scheduled', dueAt: NOW - 9, startedAt: NOW - 3, completedAt: NOW,
+    readiness: 'not-hydrated', outcome: 'skipped', metrics: null,
+  });
+  assert.deepEqual(read().receipts[0], {
+    sequence: 1, kind: 'scheduled', dueAt: NOW - 9, startedAt: NOW - 3,
+    completedAt: NOW, readiness: 'not-hydrated', outcome: 'skipped', metrics: null,
+  });
+  resetResolutionRunSession();
 });

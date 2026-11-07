@@ -71,3 +71,30 @@ Rollback must revert the warning snapshot/lifecycle and its consumers together;
 revert the sidecar bind selection and matching CSP policies together. Preserve
 historical user state. Do not interpret older builds as providing the new warning
 anti-resurrection guarantees.
+
+## Final current-main refresh
+
+The final publication candidate was rebased conflict-free onto verified main
+`45a4afad384a623e6a80b6100e8f7b2ffd8fc9ff` after PRs #1843 and #1849.
+The six-suite gate above was rerun successfully against this base, including
+Chromium and the full lint/type/secret/documentation/build gate. A fresh live
+GitHub snapshot declared candidate PR #1844 explicitly and returned zero blocking
+roadmap findings. Other unmerged task claims remain advisory, not false DONE claims.
+
+The exact latest-main selector selected and passed 92 scripts with Node 22 and
+the canonical user temporary directory. Its script was read from verified main,
+not the feature branch. The temporary MCP dependency link was removed afterward.
+
+[Mutation continuity hashes](UX-047-MUTATION-CONTINUITY.json) record 32 source/test
+rows, all unchanged from frozen `56ccd569362361d92be0877980262f56aeae36da`.
+The only whole-file differences from the original warning mutation checkpoint are
+ACC-510's two news-provenance lines in the data loader and the subsequent port
+fallback implementation. The warning loader logic and tests are unchanged; the
+fallback source and tests match their own later mutation checkpoint exactly.
+Thus no historical test run is represented as a new mutation run. Current-base
+checks above were actually rerun; final integrated native acceptance stays open.
+
+The original clean local worktree tip
+`2416345f69c0f42eedc78d309744666a331a9ccf` remains preserved on
+`codex/ux047-preserved-nov7-before-main`. The reconciled worktree now owns the
+original PR branch name; neither original files nor its tip were overwritten.

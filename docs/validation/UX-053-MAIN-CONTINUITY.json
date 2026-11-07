@@ -1,0 +1,444 @@
+{
+  "actualMain": "e104ebfe7768ab814dccc145b1dd3412c4912d60",
+  "rebasedHead": "b5f3eadebcdddeddef26fc0868907a77594a2971",
+  "actualExecutionHead": "fed58f603631f6ec4b1a4faefc9e068c2348061b",
+  "requiredCount": 51,
+  "executedCount": 76,
+  "requiredScripts": [
+    "test:acc509",
+    "test:acc510",
+    "test:agentic-pipeline",
+    "test:alert-capacity",
+    "test:algorithms",
+    "test:analytics-consent",
+    "test:analytics-lifecycle",
+    "test:datacenter",
+    "test:datacenter-ownership",
+    "test:desktop-identity",
+    "test:desktop-updater",
+    "test:domain-retirement",
+    "test:fetch-attribution",
+    "test:gdacs-map",
+    "test:imessage",
+    "test:install-scripts",
+    "test:lazy-panel-tracker",
+    "test:lifelines",
+    "test:little-snitch",
+    "test:map-clarity",
+    "test:map-compatibility",
+    "test:maritime",
+    "test:ml-budget",
+    "test:mode",
+    "test:native-notify",
+    "test:news-resilience",
+    "test:openaq",
+    "test:providers",
+    "test:pwa-deployment",
+    "test:quiet-hours",
+    "test:reasoning",
+    "test:review-trail",
+    "test:roadmap-controller",
+    "test:satellite",
+    "test:secret-boundary",
+    "test:settings",
+    "test:sidecar-ci",
+    "test:sidecar-routing",
+    "test:survival",
+    "test:ucdp-provider",
+    "test:ux010",
+    "test:ux026",
+    "test:ux047",
+    "test:ux050",
+    "test:ux052",
+    "test:ux053",
+    "test:ux059",
+    "test:vault-writer",
+    "test:warning-delivery",
+    "test:wildfire",
+    "test:workflow-security"
+  ],
+  "commandComparisons": [
+    {
+      "script": "test:acc509",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:acc510",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:agentic-pipeline",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:alert-capacity",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:algorithms",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:analytics-consent",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:analytics-lifecycle",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:datacenter",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:datacenter-ownership",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:desktop-identity",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:desktop-updater",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:domain-retirement",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:fetch-attribution",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:gdacs-map",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:imessage",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:install-scripts",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:lazy-panel-tracker",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:lifelines",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:little-snitch",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:map-clarity",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:map-compatibility",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:maritime",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:ml-budget",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:mode",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:native-notify",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:news-resilience",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:openaq",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:providers",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:pwa-deployment",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:quiet-hours",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": false
+    },
+    {
+      "script": "test:reasoning",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:review-trail",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:roadmap-controller",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:satellite",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:secret-boundary",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:settings",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:sidecar-ci",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:sidecar-routing",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:survival",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:ucdp-provider",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:ux010",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:ux026",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:ux047",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:ux050",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:ux052",
+      "previousOwner": "PR",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:ux053",
+      "previousOwner": "PR",
+      "currentOwner": "PR",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:ux059",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:vault-writer",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:warning-delivery",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:wildfire",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    },
+    {
+      "script": "test:workflow-security",
+      "previousOwner": "main",
+      "currentOwner": "main",
+      "commandUnchanged": true
+    }
+  ],
+  "allCurrentMainCommandsExpanded": true,
+  "mapperSHA256": "b1cf2ebb917248edaa8bb1033b853da14d5b0a0970f58f7522ad17b7a4d83070",
+  "nonEvidenceRootEntries": [
+    "040000 tree f51565948bd39a798773c0edb80bcd156b5d8921\t.agents",
+    "040000 tree 4a89f8f581c2daf2935e0db2febfd5402b246e67\t.claude",
+    "040000 tree ba392459d764db0240746bcdcd0d93a9e88cdb68\t.codex",
+    "100644 blob 965957eb0686346d9acc017d734b9409da98c090\t.env.example",
+    "040000 tree d2adfd4b37b09d25ef678132f831c0a9f272ae39\t.github",
+    "100644 blob e0b5d557fa1bf0f40761693e97b1ca932303400c\t.gitignore",
+    "040000 tree 9c2dcd507f2b998d65e0fe70d9ec3ac39b704fae\t.husky",
+    "100644 blob efc00743f64247a36394d4b88db278204352720a\t.mcp.json",
+    "100644 blob 2bd5a0a98a36cc08ada88b804d3be047e6aa5b8a\t.node-version",
+    "100644 blob da29da5a1403bd304a3accd02b2b56a31f27571b\t.npmrc",
+    "100644 blob 2bd5a0a98a36cc08ada88b804d3be047e6aa5b8a\t.nvmrc",
+    "100644 blob e0bf4af2edd12b8a17d735ebe4451f5f16054500\tAGENTS.md",
+    "100644 blob 133145ef8ce04cd081ca9f0614aabf69644c9550\tCHANGELOG.md",
+    "100644 blob cbfa872ae890e4cac965acaf77565b4efd916d0d\tCLAUDE.md",
+    "100644 blob e19aaf8762c7dd8d27d685ffffa1ecc6738e7f13\tCODE_OF_CONDUCT.md",
+    "100644 blob c07f9b9107172f4356da5205727a1c33cb16b8dd\tCONTRIBUTING.md",
+    "100644 blob cfc37be9cc23878b4a487800b341f6c2df0ad578\tLICENSE",
+    "100644 blob 9de826b991614d33c4982d99618eb7fa23529c3b\tMakefile",
+    "100644 blob cbef1b4ac1bcd677609f776a2a1f2db24fdb88e4\tNOTICE.md",
+    "100644 blob 9a742855224300503d36061b8d35a60d98c3f277\tPRIVACY.md",
+    "100644 blob 1af35aee4b7f1b47722dee40ad72bd0d9423d260\tREADME.md",
+    "100644 blob f4ec1804d2a016394123372245f2393dc4bdb55e\tROADMAP.md",
+    "100644 blob bd124bf8822fbda5b79708b39623d1e6cdc656d8\tSECURITY.md",
+    "040000 tree 643298657ac791b23d9060901dbc5976d099eb05\tapi",
+    "040000 tree 176d812ce3ba065130a53df8bff75e6280feb354\tconfig",
+    "040000 tree aed466cd0aa7ce9f93d7c1bd20df81ea91cf8d4f\tconvex",
+    "040000 tree 1656d097a888855bcf46aa8bdde2cbff24bbb5c2\tdata",
+    "040000 tree a69a3a8209ab29c7a9c42c13a733c120c84bb2bd\tdeploy",
+    "040000 tree 07560038c5f9468df3028ce3b0c9988404337243\te2e",
+    "100644 blob 85f40a6f9d558c826e05c347d05867aaf0ee5c6e\teslint.config.mjs",
+    "100644 blob 1e6f2431a4aae2212adcc2828559ef1af7acb7bb\tindex.html",
+    "100644 blob 627e8a8a14cf8ef698c68109b138d9826cfc30d3\tlive-channels.html",
+    "040000 tree 4f899990ec06891ac7f6e89a7530e9f418b97b16\tmarketing-site",
+    "100644 blob 228b3ac17769fde63fbd1289d3cbd847a864e6dc\tmiddleware.ts",
+    "100644 blob 7592cb374049e70c9fe83f9356f0f0cb9b83e7cc\tpackage-lock.json",
+    "100644 blob b6810ff24f258c2e0d51ef4e0f2f6a9b0eed6b72\tpackage.json",
+    "100644 blob 5d577ada39a2ff6b7f24b32db131d1d915fd4acc\tpage-load-baseline.png",
+    "100644 blob 48f2f96c8164beef5db8a026a04d3e3c74720d47\tplaywright.config.ts",
+    "040000 tree 6f3943b29ed1273a4e367c22061499b35fe60007\tproto",
+    "040000 tree c0d42e5b8fd5699cf8f223a871d9c62d2e6b726b\tpublic",
+    "100644 blob 6267467415f0e490c96868ef1540b0318044cda2\trailpack.json",
+    "040000 tree 7eea69c7414d3583f7264502fcc339baeabc1c37\tresearch",
+    "040000 tree 10927acb56d9b34c7b409a8c1d4eb69c079f35f3\tscripts",
+    "040000 tree b1075e2066a9147da79b831b5bac22ade1b2e25f\tserver",
+    "100644 blob 5f1bab4142b50bdccf6d187a5174f6a3300b6c82\tsettings.html",
+    "100644 blob 15a65e8a8cc59f1fbbff1016089d0f553666929f\tskills-lock.json",
+    "040000 tree 360d24ae0f5985c0b234779411625bf98f908d59\tsrc-tauri",
+    "040000 tree a57e9d6be19c674efd864662c14917e70f39ae79\tsrc",
+    "040000 tree b88d682634bf616be5d29534afecb7ea4581bde8\ttests",
+    "040000 tree 811e15eb88d38c3304b7f5376ff7f616615d8446\ttools",
+    "100644 blob 000085ff10193be68a7a60d7a55f60684340e046\ttsconfig.acc008.json",
+    "100644 blob b2eea0835235e1779dd7274d4660105e835e71a7\ttsconfig.api.json",
+    "100644 blob 4a9e00fdc92c4b2d5986628d45e002703eb172c4\ttsconfig.json",
+    "040000 tree 61ef8a5822d3c87c08ef38647495bb947ac24e2b\tvendor",
+    "100644 blob 0fe3624b26b419c68d5ada362eafe667bfe0c2b0\tverbose-mode.json",
+    "100644 blob 0a32f78540b56fcf63e0e30ebac73f81edff36b6\tvercel.json",
+    "100644 blob 83369e5bbfe43c39c6b8be9f795e4a2a0020e720\tvite.config.ts",
+    "040000 tree 20fb2e1c53fab04da2b180d10061cb456681066e\twebsite-screenshots"
+  ],
+  "trackedInputDifferences": [
+    "docs/validation/UX-053-LOCAL-INTEGRATION.md"
+  ],
+  "completeExecutionInputManifestSHA256": "d01e216bc2483333a178f446b453ec904448e525f3bc0be53c98178a121f2bcc",
+  "affectedTrustedRerun": {
+    "executionHead": "b5f3eadebcdddeddef26fc0868907a77594a2971",
+    "scripts": [
+      "test:quiet-hours",
+      "test:ux052"
+    ],
+    "reason": "quiet-hours main-owned recipe added a test; UX052 changed PR-only to main-owned",
+    "logSHA256": "fa8abf75fb71e3042b635a209e3384b2da0e334b6fcc0eb06a2e5fa1cf142e30",
+    "runnerSHA256": "86bb907fec85960dfbac43812de66ba032d323fd7e6ff67a1e0b8529ab186201"
+  }
+}

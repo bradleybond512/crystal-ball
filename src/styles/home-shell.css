@@ -242,6 +242,39 @@ body.is-desktop-macos .home-shell-topbar {
   box-shadow: var(--e-1), var(--edge-highlight);
 }
 
+.hs-context-bands { display: contents; }
+.hs-posture-axes { list-style: none; padding: 0; margin: 8px 0; }
+.hs-posture-axis { margin-bottom: 8px; }
+.hs-posture-axis-title,
+.hs-posture-move-title { font-size: var(--text-xs); font-weight: 600; color: var(--hs-fg); }
+.hs-posture-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.hs-posture-actions button,
+.hs-posture-evidence {
+  border: none;
+  border-radius: var(--r-pill);
+  padding: 5px 10px;
+  background: var(--accent-selection);
+  color: var(--hs-fg);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+.hs-posture-actions button:focus-visible,
+.hs-posture-evidence:focus-visible { outline: 2px solid var(--hs-fg); outline-offset: 2px; }
+.hs-posture-band { overflow-wrap: anywhere; }
+.hs-posture-band[data-band='critical'] .hs-band-headline { color: var(--hs-bad); }
+.hs-posture-band[data-band='high'] .hs-band-headline,
+.hs-posture-band[data-band='elevated'] .hs-band-headline { color: var(--hs-warn); }
+.hs-posture-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 body.is-desktop-macos .hs-band {
   background: var(--mat-chrome-bg);
   -webkit-backdrop-filter: var(--mat-blur-chrome);

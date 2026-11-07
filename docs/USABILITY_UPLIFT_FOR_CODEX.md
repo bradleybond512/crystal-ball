@@ -1244,6 +1244,239 @@ presented as calibrated.
   surface, and `npm run test:intelligence`, `npm run test:insights` and
   `npm run typecheck:all` pass.
 
+## October 18 delivery-pipeline intake, reconciled November 7
+
+The original read-only intake inspected `7e3bfed` on October 18. This revision
+rechecks its premises against main `18f0da9bf` and the November 7 open-PR
+inventory. It adds backlog definitions, not permission to implement a new
+high-assurance design, change account settings, publish a release or install.
+Existing task statuses and acceptance criteria above remain unchanged.
+
+The proposed UX-064 duplicate-tolerant watchdog change is not imported as a
+live task: it would weaken an intentional fail-closed check. On November 7,
+[the duplicate issue](https://github.com/bradleybond512/crystal-ball/issues/1719)
+was closed while [the original tracker](https://github.com/bradleybond512/crystal-ball/issues/1680)
+was retained. The unchanged watchdog rerun
+[passed](https://github.com/bradleybond512/crystal-ball/actions/runs/42391432447).
+Keep duplicate detection fatal; do not arbitrarily select the newest tracker.
+This supersedes the October proposal to close the original issue.
+
+The intake does not authorize closing unrelated provenance or outreach issues.
+Counts below are dated observations, not permanently current inventory.
+
+November 8 delivery recheck at main `8e042ee29439d01fd3c1ad136665478c3dee358a`:
+[PR #1825](https://github.com/bradleybond512/crystal-ball/pull/1825) merged the
+scripts IP-address security update, [PR #1790](https://github.com/bradleybond512/crystal-ball/pull/1790)
+was closed as fully superseded without deleting its branch, and
+[PR #1797](https://github.com/bradleybond512/crystal-ball/pull/1797) merged the
+reviewed download-artifact pin. Ten dependency PRs remain open in that dated
+snapshot. [PR #1822](https://github.com/bradleybond512/crystal-ball/pull/1822)
+also merged the Diagnostics/shortcut integration. These verified deliveries
+do not complete the remaining backlog or native/release acceptance.
+
+### UX-063 — Evaluate a bounded CI Sonnet review option *(High Assurance)*
+
+Priority: S
+Dependencies: none
+
+An October review transmission was denied, but that does not establish that
+every Codex PR is blocked. November 7 PRs completed genuine Sonnet CLI reviews
+with exact-source verdicts. Supported client/context repairs enabled those
+reviews without changing billing or weakening the review gate. A later
+individual denial must still be respected; past success is not a bypass.
+
+- Discovery: compare the working existing CLI path with an optional CI path;
+  establish whether the latter adds enough reliability to justify its cost.
+- Proposed surface, only after approved design: cross-agent workflow and a
+  bounded Sonnet reviewer modeled on the existing Codex CI path.
+- Preserve exact-source review, Sonnet medium, secret scanning, spend limits,
+  fork isolation, trusted base-owned code and minimal permissions. Never run
+  untrusted PR code with privileged credentials or use CI to route around a
+  denied transmission. Preserve the verdict path when the option is off.
+- Any new credential, billing arrangement or persistent permission requires
+  its own applicable authorization. Dependency labels follow current standing
+  delegation, not the old owner-only wording.
+- Done when the approved option has genuine positive and negative-path
+  evidence, or a reviewed decision records that the existing path is sufficient.
+  This proposal is not a prerequisite for later consolidation work.
+
+### UX-065 — Reconcile the Round 4 checkpoint and remaining security drafts
+
+Priority: S
+Dependencies: none
+
+The October checkpoint is historical evidence, not a current delivered count.
+On November 7, seven old security drafts remain open: PRs #1761, #1765,
+PRs #1769, #1770, #1778, #1781 and #1783. Some portions landed separately with
+stronger repairs. Replaying their old ancestry can overwrite those fixes.
+
+- Add a dated checkpoint with verified merge evidence and exact remaining
+  scope per draft. Preserve the original checkpoint as history.
+- Reconstruct only undelivered changes; retain main's corrected Unicode
+  comparison, newest-attempt sync gate, workflow hardening and later auth/CSP
+  integration. Sequence quota step 1 before step 2 and resolve shared owners.
+- Require current-base tests, mutation evidence and genuine final reviews.
+  New high-assurance decisions return to design approval. Do not mark an old
+  full PR delivered merely because a bounded subset merged.
+- Done when each draft is safely delivered, superseded with verified coverage,
+  or has an explicit unresolved hold. Do not close unique work without approval.
+
+### UX-066 — Clear the dependency backlog in technically reviewed batches
+
+Priority: S
+Dependencies: none
+
+The November 7 inventory has 13 open dependency PRs, not the original twelve.
+A green bot review gate alone is not a genuine agent review. Old failed checks
+must be diagnosed and rerun after reconciliation rather than waived.
+
+- Build a per-PR assessment of necessity, maintenance, license, release age,
+  official integrity/provenance, install scripts/bin changes, compatibility,
+  build impact, security, current-main conflicts and relevant validation.
+- Bradley's October 24 standing delegation permits agents to apply exactly
+  `dependency-change-approved` and justified `dependency-age-reviewed` after
+  that assessment. `install-scripts-reviewed` remains human-only. Do not add
+  an age exception when the ordinary age gate passes.
+- Preserve newer safe main versions. The old grouped PR #1790 would have
+  downgraded current MCP packages; its unique-scope audit and #1825 delivery
+  supported the verified November 8 supersession noted above.
+- Done when each current update is merged, explicitly held or verified as
+  superseded, and accessible security alerts have been triaged. Do not claim
+  alerts were read when access or evidence is missing.
+
+### UX-067 — Restore a trustworthy release-integrity signal on main
+
+Priority: S
+Dependencies: none
+
+Main remains version 2.25.147; strict release-doctor rejects its existing tag.
+PR #1838 prepares 148 source but does not prove native acceptance. Never hide
+this failure by weakening the doctor, bumping solely for green CI or publishing
+without authorization. A safe design may separate source preparation from
+release execution; the intake does not declare publishing the only solution.
+
+Exit condition: The approved source/release policy passes strict main integrity checks without bypassing release acceptance, or an explicit deferral preserves the visible hold.
+Review after: 2026-11-15
+
+Signing/notarization, artifact/SLSA verification, platform smoke, installed
+147 upgrade and signer continuity remain separate acceptance. Existing release,
+tag, build-dispatch, deployment and installation holds stay in force.
+
+### UX-068 — Inventory stale branches and worktrees before cleanup *(High Assurance)*
+
+Priority: C
+Dependencies: none
+
+The October branch/worktree counts are stale. A cleanup workflow already
+exists; inspect its current scope before proposing another mechanism.
+
+- Produce a current manifest distinguishing merged, patch-equivalent and
+  unique work, with open-PR ownership and verified recovery copies.
+- Require applicable approval before deletion. Preserve unique work and
+  existing directories; do not treat a prunable metadata record as permission
+  to delete its directory. Do not prune while another owner is working.
+- Done when approved cleanup is verified against the manifest, no open PR
+  loses its head and all unique work remains recoverable.
+
+### UX-069 — Align auto-PR messaging with the actual publication path
+
+Priority: C
+Dependencies: none
+
+The auto-PR workflow exists, while Actions PR creation/approval is disabled.
+Agents currently open drafts themselves. Recheck the exact warning before
+changing the workflow; do not enable broader Actions approval permissions.
+
+- Propose accurate notices and documentation while retaining explicit draft
+  creation, exact-source review and mandatory protected closeout.
+- Workflow changes require technical assessment and the delegated dependency
+  label, not a newly invented owner-only label gate.
+- Done when a normal authorized agent publication has accurate messaging and
+  no accidental ready transition or auto-merge race.
+
+### UX-070 — Design dependency-change and scheduled test coverage *(High Assurance)*
+
+Priority: S
+Dependencies: none
+
+The targeted selector currently permits an empty selection for dependency-only
+paths; this is an explicit policy, not proof that no other CI tests execute.
+The old 169-suite/25,000-case inventory is not a current measurement.
+
+- Inventory current npm, Rust, browser and native suites, their environments,
+  cost and dependencies before choosing coverage. Compare broad selection with
+  bounded dependency-sensitive coverage and a scheduled sweep.
+- Obtain design approval before changing the trusted selector, gate budgets,
+  scheduling or required checks. Never lower existing checks to fund new ones.
+- Done when the approved policy has tested selection, bounded scheduling,
+  useful failure reporting and actual execution evidence. Merely enumerating
+  scripts is not a successful full test run.
+
+### UX-071 — Design safe Rust tests and Clippy coverage in CI *(High Assurance)*
+
+Priority: S
+Dependencies: none
+
+Current workflows run cargo audit/deny but no explicit cargo test/clippy job.
+Refresh the historical test/unsafe counts and map platform requirements first.
+
+- Identify pure fixture tests separately from Keychain, permissions, native
+  services and user-state operations. No CI test may touch the real Keychain.
+- Propose locked tests/Clippy with a reviewed runner matrix and honest handling
+  of existing warnings. Never suppress a genuine new finding to get green.
+- New workflow/required-check decisions follow the existing approval policy.
+- Done when approved jobs have actual passing results and a deliberate failing
+  fixture proves failure detection without secrets or native user-state access.
+
+### UX-072 — Design backup and restore for local user state *(High Assurance)*
+
+Priority: A
+Dependencies: none
+
+Existing key-vault backup is not a verified backup of saved places, watchlists,
+forecast/outcome history, journal, pins, consent or sidecar evidence. Inventory
+stores and ownership before choosing a format or reuse of encryption helpers.
+
+- Design a versioned, encrypted, local-only backup and verified restore with
+  explicit merge/replace semantics, migration and rollback. Exclude credentials
+  and Keychain access; never silently overwrite newer records or upload data.
+- Preserve UX-056 retention constraints. New filesystem/security decisions
+  require approval after design; existing key backup permission does not cover
+  a new user-state restore action.
+- Done when approved fixture round trips, corrupt-input/no-write checks and
+  separately authorized packaged acceptance establish the declared coverage.
+
+### UX-073 — Scope cohesive extractions from the largest modules
+
+Priority: C
+Dependencies: none
+
+Several UI/data-loader modules remain large. Refresh measurements and trace
+ownership; file length alone does not justify a refactor or a 1,500-line gate.
+
+- Propose one behavior-preserving extraction at a time, backed by
+  characterization tests, import/selector continuity and bundle/performance
+  comparison. Check whether apparently parallel map implementations have
+  distinct callers before consolidating them.
+- Done when a bounded extraction reduces concrete coupling or edit risk with
+  unchanged behavior and no weakened checks. Architecture changes require
+  their own high-assurance design approval.
+
+### UX-074 — Design verifiable desktop release SBOMs *(High Assurance)*
+
+Priority: C
+Dependencies: none
+
+Build provenance is not a complete software bill of materials. Inventory the
+actual packaged npm/Rust payloads before choosing generators and attestation.
+
+- Propose format, generator provenance, source/artifact binding and verification
+  for each supported variant. New tools retain dependency-age, integrity and
+  install-script gates. Do not infer coverage from a manifest alone.
+- Done when separately authorized release-artifact verification proves SBOMs
+  describe the shipped payload. This task definition authorizes no tag,
+  workflow dispatch, public release or installation.
+
 ## What was NOT verified
 
 State these as open questions rather than treating them as settled:
@@ -1322,6 +1555,17 @@ Update the row in the same PR that does the work.
 | UX-060 | Preserve onboarding keyboard ownership against proactive digest | DONE | #1735 |
 | UX-061 | Truthful, restrained map presentation | DONE | #1802; [bounded evidence](validation/MAP-CLARITY-CLEANUP.md); native acceptance recorded separately |
 | UX-062 | Label forecasts that trail their baseline | NOT STARTED — HIGH ASSURANCE | |
+| UX-063 | Evaluate bounded CI Sonnet review | NOT STARTED — HIGH ASSURANCE | |
+| UX-065 | Round 4 checkpoint and remaining security drafts | NOT STARTED | |
+| UX-066 | Dependabot backlog in reviewed batches | NOT STARTED | |
+| UX-067 | Green release-integrity signal on main | WAITING | |
+| UX-068 | Inventory branches and worktrees before cleanup | NOT STARTED — HIGH ASSURANCE | |
+| UX-069 | Auto-PR workflow warning | NOT STARTED | |
+| UX-070 | Design dependency and scheduled test coverage | NOT STARTED — HIGH ASSURANCE | |
+| UX-071 | Design safe Rust tests and Clippy CI | NOT STARTED — HIGH ASSURANCE | |
+| UX-072 | Local user-data backup and restore | NOT STARTED — HIGH ASSURANCE | |
+| UX-073 | Scope cohesive module extractions | NOT STARTED | |
+| UX-074 | Release SBOMs | NOT STARTED — HIGH ASSURANCE | |
 
 ## Repair 12 — Diagnostics entry and shortcut ownership (2026-10-18)
 
@@ -1329,6 +1573,14 @@ Update the row in the same PR that does the work.
 | --- | --- | --- | --- | --- |
 | Repair12 — historical 2026-10-18 checkpoint | Existing System Diagnostic destination from Home, live command palette and Settings Debug; registry-owned HUD/Ghost/globe shortcuts and Help | Local implementation and focused source/DOM validation; full gate and independent review pending | Pending: browser/desktop focus, native key delivery and VoiceOver | Not published; remote Draft claims paused pending approval |
 | Repair12 — current 2026-11-08 checkpoint | Same bounded Diagnostics navigation and shortcut design, reconciled with main `8eaa227cc` | Integrated local aggregate, full ESLint baseline, full build/bundle budget and 22 browser cases passed; affected fixture failures repaired with fresh detecting mutation proofs. Final exact-source Sonnet review and hosted gates pending | Still open: packaged/native focus and shortcut delivery, VoiceOver, live-provider and installed/offline acceptance. Browser fixtures are not native acceptance | Existing published draft #1822; Bradley authorized repair and protected merge after the required review and checks |
+
+Publication follow-up, November 8: the qualification row above is the frozen
+pre-review checkpoint. PR #1822 subsequently passed genuine Sonnet review and
+all 27 active hosted checks, then merged as
+`5559a864a1012bb37498e2b0bfc642624342a401`. Post-merge security, typecheck,
+variant, smoke and accessibility checks passed. Its automatic tag workflow
+skipped both tag creation and build dispatch. Native/packaged acceptance and
+all release/deployment/installation holds remain unchanged.
 
 The canonical navigation label is **Diagnostics**, backed by the unchanged
 `system-diagnostic` panel ID. Algorithm Diagnostic, Feed Health and Self-Test

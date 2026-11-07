@@ -904,9 +904,12 @@ source-fusion program, requiring domain evidence before tolerance changes.
 
 ### UX-033 — Keep content reachable during stacked warnings
 
-Status: NOT STARTED
+Status: MONITOR
+Exit condition: Verify stacked-warning scrolling, keyboard actions, content/navigation reachability and resize/dismiss behavior in installed macOS/WebKit; retain the validated bounded cap.
+Review after: 2026-11-21
 Priority: S
 Source findings: PR1731 H1.
+Implementation update (2026-11-07): PR #1839 caps the measured warning shelf at 40% of the viewport remaining below EEW. Chromium geometry: 5 pass / 0 fail; clean-tree mutation: 0 pass / 5 fail; summary-strip: 8 pass / 0 fail; weather: 411 pass / 0 fail. Full agentic gate passed. The bounded code slice passed independent Sonnet review; installed macOS/WebKit acceptance remains open. MONITOR records the validated slice, not native acceptance or overall completion. Evidence: [UX-033-WARNING-STACK-CAP.md](validation/UX-033-WARNING-STACK-CAP.md).
 
 Acceptance: Cap the measured notification stack and its reserved space together. At small window sizes, stacked warnings remain scrollable while content and navigation remain reachable.
 
@@ -1291,7 +1294,7 @@ Update the row in the same PR that does the work.
 | UX-027 | Evidence-scoped Home reassurance | DONE | #1707 |
 | UX-031 | Reliable system appearance lifecycle | MONITOR | #1720 |
 | UX-032 | Settings keyboard containment | MONITOR | #1723 |
-| UX-033 | Keep content reachable during stacked warnings | NOT STARTED | — |
+| UX-033 | Keep content reachable during stacked warnings | MONITOR | #1839 — bounded cap and Chromium geometry validated; installed macOS/WebKit acceptance remains open. |
 | UX-034 | Assign ownership of top-of-window surfaces | MONITOR | #1730 |
 | UX-035 | Gate background panel work by actual need | MONITOR — HIGH ASSURANCE | #1859 merged; bounded two-panel slice validated ([QA](validation/UX-035-HIDDEN-PRESENTATION.md)). Native background and broader acceptance remain open; installation/release/deployment paused. |
 | UX-036 | Spread refresh work and honor battery policy | NOT STARTED — HIGH ASSURANCE | — |

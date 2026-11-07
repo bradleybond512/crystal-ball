@@ -1,0 +1,2182 @@
+{
+  "executionSha": "69a2a1864e907e0acf7690283138bfe9bda091c4",
+  "executionTree": "cab67b6aee41820d4c813e9a5c83a820391fc0b9",
+  "pendingAccessibilityBase": "28538e31ac9e881c8d58a087b97b35537c440abe",
+  "actualMainAtQualification": "8174ce37131fa73f3cbb8aeaadfae4272b0f2404",
+  "pendingNotActualMain": true,
+  "root": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball",
+  "node": "v22.23.1",
+  "canonicalTmpdir": "/var/folders/qt/hq7cydbd06d6g0yksx3mxm3c0000gn/T/",
+  "trackedNonProvenanceInputsVerifiedUnchanged": 5557,
+  "keyInputSha256": {
+    "src/components/NotificationStack.ts": "0924eeaa8fa60ae16dfb7e59d60a60380edc6b3394974a3c32c4e02e7283f6a7",
+    "src/services/synthesis/transport-evidence.ts": "4562b19e426224da459d4c260de71dccb59aecf399bdbad3d53c75d667dd2bc2",
+    "src/services/synthesis/__tests__/transport-evidence.test.mts": "bda5567e1be92ae17c2f94ca292582aa278f97f9a7b9409001f74c07ad34b081",
+    "src/services/notification-dispatcher.ts": "67c36d15b93e9e077e8588e9fed522b7bd2bdbebe7c6c4f50155395d2f4fdd9c",
+    "e2e/warning-stack-layout.mjs": "5e722172564b15614748877c5c71fc5235589409499dce3aaa75f6611854430a",
+    "e2e/summary-strip-layout.mjs": "13ceb8c762e07a433ad3e5a245b4e55af5299650de684d804ba79d36f1bc170d",
+    "package.json": "bfa3b8c9e1c7512d127637db54e337374127e679de5edc09cb08f3d8ca85b84c",
+    "package-lock.json": "fa0fc7a76d31ce38c5b03b52e88b4c61956e444dc5171e89fab9a105e02e147f",
+    "marketing-site/package-lock.json": "e981f0710a0912e11068ba27fe6227dab1b5f101dcdb9241a0dd33b8f46b7480",
+    "scripts/agentic-validate.sh": "867d27d6c6e14ca9c8fb1385b7f5574372b15f61f68fb73e62004de1eaed3d50",
+    "scripts/targeted-tests.mjs": "b1cf2ebb917248edaa8bb1033b853da14d5b0a0970f58f7522ad17b7a4d83070",
+    "scripts/lint-baseline.json": "d5ef02a8d4c29b147e5ab32c3fb492929cf97fb3aee30c050be6825d423e389a",
+    "scripts/lint-changed.mjs": "a22510115432d2347315d3f748735515c19447f63576cc5d32c77181817113c7"
+  },
+  "marketingInstalledEntriesVerified": 494,
+  "marketingInstalledLockSha256": "6975c2fe226936341b8ed25556144ee0d1a5ce8618f7f4d079eb6f10863ffff7",
+  "artifactHandling": "xmpp bundle absent; dist left in place; no artifact moved or excluded",
+  "buildFiles": 674,
+  "aggregate": {
+    "command": "bash scripts/agentic-validate.sh --tests 'test:warning-stack-layout test:summary-strip-layout test:weather test:ux044 test:ux047 test:warning-delivery'",
+    "exit": 0,
+    "counts": {
+      "geometry": [
+        5,
+        0
+      ],
+      "summary": [
+        9,
+        0
+      ],
+      "weather": [
+        411,
+        0
+      ],
+      "ux044": [
+        26,
+        0
+      ],
+      "ux047": [
+        124,
+        0
+      ],
+      "notificationDelivery": [
+        45,
+        0
+      ]
+    },
+    "finalOutput": "Agentic validation gate passed.",
+    "allUnchangedGateStepsRan": true,
+    "warnings": "Existing ineffective dynamic imports and bundler timings, no suppressions"
+  },
+  "freshTransport": {
+    "command": "node --import tsx --test src/services/synthesis/__tests__/transport-evidence.test.mts",
+    "exit": 0,
+    "pass": 14,
+    "fail": 0
+  },
+  "explicitLintCi": {
+    "command": "npm run lint:ci",
+    "exit": 0,
+    "baselineFindings": 1006,
+    "baselineIncreases": 0,
+    "changedFiles": 63,
+    "errors": 0,
+    "warnings": [
+      "api/aviation/_faa-ground-stop.d.ts: File ignored because no matching configuration was supplied"
+    ],
+    "rulesAndBaselinesUnchanged": true
+  },
+  "selectorAudit": {
+    "executionSha": "69a2a1864e907e0acf7690283138bfe9bda091c4",
+    "actualMain": "8174ce37131fa73f3cbb8aeaadfae4272b0f2404",
+    "mergeBase": "b7f5483089e30592163647f70626bf925305b62d",
+    "selected": [
+      {
+        "name": "test:acc509",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/__tests__/alert-identity.test.mts src/services/__tests__/unified-alerts-identity.test.mts src/services/__tests__/lsr-alert-identity.test.mts src/services/__tests__/acc509-replay.test.mts tests/intelligence/situation-engine-identity.test.mts tests/intelligence/compound-episode-identity.test.mts tests/intelligence/situation-geography-consumers.test.mts tests/components/situation-panel-delegation.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/alert-identity.test.mts",
+              "src/services/__tests__/unified-alerts-identity.test.mts",
+              "src/services/__tests__/lsr-alert-identity.test.mts",
+              "src/services/__tests__/acc509-replay.test.mts",
+              "tests/intelligence/situation-engine-identity.test.mts",
+              "tests/intelligence/compound-episode-identity.test.mts",
+              "tests/intelligence/situation-geography-consumers.test.mts",
+              "tests/components/situation-panel-delegation.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:acc510",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/__tests__/acc510-news-domain.test.mts src/services/__tests__/acc510-news-producers.test.mts src/services/__tests__/acc510-news-handoff.test.mts src/services/__tests__/acc510-news-replay.test.mts src/services/__tests__/acc510-situation-domains.test.mts src/services/__tests__/acc510-analyst-domain-path.test.mts tests/intelligence/acc510-neutral-consumers.test.mts tests/components/situation-panel-delegation.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/acc510-news-domain.test.mts",
+              "src/services/__tests__/acc510-news-producers.test.mts",
+              "src/services/__tests__/acc510-news-handoff.test.mts",
+              "src/services/__tests__/acc510-news-replay.test.mts",
+              "src/services/__tests__/acc510-situation-domains.test.mts",
+              "src/services/__tests__/acc510-analyst-domain-path.test.mts",
+              "tests/intelligence/acc510-neutral-consumers.test.mts",
+              "tests/components/situation-panel-delegation.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:agentic-pipeline",
+        "owner": "PR-only npm",
+        "command": "tsx --test tests/agentic-pipeline.test.mjs",
+        "stages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:agentic-pipeline"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:airquality",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/airquality/__tests__/purpleair-helpers.test.mts src/services/airquality/__tests__/airquality-fusion-observations.test.mts src/services/airquality/__tests__/purpleair-fusion-fetch.test.mts src/services/airquality/__tests__/air-quality-callout-bridge.test.mts && node --test src-tauri/sidecar/__tests__/purpleair-route-guards.test.mjs",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/airquality/__tests__/purpleair-helpers.test.mts",
+              "src/services/airquality/__tests__/airquality-fusion-observations.test.mts",
+              "src/services/airquality/__tests__/purpleair-fusion-fetch.test.mts",
+              "src/services/airquality/__tests__/air-quality-callout-bridge.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/purpleair-route-guards.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:alert-capacity",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/__tests__/unified-alerts-capacity.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/unified-alerts-capacity.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:algorithms",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/algorithms/__tests__/*.test.mts src/services/__tests__/military-patterns.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/algorithms/__tests__/*.test.mts",
+              "src/services/__tests__/military-patterns.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:analytics-consent",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/__tests__/analytics-consent.test.mts src/services/__tests__/analytics-sdk-lifecycle.test.mjs src/components/__tests__/analytics-reset-notice.test.mts src/components/__tests__/shell-a11y-contracts.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/analytics-consent.test.mts",
+              "src/services/__tests__/analytics-sdk-lifecycle.test.mjs",
+              "src/components/__tests__/analytics-reset-notice.test.mts",
+              "src/components/__tests__/shell-a11y-contracts.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:analytics-lifecycle",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/__tests__/analytics-sdk-lifecycle.test.mjs src/components/__tests__/analytics-reset-notice.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/analytics-sdk-lifecycle.test.mjs",
+              "src/components/__tests__/analytics-reset-notice.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:components",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/components/__tests__/disease-outbreak-tabs.test.mts src/components/__tests__/space-weather-panel.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/components/__tests__/disease-outbreak-tabs.test.mts",
+              "src/components/__tests__/space-weather-panel.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:datacenter",
+        "owner": "PR-only npm",
+        "command": "tsx --test src/services/datacenter/__tests__/datacenter-types.test.mts src/services/datacenter/__tests__/power-posture.test.mts src/services/datacenter/__tests__/weather-posture.test.mts src/services/datacenter/__tests__/readiness-actions.test.mts src/services/datacenter/__tests__/datacenter-posture.test.mts src/services/datacenter/__tests__/site-resolver.test.mts src/services/datacenter/__tests__/datacenter-state.test.mts src/services/datacenter/__tests__/datacenter-view.test.mts src/services/datacenter/__tests__/site-zones.test.mts && node --test tests/datacenter-zone-degrade-wiring.test.mjs",
+        "stages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:datacenter"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:datacenter-ownership",
+        "owner": "PR-only npm",
+        "command": "tsx --test src/services/datacenter/__tests__/site-zones.test.mts tests/datacenter-site-ownership-runtime.test.mts && node --test tests/datacenter-zone-degrade-wiring.test.mjs",
+        "stages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:datacenter-ownership"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:desktop-identity",
+        "owner": "PR-only npm",
+        "command": "node --test tests/desktop-identity.test.mjs tests/release-metadata.test.mjs tests/release-context.test.mjs tests/release-manifest.test.mjs tests/build-desktop-workflow.test.mjs tests/desktop-package-signing.test.mjs && npm run test:desktop-updater",
+        "stages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:desktop-identity"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:desktop-updater",
+        "owner": "trusted:actual-main",
+        "command": "node --test tests/desktop-updater-signature.test.mjs tests/desktop-updater-authority.test.mjs tests/updater-identity-native.test.mjs && tsx --test src/app/__tests__/desktop-updater.test.mts",
+        "stages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/desktop-updater-signature.test.mjs",
+              "tests/desktop-updater-authority.test.mjs",
+              "tests/updater-identity-native.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/app/__tests__/desktop-updater.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:diagnostics",
+        "owner": "trusted:actual-main",
+        "command": "tsx --import ./tests/panels/register-hook.mjs --test src/services/diagnostics/__tests__/*.test.mts tests/services/analysis-worker.test.mts && node --test scripts/checkup-log-audit.test.mjs scripts/claude-auth-core.test.mjs scripts/claude-auth-doctor.test.mjs scripts/doctor-core.test.mjs tools/mcp-server/__tests__/diagnostics-tools.test.mjs src-tauri/sidecar/__tests__/analyst-diagnostics-mirror.test.mjs",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "src/services/diagnostics/__tests__/*.test.mts",
+              "tests/services/analysis-worker.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "scripts/checkup-log-audit.test.mjs",
+              "scripts/claude-auth-core.test.mjs",
+              "scripts/claude-auth-doctor.test.mjs",
+              "scripts/doctor-core.test.mjs",
+              "tools/mcp-server/__tests__/diagnostics-tools.test.mjs",
+              "src-tauri/sidecar/__tests__/analyst-diagnostics-mirror.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:domain-retirement",
+        "owner": "PR-only npm",
+        "command": "node --test tests/retired-domain-suite.test.mjs",
+        "stages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:domain-retirement"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:earthquake",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/earthquake/__tests__/earthquake-intelligence.test.mts src/services/earthquake/__tests__/earthquake-fusion-observations.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/earthquake/__tests__/earthquake-intelligence.test.mts",
+              "src/services/earthquake/__tests__/earthquake-fusion-observations.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:emergency-pack",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/emergency-pack/__tests__/*.test.mts src/components/__tests__/emergency-pack-view.test.mts src/components/__tests__/emergency-readiness-pack-panel.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/emergency-pack/__tests__/*.test.mts",
+              "src/components/__tests__/emergency-pack-view.test.mts",
+              "src/components/__tests__/emergency-readiness-pack-panel.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:emergency-readiness",
+        "owner": "trusted:actual-main",
+        "command": "tsx --import ./tests/panels/register-hook.mjs --test src/services/survival/__tests__/snapshot-store.test.mts src/services/lifelines/__tests__/lifeline-runtime.test.mts src/components/__tests__/emergency-readiness-view.test.mts src/components/__tests__/emergency-readiness-panel.test.mts tests/emergency-readiness-panel-wiring.test.mjs",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "src/services/survival/__tests__/snapshot-store.test.mts",
+              "src/services/lifelines/__tests__/lifeline-runtime.test.mts",
+              "src/components/__tests__/emergency-readiness-view.test.mts",
+              "src/components/__tests__/emergency-readiness-panel.test.mts",
+              "tests/emergency-readiness-panel-wiring.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:event-store",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/components/__tests__/event-store-helpers.test.mts && node --test src-tauri/sidecar/__tests__/event-store.test.mjs src-tauri/sidecar/__tests__/event-store-wiring.test.mjs",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/components/__tests__/event-store-helpers.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/event-store.test.mjs",
+              "src-tauri/sidecar/__tests__/event-store-wiring.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:evidence-journal",
+        "owner": "trusted:actual-main",
+        "command": "node --test src-tauri/sidecar/__tests__/evidence-store.test.mjs src-tauri/sidecar/__tests__/evidence-routes.test.mjs tests/evidence-journal-boundary.test.mjs && tsx --test src/services/intelligence/__tests__/evidence-journal.test.mts src/components/__tests__/evidence-journal-view.test.mts src/components/__tests__/evidence-journal-panel.test.mts",
+        "stages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/evidence-store.test.mjs",
+              "src-tauri/sidecar/__tests__/evidence-routes.test.mjs",
+              "tests/evidence-journal-boundary.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/intelligence/__tests__/evidence-journal.test.mts",
+              "src/components/__tests__/evidence-journal-view.test.mts",
+              "src/components/__tests__/evidence-journal-panel.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:feed-health",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/diagnostics/__tests__/feed-catalog.test.mts src/components/__tests__/feed-health-panel.test.mts && node --test src-tauri/sidecar/__tests__/feed-tracker.test.mjs",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/diagnostics/__tests__/feed-catalog.test.mts",
+              "src/components/__tests__/feed-health-panel.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/feed-tracker.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:feed-health-dashboard",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/components/__tests__/feed-health-dashboard-panel.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/components/__tests__/feed-health-dashboard-panel.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:fetch-attribution",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/__tests__/fetch-attribution.test.mts src/services/__tests__/fetch-attribution-wiring.test.mts src/services/__tests__/fetch-attribution-port-race.test.mts src/services/__tests__/caller-abort.test.mts src/services/__tests__/cached-fetch-fallback.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/fetch-attribution.test.mts",
+              "src/services/__tests__/fetch-attribution-wiring.test.mts",
+              "src/services/__tests__/fetch-attribution-port-race.test.mts",
+              "src/services/__tests__/caller-abort.test.mts",
+              "src/services/__tests__/cached-fetch-fallback.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:firms",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/components/__tests__/firms-helpers.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/components/__tests__/firms-helpers.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:gdacs-map",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/__tests__/gdacs-map.test.mts src/services/__tests__/api-diagnostic.test.mts src/services/__tests__/data-freshness.test.mts src/services/__tests__/persisted-date-hydration.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/gdacs-map.test.mts",
+              "src/services/__tests__/api-diagnostic.test.mts",
+              "src/services/__tests__/data-freshness.test.mts",
+              "src/services/__tests__/persisted-date-hydration.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:health-contract",
+        "owner": "PR-only npm",
+        "command": "node --test tests/health-contract-suite.test.mjs",
+        "stages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:health-contract"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:home-reassurance",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/home-shell/__tests__/briefing-view.test.mts src/components/__tests__/home-shell-reassurance.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/home-shell/__tests__/briefing-view.test.mts",
+              "src/components/__tests__/home-shell-reassurance.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:imessage",
+        "owner": "trusted:actual-main",
+        "command": "node --test tests/imessage-native-boundary.test.mjs && tsx --test src/services/__tests__/imessage-bridge.test.mts src/components/__tests__/imessage-settings.test.mts src/app/__tests__/desktop-imessage.test.mts src/services/seismic/__tests__/eew-imessage.test.mts src/services/notifications/__tests__/imessage-bridge-extended.test.mts src/services/notifications/__tests__/imessage-pause-alerts.test.mts src/components/__tests__/imessage-paused-notice.test.mts src/components/__tests__/imessage-paused-notice-bridge.test.mts",
+        "stages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/imessage-native-boundary.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/imessage-bridge.test.mts",
+              "src/components/__tests__/imessage-settings.test.mts",
+              "src/app/__tests__/desktop-imessage.test.mts",
+              "src/services/seismic/__tests__/eew-imessage.test.mts",
+              "src/services/notifications/__tests__/imessage-bridge-extended.test.mts",
+              "src/services/notifications/__tests__/imessage-pause-alerts.test.mts",
+              "src/components/__tests__/imessage-paused-notice.test.mts",
+              "src/components/__tests__/imessage-paused-notice-bridge.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:insights",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/insights/__tests__/big-event-detector.test.mts src/services/insights/__tests__/confidence-urgency-matrix.test.mts src/services/insights/__tests__/notification-ladder.test.mts src/services/insights/__tests__/share-packet.test.mts src/services/insights/__tests__/ask-the-data.test.mts src/services/insights/__tests__/ask-context.test.mts src/components/__tests__/ask-the-data-view.test.mts src/services/insights/__tests__/action-briefs.test.mts src/services/insights/__tests__/data-bridge.test.mts src/services/action-guidance/__tests__/earthquake-action-guidance.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/insights/__tests__/big-event-detector.test.mts",
+              "src/services/insights/__tests__/confidence-urgency-matrix.test.mts",
+              "src/services/insights/__tests__/notification-ladder.test.mts",
+              "src/services/insights/__tests__/share-packet.test.mts",
+              "src/services/insights/__tests__/ask-the-data.test.mts",
+              "src/services/insights/__tests__/ask-context.test.mts",
+              "src/components/__tests__/ask-the-data-view.test.mts",
+              "src/services/insights/__tests__/action-briefs.test.mts",
+              "src/services/insights/__tests__/data-bridge.test.mts",
+              "src/services/action-guidance/__tests__/earthquake-action-guidance.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:install-scripts",
+        "owner": "PR-only npm",
+        "command": "node --test tests/install-script-drift.test.mjs tests/main-sync-agent.test.mjs tests/install-mcp-deps.test.mjs tests/desktop-package-signing.test.mjs tests/desktop-build-full.test.mjs scripts/install-crystalball-mcp.test.mjs",
+        "stages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:install-scripts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:lazy-panel-tracker",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test tests/lazy-panel-tracker.test.mjs src/app/__tests__/lazy-panel-order.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "tests/lazy-panel-tracker.test.mjs",
+              "src/app/__tests__/lazy-panel-order.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:lifelines",
+        "owner": "trusted:actual-main",
+        "command": "node --test api/local-logistics.test.mjs api/grid-outages.test.mjs api/usgs-water-proxy.test.mjs api/__tests__/local-logistics.test.mjs src-tauri/sidecar/__tests__/bounded-provider-responses.test.mjs src-tauri/sidecar/__tests__/local-logistics-route.test.mjs src-tauri/sidecar/__tests__/intel-expansion-cluster3.test.mjs src-tauri/sidecar/__tests__/sidecar-ttl-cache-guards.test.mjs tests/local-logistics-panel.test.mjs tests/lifeline-runtime-wiring.test.mjs tests/place-briefs.test.mjs tests/saved-place-lifeline-pack-wiring.test.mjs tests/water-quality-wiring.test.mjs && tsx --test src/services/lifelines/__tests__/*.test.mts src/services/__tests__/offline-alert-cache.test.mts tests/comms-lifeline-context.test.mts tests/lifeline-evidence-expiry.test.mts tests/local-logistics.test.mts tests/local-logistics-prewarm.test.mts tests/place-briefs-lifelines.test.mts tests/saved-place-lifeline-pack.test.mts tests/saved-place-weather.test.mts tests/water-quality-truth.test.mts src/components/__tests__/feed-health-panel.test.mts src/components/__tests__/local-logistics-panel.test.mts src/components/__tests__/personal-storm-mode-shelf.test.mts src/services/diagnostics/__tests__/feed-catalog.test.mts",
+        "stages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "api/local-logistics.test.mjs",
+              "api/grid-outages.test.mjs",
+              "api/usgs-water-proxy.test.mjs",
+              "api/__tests__/local-logistics.test.mjs",
+              "src-tauri/sidecar/__tests__/bounded-provider-responses.test.mjs",
+              "src-tauri/sidecar/__tests__/local-logistics-route.test.mjs",
+              "src-tauri/sidecar/__tests__/intel-expansion-cluster3.test.mjs",
+              "src-tauri/sidecar/__tests__/sidecar-ttl-cache-guards.test.mjs",
+              "tests/local-logistics-panel.test.mjs",
+              "tests/lifeline-runtime-wiring.test.mjs",
+              "tests/place-briefs.test.mjs",
+              "tests/saved-place-lifeline-pack-wiring.test.mjs",
+              "tests/water-quality-wiring.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/lifelines/__tests__/*.test.mts",
+              "src/services/__tests__/offline-alert-cache.test.mts",
+              "tests/comms-lifeline-context.test.mts",
+              "tests/lifeline-evidence-expiry.test.mts",
+              "tests/local-logistics.test.mts",
+              "tests/local-logistics-prewarm.test.mts",
+              "tests/place-briefs-lifelines.test.mts",
+              "tests/saved-place-lifeline-pack.test.mts",
+              "tests/saved-place-weather.test.mts",
+              "tests/water-quality-truth.test.mts",
+              "src/components/__tests__/feed-health-panel.test.mts",
+              "src/components/__tests__/local-logistics-panel.test.mts",
+              "src/components/__tests__/personal-storm-mode-shelf.test.mts",
+              "src/services/diagnostics/__tests__/feed-catalog.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:lifelines-grid",
+        "owner": "trusted:actual-main",
+        "command": "node --test api/grid-outages.test.mjs tests/grid-odin-wiring.test.mjs src-tauri/sidecar/__tests__/intel-expansion-cluster3.test.mjs src-tauri/sidecar/__tests__/sidecar-ttl-cache-guards.test.mjs && tsx --test tests/grid-loader-lifecycle.test.mts src/services/infrastructure/__tests__/grid-monitor.test.mts src/services/infrastructure/__tests__/infrastructure-overlay.test.mts src/services/infrarisks/__tests__/infra-risk-service.test.mts src/services/diagnostics/__tests__/feed-catalog.test.mts src/components/__tests__/feed-health-panel.test.mts",
+        "stages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "api/grid-outages.test.mjs",
+              "tests/grid-odin-wiring.test.mjs",
+              "src-tauri/sidecar/__tests__/intel-expansion-cluster3.test.mjs",
+              "src-tauri/sidecar/__tests__/sidecar-ttl-cache-guards.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "tests/grid-loader-lifecycle.test.mts",
+              "src/services/infrastructure/__tests__/grid-monitor.test.mts",
+              "src/services/infrastructure/__tests__/infrastructure-overlay.test.mts",
+              "src/services/infrarisks/__tests__/infra-risk-service.test.mts",
+              "src/services/diagnostics/__tests__/feed-catalog.test.mts",
+              "src/components/__tests__/feed-health-panel.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:lifelines-map",
+        "owner": "trusted:actual-main",
+        "command": "tsx --import ./tests/panels/register-hook.mjs --test tests/lifelines-map.test.mts tests/evacuation-routing.test.mts src/components/__tests__/map-popup-lifeline.test.mts && node --test api/osrm-route.test.mjs src-tauri/sidecar/__tests__/osrm-route.test.mjs tests/lifelines-map-wiring.test.mjs",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "tests/lifelines-map.test.mts",
+              "tests/evacuation-routing.test.mts",
+              "src/components/__tests__/map-popup-lifeline.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "api/osrm-route.test.mjs",
+              "src-tauri/sidecar/__tests__/osrm-route.test.mjs",
+              "tests/lifelines-map-wiring.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:little-snitch",
+        "owner": "trusted:actual-main",
+        "command": "node --test scripts/export-little-snitch-traffic.test.mjs scripts/install-little-snitch-exporter.test.mjs scripts/little-snitch-log-traffic-helper.test.mjs src-tauri/sidecar/local-api-server.test.mjs && tsx --test src/services/__tests__/little-snitch.test.mts src/components/__tests__/little-snitch-panel-source-state.test.mts",
+        "stages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "scripts/export-little-snitch-traffic.test.mjs",
+              "scripts/install-little-snitch-exporter.test.mjs",
+              "scripts/little-snitch-log-traffic-helper.test.mjs",
+              "src-tauri/sidecar/local-api-server.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/little-snitch.test.mts",
+              "src/components/__tests__/little-snitch-panel-source-state.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:map-clarity",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/components/__tests__/map-clarity-model.test.mts src/components/__tests__/map-feature-list.test.mts && tsx --import ./tests/panels/register-hook.mjs --test --test-force-exit src/components/__tests__/map-popup-faa-camera.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/components/__tests__/map-clarity-model.test.mts",
+              "src/components/__tests__/map-feature-list.test.mts"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "--test-force-exit",
+              "src/components/__tests__/map-popup-faa-camera.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:maritime",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/maritime/__tests__/freight-stress.test.mts src/services/maritime/__tests__/chokepoint-monitor.test.mts src/services/maritime/__tests__/chokepoint-aggregator.test.mts src/services/maritime/__tests__/maritime-threats.test.mts src/services/maritime/__tests__/vessel-classifier.test.mts src/services/maritime/__tests__/vessel-globe-helpers.test.mts src/services/__tests__/dark-vessel-gaps.test.mts && node --test src-tauri/sidecar/__tests__/freight-stress-parity.test.mjs src-tauri/sidecar/__tests__/dark-vessel-gaps-parity.test.mjs src-tauri/sidecar/__tests__/maritime-vessels-parity.test.mjs",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/maritime/__tests__/freight-stress.test.mts",
+              "src/services/maritime/__tests__/chokepoint-monitor.test.mts",
+              "src/services/maritime/__tests__/chokepoint-aggregator.test.mts",
+              "src/services/maritime/__tests__/maritime-threats.test.mts",
+              "src/services/maritime/__tests__/vessel-classifier.test.mts",
+              "src/services/maritime/__tests__/vessel-globe-helpers.test.mts",
+              "src/services/__tests__/dark-vessel-gaps.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/freight-stress-parity.test.mjs",
+              "src-tauri/sidecar/__tests__/dark-vessel-gaps-parity.test.mjs",
+              "src-tauri/sidecar/__tests__/maritime-vessels-parity.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:mcp-companion",
+        "owner": "PR-only npm",
+        "command": "node --test tests/mcp-companion-suite.test.mjs tests/mcp-suite-entry.test.mjs",
+        "stages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:mcp-companion"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:mcp-untrusted",
+        "owner": "PR-only npm",
+        "command": "node --test tests/mcp-untrusted-suite.test.mjs",
+        "stages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:mcp-untrusted"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:ml-budget",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/__tests__/ml-request-budget.test.mts src/services/__tests__/ml-worker-manager.test.mts src/workers/__tests__/ml-worker-eviction.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/ml-request-budget.test.mts",
+              "src/services/__tests__/ml-worker-manager.test.mts",
+              "src/workers/__tests__/ml-worker-eviction.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:mode",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/app/__tests__/mode-manager.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/app/__tests__/mode-manager.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:native-notify",
+        "owner": "trusted:actual-main",
+        "command": "node --test tests/native-notify-boundary.test.mjs && tsx --test src/services/__tests__/native-notify.test.mts src/services/__tests__/notification-router.test.mts src/services/__tests__/proximity-alert-delivery.test.mts src/services/notifications/__tests__/push-notifier-history.test.mts src/app/__tests__/desktop-imessage.test.mts src/app/__tests__/desktop-updater.test.mts src/services/__tests__/threat-reactor.test.mts src/services/__tests__/threat-reactor-retry.test.mts",
+        "stages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/native-notify-boundary.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/native-notify.test.mts",
+              "src/services/__tests__/notification-router.test.mts",
+              "src/services/__tests__/proximity-alert-delivery.test.mts",
+              "src/services/notifications/__tests__/push-notifier-history.test.mts",
+              "src/app/__tests__/desktop-imessage.test.mts",
+              "src/app/__tests__/desktop-updater.test.mts",
+              "src/services/__tests__/threat-reactor.test.mts",
+              "src/services/__tests__/threat-reactor-retry.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:news-resilience",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/__tests__/news-provenance.test.mts src/services/__tests__/rss-adapters-tracked.test.mts src/services/news/__tests__/news-snapshot.test.mts tests/components/news-resilience-panels.test.mts && node --test tests/news-route-provenance.test.mjs tests/ux040-news-snapshot-wiring.test.mjs",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/news-provenance.test.mts",
+              "src/services/__tests__/rss-adapters-tracked.test.mts",
+              "src/services/news/__tests__/news-snapshot.test.mts",
+              "tests/components/news-resilience-panels.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/news-route-provenance.test.mjs",
+              "tests/ux040-news-snapshot-wiring.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:notification-history",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/notifications/__tests__/notification-history-service.test.mts src/services/notifications/__tests__/push-notifier-history.test.mts src/components/__tests__/notification-history-helpers.test.mts src/services/diagnostics/__tests__/sidecar-self-test.test.mts && node --test src-tauri/sidecar/__tests__/self-test-classify.test.mjs",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/notifications/__tests__/notification-history-service.test.mts",
+              "src/services/notifications/__tests__/push-notifier-history.test.mts",
+              "src/components/__tests__/notification-history-helpers.test.mts",
+              "src/services/diagnostics/__tests__/sidecar-self-test.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/self-test-classify.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:notifications",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/notifications/__tests__/eew-tiers.test.mts src/services/notifications/__tests__/notification-ledger.test.mts src/services/notifications/__tests__/push-notifier.test.mts src/services/notifications/__tests__/imessage-bridge-extended.test.mts src/services/notifications/__tests__/voice-alerter.test.mts src/services/notifications/__tests__/event-bridge.test.mts src-tauri/sidecar/__tests__/notification-integration.test.mts src/components/__tests__/notification-panels.test.mts tests/notifications/all-producers.integration.test.mts tests/notifications/notification-ladder.test.mts src/services/insights/__tests__/weather-quiet-hours-wiring.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/notifications/__tests__/eew-tiers.test.mts",
+              "src/services/notifications/__tests__/notification-ledger.test.mts",
+              "src/services/notifications/__tests__/push-notifier.test.mts",
+              "src/services/notifications/__tests__/imessage-bridge-extended.test.mts",
+              "src/services/notifications/__tests__/voice-alerter.test.mts",
+              "src/services/notifications/__tests__/event-bridge.test.mts",
+              "src-tauri/sidecar/__tests__/notification-integration.test.mts",
+              "src/components/__tests__/notification-panels.test.mts",
+              "tests/notifications/all-producers.integration.test.mts",
+              "tests/notifications/notification-ladder.test.mts",
+              "src/services/insights/__tests__/weather-quiet-hours-wiring.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:openaq",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/airquality/__tests__/openaq-service.test.mts src/components/__tests__/openaq-panel-contract.test.mts src/app/__tests__/openaq-desktop-boundary.test.mts && node --test src-tauri/sidecar/__tests__/openaq-v3-route.test.mjs tests/openaq-local-boundary.test.mjs",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/airquality/__tests__/openaq-service.test.mts",
+              "src/components/__tests__/openaq-panel-contract.test.mts",
+              "src/app/__tests__/openaq-desktop-boundary.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/openaq-v3-route.test.mjs",
+              "tests/openaq-local-boundary.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:port-publication",
+        "owner": "PR-only npm",
+        "command": "node --test tests/sidecar-port-publication-suite.test.mjs",
+        "stages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:port-publication"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:providers",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test tests/data-sources-wiring.test.mjs src/services/earthquake/__tests__/usgs-fusion-fetch.test.mts src/services/geo/__tests__/geo-math.test.mts src/services/providers/__tests__/provider-registry.test.mts src/services/providers/__tests__/provider-health.test.mts src/services/providers/__tests__/source-fusion.test.mts src/services/providers/__tests__/provider-bridge.test.mts src/services/providers/__tests__/data-bridge-supersession.test.mts src/services/providers/__tests__/provider-domain-map.test.mts src/services/providers/__tests__/fusion-ingest.test.mts src/services/providers/__tests__/fusion-ingest-key.test.mts src/services/providers/__tests__/fusion-publish.test.mts src/services/providers/__tests__/provider-health-timeline-view.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "tests/data-sources-wiring.test.mjs",
+              "src/services/earthquake/__tests__/usgs-fusion-fetch.test.mts",
+              "src/services/geo/__tests__/geo-math.test.mts",
+              "src/services/providers/__tests__/provider-registry.test.mts",
+              "src/services/providers/__tests__/provider-health.test.mts",
+              "src/services/providers/__tests__/source-fusion.test.mts",
+              "src/services/providers/__tests__/provider-bridge.test.mts",
+              "src/services/providers/__tests__/data-bridge-supersession.test.mts",
+              "src/services/providers/__tests__/provider-domain-map.test.mts",
+              "src/services/providers/__tests__/fusion-ingest.test.mts",
+              "src/services/providers/__tests__/fusion-ingest-key.test.mts",
+              "src/services/providers/__tests__/fusion-publish.test.mts",
+              "src/services/providers/__tests__/provider-health-timeline-view.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:quiet-hours",
+        "owner": "trusted:actual-main",
+        "command": "tsx --import ./tests/panels/register-hook.mjs --test src/services/notifications/__tests__/quiet-hours.test.mts src/components/__tests__/notification-quiet-hours-panels.test.mts src/components/__tests__/notification-settings-unavailable.test.mts src/services/notifications/__tests__/notification-settings-service.test.mts src/services/__tests__/notification-dispatcher-trace.test.mts src/services/insights/__tests__/weather-quiet-hours-wiring.test.mts src/services/notifications/__tests__/alert-trace.test.mts src/components/__tests__/notification-panels.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "src/services/notifications/__tests__/quiet-hours.test.mts",
+              "src/components/__tests__/notification-quiet-hours-panels.test.mts",
+              "src/components/__tests__/notification-settings-unavailable.test.mts",
+              "src/services/notifications/__tests__/notification-settings-service.test.mts",
+              "src/services/__tests__/notification-dispatcher-trace.test.mts",
+              "src/services/insights/__tests__/weather-quiet-hours-wiring.test.mts",
+              "src/services/notifications/__tests__/alert-trace.test.mts",
+              "src/components/__tests__/notification-panels.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:reasoning",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/__tests__/hypothesis-dedupe.test.mts src/services/__tests__/hypothesis-entities.test.mts src/services/__tests__/hypothesis-feedback.test.mts src/services/__tests__/hypothesis-feedback-mult.test.mts src/services/__tests__/pressure-baselines.test.mts src/services/__tests__/llm-budget.test.mts src/services/__tests__/action-memory.test.mts src/services/__tests__/hypothesis-alternatives.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/hypothesis-dedupe.test.mts",
+              "src/services/__tests__/hypothesis-entities.test.mts",
+              "src/services/__tests__/hypothesis-feedback.test.mts",
+              "src/services/__tests__/hypothesis-feedback-mult.test.mts",
+              "src/services/__tests__/pressure-baselines.test.mts",
+              "src/services/__tests__/llm-budget.test.mts",
+              "src/services/__tests__/action-memory.test.mts",
+              "src/services/__tests__/hypothesis-alternatives.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:review-trail",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/__tests__/panel-attention.test.mts src/services/__tests__/sidebar-heat.test.mts src/components/__tests__/attention-navigator.test.mts src/app/__tests__/panel-attention-wiring.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/panel-attention.test.mts",
+              "src/services/__tests__/sidebar-heat.test.mts",
+              "src/components/__tests__/attention-navigator.test.mts",
+              "src/app/__tests__/panel-attention-wiring.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:roadmap-controller",
+        "owner": "trusted:actual-main",
+        "command": "node --test tests/roadmap-controller.test.mjs",
+        "stages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/roadmap-controller.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:rules-engine",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/intelligence/__tests__/rules-engine.test.mts src/services/intelligence/__tests__/rules-bootstrap.test.mts src/components/__tests__/observation-rules-helpers.test.mts && node --test src-tauri/sidecar/__tests__/rules.test.mjs",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/intelligence/__tests__/rules-engine.test.mts",
+              "src/services/intelligence/__tests__/rules-bootstrap.test.mts",
+              "src/components/__tests__/observation-rules-helpers.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/rules.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:sanitize",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/utils/__tests__/sanitize.test.mts src/utils/__tests__/degraded-response.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/utils/__tests__/sanitize.test.mts",
+              "src/utils/__tests__/degraded-response.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:satellite",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/__tests__/satellite-weather.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/satellite-weather.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:sec-hardening",
+        "owner": "trusted:actual-main",
+        "command": "node --test tests/csp-allowlist.test.mjs src-tauri/sidecar/__tests__/faa-cam-ssrf-pinning.test.mjs src-tauri/sidecar/__tests__/webhook-dispatch.test.mjs src-tauri/sidecar/__tests__/ipv4-fetch-redirect.test.mjs src-tauri/sidecar/__tests__/isprivateip-ssrf.test.mjs src-tauri/sidecar/__tests__/ipaws-outage.test.mjs src-tauri/sidecar/__tests__/feed-resilience.test.mjs",
+        "stages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/csp-allowlist.test.mjs",
+              "src-tauri/sidecar/__tests__/faa-cam-ssrf-pinning.test.mjs",
+              "src-tauri/sidecar/__tests__/webhook-dispatch.test.mjs",
+              "src-tauri/sidecar/__tests__/ipv4-fetch-redirect.test.mjs",
+              "src-tauri/sidecar/__tests__/isprivateip-ssrf.test.mjs",
+              "src-tauri/sidecar/__tests__/ipaws-outage.test.mjs",
+              "src-tauri/sidecar/__tests__/feed-resilience.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:secret-boundary",
+        "owner": "trusted:actual-main",
+        "command": "node --test tests/secret-boundary.test.mjs tests/sidecar-secret-routing-boundary.test.mjs tests/ucdp-local-boundary.test.mjs src-tauri/sidecar/secret-sync.test.mjs && tsx --test src/services/__tests__/secret-boundary.test.mts src/services/__tests__/keychain.test.mts src/components/__tests__/key-dashboard-secret-boundary.test.mts",
+        "stages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/secret-boundary.test.mjs",
+              "tests/sidecar-secret-routing-boundary.test.mjs",
+              "tests/ucdp-local-boundary.test.mjs",
+              "src-tauri/sidecar/secret-sync.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/secret-boundary.test.mts",
+              "src/services/__tests__/keychain.test.mts",
+              "src/components/__tests__/key-dashboard-secret-boundary.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:security",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/security/__tests__/cve-service.test.mts src/services/security/__tests__/vulners-service.test.mts src/components/__tests__/cve-panel-helpers.test.mts && node --test src-tauri/sidecar/__tests__/security-cve-parity.test.mjs",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/security/__tests__/cve-service.test.mts",
+              "src/services/security/__tests__/vulners-service.test.mts",
+              "src/components/__tests__/cve-panel-helpers.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/security-cve-parity.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:settings",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/__tests__/key-categories.test.mts src/services/__tests__/key-feature-index.test.mts src/services/__tests__/key-shape-registry.test.mts src/services/__tests__/wizard-state.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/key-categories.test.mts",
+              "src/services/__tests__/key-feature-index.test.mts",
+              "src/services/__tests__/key-shape-registry.test.mts",
+              "src/services/__tests__/wizard-state.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:sidecar-ci",
+        "owner": "trusted:actual-main",
+        "command": "node --test tests/sidecar-ci-inventory.test.mjs tests/sidecar-ci-suite.test.mjs",
+        "stages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/sidecar-ci-inventory.test.mjs",
+              "tests/sidecar-ci-suite.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:sidecar-fallback",
+        "owner": "PR-only npm",
+        "command": "node --test tests/sidecar-port-range.test.mjs tests/csp-allowlist.test.mjs",
+        "stages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:sidecar-fallback"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:sidecar-lows",
+        "owner": "trusted:actual-main",
+        "command": "node --test --test-timeout=60000 src-tauri/sidecar/__tests__/q20-sidecar-lows.test.mjs src-tauri/sidecar/sms-security.test.mjs src-tauri/sidecar/__tests__/sms-auth.test.mjs",
+        "stages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "--test-timeout=60000",
+              "src-tauri/sidecar/__tests__/q20-sidecar-lows.test.mjs",
+              "src-tauri/sidecar/sms-security.test.mjs",
+              "src-tauri/sidecar/__tests__/sms-auth.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:sidecar-routing",
+        "owner": "trusted:actual-main",
+        "command": "node --test tests/sidecar-secret-routing-boundary.test.mjs tests/ucdp-local-boundary.test.mjs tests/openaq-local-boundary.test.mjs && tsx --test src/services/__tests__/cloud-fallback-policy.test.mts src/services/__tests__/runtime-fetch-fallback.test.mts src/services/__tests__/confirmed-port-routing.test.mts src/services/diagnostics/__tests__/local-engine-status.test.mts src/services/diagnostics/__tests__/sidecar-probe-engine.test.mts tests/api-param-classification.test.mts src/services/__tests__/fetch-attribution-port-race.test.mts src/services/__tests__/fetch-attribution.test.mts src/services/__tests__/ucdp-runtime-boundary.test.mts",
+        "stages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/sidecar-secret-routing-boundary.test.mjs",
+              "tests/ucdp-local-boundary.test.mjs",
+              "tests/openaq-local-boundary.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/cloud-fallback-policy.test.mts",
+              "src/services/__tests__/runtime-fetch-fallback.test.mts",
+              "src/services/__tests__/confirmed-port-routing.test.mts",
+              "src/services/diagnostics/__tests__/local-engine-status.test.mts",
+              "src/services/diagnostics/__tests__/sidecar-probe-engine.test.mts",
+              "tests/api-param-classification.test.mts",
+              "src/services/__tests__/fetch-attribution-port-race.test.mts",
+              "src/services/__tests__/fetch-attribution.test.mts",
+              "src/services/__tests__/ucdp-runtime-boundary.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:situations",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/intelligence/__tests__/situation-store.test.mts src/services/intelligence/__tests__/situation-detector.test.mts src/components/__tests__/situation-panel-helpers.test.mts && node --test src-tauri/sidecar/__tests__/situations.test.mjs",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/intelligence/__tests__/situation-store.test.mts",
+              "src/services/intelligence/__tests__/situation-detector.test.mts",
+              "src/components/__tests__/situation-panel-helpers.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/situations.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:smoke-engine",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/smoke/__tests__/aqi-category.test.mts src/services/smoke/__tests__/safe-windows.test.mts src/services/smoke/__tests__/arrival-eta.test.mts src/services/smoke/__tests__/forecast-field.test.mts src/services/smoke/__tests__/hrrr-smoke.test.mts src/services/smoke/__tests__/hrrr-smoke-parity.test.mts src/services/smoke/__tests__/fire-detection-sources.test.mts src/services/smoke/__tests__/clean-air-compass.test.mts src/services/smoke/__tests__/activity-guidance.test.mts src/services/smoke/__tests__/clean-room-checklist.test.mts src/services/smoke/__tests__/smoke-fetch.test.mts src/services/smoke/__tests__/smoke-state.test.mts src/services/smoke/__tests__/smoke-headline.test.mts src/services/smoke/__tests__/smoke-callout.test.mts && node --test src-tauri/sidecar/__tests__/hrrr-smoke.test.mjs",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/smoke/__tests__/aqi-category.test.mts",
+              "src/services/smoke/__tests__/safe-windows.test.mts",
+              "src/services/smoke/__tests__/arrival-eta.test.mts",
+              "src/services/smoke/__tests__/forecast-field.test.mts",
+              "src/services/smoke/__tests__/hrrr-smoke.test.mts",
+              "src/services/smoke/__tests__/hrrr-smoke-parity.test.mts",
+              "src/services/smoke/__tests__/fire-detection-sources.test.mts",
+              "src/services/smoke/__tests__/clean-air-compass.test.mts",
+              "src/services/smoke/__tests__/activity-guidance.test.mts",
+              "src/services/smoke/__tests__/clean-room-checklist.test.mts",
+              "src/services/smoke/__tests__/smoke-fetch.test.mts",
+              "src/services/smoke/__tests__/smoke-state.test.mts",
+              "src/services/smoke/__tests__/smoke-headline.test.mts",
+              "src/services/smoke/__tests__/smoke-callout.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/hrrr-smoke.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:sms",
+        "owner": "trusted:actual-main",
+        "command": "node --test src-tauri/sidecar/sms-command-parser.test.mjs src-tauri/sidecar/sms-security.test.mjs src-tauri/sidecar/sms-response-formatter.test.mjs src-tauri/sidecar/__tests__/sms-auth.test.mjs",
+        "stages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/sms-command-parser.test.mjs",
+              "src-tauri/sidecar/sms-security.test.mjs",
+              "src-tauri/sidecar/sms-response-formatter.test.mjs",
+              "src-tauri/sidecar/__tests__/sms-auth.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:sms-panel",
+        "owner": "PR-only npm",
+        "command": "tsx --import ./tests/panels/register-hook.mjs --test tests/panels/sms-settings-panel.test.mts",
+        "stages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:sms-panel"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:spaceweather",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/spaceweather/__tests__/swpc-monitor.test.mts src/services/spaceweather/__tests__/globe-overlay.test.mts src/services/spaceweather/__tests__/solar-imagery.test.mts src/services/spaceweather/__tests__/kp-fusion-observations.test.mts && node --test src-tauri/sidecar/__tests__/spaceweather-parity.test.mjs && node --import tsx --test src-tauri/sidecar/__tests__/spaceweather-imagery-parity.test.mjs",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/spaceweather/__tests__/swpc-monitor.test.mts",
+              "src/services/spaceweather/__tests__/globe-overlay.test.mts",
+              "src/services/spaceweather/__tests__/solar-imagery.test.mts",
+              "src/services/spaceweather/__tests__/kp-fusion-observations.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/spaceweather-parity.test.mjs"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--import",
+              "tsx",
+              "--test",
+              "src-tauri/sidecar/__tests__/spaceweather-imagery-parity.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:survival",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/survival/__tests__/survival-types.test.mts src/services/survival/__tests__/threat-projection.test.mts src/services/survival/__tests__/posture-trajectory.test.mts src/services/survival/__tests__/world-branches.test.mts src/services/survival/__tests__/decision-consequence.test.mts src/services/survival/__tests__/grid-down-certify.test.mts src/services/survival/__tests__/offline-playbook.test.mts src/services/survival/__tests__/comms-fallback.test.mts src/services/survival/__tests__/posture-loop-replay.test.mts src/services/survival/__tests__/posture-calibration.test.mts src/services/survival/__tests__/projection-calibration.test.mts src/services/survival/__tests__/retrospective-digest.test.mts src/services/survival/__tests__/retrospective-view.test.mts src/services/survival/__tests__/decision-consequence-view.test.mts src/services/survival/__tests__/offline-playbook-view.test.mts src/services/survival/__tests__/comms-fallback-view.test.mts src/services/survival/__tests__/grid-down-certify-view.test.mts src/services/survival/__tests__/posture-trajectory-view.test.mts src/services/survival/__tests__/world-branches-view.test.mts src/services/survival/__tests__/survival-posture-view.test.mts src/services/survival/__tests__/survival-outlook.test.mts src/services/survival/__tests__/survival-posture.test.mts src/services/survival/__tests__/survival-moves.test.mts src/services/survival/__tests__/survival-plan.test.mts src/services/survival/__tests__/world-snapshot.test.mts src/services/survival/__tests__/snapshot-integrity.test.mts src/services/survival/__tests__/survival-loop.test.mts src/services/survival/__tests__/posture-contributor.test.mts src/services/survival/__tests__/move-provider.test.mts src/services/survival/__tests__/storm-posture-adapter.test.mts src/services/survival/__tests__/supply-contributor.test.mts src/services/survival/__tests__/energy-water-contributor.test.mts src/services/survival/__tests__/grid-energy-adapter.test.mts src/services/__tests__/power-grid-alerts-cache.test.mts src/services/survival/__tests__/financial-contributor.test.mts src/services/survival/__tests__/security-contributor.test.mts src/services/survival/__tests__/mobility-contributor.test.mts src/services/survival/__tests__/comms-contributor.test.mts src/services/survival/__tests__/health-contributor.test.mts src/services/__tests__/disease-intel-cache.test.mts src/services/survival/__tests__/personal-lens.test.mts src/services/survival/__tests__/lens-board.test.mts src/services/survival/__tests__/board-events.test.mts src/services/survival/__tests__/scrubber-view.test.mts src/services/survival/__tests__/time-scrubber.test.mts src/services/survival/__tests__/map-modes.test.mts src/services/survival/__tests__/lens-marker-style.test.mts src/services/survival/__tests__/scrubber-loop.test.mts src/services/survival/__tests__/map-modes-apply.test.mts src/services/survival/__tests__/lens-marker-apply.test.mts src/services/survival/__tests__/survival-map-modes.test.mts src/services/__tests__/internet-outages-cache.test.mts src/services/survival/__tests__/chokepoint-mobility-adapter.test.mts src/services/supply-chain/__tests__/chokepoint-cache.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/survival/__tests__/survival-types.test.mts",
+              "src/services/survival/__tests__/threat-projection.test.mts",
+              "src/services/survival/__tests__/posture-trajectory.test.mts",
+              "src/services/survival/__tests__/world-branches.test.mts",
+              "src/services/survival/__tests__/decision-consequence.test.mts",
+              "src/services/survival/__tests__/grid-down-certify.test.mts",
+              "src/services/survival/__tests__/offline-playbook.test.mts",
+              "src/services/survival/__tests__/comms-fallback.test.mts",
+              "src/services/survival/__tests__/posture-loop-replay.test.mts",
+              "src/services/survival/__tests__/posture-calibration.test.mts",
+              "src/services/survival/__tests__/projection-calibration.test.mts",
+              "src/services/survival/__tests__/retrospective-digest.test.mts",
+              "src/services/survival/__tests__/retrospective-view.test.mts",
+              "src/services/survival/__tests__/decision-consequence-view.test.mts",
+              "src/services/survival/__tests__/offline-playbook-view.test.mts",
+              "src/services/survival/__tests__/comms-fallback-view.test.mts",
+              "src/services/survival/__tests__/grid-down-certify-view.test.mts",
+              "src/services/survival/__tests__/posture-trajectory-view.test.mts",
+              "src/services/survival/__tests__/world-branches-view.test.mts",
+              "src/services/survival/__tests__/survival-posture-view.test.mts",
+              "src/services/survival/__tests__/survival-outlook.test.mts",
+              "src/services/survival/__tests__/survival-posture.test.mts",
+              "src/services/survival/__tests__/survival-moves.test.mts",
+              "src/services/survival/__tests__/survival-plan.test.mts",
+              "src/services/survival/__tests__/world-snapshot.test.mts",
+              "src/services/survival/__tests__/snapshot-integrity.test.mts",
+              "src/services/survival/__tests__/survival-loop.test.mts",
+              "src/services/survival/__tests__/posture-contributor.test.mts",
+              "src/services/survival/__tests__/move-provider.test.mts",
+              "src/services/survival/__tests__/storm-posture-adapter.test.mts",
+              "src/services/survival/__tests__/supply-contributor.test.mts",
+              "src/services/survival/__tests__/energy-water-contributor.test.mts",
+              "src/services/survival/__tests__/grid-energy-adapter.test.mts",
+              "src/services/__tests__/power-grid-alerts-cache.test.mts",
+              "src/services/survival/__tests__/financial-contributor.test.mts",
+              "src/services/survival/__tests__/security-contributor.test.mts",
+              "src/services/survival/__tests__/mobility-contributor.test.mts",
+              "src/services/survival/__tests__/comms-contributor.test.mts",
+              "src/services/survival/__tests__/health-contributor.test.mts",
+              "src/services/__tests__/disease-intel-cache.test.mts",
+              "src/services/survival/__tests__/personal-lens.test.mts",
+              "src/services/survival/__tests__/lens-board.test.mts",
+              "src/services/survival/__tests__/board-events.test.mts",
+              "src/services/survival/__tests__/scrubber-view.test.mts",
+              "src/services/survival/__tests__/time-scrubber.test.mts",
+              "src/services/survival/__tests__/map-modes.test.mts",
+              "src/services/survival/__tests__/lens-marker-style.test.mts",
+              "src/services/survival/__tests__/scrubber-loop.test.mts",
+              "src/services/survival/__tests__/map-modes-apply.test.mts",
+              "src/services/survival/__tests__/lens-marker-apply.test.mts",
+              "src/services/survival/__tests__/survival-map-modes.test.mts",
+              "src/services/__tests__/internet-outages-cache.test.mts",
+              "src/services/survival/__tests__/chokepoint-mobility-adapter.test.mts",
+              "src/services/supply-chain/__tests__/chokepoint-cache.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:synthesis",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/synthesis/__tests__/signal-watch.test.mts src/services/synthesis/__tests__/precedent-matcher.test.mts src/services/synthesis/__tests__/leading-indicators.test.mts src/services/synthesis/__tests__/ai-brief-generator.test.mts src/services/synthesis/__tests__/correlation-engine.test.mts && node --test src-tauri/sidecar/__tests__/synthesis-correlations.test.mjs",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/synthesis/__tests__/signal-watch.test.mts",
+              "src/services/synthesis/__tests__/precedent-matcher.test.mts",
+              "src/services/synthesis/__tests__/leading-indicators.test.mts",
+              "src/services/synthesis/__tests__/ai-brief-generator.test.mts",
+              "src/services/synthesis/__tests__/correlation-engine.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/synthesis-correlations.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:system-theme",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/utils/__tests__/theme-manager.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/utils/__tests__/theme-manager.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:ucdp-provider",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test server/crystalball/conflict/v1/__tests__/list-ucdp-events.test.mts src/services/conflict/__tests__/ucdp-fetch-behavior.test.mts src/services/__tests__/ucdp-runtime-boundary.test.mts src/components/__tests__/ucdp-events-panel.test.mts src/app/__tests__/ucdp-desktop-boundary.test.mts api/__tests__/ucdp-classifications.test.mjs src-tauri/sidecar/__tests__/ucdp-local-routes.test.mjs tests/ucdp-local-boundary.test.mjs tests/ucdp-loader-freshness.test.mjs",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "server/crystalball/conflict/v1/__tests__/list-ucdp-events.test.mts",
+              "src/services/conflict/__tests__/ucdp-fetch-behavior.test.mts",
+              "src/services/__tests__/ucdp-runtime-boundary.test.mts",
+              "src/components/__tests__/ucdp-events-panel.test.mts",
+              "src/app/__tests__/ucdp-desktop-boundary.test.mts",
+              "api/__tests__/ucdp-classifications.test.mjs",
+              "src-tauri/sidecar/__tests__/ucdp-local-routes.test.mjs",
+              "tests/ucdp-local-boundary.test.mjs",
+              "tests/ucdp-loader-freshness.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:untrusted-html",
+        "owner": "trusted:actual-main",
+        "command": "tsx --import ./tests/panels/register-hook.mjs --test src/services/resource-inventory/__tests__/schema.test.mts src/utils/__tests__/finite-number.test.mts src/components/__tests__/resource-inventory-untrusted.test.mts src/components/__tests__/untrusted-numeric-fields.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "src/services/resource-inventory/__tests__/schema.test.mts",
+              "src/utils/__tests__/finite-number.test.mts",
+              "src/components/__tests__/resource-inventory-untrusted.test.mts",
+              "src/components/__tests__/untrusted-numeric-fields.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:ux010",
+        "owner": "trusted:actual-main",
+        "command": "node --test tests/ux010-location-startup.test.mjs && tsx --test src/services/__tests__/location.test.mts tests/ux010-ephemeral-local-logistics.test.mts tests/ux010-current-location-save.test.mts src/components/__tests__/ux010-current-location-panel.test.mts && npm run build:full && node --test tests/ux010-native-gate.test.mjs",
+        "stages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/ux010-location-startup.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/location.test.mts",
+              "tests/ux010-ephemeral-local-logistics.test.mts",
+              "tests/ux010-current-location-save.test.mts",
+              "src/components/__tests__/ux010-current-location-panel.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/typescript/bin/tsc"
+            ],
+            "env": {
+              "VITE_VARIANT": "full"
+            }
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/vite/bin/vite.js",
+              "build"
+            ],
+            "env": {
+              "VITE_VARIANT": "full"
+            }
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/ux010-native-gate.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:ux011",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/weather/__tests__/weather-alerts-parse.test.mts src/services/weather/__tests__/evacuation-hazard-exposure.test.mts src/components/__tests__/evacuation-hazard-exposure-panel.test.mts && node --test tests/evacuation-hazard-exposure-wiring.test.mjs",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/weather/__tests__/weather-alerts-parse.test.mts",
+              "src/services/weather/__tests__/evacuation-hazard-exposure.test.mts",
+              "src/components/__tests__/evacuation-hazard-exposure-panel.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/evacuation-hazard-exposure-wiring.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:ux018",
+        "owner": "PR-only npm",
+        "command": "tsx --test src/services/intelligence/__tests__/calibration-resolution-scheduler.test.mts tools/mcp-server/__tests__/diagnostics-tools.test.mjs src/services/intelligence/__tests__/outcome-resolvers.test.mts src/services/intelligence/__tests__/resolver-pass-metrics.test.mts src/services/intelligence/__tests__/resolution-run-receipts.test.mts src/services/intelligence/__tests__/forecast-calibration-adapter.test.mts src/services/intelligence/__tests__/calibration-bridge-wiring.test.mts src/services/intelligence/__tests__/resolution-quality-audit.test.mts src/services/algorithms/__tests__/algorithm-diagnostics.test.mts",
+        "stages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:ux018"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:ux026",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/__tests__/digest-alert-projection.test.mts src/services/__tests__/digest-narrative-contract.test.mts src/services/__tests__/nws-alert-retrieval-freshness.test.mts src/components/__tests__/digest-overlay.test.mts tests/ux026-digest-lifecycle.test.mjs tests/ux026-fourth-cycle-runtime.test.mjs",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/digest-alert-projection.test.mts",
+              "src/services/__tests__/digest-narrative-contract.test.mts",
+              "src/services/__tests__/nws-alert-retrieval-freshness.test.mts",
+              "src/components/__tests__/digest-overlay.test.mts",
+              "tests/ux026-digest-lifecycle.test.mjs",
+              "tests/ux026-fourth-cycle-runtime.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:ux032",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/components/__tests__/unified-settings-keyboard.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/components/__tests__/unified-settings-keyboard.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:ux044",
+        "owner": "PR-only npm",
+        "command": "tsx --test src/components/__tests__/critical-posture-banner.test.mts src/components/__tests__/summary-strip-announcements.test.mts",
+        "stages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:ux044"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:ux047",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test tests/nws-provider-snapshot.test.mjs src/services/__tests__/nws-alert-retrieval-freshness.test.mts src/services/__tests__/nws-alert-lifecycle.test.mts tests/ux047/nws-ui-loader.test.mts tests/ux047/nws-snapshot-cache.test.mts tests/ux047/nws-panel.test.mts tests/ux047/operational-consumers.test.mts src/services/__tests__/sidebar-heat.test.mts src/services/native/__tests__/menubar-status.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "tests/nws-provider-snapshot.test.mjs",
+              "src/services/__tests__/nws-alert-retrieval-freshness.test.mts",
+              "src/services/__tests__/nws-alert-lifecycle.test.mts",
+              "tests/ux047/nws-ui-loader.test.mts",
+              "tests/ux047/nws-snapshot-cache.test.mts",
+              "tests/ux047/nws-panel.test.mts",
+              "tests/ux047/operational-consumers.test.mts",
+              "src/services/__tests__/sidebar-heat.test.mts",
+              "src/services/native/__tests__/menubar-status.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:ux049",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/synthesis/__tests__/threat-aggregator.test.mts src/services/synthesis/__tests__/geo-threat-evidence.test.mts src/services/synthesis/__tests__/transport-evidence.test.mts src/services/synthesis/__tests__/faa-stop-handoff.test.mts src/services/aviation/__tests__/threat-feed-cache.test.mts tests/panels/threat-transport-coverage.test.mts src/services/earthquake/__tests__/usgs-fusion-fetch.test.mts src/services/spaceweather/__tests__/kp-fusion-observations.test.mts src/components/__tests__/threat-dashboard-coverage.test.mts && node --test tests/data-sources-wiring.test.mjs",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/synthesis/__tests__/threat-aggregator.test.mts",
+              "src/services/synthesis/__tests__/geo-threat-evidence.test.mts",
+              "src/services/synthesis/__tests__/transport-evidence.test.mts",
+              "src/services/synthesis/__tests__/faa-stop-handoff.test.mts",
+              "src/services/aviation/__tests__/threat-feed-cache.test.mts",
+              "tests/panels/threat-transport-coverage.test.mts",
+              "src/services/earthquake/__tests__/usgs-fusion-fetch.test.mts",
+              "src/services/spaceweather/__tests__/kp-fusion-observations.test.mts",
+              "src/components/__tests__/threat-dashboard-coverage.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/data-sources-wiring.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:ux050",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/__tests__/ghost-mode-state.test.mts src/services/__tests__/ghost-notification-policy.test.mts src/services/__tests__/notification-dispatcher-trace.test.mts src/components/__tests__/ghost-mode-notice.test.mts tests/ghost-mode-entry.test.mts src/config/__tests__/story-renderer-chunk.test.mts && node --test tests/comms-panel.test.mjs && npm run build:full && node scripts/check-precache-budget.mjs && node --experimental-vm-modules --test tests/ghost-mode-bundle.test.mjs",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/ghost-mode-state.test.mts",
+              "src/services/__tests__/ghost-notification-policy.test.mts",
+              "src/services/__tests__/notification-dispatcher-trace.test.mts",
+              "src/components/__tests__/ghost-mode-notice.test.mts",
+              "tests/ghost-mode-entry.test.mts",
+              "src/config/__tests__/story-renderer-chunk.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/comms-panel.test.mjs"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/typescript/bin/tsc"
+            ],
+            "env": {
+              "VITE_VARIANT": "full"
+            }
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/vite/bin/vite.js",
+              "build"
+            ],
+            "env": {
+              "VITE_VARIANT": "full"
+            }
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "scripts/check-precache-budget.mjs"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--experimental-vm-modules",
+              "--test",
+              "tests/ghost-mode-bundle.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:ux052",
+        "owner": "trusted:actual-main",
+        "command": "tsx --import ./tests/panels/register-hook.mjs --test src/services/__tests__/derived-notification-policy.test.mts src/services/__tests__/derived-alert-reactions.test.mts src/services/notifications/__tests__/notification-settings-service.test.mts src/services/notifications/__tests__/alert-trace.test.mts src/services/notifications/__tests__/quiet-hours.test.mts src/components/__tests__/notification-panels.test.mts src/components/__tests__/notification-quiet-hours-panels.test.mts src/components/__tests__/notification-settings-unavailable.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "src/services/__tests__/derived-notification-policy.test.mts",
+              "src/services/__tests__/derived-alert-reactions.test.mts",
+              "src/services/notifications/__tests__/notification-settings-service.test.mts",
+              "src/services/notifications/__tests__/alert-trace.test.mts",
+              "src/services/notifications/__tests__/quiet-hours.test.mts",
+              "src/components/__tests__/notification-panels.test.mts",
+              "src/components/__tests__/notification-quiet-hours-panels.test.mts",
+              "src/components/__tests__/notification-settings-unavailable.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:ux053",
+        "owner": "trusted:actual-main",
+        "command": "node --test tests/vault-intro-scanner.test.mjs && tsx --test src/app/__tests__/boot-workspace.test.mts src/app/__tests__/startup-acquisition.test.mts src/app/__tests__/desktop-imessage.test.mts src/services/__tests__/notification-router.test.mts src/services/__tests__/threat-reactor-retry.test.mts tests/workspace-startup.test.mts",
+        "stages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/vault-intro-scanner.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/app/__tests__/boot-workspace.test.mts",
+              "src/app/__tests__/startup-acquisition.test.mts",
+              "src/app/__tests__/desktop-imessage.test.mts",
+              "src/services/__tests__/notification-router.test.mts",
+              "src/services/__tests__/threat-reactor-retry.test.mts",
+              "tests/workspace-startup.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:ux055",
+        "owner": "PR-only npm",
+        "command": "tsx --test src/services/__tests__/credential-evidence.test.mts src/services/__tests__/settings-manager-verification.test.mts src/services/__tests__/standalone-credential-row.test.mts src/services/__tests__/secret-boundary.test.mts src/components/__tests__/key-dashboard-secret-boundary.test.mts src/services/__tests__/wizard-state.test.mts src/services/__tests__/secret-write-pending.test.mts src/components/__tests__/unified-settings-keyboard.test.mts src-tauri/sidecar/__tests__/credential-verification.test.mjs",
+        "stages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:ux055"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:ux058",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/__tests__/alert-retention-provenance.test.mts src/services/insights/__tests__/notification-ladder.test.mts src/services/__tests__/nws-notification-owner.test.mts src/services/__tests__/warning-inbox-dispositions.test.mts src/components/__tests__/unified-alert-inbox-disposition.test.mts src/services/__tests__/notification-dispatcher-trace.test.mts src/services/__tests__/unified-alerts-warning-delivery.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/alert-retention-provenance.test.mts",
+              "src/services/insights/__tests__/notification-ladder.test.mts",
+              "src/services/__tests__/nws-notification-owner.test.mts",
+              "src/services/__tests__/warning-inbox-dispositions.test.mts",
+              "src/components/__tests__/unified-alert-inbox-disposition.test.mts",
+              "src/services/__tests__/notification-dispatcher-trace.test.mts",
+              "src/services/__tests__/unified-alerts-warning-delivery.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:ux059",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/__tests__/alert-retention-provenance.test.mts src/services/__tests__/unified-alert-retention.test.mts src/services/__tests__/alert-retention-identity.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/alert-retention-provenance.test.mts",
+              "src/services/__tests__/unified-alert-retention.test.mts",
+              "src/services/__tests__/alert-retention-identity.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:ux060",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test tests/ux060-onboarding-digest.test.mjs src/components/__tests__/digest-overlay.test.mts src/components/__tests__/welcome-flow-sources.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "tests/ux060-onboarding-digest.test.mjs",
+              "src/components/__tests__/digest-overlay.test.mts",
+              "src/components/__tests__/welcome-flow-sources.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:vault-writer",
+        "owner": "trusted:actual-main",
+        "command": "node --test tests/vault-writer-boundary.test.mjs tests/vault-writer-native.test.mjs && tsx --test src/services/__tests__/secret-write-pending.test.mts",
+        "stages": [
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "tests/vault-writer-boundary.test.mjs",
+              "tests/vault-writer-native.test.mjs"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/secret-write-pending.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:warning-delivery",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/__tests__/notification-dispatcher-trace.test.mts src/services/__tests__/unified-alerts-warning-delivery.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/notification-dispatcher-trace.test.mts",
+              "src/services/__tests__/unified-alerts-warning-delivery.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:watchboard",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/components/__tests__/watchboard-store-helpers.test.mts && node --test src-tauri/sidecar/__tests__/watchboard-engine.test.mjs",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/components/__tests__/watchboard-store-helpers.test.mts"
+            ]
+          },
+          {
+            "bin": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+            "args": [
+              "--test",
+              "src-tauri/sidecar/__tests__/watchboard-engine.test.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:weather",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/weather/__tests__/weather-exposure.test.mts src/services/weather/__tests__/nws-polygon-match.test.mts src/services/weather/__tests__/personal-storm-mode.test.mts src/services/weather/__tests__/spc-outlook.test.mts src/services/weather/__tests__/warning-verification-bridge.test.mts src/services/weather/__tests__/weather-warning-diagnostics.test.mts src/services/weather/__tests__/weather-feed-select.test.mts src/services/weather/__tests__/weather-feed-state.test.mts src/services/weather/__tests__/saved-place-adapter.test.mts src/services/weather/__tests__/personal-weather-status.test.mts src/services/weather/__tests__/ring-geometry.test.mts src/services/weather/__tests__/weather-alerts-parse.test.mts src/services/weather/__tests__/weather-unevaluable-alert.test.mts src/services/weather/__tests__/weather-feed-toctou.test.mts src/services/weather/__tests__/weather-ugc-fetch.test.mts src/services/weather/__tests__/saved-place-signature.test.mts src/services/weather/__tests__/classify-hazard.test.mts src/services/weather/__tests__/nws-hazards.test.mts src/services/weather/__tests__/self-test-fixture.test.mts src/services/weather/__tests__/weather-urgency.test.mts src/services/weather/__tests__/weather-warning-router.test.mts src/services/weather/__tests__/weather-fusion-observations.test.mts src/components/__tests__/personal-storm-mode-view.test.mts src/components/__tests__/personal-storm-mode-shelf.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/weather/__tests__/weather-exposure.test.mts",
+              "src/services/weather/__tests__/nws-polygon-match.test.mts",
+              "src/services/weather/__tests__/personal-storm-mode.test.mts",
+              "src/services/weather/__tests__/spc-outlook.test.mts",
+              "src/services/weather/__tests__/warning-verification-bridge.test.mts",
+              "src/services/weather/__tests__/weather-warning-diagnostics.test.mts",
+              "src/services/weather/__tests__/weather-feed-select.test.mts",
+              "src/services/weather/__tests__/weather-feed-state.test.mts",
+              "src/services/weather/__tests__/saved-place-adapter.test.mts",
+              "src/services/weather/__tests__/personal-weather-status.test.mts",
+              "src/services/weather/__tests__/ring-geometry.test.mts",
+              "src/services/weather/__tests__/weather-alerts-parse.test.mts",
+              "src/services/weather/__tests__/weather-unevaluable-alert.test.mts",
+              "src/services/weather/__tests__/weather-feed-toctou.test.mts",
+              "src/services/weather/__tests__/weather-ugc-fetch.test.mts",
+              "src/services/weather/__tests__/saved-place-signature.test.mts",
+              "src/services/weather/__tests__/classify-hazard.test.mts",
+              "src/services/weather/__tests__/nws-hazards.test.mts",
+              "src/services/weather/__tests__/self-test-fixture.test.mts",
+              "src/services/weather/__tests__/weather-urgency.test.mts",
+              "src/services/weather/__tests__/weather-warning-router.test.mts",
+              "src/services/weather/__tests__/weather-fusion-observations.test.mts",
+              "src/components/__tests__/personal-storm-mode-view.test.mts",
+              "src/components/__tests__/personal-storm-mode-shelf.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:webcams",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/webcams/__tests__/webcam-aggregator.test.mts src/services/webcams/__tests__/webcam-health.test.mts src/services/webcams/__tests__/flight-rule.test.mts src/services/webcams/__tests__/metar-parser.test.mts src/services/webcams/__tests__/station-matcher.test.mts src/services/webcams/__tests__/dot511-adapter.test.mts src/services/webcams/__tests__/volcano-cam-catalog.test.mts src/services/webcams/__tests__/nps-adapter.test.mts src/services/webcams/__tests__/alertwildfire-adapter.test.mts src/services/webcams/__tests__/streamgauge-adapter.test.mts src/services/webcams/__tests__/windy-adapter.test.mts src/services/webcams/__tests__/noaa-coastal-catalog.test.mts src/services/webcams/__tests__/health-view.test.mts src/services/webcams/__tests__/youtube-live-registry.test.mts src/services/webcams/__tests__/probe-backoff.test.mts src/services/webcams/__tests__/pinned-store.test.mts src/services/webcams/__tests__/webcam-config-loader.test.mts src/services/webcams/__tests__/caltrans-config.test.mts src/services/webcams/__tests__/tfl-config.test.mts src/services/webcams/__tests__/singapore-config.test.mts src/services/webcams/__tests__/airnow-visibility-catalog.test.mts src/services/webcams/__tests__/geonet-config.test.mts src/services/webcams/__tests__/hazecam-catalog.test.mts src/services/webcams/__tests__/live-video-refresh.test.mts src/services/webcams/__tests__/webcam-pick.test.mts src/services/webcams/__tests__/webcam-viewer.test.mts src/services/webcams/__tests__/webcam-globe-layer.test.mts src/services/webcams/__tests__/frame-resolver.test.mts && tsx --import ./tests/panels/register-hook.mjs --test --test-force-exit src/components/__tests__/live-webcams-panel.test.mts src/components/__tests__/map-popup-faa-camera.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/webcams/__tests__/webcam-aggregator.test.mts",
+              "src/services/webcams/__tests__/webcam-health.test.mts",
+              "src/services/webcams/__tests__/flight-rule.test.mts",
+              "src/services/webcams/__tests__/metar-parser.test.mts",
+              "src/services/webcams/__tests__/station-matcher.test.mts",
+              "src/services/webcams/__tests__/dot511-adapter.test.mts",
+              "src/services/webcams/__tests__/volcano-cam-catalog.test.mts",
+              "src/services/webcams/__tests__/nps-adapter.test.mts",
+              "src/services/webcams/__tests__/alertwildfire-adapter.test.mts",
+              "src/services/webcams/__tests__/streamgauge-adapter.test.mts",
+              "src/services/webcams/__tests__/windy-adapter.test.mts",
+              "src/services/webcams/__tests__/noaa-coastal-catalog.test.mts",
+              "src/services/webcams/__tests__/health-view.test.mts",
+              "src/services/webcams/__tests__/youtube-live-registry.test.mts",
+              "src/services/webcams/__tests__/probe-backoff.test.mts",
+              "src/services/webcams/__tests__/pinned-store.test.mts",
+              "src/services/webcams/__tests__/webcam-config-loader.test.mts",
+              "src/services/webcams/__tests__/caltrans-config.test.mts",
+              "src/services/webcams/__tests__/tfl-config.test.mts",
+              "src/services/webcams/__tests__/singapore-config.test.mts",
+              "src/services/webcams/__tests__/airnow-visibility-catalog.test.mts",
+              "src/services/webcams/__tests__/geonet-config.test.mts",
+              "src/services/webcams/__tests__/hazecam-catalog.test.mts",
+              "src/services/webcams/__tests__/live-video-refresh.test.mts",
+              "src/services/webcams/__tests__/webcam-pick.test.mts",
+              "src/services/webcams/__tests__/webcam-viewer.test.mts",
+              "src/services/webcams/__tests__/webcam-globe-layer.test.mts",
+              "src/services/webcams/__tests__/frame-resolver.test.mts"
+            ]
+          },
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--import",
+              "./tests/panels/register-hook.mjs",
+              "--test",
+              "--test-force-exit",
+              "src/components/__tests__/live-webcams-panel.test.mts",
+              "src/components/__tests__/map-popup-faa-camera.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:wildfire",
+        "owner": "trusted:actual-main",
+        "command": "tsx --test src/services/__tests__/fire-intel-service.test.mts",
+        "stages": [
+          {
+            "bin": "/Users/bradleybond/.codex/worktrees/ux033-reconcile-nov7/crystalball/node_modules/.bin/tsx",
+            "args": [
+              "--test",
+              "src/services/__tests__/fire-intel-service.test.mts"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test:workflow-security",
+        "owner": "PR-only npm",
+        "command": "node --test tests/workflow-injection.test.mjs tests/dependency-change-gate.test.mjs tests/lint-workflow.test.mjs tests/build-desktop-workflow.test.mjs tests/github-automation-hardening.test.mjs tests/agent-merge-workflow.test.mjs tests/workflow-action-pinning.test.mjs tests/workflow-security-boundaries.test.mjs tests/auto-tag-auth.test.mjs tests/workflow-expression-runtime.test.mjs",
+        "stages": [
+          {
+            "bin": "npm",
+            "args": [
+              "run",
+              "test:workflow-security"
+            ]
+          }
+        ]
+      }
+    ],
+    "unmapped": [],
+    "gate": {
+      "fail": false,
+      "reason": ""
+    },
+    "stageEnvironmentRule": "Execute with env: stage.env ?? process.env; explicit VITE_VARIANT preserved. Audit only; full selection not executed.",
+    "actualMainMapperIdentical": true
+  },
+  "liveCandidateSnapshot": {
+    "generatedAt": "2026-11-07T14:10:33.316292Z",
+    "complete": true,
+    "records": 103,
+    "openMain": 29,
+    "candidate": [
+      1839
+    ],
+    "exit": 1,
+    "blockers": [
+      "- UX-044 evidence PR #1854 is not merged (state OPEN)",
+      "- UX-055 evidence PR #1851 is not merged (state OPEN)"
+    ],
+    "noWaiver": true
+  },
+  "mutationProvenance": {
+    "ownCap": "Exact unchanged NotificationStack and geometry bytes preserve prior 5/0 to 0/5 clean mutation. Not a fresh run.",
+    "commonTransport": "Exact helper/test hashes match UX055 shared repair receipt:14/0 to8/6 to14/0. Fresh local transport14/0 above; no new local mutation."
+  },
+  "evidenceFilesSha256": {
+    "inputs.json": "c0b28fed31439e1dcf2b7550e5660da0aa96b6e04cdd0f69b7ffc3c2a7265f18",
+    "build-manifest.json": "28a916b283ab067778a046997df9118b45fb606c43673d87a07f2c1cf785a717",
+    "aggregate.log": "9fc9397f4a806e5f4b72b85b38d6814693b2956b159609cdd7fe17fe5867e838",
+    "lint-ci.log": "6a9a7cfdd1fc84fc7b4cfc9eed86217afc77e453d6de21df64c973596c1b1538",
+    "transport.log": "7cd7016474ccd50ebeb92f4349c26c9c9e98ad07691ccdd1f2e2088c37116502",
+    "selector.json": "b226e89926d9fdcd67ef26d44a40fb304c8535e39e29bf15968950aabf38300e",
+    "live-snapshot.json": "09220f5405fb730311f2e8bbbab2af3401c90160ab02e2947e8a88e0064c0739",
+    "live-gate.log": "7c7ae7c9508e6085db9328a2f60e8509081cab84580068a08279d24eb43f0be5"
+  },
+  "limitations": [
+    "No Sonnet review/verdict/push/main merge",
+    "Native macOS/WebKit and full-app acceptance remain MONITOR",
+    "Actual-main integration still pending dependency landings; expected OPEN blockers retained",
+    "Heavy slot and shared8174 pin released after all qualification reading origin completed"
+  ]
+}

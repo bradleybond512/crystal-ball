@@ -903,7 +903,7 @@ source-fusion program, requiring domain evidence before tolerance changes.
 Status: IN PROGRESS
 Priority: S
 Source findings: PR1731 H1.
-Implementation claim (2026-10-30): Cap the existing measured warning shelf while preserving warning order and actions. Implementation, browser qualification and cross-agent review are pending; no completion or native acceptance is claimed.
+Implementation update (2026-11-07): PR #1839 caps the measured warning shelf at 40% of the viewport remaining below EEW. Chromium geometry: 5 pass / 0 fail; clean-tree mutation: 0 pass / 5 fail; summary-strip: 8 pass / 0 fail; weather: 411 pass / 0 fail. Full agentic gate passed. Independent Sonnet review and installed macOS/WebKit acceptance remain pending; no native acceptance or overall completion is claimed. Evidence: [UX-033-WARNING-STACK-CAP.md](validation/UX-033-WARNING-STACK-CAP.md).
 
 Acceptance: Cap the measured notification stack and its reserved space together. At small window sizes, stacked warnings remain scrollable while content and navigation remain reachable.
 

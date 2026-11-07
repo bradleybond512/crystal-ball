@@ -1,4 +1,5 @@
 import { Panel } from './Panel';
+import { youtubeWatchUrl } from './live-news-url';
 import { fetchLiveVideoInfo } from '@/services/live-news';
 import { isDesktopRuntime, getRemoteApiBaseUrl, getApiBaseUrl, getLocalApiPort, isRetiredAppUrl } from '@/services/runtime';
 import { tryInvokeTauri } from '@/services/tauri-bridge';
@@ -931,15 +932,13 @@ export class LiveNewsPanel extends Panel {
 
   private showEmbedError(channel: LiveChannel, errorCode: number): void {
  this.destroyPlayer();
- const watchUrl = channel.videoId
- ? `https://www.youtube.com/watch?v=${encodeURIComponent(channel.videoId)}`
- : `https://www.youtube.com/${channel.handle}`;
+ const watchUrl = youtubeWatchUrl(channel);
 
  this.content.innerHTML = `
  <div class="live-offline">
  <div class="offline-icon">!</div>
  <div class="offline-text">${t('components.liveNews.cannotEmbed', { name: escapeHtml(channel.name), code: String(errorCode), interpolation: { escapeValue: false } })}</div>
- <a class="offline-retry" href="${watchUrl}" target="_blank" rel="noopener noreferrer">${t('components.liveNews.openOnYouTube')}</a>
+ <a class="offline-retry" href="${escapeHtml(watchUrl)}" target="_blank" rel="noopener noreferrer">${t('components.liveNews.openOnYouTube')}</a>
  </div>
  `;
   }
@@ -1298,9 +1297,7 @@ export class LiveNewsPanel extends Panel {
 
   private showBotCheckPrompt(): void {
  const channel = this.activeChannel;
- const watchUrl = channel.videoId
- ? `https://www.youtube.com/watch?v=${encodeURIComponent(channel.videoId)}`
- : `https://www.youtube.com/${encodeURIComponent(channel.handle)}`;
+ const watchUrl = youtubeWatchUrl(channel);
 
  this.destroyPlayer();
  this.content.innerHTML = '';

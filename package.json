@@ -5,6 +5,7 @@
   "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
+    "test:live-news-links": "tsx --import ./tests/panels/register-hook.mjs --test src/components/__tests__/live-news-url.test.mts src/components/__tests__/live-news-links.test.mts && node --test tests/live-news-hls.test.mjs",
     "test:marketing": "npm --prefix marketing-site run typecheck && npm --prefix marketing-site run lint && npm --prefix marketing-site test",
     "smoke": "tsx scripts/smoke.mts",
     "smoke:offline": "tsx scripts/smoke.mts --offline",

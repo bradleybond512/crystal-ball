@@ -956,7 +956,7 @@ Acceptance: Inventory intentional stacking contexts and introduce a reviewed rat
 
 ### UX-038 — Constrain video-channel link construction
 
-Status: NOT STARTED — HIGH ASSURANCE
+Status: DONE — HIGH ASSURANCE; PR #1840 — fixed-origin error-link helper, behavioral tests and mutation proofs ([QA](validation/UX-038-LINK-SAFETY.md))
 Priority: S
 Source findings: PR1731 L1.
 
@@ -1299,7 +1299,7 @@ Update the row in the same PR that does the work.
 | UX-035 | Gate background panel work by actual need | MONITOR — HIGH ASSURANCE | #1859 merged; bounded two-panel slice validated ([QA](validation/UX-035-HIDDEN-PRESENTATION.md)). Native background and broader acceptance remain open; installation/release/deployment paused. |
 | UX-036 | Spread refresh work and honor battery policy | NOT STARTED — HIGH ASSURANCE | — |
 | UX-037 | Prevent new unowned stacking levels | NOT STARTED | — |
-| UX-038 | Constrain video-channel link construction | NOT STARTED — HIGH ASSURANCE | — |
+| UX-038 | Constrain video-channel link construction | DONE — HIGH ASSURANCE | PR #1840 — two fixed-origin error links; 12 behavioral/helper tests, 46 HLS regressions, five clean-tree mutations and full validation ([QA](validation/UX-038-LINK-SAFETY.md)). |
 | UX-040 | Expose unavailable and stale feed outcomes | MONITOR — HIGH ASSURANCE | #1841 — merged bounded news/status slice; broader acceptance remains open |
 | UX-042 | Construct panels when needed without losing coverage | MONITOR | #1714 |
 | UX-043 | Reduce repeated alert subscriber scans | NOT STARTED | — |

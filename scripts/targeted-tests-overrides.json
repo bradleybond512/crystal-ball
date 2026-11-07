@@ -720,7 +720,8 @@
     "test:workflow-security"
   ],
   ".github/workflows/roadmap-controller.yml": [
-    "test:workflow-security"
+    "test:workflow-security",
+    "test:roadmap-controller"
   ],
   ".github/workflows/sast.yml": [
     "test:workflow-security"
@@ -1178,5 +1179,20 @@
   ],
   "api/_news-provenance.js": [
     "test:news-resilience"
+  ],
+  "src/services/correlation/__bench__/golden-streams.ts": [
+    "test:acc508"
+  ],
+  "src/services/correlation/bench-correlation.ts": [
+    "test:acc508"
+  ],
+  "src/services/correlation/bench-correlation-baseline.ts": [
+    "test:acc508"
+  ],
+  "src/services/correlation/__bench__/bench-correlation-baseline.json": [
+    "test:acc508"
+  ],
+  "scripts/correlation-benchmark.mts": [
+    "test:acc508"
   ]
 }

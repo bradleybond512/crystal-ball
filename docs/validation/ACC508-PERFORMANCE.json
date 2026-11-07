@@ -1,0 +1,263 @@
+{
+  "note": "Warm in-process full benchmark, paired alternating order. Synthetic single-machine timing, not a latency SLA.",
+  "old": {
+    "medianMs": 51.87383349999993,
+    "minMs": 51.104167000000416,
+    "maxMs": 60.38645900000006,
+    "n": 20
+  },
+  "new": {
+    "medianMs": 62.44512499999985,
+    "minMs": 61.569582999999966,
+    "maxMs": 73.32441600000004,
+    "n": 20
+  },
+  "samples": [
+    {
+      "old": {
+        "ms": 59.22987499999999,
+        "observations": 469,
+        "family": 272
+      },
+      "new": {
+        "ms": 69.34912500000002,
+        "observations": 504,
+        "family": 342
+      }
+    },
+    {
+      "new": {
+        "ms": 69.52866700000004,
+        "observations": 504,
+        "family": 342
+      },
+      "old": {
+        "ms": 60.38645900000006,
+        "observations": 469,
+        "family": 272
+      }
+    },
+    {
+      "old": {
+        "ms": 57.54399999999998,
+        "observations": 469,
+        "family": 272
+      },
+      "new": {
+        "ms": 73.32441600000004,
+        "observations": 504,
+        "family": 342
+      }
+    },
+    {
+      "new": {
+        "ms": 69.9867089999999,
+        "observations": 504,
+        "family": 342
+      },
+      "old": {
+        "ms": 52.97799999999995,
+        "observations": 469,
+        "family": 272
+      }
+    },
+    {
+      "old": {
+        "ms": 52.11116700000002,
+        "observations": 469,
+        "family": 272
+      },
+      "new": {
+        "ms": 62.61191699999995,
+        "observations": 504,
+        "family": 342
+      }
+    },
+    {
+      "new": {
+        "ms": 62.98141599999997,
+        "observations": 504,
+        "family": 342
+      },
+      "old": {
+        "ms": 51.46945800000003,
+        "observations": 469,
+        "family": 272
+      }
+    },
+    {
+      "old": {
+        "ms": 51.41866600000003,
+        "observations": 469,
+        "family": 272
+      },
+      "new": {
+        "ms": 62.47966599999995,
+        "observations": 504,
+        "family": 342
+      }
+    },
+    {
+      "new": {
+        "ms": 62.29487500000005,
+        "observations": 504,
+        "family": 342
+      },
+      "old": {
+        "ms": 51.8338339999998,
+        "observations": 469,
+        "family": 272
+      }
+    },
+    {
+      "old": {
+        "ms": 51.91383300000007,
+        "observations": 469,
+        "family": 272
+      },
+      "new": {
+        "ms": 62.51149999999984,
+        "observations": 504,
+        "family": 342
+      }
+    },
+    {
+      "new": {
+        "ms": 62.198083,
+        "observations": 504,
+        "family": 342
+      },
+      "old": {
+        "ms": 52.04866599999991,
+        "observations": 469,
+        "family": 272
+      }
+    },
+    {
+      "old": {
+        "ms": 52.40383399999996,
+        "observations": 469,
+        "family": 272
+      },
+      "new": {
+        "ms": 61.72204099999999,
+        "observations": 504,
+        "family": 342
+      }
+    },
+    {
+      "new": {
+        "ms": 62.57720799999993,
+        "observations": 504,
+        "family": 342
+      },
+      "old": {
+        "ms": 52.1165410000001,
+        "observations": 469,
+        "family": 272
+      }
+    },
+    {
+      "old": {
+        "ms": 52.497499999999945,
+        "observations": 469,
+        "family": 272
+      },
+      "new": {
+        "ms": 62.101457999999866,
+        "observations": 504,
+        "family": 342
+      }
+    },
+    {
+      "new": {
+        "ms": 61.882500000000164,
+        "observations": 504,
+        "family": 342
+      },
+      "old": {
+        "ms": 51.130084000000124,
+        "observations": 469,
+        "family": 272
+      }
+    },
+    {
+      "old": {
+        "ms": 51.28366700000015,
+        "observations": 469,
+        "family": 272
+      },
+      "new": {
+        "ms": 62.35599999999977,
+        "observations": 504,
+        "family": 342
+      }
+    },
+    {
+      "new": {
+        "ms": 62.88229199999978,
+        "observations": 504,
+        "family": 342
+      },
+      "old": {
+        "ms": 51.4930830000003,
+        "observations": 469,
+        "family": 272
+      }
+    },
+    {
+      "old": {
+        "ms": 51.104167000000416,
+        "observations": 469,
+        "family": 272
+      },
+      "new": {
+        "ms": 61.88591700000006,
+        "observations": 504,
+        "family": 342
+      }
+    },
+    {
+      "new": {
+        "ms": 62.352499999999964,
+        "observations": 504,
+        "family": 342
+      },
+      "old": {
+        "ms": 51.28779200000008,
+        "observations": 469,
+        "family": 272
+      }
+    },
+    {
+      "old": {
+        "ms": 51.73083299999962,
+        "observations": 469,
+        "family": 272
+      },
+      "new": {
+        "ms": 61.569582999999966,
+        "observations": 504,
+        "family": 342
+      }
+    },
+    {
+      "new": {
+        "ms": 62.410583999999744,
+        "observations": 504,
+        "family": 342
+      },
+      "old": {
+        "ms": 51.64195900000004,
+        "observations": 469,
+        "family": 272
+      }
+    }
+  ],
+  "productSha": "14da6a1e97ab75634920a8ff66e56ebe1d93e701",
+  "sourceSha256": {
+    "src/services/correlation/__bench__/golden-streams.ts": "2c32b32b33d9463159aac1772dfeea50a5de45c24d35690f0dd8adb499d712fd",
+    "src/services/correlation/bench-correlation.ts": "a2d6ea0f5018ae7833f6bac821293ca3b32f7989eff31be935d9118c304c33de"
+  },
+  "scriptSha256": "d2a2982047cfe4fd352a4443f649a1e4866a30a87f58607f2c1a77d460fcb288"
+}

@@ -492,7 +492,7 @@ function protoItemToNewsItem(p: ProtoNewsItem): NewsItem {
  level,
  category: p.threat.category as import('@/services/threat-classifier').EventCategory,
  confidence: p.threat.confidence,
- source: (p.threat.source || 'keyword') as 'keyword' | 'ml' | 'llm',
+ source: p.threat.source as 'keyword' | 'ml' | 'llm',
  } : undefined,
  ...(p.locationName && { locationName: p.locationName }),
  ...(p.location && { lat: p.location.latitude, lon: p.location.longitude }),
@@ -1187,7 +1187,7 @@ export class DataLoaderManager implements AppModule {
 
  this.publishNewsFeeds(generation, enabledFeeds, items, digest.digest.feedAcquisitions);
 
- ingestHeadlines(items.map(i => ({ title: i.title, pubDate: i.pubDate, source: i.source, link: i.link })));
+ ingestHeadlines(items.map(i => ({ title: i.title, pubDate: i.pubDate, source: i.source, link: i.link, threat: i.threat, provenance: i.provenance })));
 
  const aiCandidates = items
  .filter(i => i.threat?.source === 'keyword')

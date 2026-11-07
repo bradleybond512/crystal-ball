@@ -1,10 +1,16 @@
 import type { CorrelationSignal } from './correlation';
+import { collectNewsEvidence, type NewsDomainEvidence } from './situation-news-domain';
+import type { ThreatClassification } from './threat-classifier';
+import type { NewsProvenance } from './news-provenance';
 import { mlWorker } from './ml-worker';
 import { generateSummary } from './summarization';
 import { SUPPRESSED_TRENDING_TERMS, escapeRegex, generateSignalId, tokenize } from '@/utils/analysis-constants';
 import { t } from '@/services/i18n';
+import { slog } from './structured-log';
 
 export interface TrendingHeadlineInput {
+  threat?: ThreatClassification;
+  provenance?: NewsProvenance;
   title: string;
   pubDate: Date;
   source: string;
@@ -12,6 +18,8 @@ export interface TrendingHeadlineInput {
 }
 
 interface StoredHeadline {
+  threat?: ThreatClassification;
+  provenance?: NewsProvenance;
   title: string;
   source: string;
   link: string;
@@ -44,6 +52,7 @@ interface TermRecord {
 }
 
 export interface TrendingSpike {
+  newsEvidence: NewsDomainEvidence;
   term: string;
   count: number;
   baseline: number;
@@ -118,7 +127,7 @@ function asDisplayTerm(term: string): string {
 }
 
 function isStorageAvailable(): boolean {
-  return typeof window !== 'undefined' && window.localStorage !== undefined;
+  return typeof window !== 'undefined' && (window as { localStorage?: Storage }).localStorage !== undefined;
 }
 
 function uniqueBlockedTerms(terms: string[]): string[] {
@@ -200,11 +209,12 @@ function normalizeEntityType(type: string): string {
 }
 
 function normalizeMLEntityText(text: string): string {
-  return text
- .replace(/^##/, '')
- .replace(/\s+/g, ' ')
- .replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, '')
- .trim();
+  const normalized = text.replace(/^##/, '').replace(/\s+/g, ' ');
+  let start = 0;
+  let end = normalized.length;
+  while (start < end && !/[A-Za-z0-9]/.test(normalized[start]!)) start++;
+  while (end > start && !/[A-Za-z0-9]/.test(normalized[end - 1]!)) end--;
+  return normalized.slice(start, end).trim();
 }
 
 function collectMLEntities(rawEntities: MLEntity[] | undefined): string[] {
@@ -259,8 +269,8 @@ export async function extractEntitiesWithML(text: string): Promise<string[]> {
  ...regexEntities,
  ...(mlEntitiesByText[0] ?? []),
  ]);
-  } catch (error) {
- console.debug('[TrendingKeywords] ML entity extraction failed, using regex entities only:', error);
+  } catch {
+ slog('debug', 'trending-keywords', '[TrendingKeywords] ML entity extraction failed, using regex entities only:');
  return dedupeEntityTerms(regexEntities);
   }
 }
@@ -385,7 +395,9 @@ function recordTermCandidates(
  title: headline.title,
  source: headline.source,
  link: headline.link ?? '',
- publishedAt: Number.isFinite(headline.pubDate.getTime()) ? headline.pubDate.getTime() : now,
+ publishedAt: headline.pubDate.getTime(),
+ threat: headline.threat,
+ provenance: headline.provenance,
  ingestedAt: now,
  });
  addedAny = true;
@@ -412,9 +424,8 @@ function checkForSpikes(now: number, config: TrendingConfig, blockedTerms: Set<s
  if (!isSpike) continue;
  if (now - record.lastSpikeAlertMs < SPIKE_COOLDOWN_MS) continue;
 
- const recentHeadlines = dedupeHeadlines(
- record.headlines.filter(headline => now - headline.ingestedAt <= ROLLING_WINDOW_MS)
- );
+ const contributingHeadlines = record.headlines.filter(headline => now - headline.ingestedAt <= ROLLING_WINDOW_MS);
+ const recentHeadlines = dedupeHeadlines(contributingHeadlines);
  const uniqueSources = new Set(recentHeadlines.map(headline => headline.source)).size;
  if (uniqueSources < MIN_SPIKE_SOURCE_COUNT) continue;
 
@@ -427,6 +438,7 @@ function checkForSpikes(now: number, config: TrendingConfig, blockedTerms: Set<s
  windowMs: ROLLING_WINDOW_MS,
  uniqueSources,
  headlines: recentHeadlines,
+ newsEvidence: collectNewsEvidence(contributingHeadlines.map(headline => ({ ...headline, pubDate: new Date(headline.publishedAt) }))),
  });
   }
 
@@ -465,8 +477,8 @@ function isLikelyProperNoun(term: string, headlines: StoredHeadline[]): boolean 
   }
   if (midSentenceCount === 0) {
  return titles.some(t => {
- const allCaps = t.match(new RegExp(String.raw`\b${escapeRegex(term)}\b`, 'gi'));
- return allCaps?.some(match => match === match.toUpperCase() && match.length >= 2);
+ const matches = t.matchAll(new RegExp(String.raw`\b${escapeRegex(term)}\b`, 'gi'));
+ return [...matches].some(([match]) => match === match!.toUpperCase() && match!.length >= 2);
  });
   }
   return capitalizedCount / midSentenceCount >= 0.5;
@@ -510,7 +522,7 @@ async function handleSpike(spike: TrendingSpike, config: TrendingConfig): Promis
   try {
  const significant = await isSignificantTerm(spike.term, spike.headlines);
  if (!significant) {
- console.debug(`[TrendingKeywords] Suppressed non-entity term: "${spike.term}"`);
+ slog('debug', 'trending-keywords', '[TrendingKeywords] Suppressed non-entity term');
  return;
  }
 
@@ -533,7 +545,8 @@ async function handleSpike(spike: TrendingSpike, config: TrendingConfig): Promis
  }
  }
 
- const priorityBoost = spike.multiplier >= 5 ? 0.9 : (spike.multiplier >= 3 ? 0.75 : 0.6);
+ const baselinePriorityBoost = spike.multiplier >= 3 ? 0.75 : 0.6;
+ const priorityBoost = spike.multiplier >= 5 ? 0.9 : baselinePriorityBoost;
  const confidence = spike.baseline > 0
  ? Math.min(0.95, priorityBoost)
  : Math.min(0.8, 0.45 + spike.count / 20);
@@ -547,6 +560,7 @@ async function handleSpike(spike: TrendingSpike, config: TrendingConfig): Promis
  timestamp: new Date(),
  data: {
  term: spike.term,
+ newsEvidence: spike.newsEvidence,
  newsVelocity: spike.count,
  relatedTopics: [spike.term],
  baseline: spike.baseline,
@@ -555,8 +569,8 @@ async function handleSpike(spike: TrendingSpike, config: TrendingConfig): Promis
  explanation: `${spike.term}: ${spike.count} mentions across ${spike.uniqueSources} sources (${multiplierText})`,
  },
  });
-  } catch (error) {
- console.warn('[TrendingKeywords] Failed to handle spike:', error);
+  } catch {
+ slog('warn', 'trending-keywords', '[TrendingKeywords] Failed to handle spike:');
   } finally {
  activeSpikeTerms.delete(termKey);
   }
@@ -596,10 +610,10 @@ async function enrichWithMLEntities(headlines: PendingMLEnrichmentHeadline[], in
 
  const spikes = checkForSpikes(now, config, blockedTerms);
  for (const spike of spikes) {
- void handleSpike(spike, config).catch(() => {});
+ void handleSpike(spike, config).catch(() => undefined);
  }
-  } catch (error) {
- console.debug('[TrendingKeywords] ML entity enrichment skipped:', error);
+  } catch {
+ slog('debug', 'trending-keywords', '[TrendingKeywords] ML entity enrichment skipped:');
   }
 }
 
@@ -634,7 +648,7 @@ export function ingestHeadlines(headlines: TrendingHeadlineInput[]): void {
 
   const spikes = checkForSpikes(now, config, blockedTerms);
   for (const spike of spikes) {
- void handleSpike(spike, config).catch(() => {});
+ void handleSpike(spike, config).catch(() => undefined);
   }
 
   void enrichWithMLEntities(pendingMLEnrichment, now);

@@ -75,6 +75,7 @@ export class CorrelationMapPanel extends Panel {
       title: 'Correlation Map',
       showCount: false,
       trackActivity: true,
+      presentationRefreshPolicy: 'visible-only',
       infoTooltip: 'Active cross-domain causal chains from the live causal-chain builder — root cause, downstream effects, and chain confidence.',
     });
     this.showLoading('Loading correlation chains…');
@@ -84,7 +85,7 @@ export class CorrelationMapPanel extends Panel {
 
   private start(): void {
     this.loadAndRender();
-    this.refreshTimer = setInterval(() => this.loadAndRender(), 30_000);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.loadAndRender()), 30_000);
   }
 
   override destroy(): void {

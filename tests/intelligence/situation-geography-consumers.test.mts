@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 import * as geography from '../../src/services/situation-types.ts';
+import * as newsDomain from '../../src/services/situation-news-domain.ts';
 import type { Situation, SituationGeo } from '../../src/services/situation-types.ts';
 import type { ForecastResult } from '../../src/services/ema-forecast.ts';
 
@@ -13,6 +14,7 @@ function loadService(name: string, dependencies: Record<string, unknown>, global
   const exports: Record<string, any> = {};
   vm.runInNewContext(compiled, { exports, Date, console, ...globals, require(id: string) {
     if (id === './situation-types') return geography;
+    if (id === './situation-news-domain') return newsDomain;
     assert.ok(id in dependencies, `unexpected dependency ${id}`);
     return dependencies[id];
   } });

@@ -10,6 +10,7 @@
 
 import type { EvidencePack } from './evidence-pack';
 import type { ObservationIdentity } from './alert-identity';
+import type { SituationDomainClassification } from './situation-news-domain';
 
 // ── Situation Lifecycle ──────────────────────────────────────────────────────
 
@@ -28,6 +29,7 @@ export type SituationDomain =
   | 'infrastructure'
   | 'health'
   | 'civil_unrest'
+  | 'unknown'
   | 'compound'; // cross-domain (most dangerous)
 
 // ── Situation ────────────────────────────────────────────────────────────────
@@ -119,6 +121,7 @@ export interface Situation {
 }
 
 export interface SituationSignalSnapshot {
+  domainClassification?: SituationDomainClassification;
   identity?: ObservationIdentity;
   geo?: SituationGeo;
   source?: string;
@@ -230,9 +233,9 @@ export const SIGNAL_DOMAIN_MAP: Record<string, SituationDomain> = {
   // Cyber
   // (cyber signals come through unified alerts, not correlation signals)
   // Civil unrest
-  velocity_spike: 'civil_unrest',
-  keyword_spike: 'civil_unrest',
-  convergence: 'civil_unrest',
+  velocity_spike: 'unknown',
+  keyword_spike: 'unknown',
+  convergence: 'unknown',
   triangulation: 'compound',
 };
 

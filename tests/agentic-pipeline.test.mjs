@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -672,6 +672,60 @@ test('the trusted full-build expansion pins the canonical definition and rejects
   );
 });
 
+test('the canonical desktop identity suite expands the pinned updater into three direct stages', () => {
+  const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
+  assert.equal(isRunnerAllowlisted(scripts['test:desktop-identity']), true);
+  assert.deepEqual(commandToStages(scripts['test:desktop-identity'], '/repo/node_modules/.bin', scripts), [
+    {
+      bin: process.execPath,
+      args: ['--test', 'tests/desktop-identity.test.mjs', 'tests/release-metadata.test.mjs',
+        'tests/release-context.test.mjs', 'tests/release-manifest.test.mjs',
+        'tests/build-desktop-workflow.test.mjs', 'tests/desktop-package-signing.test.mjs'],
+    },
+    {
+      bin: process.execPath,
+      args: ['--test', 'tests/desktop-updater-signature.test.mjs',
+        'tests/desktop-updater-authority.test.mjs', 'tests/updater-identity-native.test.mjs'],
+    },
+    { bin: '/repo/node_modules/.bin/tsx', args: ['--test', 'src/app/__tests__/desktop-updater.test.mts'] },
+  ]);
+});
+
+test('the trusted updater expansion rejects missing or changed canonical definitions', () => {
+  const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
+  const canonical = scripts['test:desktop-updater'];
+  for (const definition of [
+    undefined,
+    `${canonical} `,
+    canonical.replace('desktop-updater-signature.test.mjs', 'replacement.test.mjs'),
+    canonical.split(' && ')[0],
+    `${canonical} && node --test tests/replacement.test.mjs`,
+    'npm run test:desktop-updater',
+  ]) {
+    assert.throws(
+      () => commandToStages('npm run test:desktop-updater', '/repo/node_modules/.bin',
+        definition === undefined ? {} : { 'test:desktop-updater': definition }),
+      /trusted test:desktop-updater definition mismatch/,
+      String(definition),
+    );
+  }
+});
+
+test('updater alias expansion does not admit arbitrary npm or shell stages', () => {
+  const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
+  assert.equal(isRunnerAllowlisted('npm run test:desktop-updater'), false);
+  for (const command of [
+    'npm  run test:desktop-updater',
+    'npm run test:desktop-updater -- extra',
+    'npm --prefix . run test:desktop-updater',
+    'npm run test:other',
+    'npm run test:desktop-updater && sh -c true',
+  ]) {
+    assert.throws(() => commandToStages(command, '/repo/node_modules/.bin', scripts),
+      /untrusted stage runner/, command);
+  }
+});
+
 test('the production trusted-main path supplies canonical scripts and inherited environment', () => {
   const targetedRunner = readFileSync(join(root, 'scripts/targeted-tests.mjs'), 'utf8');
 
@@ -1112,13 +1166,14 @@ test('declaring a suite that does not exist does not launder coverage', () => {
   assert.deepEqual(unmapped, ['scripts/whatever.mjs']);
 });
 
-function targetedCliFixture(t) {
+function targetedCliFixture(t, { extraScripts = {}, trustedFiles = {} } = {}) {
   const { dir, git } = fixtureRepo('codex/targeted-fixture');
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const scripts = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [
     `test:padding-${i}`, `node --test tests/padding-${i}.test.mjs`,
   ]));
   scripts['test:providers'] = 'node --test tests/trusted.test.mjs';
+  Object.assign(scripts, extraScripts);
   const write = (file, contents) => {
     mkdirSync(dirname(join(dir, file)), { recursive: true });
     writeFileSync(join(dir, file), contents);
@@ -1127,7 +1182,8 @@ function targetedCliFixture(t) {
   const markerTest = (marker) => `import { writeFileSync } from 'node:fs';\nwriteFileSync(${JSON.stringify(marker)}, 'executed');\n`;
   write('package.json', packageJson(scripts));
   write('tests/trusted.test.mjs', markerTest('trusted-ran.txt'));
-  git('add', 'package.json', 'tests/trusted.test.mjs');
+  for (const [file, contents] of Object.entries(trustedFiles)) write(file, contents);
+  git('add', 'package.json', 'tests/trusted.test.mjs', ...Object.keys(trustedFiles));
   git('commit', '-q', '-m', 'fixture: trusted main commands');
   git('update-ref', 'refs/remotes/origin/main', 'HEAD');
   return {
@@ -1145,6 +1201,51 @@ function targetedCliFixture(t) {
     },
   };
 }
+
+function desktopUpdaterCliFixture(t, { failUpdater = false } = {}) {
+  const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
+  const extraScripts = Object.fromEntries(['test:desktop-identity', 'test:desktop-updater']
+    .map((name) => [name, scripts[name]]));
+  const nodeFiles = `${scripts['test:desktop-identity'].split(' && ')[0]} ${scripts['test:desktop-updater'].split(' && ')[0]}`
+    .split(' ').filter((token) => token.endsWith('.mjs'));
+  const trustedFiles = Object.fromEntries(nodeFiles.map((file) => [file,
+    `import { writeFileSync } from 'node:fs';\nwriteFileSync(${JSON.stringify(`${file}.ran`)}, 'executed');\n`
+      + (failUpdater && file === 'tests/desktop-updater-signature.test.mjs' ? 'process.exit(1);\n' : ''),
+  ]));
+  const f = targetedCliFixture(t, { extraScripts, trustedFiles });
+  f.write('node_modules/.bin/tsx', `#!${process.execPath}\n`
+    + "import { writeFileSync } from 'node:fs';\nwriteFileSync('tsx-args.json', JSON.stringify(process.argv.slice(2)));\n");
+  chmodSync(join(f.dir, 'node_modules/.bin/tsx'), 0o755);
+  f.write('tests/replacement.test.mjs', f.markerTest('replacement-ran.txt'));
+  f.write('package.json', f.packageJson({ ...f.scripts,
+    'test:desktop-identity': 'node --test tests/replacement.test.mjs',
+    'test:desktop-updater': 'node --test tests/replacement.test.mjs',
+  }));
+  f.write('tests/desktop-identity.test.mjs', `${trustedFiles['tests/desktop-identity.test.mjs']}\n// PR edit\n`);
+  return { ...f, nodeFiles };
+}
+
+test('updater CLI runs every main-owned stage despite PR rewrites of both aliases', (t) => {
+  const f = desktopUpdaterCliFixture(t);
+  const result = f.run(['package.json', 'tests/desktop-identity.test.mjs']);
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  for (const file of f.nodeFiles) assert.equal(readFileSync(join(f.dir, `${file}.ran`), 'utf8'), 'executed');
+  assert.deepEqual(JSON.parse(readFileSync(join(f.dir, 'tsx-args.json'), 'utf8')),
+    ['--test', 'src/app/__tests__/desktop-updater.test.mts']);
+  assert.equal(existsSync(join(f.dir, 'replacement-ran.txt')), false);
+  assert.match(result.stdout, /\[trusted:main\] test:desktop-identity:/);
+  assert.match(result.stdout, /1 script\(s\) passed/);
+});
+
+test('updater CLI propagates a trusted updater failure and stops before tsx', (t) => {
+  const f = desktopUpdaterCliFixture(t, { failUpdater: true });
+  const result = f.run(['package.json', 'tests/desktop-identity.test.mjs']);
+  assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
+  assert.equal(readFileSync(join(f.dir, 'tests/desktop-updater-signature.test.mjs.ran'), 'utf8'), 'executed');
+  assert.equal(existsSync(join(f.dir, 'tsx-args.json')), false);
+  assert.equal(existsSync(join(f.dir, 'replacement-ran.txt')), false);
+  assert.match(result.stdout, /FAILED: test:desktop-identity \(exit 1\)/);
+});
 
 test('PR overrides CLI: the declaration file causes the new suite to execute', (t) => {
   const f = targetedCliFixture(t);

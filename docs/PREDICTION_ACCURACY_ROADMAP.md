@@ -943,7 +943,7 @@ These tasks retain their detailed designs in
 | ACC-507 | DONE | Bounded cross-event correlation ingestion and liveness proof | ACC-502 (DONE) |
 | ACC-508 | TODO | Near-threshold coupling recall gate | ACC-503 (DONE), ACC-504 (DONE) |
 | ACC-509 | DONE | Stable situation identity under delayed and repeated input | #1738; #1743 performance follow-up; [evidence](validation/ACC-509-IDENTITY.md); UX-059 integration hold |
-| ACC-510 | TODO | Evidence-based domain for news-derived situations | ACC-509 |
+| ACC-510 | MONITOR | Evidence-based domain for news-derived situations | #1858; bounded code evidence complete, production monitoring open |
 
 Safety invariant: learned inhibitory evidence remains shadow-only and cannot
 change operational scores, confidence, posture, alerts, or delivery rungs.
@@ -1996,9 +1996,15 @@ in UX-059 must coordinate with this store path. No accuracy-gate weakening.
 
 ### ACC-510 — Evidence-based domain for news-derived situations
 
-Status: `TODO`
+Status: `MONITOR`
+
+Claim: draft [#1858](https://github.com/bradleybond512/crystal-ball/pull/1858), `codex/acc510-news-domain`. [Approved design](plans/2026-11-06-acc510-news-domain-evidence.md). Local implementation validated: [QA and replay evidence](validation/ACC-510-NEWS-DOMAIN-EVIDENCE.md). Synthetic replay reduces false unrest positives from 13 to 0, with four added misses explicitly retained. Bradley authorized publication, reconciliation and merging. The validated bounded code slice is ready for its final review/check gates; production-accuracy monitoring and installed-app acceptance remain open. Installation, tags, releases, build dispatch and deployment remain paused.
+
+Evidence: #1858; [bounded QA and synthetic replay](validation/ACC-510-NEWS-DOMAIN-EVIDENCE.md). MONITOR preserves the open production and installation acceptance; it does not claim a measured accuracy gain.
 
 Priority: A
+Review after: 2026-11-14
+Exit condition: After separately authorized delivery, verify supported/unknown news, history migration and authoritative-warning behavior, then review labeled production observations before claiming accuracy uplift.
 
 Dependencies: ACC-509
 

@@ -41,7 +41,8 @@
   ],
   "src/services/alert-identity.ts": [
     "test:acc509",
-    "test:ux059"
+    "test:ux059",
+    "test:acc510"
   ],
   "src/services/unified-alerts.ts": [
     "test:acc509",
@@ -51,19 +52,23 @@
     "test:acc509"
   ],
   "src/services/analysis-core.ts": [
-    "test:acc509"
+    "test:acc509",
+    "test:acc510"
   ],
   "src/services/situation-types.ts": [
-    "test:acc509"
+    "test:acc509",
+    "test:acc510"
   ],
   "src/services/situation-engine.ts": [
-    "test:acc509"
+    "test:acc509",
+    "test:acc510"
   ],
   "src/services/situation-feed.ts": [
     "test:acc509"
   ],
   "src/services/situation-correlator.ts": [
-    "test:acc509"
+    "test:acc509",
+    "test:acc510"
   ],
   "src/services/situation-alert-bridge.ts": [
     "test:acc509"
@@ -72,13 +77,15 @@
     "test:acc509"
   ],
   "src/services/situation-personalizer.ts": [
-    "test:acc509"
+    "test:acc509",
+    "test:acc510"
   ],
   "src/services/forecast-overlay.ts": [
     "test:acc509"
   ],
   "src/services/threat-synthesis.ts": [
-    "test:acc509"
+    "test:acc509",
+    "test:acc510"
   ],
   "src/services/watchlist-hypothesis-bridge.ts": [
     "test:acc509"
@@ -87,7 +94,8 @@
     "test:acc509"
   ],
   "src/components/SituationPanel.ts": [
-    "test:acc509"
+    "test:acc509",
+    "test:acc510"
   ],
   "src/services/alert-retention.ts": [
     "test:ux059"
@@ -105,7 +113,8 @@
     "test:ux059",
     "test:quiet-hours",
     "test:datacenter",
-    "test:datacenter-ownership"
+    "test:datacenter-ownership",
+    "test:acc510"
   ],
   "src/services/gdacs-coverage.ts": [
     "test:gdacs-map"
@@ -724,7 +733,8 @@
     "test:workflow-security"
   ],
   ".github/workflows/roadmap-controller.yml": [
-    "test:workflow-security"
+    "test:workflow-security",
+    "test:roadmap-controller"
   ],
   ".github/workflows/sast.yml": [
     "test:workflow-security"
@@ -1183,5 +1193,38 @@
   ],
   "api/_news-provenance.js": [
     "test:news-resilience"
+  ],
+  "src/components/Panel.ts": [
+    "test:panel-presentation"
+  ],
+  "src/components/AlertFatigueDashboardPanel.ts": [
+    "test:panel-presentation"
+  ],
+  "src/components/CorrelationMapPanel.ts": [
+    "test:panel-presentation"
+  ],
+  "tests/panel-presentation.test.mjs": [
+    "test:panel-presentation"
+  ],
+  "src/services/situation-news-domain.ts": [
+    "test:acc510"
+  ],
+  "src/services/trending-keywords.ts": [
+    "test:acc510"
+  ],
+  "src/services/rss.ts": [
+    "test:acc510"
+  ],
+  "src/services/analyst-loop.ts": [
+    "test:acc510"
+  ],
+  "src/services/intelligence/event-occurrence-contract.ts": [
+    "test:acc510"
+  ],
+  "src/services/intelligence/hypothesis-prediction-bridge.ts": [
+    "test:acc510"
+  ],
+  "src/services/situation-forecaster.ts": [
+    "test:acc510"
   ]
 }

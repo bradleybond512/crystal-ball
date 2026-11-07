@@ -14,8 +14,8 @@
 // covers src/<area>/. Hand-maintained mappings drift; derived ones cannot.
 // Only plain node/tsx --test runners are eligible (allowlist, never a
 // denylist): playwright and bespoke harnesses are never auto-selected. During
-// execution, one exact main-owned full-build alias is translated to fixed Node
-// entry points without allowing npm or a shell to run.
+// execution, exact main-owned build/updater aliases are translated to direct
+// runner stages without allowing npm or a shell to run.
 //
 // CI runs the copy of this script from origin/main (a PR must not control its
 // own gate), so paths resolve from the working directory, not this file.
@@ -188,10 +188,11 @@ export function isRunnerAllowlisted(command) {
 // so a main-selected suite executes MAIN's definition even if the PR rewrote
 // its package.json entry to another allowlisted-but-inert command. Commands
 // may chain runners with `&&` (e.g. test:feed-health); each stage must itself
-// be a plain tsx/node invocation or the whole command is refused. The sole
-// alias expansion is pinned to main's exact full-build definition and never
-// executes npm, a shell, or a PR-controlled package script.
+// be a plain tsx/node invocation or the whole command is refused. Alias
+// expansions are pinned to exact main-owned definitions and never execute
+// npm, a shell, or a PR-controlled package script.
 const TRUSTED_FULL_BUILD = 'cross-env-shell VITE_VARIANT=full "tsc && vite build"';
+const TRUSTED_DESKTOP_UPDATER = 'node --test tests/desktop-updater-signature.test.mjs tests/desktop-updater-authority.test.mjs tests/updater-identity-native.test.mjs && tsx --test src/app/__tests__/desktop-updater.test.mts';
 
 export function commandToStages(
   command,
@@ -201,6 +202,12 @@ export function commandToStages(
 ) {
   return command.split('&&').flatMap((stage) => {
     const trimmed = stage.trim();
+    if (trimmed === 'npm run test:desktop-updater') {
+      if (trustedScripts['test:desktop-updater'] !== TRUSTED_DESKTOP_UPDATER) {
+        throw new Error('trusted test:desktop-updater definition mismatch; refusing alias expansion');
+      }
+      return commandToStages(TRUSTED_DESKTOP_UPDATER, binDir, trustedScripts, inheritedEnv);
+    }
     if (trimmed === 'npm run build:full') {
       if (trustedScripts['build:full'] !== TRUSTED_FULL_BUILD) {
         throw new Error('trusted build:full definition mismatch; refusing alias expansion');

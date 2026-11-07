@@ -43,7 +43,7 @@
  */
 
 import type {
-  BenchEdgeRow, BenchInhibitoryEdgeRow, BenchLearnedPairRow, BenchPairEmission, BenchPairRow, BenchResyncProbe,
+  BenchBoundaryRecall, BenchEdgeRow, BenchInhibitoryEdgeRow, BenchLearnedPairRow, BenchPairEmission, BenchPairRow, BenchResyncProbe,
   BenchRuleProbe, CorrelationBenchReport, EdgeVerdict,
 } from './bench-correlation';
 // The gate reads planted truth DIRECTLY. A ledger row that carries its own
@@ -53,7 +53,7 @@ import type {
 import { runCorrelationBenchmark } from './bench-correlation';
 import {
   corpusDomains, decoyEventIds, digestRecords, pairKeyFor, plantedCouplingIndex,
-  plantedTruePairKeys,
+  plantedTruePairKeys, PLANTED_COUPLINGS,
 } from './__bench__/golden-streams';
 import { verifyResyncProbe, verifyRuleProbes } from './__bench__/rule-probe-verify';
 import { DEFAULT_WINDOWS_MS, type MultipleTestingFamily } from './lead-lag';
@@ -148,7 +148,7 @@ const TOLERANCE_CEILINGS: CorrelationBenchTolerances = {
  * confusing reasons, only for the fields that happen to be gated. Pin the
  * version and say so once, plainly.
  */
-export const CORRELATION_BENCH_SCHEMA_VERSION = 13;
+export const CORRELATION_BENCH_SCHEMA_VERSION = 14;
 
 /**
  * `goldenCorpusDigest()` emits exactly 32 lowercase hex characters. Comparing
@@ -161,6 +161,7 @@ export const CORRELATION_BENCH_SCHEMA_VERSION = 13;
 const DIGEST_PATTERN = /^[\da-f]{32}$/;
 
 export interface CorrelationBenchBaseline {
+  boundaryRecall?: BenchBoundaryRecall[];
   /** Bumped only when the baseline's own shape changes. */
   schemaVersion: number;
   /** ISO date the baseline was seeded — informational, never compared. */
@@ -344,6 +345,144 @@ export function benchTolerancesDigest(tolerances: CorrelationBenchBaseline['tole
   const records: string[] = [];
   canonicalRecords(tolerances, '', records);
   return digestRecords(records);
+}
+
+export interface CorrelationBenchMigrationV13ToV14 {
+  fromSchemaVersion: 13;
+  toSchemaVersion: 14;
+  previousPayloadDigest: string;
+  previousReportDigest: string;
+  previousTolerancesDigest: string;
+  nextCorpusDigest: string;
+  nextReportDigest: string;
+  nextPayloadDigest: string;
+  addedStreamDigest: string;
+  expectedMovement: Record<string, { from: number; to: number }>;
+  reason: string;
+}
+
+export function boundaryMigrationPayloadDigest(baseline: CorrelationBenchBaseline): string {
+  const payload = Object.fromEntries(
+    Object.entries(baseline).filter(([key]) => key !== 'seededAt' && key !== 'note'),
+  );
+  return sectionDigest(payload);
+}
+
+export const CORRELATION_BENCH_V13_TO_V14_MIGRATION: CorrelationBenchMigrationV13ToV14 = {
+  fromSchemaVersion: 13,
+  toSchemaVersion: 14,
+  previousPayloadDigest: '91f2765056e4aa047abb78244a9dd71a',
+  previousReportDigest: 'fdf1ead2d5503886781b125c125bf799',
+  previousTolerancesDigest: '0c24f1a31e8401fc64c2dc7e96968c4a',
+  nextCorpusDigest: '5c03b9bd78a0fcd8d1e79906b3338692',
+  nextReportDigest: 'cb97f41fb05a5bd2d5aad4866d1d0ff8',
+  nextPayloadDigest: 'cde858908e1bf6de0b44f8abf1d1af20',
+  addedStreamDigest: '3811a3f0d52bed98b499aefd8207f371',
+  expectedMovement: {
+    "streamCount": {
+      "from": 10,
+      "to": 11
+    },
+    "observationCount": {
+      "from": 469,
+      "to": 504
+    },
+    "plantedCausalCount": {
+      "from": 5,
+      "to": 6
+    },
+    "minedEdgeCount": {
+      "from": 257,
+      "to": 327
+    },
+    "significantEdgeCount": {
+      "from": 5,
+      "to": 6
+    },
+    "fixedCandidateEvidenceSeparation": {
+      "from": 14.3647,
+      "to": 13.0872
+    },
+    "learnedRuleCount": {
+      "from": 5,
+      "to": 6
+    },
+    "causalLearnedRuleCount": {
+      "from": 5,
+      "to": 6
+    },
+    "learnedRulePairCount": {
+      "from": 32,
+      "to": 36
+    },
+    "causalLearnedRulePairCount": {
+      "from": 32,
+      "to": 36
+    },
+    "minCausalLearnedRulePairCount": {
+      "from": 6,
+      "to": 4
+    }
+  },
+  reason: 'ACC-508 adds one frozen near-boundary causal stream and a measured Holm coverage gate; existing streams and thresholds remain unchanged.',
+};
+
+export function validateCorrelationBenchV13ToV14Migration(
+  report: CorrelationBenchReport,
+  previous: CorrelationBenchBaseline,
+  manifest = CORRELATION_BENCH_V13_TO_V14_MIGRATION,
+): CorrelationBenchComparison {
+  const reasons: string[] = [];
+  if (sectionDigest(manifest) !== sectionDigest(CORRELATION_BENCH_V13_TO_V14_MIGRATION)) {
+    return { ok: false, reasons: ['v13→v14 migration manifest differs from the reviewed transition'] };
+  }
+  if (previous.schemaVersion !== 13 || manifest.toSchemaVersion !== CORRELATION_BENCH_SCHEMA_VERSION) {
+    reasons.push('v13→v14 migration must be the one-hop path to the compiled schema');
+  }
+  if (boundaryMigrationPayloadDigest(previous) !== manifest.previousPayloadDigest
+    || previous.reportDigest !== manifest.previousReportDigest
+    || benchTolerancesDigest(previous.tolerances) !== manifest.previousTolerancesDigest) {
+    reasons.push('v13→v14 source payload, report or tolerances are not the reviewed baseline');
+  }
+  if (report.corpusDigest !== manifest.nextCorpusDigest || benchReportDigest(report) !== manifest.nextReportDigest) {
+    reasons.push('v13→v14 candidate corpus or report differs from the reviewed addition');
+  }
+  const candidate = seedCorrelationBenchBaseline(report, previous, previous.seededAt);
+  if (boundaryMigrationPayloadDigest(candidate) !== manifest.nextPayloadDigest) {
+    reasons.push('v13→v14 candidate payload differs from the reviewed addition');
+  }
+  const beforeStreams = Object.keys(previous.streamDigests).sort(compareStrings);
+  const afterStreams = Object.keys(report.streamDigests).sort(compareStrings);
+  if (beforeStreams.length !== 10 || afterStreams.length !== 11
+    || afterStreams.filter(id => !beforeStreams.includes(id)).join(',') !== 'near-boundary-causal'
+    || report.streamDigests['near-boundary-causal'] !== manifest.addedStreamDigest
+    || beforeStreams.some(id => report.streamDigests[id] !== previous.streamDigests[id])) {
+    reasons.push('v13→v14 must preserve all ten old streams and add only the reviewed S11');
+  }
+  const allowed = new Set(['schemaVersion', 'seededAt', 'note', 'corpusDigest', 'streamDigests',
+    'reportDigest', 'witnessed', 'boundaryRecall', 'multipleTestingFamily', ...Object.keys(manifest.expectedMovement)]);
+  const before = previous as unknown as Record<string, unknown>;
+  const after = candidate as unknown as Record<string, unknown>;
+  for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    if (!allowed.has(key) && sectionDigest(before[key]) !== sectionDigest(after[key])) {
+      reasons.push(`v13→v14 unapproved movement of ${key}`);
+    }
+  }
+  for (const [key, movement] of Object.entries(manifest.expectedMovement)) {
+    if (before[key] !== movement.from || after[key] !== movement.to) {
+      reasons.push(`v13→v14 ${key} differs from its reviewed additive movement`);
+    }
+  }
+  const oldLearned = report.learnedPairs.filter(row => row.ruleId !== 'learned:boundary-a->boundary-b');
+  if (sectionDigest(oldLearned) !== previous.witnessed.sectionDigests.learnedPairs) {
+    reasons.push('v13→v14 changed evidence from the five original learned rules');
+  }
+  if (reasons.length > 0) return { ok: false, reasons };
+  checkReportConsistency(reasons, report);
+  checkMigrationSharedGates(reasons, report, previous);
+  const graded = compareCorrelationBenchToBaseline(report, candidate);
+  reasons.push(...graded.reasons);
+  return { ok: reasons.length === 0, reasons };
 }
 
 export interface CorrelationBenchV13StatisticalReseed {
@@ -1777,6 +1916,52 @@ function checkPreflight(
   return reasons;
 }
 
+export function validateBoundaryRecall(report: CorrelationBenchReport): string[] {
+  const reasons: string[] = [];
+  const rows = report.boundaryRecall;
+  if (!Array.isArray(rows) || rows.length !== 1 || !rows[0] || typeof rows[0] !== 'object') {
+    return ['boundary recall requires exactly one actual candidate'];
+  }
+  const row = rows[0];
+  const truth = PLANTED_COUPLINGS.filter(item => item.from === 'boundary-a' && item.to === 'boundary-b');
+  if (truth.length !== 1 || truth[0]?.kind !== 'causal'
+    || row.from !== 'boundary-a' || row.to !== 'boundary-b' || row.bindingGate !== 'holm-adjusted-p') {
+    reasons.push('boundary recall identity is not the independently planted causal direction');
+  }
+  const values = [row.windowMs, row.support, row.antecedents, row.lift, row.zScore,
+    row.adjustedPValue, row.alpha, row.eligibleOrderedPairs, row.posteriorProbability,
+    row.expectedUtility, row.alphaUtilization, row.posteriorSlack, row.utilitySlack];
+  if (values.some(value => typeof value !== 'number' || !Number.isFinite(value))) {
+    return [...reasons, 'boundary recall evidence must be finite'];
+  }
+  if (row.alpha <= 0 || row.alpha > 1 || row.adjustedPValue! < 0 || row.adjustedPValue! > 1
+    || row.posteriorProbability! < 0 || row.posteriorProbability! > 1
+    || row.windowMs <= 0 || !Number.isInteger(row.support) || !Number.isInteger(row.antecedents)
+    || row.support < 3 || row.antecedents < row.support || row.lift! < 2 || row.zScore! < 2
+    || row.posteriorProbability! < .8 || row.expectedUtility! <= 0) {
+    reasons.push('boundary recall candidate does not satisfy the real promotion gates');
+  }
+  const family = report.multipleTestingFamily;
+  if (row.alpha !== family?.alpha || row.eligibleOrderedPairs !== family.eligibleOrderedPairs
+    || !Number.isInteger(row.eligibleOrderedPairs) || row.eligibleOrderedPairs < 1) {
+    reasons.push('boundary recall family evidence disagrees with this mining run');
+  }
+  const utilization = row.adjustedPValue! / row.alpha;
+  if (row.alphaUtilization !== utilization || utilization < .85 || utilization > .99) {
+    reasons.push('boundary recall Holm alpha utilization must remain within [0.85, 0.99]');
+  }
+  if (row.posteriorSlack !== row.posteriorProbability! - .8 || row.utilitySlack !== row.expectedUtility) {
+    reasons.push('boundary recall posterior or utility slack disagrees with evidence');
+  }
+  const recovered = Array.isArray(report.edges) && report.edges.filter(edge => edge.from === row.from && edge.to === row.to);
+  if (row.admitted !== true || row.becameLearnedRule !== true || !recovered || recovered.length !== 1
+    || recovered[0]?.becameLearnedRule !== true || recovered[0]?.verdict !== 'causal') {
+    reasons.push('boundary recall candidate was not admitted and recovered as a learned causal rule');
+  }
+  divergences(referenceReport().boundaryRecall, rows, 'boundaryRecall', reasons, 8);
+  return reasons;
+}
+
 export function compareCorrelationBenchToBaseline(
   report: CorrelationBenchReport,
   baseline: CorrelationBenchBaseline,
@@ -1787,6 +1972,9 @@ export function compareCorrelationBenchToBaseline(
 
   const preflight = checkPreflight(report, baseline);
   if (preflight.length > 0) return { ok: false, reasons: preflight };
+  if (sectionDigest(baseline.boundaryRecall) !== sectionDigest(report.boundaryRecall)) {
+    return { ok: false, reasons: ['baseline boundary recall witness differs from the live report'] };
+  }
 
   // ── Fail closed on anything non-numeric BEFORE any directional check ───
   // A missing JSON field or a corrupt report yields NaN, and `NaN > tolerance`
@@ -2025,6 +2213,7 @@ export function compareCorrelationBenchToBaseline(
   // itemised first so drift is named, then anchored by the whole-report digest.
   checkWitnessedFields(reasons, report, baseline);
   checkReportDigest(reasons, report, baseline);
+  reasons.push(...validateBoundaryRecall(report));
 
   return { ok: reasons.length === 0, reasons };
 }
@@ -3686,6 +3875,7 @@ export function seedCorrelationBenchBaseline(
     seededAt,
     note: carriedOver.note,
     replayMode: report.replayMode,
+    boundaryRecall: report.boundaryRecall?.map(row => ({ ...row })),
 
     streamCount: report.streamCount,
     observationCount: report.observationCount,

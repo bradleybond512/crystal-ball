@@ -1,0 +1,103 @@
+{
+  "productionUplift": false,
+  "description": "Real frozen benchmark/miner perturbations; engineering boundary coverage, not production accuracy.",
+  "runs": [
+    {
+      "fixture": "approved-boundary",
+      "candidate": {
+        "from": "boundary-a",
+        "to": "boundary-b",
+        "windowMs": 3600000,
+        "support": 4,
+        "antecedents": 6,
+        "lift": 16.81833890965171,
+        "zScore": 7.871946343560125,
+        "adjustedPValue": 0.04514048363946339,
+        "alpha": 0.05,
+        "eligibleOrderedPairs": 342,
+        "posteriorProbability": 0.8160202886303283,
+        "expectedUtility": 0.08010144315164136,
+        "admitted": true,
+        "becameLearnedRule": true,
+        "bindingGate": "holm-adjusted-p",
+        "alphaUtilization": 0.9028096727892677,
+        "posteriorSlack": 0.016020288630328228,
+        "utilitySlack": 0.08010144315164136
+      }
+    },
+    {
+      "fixture": "calibration-neighbors",
+      "easier": {
+        "from": "boundary-a",
+        "to": "boundary-b",
+        "windowMs": 3600000,
+        "support": 4,
+        "antecedents": 6,
+        "lift": 17.406931383170893,
+        "zScore": 8.02003376718899,
+        "adjustedPValue": 0.03942482258853683,
+        "alpha": 0.05,
+        "eligibleOrderedPairs": 342,
+        "posteriorProbability": 0.8275247171353896,
+        "expectedUtility": 0.13762358567694777,
+        "admitted": true,
+        "becameLearnedRule": true,
+        "bindingGate": "holm-adjusted-p",
+        "alphaUtilization": 0.7884964517707366,
+        "posteriorSlack": 0.02752471713538951,
+        "utilitySlack": 0.13762358567694777
+      },
+      "harder": {
+        "from": "boundary-a",
+        "to": "boundary-b",
+        "windowMs": 3600000,
+        "support": 4,
+        "antecedents": 6,
+        "lift": 16.26899109907807,
+        "zScore": 7.7311782314876165,
+        "adjustedPValue": 0.05143946415527093,
+        "alpha": 0.05,
+        "eligibleOrderedPairs": 342,
+        "posteriorProbability": 0.8044421853248095,
+        "expectedUtility": 0.022210926624047445,
+        "admitted": false,
+        "becameLearnedRule": false,
+        "bindingGate": "holm-adjusted-p",
+        "alphaUtilization": 1.0287892831054186,
+        "posteriorSlack": 0.0044421853248094445,
+        "utilitySlack": 0.022210926624047445
+      }
+    },
+    {
+      "fixture": "family-drift",
+      "candidate": {
+        "from": "boundary-a",
+        "to": "boundary-b",
+        "windowMs": 3600000,
+        "support": 4,
+        "antecedents": 6,
+        "lift": 16.81833890965171,
+        "zScore": 7.871946343560125,
+        "adjustedPValue": 0.05041844788038526,
+        "alpha": 0.05,
+        "eligibleOrderedPairs": 380,
+        "posteriorProbability": 0.8160202886303283,
+        "expectedUtility": 0.08010144315164136,
+        "admitted": false,
+        "becameLearnedRule": false,
+        "bindingGate": "holm-adjusted-p",
+        "alphaUtilization": 1.0083689576077053,
+        "posteriorSlack": 0.016020288630328228,
+        "utilitySlack": 0.08010144315164136
+      }
+    }
+  ],
+  "productSha": "14da6a1e97ab75634920a8ff66e56ebe1d93e701",
+  "testSha256": "6a4c28f50bc40352f2a5efcb2275e1473ae52f630d2c9315509cbbb1bd75bff5",
+  "fixtureSha256": "2c32b32b33d9463159aac1772dfeea50a5de45c24d35690f0dd8adb499d712fd",
+  "perturbations": {
+    "easier": "Remove the last existing independent boundary-b background event, retaining all remaining timestamps. Measured alpha utilization 0.7884964517707366 differs from discovery 0.790922 because discovery regenerated spacing for 24 background events. Neither changes approved S11.",
+    "harder": "Add one boundary-b background event at CORPUS_T0 + 0.63 day; preserve the other 35 observations.",
+    "familyDrift": "Add independent-domain observations at days 1.23, 10.353, 19.476; family grows from 342 to 380."
+  }
+}

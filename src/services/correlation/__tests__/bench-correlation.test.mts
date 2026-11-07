@@ -61,8 +61,48 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(here, '..', '..', '..', '..');
 const BASELINE_PATH = path.join(here, '..', '__bench__', 'bench-correlation-baseline.json');
 
+function loadV13Baseline(): CorrelationBenchBaseline {
+  return JSON.parse(readFileSync(path.join(here, 'fixtures', 'bench-correlation-v13.json'), 'utf8'));
+}
+
 function loadBaseline(): CorrelationBenchBaseline {
   return JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as CorrelationBenchBaseline;
+}
+
+function previousStatisticalV13(): CorrelationBenchBaseline {
+  const committed = loadV13Baseline();
+  return {
+    ...committed,
+    seededAt: '2026-08-05T02:14:06.820Z',
+    reportDigest: '6d8489c850bea5b7cd3aef6d3b69b12e',
+    multipleTestingFamily: {
+      ...committed.multipleTestingFamily,
+      method: 'gaussian-union-bound',
+    },
+    couplingPrecision: 0.2941,
+    minedEdgeCount: 258,
+    significantEdgeCount: 17,
+    confoundedFalsePositives: 2,
+    mediatedFalsePositives: 1,
+    unplantedFalsePositives: 9,
+    falseEdgeCount: 12,
+    edgeEvidenceSeparation: 6.8894,
+    fixedCandidateEvidenceSeparation: 13.4241,
+    learnedRuleCount: 12,
+    learnedRuleFalsePositives: 7,
+    learnedRulePairCount: 102,
+    witnessed: {
+      ...committed.witnessed,
+      meanCausalEdgeStrength: 1,
+      meanCausalEdgeZ: 15.0045,
+      edgeEvidenceSeparation: 6.8894,
+      sectionDigests: {
+        ...committed.witnessed.sectionDigests,
+        edges: '6c4f26a125dc1959a3d3600a1b77b03e',
+        learnedPairs: '5facb47718ff80e5fb1c3447ac98df60',
+      },
+    },
+  };
 }
 
 const round4 = (v: number): number => Math.round(v * 10_000) / 10_000;
@@ -901,17 +941,15 @@ describe('the gate', () => {
       causalLearnedRuleIds: causalRuleIds,
       edges: causalEdgeRows,
     };
-    // Five causal rules now, so the ledger has to witness five live rules
-    // summing to the unchanged 19 — and none of them below the per-rule floor,
-    // or the liveness gate would fire instead of the run passing.
+    // Six causal rules must each retain live evidence above the per-rule floor.
     const perfect = withLearnedPairRows(
       perfectCounters,
       learnedRowsFor(
         perfectCounters,
-        causalRuleIds.map((id, i) => [id, [5, 4, 4, 3, 3][i]!] as const),
+        causalRuleIds.map((id, i) => [id, [5, 4, 4, 3, 3, 3][i]!] as const),
       ),
     );
-    assert.deepEqual(perfect.causalLearnedRulePairsPerRule, [5, 4, 4, 3, 3]);
+    assert.deepEqual(perfect.causalLearnedRulePairsPerRule, [5, 4, 4, 3, 3, 3]);
     const { reasons } = compareCorrelationBenchToBaseline(perfect, baseline);
     // A hand-authored report reproduces neither the re-run nor the committed
     // ledger digest, and both reasons are expected here — the property under
@@ -1039,7 +1077,7 @@ describe('the gate', () => {
       report,
       learnedRowsFor(report, [[report.causalLearnedRuleIds[0]!, 1]]),
     );
-    assert.deepEqual(nearlyDark.causalLearnedRulePairsPerRule, [1, 0, 0, 0, 0]);
+    assert.deepEqual(nearlyDark.causalLearnedRulePairsPerRule, [1, 0, 0, 0, 0, 0]);
     const { ok, reasons } = compareCorrelationBenchToBaseline(nearlyDark, baseline);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('causal learned rules went quiet')));
@@ -2311,9 +2349,10 @@ describe('the re-seed emitter produces a baseline that passes', () => {
     assert.equal(ok, true, `re-seeded baseline should pass: ${JSON.stringify(reasons)}`);
   });
 
-  it('pins every v13 replay, family, candidate, inhibition, and stream identity field', () => {
+  it('pins every v14 replay, boundary, family, candidate, inhibition, and stream identity field', () => {
     const seeded = seedCorrelationBenchBaseline(report, carriedOver, '2026-08-03');
-    assert.equal(seeded.schemaVersion, 13);
+    assert.equal(seeded.schemaVersion, 14);
+    assert.deepEqual(seeded.boundaryRecall, report.boundaryRecall);
     assert.equal(seeded.replayMode, report.replayMode);
     assert.deepEqual(seeded.streamDigests, report.streamDigests);
     assert.deepEqual(seeded.multipleTestingFamily, report.multipleTestingFamily);
@@ -2557,7 +2596,7 @@ describe('the one-shot v11 to v12 migration gate', () => {
     },
   };
   const previous: CorrelationBenchBaseline = {
-    ...loadBaseline(),
+    ...loadV13Baseline(),
     schemaVersion: 11,
     observationCount: 378,
     corpusDigest: '8411c23a6f009f2245ec779a7593685e',
@@ -2584,7 +2623,7 @@ describe('the one-shot v11 to v12 migration gate', () => {
     ) => { ok: boolean; reasons: string[] };
   };
 
-  it('accepts only the pinned S9-only transition with all new gates armed', () => {
+  it('refuses the new S11 corpus through the historical S9-only transition', () => {
     assert.ok(api.CORRELATION_BENCH_V11_TO_V12_MIGRATION);
     assert.ok(api.validateCorrelationBenchV11ToV12Migration);
     const verdict = api.validateCorrelationBenchV11ToV12Migration(
@@ -2592,8 +2631,9 @@ describe('the one-shot v11 to v12 migration gate', () => {
       previous,
       api.CORRELATION_BENCH_V11_TO_V12_MIGRATION,
     );
-    assert.deepEqual(verdict.reasons, []);
-    assert.equal(verdict.ok, true);
+    assert.equal(verdict.ok, false);
+    assert.match(verdict.reasons.join(' '), /exactly the ten reviewed streams/);
+    assert.match(verdict.reasons.join(' '), /S9-only corpus transition/);
   });
 
   it('rejects a migrated report whose learned execution path collapses behind one survivor', () => {
@@ -3421,62 +3461,32 @@ describe('round 14 — the gate stops taking the producer at its word', () => {
 describe('ACC-503/ACC-504 — the schema-13 statistical reseed is pinned', () => {
   const report = runCorrelationBenchmark();
   const committed = loadBaseline();
-  const previousV13 = (): CorrelationBenchBaseline => ({
-    ...committed,
-    seededAt: '2026-08-05T02:14:06.820Z',
-    reportDigest: '6d8489c850bea5b7cd3aef6d3b69b12e',
-    multipleTestingFamily: {
-      ...committed.multipleTestingFamily,
-      method: 'gaussian-union-bound',
-    },
-    couplingPrecision: 0.2941,
-    minedEdgeCount: 258,
-    significantEdgeCount: 17,
-    confoundedFalsePositives: 2,
-    mediatedFalsePositives: 1,
-    unplantedFalsePositives: 9,
-    falseEdgeCount: 12,
-    edgeEvidenceSeparation: 6.8894,
-    fixedCandidateEvidenceSeparation: 13.4241,
-    learnedRuleCount: 12,
-    learnedRuleFalsePositives: 7,
-    learnedRulePairCount: 102,
-    witnessed: {
-      ...committed.witnessed,
-      meanCausalEdgeStrength: 1,
-      meanCausalEdgeZ: 15.0045,
-      edgeEvidenceSeparation: 6.8894,
-      sectionDigests: {
-        ...committed.witnessed.sectionDigests,
-        edges: '6c4f26a125dc1959a3d3600a1b77b03e',
-        learnedPairs: '5facb47718ff80e5fb1c3447ac98df60',
-      },
-    },
-  });
 
-  it('accepts only the reviewed exact-binomial-Holm transition', () => {
+
+  it('refuses the historical exact-binomial-Holm transition for the new corpus', () => {
     const { ok, reasons } = correlationBaseline.validateCorrelationBenchV13StatisticalReseed(
       report,
-      previousV13(),
+      previousStatisticalV13(),
       correlationBaseline.CORRELATION_BENCH_V13_STATISTICAL_RESEED,
     );
-    assert.equal(ok, true, JSON.stringify(reasons));
+    assert.equal(ok, false);
+    assert.match(reasons.join(' '), /changed the frozen corpus|multiple-testing family changed/);
   });
 
   it('pins the exact reviewed previous payload and tolerances', () => {
     const manifest = correlationBaseline.CORRELATION_BENCH_V13_STATISTICAL_RESEED;
     assert.equal(
-      correlationBaseline.benchBaselinePayloadDigest(previousV13()),
+      correlationBaseline.benchBaselinePayloadDigest(previousStatisticalV13()),
       manifest.previousPayloadDigest,
     );
     assert.equal(
-      correlationBaseline.benchTolerancesDigest(previousV13().tolerances),
+      correlationBaseline.benchTolerancesDigest(previousStatisticalV13().tolerances),
       manifest.previousTolerancesDigest,
     );
   });
 
   it('refuses a self-consistent previous payload forgery', () => {
-    const previous = { ...previousV13(), minedEdgeCount: report.minedEdgeCount };
+    const previous = { ...previousStatisticalV13(), minedEdgeCount: report.minedEdgeCount };
     const { ok, reasons } = correlationBaseline.validateCorrelationBenchV13StatisticalReseed(
       report,
       previous,
@@ -3496,30 +3506,31 @@ describe('ACC-503/ACC-504 — the schema-13 statistical reseed is pinned', () =>
     };
     const { ok, reasons } = correlationBaseline.validateCorrelationBenchV13StatisticalReseed(
       changed,
-      previousV13(),
+      previousStatisticalV13(),
       correlationBaseline.CORRELATION_BENCH_V13_STATISTICAL_RESEED,
     );
     assert.equal(ok, false);
     assert.match(reasons.join(' '), /reviewed next report|unreviewed multiple-testing family/);
   });
 
-  it('routes the ordinary reseed guard through the pinned transition', () => {
+  it('refuses to route the new corpus through the historical statistical transition', () => {
     const { ok, reasons } = correlationBaseline.compareCorrelationBenchReseedToPrevious(
       report,
-      previousV13(),
+      previousStatisticalV13(),
     );
-    assert.equal(ok, true, JSON.stringify(reasons));
+    assert.equal(ok, false);
+    assert.match(reasons.join(' '), /baseline schemaVersion is 13, expected 14/);
   });
 
   it('routes an unreviewed next report through the normal fail-closed comparator', () => {
     const changed = { ...report, meanTruePairConfidence: 0.01 };
     const { ok, reasons } = correlationBaseline.compareCorrelationBenchReseedToPrevious(
       changed,
-      previousV13(),
+      previousStatisticalV13(),
     );
     assert.equal(ok, false);
     assert.ok(
-      reasons.some((reason) => reason.includes('multiple-testing family changed')),
+      reasons.some((reason) => reason.includes('baseline schemaVersion is 13, expected 14')),
       reasons.join(' | '),
     );
   });
@@ -3531,19 +3542,15 @@ describe('round 15 — the v12→v13 schema bump is a pinned migration, not a sk
   const carriedOver = { note: committed.note, tolerances: committed.tolerances };
   const manifest = correlationBaseline.CORRELATION_BENCH_V12_TO_V13_MIGRATION;
 
-  // The reviewed v12 baseline differed from today's only in schemaVersion,
-  // seededAt, and reportDigest — that IS the claim the migration makes. The
-  // reconstruction is only admissible because `previousPayloadDigest` pins it:
-  // if any forbidden field differed from the real reviewed v12 baseline, this
-  // object would digest to something else and the validator would refuse it.
-  // The test below asserts exactly that before using it.
-  const previousV12 = (): correlationBaseline.CorrelationBenchBaseline => ({
-    ...seedCorrelationBenchBaseline(report, carriedOver, committed.seededAt),
+  // Preserve the legacy test's pinned reconstruction from the pre-S11 baseline.
+  // The retired migration must still reject tampering and cannot seed schema 14.
+  const previousV12 = (): CorrelationBenchBaseline => ({
+    ...loadV13Baseline(),
     schemaVersion: 12,
     reportDigest: manifest.previousReportDigest,
-  } as unknown as correlationBaseline.CorrelationBenchBaseline);
+  });
 
-  it('reconstructs the reviewed v12 payload exactly — the pin says so', () => {
+  it('preserves the legacy reconstruction matched by the migration payload pin', () => {
     assert.equal(
       correlationBaseline.benchBaselinePayloadDigest(previousV12()),
       manifest.previousPayloadDigest,
@@ -3594,13 +3601,14 @@ describe('round 15 — the v12→v13 schema bump is a pinned migration, not a sk
     assert.match(reasons.join(' '), /legacyRetiredField moved from 42 to undefined/);
   });
 
-  it('accepts the real additive transition', () => {
+  it('refuses the retired v12→v13 path for the schema-14 corpus', () => {
     const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
       report,
       previousV12(),
       manifest,
     );
-    assert.equal(ok, true, JSON.stringify(reasons));
+    assert.equal(ok, false);
+    assert.match(reasons.join(' '), /no longer the one-hop path/);
   });
 
   it('refuses a manifest that is not the pinned one', () => {
@@ -3657,7 +3665,7 @@ describe('round 15 — the v12→v13 schema bump is a pinned migration, not a sk
   it('pins the migration to exactly one hop', () => {
     assert.equal(manifest.fromSchemaVersion, 12);
     assert.equal(manifest.toSchemaVersion, 13);
-    assert.equal(manifest.toSchemaVersion, CORRELATION_BENCH_SCHEMA_VERSION);
+    assert.notEqual(manifest.toSchemaVersion, CORRELATION_BENCH_SCHEMA_VERSION);
   });
 
   it('the runtime one-hop check is real code, not just a test-level assertion', () => {
@@ -3684,16 +3692,17 @@ describe('round 15 — the v12→v13 schema bump is a pinned migration, not a sk
     // field reaches the check through the real validator; see the
     // "validator wiring, not just the helper" test below for the
     // permanent, mutation-free proof that the call site itself is intact.
-    assert.equal(
+    assert.notEqual(
       correlationBaseline.CORRELATION_BENCH_V12_TO_V13_MIGRATION.toSchemaVersion,
       CORRELATION_BENCH_SCHEMA_VERSION,
     );
-    const { ok } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
       report,
       previousV12(),
       manifest,
     );
-    assert.equal(ok, true);
+    assert.equal(ok, false);
+    assert.match(reasons.join(' '), /no longer the one-hop path/);
   });
 
   it('oneHopSchemaVersionCheckReason refuses a manifest that no longer targets the compiled schema', () => {

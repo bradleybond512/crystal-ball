@@ -974,7 +974,7 @@ These tasks retain their detailed designs in
 | ACC-505 | DONE | Per-regime correlation reliability | ACC-501 (DONE) |
 | ACC-506 | WAITING | Bounded correlation-kernel tunables and safety fixtures | ACC-505 |
 | ACC-507 | DONE | Bounded cross-event correlation ingestion and liveness proof | ACC-502 (DONE) |
-| ACC-508 | TODO | Near-threshold coupling recall gate | ACC-503 (DONE), ACC-504 (DONE) |
+| ACC-508 | DONE | Near-threshold coupling recall gate | ACC-503 (DONE), ACC-504 (DONE) |
 | ACC-509 | DONE | Stable situation identity under delayed and repeated input | #1738; #1743 performance follow-up; [evidence](validation/ACC-509-IDENTITY.md); UX-059 integration hold |
 | ACC-510 | MONITOR | Evidence-based domain for news-derived situations | #1858; bounded code evidence complete, production monitoring open |
 
@@ -1961,7 +1961,11 @@ Outcome — delivered:
 
 ### ACC-508 — Near-threshold coupling recall gate
 
-Status: `TODO`
+Status: `DONE`
+
+Claim: draft [#1857](https://github.com/bradleybond512/crystal-ball/pull/1857), `codex/acc508-coupling-recall`. [Approved design](plans/2026-11-05-acc508-near-threshold-recall.md). Local implementation verified: 21 focused checks, 459 correlation checks, 38 selected suites and 33 caught behavior reversals. [QA, calibration and proof evidence](validation/ACC-508-COUPLING-RECALL.md). The reviewed metadata repair is already on main. Bradley authorized reconciliation, publication and merging; installation, release and deployment remain paused.
+
+Evidence: #1857 (candidate completion PR); [QA, calibration and proof evidence](validation/ACC-508-COUPLING-RECALL.md). DONE records scoped frozen-benchmark recovery/margin and schema-migration acceptance. Production accuracy uplift remains unproven.
 
 Priority: A
 

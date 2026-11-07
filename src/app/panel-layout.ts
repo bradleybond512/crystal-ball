@@ -760,7 +760,14 @@ export class PanelLayoutManager implements AppModule {
   private stormMode: PersonalStormMode | null = null;
   private stormMount: HTMLElement | null = null;
   private _onStormDecision: ((e: Event) => void) | null = null;
-  private expirePredictionsTimer: ReturnType<typeof setInterval> | null = null;
+  private calibrationInputsReady = SITE_VARIANT === 'happy';
+  private calibrationScheduler?: { notifyReady(): void; stop(): void };
+
+  markCalibrationInputsReady(): void {
+    if (this.calibrationInputsReady || this.destroyed) return;
+    this.calibrationInputsReady = true;
+    this.calibrationScheduler?.notifyReady();
+  }
   private unsubDcPlaces: (() => void) | null = null;
   private unsubWeatherClearOnPlaces: (() => void) | null = null;
   private safetyCaseUnsub: (() => void) | null = null;
@@ -989,10 +996,8 @@ export class PanelLayoutManager implements AppModule {
  // destroy it (and its ResizeObserver) outlive teardown and can't be GC'd.
  this.ctx.map?.destroy();
  this.ctx.map = null;
- if (this.expirePredictionsTimer) {
- clearInterval(this.expirePredictionsTimer);
- this.expirePredictionsTimer = null;
- }
+ this.calibrationScheduler?.stop();
+ this.calibrationScheduler = undefined;
  if (this._lastViewedObserver) {
  this._lastViewedObserver.disconnect();
  this._lastViewedObserver = null;
@@ -1354,7 +1359,7 @@ export class PanelLayoutManager implements AppModule {
  });
  startEpistemicCalibration();
  startAssumptionExpirySweep();
- this.expirePredictionsTimer = setInterval(() => { try { settleCalibrationBridges(); } catch { /* noop */ } }, 60 * 60 * 1000);
+
  // PR 14 memory hygiene: flag episodic-memory episodes whose backing
  // explanation was refuted by competitive-hypothesis resolution. Best-effort
  // entity-overlap match (see contradictEpisodesForRefutation doc) — never
@@ -2633,37 +2638,34 @@ export class PanelLayoutManager implements AppModule {
  import('@/services/intelligence/observation-store'),
  import('@/services/spc-outlook'),
  import('@/services/cognition/cognition-settings'),
- import('@/services/diagnostics/recurring-loops'),
-]).then(([
+ import('@/services/intelligence/calibration-resolution-scheduler'),
+ ]).then(([
    { eventOccurrenceResolver, marketMoveResolver, warningVerificationResolver },
-   { dispatchOutcomeResolvers },
+   { dispatchMeasuredOutcomeResolvers, hasDueCalibrationWork, isCalibrationSnapshotCurrent },
    { getSpotPriceHistory },
    { query },
    { getLatestStormReportBatch },
    { isCognitionEnabled },
-   { registerRecurringLoop },
+   { startCalibrationResolutionScheduler },
  ]) => {
- registerRecurringLoop(
-   'outcome-resolvers',
-   () => {
-     if (!isCognitionEnabled('outcome-resolvers')) return;
-     const now = Date.now();
-     const stormReports = getLatestStormReportBatch();
-     dispatchOutcomeResolvers({
-       now,
-       spotHistoryFor: (symbol, sinceExclusive, untilInclusive) =>
-         getSpotPriceHistory(symbol, { sinceExclusive, untilInclusive }),
-       queryObservations: (queryInput) => query(queryInput),
-       stormReportBatch: () => stormReports,
-     }, [
-       marketMoveResolver,
-       warningVerificationResolver,
-       eventOccurrenceResolver,
-     ]);
-   },
-   15 * 60_000,
-   { priority: 'low', runImmediately: false },
- );
+   if (this.destroyed || this.ctx.isDestroyed) return;
+   this.calibrationScheduler = startCalibrationResolutionScheduler({
+     isReady: () => this.calibrationInputsReady && isCalibrationSnapshotCurrent(),
+     isBridgeReady: isCalibrationSnapshotCurrent,
+     enabled: () => isCognitionEnabled('outcome-resolvers'),
+     hasDueWork: hasDueCalibrationWork,
+     bridge: settleCalibrationBridges,
+     resolve: (now) => {
+       const stormReports = getLatestStormReportBatch();
+       return dispatchMeasuredOutcomeResolvers({
+         now,
+         spotHistoryFor: (symbol, sinceExclusive, untilInclusive) =>
+           getSpotPriceHistory(symbol, { sinceExclusive, untilInclusive }),
+         queryObservations: (queryInput) => query(queryInput),
+         stormReportBatch: () => stormReports,
+       }, [marketMoveResolver, warningVerificationResolver, eventOccurrenceResolver]);
+     },
+   });
  }).catch((error) => {
  console.error('[boot] outcome resolver wiring failed:', error);
  });

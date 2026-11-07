@@ -515,6 +515,7 @@ async function resolveGridInfrastructure(lat: number, lon: number): Promise<Powe
 }
 
 export interface DataLoaderCallbacks {
+  onForecastInputsAttempted?: () => void;
   renderCriticalBanner: (postures: TheaterPostureSummary[]) => void;
 }
 
@@ -782,6 +783,7 @@ export class DataLoaderManager implements AppModule {
  }
  } finally {
  this.ctx.inFlight.delete(name);
+ if (name === 'markets' && !this.ctx.isDestroyed) this.callbacks.onForecastInputsAttempted?.();
  }
  };
 

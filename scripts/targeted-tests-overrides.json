@@ -125,7 +125,8 @@
     "test:acc510",
     "test:ux047",
     "test:ux053",
-    "test:ux058"
+    "test:ux058",
+    "test:ux018"
   ],
   "src/services/gdacs-coverage.ts": [
     "test:gdacs-map"
@@ -298,7 +299,8 @@
   ],
   "src/app/panel-layout.ts": [
     "test:ux050",
-    "test:ux053"
+    "test:ux053",
+    "test:ux018"
   ],
   "src/styles/alerts.css": [
     "test:ux050"
@@ -695,7 +697,8 @@
   ],
   "src/services/intelligence/forecast-calibration-adapter.ts": [
     "test:evidence-journal",
-    "test:forecast-load"
+    "test:forecast-load",
+    "test:ux018"
   ],
   "src/components/evidence-journal-view.ts": [
     "test:evidence-journal"
@@ -870,7 +873,8 @@
   "src/App.ts": [
     "test:pwa-deployment",
     "test:ux047",
-    "test:ux053"
+    "test:ux053",
+    "test:ux018"
   ],
   "src/services/country-geometry.ts": [
     "test:pwa-deployment",
@@ -1364,5 +1368,26 @@
     "test:ux058",
     "test:domain-retirement",
     "test:ux059"
+  ],
+  "src/services/intelligence/outcome-resolvers.ts": [
+    "test:ux018"
+  ],
+  "src/services/intelligence/calibration-bridge-wiring.ts": [
+    "test:ux018"
+  ],
+  "src/services/algorithms/algorithm-diagnostics.ts": [
+    "test:ux018"
+  ],
+  "src/services/intelligence/calibration-resolution-scheduler.ts": [
+    "test:ux018"
+  ],
+  "src/services/intelligence/resolution-run-receipts.ts": [
+    "test:ux018"
+  ],
+  "src/services/intelligence/resolver-pass-metrics.ts": [
+    "test:ux018"
+  ],
+  "tools/mcp-server/forecast-evaluation-public.mjs": [
+    "test:ux018"
   ]
 }

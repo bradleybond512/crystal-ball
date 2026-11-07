@@ -539,7 +539,11 @@ to refresh, not immutable acceptance thresholds.
 
 Dependencies: UX-017
 
+Status: MONITOR — HIGH ASSURANCE
 Priority: A
+Review after: 2026-11-14
+Exit condition: Seven consecutive scheduled passes with real eligible opportunities and zero eligible overdue outcomes, classified late causes, improved direct-label coverage in comparable cohorts, and accounting for every proxy or unresolved outcome.
+Evidence: #1853 — [local resolver verification](validation/UX-018-RESOLVER-RUNS.md). Seven scheduled production passes and comparable direct-label coverage remain pending.
 
 - **Change surface:** `src/services/intelligence/prediction-resolver.ts`,
   `prediction-resolution-cadence.ts`, `outcome-resolvers.ts`, and the resolution
@@ -1266,7 +1270,7 @@ Update the row in the same PR that does the work.
 | UX-015 | New outage provider integration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-016 | Timeline controller + cursor wiring | NOT STARTED — HIGH ASSURANCE | — |
 | UX-017 | Complete Mac main-sync toolchain repair | DONE | #1693 |
-| UX-018 | Timely authoritative forecast resolution | NOT STARTED | — |
+| UX-018 | Timely authoritative forecast resolution | MONITOR — HIGH ASSURANCE | [Local evidence](validation/UX-018-RESOLVER-RUNS.md) · [Draft #1853](https://github.com/bradleybond512/crystal-ball/pull/1853) |
 | UX-019 | Safe forecast algorithm recalibration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-020 | Entity and analog evidence growth | NOT STARTED | — |
 | UX-021 | Optional-feed classification and recovery | WAITING | #1692 |

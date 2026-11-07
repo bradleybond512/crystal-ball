@@ -205,11 +205,80 @@ function publicEvaluationPromotion(value) {
     : null;
 }
 
+const RUN_COUNTS = [
+  'pending', 'rawOverdueBefore', 'rawOverdueAfter', 'diagnosticOverdueBefore', 'diagnosticOverdueAfter',
+  'pastExpiryGrace', 'eligibleOverdueBefore', 'eligibleOverdueAfter', 'opportunities', 'unsupported',
+  'invalidCriteria', 'awaitingEvidence', 'windowOpen', 'rejectedWrites', 'expired', 'direct', 'proxy',
+  'unattributed', 'persistenceFailures',
+];
+const BRIDGE_COUNTS = ['shortageExpired', 'advisoryExpired', 'legacyExpired'];
+const RUN_STATES = new Set(['ready', 'hidden', 'cognition-disabled', 'not-hydrated', 'disposed', 'coordination-unavailable']);
+
+function publicRunMetrics(raw, kind) {
+  if (!objectValue(raw)) return null;
+  const metrics = {};
+  const bridge = kind === 'bridge';
+  for (const key of bridge ? BRIDGE_COUNTS : RUN_COUNTS) {
+    const count = exactCount(raw[key]);
+    if (count === null) return null;
+    metrics[key] = count;
+  }
+  if (bridge) {
+    if (typeof raw.enabled !== 'boolean' || typeof raw.failed !== 'boolean') return null;
+    metrics.enabled = raw.enabled;
+    metrics.failed = raw.failed;
+  }
+  return metrics;
+}
+
+function publicRunReceipt(value) {
+  const run = objectValue(value);
+  if (!run) return null;
+  const { sequence, kind, dueAt, startedAt, completedAt, readiness, outcome } = run;
+  if (!Number.isSafeInteger(sequence) || sequence < 1 || !['scheduled', 'catchup', 'bridge'].includes(kind)
+    || !RUN_STATES.has(readiness) || !['completed', 'skipped', 'failed'].includes(outcome)
+    || ![dueAt, startedAt, completedAt].every(t => Number.isSafeInteger(t) && t >= 0)
+    || dueAt > startedAt || startedAt > completedAt) return null;
+  return { sequence, kind, dueAt, startedAt, completedAt, readiness, outcome, metrics: publicRunMetrics(run.metrics, kind) };
+}
+
+function supportsReportedRunCount(receipts, count) {
+  const scheduled = receipts.filter(run => run.kind !== 'bridge');
+  if (count === null || count > scheduled.length) return false;
+  if (count === 0) return true;
+  const interval = 15 * 60_000;
+  return scheduled.slice(-count).every((run, index, tail) => {
+    const m = run.metrics;
+    const previous = tail[index - 1];
+    return run.kind === 'scheduled' && run.readiness === 'ready' && run.outcome === 'completed'
+      && run.startedAt - run.dueAt < interval && m && m.opportunities > 0 && m.eligibleOverdueAfter === 0
+      && m.rejectedWrites === 0 && m.persistenceFailures === 0
+      && (!previous || (run.sequence > previous.sequence && run.dueAt - previous.dueAt >= interval
+        && run.dueAt - previous.dueAt < 2 * interval));
+  });
+}
+
+function publicResolverRuns(value) {
+  const runs = objectValue(value);
+  if (runs?.requiredScheduledRuns !== 7 || !Array.isArray(runs.receipts) || runs.receipts.length > 16) return null;
+  const receipts = runs.receipts.map(publicRunReceipt).filter(Boolean);
+  const count = exactCount(runs.consecutiveQualifyingScheduledRuns);
+  return {
+    requiredScheduledRuns: 7,
+    historicalLateCauseUnknown: exactCount(runs.historicalLateCauseUnknown),
+    consecutiveQualifyingScheduledRuns: receipts.length === runs.receipts.length && supportsReportedRunCount(receipts, count) ? count : null,
+    receipts,
+  };
+}
+
 export function publicForecastCalibration(value) {
   const forecastCalibration = objectValue(value);
   if (!forecastCalibration) return null;
   const output = { ...forecastCalibration };
   delete output.evaluation;
+  if (Object.hasOwn(forecastCalibration, 'resolverRuns')) {
+    output.resolverRuns = publicResolverRuns(forecastCalibration.resolverRuns);
+  }
   const evaluation = publicForecastEvaluation(forecastCalibration.evaluation);
   if (evaluation) output.evaluation = evaluation;
   return output;

@@ -1,0 +1,164 @@
+{
+  "candidatePr": 1853,
+  "validatedCommit": "9ad9902564d5e0c318ec7ff3545226efb0d5015d",
+  "base": "4cc92fa7731b1416b7ee3d032081ae1c22b9eac9",
+  "identity": [
+    {
+      "file": "src/App.ts",
+      "historicalSha256": "1ffbb8bd41879407db70ad91695cd495309a800e3069c62e786e7294d72b7c69",
+      "currentSha256": "1ffbb8bd41879407db70ad91695cd495309a800e3069c62e786e7294d72b7c69",
+      "identical": true
+    },
+    {
+      "file": "src/app/data-loader.ts",
+      "historicalSha256": "fbc1ba5d7eb7318c4e6831c385c9566a7f1245bc250f7b603072476016464761",
+      "currentSha256": "95167e9733c4b2b1b04ec8c539390f795ca20adc4a03deac570a23631e5cb349",
+      "identical": false
+    },
+    {
+      "file": "src/app/panel-layout.ts",
+      "historicalSha256": "1f06f74c7402a15b410f7a6ac9bf31d3d8b743116f3e243589846499d13c9e31",
+      "currentSha256": "1f06f74c7402a15b410f7a6ac9bf31d3d8b743116f3e243589846499d13c9e31",
+      "identical": true
+    },
+    {
+      "file": "src/services/algorithms/__tests__/algorithm-diagnostics.test.mts",
+      "historicalSha256": "256c855e848b272123d8bffeb45de6da825c4c3cadec35296065ef2f25fb5f08",
+      "currentSha256": "256c855e848b272123d8bffeb45de6da825c4c3cadec35296065ef2f25fb5f08",
+      "identical": true
+    },
+    {
+      "file": "src/services/algorithms/algorithm-diagnostics.ts",
+      "historicalSha256": "35bbb763076e29d7b9b445799549ad6d10d9e313688d5bab9f73182724c5e80b",
+      "currentSha256": "35bbb763076e29d7b9b445799549ad6d10d9e313688d5bab9f73182724c5e80b",
+      "identical": true
+    },
+    {
+      "file": "src/services/intelligence/__tests__/calibration-resolution-scheduler.test.mts",
+      "historicalSha256": "bed19ce7014e4592401e2a3e4ebbbee1632b8eca857b788160587a5294f24f23",
+      "currentSha256": "bed19ce7014e4592401e2a3e4ebbbee1632b8eca857b788160587a5294f24f23",
+      "identical": true
+    },
+    {
+      "file": "src/services/intelligence/__tests__/outcome-resolvers.test.mts",
+      "historicalSha256": "c1b489592c619d03a88288101bcd91340738f9d7a09ee920fbd0707ee5a5e5e1",
+      "currentSha256": "c1b489592c619d03a88288101bcd91340738f9d7a09ee920fbd0707ee5a5e5e1",
+      "identical": true
+    },
+    {
+      "file": "src/services/intelligence/__tests__/resolution-run-receipts.test.mts",
+      "historicalSha256": "f953de0b54304eeef7c89de5445e960b504b8a2cb797be81bd7c52a3af2ef213",
+      "currentSha256": "f953de0b54304eeef7c89de5445e960b504b8a2cb797be81bd7c52a3af2ef213",
+      "identical": true
+    },
+    {
+      "file": "src/services/intelligence/__tests__/resolver-pass-metrics.test.mts",
+      "historicalSha256": "8f999581c57659961234274ec5604e5d202754f8d904d2af5666ad2cf1a22142",
+      "currentSha256": "8f999581c57659961234274ec5604e5d202754f8d904d2af5666ad2cf1a22142",
+      "identical": true
+    },
+    {
+      "file": "src/services/intelligence/calibration-bridge-wiring.ts",
+      "historicalSha256": "69bd024f0ce0223c7d8fddc012e1b6dc635fdef49ae3495ecb6f0508645709cb",
+      "currentSha256": "69bd024f0ce0223c7d8fddc012e1b6dc635fdef49ae3495ecb6f0508645709cb",
+      "identical": true
+    },
+    {
+      "file": "src/services/intelligence/calibration-resolution-scheduler.ts",
+      "historicalSha256": "4895353681e49d8ba9c67b5795c6806f44c7d13e01ef830aaf4025fb1358f1d7",
+      "currentSha256": "4895353681e49d8ba9c67b5795c6806f44c7d13e01ef830aaf4025fb1358f1d7",
+      "identical": true
+    },
+    {
+      "file": "src/services/intelligence/forecast-calibration-adapter.ts",
+      "historicalSha256": "e67980648a54976960246aa6c9f08602f8b4885fb60ccb0d98d6b1ebb1284e94",
+      "currentSha256": "e67980648a54976960246aa6c9f08602f8b4885fb60ccb0d98d6b1ebb1284e94",
+      "identical": true
+    },
+    {
+      "file": "src/services/intelligence/outcome-resolvers.ts",
+      "historicalSha256": "6ddf7281cd43ec052455f87b71c582bc3c0db6fac732db1ab686d26503f9f088",
+      "currentSha256": "6ddf7281cd43ec052455f87b71c582bc3c0db6fac732db1ab686d26503f9f088",
+      "identical": true
+    },
+    {
+      "file": "src/services/intelligence/resolution-run-receipts.ts",
+      "historicalSha256": "ce08ab991059262e754b1050f74297a303180f5a3b349a2f74417a09a2c2a626",
+      "currentSha256": "ce08ab991059262e754b1050f74297a303180f5a3b349a2f74417a09a2c2a626",
+      "identical": true
+    },
+    {
+      "file": "tools/mcp-server/__tests__/diagnostics-tools.test.mjs",
+      "historicalSha256": "23170857ae821eb8700d04bd01a4bf20b855c7bd7d5fd1dee93aa8349242c32c",
+      "currentSha256": "23170857ae821eb8700d04bd01a4bf20b855c7bd7d5fd1dee93aa8349242c32c",
+      "identical": true
+    },
+    {
+      "file": "tools/mcp-server/forecast-evaluation-public.mjs",
+      "historicalSha256": "d70d0cdb393bcd8283a3fc0606fe88790bde8671cab56c66ce1a6fd0c52637da",
+      "currentSha256": "d70d0cdb393bcd8283a3fc0606fe88790bde8671cab56c66ce1a6fd0c52637da",
+      "identical": true
+    }
+  ],
+  "refreshedMutations": [
+    {
+      "id": "SCHED18",
+      "sha256": "95167e9733c4b2b1b04ec8c539390f795ca20adc4a03deac570a23631e5cb349",
+      "restoredSha256": "95167e9733c4b2b1b04ec8c539390f795ca20adc4a03deac570a23631e5cb349",
+      "greenBefore": {
+        "exit": 0,
+        "counts": [
+          "# pass 1",
+          "# fail 0"
+        ]
+      },
+      "red": {
+        "exit": 1,
+        "counts": [
+          "# pass 0",
+          "# fail 1"
+        ]
+      },
+      "greenAfter": {
+        "exit": 0,
+        "counts": [
+          "# pass 1",
+          "# fail 0"
+        ]
+      },
+      "cleanAfterRestore": true,
+      "appliedDiff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex 897591e04..7632278cc 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -759,7 +759,7 @@ export class DataLoaderManager implements AppModule {\n  }\n  } finally {\n  this.ctx.inFlight.delete(name);\n- if (name === 'markets' && !this.ctx.isDestroyed) this.callbacks.onForecastInputsAttempted?.();\n+ if (name === 'news' && !this.ctx.isDestroyed) this.callbacks.onForecastInputsAttempted?.();\n  }\n  };\n \n",
+      "redOutput": "TAP version 13\n# Subtest: the actual initial source loader releases calibration after an attempted markets wave, independently of news\nnot ok 1 - the actual initial source loader releases calibration after an attempted markets wave, independently of news\n  ---\n  duration_ms: 30.603\n  type: 'test'\n  location: '/Users/bradleybond/.codex/worktrees/ux018-forecast-resolution/crystalball/src/services/intelligence/__tests__/calibration-resolution-scheduler.test.mts:1:7939'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    0 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 0\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (/Users/bradleybond/.codex/worktrees/ux018-forecast-resolution/crystalball/src/services/intelligence/__tests__/calibration-resolution-scheduler.test.mts:188:10)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 642.447542\n"
+    },
+    {
+      "id": "SCHED19",
+      "sha256": "95167e9733c4b2b1b04ec8c539390f795ca20adc4a03deac570a23631e5cb349",
+      "restoredSha256": "95167e9733c4b2b1b04ec8c539390f795ca20adc4a03deac570a23631e5cb349",
+      "greenBefore": {
+        "exit": 0,
+        "counts": [
+          "# pass 1",
+          "# fail 0"
+        ]
+      },
+      "red": {
+        "exit": 1,
+        "counts": [
+          "# pass 0",
+          "# fail 1"
+        ]
+      },
+      "greenAfter": {
+        "exit": 0,
+        "counts": [
+          "# pass 1",
+          "# fail 0"
+        ]
+      },
+      "cleanAfterRestore": true,
+      "appliedDiff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex 897591e04..72d2d4534 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -759,7 +759,7 @@ export class DataLoaderManager implements AppModule {\n  }\n  } finally {\n  this.ctx.inFlight.delete(name);\n- if (name === 'markets' && !this.ctx.isDestroyed) this.callbacks.onForecastInputsAttempted?.();\n+ if (name === 'markets') this.callbacks.onForecastInputsAttempted?.();\n  }\n  };\n \n",
+      "redOutput": "TAP version 13\n# Subtest: the actual initial source loader releases calibration after an attempted markets wave, independently of news\nnot ok 1 - the actual initial source loader releases calibration after an attempted markets wave, independently of news\n  ---\n  duration_ms: 31.222791\n  type: 'test'\n  location: '/Users/bradleybond/.codex/worktrees/ux018-forecast-resolution/crystalball/src/services/intelligence/__tests__/calibration-resolution-scheduler.test.mts:1:7939'\n  failureType: 'testCodeFailure'\n  error: |-\n    a completed request cannot mark a disposed owner ready\n    \n    2 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 2\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (/Users/bradleybond/.codex/worktrees/ux018-forecast-resolution/crystalball/src/services/intelligence/__tests__/calibration-resolution-scheduler.test.mts:195:10)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 637.070292\n"
+    }
+  ],
+  "liveSnapshot": "2026-11-07T07:19:04.941458Z"
+}

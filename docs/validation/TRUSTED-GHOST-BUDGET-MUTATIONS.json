@@ -1,0 +1,47 @@
+[
+  {
+    "name": "restore-npm-budget",
+    "file": "package.json",
+    "sha256": "0b49d11ff595f3f3f4f149ce71b15ceff07fe907aad4dd07df050f78bd209412",
+    "diff": "diff --git a/package.json b/package.json\nindex ba1a2fd40..4101f57a2 100644\n--- a/package.json\n+++ b/package.json\n@@ -197,7 +197,7 @@\n     \"test:ux032-browser\": \"playwright test e2e/settings-keyboard.spec.ts\",\n     \"test:ux060\": \"tsx --test tests/ux060-onboarding-digest.test.mjs src/components/__tests__/digest-overlay.test.mts src/components/__tests__/welcome-flow-sources.test.mts\",\n     \"test:ux060-browser\": \"playwright test e2e/home-shell-boot.spec.ts\",\n-    \"test:ux050\": \"tsx --test src/services/__tests__/ghost-mode-state.test.mts src/services/__tests__/ghost-notification-policy.test.mts src/services/__tests__/notification-dispatcher-trace.test.mts src/components/__tests__/ghost-mode-notice.test.mts tests/ghost-mode-entry.test.mts src/config/__tests__/story-renderer-chunk.test.mts && node --test tests/comms-panel.test.mjs && npm run build:full && node scripts/check-precache-budget.mjs && node --experimental-vm-modules --test tests/ghost-mode-bundle.test.mjs\",\n+    \"test:ux050\": \"tsx --test src/services/__tests__/ghost-mode-state.test.mts src/services/__tests__/ghost-notification-policy.test.mts src/services/__tests__/notification-dispatcher-trace.test.mts src/components/__tests__/ghost-mode-notice.test.mts tests/ghost-mode-entry.test.mts src/config/__tests__/story-renderer-chunk.test.mts && node --test tests/comms-panel.test.mjs && npm run build:full && npm run pwa:budget && node --experimental-vm-modules --test tests/ghost-mode-bundle.test.mjs\",\n     \"test:ux026\": \"tsx --test src/services/__tests__/digest-alert-projection.test.mts src/services/__tests__/digest-narrative-contract.test.mts src/services/__tests__/nws-alert-retrieval-freshness.test.mts src/components/__tests__/digest-overlay.test.mts tests/ux026-digest-lifecycle.test.mjs tests/ux026-fourth-cycle-runtime.test.mjs\",\n     \"test:emergency-pack\": \"tsx --test src/services/emergency-pack/__tests__/*.test.mts src/components/__tests__/emergency-pack-view.test.mts src/components/__tests__/emergency-readiness-pack-panel.test.mts\",\n     \"test:lifelines-map\": \"tsx --import ./tests/panels/register-hook.mjs --test tests/lifelines-map.test.mts tests/evacuation-routing.test.mts src/components/__tests__/map-popup-lifeline.test.mts && node --test api/osrm-route.test.mjs src-tauri/sidecar/__tests__/osrm-route.test.mjs tests/lifelines-map-wiring.test.mjs\",\n",
+    "passCount": 2,
+    "failCount": 1,
+    "assertions": [
+      "not ok 2 - the main-owned UX-050 command expands its build and PWA budget without npm or a shell"
+    ]
+  },
+  {
+    "name": "omit-budget",
+    "file": "package.json",
+    "sha256": "0b49d11ff595f3f3f4f149ce71b15ceff07fe907aad4dd07df050f78bd209412",
+    "diff": "diff --git a/package.json b/package.json\nindex ba1a2fd40..5380712f7 100644\n--- a/package.json\n+++ b/package.json\n@@ -197,7 +197,7 @@\n     \"test:ux032-browser\": \"playwright test e2e/settings-keyboard.spec.ts\",\n     \"test:ux060\": \"tsx --test tests/ux060-onboarding-digest.test.mjs src/components/__tests__/digest-overlay.test.mts src/components/__tests__/welcome-flow-sources.test.mts\",\n     \"test:ux060-browser\": \"playwright test e2e/home-shell-boot.spec.ts\",\n-    \"test:ux050\": \"tsx --test src/services/__tests__/ghost-mode-state.test.mts src/services/__tests__/ghost-notification-policy.test.mts src/services/__tests__/notification-dispatcher-trace.test.mts src/components/__tests__/ghost-mode-notice.test.mts tests/ghost-mode-entry.test.mts src/config/__tests__/story-renderer-chunk.test.mts && node --test tests/comms-panel.test.mjs && npm run build:full && node scripts/check-precache-budget.mjs && node --experimental-vm-modules --test tests/ghost-mode-bundle.test.mjs\",\n+    \"test:ux050\": \"tsx --test src/services/__tests__/ghost-mode-state.test.mts src/services/__tests__/ghost-notification-policy.test.mts src/services/__tests__/notification-dispatcher-trace.test.mts src/components/__tests__/ghost-mode-notice.test.mts tests/ghost-mode-entry.test.mts src/config/__tests__/story-renderer-chunk.test.mts && node --test tests/comms-panel.test.mjs && npm run build:full && node --experimental-vm-modules --test tests/ghost-mode-bundle.test.mjs\",\n     \"test:ux026\": \"tsx --test src/services/__tests__/digest-alert-projection.test.mts src/services/__tests__/digest-narrative-contract.test.mts src/services/__tests__/nws-alert-retrieval-freshness.test.mts src/components/__tests__/digest-overlay.test.mts tests/ux026-digest-lifecycle.test.mjs tests/ux026-fourth-cycle-runtime.test.mjs\",\n     \"test:emergency-pack\": \"tsx --test src/services/emergency-pack/__tests__/*.test.mts src/components/__tests__/emergency-pack-view.test.mts src/components/__tests__/emergency-readiness-pack-panel.test.mts\",\n     \"test:lifelines-map\": \"tsx --import ./tests/panels/register-hook.mjs --test tests/lifelines-map.test.mts tests/evacuation-routing.test.mts src/components/__tests__/map-popup-lifeline.test.mts && node --test api/osrm-route.test.mjs src-tauri/sidecar/__tests__/osrm-route.test.mjs tests/lifelines-map-wiring.test.mjs\",\n",
+    "passCount": 2,
+    "failCount": 1,
+    "assertions": [
+      "not ok 2 - the main-owned UX-050 command expands its build and PWA budget without npm or a shell"
+    ]
+  },
+  {
+    "name": "admit-npm",
+    "file": "scripts/targeted-tests.mjs",
+    "sha256": "b1cf2ebb917248edaa8bb1033b853da14d5b0a0970f58f7522ad17b7a4d83070",
+    "diff": "diff --git a/scripts/targeted-tests.mjs b/scripts/targeted-tests.mjs\nindex 054085af2..5389e14f6 100755\n--- a/scripts/targeted-tests.mjs\n+++ b/scripts/targeted-tests.mjs\n@@ -229,6 +229,7 @@ export function commandToStages(\n     }\n     const tokens = trimmed.split(/\\s+/).filter(Boolean);\n     const [runner, ...rest] = tokens;\n+    if (runner === 'npm') return [{ bin: 'npm', args: rest }];\n     if (runner === 'node') return [{ bin: process.execPath, args: rest }];\n     if (runner === 'tsx') return [{ bin: path.join(binDir, 'tsx'), args: rest }];\n     throw new Error(`untrusted stage runner \"${runner}\" in: ${command}`);\n",
+    "passCount": 1,
+    "failCount": 2,
+    "assertions": [
+      "not ok 1 - updater alias expansion does not admit arbitrary npm or shell stages",
+      "not ok 3 - the PWA budget alias does not broaden npm or shell admission"
+    ]
+  },
+  {
+    "name": "admit-shell",
+    "file": "scripts/targeted-tests.mjs",
+    "sha256": "b1cf2ebb917248edaa8bb1033b853da14d5b0a0970f58f7522ad17b7a4d83070",
+    "diff": "diff --git a/scripts/targeted-tests.mjs b/scripts/targeted-tests.mjs\nindex 054085af2..2364a42b3 100755\n--- a/scripts/targeted-tests.mjs\n+++ b/scripts/targeted-tests.mjs\n@@ -229,6 +229,7 @@ export function commandToStages(\n     }\n     const tokens = trimmed.split(/\\s+/).filter(Boolean);\n     const [runner, ...rest] = tokens;\n+    if (runner === 'sh') return [{ bin: 'sh', args: rest }];\n     if (runner === 'node') return [{ bin: process.execPath, args: rest }];\n     if (runner === 'tsx') return [{ bin: path.join(binDir, 'tsx'), args: rest }];\n     throw new Error(`untrusted stage runner \"${runner}\" in: ${command}`);\n",
+    "passCount": 2,
+    "failCount": 1,
+    "assertions": [
+      "not ok 1 - updater alias expansion does not admit arbitrary npm or shell stages"
+    ]
+  }
+]

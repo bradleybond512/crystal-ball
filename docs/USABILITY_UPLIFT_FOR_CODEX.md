@@ -919,11 +919,13 @@ Acceptance: Inventory each rail as measured content or an intentional overlay; v
 
 ### UX-035 — Gate background panel work by actual need
 
-Status: IN REVIEW — HIGH ASSURANCE
+Status: MONITOR — HIGH ASSURANCE
 Priority: B
+Review after: 2026-11-14
+Exit condition: Document native background/foreground and broader application acceptance after separately authorized delivery; until then retain the bounded two-panel scope and open acceptance.
 Source findings: PR1731 H3.
 
-Claim: draft [#1859](https://github.com/bradleybond512/crystal-ball/pull/1859), `codex/ux035-hidden-presentation`; approved documentation-only draft claim and local implementation. [Design](plans/2026-11-06-ux035-hidden-presentation.md). Scope is the two profiled Alert Fatigue and Correlation Map presentation timers; broader application acceptance remains open. Code publication, installation, auto-merge and delivery remain paused.
+Landed: [#1859](https://github.com/bradleybond512/crystal-ball/pull/1859) at `8bc006af2f80fdebb6398917c60b39d9797980b4` on 2026-11-07. [Design](plans/2026-11-06-ux035-hidden-presentation.md). Scope is the two profiled Alert Fatigue and Correlation Map presentation timers; broader application acceptance remains open. The reviewed two-panel code slice is merged. Installation, tags, releases, build dispatch and deployment remain paused.
 
 Evidence: [Local QA, profile and browser results](validation/UX-035-HIDDEN-PRESENTATION.md): 45 selected suites passed, 19 behavior mutations caught; three matched profiles reduce invisible builds from 200 to zero with one queued recovery. Native background and application-wide acceptance remain open.
 
@@ -1253,7 +1255,7 @@ Update the row in the same PR that does the work.
 | UX-032 | Settings keyboard containment | MONITOR | #1723 |
 | UX-033 | Keep content reachable during stacked warnings | NOT STARTED | — |
 | UX-034 | Assign ownership of top-of-window surfaces | MONITOR | #1730 |
-| UX-035 | Gate background panel work by actual need | IN REVIEW — HIGH ASSURANCE | Draft #1859; two-panel slice locally validated ([QA](validation/UX-035-HIDDEN-PRESENTATION.md)). Native background and broader acceptance remain open; code publication/delivery paused. |
+| UX-035 | Gate background panel work by actual need | MONITOR — HIGH ASSURANCE | #1859 merged; bounded two-panel slice validated ([QA](validation/UX-035-HIDDEN-PRESENTATION.md)). Native background and broader acceptance remain open; installation/release/deployment paused. |
 | UX-036 | Spread refresh work and honor battery policy | NOT STARTED — HIGH ASSURANCE | — |
 | UX-037 | Prevent new unowned stacking levels | NOT STARTED | — |
 | UX-038 | Constrain video-channel link construction | NOT STARTED — HIGH ASSURANCE | — |

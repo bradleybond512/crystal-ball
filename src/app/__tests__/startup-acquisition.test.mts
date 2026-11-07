@@ -35,6 +35,7 @@ function fixture(variant = 'full', overrides: Record<string, unknown> = {}) {
   document.addEventListener('wm:data-refreshed', () => facts.push('published'));
   const deps: Record<string, unknown> = {
     '@/config': { SITE_VARIANT: variant },
+    '@/services/unified-alerts': { unifiedAlertStore: { startNwsLifecycle() {}, subscribe: () => () => {} } },
     '@/utils': { debounce: () => () => {} },
     '@/utils/concurrency-limiter': { createConcurrencyLimiter: measuredLimiter },
     '@/services/runtime-config': { subscribeRuntimeConfig: () => () => {} },
@@ -149,18 +150,23 @@ function warningFixture() {
   const network = deferred();
   const zones = deferred();
   const enteredZones = deferred();
+  const stormContext = { nwsAlerts: [] as unknown[] };
   const deps = {
     '@/services': {
-      getStormPreparednessContext: () => ({ nwsAlerts: [] }),
-      updateStormPreparednessContext: () => published.push('storm context'),
+      getStormPreparednessContext: () => stormContext,
+      updateStormPreparednessContext: (value: object) => { Object.assign(stormContext, value); published.push('nwsAlerts' in value ? 'nws context' : 'storm context'); },
       fetchSpcSummary() {}, fetchMarineHazards() {}, fetchExcessiveRainfallOutlooks() {}, fetchWinterWeatherOutlooks() {},
     },
-    '@/services/offline-alert-cache': { withOfflineCache: async () => {
+    '@/services/nws-alert-snapshot-cache': { NWS_SNAPSHOT_FRESH_MS: 300_000, fetchCachedNwsSnapshot: async () => {
       await network.promise;
-      return { data: [{ id: 'fixture', event: 'Storm' }], source: 'network' };
+      return { data: { observedAt: Date.now(), alerts: [{ id: 'fixture', event: 'Storm' }] }, source: 'network', isStale: false };
     } },
     '@/services/alert-normalizer': { normalizeNWSAlert: (row: unknown) => row },
-    '@/services/unified-alerts': { unifiedAlertStore: { ingest: () => published.push('store') } },
+    '@/services/unified-alerts': { unifiedAlertStore: {
+      startNwsLifecycle() {}, subscribe: () => () => {}, getNwsObservedAt: () => null,
+      reconcileNwsSnapshot: () => { published.push('store'); return { disposition: 'applied' }; },
+      getOperationalNwsAlerts: (snapshot: { alerts: unknown[] }) => snapshot.alerts,
+    } },
     '@/services/weather/warning-verification-bridge': { recordWarningPredictions: () => published.push('prediction') },
     '@/services/weather/weather-warning-router': { routeWeatherAlert: () => ({}) },
     '@/services/saved-places': { getSavedPlaces: () => [{ id: 'home', offlinePinned: true }] },
@@ -171,7 +177,7 @@ function warningFixture() {
     '@/services/lifelines/lifeline-prewarm': { lifelinePrewarmCoordinator: { enqueue: () => published.push('prewarm') } },
   };
   const f = fixture('full', deps);
-  Object.assign(f.ctx.panels, { 'nws-alerts': { update: () => published.push('panel') } });
+  Object.assign(f.ctx.panels, { 'nws-alerts': { updateSnapshot: () => published.push('panel') } });
   f.document.addEventListener('cb:storm-decision', () => published.push('storm event'));
   return { ...f, published, network, zones, enteredZones, deps };
 }
@@ -183,7 +189,7 @@ test('fresh NWS updates ready panels, store, storm event and matched-place prewa
   f.zones.release();
   await loading;
   await turn();
-  assert.deepEqual(f.published.sort(), ['panel', 'prediction', 'prewarm', 'store', 'storm context', 'storm event']);
+  assert.deepEqual(f.published.sort(), ['nws context', 'panel', 'prediction', 'prewarm', 'store', 'storm context', 'storm event']);
 });
 
 test('late NWS acquisition cannot publish to the next app after destroy', async () => {
@@ -206,7 +212,7 @@ test('destroy during saved-place resolution preserves earlier NWS evidence witho
   f.zones.release();
   await loading;
   await turn();
-  assert.deepEqual(f.published, ['panel', 'store', 'prediction']);
+  assert.deepEqual(f.published, ['store', 'panel', 'nws context', 'prediction']);
 });
 
 test('disposal from a storm event cannot queue a late prewarm or publish context', async () => {
@@ -216,17 +222,17 @@ test('disposal from a storm event cannot queue a late prewarm or publish context
   f.zones.release();
   await f.realNws();
   await turn();
-  assert.deepEqual(f.published, ['panel', 'store', 'prediction', 'storm event']);
+  assert.deepEqual(f.published, ['store', 'panel', 'nws context', 'prediction', 'storm event']);
 });
 
 test('a disposed NWS owner never resets the panel through its failure fallback', async (t) => {
   const f = warningFixture();
   t.mock.method(console, 'warn', () => {});
-  f.deps['@/services'].getStormPreparednessContext = () => { throw new Error('context unavailable'); };
-  await f.realNws();
+  t.mock.method(f.deps['@/services/nws-alert-snapshot-cache'], 'fetchCachedNwsSnapshot', async () => { throw new Error('acquisition unavailable'); });
+  await f.loader.refreshNWSAlerts();
   assert.deepEqual(f.published, ['panel']);
   f.ctx.isDestroyed = true;
-  await f.realNws();
+  await f.loader.refreshNWSAlerts();
   assert.deepEqual(f.published, ['panel']);
 });
 

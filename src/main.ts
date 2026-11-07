@@ -353,7 +353,8 @@ if (urlParams.get('settings') === '1') {
     clearChunkReloadGuard(chunkReloadStorageKey);
     try { window.getSelection()?.removeAllRanges(); } catch { /* stray boot text-selection */ }
   };
-  void boot().catch((error: unknown) => {
+  appStartup = boot();
+  void appStartup.catch((error: unknown) => {
     console.error('[boot] workspace startup failed:', error);
     showWorkspaceStartupFailure(document, () => window.location.reload());
   });

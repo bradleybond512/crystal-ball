@@ -1,0 +1,70 @@
+{
+  "historicalImplementation": "7efdff90cd05a676f90cefa9e9c841b6a8464cc9",
+  "currentSourceHead": "b5f3eadebcdddeddef26fc0868907a77594a2971",
+  "unchangedFiles": {
+    "src/app/workspace-startup.ts": {
+      "historical": "f7193781ecf1d7113f9b5375de14a191242086da8d181317de7d6bd68f1a40a3",
+      "current": "f7193781ecf1d7113f9b5375de14a191242086da8d181317de7d6bd68f1a40a3"
+    },
+    "tests/workspace-startup.test.mts": {
+      "historical": "895686eeba43b9145229a08252c1bedf20d492b39b032dcc8161a1f7faefe11b",
+      "current": "895686eeba43b9145229a08252c1bedf20d492b39b032dcc8161a1f7faefe11b"
+    },
+    "src/app/vault-intro.ts": {
+      "historical": "1911c1640e6f09c1e513959a1dbd95c5ebde1592f059787f648e354289d8a00a",
+      "current": "1911c1640e6f09c1e513959a1dbd95c5ebde1592f059787f648e354289d8a00a"
+    },
+    "src/app/loaders/cyber.ts": {
+      "historical": "7cf39caa15d93d346baa44f94e0fc1983e07435ea24e7d5b19d3892a9ed08e4b",
+      "current": "7cf39caa15d93d346baa44f94e0fc1983e07435ea24e7d5b19d3892a9ed08e4b"
+    },
+    "src/app/desktop-notifications.ts": {
+      "historical": "59828e585fb85a6e930792aae26e4e3286d3f3a9b1dd1cd35fe2be5e8490c7d7",
+      "current": "59828e585fb85a6e930792aae26e4e3286d3f3a9b1dd1cd35fe2be5e8490c7d7"
+    },
+    "src/app/__tests__/desktop-imessage.test.mts": {
+      "historical": "7fbb9ec89c3d75ea4d1d1412ed0458a7a8dbf71e849108615e9e8d0fe6abd16e",
+      "current": "7fbb9ec89c3d75ea4d1d1412ed0458a7a8dbf71e849108615e9e8d0fe6abd16e"
+    },
+    "src/services/notification-router.ts": {
+      "historical": "0a36039125aca5f7b602f9458310316cf6a70a7463ac2504d8296a7e6c55f18c",
+      "current": "0a36039125aca5f7b602f9458310316cf6a70a7463ac2504d8296a7e6c55f18c"
+    },
+    "src/services/__tests__/notification-router.test.mts": {
+      "historical": "3088ecc783946afe0573e9e6b35e67fdaf7222197db3e7f5b91d6ea1f46c74d3",
+      "current": "3088ecc783946afe0573e9e6b35e67fdaf7222197db3e7f5b91d6ea1f46c74d3"
+    },
+    "src/services/__tests__/threat-reactor-retry.test.mts": {
+      "historical": "098e5ddccaae23e5d7c4829fbe65edf01626d740f9e1a88b818f2b0bffac667d",
+      "current": "098e5ddccaae23e5d7c4829fbe65edf01626d740f9e1a88b818f2b0bffac667d"
+    }
+  },
+  "changedFilesNotClaimedWholeFileIdentical": {
+    "src/App.ts": {
+      "historical": "1996819e8a7056a5f3a79c6b73e90ea942b9a1555051a4a93e16bf34716539a3",
+      "current": "a1174d69a56fac35cc91c671be313ed9f75b767afad6d9631a9e8dbee7489d57"
+    },
+    "src/app/__tests__/boot-workspace.test.mts": {
+      "historical": "6a15d5855426753a8325d92f69199ac916cd7bc63206cb46a2590e8f286931fd",
+      "current": "346dee5ce5868e1f2f3a41992111f937b4e987caa403b16d5f32efb8fdd470cd"
+    },
+    "src/app/panel-layout.ts": {
+      "historical": "0c58d0f29c4f9d313f07a9b0a57ca7cacff2a7cf69503ddaa6d587dc503093ac",
+      "current": "899b0da190bbd381709064b0a30b75f438c1f344cc3fe8778da3e38b8597ffe7"
+    },
+    "src/main.ts": {
+      "historical": "9b1863e2c2c61915a1f46fdc31ad07e2c20efcee7d450eb7a49a9cf9a4e00ccb",
+      "current": "d4109d69218b44393158db55d543740743ac78e30addf262a27666855871bb8b"
+    },
+    "src/app/data-loader.ts": {
+      "historical": "fdd429f51168f40bdda4129fa081efb3446604759998aa758a5c04f54b6c4a9a",
+      "current": "3e9e419495973052b42d8dc68de6311e97ae44c0110b67eadc2c0a6d5777eec0"
+    },
+    "src/app/__tests__/startup-acquisition.test.mts": {
+      "historical": "51166c3222bebef8c0bc2668f8e56ba427a8aaf490b3fc14de1e7f53ab0b7b49",
+      "current": "05cc09e13e7e9b40f517abc0f09da788331f5845e5f0157e803571403f7dbc23"
+    }
+  },
+  "currentIntegrationMutationHashesMatch": true,
+  "scope": "Original mutations are historical evidence. Current integration mutations certify combined boot promise and post-acquisition teardown; current full suite certifies fixtures adapted to operational snapshot contract. Native timing is not certified."
+}

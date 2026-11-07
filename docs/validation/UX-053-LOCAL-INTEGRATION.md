@@ -79,3 +79,32 @@ lands, compare fresh actual-main required selection and relevant input hashes,
 run any missing/changed coverage, obtain a fresh candidate snapshot and an
 actual exact-head Sonnet review. Native MONITOR acceptance and all release /
 installation holds remain open. No new full aggregate gate is claimed here.
+
+## Actual-main publication reconciliation
+
+After #1847 merged, this branch was replayed onto verified actual main
+`e104ebfe7768ab814dccc145b1dd3412c4912d60` at
+`b5f3eadebcdddeddef26fc0868907a77594a2971`. Every non-evidence root object and
+tracked source/test/build byte matches actual 76-suite execution `fed58f603`.
+Fresh actual-main selection requires 51 scripts, all in the executed superset.
+The mapper bytes are identical, but command-path comparison correctly found
+that quiet-hours gained a main-owned test and UX052 became main-owned. Both
+complete commands were freshly executed through the actual-main trusted mapper
+on **b5f3eade**, and passed. No fresh 51-suite or aggregate rerun is claimed.
+[Required selection, effective command comparison and rerun hashes](UX-053-MAIN-CONTINUITY.json)
+record this distinction. Main-owned UX050's complete direct Node recipe is
+unchanged from the successfully executed conservative run.
+
+[Mutation hash continuity](UX-053-MUTATION-CONTINUITY.json) explicitly separates
+unchanged original files from historical files changed during integration.
+The original 106-mutation certificate is historical, not a claim that its whole
+source tree equals this one. Current integration mutation source hashes match
+exactly, certifying the combined exported boot promise and teardown guard.
+Snapshot/lifecycle fixture adaptations and their preserved assertions were
+executed in the fresh conservative run. Native startup timing remains unproven.
+
+A fresh live candidate #1848 snapshot reports zero blockers. Original worktree
+`0ad225406542ca6e5a664261c6dcb27cc5e671cf` remains clean and unchanged under
+`codex/ux053-preserved-nov7-before-main`; this active worktree now uses the
+original PR branch `codex/ux053-boot-readiness`. MONITOR and release/install holds
+remain intact. Exact-head Sonnet and hosted checks are still required.

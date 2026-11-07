@@ -49,3 +49,12 @@ Historical isolated rendering/mutation receipts are not final integrated package
 acceptance. Installation, release, tags, build dispatch and deployment remain
 paused. Rollback should revert warning-session/dispatch integration together,
 without regressing national warning retirement or Ghost fail-closed behavior.
+
+## Refreshed pending dependency
+
+This local checkpoint was replayed onto `37f68658d0b4e34e7b48f3d83937fcd4d98f9b79` while #1844 was still pending.
+[Continuity hashes](UX-058-DEPENDENCY-CONTINUITY.json) confirm 31 feature source/test files and the complete
+`src`, `src-tauri`, and `api` trees are unchanged from `3b3958b091ccae22fb118320a10d47c23e5e5c7a`.
+No new full test run is claimed for this history/metadata transition. The original
+local tip is preserved on `codex/ux058-preserved-local-base-nov7`. Actual-main
+reconciliation, live candidate snapshot and exact-head Sonnet review remain open.

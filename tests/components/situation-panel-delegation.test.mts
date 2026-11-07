@@ -341,3 +341,51 @@ test('unknown map location hides its action and blocks stale-button focus', () =
     internals.destroy();
   }
 });
+
+test('unknown topic is visible with a bounded classification reason before expansion', () => {
+  const sit = makeSituation('unknown-topic');
+  sit.domain = 'unknown';
+  sit.domainDiversity = 0;
+  sit.signals = [{ ...sit.signals[0]!, domain: 'unknown', domainClassification: {
+    version: 1, domain: 'unknown', basis: 'abstained', reason: 'unsupported_category', evidence: [], articleCount: 2, sourceCount: 2,
+  } }];
+  const { internals, content } = mountPanel([sit]);
+  try {
+    const reason = content.querySelector('.sit-domain-reason');
+    assert.ok(reason, 'classification is visible in the collapsed card');
+    assert.match(reason.textContent ?? '', /Topic unconfirmed/);
+    assert.match(reason.textContent ?? '', /supported topic/i);
+    assert.doesNotMatch(content.textContent ?? '', /undefined/);
+    assert.equal(content.querySelector('.sit-card')?.getAttribute('data-sit-id'), sit.id);
+    assert.ok(content.querySelector('button.sit-map-btn'), 'existing native map control remains available');
+    dispatchBubblingClick(content.querySelector('.sit-header')!);
+    assert.equal(internals._expandedSitId, sit.id);
+    assert.equal(content.querySelectorAll('.sit-domain-reason').length, 1);
+    sit.signals[0]!.domainClassification!.reason = 'conflicting_evidence';
+    internals.render();
+    assert.match(content.querySelector('.sit-domain-reason')?.textContent ?? '', /disagree/i);
+  } finally {
+    internals.destroy();
+  }
+});
+
+test('unknown topic without metadata remains visible and untrusted reason text is never rendered', () => {
+  const sit = makeSituation('missing-topic');
+  sit.domain = 'unknown';
+  sit.signals[0]!.domain = 'unknown';
+  const { internals, content } = mountPanel([sit]);
+  try {
+    assert.match(content.querySelector('.sit-domain-reason')?.textContent ?? '', /Topic unconfirmed.*incomplete/i);
+    sit.signals[0]!.domainClassification = {
+      version: 1, domain: 'unknown', basis: 'abstained', reason: '<img src=x onerror=alert(1)>'.repeat(100) as any, evidence: [], articleCount: 0, sourceCount: 0,
+    };
+    internals.render();
+    const text = content.querySelector('.sit-domain-reason')?.textContent ?? '';
+    assert.match(text, /Topic unconfirmed/);
+    assert.ok(text.length < 500);
+    assert.equal(content.querySelector('.sit-domain-reason img'), null);
+    assert.doesNotMatch(text, /onerror/);
+  } finally {
+    internals.destroy();
+  }
+});

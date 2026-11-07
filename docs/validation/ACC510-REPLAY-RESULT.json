@@ -1,0 +1,215 @@
+{
+  "fixtureSha256": "28284a984f9b8202173c8cc93a06d10efc942c55199fff9168dc52ba3f21dc05",
+  "total": 20,
+  "falseUnrestPositives": 0,
+  "missedUnrest": 4,
+  "abstentions": 15,
+  "addedMisses": [
+    "mixed-protest-tech",
+    "one-source-unrest",
+    "conflicting-supported",
+    "overflow-unrest"
+  ],
+  "outcomes": [
+    {
+      "id": "earnings",
+      "groundTruthUnrest": false,
+      "signalDomain": "economic",
+      "situationDomain": "economic",
+      "reason": "supported",
+      "falseUnrestPositive": false,
+      "missedUnrest": false,
+      "abstained": false
+    },
+    {
+      "id": "sports",
+      "groundTruthUnrest": false,
+      "signalDomain": "unknown",
+      "situationDomain": "unknown",
+      "reason": "unsupported_category",
+      "falseUnrestPositive": false,
+      "missedUnrest": false,
+      "abstained": true
+    },
+    {
+      "id": "technology",
+      "groundTruthUnrest": false,
+      "signalDomain": "unknown",
+      "situationDomain": "unknown",
+      "reason": "unsupported_category",
+      "falseUnrestPositive": false,
+      "missedUnrest": false,
+      "abstained": true
+    },
+    {
+      "id": "routine-weather",
+      "groundTruthUnrest": false,
+      "signalDomain": "unknown",
+      "situationDomain": "unknown",
+      "reason": "unsupported_category",
+      "falseUnrestPositive": false,
+      "missedUnrest": false,
+      "abstained": true
+    },
+    {
+      "id": "severe-weather",
+      "groundTruthUnrest": false,
+      "signalDomain": "natural_hazard",
+      "situationDomain": "natural_hazard",
+      "reason": "supported",
+      "falseUnrestPositive": false,
+      "missedUnrest": false,
+      "abstained": false
+    },
+    {
+      "id": "ambiguous-strike",
+      "groundTruthUnrest": false,
+      "signalDomain": "unknown",
+      "situationDomain": "unknown",
+      "reason": "unsupported_category",
+      "falseUnrestPositive": false,
+      "missedUnrest": false,
+      "abstained": true
+    },
+    {
+      "id": "source-type-convergence",
+      "groundTruthUnrest": false,
+      "signalDomain": "unknown",
+      "situationDomain": "unknown",
+      "reason": "incomplete_evidence",
+      "falseUnrestPositive": false,
+      "missedUnrest": false,
+      "abstained": true
+    },
+    {
+      "id": "mixed-protest-tech",
+      "groundTruthUnrest": true,
+      "signalDomain": "unknown",
+      "situationDomain": "unknown",
+      "reason": "unsupported_category",
+      "falseUnrestPositive": false,
+      "missedUnrest": true,
+      "abstained": true
+    },
+    {
+      "id": "missing-metadata",
+      "groundTruthUnrest": false,
+      "signalDomain": "unknown",
+      "situationDomain": "unknown",
+      "reason": "incomplete_evidence",
+      "falseUnrestPositive": false,
+      "missedUnrest": false,
+      "abstained": true
+    },
+    {
+      "id": "invalid-confidence",
+      "groundTruthUnrest": false,
+      "signalDomain": "unknown",
+      "situationDomain": "unknown",
+      "reason": "invalid_evidence",
+      "falseUnrestPositive": false,
+      "missedUnrest": false,
+      "abstained": true
+    },
+    {
+      "id": "invalid-method",
+      "groundTruthUnrest": false,
+      "signalDomain": "unknown",
+      "situationDomain": "unknown",
+      "reason": "invalid_evidence",
+      "falseUnrestPositive": false,
+      "missedUnrest": false,
+      "abstained": true
+    },
+    {
+      "id": "duplicate-article",
+      "groundTruthUnrest": false,
+      "signalDomain": "unknown",
+      "situationDomain": "unknown",
+      "reason": "insufficient_evidence",
+      "falseUnrestPositive": false,
+      "missedUnrest": false,
+      "abstained": true
+    },
+    {
+      "id": "future-evidence",
+      "groundTruthUnrest": false,
+      "signalDomain": "unknown",
+      "situationDomain": "unknown",
+      "reason": "invalid_evidence",
+      "falseUnrestPositive": false,
+      "missedUnrest": false,
+      "abstained": true
+    },
+    {
+      "id": "overflow-technology",
+      "groundTruthUnrest": false,
+      "signalDomain": "unknown",
+      "situationDomain": "unknown",
+      "reason": "evidence_overflow",
+      "falseUnrestPositive": false,
+      "missedUnrest": false,
+      "abstained": true
+    },
+    {
+      "id": "actual-protest",
+      "groundTruthUnrest": true,
+      "signalDomain": "civil_unrest",
+      "situationDomain": "civil_unrest",
+      "reason": "supported",
+      "falseUnrestPositive": false,
+      "missedUnrest": false,
+      "abstained": false
+    },
+    {
+      "id": "actual-riot",
+      "groundTruthUnrest": true,
+      "signalDomain": "civil_unrest",
+      "situationDomain": "civil_unrest",
+      "reason": "supported",
+      "falseUnrestPositive": false,
+      "missedUnrest": false,
+      "abstained": false
+    },
+    {
+      "id": "labor-unrest",
+      "groundTruthUnrest": true,
+      "signalDomain": "civil_unrest",
+      "situationDomain": "civil_unrest",
+      "reason": "supported",
+      "falseUnrestPositive": false,
+      "missedUnrest": false,
+      "abstained": false
+    },
+    {
+      "id": "one-source-unrest",
+      "groundTruthUnrest": true,
+      "signalDomain": "unknown",
+      "situationDomain": "unknown",
+      "reason": "insufficient_evidence",
+      "falseUnrestPositive": false,
+      "missedUnrest": true,
+      "abstained": true
+    },
+    {
+      "id": "conflicting-supported",
+      "groundTruthUnrest": true,
+      "signalDomain": "unknown",
+      "situationDomain": "unknown",
+      "reason": "conflicting_evidence",
+      "falseUnrestPositive": false,
+      "missedUnrest": true,
+      "abstained": true
+    },
+    {
+      "id": "overflow-unrest",
+      "groundTruthUnrest": true,
+      "signalDomain": "unknown",
+      "situationDomain": "unknown",
+      "reason": "evidence_overflow",
+      "falseUnrestPositive": false,
+      "missedUnrest": true,
+      "abstained": true
+    }
+  ]
+}

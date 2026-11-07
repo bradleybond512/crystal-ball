@@ -209,6 +209,7 @@ const DOMAIN_ACTIONS: Record<SituationDomain, ActionCategory[]> = {
   health: ['physical_safety', 'supply_chain'],
   civil_unrest: ['travel', 'physical_safety', 'financial'],
   compound: ['information', 'physical_safety', 'financial'],
+  unknown: ['information'],
 };
 
 function generateGenericActions(
@@ -308,6 +309,20 @@ export function personalizeSituation(
 
   // Ghost mode: suppress action generation
   if (userCtx.appMode === 'ghost') return [];
+
+  if (situation.domain === 'unknown') {
+ return [{
+ id: genActionId(),
+ headline: `Monitor: ${situation.title}`,
+ rationale: 'Topic unconfirmed. Review the contributing reports for supported topic evidence.',
+ urgency: 'monitor',
+ category: 'information',
+ steps: ['Review the contributing reports', 'Watch for a confirmed topic as evidence updates'],
+ situationId: situation.id,
+ scenarioId: null,
+ dismissed: false,
+ }];
+  }
 
   // Low relevance + low confidence: only monitor action
   if (relevance.score < 0.15 && situation.confidence < 0.3) {

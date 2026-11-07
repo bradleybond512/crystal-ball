@@ -473,9 +473,9 @@ class NotificationDispatcher {
       clearTimeout(timer);
       controller.abort();
       const mode = getNotificationModeState();
-      const hold = outcome !== 'denied' && holdNotificationForMode(alert.severity === 'critical', mode);
+      const hold = outcome === 'denied' ? undefined : holdNotificationForMode(alert.severity === 'critical', mode);
       if (outcome !== 'denied' && (hold || mode.generation !== generation)) {
-        suppressTrace(trace, hold || 'mode-changed-during-permission');
+        suppressTrace(trace, hold ?? 'mode-changed-during-permission');
         return;
       }
       if (outcome !== 'granted' || Notification.permission !== 'granted') {

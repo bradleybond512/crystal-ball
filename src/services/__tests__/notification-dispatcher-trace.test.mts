@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { beforeEach } from 'node:test';
 
-import { setMode } from '../mode-manager.ts';
+import { getGhostModeState, setMode } from '../mode-manager.ts';
 import type { UnifiedAlert } from '../unified-alerts.ts';
 import { getNotificationTraceRegistry, resetDiagnosticsState } from '../diagnostics/diagnostics-state.ts';
 import { getSettings, resetSettings, updateDomainSettings, updateGlobalSettings } from '../notifications/notification-settings-service.ts';
@@ -275,7 +275,7 @@ for (const desktop of [false, true]) {
   });
 }
 
-for (const scenario of ['allowed', 'mode', 'mode-roundtrip', 'channel-roundtrip', 'quiet-hours', 'owner', 'expiry', 'cancel', 'stale-prompt', 'clock-reversal'] as const) {
+for (const scenario of ['allowed', 'mode', 'denied-mode', 'mode-roundtrip', 'channel-roundtrip', 'quiet-hours', 'owner', 'expiry', 'cancel', 'stale-prompt', 'clock-reversal'] as const) {
   test(`permission completion rechecks eligibility: ${scenario}`, async t => {
     const { notificationDispatcher: dispatcher } = await loadFresh();
     const doc = new EventTarget();
@@ -294,7 +294,7 @@ for (const scenario of ['allowed', 'mode', 'mode-roundtrip', 'channel-roundtrip'
     const warning = { ...alert('pending', 'high'), retentionEvidence: { kind: 'nws-expiry' as const, issuedAt: now-1, observedAt: now, expiresAt: now+1000 } };
     dispatcher.dispatchNotification(warning, 'banner', () => current);
     assert.equal(prompts.mock.callCount(), 1);
-    if (scenario === 'mode') localStorage.setItem('wm-app-mode', 'ghost');
+    if (scenario === 'mode' || scenario === 'denied-mode') localStorage.setItem('wm-app-mode', 'ghost');
     if (scenario === 'mode-roundtrip') {
       localStorage.setItem('wm-app-mode', 'ghost');
       doc.dispatchEvent(new Event('wm:mode-changed'));
@@ -311,14 +311,21 @@ for (const scenario of ['allowed', 'mode', 'mode-roundtrip', 'channel-roundtrip'
     if (scenario === 'cancel') dispatcher.cancelPendingPermission();
     if (scenario === 'stale-prompt') { warning.retentionEvidence.expiresAt += 200_000; now += 120_000; }
     if (scenario === 'clock-reversal') now--;
-    NotificationStub.permission = 'granted';
-    resolve('granted');
+    const choice = scenario === 'denied-mode' ? 'denied' : 'granted';
+    NotificationStub.permission = choice;
+    resolve(choice);
     await new Promise(resolveTurn => setImmediate(resolveTurn));
     assert.equal(NotificationStub.calls.length, scenario === 'allowed' ? 1 : 0);
+    if (scenario === 'denied-mode') {
+      assert.equal(getGhostModeState().muted, 0, 'denial must not increment Ghost suppression accounting');
+      assert.deepEqual(getNotificationTraceRegistry().summary().suppressedByReason, {});
+    }
     const trace = getNotificationTraceRegistry().all()[0];
     if (scenario === 'mode' || scenario === 'mode-roundtrip') {
       assert.equal(trace?.decision, 'suppressed');
       assert.equal(trace?.nativeResult, undefined, 'mode suppression is not a native delivery attempt');
+      assert.deepEqual(getNotificationTraceRegistry().summary().suppressedByReason,
+        { [scenario === 'mode' ? 'ghost-mode' : 'mode-changed-during-permission']: 1 });
     } else if (scenario !== 'allowed') assert.equal(trace?.nativeResult?.delivered, false);
   });
 }

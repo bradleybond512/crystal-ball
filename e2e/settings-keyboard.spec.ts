@@ -377,7 +377,11 @@ test('Settings has one content scroller and keeps header, tabs and last controls
       await expect(panel.locator('.key-card-clear').last()).toBeHidden();
       await expect(panel.locator('.key-card-clear').last()).toHaveAttribute('hidden', '');
     }
-    const last = panel.locator('button:not([hidden]), input:not([hidden]), select:not([hidden]), a:not([hidden]), .status-row:not([hidden]), .us-debug-empty:not([hidden])').last();
+    let last = panel.locator('button:not([hidden]), input:not([hidden]), select:not([hidden]), a:not([hidden]), .status-row:not([hidden]), .us-debug-empty:not([hidden])').last();
+    // Styled switch inputs intentionally have no visual box; their exact label owns it.
+    if (await last.evaluate(element => element.matches('.ai-flow-switch > input'))) {
+      last = last.locator('..');
+    }
     await expect(last).toBeVisible();
     const lastBounds = await last.boundingBox();
     expect(lastBounds).not.toBeNull();

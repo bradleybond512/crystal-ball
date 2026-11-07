@@ -188,7 +188,7 @@ test('panel layout mounts the status into the live stack, forwards current mobil
   const file = readFileSync(new URL('../../app/panel-layout.ts', import.meta.url), 'utf8');
   const source = ts.createSourceFile('panel-layout.ts', file, ts.ScriptTarget.Latest, true);
   const layout = source.statements.find(node => ts.isClassDeclaration(node) && node.name?.text === 'PanelLayoutManager') as ts.ClassDeclaration;
-  const methods = ['mountAlertShelf', 'renderCriticalBanner', 'destroy'].map(name =>
+  const methods = ['mountAlertShelf', 'renderCriticalBanner', 'destroyNavigationShortcuts', 'destroy'].map(name =>
     layout.members.find(node => node.name?.getText(source) === name)!.getText(source));
   const compiled = ts.transpileModule('class Layout {' + methods.join('\n') + '}', {
     compilerOptions: { target: ts.ScriptTarget.ES2022 },

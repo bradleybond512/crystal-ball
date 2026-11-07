@@ -5,7 +5,7 @@
  * (frozen fixtures with planted ground truth, fixed-seed PRNG, stable
  * timestamps, no live fetch, no Math.random, no Date.now).
  *
- * Ten streams over a fixed 30-day span, each planted for a specific reason.
+ * Eleven streams over a fixed 30-day span, each planted for a specific reason.
  * Ground truth exists at two levels because the correlation stack has two
  * independently-movable halves:
  *
@@ -712,6 +712,24 @@ function buildDecoyNearMiss(): GoldenStream {
   };
 }
 
+function buildNearBoundaryCausal(): GoldenStream {
+  const antecedents = [2.1, 7.1, 12.1, 17.1, 22.1, 27.1]
+    .map(day => ({ domain: 'boundary-a', timestamp: at(day) }));
+  const consequents = [
+    ...antecedents.slice(0, 4).map(event => ({ domain: 'boundary-b', timestamp: event.timestamp + HOUR / 2 })),
+    ...Array.from({ length: 25 }, (_, i) => ({ domain: 'boundary-b', timestamp: CORPUS_T0 + (.63 + (i + 1) * 29 / 26) * DAY })),
+  ];
+  return {
+    id: 'near-boundary-causal',
+    description: 'Four delayed responses to six causes amid frozen independent background, near Holm admission.',
+    observations: [...antecedents, ...consequents].map((event, i) => obs({
+      ...event, id: `s11-${i}`, sourceId: 'fixture-boundary', severity: 'MEDIUM', title: `boundary ${i}`,
+    })),
+    truePairKeys: [],
+    decoyEventIds: [],
+  };
+}
+
 // ── Corpus ──────────────────────────────────────────────────────────────────
 
 export const GOLDEN_STREAMS: readonly GoldenStream[] = [
@@ -725,6 +743,7 @@ export const GOLDEN_STREAMS: readonly GoldenStream[] = [
   buildMediatedChain(),
   buildInhibitoryPair(),
   buildDecoyNearMiss(),
+  buildNearBoundaryCausal(),
 ];
 
 /**
@@ -735,6 +754,10 @@ export const GOLDEN_STREAMS: readonly GoldenStream[] = [
  * domain and the miner excludes self-domain edges — it grades the engine only.
  */
 export const PLANTED_COUPLINGS: readonly PlantedCoupling[] = [
+  {
+    from: 'boundary-a', to: 'boundary-b', kind: 'causal',
+    rationale: 'S11 — four of six causes have a delayed response amid independent destination background.',
+  },
   {
     from: 'weather', to: 'humanitarian', kind: 'causal',
     rationale: 'S1 — each M6.8 quake is followed by an ocean-hazard bulletin within 45 min.',

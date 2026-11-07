@@ -1458,5 +1458,20 @@
   ],
   "src/services/correlation/island-calibration.ts": [
     "test:acc505"
+  ],
+  "src/services/correlation/__bench__/golden-streams.ts": [
+    "test:acc508"
+  ],
+  "src/services/correlation/bench-correlation.ts": [
+    "test:acc508"
+  ],
+  "src/services/correlation/bench-correlation-baseline.ts": [
+    "test:acc508"
+  ],
+  "src/services/correlation/__bench__/bench-correlation-baseline.json": [
+    "test:acc508"
+  ],
+  "scripts/correlation-benchmark.mts": [
+    "test:acc508"
   ]
 }

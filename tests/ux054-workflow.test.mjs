@@ -28,7 +28,7 @@ test('forks get the isolated audit while installation and signature verification
   assert.equal(setup.with['package-manager-cache'], false);
   assert.equal(audit.env.PR_BASE_SHA, '${{ github.event.pull_request.base.sha }}');
   assert.equal(audit.env.MERGE_BASE_SHA, '${{ github.event.merge_group.base_sha }}');
-  assert.equal(audit.env.ROLLOUT_BASE, 'cd459dfec514c80e2fcc3f0d7965ea6ef76a7b6a');
+  assert.equal(audit.env.ROLLOUT_BASE, '180f58ed0e15c6453afdc5b5a267fe1af38a7793');
   const install = job.steps.find(s => s.run === 'npm ci --ignore-scripts');
   const verify = job.steps.find(s => s.run === 'npm audit signatures');
   for (const stage of [job, audit, install, verify]) {

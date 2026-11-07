@@ -1,0 +1,14 @@
+[
+  {
+    "name": "shared-identity-cap",
+    "file": "src-tauri/sidecar/nws-alert-row.mjs",
+    "sha256": "07c3291e503590744b23fc86310ab297966577a85d85aee70330963a8d885c31",
+    "diff": "diff --git a/src-tauri/sidecar/nws-alert-row.mjs b/src-tauri/sidecar/nws-alert-row.mjs\nindex d2f6828fc..edc3d55c9 100644\n--- a/src-tauri/sidecar/nws-alert-row.mjs\n+++ b/src-tauri/sidecar/nws-alert-row.mjs\n@@ -90,7 +90,7 @@ export function normalizeNwsAlert(value, responseBudget) {\n   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;\n   const alert = value;\n   const onset = typeof alert.onset === 'string' ? alert.onset.trim() : '';\n-  const valid = typeof alert.id === 'string' && alert.id.length > 0 && alert.id.length <= 1024\n+  const valid = typeof alert.id === 'string' && alert.id.length > 0\n     && typeof alert.event === 'string'\n     && typeof alert.headline === 'string'\n     && typeof alert.description === 'string'\n",
+    "passCount": 64,
+    "failCount": 2,
+    "assertions": [
+      "not ok 17 - renderer rejects oversized identity without caching it and immediately recovers",
+      "not ok 33 - web NWS rejects oversized identity instead of caching an authoritative all-clear"
+    ]
+  }
+]

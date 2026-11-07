@@ -88,3 +88,22 @@ The subsequent metadata-only rebase at `54038130340bf6b8443dc376fe1b1de3df01196d
 `e7fd299d9b624e7c1d41d13bffae66264d8b29c3` preserved every non-evidence root object
 and all 42 relevant file hashes in the superset receipt. The 74-script execution
 head remains `8021f76453d6225b04393d519830a993e56d95c9`; no rerun is claimed.
+
+## Actual-main publication candidate
+
+After #1846 merged, the prepared branch was replayed onto actual main
+`ef4e1f8fe475405fec712aabfb4d05c4cdc967b3`. Fresh main-owned selection requires
+65 scripts, all contained in the 74 scripts actually executed on
+`8021f76453d6225b04393d519830a993e56d95c9`. Every non-evidence root Git object
+and all 42 relevant file hashes match that execution receipt, including tests,
+source and build configuration. [Selection comparison](UX-052-MAIN-CONTINUITY.json)
+records the actual execution head separately from later evidence and rebase heads.
+No fresh test run is claimed for this metadata/history-only transition.
+
+A fresh live GitHub snapshot explicitly naming candidate PR #1847 returned zero
+roadmap blockers. MONITOR, final packaged acceptance and installation/release
+holds remain unchanged. The original clean worktree at
+`16d2c73aa85e80cb551b08a5900f7c348d305787` was reversibly preserved on
+`codex/ux052-preserved-nov7-before-main`; the reconciled worktree now owns the
+original PR branch name. Final exact-head Sonnet review and hosted checks are
+still required, not claimed as already passed by this document.

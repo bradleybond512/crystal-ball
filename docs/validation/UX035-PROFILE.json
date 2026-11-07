@@ -1,0 +1,1926 @@
+{
+  "baseline": [
+    {
+      "revision": "7ca71372185a8accb3de093a50093f5b576d402b",
+      "node": "v22.23.1",
+      "workload": {
+        "fixedTime": 1793966400000,
+        "turnsPerStage": 200,
+        "alerts": 1000,
+        "observations": 1000,
+        "chains": 100,
+        "linksPerChain": 4,
+        "pairs": 500
+      },
+      "method": "Whole production TS modules transpiled to CJS in VM; Happy DOM; controlled timers/IO/visibility; actual pure stores hydrated with fixtures. No clock advance or OS background throttling. Callback durations exclude later timeout/RAF drain; constructors reported separately.",
+      "results": [
+        {
+          "panel": "AlertFatigueDashboardPanel",
+          "constructor": {
+            "durationMs": 5.115,
+            "counts": {
+              "render": 1,
+              "getFatigueReport": 1,
+              "getAlertRate": 1,
+              "getAllAlerts": 1,
+              "buildHtml": 1,
+              "setContent": 1
+            }
+          },
+          "stages": [
+            {
+              "name": "foreground-visible",
+              "turns": 200,
+              "counts": {
+                "render": 200,
+                "getFatigueReport": 200,
+                "getAlertRate": 200,
+                "getAllAlerts": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 17.649,
+                "medianMs": 0.0725,
+                "p95Ms": 0.1721
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "off-screen",
+              "turns": 200,
+              "counts": {
+                "render": 200,
+                "getFatigueReport": 200,
+                "getAlertRate": 200,
+                "getAllAlerts": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 14.948,
+                "medianMs": 0.0702,
+                "p95Ms": 0.0871
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "document-hidden-intersecting",
+              "turns": 200,
+              "counts": {
+                "render": 200,
+                "getFatigueReport": 200,
+                "getAlertRate": 200,
+                "getAllAlerts": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 15.342,
+                "medianMs": 0.071,
+                "p95Ms": 0.0949
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "disabled",
+              "turns": 200,
+              "counts": {
+                "render": 200,
+                "getFatigueReport": 200,
+                "getAlertRate": 200,
+                "getAllAlerts": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 14.701,
+                "medianMs": 0.0684,
+                "p95Ms": 0.0881
+              },
+              "hiddenClass": true
+            },
+            {
+              "name": "resumed",
+              "turns": 200,
+              "counts": {
+                "render": 200,
+                "getFatigueReport": 200,
+                "getAlertRate": 200,
+                "getAllAlerts": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 14.906,
+                "medianMs": 0.068,
+                "p95Ms": 0.0907
+              },
+              "hiddenClass": false
+            }
+          ],
+          "intervalsAfterDestroy": 0
+        },
+        {
+          "panel": "CorrelationMapPanel",
+          "constructor": {
+            "durationMs": 3.569,
+            "counts": {
+              "loadAndRender": 1,
+              "query": 1,
+              "getChains": 1,
+              "getRecent": 1,
+              "render": 1,
+              "buildHtml": 1,
+              "setContent": 1
+            }
+          },
+          "stages": [
+            {
+              "name": "foreground-visible",
+              "turns": 200,
+              "counts": {
+                "loadAndRender": 200,
+                "query": 200,
+                "getChains": 200,
+                "getRecent": 200,
+                "render": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 217.367,
+                "medianMs": 0.9655,
+                "p95Ms": 1.6102
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "off-screen",
+              "turns": 200,
+              "counts": {
+                "loadAndRender": 200,
+                "query": 200,
+                "getChains": 200,
+                "getRecent": 200,
+                "render": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 204.029,
+                "medianMs": 0.949,
+                "p95Ms": 1.6613
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "document-hidden-intersecting",
+              "turns": 200,
+              "counts": {
+                "loadAndRender": 200,
+                "query": 200,
+                "getChains": 200,
+                "getRecent": 200,
+                "render": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 202.881,
+                "medianMs": 0.9485,
+                "p95Ms": 1.3288
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "disabled",
+              "turns": 200,
+              "counts": {
+                "loadAndRender": 200,
+                "query": 200,
+                "getChains": 200,
+                "getRecent": 200,
+                "render": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 201.053,
+                "medianMs": 0.9492,
+                "p95Ms": 1.2793
+              },
+              "hiddenClass": true
+            },
+            {
+              "name": "resumed",
+              "turns": 200,
+              "counts": {
+                "loadAndRender": 200,
+                "query": 200,
+                "getChains": 200,
+                "getRecent": 200,
+                "render": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 202.169,
+                "medianMs": 0.9472,
+                "p95Ms": 1.6652
+              },
+              "hiddenClass": false
+            }
+          ],
+          "intervalsAfterDestroy": 0
+        }
+      ],
+      "lifecycle": {
+        "hideBeforeIoRuns": 1,
+        "foregroundDrains": 0,
+        "ioWhileHiddenRuns": 1,
+        "pendingRetainedAfterDestroy": true,
+        "queuedIoAfterDestroyRuns": 1,
+        "directGateAfterDestroyRuns": 1
+      },
+      "loadedSourceFiles": [
+        "src/components/AlertFatigueDashboardPanel.ts",
+        "src/components/CorrelationMapPanel.ts",
+        "src/components/Panel.ts",
+        "src/components/alert-fatigue-dashboard-helpers.ts",
+        "src/components/panel-loading-budget.ts",
+        "src/services/correlation/causal-chain-view.ts",
+        "src/services/correlation/correlation-map-view.ts",
+        "src/services/intelligence/alert-fatigue-detector.ts",
+        "src/services/intelligence/causal-chain.ts",
+        "src/services/intelligence/correlation-store.ts",
+        "src/services/intelligence/observation-store.ts",
+        "src/utils/dom-utils.ts",
+        "src/utils/format-duration.ts",
+        "src/utils/sanitize.ts"
+      ]
+    },
+    {
+      "revision": "7ca71372185a8accb3de093a50093f5b576d402b",
+      "node": "v22.23.1",
+      "workload": {
+        "fixedTime": 1793966400000,
+        "turnsPerStage": 200,
+        "alerts": 1000,
+        "observations": 1000,
+        "chains": 100,
+        "linksPerChain": 4,
+        "pairs": 500
+      },
+      "method": "Whole production TS modules transpiled to CJS in VM; Happy DOM; controlled timers/IO/visibility; actual pure stores hydrated with fixtures. No clock advance or OS background throttling. Callback durations exclude later timeout/RAF drain; constructors reported separately.",
+      "results": [
+        {
+          "panel": "AlertFatigueDashboardPanel",
+          "constructor": {
+            "durationMs": 4.95,
+            "counts": {
+              "render": 1,
+              "getFatigueReport": 1,
+              "getAlertRate": 1,
+              "getAllAlerts": 1,
+              "buildHtml": 1,
+              "setContent": 1
+            }
+          },
+          "stages": [
+            {
+              "name": "foreground-visible",
+              "turns": 200,
+              "counts": {
+                "render": 200,
+                "getFatigueReport": 200,
+                "getAlertRate": 200,
+                "getAllAlerts": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 18.946,
+                "medianMs": 0.0745,
+                "p95Ms": 0.1879
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "off-screen",
+              "turns": 200,
+              "counts": {
+                "render": 200,
+                "getFatigueReport": 200,
+                "getAlertRate": 200,
+                "getAllAlerts": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 15.96,
+                "medianMs": 0.0731,
+                "p95Ms": 0.0937
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "document-hidden-intersecting",
+              "turns": 200,
+              "counts": {
+                "render": 200,
+                "getFatigueReport": 200,
+                "getAlertRate": 200,
+                "getAllAlerts": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 15.132,
+                "medianMs": 0.0733,
+                "p95Ms": 0.0834
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "disabled",
+              "turns": 200,
+              "counts": {
+                "render": 200,
+                "getFatigueReport": 200,
+                "getAlertRate": 200,
+                "getAllAlerts": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 15.593,
+                "medianMs": 0.0728,
+                "p95Ms": 0.0895
+              },
+              "hiddenClass": true
+            },
+            {
+              "name": "resumed",
+              "turns": 200,
+              "counts": {
+                "render": 200,
+                "getFatigueReport": 200,
+                "getAlertRate": 200,
+                "getAllAlerts": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 15.229,
+                "medianMs": 0.0719,
+                "p95Ms": 0.089
+              },
+              "hiddenClass": false
+            }
+          ],
+          "intervalsAfterDestroy": 0
+        },
+        {
+          "panel": "CorrelationMapPanel",
+          "constructor": {
+            "durationMs": 3.868,
+            "counts": {
+              "loadAndRender": 1,
+              "query": 1,
+              "getChains": 1,
+              "getRecent": 1,
+              "render": 1,
+              "buildHtml": 1,
+              "setContent": 1
+            }
+          },
+          "stages": [
+            {
+              "name": "foreground-visible",
+              "turns": 200,
+              "counts": {
+                "loadAndRender": 200,
+                "query": 200,
+                "getChains": 200,
+                "getRecent": 200,
+                "render": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 220.763,
+                "medianMs": 0.9887,
+                "p95Ms": 1.7096
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "off-screen",
+              "turns": 200,
+              "counts": {
+                "loadAndRender": 200,
+                "query": 200,
+                "getChains": 200,
+                "getRecent": 200,
+                "render": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 205.732,
+                "medianMs": 0.9626,
+                "p95Ms": 1.7783
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "document-hidden-intersecting",
+              "turns": 200,
+              "counts": {
+                "loadAndRender": 200,
+                "query": 200,
+                "getChains": 200,
+                "getRecent": 200,
+                "render": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 216.094,
+                "medianMs": 0.9481,
+                "p95Ms": 1.8269
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "disabled",
+              "turns": 200,
+              "counts": {
+                "loadAndRender": 200,
+                "query": 200,
+                "getChains": 200,
+                "getRecent": 200,
+                "render": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 202.159,
+                "medianMs": 0.95,
+                "p95Ms": 1.2373
+              },
+              "hiddenClass": true
+            },
+            {
+              "name": "resumed",
+              "turns": 200,
+              "counts": {
+                "loadAndRender": 200,
+                "query": 200,
+                "getChains": 200,
+                "getRecent": 200,
+                "render": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 199.369,
+                "medianMs": 0.9436,
+                "p95Ms": 1.1308
+              },
+              "hiddenClass": false
+            }
+          ],
+          "intervalsAfterDestroy": 0
+        }
+      ],
+      "lifecycle": {
+        "hideBeforeIoRuns": 1,
+        "foregroundDrains": 0,
+        "ioWhileHiddenRuns": 1,
+        "pendingRetainedAfterDestroy": true,
+        "queuedIoAfterDestroyRuns": 1,
+        "directGateAfterDestroyRuns": 1
+      },
+      "loadedSourceFiles": [
+        "src/components/AlertFatigueDashboardPanel.ts",
+        "src/components/CorrelationMapPanel.ts",
+        "src/components/Panel.ts",
+        "src/components/alert-fatigue-dashboard-helpers.ts",
+        "src/components/panel-loading-budget.ts",
+        "src/services/correlation/causal-chain-view.ts",
+        "src/services/correlation/correlation-map-view.ts",
+        "src/services/intelligence/alert-fatigue-detector.ts",
+        "src/services/intelligence/causal-chain.ts",
+        "src/services/intelligence/correlation-store.ts",
+        "src/services/intelligence/observation-store.ts",
+        "src/utils/dom-utils.ts",
+        "src/utils/format-duration.ts",
+        "src/utils/sanitize.ts"
+      ]
+    },
+    {
+      "revision": "7ca71372185a8accb3de093a50093f5b576d402b",
+      "node": "v22.23.1",
+      "workload": {
+        "fixedTime": 1793966400000,
+        "turnsPerStage": 200,
+        "alerts": 1000,
+        "observations": 1000,
+        "chains": 100,
+        "linksPerChain": 4,
+        "pairs": 500
+      },
+      "method": "Whole production TS modules transpiled to CJS in VM; Happy DOM; controlled timers/IO/visibility; actual pure stores hydrated with fixtures. No clock advance or OS background throttling. Callback durations exclude later timeout/RAF drain; constructors reported separately.",
+      "results": [
+        {
+          "panel": "AlertFatigueDashboardPanel",
+          "constructor": {
+            "durationMs": 4.989,
+            "counts": {
+              "render": 1,
+              "getFatigueReport": 1,
+              "getAlertRate": 1,
+              "getAllAlerts": 1,
+              "buildHtml": 1,
+              "setContent": 1
+            }
+          },
+          "stages": [
+            {
+              "name": "foreground-visible",
+              "turns": 200,
+              "counts": {
+                "render": 200,
+                "getFatigueReport": 200,
+                "getAlertRate": 200,
+                "getAllAlerts": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 18.623,
+                "medianMs": 0.071,
+                "p95Ms": 0.1662
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "off-screen",
+              "turns": 200,
+              "counts": {
+                "render": 200,
+                "getFatigueReport": 200,
+                "getAlertRate": 200,
+                "getAllAlerts": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 15.067,
+                "medianMs": 0.07,
+                "p95Ms": 0.087
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "document-hidden-intersecting",
+              "turns": 200,
+              "counts": {
+                "render": 200,
+                "getFatigueReport": 200,
+                "getAlertRate": 200,
+                "getAllAlerts": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 15.038,
+                "medianMs": 0.0704,
+                "p95Ms": 0.0967
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "disabled",
+              "turns": 200,
+              "counts": {
+                "render": 200,
+                "getFatigueReport": 200,
+                "getAlertRate": 200,
+                "getAllAlerts": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 14.647,
+                "medianMs": 0.0685,
+                "p95Ms": 0.0852
+              },
+              "hiddenClass": true
+            },
+            {
+              "name": "resumed",
+              "turns": 200,
+              "counts": {
+                "render": 200,
+                "getFatigueReport": 200,
+                "getAlertRate": 200,
+                "getAllAlerts": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 14.682,
+                "medianMs": 0.0693,
+                "p95Ms": 0.091
+              },
+              "hiddenClass": false
+            }
+          ],
+          "intervalsAfterDestroy": 0
+        },
+        {
+          "panel": "CorrelationMapPanel",
+          "constructor": {
+            "durationMs": 3.329,
+            "counts": {
+              "loadAndRender": 1,
+              "query": 1,
+              "getChains": 1,
+              "getRecent": 1,
+              "render": 1,
+              "buildHtml": 1,
+              "setContent": 1
+            }
+          },
+          "stages": [
+            {
+              "name": "foreground-visible",
+              "turns": 200,
+              "counts": {
+                "loadAndRender": 200,
+                "query": 200,
+                "getChains": 200,
+                "getRecent": 200,
+                "render": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 218.242,
+                "medianMs": 0.9845,
+                "p95Ms": 1.7356
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "off-screen",
+              "turns": 200,
+              "counts": {
+                "loadAndRender": 200,
+                "query": 200,
+                "getChains": 200,
+                "getRecent": 200,
+                "render": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 200.176,
+                "medianMs": 0.9418,
+                "p95Ms": 1.6404
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "document-hidden-intersecting",
+              "turns": 200,
+              "counts": {
+                "loadAndRender": 200,
+                "query": 200,
+                "getChains": 200,
+                "getRecent": 200,
+                "render": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 198.424,
+                "medianMs": 0.936,
+                "p95Ms": 1.4162
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "disabled",
+              "turns": 200,
+              "counts": {
+                "loadAndRender": 200,
+                "query": 200,
+                "getChains": 200,
+                "getRecent": 200,
+                "render": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 197.196,
+                "medianMs": 0.9311,
+                "p95Ms": 1.1226
+              },
+              "hiddenClass": true
+            },
+            {
+              "name": "resumed",
+              "turns": 200,
+              "counts": {
+                "loadAndRender": 200,
+                "query": 200,
+                "getChains": 200,
+                "getRecent": 200,
+                "render": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 200.905,
+                "medianMs": 0.9369,
+                "p95Ms": 1.2887
+              },
+              "hiddenClass": false
+            }
+          ],
+          "intervalsAfterDestroy": 0
+        }
+      ],
+      "lifecycle": {
+        "hideBeforeIoRuns": 1,
+        "foregroundDrains": 0,
+        "ioWhileHiddenRuns": 1,
+        "pendingRetainedAfterDestroy": true,
+        "queuedIoAfterDestroyRuns": 1,
+        "directGateAfterDestroyRuns": 1
+      },
+      "loadedSourceFiles": [
+        "src/components/AlertFatigueDashboardPanel.ts",
+        "src/components/CorrelationMapPanel.ts",
+        "src/components/Panel.ts",
+        "src/components/alert-fatigue-dashboard-helpers.ts",
+        "src/components/panel-loading-budget.ts",
+        "src/services/correlation/causal-chain-view.ts",
+        "src/services/correlation/correlation-map-view.ts",
+        "src/services/intelligence/alert-fatigue-detector.ts",
+        "src/services/intelligence/causal-chain.ts",
+        "src/services/intelligence/correlation-store.ts",
+        "src/services/intelligence/observation-store.ts",
+        "src/utils/dom-utils.ts",
+        "src/utils/format-duration.ts",
+        "src/utils/sanitize.ts"
+      ]
+    }
+  ],
+  "final": [
+    {
+      "sourceHashes": {
+        "src/components/Panel.ts": "8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de",
+        "src/components/AlertFatigueDashboardPanel.ts": "738e4045b55d21f96ad71b881c6d7021c26017726a20f1be831426ebcad56494",
+        "src/components/CorrelationMapPanel.ts": "277ff73e06def7a496ec51b7d73b32f7eb5a506cbe456b66d0440e6b846348d7"
+      },
+      "revision": "c2d55f49a084cce9dca2af6155fcc07d034bf820",
+      "node": "v22.23.1",
+      "workload": {
+        "fixedTime": 1793966400000,
+        "turnsPerStage": 200,
+        "alerts": 1000,
+        "observations": 1000,
+        "chains": 100,
+        "linksPerChain": 4,
+        "pairs": 500
+      },
+      "method": "Whole production TS modules transpiled to CJS in VM; Happy DOM; controlled timers/IO/visibility; actual pure stores hydrated with fixtures. No clock advance or OS background throttling. Callback durations exclude later timeout/RAF drain; constructors reported separately.",
+      "results": [
+        {
+          "panel": "AlertFatigueDashboardPanel",
+          "constructor": {
+            "durationMs": 5.594,
+            "counts": {
+              "render": 1,
+              "getFatigueReport": 1,
+              "getAlertRate": 1,
+              "getAllAlerts": 1,
+              "buildHtml": 1,
+              "setContent": 1
+            }
+          },
+          "stages": [
+            {
+              "name": "foreground-visible",
+              "turns": 200,
+              "transitionCounts": {
+                "render": 0,
+                "getFatigueReport": 0,
+                "getAlertRate": 0,
+                "getAllAlerts": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "render": 200,
+                "getFatigueReport": 200,
+                "getAlertRate": 200,
+                "getAllAlerts": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 21.251,
+                "medianMs": 0.074,
+                "p95Ms": 0.2173
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "off-screen",
+              "turns": 200,
+              "transitionCounts": {
+                "render": 0,
+                "getFatigueReport": 0,
+                "getAlertRate": 0,
+                "getAllAlerts": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "render": 0,
+                "getFatigueReport": 0,
+                "getAlertRate": 0,
+                "getAllAlerts": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 0.121,
+                "medianMs": 0.0006,
+                "p95Ms": 0.0007
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "document-hidden-intersecting",
+              "turns": 200,
+              "transitionCounts": {
+                "render": 0,
+                "getFatigueReport": 0,
+                "getAlertRate": 0,
+                "getAllAlerts": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "render": 0,
+                "getFatigueReport": 0,
+                "getAlertRate": 0,
+                "getAllAlerts": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 0.04,
+                "medianMs": 0.0002,
+                "p95Ms": 0.0002
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "disabled",
+              "turns": 200,
+              "transitionCounts": {
+                "render": 1,
+                "getFatigueReport": 1,
+                "getAlertRate": 1,
+                "getAllAlerts": 1,
+                "buildHtml": 1,
+                "setContent": 1,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "render": 0,
+                "getFatigueReport": 0,
+                "getAlertRate": 0,
+                "getAllAlerts": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 0.117,
+                "medianMs": 0.0006,
+                "p95Ms": 0.0006
+              },
+              "hiddenClass": true
+            },
+            {
+              "name": "resumed",
+              "turns": 200,
+              "transitionCounts": {
+                "render": 1,
+                "getFatigueReport": 1,
+                "getAlertRate": 1,
+                "getAllAlerts": 1,
+                "buildHtml": 1,
+                "setContent": 1,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "render": 200,
+                "getFatigueReport": 200,
+                "getAlertRate": 200,
+                "getAllAlerts": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 15.221,
+                "medianMs": 0.0702,
+                "p95Ms": 0.0952
+              },
+              "hiddenClass": false
+            }
+          ],
+          "intervalsAfterDestroy": 0
+        },
+        {
+          "panel": "CorrelationMapPanel",
+          "constructor": {
+            "durationMs": 5.228,
+            "counts": {
+              "loadAndRender": 1,
+              "query": 1,
+              "getChains": 1,
+              "getRecent": 1,
+              "render": 1,
+              "buildHtml": 1,
+              "setContent": 1
+            }
+          },
+          "stages": [
+            {
+              "name": "foreground-visible",
+              "turns": 200,
+              "transitionCounts": {
+                "loadAndRender": 0,
+                "query": 0,
+                "getChains": 0,
+                "getRecent": 0,
+                "render": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "loadAndRender": 200,
+                "query": 200,
+                "getChains": 200,
+                "getRecent": 200,
+                "render": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 223.207,
+                "medianMs": 1.0067,
+                "p95Ms": 1.8529
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "off-screen",
+              "turns": 200,
+              "transitionCounts": {
+                "loadAndRender": 0,
+                "query": 0,
+                "getChains": 0,
+                "getRecent": 0,
+                "render": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "loadAndRender": 0,
+                "query": 0,
+                "getChains": 0,
+                "getRecent": 0,
+                "render": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 0.11,
+                "medianMs": 0.0005,
+                "p95Ms": 0.0006
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "document-hidden-intersecting",
+              "turns": 200,
+              "transitionCounts": {
+                "loadAndRender": 0,
+                "query": 0,
+                "getChains": 0,
+                "getRecent": 0,
+                "render": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "loadAndRender": 0,
+                "query": 0,
+                "getChains": 0,
+                "getRecent": 0,
+                "render": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 0.057,
+                "medianMs": 0.0002,
+                "p95Ms": 0.0003
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "disabled",
+              "turns": 200,
+              "transitionCounts": {
+                "loadAndRender": 1,
+                "query": 1,
+                "getChains": 1,
+                "getRecent": 1,
+                "render": 1,
+                "buildHtml": 1,
+                "setContent": 1,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "loadAndRender": 0,
+                "query": 0,
+                "getChains": 0,
+                "getRecent": 0,
+                "render": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 0.091,
+                "medianMs": 0.0005,
+                "p95Ms": 0.0005
+              },
+              "hiddenClass": true
+            },
+            {
+              "name": "resumed",
+              "turns": 200,
+              "transitionCounts": {
+                "loadAndRender": 1,
+                "query": 1,
+                "getChains": 1,
+                "getRecent": 1,
+                "render": 1,
+                "buildHtml": 1,
+                "setContent": 1,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "loadAndRender": 200,
+                "query": 200,
+                "getChains": 200,
+                "getRecent": 200,
+                "render": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 206.114,
+                "medianMs": 0.9787,
+                "p95Ms": 1.2101
+              },
+              "hiddenClass": false
+            }
+          ],
+          "intervalsAfterDestroy": 0
+        }
+      ],
+      "lifecycle": {
+        "hideBeforeIoRuns": 0,
+        "foregroundDrains": 1,
+        "ioWhileHiddenRuns": 0,
+        "pendingRetainedAfterDestroy": false,
+        "queuedIoAfterDestroyRuns": 0,
+        "directGateAfterDestroyRuns": 0
+      },
+      "loadedSourceFiles": [
+        "src/components/AlertFatigueDashboardPanel.ts",
+        "src/components/CorrelationMapPanel.ts",
+        "src/components/Panel.ts",
+        "src/components/alert-fatigue-dashboard-helpers.ts",
+        "src/components/panel-loading-budget.ts",
+        "src/services/correlation/causal-chain-view.ts",
+        "src/services/correlation/correlation-map-view.ts",
+        "src/services/intelligence/alert-fatigue-detector.ts",
+        "src/services/intelligence/causal-chain.ts",
+        "src/services/intelligence/correlation-store.ts",
+        "src/services/intelligence/observation-store.ts",
+        "src/utils/dom-utils.ts",
+        "src/utils/format-duration.ts",
+        "src/utils/sanitize.ts"
+      ]
+    },
+    {
+      "sourceHashes": {
+        "src/components/Panel.ts": "8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de",
+        "src/components/AlertFatigueDashboardPanel.ts": "738e4045b55d21f96ad71b881c6d7021c26017726a20f1be831426ebcad56494",
+        "src/components/CorrelationMapPanel.ts": "277ff73e06def7a496ec51b7d73b32f7eb5a506cbe456b66d0440e6b846348d7"
+      },
+      "revision": "c2d55f49a084cce9dca2af6155fcc07d034bf820",
+      "node": "v22.23.1",
+      "workload": {
+        "fixedTime": 1793966400000,
+        "turnsPerStage": 200,
+        "alerts": 1000,
+        "observations": 1000,
+        "chains": 100,
+        "linksPerChain": 4,
+        "pairs": 500
+      },
+      "method": "Whole production TS modules transpiled to CJS in VM; Happy DOM; controlled timers/IO/visibility; actual pure stores hydrated with fixtures. No clock advance or OS background throttling. Callback durations exclude later timeout/RAF drain; constructors reported separately.",
+      "results": [
+        {
+          "panel": "AlertFatigueDashboardPanel",
+          "constructor": {
+            "durationMs": 5.59,
+            "counts": {
+              "render": 1,
+              "getFatigueReport": 1,
+              "getAlertRate": 1,
+              "getAllAlerts": 1,
+              "buildHtml": 1,
+              "setContent": 1
+            }
+          },
+          "stages": [
+            {
+              "name": "foreground-visible",
+              "turns": 200,
+              "transitionCounts": {
+                "render": 0,
+                "getFatigueReport": 0,
+                "getAlertRate": 0,
+                "getAllAlerts": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "render": 200,
+                "getFatigueReport": 200,
+                "getAlertRate": 200,
+                "getAllAlerts": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 21.801,
+                "medianMs": 0.0734,
+                "p95Ms": 0.2316
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "off-screen",
+              "turns": 200,
+              "transitionCounts": {
+                "render": 0,
+                "getFatigueReport": 0,
+                "getAlertRate": 0,
+                "getAllAlerts": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "render": 0,
+                "getFatigueReport": 0,
+                "getAlertRate": 0,
+                "getAllAlerts": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 0.126,
+                "medianMs": 0.0006,
+                "p95Ms": 0.0007
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "document-hidden-intersecting",
+              "turns": 200,
+              "transitionCounts": {
+                "render": 0,
+                "getFatigueReport": 0,
+                "getAlertRate": 0,
+                "getAllAlerts": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "render": 0,
+                "getFatigueReport": 0,
+                "getAlertRate": 0,
+                "getAllAlerts": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 0.042,
+                "medianMs": 0.0002,
+                "p95Ms": 0.0002
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "disabled",
+              "turns": 200,
+              "transitionCounts": {
+                "render": 1,
+                "getFatigueReport": 1,
+                "getAlertRate": 1,
+                "getAllAlerts": 1,
+                "buildHtml": 1,
+                "setContent": 1,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "render": 0,
+                "getFatigueReport": 0,
+                "getAlertRate": 0,
+                "getAllAlerts": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 0.13,
+                "medianMs": 0.0006,
+                "p95Ms": 0.0007
+              },
+              "hiddenClass": true
+            },
+            {
+              "name": "resumed",
+              "turns": 200,
+              "transitionCounts": {
+                "render": 1,
+                "getFatigueReport": 1,
+                "getAlertRate": 1,
+                "getAllAlerts": 1,
+                "buildHtml": 1,
+                "setContent": 1,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "render": 200,
+                "getFatigueReport": 200,
+                "getAlertRate": 200,
+                "getAllAlerts": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 15.553,
+                "medianMs": 0.0725,
+                "p95Ms": 0.0918
+              },
+              "hiddenClass": false
+            }
+          ],
+          "intervalsAfterDestroy": 0
+        },
+        {
+          "panel": "CorrelationMapPanel",
+          "constructor": {
+            "durationMs": 5.34,
+            "counts": {
+              "loadAndRender": 1,
+              "query": 1,
+              "getChains": 1,
+              "getRecent": 1,
+              "render": 1,
+              "buildHtml": 1,
+              "setContent": 1
+            }
+          },
+          "stages": [
+            {
+              "name": "foreground-visible",
+              "turns": 200,
+              "transitionCounts": {
+                "loadAndRender": 0,
+                "query": 0,
+                "getChains": 0,
+                "getRecent": 0,
+                "render": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "loadAndRender": 200,
+                "query": 200,
+                "getChains": 200,
+                "getRecent": 200,
+                "render": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 228.709,
+                "medianMs": 1.0172,
+                "p95Ms": 1.9821
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "off-screen",
+              "turns": 200,
+              "transitionCounts": {
+                "loadAndRender": 0,
+                "query": 0,
+                "getChains": 0,
+                "getRecent": 0,
+                "render": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "loadAndRender": 0,
+                "query": 0,
+                "getChains": 0,
+                "getRecent": 0,
+                "render": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 0.125,
+                "medianMs": 0.0005,
+                "p95Ms": 0.0006
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "document-hidden-intersecting",
+              "turns": 200,
+              "transitionCounts": {
+                "loadAndRender": 0,
+                "query": 0,
+                "getChains": 0,
+                "getRecent": 0,
+                "render": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "loadAndRender": 0,
+                "query": 0,
+                "getChains": 0,
+                "getRecent": 0,
+                "render": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 0.056,
+                "medianMs": 0.0002,
+                "p95Ms": 0.0003
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "disabled",
+              "turns": 200,
+              "transitionCounts": {
+                "loadAndRender": 1,
+                "query": 1,
+                "getChains": 1,
+                "getRecent": 1,
+                "render": 1,
+                "buildHtml": 1,
+                "setContent": 1,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "loadAndRender": 0,
+                "query": 0,
+                "getChains": 0,
+                "getRecent": 0,
+                "render": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 0.095,
+                "medianMs": 0.0005,
+                "p95Ms": 0.0005
+              },
+              "hiddenClass": true
+            },
+            {
+              "name": "resumed",
+              "turns": 200,
+              "transitionCounts": {
+                "loadAndRender": 1,
+                "query": 1,
+                "getChains": 1,
+                "getRecent": 1,
+                "render": 1,
+                "buildHtml": 1,
+                "setContent": 1,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "loadAndRender": 200,
+                "query": 200,
+                "getChains": 200,
+                "getRecent": 200,
+                "render": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 217.665,
+                "medianMs": 1.0192,
+                "p95Ms": 1.8378
+              },
+              "hiddenClass": false
+            }
+          ],
+          "intervalsAfterDestroy": 0
+        }
+      ],
+      "lifecycle": {
+        "hideBeforeIoRuns": 0,
+        "foregroundDrains": 1,
+        "ioWhileHiddenRuns": 0,
+        "pendingRetainedAfterDestroy": false,
+        "queuedIoAfterDestroyRuns": 0,
+        "directGateAfterDestroyRuns": 0
+      },
+      "loadedSourceFiles": [
+        "src/components/AlertFatigueDashboardPanel.ts",
+        "src/components/CorrelationMapPanel.ts",
+        "src/components/Panel.ts",
+        "src/components/alert-fatigue-dashboard-helpers.ts",
+        "src/components/panel-loading-budget.ts",
+        "src/services/correlation/causal-chain-view.ts",
+        "src/services/correlation/correlation-map-view.ts",
+        "src/services/intelligence/alert-fatigue-detector.ts",
+        "src/services/intelligence/causal-chain.ts",
+        "src/services/intelligence/correlation-store.ts",
+        "src/services/intelligence/observation-store.ts",
+        "src/utils/dom-utils.ts",
+        "src/utils/format-duration.ts",
+        "src/utils/sanitize.ts"
+      ]
+    },
+    {
+      "sourceHashes": {
+        "src/components/Panel.ts": "8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de",
+        "src/components/AlertFatigueDashboardPanel.ts": "738e4045b55d21f96ad71b881c6d7021c26017726a20f1be831426ebcad56494",
+        "src/components/CorrelationMapPanel.ts": "277ff73e06def7a496ec51b7d73b32f7eb5a506cbe456b66d0440e6b846348d7"
+      },
+      "revision": "c2d55f49a084cce9dca2af6155fcc07d034bf820",
+      "node": "v22.23.1",
+      "workload": {
+        "fixedTime": 1793966400000,
+        "turnsPerStage": 200,
+        "alerts": 1000,
+        "observations": 1000,
+        "chains": 100,
+        "linksPerChain": 4,
+        "pairs": 500
+      },
+      "method": "Whole production TS modules transpiled to CJS in VM; Happy DOM; controlled timers/IO/visibility; actual pure stores hydrated with fixtures. No clock advance or OS background throttling. Callback durations exclude later timeout/RAF drain; constructors reported separately.",
+      "results": [
+        {
+          "panel": "AlertFatigueDashboardPanel",
+          "constructor": {
+            "durationMs": 5.549,
+            "counts": {
+              "render": 1,
+              "getFatigueReport": 1,
+              "getAlertRate": 1,
+              "getAllAlerts": 1,
+              "buildHtml": 1,
+              "setContent": 1
+            }
+          },
+          "stages": [
+            {
+              "name": "foreground-visible",
+              "turns": 200,
+              "transitionCounts": {
+                "render": 0,
+                "getFatigueReport": 0,
+                "getAlertRate": 0,
+                "getAllAlerts": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "render": 200,
+                "getFatigueReport": 200,
+                "getAlertRate": 200,
+                "getAllAlerts": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 20.578,
+                "medianMs": 0.073,
+                "p95Ms": 0.2098
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "off-screen",
+              "turns": 200,
+              "transitionCounts": {
+                "render": 0,
+                "getFatigueReport": 0,
+                "getAlertRate": 0,
+                "getAllAlerts": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "render": 0,
+                "getFatigueReport": 0,
+                "getAlertRate": 0,
+                "getAllAlerts": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 0.123,
+                "medianMs": 0.0006,
+                "p95Ms": 0.0007
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "document-hidden-intersecting",
+              "turns": 200,
+              "transitionCounts": {
+                "render": 0,
+                "getFatigueReport": 0,
+                "getAlertRate": 0,
+                "getAllAlerts": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "render": 0,
+                "getFatigueReport": 0,
+                "getAlertRate": 0,
+                "getAllAlerts": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 0.041,
+                "medianMs": 0.0002,
+                "p95Ms": 0.0002
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "disabled",
+              "turns": 200,
+              "transitionCounts": {
+                "render": 1,
+                "getFatigueReport": 1,
+                "getAlertRate": 1,
+                "getAllAlerts": 1,
+                "buildHtml": 1,
+                "setContent": 1,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "render": 0,
+                "getFatigueReport": 0,
+                "getAlertRate": 0,
+                "getAllAlerts": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 0.118,
+                "medianMs": 0.0006,
+                "p95Ms": 0.0006
+              },
+              "hiddenClass": true
+            },
+            {
+              "name": "resumed",
+              "turns": 200,
+              "transitionCounts": {
+                "render": 1,
+                "getFatigueReport": 1,
+                "getAlertRate": 1,
+                "getAllAlerts": 1,
+                "buildHtml": 1,
+                "setContent": 1,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "render": 200,
+                "getFatigueReport": 200,
+                "getAlertRate": 200,
+                "getAllAlerts": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 15.527,
+                "medianMs": 0.0719,
+                "p95Ms": 0.0892
+              },
+              "hiddenClass": false
+            }
+          ],
+          "intervalsAfterDestroy": 0
+        },
+        {
+          "panel": "CorrelationMapPanel",
+          "constructor": {
+            "durationMs": 5.95,
+            "counts": {
+              "loadAndRender": 1,
+              "query": 1,
+              "getChains": 1,
+              "getRecent": 1,
+              "render": 1,
+              "buildHtml": 1,
+              "setContent": 1
+            }
+          },
+          "stages": [
+            {
+              "name": "foreground-visible",
+              "turns": 200,
+              "transitionCounts": {
+                "loadAndRender": 0,
+                "query": 0,
+                "getChains": 0,
+                "getRecent": 0,
+                "render": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "loadAndRender": 200,
+                "query": 200,
+                "getChains": 200,
+                "getRecent": 200,
+                "render": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 242.695,
+                "medianMs": 1.0686,
+                "p95Ms": 2.0132
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "off-screen",
+              "turns": 200,
+              "transitionCounts": {
+                "loadAndRender": 0,
+                "query": 0,
+                "getChains": 0,
+                "getRecent": 0,
+                "render": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "loadAndRender": 0,
+                "query": 0,
+                "getChains": 0,
+                "getRecent": 0,
+                "render": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 0.109,
+                "medianMs": 0.0005,
+                "p95Ms": 0.0006
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "document-hidden-intersecting",
+              "turns": 200,
+              "transitionCounts": {
+                "loadAndRender": 0,
+                "query": 0,
+                "getChains": 0,
+                "getRecent": 0,
+                "render": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "loadAndRender": 0,
+                "query": 0,
+                "getChains": 0,
+                "getRecent": 0,
+                "render": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 0.057,
+                "medianMs": 0.0002,
+                "p95Ms": 0.0003
+              },
+              "hiddenClass": false
+            },
+            {
+              "name": "disabled",
+              "turns": 200,
+              "transitionCounts": {
+                "loadAndRender": 1,
+                "query": 1,
+                "getChains": 1,
+                "getRecent": 1,
+                "render": 1,
+                "buildHtml": 1,
+                "setContent": 1,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "loadAndRender": 0,
+                "query": 0,
+                "getChains": 0,
+                "getRecent": 0,
+                "render": 0,
+                "buildHtml": 0,
+                "setContent": 0,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 0.099,
+                "medianMs": 0.0005,
+                "p95Ms": 0.0005
+              },
+              "hiddenClass": true
+            },
+            {
+              "name": "resumed",
+              "turns": 200,
+              "transitionCounts": {
+                "loadAndRender": 1,
+                "query": 1,
+                "getChains": 1,
+                "getRecent": 1,
+                "render": 1,
+                "buildHtml": 1,
+                "setContent": 1,
+                "setContentImmediate": 0
+              },
+              "counts": {
+                "loadAndRender": 200,
+                "query": 200,
+                "getChains": 200,
+                "getRecent": 200,
+                "render": 200,
+                "buildHtml": 200,
+                "setContent": 200,
+                "setContentImmediate": 0
+              },
+              "callbackDuration": {
+                "totalMs": 224.063,
+                "medianMs": 1.0488,
+                "p95Ms": 1.5739
+              },
+              "hiddenClass": false
+            }
+          ],
+          "intervalsAfterDestroy": 0
+        }
+      ],
+      "lifecycle": {
+        "hideBeforeIoRuns": 0,
+        "foregroundDrains": 1,
+        "ioWhileHiddenRuns": 0,
+        "pendingRetainedAfterDestroy": false,
+        "queuedIoAfterDestroyRuns": 0,
+        "directGateAfterDestroyRuns": 0
+      },
+      "loadedSourceFiles": [
+        "src/components/AlertFatigueDashboardPanel.ts",
+        "src/components/CorrelationMapPanel.ts",
+        "src/components/Panel.ts",
+        "src/components/alert-fatigue-dashboard-helpers.ts",
+        "src/components/panel-loading-budget.ts",
+        "src/services/correlation/causal-chain-view.ts",
+        "src/services/correlation/correlation-map-view.ts",
+        "src/services/intelligence/alert-fatigue-detector.ts",
+        "src/services/intelligence/causal-chain.ts",
+        "src/services/intelligence/correlation-store.ts",
+        "src/services/intelligence/observation-store.ts",
+        "src/utils/dom-utils.ts",
+        "src/utils/format-duration.ts",
+        "src/utils/sanitize.ts"
+      ]
+    }
+  ]
+}

@@ -222,6 +222,7 @@
     "test:energy-superpower": "tsx --import ./tests/panels/register-hook.mjs --test tests/components/energy-superpower-panel.test.mts",
     "test:health-superpower": "tsx --import ./tests/panels/register-hook.mjs --test tests/components/health-superpower-panel.test.mts",
     "test:alert-fatigue-dashboard": "tsx --test tests/components/alert-fatigue-dashboard-helpers.test.mts",
+    "test:panel-presentation": "tsx --test tests/panel-presentation.test.mjs tests/panel-visibility-regression.test.mjs src/services/correlation/__tests__/causal-chain-view.test.mts src/services/correlation/__tests__/correlation-map-view.test.mts",
     "test:organized-crime-superpower": "tsx --test tests/components/organized-crime-superpower-panel.test.mts",
     "test:water-security": "tsx --test tests/components/water-security-panel.test.mts",
     "test:personal-resilience-panel": "tsx --test tests/components/personal-resilience-panel.test.mts",

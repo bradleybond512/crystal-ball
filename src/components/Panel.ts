@@ -22,6 +22,7 @@ export interface PanelOptions {
   className?: string;
   trackActivity?: boolean;
   infoTooltip?: string;
+  presentationRefreshPolicy?: 'visible-only';
 }
 
 const PANEL_SPANS_KEY = 'crystalball-panel-spans';
@@ -256,7 +257,9 @@ export class Panel {
   // IntersectionObserver state — panels that are scrolled out of view skip DOM
   // writes entirely; the pending HTML is flushed when they scroll back in.
   private panelIntersecting = true;
+  private hasIntersectionObservation = false;
   private intersectionObserver: IntersectionObserver | null = null;
+  private readonly presentationRefreshPolicy: PanelOptions['presentationRefreshPolicy'];
   private static appVisible = true;
   private aiSummaryOverlay: HTMLElement | null = null;
 
@@ -267,6 +270,7 @@ export class Panel {
 
   constructor(options: PanelOptions) {
  this.panelId = options.id;
+ this.presentationRefreshPolicy = options.presentationRefreshPolicy;
  // Register with the panel-health registry so the diagnostics surface reflects
  // real mount/render/error lifecycle. Guarded: diagnostics must never be able
  // to break panel construction.
@@ -1071,10 +1075,12 @@ export class Panel {
  }
  this.intersectionObserver = new IntersectionObserver(
  (entries) => {
+ if (this.presentationRefreshPolicy === 'visible-only' && this.baseDestroyed) return;
  const entry = entries[entries.length - 1];
  if (!entry) return;
  const wasHidden = !this.panelIntersecting;
  this.panelIntersecting = entry.isIntersecting;
+ this.hasIntersectionObservation = true;
  try { getPanelHealthRegistry().setVisible(this.panelId, this.panelIntersecting); } catch { /* diagnostics optional */ }
  // Pause CSS animations (loading spinners, pulse dots) on off-screen panels.
  // The render-gate already skips their JS re-renders, but WebKit keeps
@@ -1085,6 +1091,10 @@ export class Panel {
  this.element.classList.toggle('panel-offscreen', !this.panelIntersecting);
  if (this.panelIntersecting && wasHidden) {
  this.flushPendingIfVisible();
+ }
+ if (this.presentationRefreshPolicy === 'visible-only') {
+ this.flushPendingPresentationRefresh();
+ } else if (this.panelIntersecting && wasHidden) {
  // Run the render that was skipped while off-screen (latest wins).
  const pending = this.pendingVisibleRender;
  this.pendingVisibleRender = null;
@@ -1112,8 +1122,32 @@ export class Panel {
    * at (the idle-CPU driver).
    */
   protected renderWhenVisible(render: () => void): void {
+ if (this.presentationRefreshPolicy === 'visible-only') {
+ if (this.baseDestroyed) return;
+ if (!this.canRefreshPresentation()) {
+ this.pendingVisibleRender = render;
+ return;
+ }
+ this.pendingVisibleRender = null;
+ render();
+ return;
+ }
  if (this.isPanelInView()) { render(); return; }
  this.pendingVisibleRender = render;
+  }
+
+  private canRefreshPresentation(): boolean {
+ return !this.baseDestroyed
+   && document.visibilityState !== 'hidden'
+   && !this.element.classList.contains('hidden')
+   && (this.intersectionObserver === null || (this.hasIntersectionObservation && this.panelIntersecting));
+  }
+
+  private flushPendingPresentationRefresh(): void {
+ if (this.presentationRefreshPolicy !== 'visible-only' || !this.canRefreshPresentation()) return;
+ const pending = this.pendingVisibleRender;
+ this.pendingVisibleRender = null;
+ if (pending) { try { pending(); } catch { /* isolate */ } }
   }
 
   /** Queue the debounce for any HTML that accumulated while the panel was
@@ -1152,6 +1186,7 @@ export class Panel {
  // won't re-fire on foreground — so also queue a deferred flush for those
  // so they're ready the moment the user scrolls to them.
  for (const p of Panel.instances) {
+ p.flushPendingPresentationRefresh();
  if (p.panelIntersecting) {
  p.flushPendingIfVisible();
  } else if (p.pendingContentHtml !== null) {
@@ -1195,6 +1230,7 @@ export class Panel {
 
   public show(): void {
  this.element.classList.remove('hidden');
+ this.flushPendingPresentationRefresh();
   }
 
   public hide(): void {
@@ -1470,6 +1506,7 @@ export class Panel {
   public destroy(): void {
  if (this.baseDestroyed) return;
  this.baseDestroyed = true;
+ if (this.presentationRefreshPolicy === 'visible-only') this.pendingVisibleRender = null;
  try { getPanelHealthRegistry().recordUnmount(this.panelId); } catch { /* diagnostics optional */ }
  Panel.instances.delete(this);
  if (Panel.instances.size === 0) Panel.stopHeartbeatTicker();

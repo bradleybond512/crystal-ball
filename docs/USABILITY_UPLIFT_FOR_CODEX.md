@@ -919,9 +919,13 @@ Acceptance: Inventory each rail as measured content or an intentional overlay; v
 
 ### UX-035 — Gate background panel work by actual need
 
-Status: NOT STARTED — HIGH ASSURANCE
+Status: IN REVIEW — HIGH ASSURANCE
 Priority: B
 Source findings: PR1731 H3.
+
+Claim: draft [#1859](https://github.com/bradleybond512/crystal-ball/pull/1859), `codex/ux035-hidden-presentation`; approved documentation-only draft claim and local implementation. [Design](plans/2026-11-06-ux035-hidden-presentation.md). Scope is the two profiled Alert Fatigue and Correlation Map presentation timers; broader application acceptance remains open. Code publication, installation, auto-merge and delivery remain paused.
+
+Evidence: [Local QA, profile and browser results](validation/UX-035-HIDDEN-PRESENTATION.md): 45 selected suites passed, 19 behavior mutations caught; three matched profiles reduce invisible builds from 200 to zero with one queued recovery. Native background and application-wide acceptance remain open.
 
 Acceptance: Profile foreground/background behavior before selecting panels. Reduce invisible presentation work while preserving safety monitoring and data dependencies; do not blanket-disable off-screen acquisition.
 
@@ -1249,7 +1253,7 @@ Update the row in the same PR that does the work.
 | UX-032 | Settings keyboard containment | MONITOR | #1723 |
 | UX-033 | Keep content reachable during stacked warnings | NOT STARTED | — |
 | UX-034 | Assign ownership of top-of-window surfaces | MONITOR | #1730 |
-| UX-035 | Gate background panel work by actual need | NOT STARTED — HIGH ASSURANCE | — |
+| UX-035 | Gate background panel work by actual need | IN REVIEW — HIGH ASSURANCE | Draft #1859; two-panel slice locally validated ([QA](validation/UX-035-HIDDEN-PRESENTATION.md)). Native background and broader acceptance remain open; code publication/delivery paused. |
 | UX-036 | Spread refresh work and honor battery policy | NOT STARTED — HIGH ASSURANCE | — |
 | UX-037 | Prevent new unowned stacking levels | NOT STARTED | — |
 | UX-038 | Constrain video-channel link construction | NOT STARTED — HIGH ASSURANCE | — |

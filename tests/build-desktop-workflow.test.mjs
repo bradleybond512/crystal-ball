@@ -19,6 +19,18 @@ test('desktop build jobs use one resolved commit for checkout and release metada
   assert.match(workflow, /RELEASE_COMMIT_SHA: \$\{\{ needs\.release-context\.outputs\.commit_sha \}\}/);
 });
 
+test('publisher independently rejects a source SHA differing from its OIDC workflow SHA before attestation', () => {
+  const publisher = workflow.slice(workflow.indexOf('  publish-release:'));
+  const guard = publisher.indexOf('name: Verify attested source matches workflow event');
+  const attest = publisher.indexOf('name: Attest build provenance for release artifacts');
+  assert.ok(guard > 0 && attest > guard);
+  const step = publisher.slice(guard, attest);
+  assert.match(step, /SOURCE_SHA: \$\{\{ needs\.release-context\.outputs\.commit_sha \}\}/);
+  assert.match(step, /WORKFLOW_SHA: \$\{\{ github\.sha \}\}/);
+  assert.match(step, /test "\$SOURCE_SHA" = "\$WORKFLOW_SHA"/);
+  assert.match(step, /exit 1/);
+});
+
 test('desktop build workflow is tag-driven and publishes only after artifact verification', () => {
   // Workflow dispatch has two modes (build / publish-recovery) but the default
  // and most common use is build-only — verify a variant input exists with

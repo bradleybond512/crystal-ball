@@ -17,7 +17,7 @@ import {
 const mainSha = 'a'.repeat(40);
 const tagSha = 'b'.repeat(40);
 
-test('CLI binds build and recovery metadata to their actual checkout commits', (t) => {
+test('CLI binds build metadata and rejects recovery from an older source commit', (t) => {
   const root = mkdtempSync(join(tmpdir(), 'cb-release-context-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const scripts = join(root, 'scripts');
@@ -46,6 +46,7 @@ test('CLI binds build and recovery metadata to their actual checkout commits', (
   git('add', '.');
   git('commit', '-q', '-m', 'newer main');
   const mainCommit = git('rev-parse', 'HEAD');
+  git('tag', '-a', 'v2.7.3', '-m', 'current release fixture');
   git('update-ref', 'refs/remotes/origin/main', mainCommit);
   const run = (...args) => spawnSync(process.execPath, [realpathSync(join(scripts, 'release-context.mjs')), ...args],
     { cwd: root, encoding: 'utf8' });
@@ -55,9 +56,13 @@ test('CLI binds build and recovery metadata to their actual checkout commits', (
   assert.equal(JSON.parse(build.stdout).commitSha, mainCommit);
   assert.equal(JSON.parse(build.stdout).version, '2.7.3');
   const recovery = run(...common, '--publish-mode', 'publish', '--release-tag-input', 'v2.7.2');
-  assert.equal(recovery.status, 0, recovery.stderr);
-  assert.equal(JSON.parse(recovery.stdout).commitSha, taggedCommit);
-  assert.equal(JSON.parse(recovery.stdout).version, '2.7.2');
+  assert.notEqual(taggedCommit, mainCommit);
+  assert.notEqual(recovery.status, 0, recovery.stdout);
+  assert.match(recovery.stderr, /Source commit differs from workflow event SHA; refusing misleading provenance/);
+  const currentRecovery = run(...common, '--publish-mode', 'publish', '--release-tag-input', 'v2.7.3');
+  assert.equal(currentRecovery.status, 0, currentRecovery.stderr);
+  assert.equal(JSON.parse(currentRecovery.stdout).commitSha, mainCommit);
+  assert.equal(JSON.parse(currentRecovery.stdout).version, '2.7.3');
   const mismatchedPush = run('--event', 'push', '--ref', 'v2.7.2', '--sha', mainCommit);
   assert.notEqual(mismatchedPush.status, 0);
   assert.match(mismatchedPush.stderr, /Tag commit does not match event SHA/);
@@ -102,14 +107,18 @@ test('build dispatch pins its event commit and refuses a release tag input', () 
   }, () => tagSha), /release_tag is only valid in publish mode/);
 });
 
-test('publish recovery pins the annotated tag commit instead of dispatch main', () => {
+test('publish recovery refuses an older tag instead of misidentifying its source', () => {
+  assert.throws(() => selectReleaseSourceCommit({
+    event: 'workflow_dispatch', refName: 'main', releaseTagInput: 'v2.7.2',
+    publishMode: 'publish', sha: mainSha,
+  }, () => tagSha), /Source commit differs from workflow event SHA; refusing misleading provenance/);
   assert.equal(selectReleaseSourceCommit({
     event: 'workflow_dispatch', refName: 'main', releaseTagInput: 'v2.7.2',
     publishMode: 'publish', sha: mainSha,
   }, (tag) => {
     assert.equal(tag, 'v2.7.2');
-    return tagSha;
-  }), tagSha);
+    return mainSha;
+  }), mainSha);
   assert.throws(() => selectReleaseSourceCommit({
     event: 'workflow_dispatch', refName: 'main', releaseTagInput: '',
     publishMode: 'publish', sha: mainSha,

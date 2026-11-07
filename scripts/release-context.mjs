@@ -133,8 +133,10 @@ export function selectReleaseSourceCommit({ event, refName, releaseTagInput = ''
   const tag = parseReleaseRef(releaseRef).tag;
   const tagSha = resolveTag(tag);
   if (!/^[a-f0-9]{40}$/i.test(tagSha)) throw new Error('Invalid tagged commit SHA');
-  if (event === 'push' && sha.toLowerCase() !== tagSha.toLowerCase()) {
- throw new Error('Tag commit does not match event SHA');
+  if (sha.toLowerCase() !== tagSha.toLowerCase()) {
+ throw new Error(event === 'push'
+   ? 'Tag commit does not match event SHA'
+   : 'Source commit differs from workflow event SHA; refusing misleading provenance');
   }
   return tagSha;
 }

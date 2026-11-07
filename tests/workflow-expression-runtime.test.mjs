@@ -33,6 +33,7 @@ function executeStep(t, name, { hostile = false, releaseExists = false, publicRe
     'needs.release-context.outputs.variant': 'full' + suffix,
     'needs.release-context.outputs.tag': 'v1.2.3' + suffix,
     'needs.release-context.outputs.commit_sha': 'a'.repeat(40) + suffix,
+    'github.sha': 'a'.repeat(40),
     'needs.release-context.outputs.short_sha': 'a'.repeat(8) + suffix,
     'needs.release-context.outputs.release_name': 'Crystal Ball v1.2.3' + suffix,
     'matrix.label': 'Linux-x64',
@@ -84,6 +85,22 @@ function executeStep(t, name, { hostile = false, releaseExists = false, publicRe
   assert.equal(existsSync(marker), false, 'workflow values are literal data, never shell evaluation');
   return { result, environment: existsSync(env.GITHUB_ENV) ? readFileSync(env.GITHUB_ENV, 'utf8') : '', outputs: existsSync(env.GITHUB_OUTPUT) ? readFileSync(env.GITHUB_OUTPUT, 'utf8') : '', events: readFileSync(calls, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse), values, asset };
 }
+
+test('publisher provenance guard accepts the workflow source and rejects a different tag source', (t) => {
+  const guard = stepFrom('Verify attested source matches workflow event');
+  assert.equal(guard.if, undefined, 'the provenance guard must run for every publish job');
+  assert.notEqual(guard['continue-on-error'], true, 'a provenance mismatch must stop publication');
+  const same = executeStep(t, 'Verify attested source matches workflow event');
+  assert.deepEqual(same.events, []);
+  assert.doesNotMatch(same.result.stdout + same.result.stderr, /::error::/);
+
+  const different = executeStep(t, 'Verify attested source matches workflow event', {
+    values: { 'needs.release-context.outputs.commit_sha': 'b'.repeat(40) },
+    expectedStatus: 1,
+  });
+  assert.deepEqual(different.events, [], 'mismatch fails before any external command');
+  assert.match(different.result.stdout + different.result.stderr, /::error::Attested source differs from workflow event SHA/);
+});
 
 const names = ['Check if tag already exists', 'Check if release already published', 'Dispatch build-desktop.yml in publish mode', 'Collect release manifest', 'Create or update GitHub release', 'Upload release assets and manifest', 'Verify uploaded release payload'];
 

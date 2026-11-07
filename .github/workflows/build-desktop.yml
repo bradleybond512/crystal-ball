@@ -10,7 +10,9 @@ on:
     #             with publish_mode=publish and release_tag=<tag>. The workflow
     #             runs at main (so it always uses the latest automation code),
     #             then resolves release_tag to one immutable commit used by
-    #             the context, build checkouts and release manifest.
+    #             the context, build checkouts and release manifest. Recovery
+    #             fails closed if that commit differs from the workflow SHA,
+    #             because the pinned attestation records the workflow SHA.
     inputs:
       variant:
         description: 'Variant to build (build mode only; publish mode derives variant from release_tag)'
@@ -503,6 +505,17 @@ jobs:
       # `gh attestation verify <file> --repo <owner>/<repo>`. Generated before
       # upload so a provenance failure aborts the publish rather than shipping
       # un-attested binaries.
+      - name: Verify attested source matches workflow event
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ needs.release-context.outputs.commit_sha }}
+          WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          test "$SOURCE_SHA" = "$WORKFLOW_SHA" || {
+            echo "::error::Attested source differs from workflow event SHA" >&2
+            exit 1
+          }
+
       - name: Attest build provenance for release artifacts
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:

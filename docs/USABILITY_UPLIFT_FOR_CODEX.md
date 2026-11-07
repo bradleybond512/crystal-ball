@@ -1097,9 +1097,9 @@ Acceptance: Define usable first-screen readiness separately from background acqu
 
 ### UX-054 — Cover subproject dependencies in security checks
 
-Status: IN REVIEW — HIGH ASSURANCE
+Status: DONE — HIGH ASSURANCE
 Priority: S
-Claim: [Draft #1849](https://github.com/bradleybond512/crystal-ball/pull/1849)
+Evidence: [#1849](https://github.com/bradleybond512/crystal-ball/pull/1849); [six-lock audit, adversarial controls and dependency assessment](validation/UX-054-DEPENDENCY-AUDIT.md). The candidate completes the bounded audit coverage; lower-severity findings remain visible, and external MCP pin hardening remains separate. No branch-protection, installation or delivery change is included.
 Source findings: PR1731 M10.
 
 Acceptance: Inventory all maintained lockfiles and exposed tools; add appropriately scoped audit coverage and resolve confirmed reachable issues without weakening thresholds.
@@ -1273,7 +1273,7 @@ Update the row in the same PR that does the work.
 | UX-051 | Align RSS request budgets across boundaries | NOT STARTED — HIGH ASSURANCE | — |
 | UX-052 | Restrain derived alert interruptions | NOT STARTED — HIGH ASSURANCE | — |
 | UX-053 | Finish boot without awaiting all data sources | NOT STARTED — HIGH ASSURANCE | — |
-| UX-054 | Cover subproject dependencies in security checks | IN REVIEW — HIGH ASSURANCE | [Draft #1849](https://github.com/bradleybond512/crystal-ball/pull/1849), [audit coverage and evidence](validation/UX-054-DEPENDENCY-AUDIT.md) |
+| UX-054 | Cover subproject dependencies in security checks | DONE — HIGH ASSURANCE | #1849; [audit coverage and evidence](validation/UX-054-DEPENDENCY-AUDIT.md). Six npm locks covered; high-severity marketing fixes verified. External MCP pins remain separate. |
 | UX-055 | Surface stale credential validation honestly | NOT STARTED — HIGH ASSURANCE | — |
 | UX-056 | Bound retained storage without losing user evidence | NOT STARTED — HIGH ASSURANCE | — |
 | UX-057 | Persist panel state only when it changes | NOT STARTED | — |

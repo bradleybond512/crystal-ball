@@ -1,6 +1,6 @@
 # UX-035 — Bound invisible presentation refreshes
 
-Status: Bradley approved this bounded slice, documentation-only draft claim and local implementation. Fresh complete roadmap ownership check confirms UX-035 is the next eligible task with no blocking findings. Production-code publication requires separate approval. Installation, auto-merge and delivery remain paused.
+Status: Bradley approved this bounded slice, documentation-only draft claim and local implementation. Fresh complete roadmap ownership check confirmed UX-035 as the next eligible task with no blocking findings; draft [#1859](https://github.com/bradleybond512/crystal-ball/pull/1859) claims it. Production-code publication requires separate approval. Installation, auto-merge and delivery remain paused.
 
 ## Brief and evidence
 

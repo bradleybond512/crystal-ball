@@ -58,3 +58,19 @@ This local checkpoint was replayed onto `37f68658d0b4e34e7b48f3d83937fcd4d98f9b7
 No new full test run is claimed for this history/metadata transition. The original
 local tip is preserved on `codex/ux058-preserved-local-base-nov7`. Actual-main
 reconciliation, live candidate snapshot and exact-head Sonnet review remain open.
+
+## Repaired-selector conservative pending-dependency run
+
+On explicit pending #1848 `ad9b7a29d05046ba522dcb69cb7348adc6624b33`, all
+**92 selected scripts passed** on actual execution
+`1886a48c40f8c1aba58ecd809565a02df7f90574`, using the main-owned selector from
+`2cf7670ca47e65fd3acf1dd0f61fcd54e76afa81`, Node 22 and canonical user TMPDIR.
+The inherited direct Node budget recipe and corrected upstream mutation evidence
+are preserved. Product source is unchanged from frozen `6adfee49`; tracked input
+hashes were verified unchanged after execution. This run includes complete
+trusted UX050. [Exact selected list and hashes](UX-058-SUPERSET-CONTINUITY.json)
+retain execution provenance. No new aggregate gate is claimed by this receipt.
+
+This is not final-main or native acceptance. Fresh actual-main selection/command
+comparison, live candidate snapshot, exact-head Sonnet and hosted checks remain
+required. MONITOR and all release/installation holds remain open.

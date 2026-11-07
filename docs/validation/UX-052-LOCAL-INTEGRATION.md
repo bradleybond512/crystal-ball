@@ -67,3 +67,19 @@ This local checkpoint was replayed onto `142069b7046b435b7dbc8b9e01245b50f28f5ac
 No new full test run is claimed for this history/metadata transition. The original
 local tip is preserved on `codex/ux052-preserved-local-base-nov7`. Actual-main
 reconciliation, live candidate snapshot and exact-head Sonnet review remain open.
+
+## Hosted-CI-time conservative validation
+
+While #1846 was still pending at `31baf59433a9cc6dc136a58e72dd0a1c01b18fe3`, this local branch
+was replayed onto it without source/test changes. The selector copied from actual
+main `4b047a1288291fd4f030985b26878c28b28b38d5` selected and passed 74 scripts on
+`8021f76453d6225b04393d519830a993e56d95c9` under Node 22 and the canonical user temporary directory.
+This selection conservatively includes both pending Ghost and derived changes.
+[Selected list, trees and input hashes](UX-052-SUPERSET-CONTINUITY.json) preserve
+what actually ran; the complete 4,013-file hash manifest and log remain local in
+`/tmp/ux052-superset/`. No current-main-only pass or new full gate is claimed here.
+
+After #1846 lands, compare the fresh main-owned required selection and all relevant
+source/test/build bytes against this receipt, rerunning new or changed coverage.
+A final live candidate snapshot, exact-head Sonnet review and hosted checks remain
+required. Native acceptance and installation/release holds are unchanged.

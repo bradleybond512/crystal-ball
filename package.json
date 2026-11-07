@@ -109,6 +109,7 @@
     "test:feed-health-tracker": "tsx --test tests/intelligence/feed-health-tracker.test.mts",
     "test:security": "tsx --test src/services/security/__tests__/cve-service.test.mts src/services/security/__tests__/vulners-service.test.mts src/components/__tests__/cve-panel-helpers.test.mts && node --test src-tauri/sidecar/__tests__/security-cve-parity.test.mjs",
     "test:sec-hardening": "node --test tests/csp-allowlist.test.mjs src-tauri/sidecar/__tests__/faa-cam-ssrf-pinning.test.mjs src-tauri/sidecar/__tests__/webhook-dispatch.test.mjs src-tauri/sidecar/__tests__/ipv4-fetch-redirect.test.mjs src-tauri/sidecar/__tests__/isprivateip-ssrf.test.mjs src-tauri/sidecar/__tests__/ipaws-outage.test.mjs src-tauri/sidecar/__tests__/feed-resilience.test.mjs",
+    "test:warning-stack-layout": "node e2e/warning-stack-layout.mjs",
     "test:summary-strip-layout": "node e2e/summary-strip-layout.mjs",
     "test:acc509": "tsx --test src/services/__tests__/alert-identity.test.mts src/services/__tests__/unified-alerts-identity.test.mts src/services/__tests__/lsr-alert-identity.test.mts src/services/__tests__/acc509-replay.test.mts tests/intelligence/situation-engine-identity.test.mts tests/intelligence/compound-episode-identity.test.mts tests/intelligence/situation-geography-consumers.test.mts tests/components/situation-panel-delegation.test.mts",
     "test:ux059": "tsx --test src/services/__tests__/alert-retention-provenance.test.mts src/services/__tests__/unified-alert-retention.test.mts src/services/__tests__/alert-retention-identity.test.mts",

@@ -916,7 +916,7 @@ Acceptance: Cap the measured notification stack and its reserved space together.
 ### UX-034 — Assign ownership of top-of-window surfaces
 
 Status: MONITOR — partial layout prerequisite in #1730
-Evidence: #1730 — measured posture row, corrected offsets and data-center strip styling.
+Evidence: #1730 — measured posture row, corrected offsets and data-center strip styling. Draft PR #1861 — bounded shelf-follow repair on actual main `5b08d9e8`: [UX034-BREAKING-STACK-FOLLOW.md](validation/UX034-BREAKING-STACK-FOLLOW.md). Qualified `ab0725e3a` tests/build/lint and mutation evidence are reused by verified exact input/build continuity, not fresh full executions; UX044 and UX033 cap remain preserved and browser coverage stays in existing Accessibility CI. Source `b82ae87f` received a genuine zero-blocker Sonnet review; this candidate-evidence metadata correction requires fresh review and hosted checks. Native/full-app/broader-rail acceptance remains open.
 Exit condition: Complete the top-of-window rail inventory and verify remaining overlap and native macOS/WebKit acceptance; keep UX-033 stack-height capping separate.
 Reviewed 2026-10-16: PR #1730 and the merged Settings layering/scroll prerequisite #1801 leave the full top-of-window rail inventory, remaining overlap acceptance and Bradley's native macOS/WebKit verification open; UX-033 stack-height capping remains separate. The date below is a provisional manual progress check, not an acceptance forecast; on actual completion evidence, record the UTC assessment date and refresh any outstanding reminder to at most 30 days later, before merge if stale.
 Review after: 2026-11-15
@@ -1295,7 +1295,7 @@ Update the row in the same PR that does the work.
 | UX-031 | Reliable system appearance lifecycle | MONITOR | #1720 |
 | UX-032 | Settings keyboard containment | MONITOR | #1723 |
 | UX-033 | Keep content reachable during stacked warnings | MONITOR | #1839 — bounded cap and Chromium geometry validated; installed macOS/WebKit acceptance remains open. |
-| UX-034 | Assign ownership of top-of-window surfaces | MONITOR | #1730 |
+| UX-034 | Assign ownership of top-of-window surfaces | MONITOR | #1730, #1861 |
 | UX-035 | Gate background panel work by actual need | MONITOR — HIGH ASSURANCE | #1859 merged; bounded two-panel slice validated ([QA](validation/UX-035-HIDDEN-PRESENTATION.md)). Native background and broader acceptance remain open; installation/release/deployment paused. |
 | UX-036 | Spread refresh work and honor battery policy | NOT STARTED — HIGH ASSURANCE | — |
 | UX-037 | Prevent new unowned stacking levels | NOT STARTED | — |

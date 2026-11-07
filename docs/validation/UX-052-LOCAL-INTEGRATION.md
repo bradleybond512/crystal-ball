@@ -132,9 +132,30 @@ Node 22 and the canonical user TMPDIR, not on a later evidence/verdict commit:
 
 [Execution receipt](UX-052-REPAIRED-MAIN-VALIDATION.json) records the selected list,
 non-evidence root objects and log/complete input-manifest hashes. Every tracked
-input hash was verified unchanged after both runs. Existing feature mutation
-proofs remain applicable because the product/test implementation is unchanged;
+input hash was verified unchanged after both runs. Existing integration mutation
+proofs remain applicable because the product/test implementation is unchanged
+since the integrated 74-suite checkpoint, not since the original feature head;
 PR #1860 carries its own focused recipe/mapper fail-closed regression mutations.
 A fresh live candidate #1847 snapshot returned zero blockers. MONITOR and final
 integrated native acceptance remain open; no release or installation occurred.
 A new exact-head Sonnet review and hosted checks are still required.
+
+## Mutation evidence provenance clarification
+
+`UX-052-MUTATIONS.json` is historical proof for original implementation
+`92259e7f2f415c551ffb05751c934d47c23ce871`. Its dispatcher hash `1c77ed78...`
+and old `modeHoldForDispatch` / `isWindowInGhostMode` patches do **not** describe
+or certify the current shared Ghost implementation. Do not apply those original
+mode-reader mutations to this integrated dispatcher. The integration receipt
+instead certifies `holdNotificationForMode` and its restored current dispatcher
+SHA-256 `417257e01d22289d96137b4617a6d01de9c579447eda4c31828ff4f93d01d631`.
+
+To remove ambiguity after review, five focused mutations were genuinely rerun
+on clean source/evidence commit `050f449008cca991a982818582b929d07360393a`.
+[Current-source diffs and failed assertions](UX-052-REPAIRED-MAIN-MUTATIONS.json)
+record a 31/0 baseline, four reversals each 30/1, and a Ghost-hold reversal 29/2.
+The last reversal fails both saved-Ghost suppression and the explicit live Ghost
+choice after a failed storage write. Unknown-preference hold and suppression
+accounting are independently reversed. Original bytes and clean Git status were
+verified after every restoration. No production or test code changed. These
+current-source proofs supersede the old mode-reader proofs for this integration.

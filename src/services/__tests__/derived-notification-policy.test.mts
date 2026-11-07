@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { beforeEach } from 'node:test';
 import type { UnifiedAlert } from '../unified-alerts.ts';
+import { setMode, getGhostModeState } from '../mode-manager.ts';
 import { getNotificationTraceRegistry, resetDiagnosticsState } from '../diagnostics/diagnostics-state.ts';
 
 const values = new Map<string, string>();
@@ -48,6 +49,7 @@ beforeEach((t) => {
   onConstruct = undefined;
   CaptureNotification.permission = 'granted';
   Object.assign(globalThis, { localStorage: storage, Notification: CaptureNotification, window: { Notification: CaptureNotification } });
+  setMode(null);
   resetSettings();
   resetDiagnosticsState();
   t.mock.method(Date.prototype, 'getHours', () => 12);
@@ -151,6 +153,8 @@ test('derived critical respects mute, quiet and Ghost ahead of pacing; NWS still
   assert.equal(calls.length, 2);
   assert.equal(calls[1]?.requireInteraction, true);
   assert.deepEqual(reasons(), { 'master-mute': 1, 'domain-quiet-hours': 1, 'ghost-mode': 1 });
+  assert.equal(getGhostModeState().muted, 1);
+  assert.equal(getGhostModeState().critical, 1);
 });
 
 test('a privacy storage read failure holds derived notifications', async (t) => {
@@ -163,6 +167,14 @@ test('a privacy storage read failure holds derived notifications', async (t) => 
   service.dispatchConvergenceAlert('Synthetic', 95, 0, 0);
   assert.equal(calls.length, 0);
   assert.deepEqual(reasons(), { 'mode-unavailable': 1 });
+  assert.equal(getGhostModeState().muted, 0);
+  t.mock.restoreAll();
+  service.dispatchConvergenceAlert('Still held', 95, 0, 0);
+  assert.equal(calls.length, 0);
+  assert.deepEqual(reasons(), { 'mode-unavailable': 2 });
+  setMode(null);
+  service.dispatchConvergenceAlert('Explicit choice', 95, 0, 0);
+  assert.equal(calls.length, 1);
 });
 
 test('unreadable permission and ungroupable titles fail closed without blocking a later candidate', async () => {

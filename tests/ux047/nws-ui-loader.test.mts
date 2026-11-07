@@ -171,7 +171,7 @@ test('full loader lifecycle subscription invalidates the view and teardown stops
     ts.forEachChild(node, visit);
   }
   visit(loaderAst);
-  const compiled = ts.transpileModule(`class Subject { ${constructor}\n${destroy}\n publishNwsSnapshot(){ this.published = true; } } return Subject;`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+  const compiled = ts.transpileModule(`class Subject { warningListeners = new AbortController(); ${constructor}\n${destroy}\n publishNwsSnapshot(){ this.published = true; } } return Subject;`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
   for (const variant of ['full', 'tech']) {
     let starts = 0; let stops = 0; let unsubscribed = 0; let callback = () => {};
     const bindings = { SITE_VARIANT: variant, subscribeRuntimeConfig: () => () => {}, stopOrefPolling: () => {},

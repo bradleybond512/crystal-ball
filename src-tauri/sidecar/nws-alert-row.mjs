@@ -90,7 +90,7 @@ export function normalizeNwsAlert(value, responseBudget) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const alert = value;
   const onset = typeof alert.onset === 'string' ? alert.onset.trim() : '';
-  const valid = typeof alert.id === 'string' && alert.id.length > 0
+  const valid = typeof alert.id === 'string' && alert.id.length > 0 && alert.id.length <= 1024
     && typeof alert.event === 'string'
     && typeof alert.headline === 'string'
     && typeof alert.description === 'string'

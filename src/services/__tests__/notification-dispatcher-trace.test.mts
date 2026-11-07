@@ -315,7 +315,11 @@ for (const scenario of ['allowed', 'mode', 'mode-roundtrip', 'channel-roundtrip'
     resolve('granted');
     await new Promise(resolveTurn => setImmediate(resolveTurn));
     assert.equal(NotificationStub.calls.length, scenario === 'allowed' ? 1 : 0);
-    if (scenario !== 'allowed') assert.equal(getNotificationTraceRegistry().all()[0]?.nativeResult?.delivered, false);
+    const trace = getNotificationTraceRegistry().all()[0];
+    if (scenario === 'mode' || scenario === 'mode-roundtrip') {
+      assert.equal(trace?.decision, 'suppressed');
+      assert.equal(trace?.nativeResult, undefined, 'mode suppression is not a native delivery attempt');
+    } else if (scenario !== 'allowed') assert.equal(trace?.nativeResult?.delivered, false);
   });
 }
 

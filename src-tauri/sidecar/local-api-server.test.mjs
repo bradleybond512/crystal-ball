@@ -4612,39 +4612,44 @@ test('theater posture computes locally without a default cloud request', async (
   }
 });
 
-test('NWS boundary refuses fabricated CAP identities and issuance and recovers with provider fields', async () => {
+test('NWS boundary refuses fabricated CAP identities and issuance and recovers with provider fields', async t => {
+  let clock = Date.now(); t.mock.method(Date, 'now', () => clock);
   const sent = '2026-11-01T08:00:00Z';
   const props = { id: 'nws-fixture', sent, onset: '2026-11-01T06:00:00Z', expires: '2026-11-01T10:00:00Z',
-    event: 'Fixture', severity: 'Severe', urgency: 'Immediate', status: 'Actual', messageType: 'Alert' };
+    headline: 'Fixture', description: '', areaDesc: 'Test', event: 'Fixture', severity: 'Severe', urgency: 'Immediate', status: 'Actual', messageType: 'Alert' };
   let payload = {};
   let headers = {};
   const app = await startRouteApp(() => ({ body: JSON.stringify(payload), headers }));
   try {
-    const feature = { type:'Feature', properties:props };
+    const feature = { type:'Feature', geometry:null, properties:props };
     for (const invalid of [{},
       ...[{id:undefined}, {sent:undefined}, {event:{}}, {areaDesc:[]}, {headline:0}, {onset:'nonsense'}, {severity:'Typo'}, {messageType:'Typo'}].map(fields =>
         ({ type:'FeatureCollection', features:[{...feature, properties:{...props,...fields}}] })),
       { type:'FeatureCollection', features:[{...feature, geometry:{type:'Polygon', coordinates:[[[0,0],[1,1]]]}}] }]) {
-      payload = invalid;
+      clock += 65_000; payload = invalid;
       const refused = await app.get('/api/nws-alerts');
       assert.equal(refused.status, 503);
     }
-    payload = { type:'FeatureCollection', features:[{type:'Feature',properties:props}] };
+    clock += 65_000; payload = { type:'FeatureCollection', features:[{type:'Feature',geometry:null,properties:props}] };
     headers = { 'content-length': String(8 * 1024 * 1024 + 1) };
     const oversized = await app.get('/api/nws-alerts');
     assert.equal(oversized.status, 503);
-    headers = {};
+    clock += 65_000; headers = {};
     const recovered = await app.get('/api/nws-alerts');
     assert.equal(recovered.status, 200);
-    const [row] = await recovered.json();
+    const inventory = await recovered.json();
+    assert.equal(inventory.completeness, 'complete');
+    const [row] = inventory.alerts;
     assert.equal(row.id, props.id);
     assert.equal(row.sent, sent);
-    payload = { type: 'FeatureCollection', features: [{ ...feature, properties: { ...props, sent: null } }] };
+    clock += 65_000; payload = { type: 'FeatureCollection', features: [{ ...feature, properties: { ...props, sent: null } }] };
     const failedRefresh = await app.get('/api/nws-alerts');
     assert.equal(failedRefresh.status, 503, 'a failed refresh cannot present the previous warning as current');
-    payload = { type:'FeatureCollection', features:[] };
+    clock += 65_000; payload = { type:'FeatureCollection', features:[] };
     const empty = await app.get('/api/nws-alerts');
     assert.equal(empty.status, 200);
-    assert.deepEqual(await empty.json(), []);
+    const emptyInventory = await empty.json();
+    assert.equal(emptyInventory.completeness, 'complete');
+    assert.deepEqual(emptyInventory.alerts, []);
   } finally { await app.cleanup(); }
 });

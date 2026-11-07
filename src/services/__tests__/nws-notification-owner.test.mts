@@ -39,7 +39,7 @@ test('site notification requires current verified observation and provider CAP i
 
 test('only the fresh NWS request issued during this load qualifies, cached rows never gain fresh ownership', async (t) => {
   _resetNwsAlertsForTest();
-  t.mock.method(globalThis, 'fetch', async () => Response.json([{ ...props, centroid: null }]));
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ schemaVersion: 1, scope: 'national-active', completeness: 'complete', observedAt: now, alerts: [{ ...props, centroid: null }] }));
   const fresh = captureNwsObservation();
   const first = await fetchNWSAlerts();
   assert.ok(fresh(first));

@@ -1,0 +1,10 @@
+{
+  "previousValidatedTip": "142069b7046b435b7dbc8b9e01245b50f28f5aca",
+  "currentRebasedTip": "5ea9a544d032fdf04fd07d8c7b2941576d621c3c",
+  "previousFullTree": "27e0208a169063fa1c5457a00cae5ad90636e332",
+  "currentFullTree": "27e0208a169063fa1c5457a00cae5ad90636e332",
+  "actualMain": "4b047a1288291fd4f030985b26878c28b28b38d5",
+  "retainedGate": "/tmp/ux050-final-dependency/gate.log",
+  "retainedGateSHA256": "c84c385142279d80c951014fba9d6cb69fcb4e42a17ea85b4f6a61dcadec582d",
+  "scope": "Entire Git trees identical before evidence-only update; seven-suite gate actually ran on previousValidatedTip. Current-main-owned selector and live candidate snapshot rerun separately. No new mutation run claimed."
+}

@@ -42,3 +42,15 @@ performed for this local dependency checkpoint.
 Installation, release, tags, build dispatch and deployment remain paused. For
 rollback, remove the notice, counters and shared-mode wiring together without
 migrating or deleting the existing stored preference.
+
+## Refreshed pending dependency
+
+The local branch was replayed cleanly onto published but still pending #1844
+`c2718140c75ae041c487db236258029de65d5c0e`, which contains verified main
+`45a4afad384a623e6a80b6100e8f7b2ffd8fc9ff`. This is not evidence that #1844 has
+merged. The original local checkpoint remains on `codex/ux050-preserved-local-base-nov7`.
+[Continuity hashes](UX-050-DEPENDENCY-CONTINUITY.json) show all 25 changed feature
+source/test files and the complete `src` tree are identical to the previous
+checkpoint. The seven-suite gate above was actually rerun and passed on this
+refreshed dependency. Final actual-main ancestry, live candidate roadmap snapshot,
+exact-head Sonnet review and hosted checks remain required before publication.

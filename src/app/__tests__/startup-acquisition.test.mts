@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import ts from 'typescript';
+import * as geoThreatEvidence from '../../services/synthesis/geo-threat-evidence.ts';
 import { createConcurrencyLimiter, type ConcurrencyLimiter } from '../../utils/concurrency-limiter.ts';
 
 const source = readFileSync(new URL('../data-loader.ts', import.meta.url), 'utf8');
@@ -35,6 +36,7 @@ function fixture(variant = 'full', overrides: Record<string, unknown> = {}) {
   document.addEventListener('wm:data-refreshed', () => facts.push('published'));
   const deps: Record<string, unknown> = {
     '@/config': { SITE_VARIANT: variant },
+    '@/services/synthesis/geo-threat-evidence': geoThreatEvidence,
     '@/services/unified-alerts': { unifiedAlertStore: { startNwsLifecycle() {}, subscribe: () => () => {} } },
     '@/utils': { debounce: () => () => {} },
     '@/utils/concurrency-limiter': { createConcurrencyLimiter: measuredLimiter },

@@ -13,6 +13,7 @@
  */
 
 import { Panel } from './Panel';
+import { trackTransportFetch } from '@/services/synthesis/transport-evidence';
 import {
   fetchAirportDelays,
   fetchMilitaryAircraft,
@@ -140,19 +141,20 @@ export class AviationIntelPanel extends Panel {
     try {
       const [notams, sigmets, pireps, military, delays, flights] = await Promise.all([
         fetchNotams(),
-        fetchSigmets(),
+        trackTransportFetch('sigmets', fetchSigmets, this.signal),
         fetchPireps(),
         fetchMilitaryAircraft(),
-        fetchAirportDelays(),
+        trackTransportFetch('stops', fetchAirportDelays, this.signal),
         fetchLiveFlights(),
       ]);
+      if (this.signal.aborted) return;
       this.state = { notams, sigmets, pireps, military, delays, flights };
     } catch {
       // Errors are surfaced as `degraded: true` in the envelopes — nothing
       // to do here beyond letting the previous snapshot stay visible.
     } finally {
       this.loading = false;
-      this.render();
+      if (!this.signal.aborted) this.render();
     }
   }
 

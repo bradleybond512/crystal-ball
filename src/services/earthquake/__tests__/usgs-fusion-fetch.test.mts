@@ -46,7 +46,7 @@ function stubFetch(body: unknown, ok = true, meta: Meta = {}): () => void {
 async function run(body: unknown, meta: Meta = {}): Promise<{ ok: boolean; count: number; message: string }> {
   const restore = stubFetch(body, true, meta);
   try {
-    const events = await fetchUsgsSeismicForFusion();
+    const { events } = await fetchUsgsSeismicForFusion();
     return { ok: true, count: events.length, message: '' };
   } catch (error) {
     return { ok: false, count: 0, message: error instanceof Error ? error.message : String(error) };
@@ -179,4 +179,21 @@ test('rejects a non-2xx response', async () => {
   const restore = stubFetch({ events: [FLAT_ROW], source: 'primary', generatedAt: FRESH }, false);
   await assert.rejects(() => fetchUsgsSeismicForFusion(), /503/);
   restore();
+});
+
+test('ships source-relative timing and strict dashboard rows alongside the existing fusion rows', async () => {
+  const restore = stubFetch({
+    events: [FEATURE, { ...FLAT_ROW, id: 'invalid', magnitude: '8junk' }],
+    source: 'primary', generatedAt: FRESH,
+  }, true, { age: '31' });
+  try {
+    const snapshot = await fetchUsgsSeismicForFusion();
+    assert.equal(snapshot.generatedAtMs, NOW - 5_000);
+    assert.equal(snapshot.originNowMs, NOW + 31_000);
+    assert.deepEqual(snapshot.dashboardEvents.map((e) => e.id), ['us1000']);
+    assert.equal(snapshot.events.length, 2);
+    assert.equal(snapshot.degraded, true);
+  } finally {
+    restore();
+  }
 });

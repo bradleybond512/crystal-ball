@@ -1,0 +1,131 @@
+{
+  "previousHead": "3e3facc5d9cda7d3c4a9b03993ec760335239d23",
+  "head": "91e9dfb1a8c8e41c0ccdcd516cd840a4533f316f",
+  "pendingBase": "bdbf5b55f98c23dbf6b07c5ef24f2d7e687f2496",
+  "featureSourceTestFiles": 30,
+  "sourceTestChanged": [],
+  "mutationCount": 5,
+  "mutationHashMismatches": [],
+  "sourceTestHashes": [
+    {
+      "path": "api/aviation/_aviation-helpers.js",
+      "sha256": "96788c805bfd9ab9ac66f5df7baad17a02141ad697bb8930488e5a8b0b50c2e7"
+    },
+    {
+      "path": "api/aviation/_faa-ground-stop.d.ts",
+      "sha256": "b1cad0aaf0e07a96b5dc1bc068bc0c2e0712a840d90b55ff24e72b9864d548aa"
+    },
+    {
+      "path": "api/aviation/_faa-ground-stop.js",
+      "sha256": "aaf76f4002a36f9d752281f0000398527105e307748a94c0961346b3277fb2db"
+    },
+    {
+      "path": "api/aviation/delays.js",
+      "sha256": "20ebd6e8d552a2b7d886d4c5ccb83221b9e758ce1cbd51cdf36136f4f62d7b4c"
+    },
+    {
+      "path": "src-tauri/sidecar/local-api-server.mjs",
+      "sha256": "23f5a5a87492354ed515a5223f459bd6ae9879d88a0b8a400ad4753ad24863d9"
+    },
+    {
+      "path": "src-tauri/sidecar/local-api-server.test.mjs",
+      "sha256": "5ad9e366a4ce44102a738f9f7d9a03629332eef84bd1206b386d707365f41db2"
+    },
+    {
+      "path": "src/app/__tests__/startup-acquisition.test.mts",
+      "sha256": "702167f3cf78311c409bd613d760a1e6d235afbef8b1505a77efa0795840e584"
+    },
+    {
+      "path": "src/app/data-loader.ts",
+      "sha256": "c52c403301962ffda60e279e15384647015aac9b3dadbdf08d11ffbccec0a79a"
+    },
+    {
+      "path": "src/app/panel-layout.ts",
+      "sha256": "211d85e05fdb75fe7a008de1755a3a25f2757787c52784ae80b2d933f30431ec"
+    },
+    {
+      "path": "src/components/AviationIntelPanel.ts",
+      "sha256": "c1217f2d230887c1f8ca9340d78b2fda3ddd50825c41830c9c69fbe5c447fcaf"
+    },
+    {
+      "path": "src/components/MaritimeIntelPanel.ts",
+      "sha256": "1290d1a65b811258eea1b1cfedf938665f86bdd42e88db30c7e579d0a34a9f3c"
+    },
+    {
+      "path": "src/components/ThreatDashboard.ts",
+      "sha256": "a5104e092cfc824f6dd19172bec4b1cea94e49412df56f39968272515b97b6e2"
+    },
+    {
+      "path": "src/components/__tests__/threat-dashboard-coverage.test.mts",
+      "sha256": "66724b00cdd35d55f17ea47760cce6e136aaef62914a506cffeff510b15301f5"
+    },
+    {
+      "path": "src/services/aviation/__tests__/threat-feed-cache.test.mts",
+      "sha256": "eba7ae5e79eb9c95186940a8f3f38039dbfd2fe241f7cbb5940ff4d909f2fe11"
+    },
+    {
+      "path": "src/services/aviation/aviation-intel-normalize.ts",
+      "sha256": "a5feb89cec60e1a3c1c6be8bdb861f282daccb6ab79acd8f5d0745e6fb18d3fa"
+    },
+    {
+      "path": "src/services/aviation/aviation-intel-service.ts",
+      "sha256": "d86902787bc13b536a04f2a3dc74daaf77778b26391ac51cdcd955b6fa7ef492"
+    },
+    {
+      "path": "src/services/aviation/aviation-intel-types.ts",
+      "sha256": "974cbef2b15ca1e36c9395890efea8052acf1ed4dae488e2d87cb67bbc5bd2ad"
+    },
+    {
+      "path": "src/services/earthquake/__tests__/usgs-fusion-fetch.test.mts",
+      "sha256": "73ff809f81a9f7debaa53dd2aff16098af06aa43fb848e120fe223d96a253f43"
+    },
+    {
+      "path": "src/services/earthquake/usgs-fusion-fetch.ts",
+      "sha256": "f131762886e5944aaabe00e6a92675386d6df3b0d1a585c31eccf88d60e5ff9e"
+    },
+    {
+      "path": "src/services/spaceweather/__tests__/kp-fusion-observations.test.mts",
+      "sha256": "ab617f6399fcc97d6b9887a97d641c14fae3ed9b5a38f58e1179d0f8d7696e87"
+    },
+    {
+      "path": "src/services/spaceweather/gfz-kp-fetch.ts",
+      "sha256": "26c58ecbe53e63f5204a05943af3fb0f9ba4a097b89d9eb48fdadd1256a216c6"
+    },
+    {
+      "path": "src/services/synthesis/__tests__/faa-stop-handoff.test.mts",
+      "sha256": "ea60cf0160d0dbef36a0f6b6d66cf68c9400d8d253ea9b9e9fa58eaa4c29fb74"
+    },
+    {
+      "path": "src/services/synthesis/__tests__/geo-threat-evidence.test.mts",
+      "sha256": "11ae1577d784c36aecc617d5ff3d21fbd314b259a3e3242a7733b5bd30d04264"
+    },
+    {
+      "path": "src/services/synthesis/__tests__/threat-aggregator.test.mts",
+      "sha256": "368e8b404f641401a2603a00407ade37c9f6ad7535fe3f5c005eb57a8a1060d5"
+    },
+    {
+      "path": "src/services/synthesis/__tests__/transport-evidence.test.mts",
+      "sha256": "2bbe8839abe36a3ce7c36f670131969870b324313561f397f50d96e4b0768d45"
+    },
+    {
+      "path": "src/services/synthesis/geo-threat-evidence.ts",
+      "sha256": "1cf8499441af884c100f39d13a722760c3071415b998bea748d60b73479aa0ed"
+    },
+    {
+      "path": "src/services/synthesis/threat-aggregator.ts",
+      "sha256": "dcdc4d02725c7d0e92b8e4d670f459cc4ea09287f9837cc09074f60da1230aaa"
+    },
+    {
+      "path": "src/services/synthesis/transport-evidence.ts",
+      "sha256": "9692b32edb98bc423a2aef653c6645b69866da2535aed9a0d11b3ad63af960a5"
+    },
+    {
+      "path": "tests/data-sources-wiring.test.mjs",
+      "sha256": "51563a748b4df64ec099e1dee96b1cacbf7650b18d3738d03d0517b504f1d66e"
+    },
+    {
+      "path": "tests/panels/threat-transport-coverage.test.mts",
+      "sha256": "bd2f425eb4018185612a1d4a0198bc03043a8899c9bc23e3ebe6bfac48634ecb"
+    }
+  ]
+}

@@ -1,20 +1,3 @@
-/**
- * Threat-level aggregator — pure-deterministic core + polling shell.
- *
- * Every domain has a `compute*Threat(snapshot)` function that takes a
- * typed input and returns a `DomainThreat` (level + topAlert + lastUpdated).
- * The polling shell wires sidecar fetches to those functions and dispatches
- * the `wm:threat-levels-updated` CustomEvent every 30 s.
- *
- * Pure invariants:
- *   - Heuristics are total functions: any partial / null / undefined input
- *     returns level 'NONE' rather than throwing.
- *   - The combine function returns a stable object shape with all 11
- *     domains present, even when their snapshots are empty.
- *   - No DOM, no fetch, no globals at module scope. The polling adapter
- *     at the bottom is the only function that touches the network.
- */
-
 // Public types
 
 export type ThreatLevel = 'NONE' | 'LOW' | 'ELEVATED' | 'HIGH' | 'CRITICAL';
@@ -41,7 +24,40 @@ export interface DomainThreat {
   lastUpdatedMs: number;
 }
 
-export type AggregatedThreats = Record<ThreatDomain, DomainThreat>;
+export interface ThreatReceipt {
+  evidenceAtMs: number;
+  expiresAtMs: number;
+  ageKind: 'observed' | 'fetched' | 'received';
+  /** Identity of the normalized mutable reading, independent of its acquisition clock. */
+  revisionKey?: string;
+  /** Ordered upstream acquisition of this reading, including when the observation time is unchanged. */
+  revisionAtMs?: number;
+  /** Membership can change independently of the newest item's time, e.g. a vessel leaving a sampled zone. */
+  snapshotMembership?: true;
+  scope: 'partial' | 'complete';
+  degraded?: boolean;
+  evaluate: (nowMs: number) => DomainThreat;
+}
+
+export interface ThreatSource {
+  source: string;
+  state: 'current' | 'degraded' | 'stale' | 'unavailable' | 'pending';
+  reporting: boolean;
+  evidenceAtMs: number | null;
+  ageKind: ThreatReceipt['ageKind'] | null;
+  attemptedAtMs: number;
+  lastAttempt: 'pending' | 'reported' | 'failed';
+  signal?: Pick<DomainThreat, 'level' | 'topAlert'>;
+}
+
+export interface CoveredThreat extends DomainThreat {
+  coverage: 'unknown' | 'partial' | 'complete' | 'stale' | 'unavailable';
+  sources: ThreatSource[];
+  lastKnown: boolean;
+  signalSource: string | null;
+}
+
+export type AggregatedThreats = Record<ThreatDomain, CoveredThreat>;
 
 export const THREAT_LEVELS_EVENT = 'wm:threat-levels-updated' as const;
 
@@ -504,7 +520,7 @@ export function computeGeopoliticalThreat(snapshot: GeopoliticalSnapshot): Domai
 
 // Combine
 
-export function aggregateThreats(input: AggregatorInput): AggregatedThreats {
+export function aggregateThreats(input: AggregatorInput): Record<ThreatDomain, DomainThreat> {
   return {
     seismic: computeSeismicThreat(input.seismic),
     space_weather: computeSpaceWeatherThreat(input.spaceWeather),
@@ -520,144 +536,232 @@ export function aggregateThreats(input: AggregatorInput): AggregatedThreats {
   };
 }
 
-// Empty state — used by the panel before the first poll completes.
+const DOMAINS: readonly ThreatDomain[] = [
+  'seismic', 'space_weather', 'wildfire', 'weather', 'aviation', 'infrastructure',
+  'maritime', 'biosurveillance', 'economic', 'cyber', 'geopolitical',
+];
 
-export function emptyAggregatedThreats(nowMs = Date.now()): AggregatedThreats {
-  const domains: ThreatDomain[] = [
-    'seismic',
-    'space_weather',
-    'wildfire',
-    'weather',
-    'aviation',
-    'infrastructure',
-    'maritime',
-    'biosurveillance',
-    'economic',
-    'cyber',
-    'geopolitical',
-  ];
-  const out = {} as AggregatedThreats;
-  for (const d of domains) out[d] = emptyThreat(d, nowMs);
-  return out;
+function unknownThreat(domain: ThreatDomain): CoveredThreat {
+  return { ...emptyThreat(domain, 0), coverage: 'unknown', sources: [], lastKnown: false, signalSource: null };
 }
 
-// Polling adapter — the only function in this module that touches the network.
+export function emptyAggregatedThreats(): AggregatedThreats {
+  return Object.fromEntries(DOMAINS.map(domain => [domain, unknownThreat(domain)])) as AggregatedThreats;
+}
 
-export interface ThreatAggregatorAdapters {
-  fetchSeismic?: () => Promise<SeismicSnapshot>;
-  fetchSpaceWeather?: () => Promise<SpaceWeatherSnapshot>;
-  fetchWildfire?: () => Promise<WildfireSnapshot>;
-  fetchWeather?: () => Promise<WeatherSnapshot>;
-  fetchAviation?: () => Promise<AviationSnapshot>;
-  fetchInfrastructure?: () => Promise<InfrastructureSnapshot>;
-  fetchMaritime?: () => Promise<MaritimeSnapshot>;
-  fetchBiosurveillance?: () => Promise<BiosurveillanceSnapshot>;
-  fetchEconomic?: () => Promise<EconomicSnapshot>;
-  fetchCyber?: () => Promise<CyberSnapshot>;
-  fetchGeopolitical?: () => Promise<GeopoliticalSnapshot>;
-  /** Polling cadence; defaults to 30 s. Tests pass a smaller value. */
+interface SourceSlot {
+  receipt?: ThreatReceipt;
+  pending?: symbol;
+  attemptedAtMs: number;
+  settledAtMs?: number;
+  failed: boolean;
+}
+
+export interface ThreatAttempt {
+  isCurrent: () => boolean;
+  report: (receipt: ThreatReceipt) => void;
+  fail: () => void;
+  cancel: () => void;
+}
+
+function describeSource(source: string, slot: SourceSlot, nowMs: number): ThreatSource {
+  const { receipt, failed } = slot;
+  const fresh = !!receipt && receipt.evidenceAtMs <= nowMs && nowMs < receipt.expiresAtMs;
+  let state: ThreatSource['state'];
+  if (receipt && fresh) state = failed || receipt.degraded ? 'degraded' : 'current';
+  else if (receipt) state = 'stale';
+  else state = failed ? 'unavailable' : 'pending';
+  let lastAttempt: ThreatSource['lastAttempt'] = failed ? 'failed' : 'reported';
+  if (slot.pending) lastAttempt = 'pending';
+  return {
+    source, state, reporting: fresh && !failed, evidenceAtMs: receipt?.evidenceAtMs ?? null,
+    ageKind: receipt?.ageKind ?? null, attemptedAtMs: slot.attemptedAtMs,
+    lastAttempt,
+  };
+}
+
+function coverageOf(sources: ThreatSource[], complete: boolean): CoveredThreat['coverage'] {
+  if (complete) return 'complete';
+  if (sources.some(s => s.reporting)) return 'partial';
+  if (sources.some(s => s.state === 'stale')) return 'stale';
+  if (sources.some(s => s.state !== 'pending')) return 'unavailable';
+  return 'unknown';
+}
+
+function preferSignal(row: CoveredThreat, signalAtMs: number, signal: DomainThreat, source: ThreatSource): boolean {
+  if (!row.signalSource) return true;
+  const currentWinnerReporting = !row.lastKnown;
+  if (source.reporting !== currentWinnerReporting) return source.reporting;
+  if (signal.level !== row.level) return maxLevel(row.level, signal.level) === signal.level;
+  if (source.evidenceAtMs !== signalAtMs) return source.evidenceAtMs! > signalAtMs;
+  return source.source < row.signalSource;
+}
+
+function sampleDomain(domain: ThreatDomain, slots: Map<string, SourceSlot>, nowMs: number): CoveredThreat {
+  const row = unknownThreat(domain);
+  let complete = slots.size > 0;
+  let oldest = Infinity;
+  let latest = 0;
+  let signalAtMs = 0;
+  for (const [source, slot] of slots) {
+    const detail = describeSource(source, slot, nowMs);
+    row.sources.push(detail);
+    const receipt = slot.receipt;
+    complete &&= detail.state === 'current' && receipt?.scope === 'complete';
+    if (!receipt) continue;
+    latest = Math.max(latest, receipt.evidenceAtMs);
+    if (detail.state === 'stale') continue;
+    oldest = Math.min(oldest, receipt.evidenceAtMs);
+    const signal = receipt.evaluate(nowMs);
+    if (signal.level === 'NONE') continue;
+    detail.signal = { level: signal.level, topAlert: signal.topAlert };
+    if (!preferSignal(row, signalAtMs, signal, detail)) continue;
+    row.level = signal.level;
+    row.topAlert = signal.topAlert;
+    row.signalSource = source;
+    row.lastKnown = !detail.reporting;
+    signalAtMs = receipt.evidenceAtMs;
+  }
+  row.coverage = coverageOf(row.sources, complete);
+  row.lastUpdatedMs = complete ? oldest : signalAtMs || latest;
+  return row;
+}
+
+function validReceipt(receipt: ThreatReceipt, nowMs: number): boolean {
+  const { evidenceAtMs, expiresAtMs, revisionAtMs, revisionKey } = receipt;
+  if (!Number.isFinite(evidenceAtMs) || evidenceAtMs <= 0 || evidenceAtMs > nowMs
+    || !Number.isFinite(expiresAtMs) || expiresAtMs <= evidenceAtMs || revisionKey === '') return false;
+  if (revisionAtMs === undefined) return !receipt.snapshotMembership;
+  return revisionKey !== undefined && Number.isSafeInteger(revisionAtMs)
+    && revisionAtMs >= evidenceAtMs && revisionAtMs <= nowMs;
+}
+
+function orderedChange(previous: ThreatReceipt, incoming: ThreatReceipt): boolean {
+  return previous.revisionKey !== incoming.revisionKey
+    && previous.revisionAtMs !== undefined && incoming.revisionAtMs !== undefined
+    && incoming.revisionAtMs > previous.revisionAtMs;
+}
+
+function reviseReceipt(slot: SourceSlot, previous: ThreatReceipt, incoming: ThreatReceipt, nowMs: number): boolean {
+  const expiresAtMs = Math.min(previous.expiresAtMs, incoming.expiresAtMs);
+  const scope = previous.scope === 'partial' ? 'partial' : incoming.scope;
+  if (previous.revisionKey !== incoming.revisionKey) {
+    if (!orderedChange(previous, incoming) || previous.expiresAtMs <= nowMs) return false;
+    slot.receipt = { ...incoming, scope, expiresAtMs };
+    return expiresAtMs > nowMs;
+  }
+
+  // A newer acquisition of identical content orders later corrections, but cannot recover an outage.
+  const revisionAtMs = Math.max(previous.revisionAtMs ?? 0, incoming.revisionAtMs ?? 0);
+  slot.receipt = {
+    ...previous, scope, expiresAtMs, revisionAtMs: revisionAtMs || undefined,
+    degraded: previous.degraded === true || incoming.degraded,
+  };
+  return !slot.failed;
+}
+
+function admitReceipt(slot: SourceSlot, incoming: ThreatReceipt, nowMs: number): boolean {
+  if (!validReceipt(incoming, nowMs)) return false;
+  const previous = slot.receipt;
+  if (!previous) {
+    slot.receipt = incoming;
+    return true;
+  }
+
+  if (previous.snapshotMembership !== incoming.snapshotMembership) return false;
+  if (previous.evidenceAtMs === incoming.evidenceAtMs) return reviseReceipt(slot, previous, incoming, nowMs);
+  if (previous.snapshotMembership && !orderedChange(previous, incoming)) return false;
+  if (incoming.evidenceAtMs < previous.evidenceAtMs) {
+    // An ordered removal can move the newest remaining sample backwards, keeping its actual age.
+    return previous.snapshotMembership === true && reviseReceipt(slot, previous, incoming, nowMs);
+  }
+  slot.receipt = incoming;
+  return true;
+}
+
+export class ThreatEvidenceStore {
+  private readonly domains = new Map<ThreatDomain, Map<string, SourceSlot>>();
+  constructor(private readonly now: () => number = Date.now) {}
+
+  begin(domain: ThreatDomain, source: string): ThreatAttempt {
+    let slots = this.domains.get(domain);
+    if (!slots) {
+      slots = new Map();
+      this.domains.set(domain, slots);
+    }
+    const slot: SourceSlot = slots.get(source) ?? { failed: false, attemptedAtMs: 0 };
+    const token = Symbol();
+    slot.pending = token;
+    slot.attemptedAtMs = this.now();
+    slots.set(source, slot);
+    const settle = (failed: boolean) => {
+      slot.pending = undefined;
+      slot.settledAtMs = slot.attemptedAtMs;
+      slot.failed = failed;
+    };
+    return {
+      isCurrent: () => slot.pending === token,
+      report: (receipt) => {
+        if (slot.pending !== token) return;
+        settle(!admitReceipt(slot, receipt, this.now()));
+      },
+      fail: () => {
+        if (slot.pending === token) settle(true);
+      },
+      cancel: () => {
+        if (slot.pending !== token) return;
+        slot.pending = undefined;
+        if (slot.settledAtMs === undefined) slots.delete(source);
+        else slot.attemptedAtMs = slot.settledAtMs;
+      },
+    };
+  }
+
+  sample(nowMs = this.now()): AggregatedThreats {
+    const result = emptyAggregatedThreats();
+    for (const [domain, slots] of this.domains) {
+      result[domain] = sampleDomain(domain, slots, nowMs);
+    }
+    return result;
+  }
+}
+
+export const threatEvidence = new ThreatEvidenceStore();
+
+interface ThreatAggregatorOptions {
+  store?: ThreatEvidenceStore;
   intervalMs?: number;
-  /** Side-effect sink. Defaults to `document.dispatchEvent(...)`. */
   emit?: (detail: ThreatLevelsEventDetail) => void;
-  /** Optional clock for tests. */
   now?: () => number;
 }
 
 export interface ThreatAggregatorHandle {
   stop: () => void;
-  /** Force one poll cycle. Useful for tests + initial render. */
   pollNow: () => Promise<AggregatedThreats>;
-  /** Latest snapshot — null before the first poll completes. */
-  latest: () => AggregatedThreats | null;
+  latest: () => AggregatedThreats;
 }
 
-export function startThreatAggregator(
-  adapters: ThreatAggregatorAdapters = {},
-): ThreatAggregatorHandle {
-  const intervalMs = adapters.intervalMs ?? 30_000;
-  const now = adapters.now ?? Date.now;
-  const emit = adapters.emit ?? defaultEmit;
-  let latest: AggregatedThreats | null = null;
+export function startThreatAggregator(options: ThreatAggregatorOptions = {}): ThreatAggregatorHandle {
+  const store = options.store ?? threatEvidence;
+  const now = options.now ?? Date.now;
+  const emit = options.emit ?? defaultEmit;
+  let latest = emptyAggregatedThreats();
   let stopped = false;
-  let timer: ReturnType<typeof setTimeout> | null = null;
-
-  async function pollOnce(): Promise<AggregatedThreats> {
-    const t = now();
-    const empty = emptyAggregatedThreats(t);
-    const [
-      seismic,
-      spaceWeather,
-      wildfire,
-      weather,
-      aviation,
-      infrastructure,
-      maritime,
-      biosurveillance,
-      economic,
-      cyber,
-      geopolitical,
-    ] = await Promise.all([
-      safeCall(adapters.fetchSeismic, { quakes: [], nowMs: t }),
-      safeCall(adapters.fetchSpaceWeather, { kpIndex: null, recentFlareClass: null, nowMs: t }),
-      safeCall(adapters.fetchWildfire, { activeFires: [], nowMs: t }),
-      safeCall(adapters.fetchWeather, { alerts: [], nowMs: t }),
-      safeCall(adapters.fetchAviation, { sigmets: [], groundStops: [], nowMs: t }),
-      safeCall(adapters.fetchInfrastructure, { outages: [], nowMs: t }),
-      safeCall(adapters.fetchMaritime, { vesselsInRedZone: [], nowMs: t }),
-      safeCall(adapters.fetchBiosurveillance, { outbreaks: [], nowMs: t }),
-      safeCall(adapters.fetchEconomic, { vix: null, ofrFsiZ: null, nowMs: t }),
-      safeCall(adapters.fetchCyber, { pulseCount24h: null, bgpHijackActive: false, nowMs: t }),
-      safeCall(adapters.fetchGeopolitical, { highSeverityEvents24h: null, topHeadline: null, nowMs: t }),
-    ]);
-    const threats = aggregateThreats({
-      seismic,
-      spaceWeather,
-      wildfire,
-      weather,
-      aviation,
-      infrastructure,
-      maritime,
-      biosurveillance,
-      economic,
-      cyber,
-      geopolitical,
-    });
-    latest = { ...empty, ...threats };
-    emit({ threats: latest, generatedAt: t });
+  function publish(): AggregatedThreats {
+    if (!stopped) {
+      const generatedAt = now();
+      latest = store.sample(generatedAt);
+      emit({ threats: latest, generatedAt });
+    }
     return latest;
   }
-
-  function schedule(): void {
-    if (stopped) return;
-    timer = setTimeout(() => {
-      void pollOnce().finally(() => schedule());
-    }, intervalMs);
-  }
-
-  // Kick off the first poll immediately so the dashboard isn't blank.
-  void pollOnce().finally(() => schedule());
-
+  publish();
+  const timer = setInterval(publish, options.intervalMs ?? 30_000);
   return {
-    stop: () => {
-      stopped = true;
-      if (timer) clearTimeout(timer);
-      timer = null;
-    },
-    pollNow: () => pollOnce(),
+    stop: () => { stopped = true; clearInterval(timer); },
+    pollNow: () => Promise.resolve(publish()),
     latest: () => latest,
   };
-}
-
-async function safeCall<T>(
-  fetcher: (() => Promise<T>) | undefined,
-  fallback: T,
-): Promise<T> {
-  if (!fetcher) return fallback;
-  try {
-    return await fetcher();
-  } catch {
-    return fallback;
-  }
 }
 
 function defaultEmit(detail: ThreatLevelsEventDetail): void {

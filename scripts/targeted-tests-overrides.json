@@ -300,7 +300,8 @@
   "src/app/panel-layout.ts": [
     "test:ux050",
     "test:ux053",
-    "test:ux018"
+    "test:ux018",
+    "test:ux049"
   ],
   "src/styles/alerts.css": [
     "test:ux050"
@@ -1389,5 +1390,17 @@
   ],
   "tools/mcp-server/forecast-evaluation-public.mjs": [
     "test:ux018"
+  ],
+  "api/aviation/_aviation-helpers.js": [
+    "test:ux049"
+  ],
+  "api/aviation/_faa-ground-stop.d.ts": [
+    "test:ux049"
+  ],
+  "api/aviation/_faa-ground-stop.js": [
+    "test:ux049"
+  ],
+  "api/aviation/delays.js": [
+    "test:ux049"
   ]
 }

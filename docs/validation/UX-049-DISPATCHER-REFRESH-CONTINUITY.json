@@ -1,0 +1,31 @@
+{
+  "executionHead": "bd0d26db4bb71f8b6de1ca959920e6a14548618a",
+  "pendingBase": "bd9a2ca516c5b602090ad89bc7190017410ef4ef",
+  "priorFullSelectionHead": "943ad4303713908934adaf9babf670043bc87200",
+  "priorInputsChecked": 5218,
+  "unchangedInputCount": 5216,
+  "changedInputHashes": [
+    {
+      "path": "src/services/__tests__/notification-dispatcher-trace.test.mts",
+      "beforeSha256": "ca6aaab376435be99040083c2d884744663c52e34aa690c9ff747aff1fc8c123",
+      "afterSha256": "d7fc52846b0b21161dfd880d0767c6bb61055e5c3ea9ab766480b873f18a1807"
+    },
+    {
+      "path": "src/services/notification-dispatcher.ts",
+      "beforeSha256": "524a92bbe806aca326148d0109018b06cdc4e31694abd3c93e32945ba933810f",
+      "afterSha256": "67c36d15b93e9e077e8588e9fed522b7bd2bdbebe7c6c4f50155395d2f4fdd9c"
+    }
+  ],
+  "changedPathsMatchDependency": [
+    "src/services/__tests__/notification-dispatcher-trace.test.mts",
+    "src/services/notification-dispatcher.ts"
+  ],
+  "allFiveOwnMutationHashesMatch": true,
+  "gitTrees": {
+    "src": "c52c1a8d33500b2c11ed5ef02115ca2c4d2827cf",
+    "tests": "07ad348f89d93daa7cfd3dca58ae81f5f2d44bad",
+    "src-tauri": "6d55fef7705ff884e08a076a5c3c7f249924c7a6",
+    "api": "b75f3b920f362b591dbc31bebe35a7f9a2192a6d",
+    "scripts": "a72894d03528833cf30bcbefd72b57c8a650b712"
+  }
+}

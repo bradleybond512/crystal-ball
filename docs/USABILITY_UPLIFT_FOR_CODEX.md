@@ -1073,7 +1073,9 @@ Acceptance: Carry real observation/fetch age and coverage into threat summaries.
 
 ### UX-050 — Make Ghost Mode suppression unmistakable
 
-Status: DONE — HIGH ASSURANCE
+Status: MONITOR — HIGH ASSURANCE
+Review after: 2026-11-14
+Exit condition: Verify shared suppression state, unknown-preference hold and notice accounting in the final integrated packaged app after separately authorized delivery. Historical isolated renderer receipts remain feature-head evidence.
 Priority: S
 Source findings: PR1731 H20.
 
@@ -1281,7 +1283,7 @@ Update the row in the same PR that does the work.
 | UX-047 | Keep national weather warnings current | MONITOR — HIGH ASSURANCE | #1844 candidate evidence; [local validation](validation/UX-047-NATIONAL-WARNINGS.md) and [historical isolated native receipts](validation/UX-047-FALLBACK-PORTS.md). Integrated packaged acceptance remains open; installation/release/deployment paused. |
 | UX-048 | Restore verified GDACS ingestion | DONE — HIGH ASSURANCE | #1740 — approved five-feed repair; [validation](validation/UX-048-GDACS.md) and [alert burst performance evidence](validation/UX-048-PERFORMANCE.md); final review/CI govern delivery |
 | UX-049 | Distinguish quiet sensors from missing observations | NOT STARTED — HIGH ASSURANCE | — |
-| UX-050 | Make Ghost Mode suppression unmistakable | DONE — HIGH ASSURANCE | #1846 — [Verification and coverage](validation/UX-050-GHOST-MODE.md) |
+| UX-050 | Make Ghost Mode suppression unmistakable | MONITOR — HIGH ASSURANCE | #1846 candidate evidence — [Verification and coverage](validation/UX-050-GHOST-MODE.md). Final integrated packaged acceptance remains open; installation/release/deployment paused. |
 | UX-051 | Align RSS request budgets across boundaries | NOT STARTED — HIGH ASSURANCE | — |
 | UX-052 | Restrain derived alert interruptions | NOT STARTED — HIGH ASSURANCE | — |
 | UX-053 | Finish boot without awaiting all data sources | NOT STARTED — HIGH ASSURANCE | — |

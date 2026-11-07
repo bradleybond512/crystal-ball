@@ -58,3 +58,12 @@ or installed profile was exercised.
 Rollback must preserve the shared Ghost state and warning retirement guards
 when removing derived interruption policy; do not restore either old competing
 mode reader or reminders for retired warning history.
+
+## Refreshed pending dependency
+
+This local checkpoint was replayed onto `142069b7046b435b7dbc8b9e01245b50f28f5aca` while #1844 was still pending.
+[Continuity hashes](UX-052-DEPENDENCY-CONTINUITY.json) confirm 17 feature source/test files and the complete
+`src`, `src-tauri`, and `api` trees are unchanged from `7cbe1f622b06b582be59b6741e31fdd5f855699f`.
+No new full test run is claimed for this history/metadata transition. The original
+local tip is preserved on `codex/ux052-preserved-local-base-nov7`. Actual-main
+reconciliation, live candidate snapshot and exact-head Sonnet review remain open.

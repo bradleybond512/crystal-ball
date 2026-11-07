@@ -13,6 +13,7 @@ function harness(value: unknown, source = 'network') {
   const writes: unknown[] = [];
   const keys: string[] = [];
   const bindings = {
+    captureNwsObservation: () => () => true,
     fetchNWSAlertsSnapshot: async () => value,
     validateNWSAlertSnapshot,
     withOfflineCache: async (key: string, fetcher: () => Promise<unknown>) => {

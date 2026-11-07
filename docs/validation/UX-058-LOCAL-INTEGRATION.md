@@ -74,3 +74,32 @@ retain execution provenance. No new aggregate gate is claimed by this receipt.
 This is not final-main or native acceptance. Fresh actual-main selection/command
 comparison, live candidate snapshot, exact-head Sonnet and hosted checks remain
 required. MONITOR and all release/installation holds remain open.
+
+## Actual-main publication reconciliation
+
+After #1848 merged, this branch was replayed onto verified actual main
+`6dec686846bcf9f12a6de3062ac1b46697d49259` at
+`48a7a6fd83d527ae0c3d524864a3bc2d25c71e2c`. All non-evidence root objects and
+tracked source/test/build bytes match actual 92-suite execution `1886a48c`.
+Fresh actual-main selection requires 90 scripts, all in the executed superset.
+Mapper bytes match exactly. Effective-command comparison found quiet-hours
+expansion and UX052/UX053 becoming main-owned; all three complete commands were
+freshly executed through actual-main's trusted mapper on **48a7a6fd** and passed
+(150, 117, and 1+71 respectively, zero failures). No fresh full90 or aggregate
+rerun is claimed. [Required list and command/hash proof](UX-058-MAIN-CONTINUITY.json)
+records accurate execution provenance; the complete trusted UX050 recipe is
+unchanged from the successful conservative run.
+
+[Historical/current mutation hash comparison](UX-058-MUTATION-CONTINUITY.json)
+separates the original 95 code reversals and packaging reversal from integrated
+source. It does not claim whole-tree identity with that historical certificate.
+The current shared-validator identity-cap mutation hash matches exactly. The
+fresh conservative run covers the adapted snapshot/lifecycle/permission fixtures
+and preserves upstream Ghost, derived and startup guards. Historical isolated
+renderer receipts are not current native or installed-app acceptance.
+
+A fresh live candidate #1852 snapshot returned zero blockers. Original clean
+worktree `064b0cc72d8836e2eb5ba8f31eabdd9990155f22` remains unchanged under
+`codex/ux058-preserved-nov7-before-main`; this active worktree now owns original
+PR branch `codex/ux058-deferred-warnings`. MONITOR and all release/install holds
+remain intact. Exact-head Sonnet review and hosted checks remain required.

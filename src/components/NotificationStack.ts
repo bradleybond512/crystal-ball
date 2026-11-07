@@ -31,7 +31,7 @@ export class NotificationStack {
       zIndex: '9001',
       display: 'flex',
       flexDirection: 'column',
-      maxHeight: 'calc(100dvh - var(--below-eew))',
+      maxHeight: 'calc((100dvh - var(--below-eew)) * 0.4)',
       overflowY: 'auto',
       overscrollBehavior: 'contain',
       pointerEvents: 'none', // individual children re-enable as needed

@@ -1,0 +1,429 @@
+{
+  "sourceHashes": {
+    "src/components/Panel.ts": "8453d8973bafa4b15e032bbaa393ca3a3ea5bc26647894be5ca586f82c6507de",
+    "src/components/AlertFatigueDashboardPanel.ts": "738e4045b55d21f96ad71b881c6d7021c26017726a20f1be831426ebcad56494",
+    "src/components/CorrelationMapPanel.ts": "277ff73e06def7a496ec51b7d73b32f7eb5a506cbe456b66d0440e6b846348d7"
+  },
+  "node": "v22.23.1",
+  "browser": "147.0.7727.15",
+  "revision": "c2d55f49a084cce9dca2af6155fcc07d034bf820",
+  "productionModules": [
+    "src/components/AlertFatigueDashboardPanel.ts",
+    "src/components/CorrelationMapPanel.ts",
+    "src/components/Panel.ts",
+    "src/components/alert-fatigue-dashboard-helpers.ts",
+    "src/components/panel-loading-budget.ts",
+    "src/services/correlation/causal-chain-view.ts",
+    "src/services/correlation/correlation-map-view.ts",
+    "src/services/intelligence/alert-fatigue-detector.ts",
+    "src/services/intelligence/causal-chain.ts",
+    "src/services/intelligence/correlation-store.ts",
+    "src/services/intelligence/observation-store.ts",
+    "src/utils/dom-utils.ts",
+    "src/utils/format-duration.ts",
+    "src/utils/sanitize.ts"
+  ],
+  "evidence": [
+    {
+      "label": "Constructor and first actual IO",
+      "after": {
+        "counts": {
+          "fatigue": 1,
+          "correlation": 1
+        },
+        "intersection": [
+          true,
+          true
+        ],
+        "documentVisibility": "visible",
+        "hidden": [
+          false,
+          false
+        ],
+        "expandedId": null,
+        "focus": null,
+        "remainingIntervals": 3
+      }
+    },
+    {
+      "label": "Visible timer turns",
+      "before": {
+        "counts": {
+          "fatigue": 1,
+          "correlation": 1
+        },
+        "intersection": [
+          true,
+          true
+        ],
+        "documentVisibility": "visible",
+        "hidden": [
+          false,
+          false
+        ],
+        "expandedId": null,
+        "focus": null,
+        "remainingIntervals": 3
+      },
+      "after": {
+        "counts": {
+          "fatigue": 11,
+          "correlation": 11
+        },
+        "intersection": [
+          true,
+          true
+        ],
+        "documentVisibility": "visible",
+        "hidden": [
+          false,
+          false
+        ],
+        "expandedId": null,
+        "focus": null,
+        "remainingIntervals": 3
+      },
+      "delta": {
+        "fatigue": 10,
+        "correlation": 10
+      }
+    },
+    {
+      "label": "Keyboard Tab reaches existing header control",
+      "after": {
+        "counts": {
+          "fatigue": 11,
+          "correlation": 12
+        },
+        "intersection": [
+          true,
+          true
+        ],
+        "documentVisibility": "visible",
+        "hidden": [
+          false,
+          false
+        ],
+        "expandedId": "chain-0",
+        "focus": "Generate AI summary of this panel",
+        "remainingIntervals": 3
+      }
+    },
+    {
+      "label": "Actual scrolling suppresses offscreen computation",
+      "before": {
+        "counts": {
+          "fatigue": 11,
+          "correlation": 12
+        },
+        "intersection": [
+          false,
+          false
+        ],
+        "documentVisibility": "visible",
+        "hidden": [
+          false,
+          false
+        ],
+        "expandedId": "chain-0",
+        "focus": "Generate AI summary of this panel",
+        "remainingIntervals": 3
+      },
+      "after": {
+        "counts": {
+          "fatigue": 11,
+          "correlation": 12
+        },
+        "intersection": [
+          false,
+          false
+        ],
+        "documentVisibility": "visible",
+        "hidden": [
+          false,
+          false
+        ],
+        "expandedId": "chain-0",
+        "focus": "Generate AI summary of this panel",
+        "remainingIntervals": 3
+      },
+      "delta": {
+        "fatigue": 0,
+        "correlation": 0
+      }
+    },
+    {
+      "label": "Actual scroll-in drains once",
+      "before": {
+        "counts": {
+          "fatigue": 11,
+          "correlation": 12
+        },
+        "intersection": [
+          false,
+          false
+        ],
+        "documentVisibility": "visible",
+        "hidden": [
+          false,
+          false
+        ],
+        "expandedId": "chain-0",
+        "focus": "Generate AI summary of this panel",
+        "remainingIntervals": 3
+      },
+      "after": {
+        "counts": {
+          "fatigue": 12,
+          "correlation": 13
+        },
+        "intersection": [
+          true,
+          true
+        ],
+        "documentVisibility": "visible",
+        "hidden": [
+          false,
+          false
+        ],
+        "expandedId": "chain-0",
+        "focus": "Generate AI summary of this panel",
+        "remainingIntervals": 3
+      },
+      "delta": {
+        "fatigue": 1,
+        "correlation": 1
+      }
+    },
+    {
+      "label": "Expansion and header focus survive offscreen resume",
+      "after": {
+        "counts": {
+          "fatigue": 12,
+          "correlation": 13
+        },
+        "intersection": [
+          true,
+          true
+        ],
+        "documentVisibility": "visible",
+        "hidden": [
+          false,
+          false
+        ],
+        "expandedId": "chain-0",
+        "focus": "Generate AI summary of this panel",
+        "remainingIntervals": 3
+      }
+    },
+    {
+      "label": "Disable immediately suppresses work before IO",
+      "before": {
+        "counts": {
+          "fatigue": 12,
+          "correlation": 13
+        },
+        "intersection": [
+          true,
+          true
+        ],
+        "documentVisibility": "visible",
+        "hidden": [
+          false,
+          false
+        ],
+        "expandedId": "chain-0",
+        "focus": "Generate AI summary of this panel",
+        "remainingIntervals": 3
+      },
+      "after": {
+        "counts": {
+          "fatigue": 12,
+          "correlation": 13
+        },
+        "intersection": [
+          true,
+          true
+        ],
+        "documentVisibility": "visible",
+        "hidden": [
+          true,
+          true
+        ],
+        "expandedId": "chain-0",
+        "focus": null,
+        "remainingIntervals": 3
+      },
+      "delta": {
+        "fatigue": 0,
+        "correlation": 0
+      }
+    },
+    {
+      "label": "Re-enable and actual IO drain once",
+      "before": {
+        "counts": {
+          "fatigue": 12,
+          "correlation": 13
+        },
+        "intersection": [
+          false,
+          false
+        ],
+        "documentVisibility": "visible",
+        "hidden": [
+          true,
+          true
+        ],
+        "expandedId": "chain-0",
+        "focus": null,
+        "remainingIntervals": 3
+      },
+      "after": {
+        "counts": {
+          "fatigue": 13,
+          "correlation": 14
+        },
+        "intersection": [
+          true,
+          true
+        ],
+        "documentVisibility": "visible",
+        "hidden": [
+          false,
+          false
+        ],
+        "expandedId": "chain-0",
+        "focus": null,
+        "remainingIntervals": 3
+      },
+      "delta": {
+        "fatigue": 1,
+        "correlation": 1
+      }
+    },
+    {
+      "label": "Controlled hidden document suppresses computation",
+      "before": {
+        "counts": {
+          "fatigue": 13,
+          "correlation": 14
+        },
+        "intersection": [
+          true,
+          true
+        ],
+        "documentVisibility": "visible",
+        "hidden": [
+          false,
+          false
+        ],
+        "expandedId": "chain-0",
+        "focus": null,
+        "remainingIntervals": 3
+      },
+      "after": {
+        "counts": {
+          "fatigue": 13,
+          "correlation": 14
+        },
+        "intersection": [
+          true,
+          true
+        ],
+        "documentVisibility": "hidden",
+        "hidden": [
+          false,
+          false
+        ],
+        "expandedId": "chain-0",
+        "focus": null,
+        "remainingIntervals": 3
+      },
+      "delta": {
+        "fatigue": 0,
+        "correlation": 0
+      }
+    },
+    {
+      "label": "Controlled foreground without IO drains once",
+      "before": {
+        "counts": {
+          "fatigue": 13,
+          "correlation": 14
+        },
+        "intersection": [
+          true,
+          true
+        ],
+        "documentVisibility": "hidden",
+        "hidden": [
+          false,
+          false
+        ],
+        "expandedId": "chain-0",
+        "focus": null,
+        "remainingIntervals": 3
+      },
+      "after": {
+        "counts": {
+          "fatigue": 14,
+          "correlation": 15
+        },
+        "intersection": [
+          true,
+          true
+        ],
+        "documentVisibility": "visible",
+        "hidden": [
+          false,
+          false
+        ],
+        "expandedId": "chain-0",
+        "focus": null,
+        "remainingIntervals": 3
+      },
+      "delta": {
+        "fatigue": 1,
+        "correlation": 1
+      }
+    },
+    {
+      "label": "Delegated correlation click remains functional",
+      "after": {
+        "counts": {
+          "fatigue": 14,
+          "correlation": 17
+        },
+        "intersection": [
+          true,
+          true
+        ],
+        "documentVisibility": "visible",
+        "hidden": [
+          false,
+          false
+        ],
+        "expandedId": "chain-0",
+        "focus": null,
+        "remainingIntervals": 3
+      }
+    },
+    {
+      "label": "Narrow isolated fixture viewport",
+      "metrics": {
+        "innerWidth": 640,
+        "scrollWidth": 640,
+        "correlationWidth": 600
+      }
+    }
+  ],
+  "errors": [],
+  "network": [],
+  "limitations": [
+    "Isolated fixture CSS, not the full application styling or installed WKWebView.",
+    "Real Chromium DOM, delegated clicks and IntersectionObserver scrolling; manual timer invocation.",
+    "Document visibility is controlled event replay: actual tab-switch probe stayed visible even with focus emulation disabled. No native background acceptance claimed.",
+    "No external network/provider/native calls. No CPU/energy claim."
+  ]
+}

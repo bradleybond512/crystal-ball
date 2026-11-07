@@ -107,3 +107,34 @@ holds remain unchanged. The original clean worktree at
 `codex/ux052-preserved-nov7-before-main`; the reconciled worktree now owns the
 original PR branch name. Final exact-head Sonnet review and hosted checks are
 still required, not claimed as already passed by this document.
+
+## Repaired trusted execution path: supersedes publication coverage conclusion
+
+Hosted targeted-tests on the prior candidate failed before UX050 execution:
+the newly main-owned recipe contained `npm run pwa:budget`, which the trusted
+mapper correctly refused. The earlier 74-script run remains genuine, but its
+selection-name subset and byte-continuity comparison did not prove the changed
+main-owned execution path. It must not be used alone to certify this candidate.
+
+After compatibility PR #1860 landed, this branch was replayed onto actual main
+`2cf7670ca47e65fd3acf1dd0f61fcd54e76afa81`, retaining the identical direct Node
+budget check and unchanged fail-closed mapper. Production source is unchanged
+from the prior candidate. Pending-base `ff47fbc63366db0f630c7542b540ac684ee7be54`
+and actual-main execution `8d176013589f2411a201ec880556bbdd73d637b0` have identical
+complete Git trees. Both fresh commands below actually ran on **8d176013** under
+Node 22 and the canonical user TMPDIR, not on a later evidence/verdict commit:
+
+- Main-owned `targeted-tests.mjs` copied from actual main: **65 scripts passed**,
+  including the complete UX050 trusted stage expansion, full build, direct
+  precache budget check and bundle test. This is not a retry on the stale base.
+- `VITE_VARIANT=full bash scripts/agentic-validate.sh --tests "test:agentic-pipeline test:ux052 test:ux050"`:
+  **passed**, including lint, typecheck, secrets, documentation and full build.
+
+[Execution receipt](UX-052-REPAIRED-MAIN-VALIDATION.json) records the selected list,
+non-evidence root objects and log/complete input-manifest hashes. Every tracked
+input hash was verified unchanged after both runs. Existing feature mutation
+proofs remain applicable because the product/test implementation is unchanged;
+PR #1860 carries its own focused recipe/mapper fail-closed regression mutations.
+A fresh live candidate #1847 snapshot returned zero blockers. MONITOR and final
+integrated native acceptance remain open; no release or installation occurred.
+A new exact-head Sonnet review and hosted checks are still required.

@@ -54,3 +54,27 @@ source/test files and the complete `src` tree are identical to the previous
 checkpoint. The seven-suite gate above was actually rerun and passed on this
 refreshed dependency. Final actual-main ancestry, live candidate roadmap snapshot,
 exact-head Sonnet review and hosted checks remain required before publication.
+
+## Actual-main publication candidate
+
+After #1844 merged, this branch was replayed onto verified main
+`4b047a1288291fd4f030985b26878c28b28b38d5`. The complete Git tree before the
+following evidence-only update is identical to validated checkpoint
+`142069b7046b435b7dbc8b9e01245b50f28f5aca`: tree
+`27e0208a169063fa1c5457a00cae5ad90636e332`.
+[Actual-main continuity](UX-050-MAIN-CONTINUITY.json) records both tree hashes
+and the retained seven-suite gate log hash. That gate was not rerun for this
+history-only transition; its actual passed result remains applicable to the
+unchanged source/tests/build configuration. No fresh mutation run is claimed.
+
+The selector copied from this exact main was independently rerun and all 72
+selected scripts passed. A fresh live GitHub snapshot explicitly naming candidate
+PR #1846 returned zero roadmap blockers. Current source remains MONITOR with
+integrated packaged acceptance open and the existing installation/release holds.
+
+The owner roadmap chat was idle before the original clean worktree at
+`8cb24ef20b1a72564e582b9f6627d86f26e7a9eb` was reversibly renamed to
+`codex/ux050-preserved-nov7-before-main`; files and tip were preserved. The
+reconciled worktree now owns the original PR branch name. Independent exact-head
+Sonnet review and hosted checks remain required; this document does not claim
+that they already passed.

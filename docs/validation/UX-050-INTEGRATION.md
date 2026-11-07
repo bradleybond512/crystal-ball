@@ -59,13 +59,19 @@ exact-head Sonnet review and hosted checks remain required before publication.
 
 After #1844 merged, this branch was replayed onto verified main
 `4b047a1288291fd4f030985b26878c28b28b38d5`. The complete Git tree before the
-following evidence-only update is identical to validated checkpoint
+following evidence-only update is identical to prepared checkpoint
 `142069b7046b435b7dbc8b9e01245b50f28f5aca`: tree
 `27e0208a169063fa1c5457a00cae5ad90636e332`.
 [Actual-main continuity](UX-050-MAIN-CONTINUITY.json) records both tree hashes
-and the retained seven-suite gate log hash. That gate was not rerun for this
-history-only transition; its actual passed result remains applicable to the
-unchanged source/tests/build configuration. No fresh mutation run is claimed.
+and the retained seven-suite gate log hash. The actual gate execution head was
+`0a7bb6c6036d45cc51152e2cd766b9494a825ec8`, before the evidence-only commit
+`142069b7046b435b7dbc8b9e01245b50f28f5aca`. Earlier wording incorrectly called
+the latter the execution head. The corrected receipt lists every changed path
+and identical non-evidence root objects across both checkpoints, the actual-main
+rebase and the reviewed source. Whole-tree identity does not extend across those
+evidence-only changes. The gate was not rerun for this history-only transition;
+its actual passed result applies to unchanged source/test/build bytes. No fresh
+gate or mutation run is claimed.
 
 The selector copied from this exact main was independently rerun and all 72
 selected scripts passed. A fresh live GitHub snapshot explicitly naming candidate

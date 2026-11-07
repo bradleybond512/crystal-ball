@@ -29,6 +29,10 @@ export interface KeyboardEventLike {
   ctrlKey?: boolean;
   shiftKey?: boolean;
   altKey?: boolean;
+  defaultPrevented?: boolean;
+  repeat?: boolean;
+  isComposing?: boolean;
+  target?: EventTarget | null;
 }
 
 export interface ShortcutBinding {
@@ -50,6 +54,8 @@ export interface ShortcutBinding {
    * opt out by setting this to false.
    */
   suppressInTextInputs?: boolean;
+  /** Optional action-specific guard; existing bindings keep their own policy. */
+  canRun?: (event: KeyboardEventLike) => boolean;
 }
 
 /** Map common alias tokens to canonical chord pieces. Case-insensitive. */
@@ -186,6 +192,8 @@ export function isTypingTarget(target: EventTarget | null | undefined): boolean 
   const tag = (el.tagName ?? '').toUpperCase();
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
   if (el.isContentEditable) return true;
+  const editable = el.closest?.('[contenteditable]');
+  if (editable && editable.getAttribute('contenteditable') !== 'false') return true;
   return false;
 }
 
@@ -217,6 +225,7 @@ export function createShortcutRegistry(): ShortcutRegistry {
       for (const b of bindings.values()) {
         if (matchesChord(event, b.chord)) {
           if (suppress && (b.suppressInTextInputs ?? true)) return false;
+          if (b.canRun && !b.canRun(event)) return false;
           try { b.run(); } catch { /* swallow — a faulty handler must not break dispatch */ }
           return true;
         }

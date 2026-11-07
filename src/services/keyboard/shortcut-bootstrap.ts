@@ -2,7 +2,7 @@
  * Bootstrap glue between the pure shortcut registry and the live DOM.
  *
  * Owns three responsibilities:
- *   1. Register the shipped shortcuts (⌘K, ⌘/, ⌘1…⌘9) into the registry.
+ *   1. Register navigation, feature actions and panel focus in the registry.
  *   2. Attach a single document keydown listener that dispatches via the
  *      registry (so the matching/suppression rules are centralized).
  *   3. Refresh ⌘1…⌘9 panel hint badges in the sidebar whenever the panel
@@ -17,6 +17,7 @@ import {
   buildPanelFocusBindings,
   isTypingTarget,
   type ShortcutRegistry,
+  type KeyboardEventLike,
 } from './shortcut-registry';
 import { isHomeShellAvailable } from '@/services/home-shell/shell-gate';
 
@@ -24,7 +25,7 @@ const HINT_CLASS = 'mac-sidebar-panel-hint';
 const SIDEBAR_SELECTOR = '.mac-sidebar-panel-item[data-panel-key]';
 
 let activeRegistry: ShortcutRegistry | null = null;
-let activeListener: ((e: KeyboardEvent) => void) | null = null;
+let activeHandles: BootstrapHandles | null = null;
 
 export interface BootstrapHandles {
   registry: ShortcutRegistry;
@@ -32,16 +33,45 @@ export interface BootstrapHandles {
   destroy: () => void;
 }
 
+export interface ShortcutBootstrapOptions {
+  isDesktopApp?: boolean;
+  /** Preserve the legacy alias's setMode behavior, distinct from toggleGhostMode. */
+  toggleLegacyGhost?: () => void;
+}
+
+function isVisibleOwner(root: HTMLElement): boolean {
+  if (!root.isConnected) return false;
+  for (let element: HTMLElement | null = root; element; element = element.parentElement) {
+    if (element.hidden || element.inert || element.getAttribute('aria-hidden') === 'true' || element.classList.contains('closing')) return false;
+    const style = window.getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden') return false;
+  }
+  return true;
+}
+
+/** Only the migrated feature toggles observe this foreground-action policy. */
+function canRunFeature(event: KeyboardEventLike, action: 'hud' | 'ghost' | 'globe'): boolean {
+  if (event.defaultPrevented || event.repeat || event.isComposing || isTypingTarget(document.activeElement)) return false;
+  const owners = document.querySelectorAll<HTMLElement>(
+    '#unifiedSettingsModal.active, .cmdk-v2-overlay, .help-overlay, .analyst-hud, [role="dialog"][aria-labelledby="cb-welcome-title"]',
+  );
+  for (const owner of owners) {
+    if (!isVisibleOwner(owner)) continue;
+    if (action === 'hud' && owner.classList.contains('analyst-hud')
+      && owner.contains(document.activeElement) && event.target instanceof Node && owner.contains(event.target)) continue;
+    return false;
+  }
+  return true;
+}
+
 /**
  * Install the global shortcut handlers. Returns handles for tests / hot reload.
  * Safe to call multiple times — previous registration is torn down first.
  */
-export function installShortcuts(): BootstrapHandles {
+export function installShortcuts(options: ShortcutBootstrapOptions = {}): BootstrapHandles {
   // Tear down any previous installation.
-  if (activeListener) {
-    document.removeEventListener('keydown', activeListener);
-    activeListener = null;
-  }
+  activeHandles?.destroy();
+  let destroyed = false;
 
   const reg = createShortcutRegistry();
   activeRegistry = reg;
@@ -77,9 +107,34 @@ export function installShortcuts(): BootstrapHandles {
     });
   }
 
+  reg.register({
+    id: 'analyst-hud', label: 'Toggle Analyst HUD', group: 'Actions', display: '⌘⇧A',
+    chord: parseChord('Cmd+Shift+A'), canRun: (event) => canRunFeature(event, 'hud'),
+    run: () => document.dispatchEvent(new CustomEvent('cb:toggle-analyst-hud')),
+  });
+  reg.register({
+    id: 'ghost-mode', label: 'Toggle Ghost Mode', group: 'Actions', display: '⌘⇧G',
+    chord: parseChord('Cmd+Shift+G'), canRun: (event) => canRunFeature(event, 'ghost'),
+    run: () => document.dispatchEvent(new CustomEvent('wm:toggle-ghost-mode')),
+  });
+  reg.register({
+    id: 'gods-vision', label: "Toggle God's Vision", group: 'Navigation', display: 'G',
+    chord: parseChord('G'), canRun: (event) => canRunFeature(event, 'globe'),
+    run: () => document.dispatchEvent(new CustomEvent('cb:toggle-gods-vision')),
+  });
+  if (options.isDesktopApp && options.toggleLegacyGhost) {
+    reg.register({
+      id: 'ghost-mode-legacy', label: 'Toggle Ghost Mode (desktop legacy)', group: 'Actions', display: '⌘M',
+      chord: parseChord('Cmd+M'),
+      canRun: (event) => Boolean(event.metaKey) && !event.ctrlKey && canRunFeature(event, 'ghost'),
+      run: options.toggleLegacyGhost,
+    });
+  }
+
   // ⌘1…⌘9 — bound to the *current* sidebar order at registration time, and
   // re-bound whenever refreshPanelHints() runs (so reorders take effect).
   const refreshPanelHints = () => {
+    if (destroyed) return;
     const keys = readPanelKeysFromSidebar();
     // Wipe any previously registered panel-focus-* bindings.
     for (const b of reg.list()) {
@@ -112,14 +167,15 @@ export function installShortcuts(): BootstrapHandles {
   const OBSERVE_OPTS: MutationObserverInit = { childList: true, subtree: true };
   const observers: { obs: MutationObserver; target: Node }[] = [];
   const observeAll = (): void => {
+    if (destroyed) return;
     for (const { obs, target } of observers) obs.observe(target, OBSERVE_OPTS);
   };
-  let scheduled = false;
+  let scheduled: number | null = null;
   const onMutate = () => {
-    if (scheduled) return;
-    scheduled = true;
-    requestAnimationFrame(() => {
-      scheduled = false;
+    if (destroyed || scheduled !== null) return;
+    scheduled = requestAnimationFrame(() => {
+      scheduled = null;
+      if (destroyed) return;
       for (const { obs } of observers) obs.disconnect();
       refreshPanelHints();
       observeAll();
@@ -138,26 +194,34 @@ export function installShortcuts(): BootstrapHandles {
       shiftKey: e.shiftKey,
       altKey: e.altKey,
       target: e.target,
+      defaultPrevented: e.defaultPrevented,
+      repeat: e.repeat,
+      isComposing: e.isComposing,
     });
     if (matched) e.preventDefault();
   };
   document.addEventListener('keydown', listener);
-  activeListener = listener;
 
   // Capture-phase safety net for the command palette (see paletteCaptureNet).
   window.addEventListener('keydown', paletteCaptureNet, true);
 
-  return {
+  const handles: BootstrapHandles = {
     registry: reg,
     refreshPanelHints,
     destroy: () => {
+      if (destroyed) return;
+      destroyed = true;
+      if (scheduled !== null) cancelAnimationFrame(scheduled);
+      scheduled = null;
       document.removeEventListener('keydown', listener);
       window.removeEventListener('keydown', paletteCaptureNet, true);
       for (const { obs } of observers) obs.disconnect();
       if (activeRegistry === reg) activeRegistry = null;
-      if (activeListener === listener) activeListener = null;
+      if (activeHandles === handles) activeHandles = null;
     },
   };
+  activeHandles = handles;
+  return handles;
 }
 
 export function getActiveRegistry(): ShortcutRegistry | null {

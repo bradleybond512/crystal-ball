@@ -154,7 +154,7 @@ test('buildBuiltinCommands includes navigation, action, and search commands', ()
   assert.ok(cmds.some(c => c.title === 'Toggle Operator Mode'));
   assert.ok(cmds.some(c => c.title === 'Clear Notifications'));
   assert.ok(cmds.some(c => c.title === 'Go to Command Center'));
-  assert.ok(cmds.some(c => c.title === 'Go to Globe'));
+  assert.ok(cmds.some(c => c.title === "Go to God's Vision"));
   assert.ok(cmds.some(c => c.title === 'Go to Map'));
   assert.ok(cmds.some(c => c.title === 'Go to Intelligence Feed'));
 });

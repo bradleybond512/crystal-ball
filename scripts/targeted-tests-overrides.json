@@ -302,7 +302,8 @@
     "test:ux053",
     "test:ux018",
     "test:ux049",
-    "test:ux044"
+    "test:ux044",
+    "test:repair12"
   ],
   "src/styles/alerts.css": [
     "test:ux050"
@@ -1480,5 +1481,33 @@
   ],
   "src/components/__tests__/breaking-news-stack-lifecycle.test.mts": [
     "test:breaking-stack-lifecycle"
+  ],
+  "src/services/keyboard/shortcut-bootstrap.ts": [
+    "test:repair12"
+  ],
+  "src/services/keyboard/shortcut-registry.ts": [
+    "test:repair12"
+  ],
+  "src/services/command-palette/built-in-commands.ts": [
+    "test:repair12"
+  ],
+  "src/app/event-handlers.ts": [
+    "test:repair12"
+  ],
+  "src/components/HelpOverlay.ts": [
+    "test:repair12"
+  ],
+  "src/components/CommandPalettePanel.ts": [
+    "test:repair12"
+  ],
+  "src/components/HomeShellOverlay.ts": [
+    "test:repair12"
+  ],
+  "src/components/UnifiedSettings.ts": [
+    "test:repair12",
+    "test:ux032"
+  ],
+  "src/config/panel-metadata.ts": [
+    "test:repair12"
   ]
 }

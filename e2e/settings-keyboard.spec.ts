@@ -371,8 +371,16 @@ test('Settings has one content scroller and keeps header, tabs and last controls
     expect(await panel.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
     expect(await page.locator('.unified-settings-close').boundingBox()).toEqual(closeBefore);
     expect(await page.locator('.unified-settings-tabs').boundingBox()).toEqual(tabsBefore);
-    const last = panel.locator('button, input, select, a, .status-row, .us-debug-empty').last();
+    // Unset credential cards deliberately retain a hidden Clear action. It is
+    // not a scroll target; do not hide CSS/ancestor visibility regressions here.
+    if (tab === 'api-keys') {
+      await expect(panel.locator('.key-card-clear').last()).toBeHidden();
+      await expect(panel.locator('.key-card-clear').last()).toHaveAttribute('hidden', '');
+    }
+    const last = panel.locator('button:not([hidden]), input:not([hidden]), select:not([hidden]), a:not([hidden]), .status-row:not([hidden]), .us-debug-empty:not([hidden])').last();
+    await expect(last).toBeVisible();
     const lastBounds = await last.boundingBox();
+    expect(lastBounds).not.toBeNull();
     const panelBounds = await panel.boundingBox();
     expect(lastBounds!.y + lastBounds!.height).toBeLessThanOrEqual(panelBounds!.y + panelBounds!.height + 1);
     await expectHit(page, '.unified-settings-close');

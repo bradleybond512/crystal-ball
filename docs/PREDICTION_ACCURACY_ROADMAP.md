@@ -195,16 +195,19 @@ Phase exit: ACC-001 through ACC-007 are on main; ACC-008 refreshes the baseline.
 
 ### ACC-008 — Refresh the production baseline
 
-Status: `IN REVIEW`
+Status: `DONE`
 
 Owner: Codex
 
 Branch: `codex/acc008-production-baseline-nov1`
 
 Scope: [read-only acquisition plan](plans/2026-11-01-acc008-production-baseline.md).
-Draft PR: #1843. [Production measurement and manifest](validation/ACC-008-PRODUCTION-BASELINE.md)
+Evidence: #1843. [Production measurement and manifest](validation/ACC-008-PRODUCTION-BASELINE.md)
 collected 2026-11-02 UTC; [validation and review](validation/ACC-008-QA-QC.md)
-recorded locally. Status remains IN REVIEW until acceptance lands on main.
+recorded locally. This candidate records the completed read-only baseline acquisition
+and ACC-601–605 reassessment for delivery in #1843. Missing champion/evaluation
+metadata remains explicit; completion does not qualify ACC-703, establish model
+readiness, or authorize installation or delivery.
 
 Priority: S
 

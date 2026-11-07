@@ -1,8 +1,9 @@
 # UX-033 warning stack cap
 
 Assessment: 2026-11-07 UTC. Standard UI slice, PR #1839. Implementation and
-Chromium geometry qualification complete; independent Sonnet review and installed
-macOS/WebKit acceptance remain pending. UX-033 remains IN PROGRESS.
+Chromium geometry qualification complete. Independent Sonnet review approved the
+bounded code slice with zero blocking findings. Installed macOS/WebKit acceptance
+remains pending. UX-033 is MONITOR, not fully complete.
 
 ## Brief and approved scope
 
@@ -114,7 +115,10 @@ restored the identical SHA-256 above and empty `git status --short`.
 
 ## Remaining acceptance and rollback
 
-Coordinator owns independent Sonnet review and publication. Do not interpret this
+Independent Claude Sonnet 4.6 (medium effort) approved implementation/docs SHA
+`25887d6f84c1215345a052d2451d6d4c2c66b5b6` with zero blocking findings. A fresh
+exact-tip review covers this subsequent metadata correction before publication.
+Coordinator owns publication and landing. Do not interpret this
 browser fixture as installed macOS/WebKit acceptance or a complete warning-source
 integration test. On the installed app, trigger multiple warnings at a short
 window height, exercise bottom actions with keyboard and scrolling, verify

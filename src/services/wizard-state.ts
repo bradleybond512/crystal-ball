@@ -3,20 +3,19 @@ import type { RuntimeSecretKey } from './runtime-config';
 const POSITION_KEY = 'cb:setup-wizard:position';
 const DONT_ASK_KEY = 'cb:setup-wizard:dont-ask';
 const SKIPPED_KEY = 'cb:setup-wizard:skipped';
-const STATUS_PREFIX = 'cb:key-status:';
 
 export interface WizardPosition { tier: number; stepIndex: number }
-export type KeyStatusState = 'valid' | 'unvalidated' | 'invalid' | 'unset' | 'skipped';
-export interface KeyStatus { state: KeyStatusState; lastChecked?: number; lastError?: string }
-
 function readJson<T>(key: string): T | null {
-  const raw = localStorage.getItem(key);
-  if (!raw) return null;
-  try { return JSON.parse(raw) as T; } catch { return null; }
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) as T : null;
+  } catch {
+    return null;
+  }
 }
 
 function writeJson(key: string, value: unknown): void {
-  localStorage.setItem(key, JSON.stringify(value));
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* Wizard progress is optional. */ }
 }
 
 export function getPosition(): WizardPosition | null {
@@ -47,14 +46,7 @@ export function addSkipped(key: RuntimeSecretKey): void {
   writeJson(SKIPPED_KEY, [...set]);
 }
 export function clearSkipped(): void {
-  localStorage.removeItem(SKIPPED_KEY);
-}
-
-export function getKeyStatus(key: RuntimeSecretKey): KeyStatus | null {
-  return readJson<KeyStatus>(STATUS_PREFIX + key);
-}
-export function setKeyStatus(key: RuntimeSecretKey, status: KeyStatus): void {
-  writeJson(STATUS_PREFIX + key, status);
+  try { localStorage.removeItem(SKIPPED_KEY); } catch { /* Wizard progress is optional. */ }
 }
 
 // Test helper. Clears all wizard-state entries.
@@ -62,8 +54,4 @@ export function resetWizardState(): void {
   localStorage.removeItem(POSITION_KEY);
   localStorage.removeItem(DONT_ASK_KEY);
   localStorage.removeItem(SKIPPED_KEY);
-  for (let i = localStorage.length - 1; i >= 0; i--) {
-    const k = localStorage.key(i);
-    if (k?.startsWith(STATUS_PREFIX)) localStorage.removeItem(k);
-  }
 }

@@ -1,0 +1,1210 @@
+{
+  "source": "c7443decea1021ac87f41371737e3cd52d63eaf3",
+  "counts": {
+    "chromium-web": {
+      "pass": 27,
+      "fail": 0
+    },
+    "chromium-desktop": {
+      "pass": 25,
+      "fail": 0
+    },
+    "wkwebview-desktop": {
+      "pass": 25,
+      "fail": 0
+    },
+    "protected-sidecar": {
+      "pass": 14,
+      "fail": 0
+    }
+  },
+  "groups": {
+    "chromium-web": {
+      "clean SHA": true,
+      "completed without exception": true,
+      "old receipt dated/historical": true,
+      "old error erased": true,
+      "missing/invalid bindings are unverified": true,
+      "passive startup, reopen, wizard, age cause zero requests": true,
+      "success shows dated source evidence": true,
+      "cooldown and double-click": true,
+      "24h verification cutoff": true,
+      "outage with historical result": true,
+      "rejection and cutoff": true,
+      "draft does not rewrite stored receipt": true,
+      "ordinary save changes value without call/current evidence": true,
+      "inflight replacement drops current binding": true,
+      "removal displays absent": true,
+      "wizard explicit save persists on outage": true,
+      "standalone stored Test and aging": true,
+      "standalone footer cannot preserve a current claim": true,
+      "draft/focus/caret survive passive refresh": true,
+      "standalone rejects definitive bad replacement": true,
+      "standalone saves on outage": true,
+      "reopening and concurrent external replacement yield historical evidence": true,
+      "metadata/DOM/IDB/log/destination privacy": true,
+      "same-origin concurrent duplicate blocked": true,
+      "cross-window cooldown boundary": true,
+      "global two-credential capacity": true,
+      "first admitted response survives denied contender": true
+    },
+    "chromium-desktop": {
+      "clean SHA": true,
+      "completed without exception": true,
+      "old receipt dated/historical": true,
+      "old error erased": true,
+      "missing/invalid bindings are unverified": true,
+      "passive startup, reopen, wizard, age cause zero requests": true,
+      "success shows dated source evidence": true,
+      "cooldown and double-click": true,
+      "24h verification cutoff": true,
+      "outage with historical result": true,
+      "rejection and cutoff": true,
+      "draft does not rewrite stored receipt": true,
+      "ordinary save changes value without call/current evidence": true,
+      "inflight replacement drops current binding": true,
+      "removal displays absent": true,
+      "wizard explicit save persists on outage": true,
+      "standalone stored Test and aging": true,
+      "standalone footer cannot preserve a current claim": true,
+      "draft/focus/caret survive passive refresh": true,
+      "standalone rejects definitive bad replacement": true,
+      "standalone saves on outage": true,
+      "reopening and concurrent external replacement yield historical evidence": true,
+      "metadata/DOM/IDB/log/destination privacy": true,
+      "stored requests authorized and value free": true,
+      "desktop sidecar-copy evidence explicitly scoped": true
+    },
+    "wkwebview-desktop": {
+      "clean SHA": true,
+      "completed without exception": true,
+      "old receipt dated/historical": true,
+      "old error erased": true,
+      "missing/invalid bindings are unverified": true,
+      "passive startup, reopen, wizard, age cause zero requests": true,
+      "success shows dated source evidence": true,
+      "cooldown and double-click": true,
+      "24h verification cutoff": true,
+      "outage with historical result": true,
+      "rejection and cutoff": true,
+      "draft does not rewrite stored receipt": true,
+      "ordinary save changes value without call/current evidence": true,
+      "inflight replacement drops current binding": true,
+      "removal displays absent": true,
+      "wizard explicit save persists on outage": true,
+      "standalone stored Test and aging": true,
+      "standalone footer cannot preserve a current claim": true,
+      "draft/focus/caret survive passive refresh": true,
+      "standalone rejects definitive bad replacement": true,
+      "standalone saves on outage": true,
+      "reopening and concurrent external replacement yield historical evidence": true,
+      "metadata/DOM/IDB/log/destination privacy": true,
+      "stored requests authorized and value free": true,
+      "desktop sidecar-copy evidence explicitly scoped": true
+    },
+    "protected-sidecar": {
+      "source SHA": true,
+      "local auth refusal zero upstream": true,
+      "unknown key refusal zero upstream": true,
+      "stored200": true,
+      "stored503": true,
+      "stored401": true,
+      "permission403": true,
+      "rate429": true,
+      "malformed200": true,
+      "pairedStored": true,
+      "unsupportedPublic200": true,
+      "immediateRepeat": true,
+      "two active, coalesced stored duplicate and blocked third": true,
+      "stored credentials confined to intended providers": true
+    }
+  },
+  "implementationCommit": "4417ac686a05f9c672c144788dcc88b645c72662",
+  "testedTree": "9f289127df10a5743acd66fee8a0b7bb4ca952b5",
+  "method": "Chromium web with a synthetic encrypted vault, desktop Chromium and nonpersistent macOS WKWebView with a synthetic native bridge, and a real authenticated HTTP sidecar with a recording provider transport. No live keychain or operator credentials.",
+  "observationsPerRenderer": 52,
+  "recorded": {
+    "chromium-web": {
+      "desktop": false,
+      "checks": {
+        "standaloneNavigation": {
+          "categories": [
+            "overview",
+            "ai",
+            "economy",
+            "markets",
+            "security",
+            "tracking",
+            "news",
+            "conflict-analysis",
+            "military-diplomatic",
+            "travel-warnings",
+            "navigation",
+            "tactical",
+            "debug"
+          ],
+          "active": "ai",
+          "available": [
+            "OLLAMA_API_URL",
+            "GROQ_API_KEY",
+            "OPENROUTER_API_KEY"
+          ]
+        },
+        "legacy": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check 306 days ago",
+          "title": "Previous check: 2026-01-01T12:00:00.000Z",
+          "feedback": ""
+        },
+        "standaloneLegacy": "Saved, not verified \u00b7 Previous check 306 days ago",
+        "passiveOpenCalls": 0,
+        "savedSuccess": {
+          "status": "valid",
+          "evidence": "Provider verified \u00b7 just now",
+          "title": "Provider verified: 2026-11-03T12:00:00.000Z",
+          "feedback": "Check finished."
+        },
+        "standaloneAfterTest": "Provider verified \u00b7 just now",
+        "futureReceipt": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified",
+          "title": "",
+          "feedback": ""
+        },
+        "malformedReceipt": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified",
+          "title": "",
+          "feedback": ""
+        },
+        "cooldownAdditionalCalls": 0,
+        "before24Hours": {
+          "status": "valid",
+          "evidence": "Provider verified \u00b7 23 hours ago",
+          "title": "Provider verified: 2026-11-03T12:00:00.000Z",
+          "feedback": ""
+        },
+        "at24Hours": {
+          "status": "unvalidated",
+          "evidence": "Provider verified \u00b7 1 day ago (stale)",
+          "title": "Provider verified: 2026-11-03T12:00:00.000Z",
+          "feedback": ""
+        },
+        "ageRefreshAdditionalCalls": 0,
+        "unavailableRetainsHistory": {
+          "status": "unvalidated",
+          "evidence": "Could not verify (provider unavailable) \u00b7 just now \u00b7 Previous result: Provider verified \u00b7 1 day ago (stale)",
+          "title": "Could not verify (provider unavailable): 2026-11-04T12:00:00.000Z \u00b7 Previous result: Provider verified, 2026-11-03T12:00:00.000Z",
+          "feedback": "Check finished."
+        },
+        "rejection": {
+          "status": "invalid",
+          "evidence": "Provider rejected \u00b7 just now",
+          "title": "Provider rejected: 2026-11-04T12:01:01.000Z",
+          "feedback": "Check finished."
+        },
+        "rejection24Hours": {
+          "status": "unvalidated",
+          "evidence": "Provider rejected \u00b7 1 day ago (stale)",
+          "title": "Provider rejected: 2026-11-04T12:01:01.000Z",
+          "feedback": ""
+        },
+        "rejectionAgePassive": 0,
+        "draftOnly": {
+          "status": "unvalidated",
+          "evidence": "Provider rejected \u00b7 1 day ago (stale)",
+          "title": "Provider rejected: 2026-11-04T12:01:01.000Z",
+          "feedback": "Draft \u00b7 Provider verified."
+        },
+        "replacement": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider rejected \u00b7 1 day ago (stale)",
+          "title": "Provider rejected: 2026-11-04T12:01:01.000Z",
+          "feedback": "Saved, not verified."
+        },
+        "ordinarySaveAdditionalCalls": 0,
+        "replacementPersisted": true,
+        "concurrentRequestCount": 1,
+        "lateCompletionAfterReplacement": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider rejected \u00b7 1 day ago (stale)",
+          "title": "Provider rejected: 2026-11-04T12:01:01.000Z",
+          "feedback": "Saved, not verified."
+        },
+        "absent": {
+          "status": "unset",
+          "evidence": "Not set",
+          "title": "",
+          "feedback": "Cleared."
+        },
+        "clearPersisted": true,
+        "openWizardCalls": 0,
+        "wizardActionLabel": "Save & verify",
+        "wizardFeedback": "Could not verify (provider unavailable) \u00b7 just now \u00b7 Previous result: Provider rejected \u00b7 1 day ago (stale)",
+        "wizardActuallySaved": true,
+        "wizardSaveCalls": 1,
+        "standaloneAfterWizard": "Could not verify (provider unavailable) \u00b7 just now \u00b7 Previous result: Provider rejected \u00b7 1 day ago (stale)",
+        "standaloneStoredTestCalls": 1,
+        "standaloneTestResult": "Provider verified \u00b7 just now",
+        "standaloneAt24Hours": "Provider verified \u00b7 1 day ago (stale)",
+        "standaloneFooterAged": "",
+        "standaloneFooterEditing": "",
+        "standaloneEditingPreserved": {
+          "focus": true,
+          "value": true,
+          "caret": true,
+          "providerCalls": 0
+        },
+        "standaloneRejectedSave": {
+          "previousUnchanged": true,
+          "providerCalls": 1,
+          "status": "modals.settingsWindow.verifyFailed"
+        },
+        "standaloneActionResult": "modals.settingsWindow.saved",
+        "standaloneActualSave": true,
+        "standaloneSaveCalls": 1,
+        "reopenedWindow": {
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider verified \u00b7 1 day ago (stale)",
+          "providerCalls": 0
+        },
+        "afterRestartExplicitTest": {
+          "status": "valid",
+          "evidence": "Provider verified \u00b7 just now",
+          "title": "Provider verified: 2026-11-06T12:08:08.000Z",
+          "feedback": "Check finished."
+        },
+        "admittedFirstResult": {
+          "firstCalls": 1,
+          "secondCalls": 0,
+          "evidence": "Provider rejected \u00b7 just now",
+          "at": "Provider rejected: 2026-11-06T12:09:09.000Z",
+          "expected": "2026-11-06T12:09:09.000Z"
+        },
+        "peerSameCredentialOverlap": {
+          "firstWindowCalls": 0,
+          "secondWindowCalls": 0
+        },
+        "peerReplacementInflight": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider rejected \u00b7 1 min ago",
+          "title": "Provider rejected: 2026-11-06T12:09:09.000Z",
+          "feedback": "Check finished."
+        },
+        "peerReplacementVisible": "Saved, not verified \u00b7 Previous check: Provider rejected \u00b7 1 min ago",
+        "peerFooterAfterReplacement": "modals.settingsWindow.saved",
+        "peerImmediateRepeatCalls": 0,
+        "peerAt59999ms": 0,
+        "peerAt60000ms": 1,
+        "twoWindowGlobalCapacity": {
+          "firstWindowCalls": 2,
+          "thirdRequest": 0
+        },
+        "legacyFreeTextRemoved": true
+      },
+      "privacy": {
+        "indexedDb": false,
+        "renderedDuringTest": false,
+        "visible": false,
+        "metadata": false,
+        "logs": false,
+        "url": false,
+        "unexpectedDestination": false,
+        "unrelatedContext": false
+      },
+      "requests": [
+        {
+          "side": false,
+          "provider": true,
+          "stored": false,
+          "carriedValue": false,
+          "auth": null,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": false,
+          "provider": true,
+          "stored": false,
+          "carriedValue": false,
+          "auth": null,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": false,
+          "provider": true,
+          "stored": false,
+          "carriedValue": false,
+          "auth": null,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": false,
+          "provider": true,
+          "stored": false,
+          "carriedValue": false,
+          "auth": null,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": false,
+          "provider": true,
+          "stored": false,
+          "carriedValue": false,
+          "auth": null,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": false,
+          "provider": true,
+          "stored": false,
+          "carriedValue": false,
+          "auth": null,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": false,
+          "provider": true,
+          "stored": false,
+          "carriedValue": false,
+          "auth": null,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": false,
+          "provider": true,
+          "stored": false,
+          "carriedValue": false,
+          "auth": null,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": false,
+          "provider": true,
+          "stored": false,
+          "carriedValue": false,
+          "auth": null,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": false,
+          "provider": true,
+          "stored": false,
+          "carriedValue": false,
+          "auth": null,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": false,
+          "provider": true,
+          "stored": false,
+          "carriedValue": false,
+          "auth": null,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": false,
+          "provider": true,
+          "stored": false,
+          "carriedValue": false,
+          "auth": null,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": false,
+          "provider": true,
+          "stored": false,
+          "carriedValue": false,
+          "auth": null,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": false,
+          "provider": true,
+          "stored": false,
+          "carriedValue": false,
+          "auth": null,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        }
+      ],
+      "errors": [],
+      "source": "c7443decea1021ac87f41371737e3cd52d63eaf3",
+      "sourceDirty": false,
+      "engine": "chromium-web"
+    },
+    "chromium-desktop": {
+      "desktop": true,
+      "checks": {
+        "standaloneNavigation": {
+          "categories": [
+            "overview",
+            "ai",
+            "economy",
+            "markets",
+            "security",
+            "tracking",
+            "news",
+            "conflict-analysis",
+            "military-diplomatic",
+            "travel-warnings",
+            "navigation",
+            "tactical",
+            "debug"
+          ],
+          "active": "tracking",
+          "available": [
+            "AISSTREAM_API_KEY",
+            "NASA_FIRMS_API_KEY",
+            "OPENAQ_API_KEY"
+          ]
+        },
+        "legacy": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check 306 days ago",
+          "title": "Previous check: 2026-01-01T12:00:00.000Z",
+          "feedback": ""
+        },
+        "standaloneLegacy": "Saved, not verified",
+        "passiveOpenCalls": 0,
+        "savedSuccess": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider verified (sidecar copy) \u00b7 just now",
+          "title": "Provider verified: 2026-11-03T12:00:00.000Z",
+          "feedback": "Check finished."
+        },
+        "standaloneAfterTest": "Saved, not verified",
+        "futureReceipt": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified",
+          "title": "",
+          "feedback": ""
+        },
+        "malformedReceipt": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified",
+          "title": "",
+          "feedback": ""
+        },
+        "cooldownAdditionalCalls": 0,
+        "before24Hours": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider verified (sidecar copy) \u00b7 23 hours ago",
+          "title": "Provider verified: 2026-11-03T12:00:00.000Z",
+          "feedback": ""
+        },
+        "at24Hours": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider verified (sidecar copy) \u00b7 1 day ago (stale)",
+          "title": "Provider verified: 2026-11-03T12:00:00.000Z",
+          "feedback": ""
+        },
+        "ageRefreshAdditionalCalls": 0,
+        "unavailableRetainsHistory": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Could not verify (provider unavailable) (sidecar copy) \u00b7 just now \u00b7 Previous result: Provider verified (sidecar copy) \u00b7 1 day ago (stale)",
+          "title": "Could not verify (provider unavailable): 2026-11-04T12:00:00.000Z \u00b7 Previous result: Provider verified, 2026-11-03T12:00:00.000Z",
+          "feedback": "Check finished."
+        },
+        "rejection": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider rejected (sidecar copy) \u00b7 just now",
+          "title": "Provider rejected: 2026-11-04T12:01:01.000Z",
+          "feedback": "Check finished."
+        },
+        "rejection24Hours": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider rejected (sidecar copy) \u00b7 1 day ago (stale)",
+          "title": "Provider rejected: 2026-11-04T12:01:01.000Z",
+          "feedback": ""
+        },
+        "rejectionAgePassive": 0,
+        "draftOnly": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider rejected (sidecar copy) \u00b7 1 day ago (stale)",
+          "title": "Provider rejected: 2026-11-04T12:01:01.000Z",
+          "feedback": "Draft \u00b7 Provider verified."
+        },
+        "replacement": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider rejected (sidecar copy) \u00b7 1 day ago (stale)",
+          "title": "Provider rejected: 2026-11-04T12:01:01.000Z",
+          "feedback": "Saved, not verified."
+        },
+        "ordinarySaveAdditionalCalls": 0,
+        "replacementPersisted": true,
+        "concurrentRequestCount": 1,
+        "lateCompletionAfterReplacement": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider rejected (sidecar copy) \u00b7 1 day ago (stale)",
+          "title": "Provider rejected: 2026-11-04T12:01:01.000Z",
+          "feedback": "Saved, not verified."
+        },
+        "absent": {
+          "status": "unset",
+          "evidence": "Not set",
+          "title": "",
+          "feedback": "Cleared."
+        },
+        "clearPersisted": true,
+        "openWizardCalls": 0,
+        "wizardActionLabel": "Save & verify",
+        "wizardFeedback": "Saved, not verified \u00b7 Previous check: Could not verify (provider unavailable) (sidecar copy) \u00b7 just now \u00b7 Previous result: Provider rejected (sidecar copy) \u00b7 1 day ago (stale)",
+        "wizardActuallySaved": true,
+        "wizardSaveCalls": 1,
+        "standaloneAfterWizard": "Saved, not verified",
+        "standaloneStoredTestCalls": 1,
+        "standaloneTestResult": "Saved, not verified \u00b7 Previous check: Provider verified (sidecar copy) \u00b7 just now",
+        "standaloneAt24Hours": "Saved, not verified \u00b7 Previous check: Provider verified (sidecar copy) \u00b7 1 day ago (stale)",
+        "standaloneFooterAged": "",
+        "standaloneFooterEditing": "",
+        "standaloneEditingPreserved": {
+          "focus": true,
+          "value": true,
+          "caret": true,
+          "providerCalls": 0
+        },
+        "standaloneRejectedSave": {
+          "previousUnchanged": true,
+          "providerCalls": 1,
+          "status": "modals.settingsWindow.verifyFailed"
+        },
+        "standaloneActionResult": "modals.settingsWindow.saved",
+        "standaloneActualSave": true,
+        "standaloneSaveCalls": 1,
+        "reopenedWindow": {
+          "evidence": "Saved, not verified \u00b7 Previous check: Could not verify (provider unavailable) (sidecar copy) \u00b7 1 day ago \u00b7 Previous result: Provider rejected (sidecar copy) \u00b7 2 days ago (stale)",
+          "providerCalls": 0
+        },
+        "afterRestartExplicitTest": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider verified (sidecar copy) \u00b7 just now",
+          "title": "Provider verified: 2026-11-06T12:08:08.000Z",
+          "feedback": "Check finished."
+        },
+        "admittedFirstResult": {
+          "firstCalls": 1,
+          "secondCalls": 1,
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider verified (sidecar copy) \u00b7 just now",
+          "at": "Provider verified: 2026-11-06T12:09:09.000Z",
+          "expected": "2026-11-06T12:09:09.000Z"
+        },
+        "peerSameCredentialOverlap": {
+          "firstWindowCalls": 0,
+          "secondWindowCalls": 1
+        },
+        "peerReplacementInflight": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider verified (sidecar copy) \u00b7 just now",
+          "title": "Provider verified: 2026-11-06T12:10:10.000Z",
+          "feedback": "Check finished."
+        },
+        "peerReplacementVisible": "Saved, not verified \u00b7 Previous check: Provider verified (sidecar copy) \u00b7 just now",
+        "peerFooterAfterReplacement": "modals.settingsWindow.saved",
+        "peerImmediateRepeatCalls": 0,
+        "peerAt59999ms": 0,
+        "peerAt60000ms": 1,
+        "twoWindowGlobalCapacity": {
+          "firstWindowCalls": 2,
+          "thirdRequest": 1
+        },
+        "legacyFreeTextRemoved": true
+      },
+      "privacy": {
+        "indexedDb": false,
+        "renderedDuringTest": false,
+        "visible": false,
+        "metadata": false,
+        "logs": false,
+        "url": false,
+        "unexpectedDestination": false,
+        "unrelatedContext": false
+      },
+      "requests": [
+        {
+          "side": true,
+          "provider": false,
+          "stored": true,
+          "carriedValue": false,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": true,
+          "carriedValue": false,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": true,
+          "carriedValue": false,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": false,
+          "carriedValue": true,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": true,
+          "carriedValue": false,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": true,
+          "carriedValue": false,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": true,
+          "carriedValue": false,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": false,
+          "carriedValue": true,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": false,
+          "carriedValue": true,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": true,
+          "carriedValue": false,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": true,
+          "carriedValue": false,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": true,
+          "carriedValue": false,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": false,
+          "carriedValue": true,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": false,
+          "carriedValue": true,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        }
+      ],
+      "errors": [],
+      "source": "c7443decea1021ac87f41371737e3cd52d63eaf3",
+      "sourceDirty": false,
+      "engine": "chromium-desktop"
+    },
+    "wkwebview-desktop": {
+      "desktop": true,
+      "checks": {
+        "standaloneNavigation": {
+          "categories": [
+            "overview",
+            "ai",
+            "economy",
+            "markets",
+            "security",
+            "tracking",
+            "news",
+            "conflict-analysis",
+            "military-diplomatic",
+            "travel-warnings",
+            "navigation",
+            "tactical",
+            "debug"
+          ],
+          "active": "tracking",
+          "available": [
+            "AISSTREAM_API_KEY",
+            "NASA_FIRMS_API_KEY",
+            "OPENAQ_API_KEY"
+          ]
+        },
+        "legacy": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check 306 days ago",
+          "title": "Previous check: 2026-01-01T12:00:00.000Z",
+          "feedback": ""
+        },
+        "standaloneLegacy": "Saved, not verified",
+        "passiveOpenCalls": 0,
+        "savedSuccess": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider verified (sidecar copy) \u00b7 just now",
+          "title": "Provider verified: 2026-11-03T12:00:00.000Z",
+          "feedback": "Check finished."
+        },
+        "standaloneAfterTest": "Saved, not verified",
+        "futureReceipt": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified",
+          "title": "",
+          "feedback": ""
+        },
+        "malformedReceipt": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified",
+          "title": "",
+          "feedback": ""
+        },
+        "cooldownAdditionalCalls": 0,
+        "before24Hours": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider verified (sidecar copy) \u00b7 23 hours ago",
+          "title": "Provider verified: 2026-11-03T12:00:00.000Z",
+          "feedback": ""
+        },
+        "at24Hours": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider verified (sidecar copy) \u00b7 1 day ago (stale)",
+          "title": "Provider verified: 2026-11-03T12:00:00.000Z",
+          "feedback": ""
+        },
+        "ageRefreshAdditionalCalls": 0,
+        "unavailableRetainsHistory": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Could not verify (provider unavailable) (sidecar copy) \u00b7 just now \u00b7 Previous result: Provider verified (sidecar copy) \u00b7 1 day ago (stale)",
+          "title": "Could not verify (provider unavailable): 2026-11-04T12:00:00.000Z \u00b7 Previous result: Provider verified, 2026-11-03T12:00:00.000Z",
+          "feedback": "Check finished."
+        },
+        "rejection": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider rejected (sidecar copy) \u00b7 just now",
+          "title": "Provider rejected: 2026-11-04T12:01:01.000Z",
+          "feedback": "Check finished."
+        },
+        "rejection24Hours": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider rejected (sidecar copy) \u00b7 1 day ago (stale)",
+          "title": "Provider rejected: 2026-11-04T12:01:01.000Z",
+          "feedback": ""
+        },
+        "rejectionAgePassive": 0,
+        "draftOnly": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider rejected (sidecar copy) \u00b7 1 day ago (stale)",
+          "title": "Provider rejected: 2026-11-04T12:01:01.000Z",
+          "feedback": "Draft \u00b7 Provider verified."
+        },
+        "replacement": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider rejected (sidecar copy) \u00b7 1 day ago (stale)",
+          "title": "Provider rejected: 2026-11-04T12:01:01.000Z",
+          "feedback": "Saved, not verified."
+        },
+        "ordinarySaveAdditionalCalls": 0,
+        "replacementPersisted": true,
+        "concurrentRequestCount": 1,
+        "lateCompletionAfterReplacement": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider rejected (sidecar copy) \u00b7 1 day ago (stale)",
+          "title": "Provider rejected: 2026-11-04T12:01:01.000Z",
+          "feedback": "Saved, not verified."
+        },
+        "absent": {
+          "status": "unset",
+          "evidence": "Not set",
+          "title": "",
+          "feedback": "Cleared."
+        },
+        "clearPersisted": true,
+        "openWizardCalls": 0,
+        "wizardActionLabel": "Save & verify",
+        "wizardFeedback": "Saved, not verified \u00b7 Previous check: Could not verify (provider unavailable) (sidecar copy) \u00b7 just now \u00b7 Previous result: Provider rejected (sidecar copy) \u00b7 1 day ago (stale)",
+        "wizardActuallySaved": true,
+        "wizardSaveCalls": 1,
+        "standaloneAfterWizard": "Saved, not verified",
+        "standaloneStoredTestCalls": 1,
+        "standaloneTestResult": "Saved, not verified \u00b7 Previous check: Provider verified (sidecar copy) \u00b7 just now",
+        "standaloneAt24Hours": "Saved, not verified \u00b7 Previous check: Provider verified (sidecar copy) \u00b7 1 day ago (stale)",
+        "standaloneFooterAged": "",
+        "standaloneFooterEditing": "",
+        "standaloneEditingPreserved": {
+          "focus": true,
+          "value": true,
+          "caret": true,
+          "providerCalls": 0
+        },
+        "standaloneRejectedSave": {
+          "previousUnchanged": true,
+          "providerCalls": 1,
+          "status": "modals.settingsWindow.verifyFailed"
+        },
+        "standaloneActionResult": "modals.settingsWindow.saved",
+        "standaloneActualSave": true,
+        "standaloneSaveCalls": 1,
+        "reopenedWindow": {
+          "evidence": "Saved, not verified \u00b7 Previous check: Could not verify (provider unavailable) (sidecar copy) \u00b7 1 day ago \u00b7 Previous result: Provider rejected (sidecar copy) \u00b7 2 days ago (stale)",
+          "providerCalls": 0
+        },
+        "afterRestartExplicitTest": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider verified (sidecar copy) \u00b7 just now",
+          "title": "Provider verified: 2026-11-06T12:08:08.000Z",
+          "feedback": "Check finished."
+        },
+        "admittedFirstResult": {
+          "firstCalls": 1,
+          "secondCalls": 1,
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider verified (sidecar copy) \u00b7 just now",
+          "at": "Provider verified: 2026-11-06T12:09:09.000Z",
+          "expected": "2026-11-06T12:09:09.000Z"
+        },
+        "peerSameCredentialOverlap": {
+          "firstWindowCalls": 0,
+          "secondWindowCalls": 1
+        },
+        "peerReplacementInflight": {
+          "status": "unvalidated",
+          "evidence": "Saved, not verified \u00b7 Previous check: Provider verified (sidecar copy) \u00b7 just now",
+          "title": "Provider verified: 2026-11-06T12:10:10.000Z",
+          "feedback": "Check finished."
+        },
+        "peerReplacementVisible": "Saved, not verified \u00b7 Previous check: Provider verified (sidecar copy) \u00b7 just now",
+        "peerFooterAfterReplacement": "modals.settingsWindow.saved",
+        "peerImmediateRepeatCalls": 0,
+        "peerAt59999ms": 0,
+        "peerAt60000ms": 1,
+        "twoWindowGlobalCapacity": {
+          "firstWindowCalls": 2,
+          "thirdRequest": 1
+        },
+        "legacyFreeTextRemoved": true
+      },
+      "privacy": {
+        "indexedDb": false,
+        "renderedDuringTest": false,
+        "visible": false,
+        "metadata": false,
+        "logs": false,
+        "url": false,
+        "unexpectedDestination": false,
+        "unrelatedContext": false
+      },
+      "requests": [
+        {
+          "side": true,
+          "provider": false,
+          "stored": true,
+          "carriedValue": false,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": true,
+          "carriedValue": false,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": true,
+          "carriedValue": false,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": false,
+          "carriedValue": true,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": true,
+          "carriedValue": false,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": true,
+          "carriedValue": false,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": true,
+          "carriedValue": false,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": false,
+          "carriedValue": true,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": false,
+          "carriedValue": true,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": true,
+          "carriedValue": false,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": true,
+          "carriedValue": false,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": true,
+          "carriedValue": false,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": false,
+          "carriedValue": true,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        },
+        {
+          "side": true,
+          "provider": false,
+          "stored": false,
+          "carriedValue": true,
+          "auth": true,
+          "leakedInUrl": false,
+          "unexpectedContext": false
+        }
+      ],
+      "errors": [],
+      "source": "c7443decea1021ac87f41371737e3cd52d63eaf3",
+      "sourceDirty": false,
+      "engine": "wkwebview-desktop"
+    }
+  },
+  "route": {
+    "source": "c7443decea1021ac87f41371737e3cd52d63eaf3",
+    "results": {
+      "unauthenticated": {
+        "http": 401,
+        "providerCalls": 0,
+        "outcome": null,
+        "legacyValid": null,
+        "reason": null
+      },
+      "invalidKey": {
+        "http": 403,
+        "providerCalls": 0,
+        "outcome": null,
+        "legacyValid": null,
+        "reason": null
+      },
+      "stored200": {
+        "http": 200,
+        "providerCalls": 1,
+        "outcome": "verified",
+        "legacyValid": null,
+        "reason": "provider-accepted"
+      },
+      "immediateRepeat": {
+        "http": 200,
+        "providerCalls": 0,
+        "outcome": "unavailable",
+        "legacyValid": null,
+        "reason": "cooldown"
+      },
+      "stored503": {
+        "http": 200,
+        "providerCalls": 1,
+        "outcome": "unavailable",
+        "legacyValid": null,
+        "reason": "provider-unavailable"
+      },
+      "stored401": {
+        "http": 200,
+        "providerCalls": 1,
+        "outcome": "rejected",
+        "legacyValid": null,
+        "reason": "provider-rejected"
+      },
+      "permission403": {
+        "http": 200,
+        "providerCalls": 1,
+        "outcome": "unavailable",
+        "legacyValid": null,
+        "reason": null
+      },
+      "rate429": {
+        "http": 200,
+        "providerCalls": 1,
+        "outcome": "unavailable",
+        "legacyValid": null,
+        "reason": null
+      },
+      "malformed200": {
+        "http": 200,
+        "providerCalls": 1,
+        "outcome": "unavailable",
+        "legacyValid": null,
+        "reason": null
+      },
+      "pairedStored": {
+        "http": 200,
+        "providerCalls": 1,
+        "outcome": "verified",
+        "legacyValid": null,
+        "reason": "provider-accepted"
+      },
+      "unsupportedPublic200": {
+        "http": 200,
+        "providerCalls": 0,
+        "outcome": "not-probed",
+        "legacyValid": null,
+        "reason": "unsupported-probe"
+      },
+      "burstThird": {
+        "http": 200,
+        "providerCalls": 0,
+        "outcome": "unavailable",
+        "legacyValid": null,
+        "reason": "concurrency-limit"
+      },
+      "burst": {
+        "inFlight": 2,
+        "thirdAdded": 0
+      },
+      "burstFirst": {
+        "http": 200,
+        "providerCalls": 2,
+        "outcome": "verified",
+        "legacyValid": null,
+        "reason": "provider-accepted"
+      },
+      "burstSame": {
+        "http": 200,
+        "providerCalls": 1,
+        "outcome": "verified",
+        "legacyValid": null,
+        "reason": "provider-accepted"
+      },
+      "burstOther": {
+        "http": 200,
+        "providerCalls": 1,
+        "outcome": "unavailable",
+        "legacyValid": null,
+        "reason": null
+      }
+    },
+    "matchedAuth": 8,
+    "matchedPair": 1,
+    "leaks": {
+      "logs": false,
+      "body": false,
+      "unexpectedDestination": false,
+      "unrelatedForwarded": false
+    }
+  }
+}

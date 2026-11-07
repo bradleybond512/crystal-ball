@@ -1,5 +1,6 @@
 import { Panel } from './Panel';
 import { KeyDashboard } from './KeyDashboard';
+import { SettingsManager } from '@/services/settings-manager';
 import { SetupWizard } from './SetupWizard';
 import {
   RUNTIME_FEATURES,
@@ -8,13 +9,11 @@ import {
   getSecretState,
   isFeatureAvailable,
   isSecretSet,
-  isFeatureEnabled,
   loadDesktopSecretsWhenReady,
   setFeatureToggle,
   setSecretValue,
   subscribeRuntimeConfig,
   validateSecret,
-  verifySecretWithApi,
   type RuntimeFeatureDefinition,
   type RuntimeFeatureId,
   type RuntimeSecretKey,
@@ -57,9 +56,9 @@ export class RuntimeConfigPanel extends Panel {
   private readonly mode: 'full' | 'alert';
   private readonly buffered: boolean;
   private readonly featureFilter?: RuntimeFeatureId[];
-  private pendingSecrets = new Map<RuntimeSecretKey, string>();
-  private validatedKeys = new Map<RuntimeSecretKey, boolean>();
-  private validationMessages = new Map<RuntimeSecretKey, string>();
+  private drafts = new SettingsManager();
+  private dashboard?: KeyDashboard;
+  private retired = false;
   private webVaultState: WebVaultLockState = isWebVaultUnlocked() ? 'unlocked' : 'missing';
   private webVaultMessage: { kind: 'info' | 'error'; text: string } | null = null;
 
@@ -75,6 +74,8 @@ export class RuntimeConfigPanel extends Panel {
  this.webVaultState = 'unlocked';
  } else if (this.webVaultState === 'unlocked') {
  this.webVaultState = 'locked';
+ this.dashboard?.destroy();
+ this.dashboard = undefined;
  }
  this.render();
  });
@@ -97,27 +98,15 @@ export class RuntimeConfigPanel extends Panel {
   }
 
   public async commitPendingSecrets(): Promise<void> {
- for (const [key, value] of this.pendingSecrets) {
- await setSecretValue(key, value);
- }
- this.pendingSecrets.clear();
- this.validatedKeys.clear();
- this.validationMessages.clear();
+ await this.drafts.commitPendingSecrets();
   }
 
   public async commitVerifiedSecrets(): Promise<void> {
- for (const [key, value] of this.pendingSecrets) {
- if (this.validatedKeys.get(key) !== false) {
- await setSecretValue(key, value);
- this.pendingSecrets.delete(key);
- this.validatedKeys.delete(key);
- this.validationMessages.delete(key);
- }
- }
+ await this.drafts.commitVerifiedSecrets();
   }
 
   public hasPendingChanges(): boolean {
- return this.pendingSecrets.size > 0;
+ return this.drafts.hasPendingChanges();
   }
 
   private getFilteredFeatures(): RuntimeFeatureDefinition[] {
@@ -128,77 +117,16 @@ export class RuntimeConfigPanel extends Panel {
 
   /** Returns missing required secrets for enabled features that have at least one pending key. */
   public getMissingRequiredSecrets(): string[] {
- const missing: string[] = [];
- for (const feature of this.getFilteredFeatures()) {
- if (!isFeatureEnabled(feature.id)) continue;
- const secrets = getEffectiveSecrets(feature);
- const hasPending = secrets.some(k => this.pendingSecrets.has(k));
- if (!hasPending) continue;
- for (const key of secrets) {
- if (!getSecretState(key).valid && !this.pendingSecrets.has(key)) {
- missing.push(key);
- }
- }
- }
- return missing;
+ return this.drafts.getMissingRequiredSecrets(this.getFilteredFeatures());
   }
 
   public getValidationErrors(): string[] {
- const errors: string[] = [];
- for (const [key, value] of this.pendingSecrets) {
- const result = validateSecret(key, value);
- if (!result.valid) errors.push(`${key}: ${result.hint ?? 'Invalid format'}`);
- }
- return errors;
+ return this.drafts.getValidationErrors();
   }
 
   public async verifyPendingSecrets(): Promise<string[]> {
  this.captureUnsavedInputs();
- const errors: string[] = [];
- const context = Object.fromEntries(this.pendingSecrets.entries()) as Partial<Record<RuntimeSecretKey, string>>;
-
- // Split into local-only failures vs keys needing remote verification
- const toVerifyRemotely: [RuntimeSecretKey, string][] = [];
- for (const [key, value] of this.pendingSecrets) {
- const localResult = validateSecret(key, value);
- if (localResult.valid) {
- toVerifyRemotely.push([key, value]);
- } else {
- this.validatedKeys.set(key, false);
- this.validationMessages.set(key, localResult.hint ?? 'Invalid format');
- errors.push(`${key}: ${localResult.hint ?? 'Invalid format'}`);
- }
- }
-
- // Run all remote verifications in parallel with a 15s global timeout
- if (toVerifyRemotely.length > 0) {
- const results = await Promise.race([
- Promise.all(toVerifyRemotely.map(async ([key, value]) => {
- const result = await verifySecretWithApi(key, value, context);
- return { key, result };
- })),
- new Promise<{ key: RuntimeSecretKey; result: { valid: boolean; message?: string } }[]>(resolve =>
- setTimeout(() => resolve(toVerifyRemotely.map(([key]) => ({
- key, result: { valid: true, message: 'Saved (verification timed out)' },
- }))), 15_000)
- ),
- ]);
- for (const { key, result: verifyResult } of results) {
- this.validatedKeys.set(key, verifyResult.valid);
- if (verifyResult.valid) {
- this.validationMessages.delete(key);
- } else {
- this.validationMessages.set(key, verifyResult.message ?? 'Verification failed');
- errors.push(`${key}: ${verifyResult.message ?? 'Verification failed'}`);
- }
- }
- }
-
- if (this.pendingSecrets.size > 0) {
- this.render();
- }
-
- return errors;
+ return this.drafts.verifyPendingSecrets();
   }
 
   public destroy(): void {
@@ -206,40 +134,19 @@ export class RuntimeConfigPanel extends Panel {
  this.unsubscribe = null;
  this.unsubscribeVault?.();
  this.unsubscribeVault = null;
- this.pendingSecrets.clear();
+ this.retired = true;
+ this.dashboard?.destroy();
+ this.drafts.destroy();
+ super.destroy();
   }
 
   private captureUnsavedInputs(): void {
- if (!this.buffered) return;
- this.content.querySelectorAll<HTMLInputElement>('input[data-secret]').forEach((input) => {
- const key = input.dataset.secret as RuntimeSecretKey | undefined;
- if (!key) return;
- const raw = input.value.trim();
- if (!raw || raw === MASKED_SENTINEL) return;
- // Skip plaintext keys whose value hasn't changed from stored value
- if (PLAINTEXT_KEYS.has(key) && !this.pendingSecrets.has(key)) {
- const stored = getRuntimeConfigSnapshot().secrets[key]?.value ?? '';
- if (raw === stored) return;
- }
- this.pendingSecrets.set(key, raw);
- const result = validateSecret(key, raw);
- if (!result.valid) {
- this.validatedKeys.set(key, false);
- this.validationMessages.set(key, result.hint ?? 'Invalid format');
- }
- });
- // Capture model from select or manual input
- const modelSelect = this.content.querySelector<HTMLSelectElement>('select[data-model-select]');
- const modelManual = this.content.querySelector<HTMLInputElement>('input[data-model-manual]');
- const modelValue = (modelManual && !modelManual.classList.contains('hidden-input') ? modelManual.value.trim() : modelSelect?.value) ?? '';
- if (modelValue && !this.pendingSecrets.has('OLLAMA_MODEL')) {
- this.pendingSecrets.set('OLLAMA_MODEL', modelValue);
- this.validatedKeys.set('OLLAMA_MODEL', true);
- }
+ if (this.buffered) this.drafts.captureUnsavedInputs(this.content);
   }
 
   // eslint-disable-next-line sonarjs/cognitive-complexity -- dispatches alert/full modes with many small branches; splitting would obscure the flow
   protected render(): void {
+ if (this.retired) return;
  this.captureUnsavedInputs();
  const snapshot = getRuntimeConfigSnapshot();
  const desktop = isDesktopRuntime();
@@ -285,6 +192,8 @@ export class RuntimeConfigPanel extends Panel {
  return;
  }
 
+ const existing = this.dashboard && this.content.querySelector<HTMLElement>('[data-key-dashboard-mount]');
+ const active = document.activeElement;
  this.content.innerHTML = `
  ${this.renderProfileSection()}
  ${desktop ? '' : this.renderWebVaultBanner()}
@@ -296,7 +205,13 @@ export class RuntimeConfigPanel extends Panel {
  `;
 
  const dashboardMount = this.content.querySelector<HTMLElement>('[data-key-dashboard-mount]');
- if (dashboardMount) this.mountDashboard(dashboardMount);
+ if (dashboardMount && existing) {
+ dashboardMount.replaceWith(existing);
+ this.dashboard?.refresh();
+ if (active instanceof HTMLElement && existing.contains(active)) active.focus({ preventScroll: true });
+ } else if (dashboardMount) {
+ this.mountDashboard(dashboardMount);
+ }
 
  this.attachListeners();
  this.attachProfileListeners();
@@ -304,19 +219,19 @@ export class RuntimeConfigPanel extends Panel {
   }
 
   private mountDashboard(container: HTMLElement): void {
- const dashboard = new KeyDashboard(container, {
- isSet: (key) => this.pendingSecrets.has(key) || isSecretSet(key),
+ this.dashboard = new KeyDashboard(container, {
+ isSet: isSecretSet,
  plaintextValue: (key) => (PLAINTEXT_KEYS.has(key)
- ? this.pendingSecrets.get(key) ?? getRuntimeConfigSnapshot().secrets[key]?.value
+ ? getRuntimeConfigSnapshot().secrets[key]?.value
  : undefined),
  onRunWizard: () => this.openWizard(),
  });
- dashboard.render();
+ this.dashboard.render();
   }
 
   private openWizard(): void {
  const wizard = new SetupWizard(document.body, {
- isSet: (key) => this.pendingSecrets.has(key) || isSecretSet(key),
+ isSet: isSecretSet,
  onClose: () => this.render(),
  });
  wizard.open();
@@ -673,8 +588,8 @@ export class RuntimeConfigPanel extends Panel {
  modelSelect.addEventListener('change', () => {
  const model = modelSelect.value;
  if (model && this.buffered) {
- this.pendingSecrets.set('OLLAMA_MODEL', model);
- this.validatedKeys.set('OLLAMA_MODEL', true);
+ this.drafts.setPending('OLLAMA_MODEL', model);
+ this.drafts.setValidation('OLLAMA_MODEL', true);
  modelSelect.classList.remove('invalid');
  modelSelect.classList.add('valid-staged');
  this.updateFeatureCardStatus('OLLAMA_MODEL');
@@ -696,11 +611,14 @@ export class RuntimeConfigPanel extends Panel {
  input.addEventListener('input', () => {
  const key = input.dataset.secret as RuntimeSecretKey | undefined;
  if (!key) return;
- if (this.buffered && this.pendingSecrets.has(key) && input.value.startsWith(MASKED_SENTINEL)) {
+ if (this.buffered && this.drafts.hasPending(key) && input.value.startsWith(MASKED_SENTINEL)) {
  input.value = input.value.slice(MASKED_SENTINEL.length);
  }
- this.validatedKeys.delete(key);
- this.validationMessages.delete(key);
+ if (this.buffered && input.value !== MASKED_SENTINEL) {
+ if (input.value.trim()) this.drafts.setPending(key, input.value.trim());
+ else this.drafts.deletePending(key);
+ }
+ this.drafts.clearValidation(key);
  const check = input.closest('.runtime-secret-row')?.querySelector('.runtime-secret-check');
  check?.classList.remove('visible');
  input.classList.remove('valid-staged', 'invalid');
@@ -714,24 +632,21 @@ export class RuntimeConfigPanel extends Panel {
  if (!key) return;
  const raw = input.value.trim();
  if (!raw) {
- if (this.buffered && this.pendingSecrets.has(key)) {
- this.pendingSecrets.delete(key);
- this.validatedKeys.delete(key);
- this.validationMessages.delete(key);
+ if (this.buffered && this.drafts.hasPending(key)) {
+ this.drafts.deletePending(key);
+ this.drafts.clearValidation(key);
  this.render();
  }
  return;
  }
  if (raw === MASKED_SENTINEL) return;
  if (this.buffered) {
- this.pendingSecrets.set(key, raw);
+ this.drafts.setPending(key, raw);
  const result = validateSecret(key, raw);
  if (result.valid) {
- this.validatedKeys.delete(key);
- this.validationMessages.delete(key);
+ this.drafts.clearValidation(key);
  } else {
- this.validatedKeys.set(key, false);
- this.validationMessages.set(key, result.hint ?? 'Invalid format');
+ this.drafts.setValidation(key, false, result.hint ?? 'Invalid format');
  }
  if (PLAINTEXT_KEYS.has(key)) {
  input.value = raw;
@@ -791,7 +706,7 @@ export class RuntimeConfigPanel extends Panel {
  const available = isFeatureAvailable(feature.id);
  const effectiveSecrets = getEffectiveSecrets(feature);
  const allStaged = !available && effectiveSecrets.every(
- (k) => getSecretState(k).valid || (this.pendingSecrets.has(k) && this.validatedKeys.get(k) !== false)
+ (k) => getSecretState(k).valid || (this.drafts.hasPending(k) && this.drafts.getValidationState(k).validated !== false)
  );
  let sectionVariant: string;
  let pillVariant: string;
@@ -836,8 +751,8 @@ export class RuntimeConfigPanel extends Panel {
  manual.addEventListener('blur', () => {
  const model = manual.value.trim();
  if (model && this.buffered) {
- this.pendingSecrets.set('OLLAMA_MODEL', model);
- this.validatedKeys.set('OLLAMA_MODEL', true);
+ this.drafts.setPending('OLLAMA_MODEL', model);
+ this.drafts.setValidation('OLLAMA_MODEL', true);
  manual.classList.remove('invalid');
  manual.classList.add('valid-staged');
  this.updateFeatureCardStatus('OLLAMA_MODEL');
@@ -848,7 +763,7 @@ export class RuntimeConfigPanel extends Panel {
   // eslint-disable-next-line sonarjs/cognitive-complexity -- the defensive res.json() shape guards nudged this already-near-threshold method one step over; a full refactor is out of scope for a security fix.
   private async fetchOllamaModels(select: HTMLSelectElement): Promise<void> {
  const snapshot = getRuntimeConfigSnapshot();
- const ollamaUrl = this.pendingSecrets.get('OLLAMA_API_URL')
+ const ollamaUrl = this.drafts.getPending('OLLAMA_API_URL')
  ?? snapshot.secrets.OLLAMA_API_URL?.value
  ?? '';
  if (!ollamaUrl) {
@@ -856,7 +771,7 @@ export class RuntimeConfigPanel extends Panel {
  return;
  }
 
- const currentModel = this.pendingSecrets.get('OLLAMA_MODEL')
+ const currentModel = this.drafts.getPending('OLLAMA_MODEL')
  ?? snapshot.secrets.OLLAMA_MODEL?.value
  ?? '';
 
@@ -900,8 +815,8 @@ export class RuntimeConfigPanel extends Panel {
  const first = models[0]!;
  select.value = first;
  if (this.buffered) {
- this.pendingSecrets.set('OLLAMA_MODEL', first);
- this.validatedKeys.set('OLLAMA_MODEL', true);
+ this.drafts.setPending('OLLAMA_MODEL', first);
+ this.drafts.setValidation('OLLAMA_MODEL', true);
  select.classList.add('valid-staged');
  this.updateFeatureCardStatus('OLLAMA_MODEL');
  }

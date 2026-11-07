@@ -358,3 +358,20 @@ test('foreground palette preserves a saved-place draft and map-pick state until 
     document.removeEventListener('keydown', underlying);
   }
 });
+
+test('credential wizard gets first use of Tab and Escape above Settings', () => {
+  const { settings, overlay } = mount();
+  settings.open();
+  const wizard = document.createElement('div');
+  wizard.className = 'setup-wizard-overlay';
+  const input = document.createElement('input');
+  wizard.append(input);
+  document.body.append(wizard);
+  try {
+    input.focus();
+    assert.equal(key('Tab').defaultPrevented, false);
+    assert.ok(document.activeElement === input);
+    key('Escape');
+    assert.equal(overlay.classList.contains('active'), true);
+  } finally { wizard.remove(); settings.close(); }
+});

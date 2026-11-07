@@ -344,7 +344,8 @@
     "test:sidecar-routing",
     "test:secret-boundary",
     "test:vault-writer",
-    "test:domain-retirement"
+    "test:domain-retirement",
+    "test:ux055"
   ],
   "src/services/cloud-fallback-policy.ts": [
     "test:sidecar-routing"
@@ -361,7 +362,8 @@
     "test:sidecar-routing"
   ],
   "src/settings-main.ts": [
-    "test:sidecar-routing"
+    "test:sidecar-routing",
+    "test:ux055"
   ],
   "src/components/SystemDiagnosticPanel.ts": [
     "test:sidecar-routing",
@@ -394,7 +396,8 @@
     "test:quiet-hours"
   ],
   "src/components/RuntimeConfigPanel.ts": [
-    "test:secret-boundary"
+    "test:secret-boundary",
+    "test:ux055"
   ],
   "src-tauri/sidecar/local-api-server.mjs": [
     "test:secret-boundary",
@@ -410,17 +413,20 @@
     "test:health-contract",
     "test:domain-retirement",
     "test:ux047",
-    "test:sidecar-fallback"
+    "test:sidecar-fallback",
+    "test:ux055"
   ],
   "src/services/keychain.ts": [
     "test:secret-boundary",
     "test:vault-writer"
   ],
   "src/components/SetupWizard.ts": [
-    "test:secret-boundary"
+    "test:secret-boundary",
+    "test:ux055"
   ],
   "src/components/KeyDashboard.ts": [
-    "test:secret-boundary"
+    "test:secret-boundary",
+    "test:ux055"
   ],
   "src-tauri/src/secret_sync.rs": [
     "test:secret-boundary",
@@ -1402,5 +1408,23 @@
   ],
   "api/aviation/delays.js": [
     "test:ux049"
+  ],
+  "src/services/settings-manager.ts": [
+    "test:ux055"
+  ],
+  "src/services/web-secret-store.ts": [
+    "test:ux055"
+  ],
+  "src/services/wizard-state.ts": [
+    "test:ux055"
+  ],
+  "src/services/credential-evidence.ts": [
+    "test:ux055"
+  ],
+  "src/services/credential-probe.ts": [
+    "test:ux055"
+  ],
+  "src-tauri/sidecar/credential-verification.mjs": [
+    "test:ux055"
   ]
 }

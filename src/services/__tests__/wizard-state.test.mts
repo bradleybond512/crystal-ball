@@ -15,7 +15,6 @@ import {
   getPosition, setPosition,
   getDontAsk, addDontAsk, removeDontAsk,
   getSkipped, addSkipped, clearSkipped,
-  getKeyStatus, setKeyStatus,
   resetWizardState,
 } from '../wizard-state.ts';
 
@@ -45,11 +44,20 @@ test('skipped clears on demand', () => {
   assert.deepEqual(getSkipped(), []);
 });
 
-test('per-key status round-trip', () => {
-  resetWizardState();
-  assert.equal(getKeyStatus('FRED_API_KEY'), null);
-  setKeyStatus('FRED_API_KEY', { state: 'valid', lastChecked: 1700000000000 });
-  assert.deepEqual(getKeyStatus('FRED_API_KEY'), { state: 'valid', lastChecked: 1700000000000 });
+test('the wizard can continue without remembering progress when storage is unavailable', () => {
+  const available = globalThis.localStorage;
+  try {
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() { throw new Error('denied'); } });
+    assert.equal(getPosition(), null);
+    assert.deepEqual(getDontAsk(), []);
+    assert.deepEqual(getSkipped(), []);
+    setPosition({ tier: 1, stepIndex: 3 });
+    addDontAsk('SHODAN_API_KEY');
+    addSkipped('NEWSDATA_API_KEY');
+    clearSkipped();
+  } finally {
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, writable: true, value: available });
+  }
 });
 
 test('corrupted JSON entries return null', () => {

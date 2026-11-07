@@ -58,6 +58,11 @@ function harness(scenario: Scenario) {
   }, keychain);
   const api: Record<string, any> = {};
   new Function('require', 'exports', compile('../runtime-config.ts'))((id: string) => {
+    if (id === './credential-probe' || id === './credential-evidence') {
+      const mod = {};
+      new Function('exports', compile('.' + id + '.ts'))(mod);
+      return mod;
+    }
     if (id === './runtime') return { isDesktopRuntime: () => true, resolveConfirmedLocalApiBase: async () => 'http://127.0.0.1:46123' };
     if (id === './tauri-bridge') return tauri;
     if (id === './keychain') return keychain;

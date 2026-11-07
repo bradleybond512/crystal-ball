@@ -1,0 +1,100 @@
+{
+  "executionCommit": "2a1643eb8af20571ed7b1a5aff78ee973cbb80d5",
+  "rootTree": "1b304e1e575cc9cadf8669a85c322f10a857e40e",
+  "pendingSensorExecution": "0118e8e78a087fc053976c3ecfadd2e62bd7ca9a",
+  "actualMain": "b7f5483089e30592163647f70626bf925305b62d",
+  "previousCredentialHead": "4f506e6f4625cdd1f98d1ed2645b820f6ac8ab97",
+  "nonProvenanceChanges": [
+    "src/services/synthesis/transport-evidence.ts",
+    "src/services/synthesis/__tests__/transport-evidence.test.mts"
+  ],
+  "currentChangedFileSha256": {
+    "src/services/synthesis/transport-evidence.ts": "4562b19e426224da459d4c260de71dccb59aecf399bdbad3d53c75d667dd2bc2",
+    "src/services/synthesis/__tests__/transport-evidence.test.mts": "bda5567e1be92ae17c2f94ca292582aa278f97f9a7b9409001f74c07ad34b081"
+  },
+  "upstreamSourceAndTestHashesMatch": true,
+  "node": "v22.23.1",
+  "command": "node --import tsx --test src/services/synthesis/__tests__/transport-evidence.test.mts",
+  "mutation": {
+    "appliedDiff": "diff --git a/src/services/synthesis/transport-evidence.ts b/src/services/synthesis/transport-evidence.ts\nindex c5ba611f6..0b13beb1a 100644\n--- a/src/services/synthesis/transport-evidence.ts\n+++ b/src/services/synthesis/transport-evidence.ts\n@@ -102,7 +102,6 @@ export async function trackTransportFetch<T>(\n   source: keyof typeof transportSources, fetchData: () => Promise<T>, signal: AbortSignal,\n ): Promise<T> {\n   // A cancelled caller still owns its fetch result, but must not replace evidence ownership.\n-  if (signal.aborted) return fetchData();\n   const { domain, label, receipt } = transportSources[source];\n   const attempt = threatEvidence.begin(domain, label);\n   signal.addEventListener('abort', attempt.cancel, { once: true });\n",
+    "beforeSha256": "4562b19e426224da459d4c260de71dccb59aecf399bdbad3d53c75d667dd2bc2",
+    "restoredSha256": "4562b19e426224da459d4c260de71dccb59aecf399bdbad3d53c75d667dd2bc2",
+    "cleanBeforeAndAfter": true
+  },
+  "freshValidation": {
+    "green": {
+      "exit": 0,
+      "counts": [
+        "# pass 14",
+        "# fail 0"
+      ],
+      "failingTests": [],
+      "logSha256": "183d4d5e9b7cc00fa7b781032def031bf05a51c62303e97c0ce3e762906fe622"
+    },
+    "red": {
+      "exit": 1,
+      "counts": [
+        "# pass 8",
+        "# fail 6"
+      ],
+      "failingTests": [
+        "not ok 9 - pre-aborted fulfilled fetch preserves empty evidence and caller contract",
+        "not ok 10 - pre-aborted rejected fetch preserves empty evidence and caller contract",
+        "not ok 11 - pre-aborted fulfilled fetch preserves settled evidence and caller contract",
+        "not ok 12 - pre-aborted rejected fetch preserves settled evidence and caller contract",
+        "not ok 13 - pre-aborted fulfilled fetch preserves pending evidence and caller contract",
+        "not ok 14 - pre-aborted rejected fetch preserves pending evidence and caller contract"
+      ],
+      "logSha256": "95e1e2912ec01b0eb7713e23ca6306f1bdbf50764ef2bfb7cbf3ddfd905c88bd"
+    },
+    "restored": {
+      "exit": 0,
+      "counts": [
+        "# pass 14",
+        "# fail 0"
+      ],
+      "failingTests": [],
+      "logSha256": "6997ce9ff2152bd779d27d7897c620d9134ff96d6411adc5175e56d371eecb64"
+    },
+    "credentials": {
+      "exit": 0,
+      "counts": [
+        "# pass 125",
+        "# fail 0"
+      ],
+      "failingTests": [],
+      "logSha256": "2d6dcb11498a8511b4c4a2d94df82d33a0982da34d7ba2eabb0d7052ba54ef4e"
+    }
+  },
+  "qualifications": "Prior selector/lint/aggregate evidence does NOT cover changed transport helper/test bytes. Fresh local14/0\u21928/6\u219214/0 proves current pre-abort behavior, but current full changed-path, lint, aggregate, independent review and final actual-main gates remain pending the sensor owner/coordinator. Own28 credential source/test/resource files unchanged; own prior mutation hashes preserved. No heavy checks or normal commit hooks run in this light slot.",
+  "ownOriginalMutationHashMatches": [
+    "src/services/credential-evidence.ts",
+    "src/services/__tests__/credential-evidence.test.mts",
+    "src/services/wizard-state.ts",
+    "src/services/__tests__/wizard-state.test.mts",
+    "src/services/settings-manager.ts",
+    "src/services/__tests__/settings-manager-verification.test.mts",
+    "src-tauri/sidecar/credential-verification.mjs",
+    "src-tauri/sidecar/__tests__/credential-verification.test.mjs",
+    "src/components/KeyDashboard.ts",
+    "src/components/__tests__/key-dashboard-secret-boundary.test.mts",
+    "src/components/SetupWizard.ts",
+    "src/components/RuntimeConfigPanel.ts",
+    "src/components/UnifiedSettings.ts",
+    "src/components/__tests__/unified-settings-keyboard.test.mts",
+    "src/settings-main.ts",
+    "src/services/__tests__/standalone-credential-row.test.mts",
+    "src/services/credential-probe.ts",
+    "src/services/__tests__/secret-boundary.test.mts",
+    "src/services/runtime-config.ts",
+    "src/services/web-secret-store.ts",
+    "scripts/check-sidecar-bundle.mjs"
+  ],
+  "ownSharedMutationHashMatches": {
+    "ROUTE01": true,
+    "ROUTE02": true,
+    "PACKAGING": true
+  },
+  "sameSourceAndTestOnFinalCompositeExecution": "ac2830d66a6046bdeddaaf6c4d04681d4711911d",
+  "qualification": "Mutation execution remains2a1643eb, not rerun here. Its exact helper/test hashes match final composite execution; fresh final composite lint/build/aggregate are independently recorded in UX055-COMPOSITE-FINAL-VALIDATION.json."
+}

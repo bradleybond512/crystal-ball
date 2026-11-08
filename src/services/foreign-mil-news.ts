@@ -9,6 +9,7 @@
  * Cache TTL: 15 minutes.
  */
 
+import { replaceNonemptyAngleSpans } from '../utils/angle-span-text';
 import { dataFreshness } from './data-freshness';
 
 export type MilNewsSource = 'Russia-MoD' | 'China-PLA' | 'TASS' | 'Xinhua' | 'RT' | 'Other';
@@ -55,9 +56,7 @@ let _cache: MilCache | null = null;
 const MILITARY_KEYWORDS = /military|army|navy|air force|missile|nuclear|weapon|exercise|drill|troops|soldier|combat|submarine|warship|hypersonic|strategic|defense|deterrence|conflict|operation|deploy|patrol/i;
 
 function stripHtml(html: string): string {
-  return html
- // eslint-disable-next-line sonarjs/slow-regex -- HTML stripping on bounded RSS content
- .replace(/<[^>]+>/g, ' ')
+  return replaceNonemptyAngleSpans(html)
  .replace(/&amp;/g, '&')
  .replace(/&lt;/g, '<')
  .replace(/&gt;/g, '>')

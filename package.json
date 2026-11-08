@@ -323,6 +323,7 @@
     "test:advisor-json-extraction": "tsx --test src/services/__tests__/advisor-json-extraction.test.mts",
     "test:angle-span-text": "tsx --test src/utils/__tests__/angle-span-text.test.mts",
     "test:spc-angle": "tsx --test src/services/__tests__/spc-angle.test.mts",
+    "test:foreign-mil-angle": "tsx --test src/services/__tests__/foreign-mil-angle.test.mts",
     "test:dsca-angle": "tsx --test src/services/__tests__/dsca-angle.test.mts",
     "test:acc508": "tsx --test src/services/correlation/__tests__/near-threshold-recall.test.mts src/services/correlation/__tests__/boundary-baseline-migration.test.mts",
     "test:breaking-stack-lifecycle": "tsx --test src/components/__tests__/breaking-news-stack-lifecycle.test.mts",

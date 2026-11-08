@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createRuntimeFetch, createWebApiFetch, isRetiredAppUrl, type RuntimeFetchDeps } from '../runtime.ts';
+import { readFileSync } from 'node:fs';
+import { deriveScriptIndex, prDeclaredOverrides, mergeOverrides, selectScripts, OVERRIDES } from '../../../scripts/targeted-tests.mjs';
+import { createRuntimeFetch, createWebApiFetch, isRetiredAppUrl, isLocalOnlyApiTarget, type RuntimeFetchDeps } from '../runtime.ts';
 
 // R4-BUG-004: the desktop fetch router sends /api/* only to a CONFIRMED
 // sidecar port and falls back to the cloud only on a connection failure or a
@@ -235,4 +237,67 @@ test('relative web requests cannot target a page served from the retired domain'
   }) as typeof fetch, '', 'https://crystalball.app');
   await assert.rejects(webFetch('/api/health'), /Retired app domain/);
   assert.equal(calls, 0);
+});
+
+// #1783: the existing event store is local machine state, not a cloud feed.
+const EVENT_STORE_TARGETS = ['health', 'query', 'count', 'prune'].map((route) => `/api/events/${route}`);
+
+test('event-store classification is exact and includes query strings, not neighboring paths', () => {
+  for (const target of EVENT_STORE_TARGETS) {
+    assert.equal(isLocalOnlyApiTarget(target), true, target);
+    assert.equal(isLocalOnlyApiTarget(`${target}?limit=50`), true, target);
+    assert.equal(isLocalOnlyApiTarget(`${target}/extra`), false, target);
+    assert.equal(isLocalOnlyApiTarget(`${target}-extra`), false, target);
+  }
+  assert.equal(isLocalOnlyApiTarget('/api/events/other'), false);
+});
+
+for (const target of EVENT_STORE_TARGETS) {
+  test(`${target} preserves a local 503 without any cloud transport`, async () => {
+    const response = new Response('event store unavailable', { status: 503 });
+    const h = harness({ local: () => response });
+    const result = await h.fetch(`${target}?limit=50`);
+    assert.equal(result, response);
+    assert.equal(await result.text(), 'event store unavailable');
+    assert.equal(h.calls.length, 1);
+    assert.equal(h.calls[0]!.url, `http://127.0.0.1:46200${target}?limit=50`);
+    assert.equal(h.calls[0]!.auth, 'Bearer tok-1');
+    assert.equal(h.invalidations(), 0);
+  });
+
+  test(`${target} keeps connection failures local and invalidates the confirmed port`, async () => {
+    const error = new TypeError('synthetic local event store unavailable');
+    const h = harness({ local: () => { throw error; } });
+    await assert.rejects(h.fetch(target), (actual) => actual === error);
+    assert.equal(h.invalidations(), 1);
+    assert.equal(h.calls.length, 4, 'preserve existing local startup retries');
+    assert.ok(h.calls.every((call) => call.url === `http://127.0.0.1:46200${target}`));
+  });
+
+  test(`${target} with no confirmed port sends nothing to either local or cloud`, async () => {
+    const h = harness({ ports: [null] });
+    await assert.rejects(h.fetch(target), /Local API port not confirmed/);
+    assert.deepEqual(h.calls, []);
+    assert.equal(h.invalidations(), 1);
+  });
+}
+
+test('event-store POST prune preserves the local response and does not change general method policy', async () => {
+  const response = new Response('event store unavailable', { status: 503 });
+  const h = harness({ local: () => response });
+  assert.equal(await h.fetch('/api/events/prune', { method: 'POST', body: '{"months":12}' }), response);
+  assert.equal(h.calls.length, 1);
+  assert.equal(h.calls[0]!.method, 'POST');
+});
+
+
+test('event routing regressions remain selected through the existing trusted routing alias', () => {
+  const scripts = JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')).scripts;
+  const index = deriveScriptIndex(scripts);
+  assert.equal(index.has('test:sidecar-routing'), true);
+  assert.ok(index.get('test:sidecar-routing')!.testFiles.has('src/services/__tests__/runtime-fetch-fallback.test.mts'));
+  const declarations = prDeclaredOverrides(() => readFileSync(new URL('../../../scripts/targeted-tests-overrides.json', import.meta.url), 'utf8'));
+  for (const path of ['src/services/runtime.ts', 'src/services/__tests__/runtime-fetch-fallback.test.mts']) {
+    assert.ok(selectScripts([path], index, mergeOverrides(OVERRIDES, declarations)).scripts.includes('test:sidecar-routing'), path);
+  }
 });

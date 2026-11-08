@@ -262,6 +262,15 @@ test('Emergency Readiness restores exact local evidence after an external-networ
       manifestRaw: seeded.manifestRaw,
     });
 
+    // Settle the real startup brief before exercising offline Library evidence.
+    // On-demand opening cancels its idle schedule; Close aborts and invalidates its
+    // generation so late completion cannot take ownership during this check.
+    await page.evaluate(() => document.dispatchEvent(new CustomEvent('cb:show-digest')));
+    const digest = page.getByRole('dialog', { name: 'Crystal Ball — Since you last looked' });
+    await expect(digest).toBeVisible();
+    await digest.getByRole('button', { name: 'Close since-you-last-looked brief' }).click();
+    await expect(digest).toBeHidden();
+
     await homeShell.locator('.home-shell-library').click();
     const library = page.locator('.library-overlay');
     await expect(library).toBeVisible();

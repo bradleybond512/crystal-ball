@@ -1,9 +1,13 @@
+import { replaceNonemptyAngleSpans } from '@/utils/angle-span-text';
 // Satellite and space debris reentry predictions
 // Sources:
 // - Aerospace Corporation reentry table: https://aerospace.org/reentries (via rss-proxy)
 // - CelesTrak recent decays: https://celestrak.org/satcat/search.php?DECAY=recent&FORMAT=json
 
 export type ReentryObjectType = 'rocket-body' | 'debris' | 'satellite' | 'unknown';
+
+type ReentrySurvivability = 'high' | 'partial' | 'low';
+type ReentrySeverity = 'critical' | 'high' | 'medium' | 'low';
 
 export interface DebrisReentry {
   id: string;
@@ -16,9 +20,9 @@ export interface DebrisReentry {
   uncertainty: string;
   predictedLat: number | null;
   predictedLon: number | null;
-  survivability: 'high' | 'partial' | 'low';
+  survivability: ReentrySurvivability;
   isAdversaryObject: boolean;
-  severity: 'critical' | 'high' | 'medium' | 'low';
+  severity: ReentrySeverity;
 }
 
 export interface ReentryReport {
@@ -44,8 +48,7 @@ function proxyUrl(url: string): string {
 }
 
 function stripHtml(html: string): string {
-  return html
- .replace(/<[^>]+>/g, ' ')
+  return replaceNonemptyAngleSpans(html)
  .replace(/&amp;/g, '&')
  .replace(/&lt;/g, '<')
  .replace(/&gt;/g, '>')
@@ -72,7 +75,7 @@ function detectCountry(_cosparId: string, objectName: string): string {
   const name = objectName.toUpperCase();
 
   // Russian/Soviet origin
-  if (/\b(COSMOS|KOSMOS|PROTON|SOYUZ|PROGRESS|MOLNIYA|ZENIT|ROKOT|STRELA|RADUGA|GORIZONT|EKSPRESS|LUCH|YAMAL|MERIDIAN|GONETS|URAGAN|GLONASS|ELEKTRO|RESURS|SICH|OKEAN|METEOR|TSELINA|PARUS|TSIKLON|TSIKADA)\b/.test(name)) {
+  if (/\b(COSMOS|KOSMOS|PROTON|SOYUZ|PROGRESS|MOLNIYA|ZENIT|ROKOT|STRELA|RADUGA|GORIZONT|EKSPRESS|LUCH|YAMAL)\b/.test(name) || /\b(MERIDIAN|GONETS|URAGAN|GLONASS|ELEKTRO|RESURS|SICH|OKEAN|METEOR|TSELINA|PARUS|TSIKLON|TSIKADA)\b/.test(name)) {
  return 'Russia';
   }
 
@@ -109,7 +112,7 @@ function isAdversaryCountry(country: string): boolean {
   return /russia|soviet|china|prc|dprk|north korea|iran/i.test(country);
 }
 
-function computeSurvivability(massKg: number | null, objectType: ReentryObjectType): 'high' | 'partial' | 'low' {
+function computeSurvivability(massKg: number | null, objectType: ReentryObjectType): ReentrySurvivability {
   const mass = massKg ?? 0;
   if (objectType === 'rocket-body') {
  // Rocket bodies are generally dense metal, higher survivability
@@ -123,11 +126,10 @@ function computeSurvivability(massKg: number | null, objectType: ReentryObjectTy
 }
 
 function computeSeverity(
-  survivability: 'high' | 'partial' | 'low',
+  survivability: ReentrySurvivability,
   isAdversaryObject: boolean,
   predictedLat: number | null,
-  _predictedLon: number | null,
-): 'critical' | 'high' | 'medium' | 'low' {
+): ReentrySeverity {
   // Populated area heuristic: roughly equatorial/mid-latitude belt
   const isPopulatedLatitude = predictedLat !== null && Math.abs(predictedLat) < 60;
 
@@ -139,69 +141,40 @@ function computeSeverity(
 
 // Parse Aerospace Corporation HTML reentry table
 // Expected columns (0-indexed): Object | COSPAR ID | Mass (kg) | Reentry Time (UTC) | Latitude (°) | Longitude (°)
-function parseAerospaceHtml(html: string): DebrisReentry[] {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
+interface ReentryColumns { colObject: number; colCospar: number; colMass: number; colTime: number; colLat: number; colLon: number; }
+function headerIndex(headers: string[], matches: (header: string) => boolean, fallback: number): number {
+  const index = headers.findIndex(header => matches(header));
+  return index === -1 ? fallback : index;
+}
+function resolveReentryColumns(headers: string[]): ReentryColumns | null {
+  const hasReentryTable = headers.some(h => h.includes('cospar') || h.includes('object')) && headers.some(h => h.includes('reentry') || h.includes('mass'));
+  if (!hasReentryTable) return null;
+  return {
+    colObject: headerIndex(headers, h => h.includes('object'), 0),
+    colCospar: headerIndex(headers, h => h.includes('cospar'), 1),
+    colMass: headerIndex(headers, h => h.includes('mass'), 2),
+    colTime: headerIndex(headers, h => h.includes('reentry') || h.includes('time') || h.includes('date'), 3),
+    colLat: headerIndex(headers, h => h.includes('lat'), 4),
+    colLon: headerIndex(headers, h => h.includes('lon'), 5),
+  };
+}
+function getCellText(cells: Element[], index: number): string {
+  return index >= 0 && index < cells.length ? stripHtml(cells[index]?.textContent ?? '').trim() : '';
+}
+function parseAerospaceRow(cells: Element[], columns: ReentryColumns, i: number): DebrisReentry | null {
+  const { colObject, colCospar, colMass, colTime, colLat, colLon } = columns;
+ const objectName = getCellText(cells, colObject);
+ const cosparId = getCellText(cells, colCospar);
+ const massStr = getCellText(cells, colMass);
+ const timeStr = getCellText(cells, colTime);
+ const latStr = getCellText(cells, colLat);
+ const lonStr = getCellText(cells, colLon);
 
-  const tables = doc.querySelectorAll('table');
-  if (tables.length === 0) return [];
-
-  const results: DebrisReentry[] = [];
-
-  for (const table of tables) {
- const rows = table.querySelectorAll('tr');
- if (rows.length < 2) continue;
-
- // Try to detect header row to find column indices
- const headerRow = rows[0]!;
- const headers = [...headerRow.querySelectorAll('th, td')].map(
- th => th.textContent?.toLowerCase().trim() ?? '',
- );
-
- // Look for telltale header columns
- const hasReentryTable =
- headers.some(h => h.includes('cospar') || h.includes('object')) &&
- headers.some(h => h.includes('reentry') || h.includes('mass'));
-
- if (!hasReentryTable) continue;
-
- let colObject = headers.findIndex(h => h.includes('object'));
- let colCospar = headers.findIndex(h => h.includes('cospar'));
- let colMass = headers.findIndex(h => h.includes('mass'));
- let colTime = headers.findIndex(h => h.includes('reentry') || h.includes('time') || h.includes('date'));
- let colLat = headers.findIndex(h => h.includes('lat'));
- let colLon = headers.findIndex(h => h.includes('lon'));
-
- // Fall back to positional defaults if headers not found
- if (colObject < 0) colObject = 0;
- if (colCospar < 0) colCospar = 1;
- if (colMass < 0) colMass = 2;
- if (colTime < 0) colTime = 3;
- if (colLat < 0) colLat = 4;
- if (colLon < 0) colLon = 5;
-
- for (let i = 1; i < rows.length; i++) {
- const row = rows[i]!;
- const cells = [...row.querySelectorAll('td')];
- if (cells.length < 3) continue;
-
- const getText = (idx: number): string =>
- idx >= 0 && idx < cells.length
- ? stripHtml(cells[idx]?.textContent ?? '').trim()
- : '';
-
- const objectName = getText(colObject);
- const cosparId = getText(colCospar);
- const massStr = getText(colMass);
- const timeStr = getText(colTime);
- const latStr = getText(colLat);
- const lonStr = getText(colLon);
-
- if (!objectName && !cosparId) continue;
+ if (!objectName && !cosparId) return null;
 
  const massKg = massStr ? Number.parseFloat(massStr.replace(/[^\d.]/g, '')) || null : null;
  const predictedTime = timeStr ? new Date(timeStr) : null;
- const validTime = predictedTime && !isNaN(predictedTime.getTime()) ? predictedTime : null;
+ const validTime = predictedTime && !Number.isNaN(predictedTime.getTime()) ? predictedTime : null;
  const predictedLat = latStr ? Number.parseFloat(latStr) : null;
  const predictedLon = lonStr ? Number.parseFloat(lonStr) : null;
 
@@ -209,29 +182,47 @@ function parseAerospaceHtml(html: string): DebrisReentry[] {
  const country = detectCountry(cosparId, objectName);
  const isAdversaryObject = isAdversaryCountry(country);
  const survivability = computeSurvivability(
- isFinite(massKg ?? Number.NaN) ? massKg : null,
+ Number.isFinite(massKg ?? Number.NaN) ? massKg : null,
  objectType,
  );
- const severity = computeSeverity(survivability, isAdversaryObject, predictedLat, predictedLon);
+ const severity = computeSeverity(survivability, isAdversaryObject, predictedLat);
 
- results.push({
+ return {
  id: cosparId || `aero-${objectName.replace(/\W/g, '').slice(0, 20)}-${i}`,
  objectName: objectName || 'Unknown Object',
  cosparId: cosparId || '',
- massKg: isFinite(massKg ?? Number.NaN) ? massKg : null,
+ massKg: Number.isFinite(massKg ?? Number.NaN) ? massKg : null,
  objectType,
  country,
  predictedTime: validTime,
  uncertainty: '',
- predictedLat: isFinite(predictedLat ?? Number.NaN) ? predictedLat : null,
- predictedLon: isFinite(predictedLon ?? Number.NaN) ? predictedLon : null,
+ predictedLat: Number.isFinite(predictedLat ?? Number.NaN) ? predictedLat : null,
+ predictedLon: Number.isFinite(predictedLon ?? Number.NaN) ? predictedLon : null,
  survivability,
  isAdversaryObject,
  severity,
- });
- }
-  }
+ };
+}
 
+function parseAerospaceHtml(html: string): DebrisReentry[] {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const tables = doc.querySelectorAll('table');
+  if (tables.length === 0) return [];
+  const results: DebrisReentry[] = [];
+  for (const table of tables) {
+    const rows = table.querySelectorAll('tr');
+    if (rows.length < 2) continue;
+    const headers = [...rows[0]!.querySelectorAll('th, td')].map(th => th.textContent?.toLowerCase().trim() ?? '');
+    const columns = resolveReentryColumns(headers);
+    if (!columns) continue;
+    for (let i = 1; i < rows.length; i++) {
+      const cells = [...rows[i]!.querySelectorAll('td')];
+      if (cells.length < 3) continue;
+      const entry = parseAerospaceRow(cells, columns, i);
+      if (entry) results.push(entry);
+    }
+  }
   return results;
 }
 
@@ -254,7 +245,7 @@ function parseCelesTrakDecay(entries: CelesTrakSatCatEntry[]): DebrisReentry[] {
  if (!decayStr) return [];
 
  const decayDate = new Date(decayStr);
- if (isNaN(decayDate.getTime())) return [];
+ if (Number.isNaN(decayDate.getTime())) return [];
 
  // Only include recent decays (last 30 days) — these are confirmed reentries
  // Skip if older than 30 days (historical)
@@ -264,7 +255,7 @@ function parseCelesTrakDecay(entries: CelesTrakSatCatEntry[]): DebrisReentry[] {
  const cosparId = (entry.INTLDES ?? '').trim();
  const rawType = (entry.OBJECT_TYPE ?? '').toUpperCase();
 
- let objectType: ReentryObjectType = 'unknown';
+ let objectType: ReentryObjectType;
  if (rawType === 'PAYLOAD') objectType = 'satellite';
  else if (rawType === 'ROCKET BODY') objectType = 'rocket-body';
  else if (rawType === 'DEBRIS') objectType = 'debris';
@@ -274,9 +265,12 @@ function parseCelesTrakDecay(entries: CelesTrakSatCatEntry[]): DebrisReentry[] {
  const isAdversaryObject = isAdversaryCountry(country);
 
  // CelesTrak doesn't give mass — use type heuristics
- const massKg = objectType === 'rocket-body' ? 2000 : (objectType === 'satellite' ? 500 : 100);
+ let massKg: number;
+ if (objectType === 'rocket-body') massKg = 2000;
+ else if (objectType === 'satellite') massKg = 500;
+ else massKg = 100;
  const survivability = computeSurvivability(massKg, objectType);
- const severity = computeSeverity(survivability, isAdversaryObject, null, null);
+ const severity = computeSeverity(survivability, isAdversaryObject, null);
 
  return [{
  id: cosparId || `ct-${entry.NORAD_CAT_ID ?? objectName.replace(/\W/g, '').slice(0, 20)}`,
@@ -303,14 +297,14 @@ export async function fetchDebrisReentries(): Promise<ReentryReport> {
  fetch(proxyUrl(AEROSPACE_ORG_URL), {
  signal: AbortSignal.timeout(12_000),
  headers: { Accept: 'text/html,*/*' },
- }).then(res => {
+ }).then(async (res): Promise<DebrisReentry[]> => {
  if (!res.ok) return [] as DebrisReentry[];
  return res.text().then(parseAerospaceHtml);
  }),
  fetch(CELESTRAK_DECAY_URL, {
  signal: AbortSignal.timeout(12_000),
  headers: { Accept: 'application/json' },
- }).then(res => {
+ }).then(async (res): Promise<DebrisReentry[]> => {
  if (!res.ok) return [] as DebrisReentry[];
  return res.json().then((data: CelesTrakSatCatEntry[]) =>
  Array.isArray(data) ? parseCelesTrakDecay(data) : [],
@@ -335,7 +329,7 @@ export async function fetchDebrisReentries(): Promise<ReentryReport> {
   }
 
   // Sort: critical first, then by predicted time ascending (soonest first)
-  const SEVERITY_ORDER: Record<'critical' | 'high' | 'medium' | 'low', number> = {
+  const SEVERITY_ORDER: Record<ReentrySeverity, number> = {
  critical: 0,
  high: 1,
  medium: 2,

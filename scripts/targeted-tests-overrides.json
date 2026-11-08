@@ -33,6 +33,32 @@
   "tests/secret-scan-automation.test.mjs": [
     "test:secret-scan"
   ],
+  "src/components/HomePostureBand.ts": [
+    "test:home-posture"
+  ],
+  "src/components/StormMoveActions.ts": [
+    "test:home-posture"
+  ],
+  "src/components/HomeShellOverlay.ts": [
+    "test:home-posture",
+    "test:home-reassurance",
+    "test:homeshell",
+    "test:repair12"
+  ],
+  "src/components/StormPosturePanel.ts": [
+    "test:home-posture"
+  ],
+  "src/styles/home-shell.css": [
+    "test:home-posture",
+    "test:ux050"
+  ],
+  "src/components/__tests__/home-posture-band.test.mts": [
+    "test:home-posture"
+  ],
+  "src/components/__tests__/home-shell-reassurance.test.mts": [
+    "test:home-posture",
+    "test:home-reassurance"
+  ],
   "scripts/install-mcp-deps.mjs": [
     "test:mcp-deps",
     "test:install-scripts"
@@ -307,9 +333,6 @@
     "test:repair12"
   ],
   "src/styles/alerts.css": [
-    "test:ux050"
-  ],
-  "src/styles/home-shell.css": [
     "test:ux050"
   ],
   "src/main.ts": [
@@ -1502,9 +1525,6 @@
     "test:repair12"
   ],
   "src/components/CommandPalettePanel.ts": [
-    "test:repair12"
-  ],
-  "src/components/HomeShellOverlay.ts": [
     "test:repair12"
   ],
   "src/components/UnifiedSettings.ts": [

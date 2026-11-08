@@ -321,6 +321,7 @@
     "test:acc505": "tsx --test src/services/cognition/__tests__/correlation-regime.test.mts src/services/correlation/__tests__/regime-reliability.test.mts src/services/correlation/__tests__/regime-reliability-replay.test.mts",
     "test:advisor-json-extraction": "tsx --test src/services/__tests__/advisor-json-extraction.test.mts",
     "test:angle-span-text": "tsx --test src/utils/__tests__/angle-span-text.test.mts",
+    "test:dsca-angle": "tsx --test src/services/__tests__/dsca-angle.test.mts",
     "test:acc508": "tsx --test src/services/correlation/__tests__/near-threshold-recall.test.mts src/services/correlation/__tests__/boundary-baseline-migration.test.mts",
     "test:breaking-stack-lifecycle": "tsx --test src/components/__tests__/breaking-news-stack-lifecycle.test.mts",
     "test:e2e:map:ci": "playwright test e2e/map-harness.spec.ts e2e/local-basemap.spec.ts --grep-invert \"matches golden screenshots per layer and zoom$\"",

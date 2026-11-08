@@ -1,4 +1,6 @@
 {
+  "src/services/dsca-arms-transfers.ts": ["test:dsca-angle"],
+  "src/services/__tests__/fixtures/dsca-original.ts.txt": ["test:dsca-angle"],
   "src/services/congress-defense.ts": ["test:angle-span-text"],
   "src/services/__tests__/fixtures/congress-defense-original.ts.txt": ["test:angle-span-text"],
   "scripts/acc008-production-baseline.mts": [

@@ -269,34 +269,34 @@ async function isolatedSms(seed, fn, fixture = {}) {
 
 for (const enabled of [true, false]) {
   test(`real API ${enabled ? 'enabled' : 'disabled'}27 accepts strict 27→26→25 tuple reductions`, async () => {
-    await isolatedSms({ enabled, allowlist: legacyRows() }, async ({ seed, accept }) => {
+    await assert.doesNotReject(isolatedSms({ enabled, allowlist: legacyRows() }, async ({ seed, accept }) => {
       await accept({ allowlist: seed.allowlist.slice(1) }, { enabled: seed.enabled, allowlist: seed.allowlist.slice(1) }, '27→26 strict reduction');
       await accept({ allowlist: seed.allowlist.slice(2) }, { enabled: seed.enabled, allowlist: seed.allowlist.slice(2) }, '26→25 strict reduction');
-    });
+    }));
   });
 }
 test('real API partial disable and disabled no-op preserve all27; re-enable omitted list is refused', async () => {
-  await isolatedSms({ enabled: true, allowlist: legacyRows() }, async ({ seed, accept, reject }) => {
+  await assert.doesNotReject(isolatedSms({ enabled: true, allowlist: legacyRows() }, async ({ seed, accept, reject }) => {
     const disabled = { ...seed, enabled: false };
     await accept({ enabled: false }, disabled, 'enabled-only disable');
     await accept({}, disabled, 'omitted fields no-op');
     await accept({ enabled: false }, disabled, 'disabled-only no-op');
     await reject({ enabled: true }, 'disabled27 cannot re-enable without list');
-  });
+  }));
 });
 test('real API disabled27 cannot enable with26 but can enable with25', async () => {
-  await isolatedSms({ enabled: false, allowlist: legacyRows() }, async ({ seed, reject, accept }) => {
+  await assert.doesNotReject(isolatedSms({ enabled: false, allowlist: legacyRows() }, async ({ seed, reject, accept }) => {
     await reject({ enabled: true, allowlist: seed.allowlist.slice(1) }, 'disabled27→enabled26 refused');
     await accept({ enabled: true, allowlist: seed.allowlist.slice(2) }, { enabled:true, allowlist:seed.allowlist.slice(2) }, 'disabled27→enabled25');
-  });
+  }));
 });
 test('real API already-enabled27 enabled-only true no-op retains all tuples', async () => {
-  await isolatedSms({ enabled:true, allowlist:legacyRows() }, async ({ seed, accept }) => {
+  await assert.doesNotReject(isolatedSms({ enabled:true, allowlist:legacyRows() }, async ({ seed, accept }) => {
     await accept({ enabled:true }, seed, 'inherited enabled state no-op');
-  });
+  }));
 });
 test('real API overcap exception refuses unchanged/increased/replacement/new/metadata/multiplicity lists', async () => {
-  await isolatedSms({ enabled:false, allowlist:legacyRows() }, async ({ seed, reject }) => {
+  await assert.doesNotReject(isolatedSms({ enabled:false, allowlist:legacyRows() }, async ({ seed, reject }) => {
     const list = seed.allowlist;
     await reject({ allowlist:list }, 'unchanged27');
     await reject({ enabled:false, allowlist:list }, 'disabled full unchanged27 no-op');
@@ -306,24 +306,24 @@ test('real API overcap exception refuses unchanged/increased/replacement/new/met
     await reject({ allowlist:[{ ...list[1], name:'Changed' }, ...list.slice(2)] }, 'name changed in shorter26');
     await reject({ allowlist:[{ ...list[1], tier:'admin' }, ...list.slice(2)] }, 'tier escalation in shorter26');
     await reject({ allowlist:[list[2], ...list.slice(2)] }, 'duplicate tuple count increased in shorter26');
-  });
+  }));
 });
 test('real API duplicate counts can decrease and normalized saved tuples authorize exact reduction', async () => {
   const rows = legacyRows(); rows[0] = { ...rows[1] }; rows[2].name = `  ${rows[2].name}  `;
-  await isolatedSms({ enabled:true, allowlist:rows }, async ({ seed, accept }) => {
+  await assert.doesNotReject(isolatedSms({ enabled:true, allowlist:rows }, async ({ seed, accept }) => {
     const reduced = seed.allowlist.slice(1).map(entry => ({ ...entry, name:entry.name.trim() }));
     await accept({ allowlist:reduced }, { enabled:true, allowlist:reduced }, 'duplicate decrement and normalized tuple reduction');
-  });
+  }));
 });
 test('real API new26 and at-cap additions are refused; <=25 normal metadata edits are allowed', async () => {
-  await isolatedSms({ enabled:false, allowlist:[] }, async ({ reject, accept }) => {
+  await assert.doesNotReject(isolatedSms({ enabled:false, allowlist:[] }, async ({ reject, accept }) => {
     const rows = Array.from({ length:26 }, (_,i) => ({ phoneNumber:'+1555800'+String(i).padStart(4,'0'), name:'Normal', tier:'readonly' }));
     await reject({ allowlist:rows }, 'new26 from empty');
     await accept({ allowlist:rows.slice(0,25) }, { enabled:false, allowlist:rows.slice(0,25) }, 'new25');
     await reject({ allowlist:rows }, 'at25 add26');
     rows[0] = { ...rows[0], name:'Allowed edit', tier:'admin' };
     await accept({ enabled:true, allowlist:rows.slice(0,25) }, { enabled:true, allowlist:rows.slice(0,25) }, 'normal metadata edit at25');
-  });
+  }));
 });
 
 const invalidEntries = [
@@ -347,15 +347,15 @@ for (const [label, entry] of invalidEntries) {
   });
 }
 test('real API exact saved legacy phone remains editable but changed/new legacy equivalent is refused', async () => {
-  await isolatedSms({ enabled:false, allowlist:[{ phoneNumber:'5551234567', name:'Old', tier:'readonly' }] }, async ({ accept, reject }) => {
+  await assert.doesNotReject(isolatedSms({ enabled:false, allowlist:[{ phoneNumber:'5551234567', name:'Old', tier:'readonly' }] }, async ({ accept, reject }) => {
     await accept({ allowlist:[{ phoneNumber:'5551234567', name:'Edited', tier:'admin' }] }, { enabled:false, allowlist:[{ phoneNumber:'5551234567', name:'Edited', tier:'admin' }] }, 'exact saved legacy');
     await reject({ allowlist:[{ phoneNumber:'555-123-4567', name:'Changed', tier:'readonly' }] }, 'unknown formatted legacy equivalent');
     await reject({ allowlist:[{ phoneNumber:'5551234568', name:'New', tier:'readonly' }] }, 'unknown legacy');
     await accept({ allowlist:[{ phoneNumber:'+1 (555) 888-9999', name:' Normal ', tier:'readonly' }] }, { enabled:false, allowlist:[{ phoneNumber:'+15558889999', name:'Normal', tier:'readonly' }] }, 'new E164 normalization');
-  });
+  }));
 });
 test('real API config shape, auth and 64KiB body guard preserve live and disk bytes', async () => {
-  await isolatedSms({ enabled:false, allowlist:[] }, async ({ assert, base, auth, get, bytes, reject }) => {
+  await assert.doesNotReject(isolatedSms({ enabled:false, allowlist:[] }, async ({ assert, base, auth, get, bytes, reject }) => {
     for (const patch of [null, [], { enabled:'yes' }, { extra:'inert' }, { allowlist:'bad' }]) await reject(patch, 'strict config shape');
     const before = await get(); const saved = bytes();
     const unauthorized = await fetch(base+'/api/sms/config', { method:'POST', headers:{ authorization:'Bearer wrong', 'content-type':'application/json' }, body:'{"enabled":true}' });
@@ -363,10 +363,10 @@ test('real API config shape, auth and 64KiB body guard preserve live and disk by
     const oversized = await fetch(base+'/api/sms/config', { method:'POST', headers:{...auth, 'content-type':'application/json'}, body:' '.repeat(64*1024)+'{"enabled":true}' });
     assert.equal(oversized.status,400,'valid JSON >64KiB refused before write');
     assert.deepEqual(await get(),before,'oversize live unchanged'); assert.deepEqual(bytes(),saved,'oversize disk unchanged');
-  });
+  }));
 });
 test('missing Twilio token refuses a held body before any bytes are sent', async () => {
-  await isolatedSms({ enabled:true, allowlist:legacyRows(1) }, async ({ assert, base, http }) => {
+  await assert.doesNotReject(isolatedSms({ enabled:true, allowlist:legacyRows(1) }, async ({ assert, base, http }) => {
     const result = await new Promise((resolve,reject) => {
       const req = http.request(base+'/api/sms/command', { method:'POST', headers:{'content-type':'application/json','content-length':'100'} }, res => {
         let body=''; res.setEncoding('utf8'); res.on('data',chunk=>body+=chunk); res.on('end',()=>{req.destroy();resolve({status:res.statusCode,body});});
@@ -376,10 +376,10 @@ test('missing Twilio token refuses a held body before any bytes are sent', async
     });
     assert.equal(result.status,503,'missing Twilio prebody refusal');
     assert.equal(JSON.parse(result.body).error,'Twilio signature required');
-  });
+  }));
 });
 test('fake CB STATUS bearer and signed form return status content; invalid auth/origin/tier/rate fail closed', async () => {
-  await isolatedSms({ enabled:true, allowlist:legacyRows(1) }, async ({ assert, base, auth, seed, createHmac }) => {
+  await assert.doesNotReject(isolatedSms({ enabled:true, allowlist:legacyRows(1) }, async ({ assert, base, auth, seed, createHmac }) => {
     const command = (body, headers={}) => fetch(base+'/api/sms/command',{method:'POST',headers:{'content-type':'application/json',...headers},body:JSON.stringify(body)});
     const statusBody={from:seed.allowlist[0].phoneNumber,body:'CB STATUS'};
     const trusted=await command(statusBody,auth);assert.equal(trusted.status,200);
@@ -399,7 +399,7 @@ test('fake CB STATUS bearer and signed form return status content; invalid auth/
       let rate;for(let i=0;i<11;i++)rate=await command(statusBody,auth);
       assert.equal(rate.status,429,'bearer still rate-limited');const rateContent=await rate.json();assert.match(rateContent.response,/rate limit/);
     } finally { delete process.env.TWILIO_AUTH_TOKEN; }
-  });
+  }));
 });
 test('actual U+2029 serializer escapes and roundtrips without changing original hostile fixture', () => {
   const payload={type:'patreon-oauth',ok:false,error:`left${String.fromCodePoint(0x20_29)}right`};
@@ -417,31 +417,31 @@ for (const [label, pattern] of [
 
 
 test('real API normalized equivalent submitted phone tuple can reduce27→26 without metadata drift', async () => {
-  await isolatedSms({ enabled:true, allowlist:legacyRows() }, async ({ seed, accept }) => {
+  await assert.doesNotReject(isolatedSms({ enabled:true, allowlist:legacyRows() }, async ({ seed, accept }) => {
     const expected = seed.allowlist.slice(1);
     const submitted = expected.map((entry,index) => index === 0
       ? { ...entry, phoneNumber:'+1 (555) 700-0001', name:'  Recipient 1  ' } : entry);
     await accept({ enabled:true, allowlist:submitted }, { enabled:true, allowlist:expected }, 'normalized phone/name tuples');
-  });
+  }));
 });
 test('real API malformed saved survivor can be disabled but cannot use oversized cleanup exemption', async () => {
   const rows=legacyRows(); rows[1]={...rows[1],name:'bad\nname'};
-  await isolatedSms({ enabled:true, allowlist:rows }, async ({ seed, accept, reject }) => {
+  await assert.doesNotReject(isolatedSms({ enabled:true, allowlist:rows }, async ({ seed, accept, reject }) => {
     await accept({ enabled:false }, { ...seed, enabled:false }, 'disable preserves malformed legacy survivor');
     await reject({ allowlist:seed.allowlist.slice(1) }, 'malformed saved survivor never confers admission');
     const cleaned=seed.allowlist.filter((_,index)=>index!==1);
     await accept({ allowlist:cleaned }, { enabled:false, allowlist:cleaned }, 'explicit remove malformed survivor');
-  });
+  }));
 });
 
 // Additive guard discrimination; direct-only fixtures do not imply JSON transport.
 
 test('real API exact saved tuple with unknown entry key cannot use shorter26 exemption', async () => {
-  await isolatedSms({ enabled: false, allowlist: legacyRows() }, async ({ seed, reject }) => {
+  await assert.doesNotReject(isolatedSms({ enabled: false, allowlist: legacyRows() }, async ({ seed, reject }) => {
     const shorter = seed.allowlist.slice(1);
     shorter[0] = { ...shorter[0], extra: 'inert-extra-field' };
     await reject({ allowlist: shorter }, 'exact saved tuple with unknown entry key, shorter26');
-  });
+  }));
 });
 
 test('strict entry guard: direct-only array with named valid fields remains an object-shape refusal', () => {

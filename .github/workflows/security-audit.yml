@@ -69,7 +69,7 @@ jobs:
         if: >-
           !cancelled() && steps.root_install.outcome == 'success' &&
           (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        run: npm audit signatures
+        run: npm audit signatures --json
 
   cargo-audit:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository

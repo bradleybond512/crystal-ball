@@ -30,7 +30,11 @@ test('forks get the isolated audit while installation and signature verification
   assert.equal(audit.env.MERGE_BASE_SHA, '${{ github.event.merge_group.base_sha }}');
   assert.equal(audit.env.ROLLOUT_BASE, '180f58ed0e15c6453afdc5b5a267fe1af38a7793');
   const install = job.steps.find(s => s.run === 'npm ci --ignore-scripts');
-  const verify = job.steps.find(s => s.run === 'npm audit signatures');
+  const verify = job.steps.find(s => s.name === 'npm audit signatures');
+  assert.equal(verify?.run, 'npm audit signatures --json');
+  assert.equal(job.permissions, undefined);
+  assert.equal(verify?.permissions, undefined);
+  assert.equal(workflow['continue-on-error'], undefined);
   for (const stage of [job, audit, install, verify]) {
     assert.ok(stage && !stage['continue-on-error'], 'audit and signature failures must count');
   }
@@ -41,6 +45,38 @@ test('forks get the isolated audit while installation and signature verification
   assert.ok(job.steps.indexOf(audit) < job.steps.indexOf(install) && job.steps.indexOf(install) < job.steps.indexOf(verify));
   assert.deepEqual(job.steps.filter(s => s.run && !s.if), [audit], 'only the standalone auditor shell runs for forks');
   for (const name of ['cargo-audit', 'cargo-deny']) assert.equal(workflow.jobs[name].if, trustedEvent);
+});
+
+test('signature JSON command preserves synthetic verifier stdout and exit status', t => {
+  const root = mkdtempSync(join(tmpdir(), 'signature-json-wiring-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const verify = job.steps.find(step => step.name === 'npm audit signatures');
+  assert.equal(verify?.run, 'npm audit signatures --json');
+  // Synthetic executable only: never invoke npm, load packages or contact a registry.
+  writeFileSync(join(root, 'npm'), `#!/bin/bash
+[[ "$*" == "audit signatures --json" ]] || exit 97
+printf '%s' "$FIXTURE_OUTPUT"
+exit "$FIXTURE_EXIT"
+`, { mode: 0o700 });
+  const cases = [
+    [0, { invalid: [], missing: [] }],
+    [1, { invalid: [{ name: 'public-example', code: 'EATTESTATIONVERIFY',
+      message: 'synthetic certificate verification failure', predicateType: 'https://slsa.dev/provenance/v1' }], missing: [] }],
+    [1, { invalid: [], missing: [{ name: 'public-example', version: '1.0.0' }] }],
+    [7, { error: { code: 'SYNTHETIC_ERROR', summary: 'synthetic unexpected verifier error' } }],
+  ];
+  for (const [status, output] of cases) {
+    const expected = JSON.stringify(output);
+    const result = spawnSync('/bin/bash', ['--noprofile', '--norc', '-eo', 'pipefail', '-c', verify.run], {
+      cwd: root, encoding: 'utf8', timeout: 5000,
+      env: { PATH: root, FIXTURE_OUTPUT: expected, FIXTURE_EXIT: String(status) },
+    });
+    assert.equal(result.error, undefined);
+    assert.equal(result.signal, null);
+    assert.equal(result.status, status, result.stderr);
+    assert.equal(result.stdout, expected);
+    assert.equal(result.stderr, '');
+  }
 });
 
 test('changing the independent auditor requires the supply-chain approval label and code owner', () => {
@@ -70,7 +106,8 @@ function history(t) {
   function run(overrides = {}) {
     assert.ok(audit);
     return spawnSync('bash', ['-euo', 'pipefail', '-c', audit.run], { cwd: work, encoding: 'utf8',
-      env: { PATH: process.env.PATH, RUNNER_TEMP: temp, GITHUB_EVENT_NAME: 'pull_request', PR_BASE_SHA: base,
+      env: { PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: process.env.TMPDIR,
+        GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', RUNNER_TEMP: temp, GITHUB_EVENT_NAME: 'pull_request', PR_BASE_SHA: base,
         MERGE_BASE_SHA: '', GITHUB_SHA: head, GITHUB_REF: 'refs/pull/1/merge', ROLLOUT_BASE: introduction,
         ROLLOUT_SHA256: sha256(code('candidate')), NODE_AUTH_TOKEN: 'credential-must-not-leak',
         NODE_OPTIONS: '--require=/absent-ux054-preload', ...overrides } });

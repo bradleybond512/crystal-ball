@@ -1,0 +1,13 @@
+# SPC nonempty-angle extraction prerequisite
+
+Base: `6c8231a6bf240d16f693a8dba306d4dd0532ece5`. Standard exact-equivalence provider/performance slice. Goal: remove quadratic unmatched-angle scanning without changing text extraction or weather policy. Non-goals: sanitization, XML parser redesign, provider health changes, classification/severity/TTL/schema changes, live NOAA calls.
+
+Architect-approved production scope is one existing `replaceNonemptyAngleSpans` call replacing `/<[^>]+>/g` and removal of its obsolete disable. All other provider bytes preserved. Original full module in `src/services/__tests__/fixtures/spc-original.ts.txt` is byte-identical to base, SHA256 `e13bd53333280b237d901a4e4d49c0322e2c31fa7eb8f6f95c1d8df39067a22e`. Helper is unchanged, text extraction only, not sanitization.
+
+`test:spc-angle` compares complete exported module behavior against that immutable oracle with synthetic fetch, clock, timeout and freshness seams. Raw Date timestamps and values are fingerprinted rather than only JSON date serialization. It covers CDATA/plain text, entity ordering, unmatched/empty/nested spans, Unicode, separate under-limit classification/sorting cases,25row cap,48hour date boundary,5minute cache, exact HTTP/exception/body errors, stale fallback, successful empty-cache replacement and labels. Ready/GO performance exercises actual exported fetch on a100000-character unmatched-angle CDATA description, measuring only work after successful startup.
+
+Preparation evidence: before production edit,5 tests yielded4 pass/1 fail: actual work exceeded1s after READY (not import failure). After single helper substitution,5/5 passed under official Node22.23.3 and a60s owned-process/disk guard. These are uncommitted preparation runs, not final clean-snapshot qualification or mutation proofs. No live provider/network/native/install effects. Package runner and selector test cover provider/test/oracle; final routing mutation must remove the package runner since removing an override alone can be equivalent via directory fallback.
+
+Scoped full-file provider and test lint passed with zero errors/warnings under installed SonarJS4.0.3 and already-qualified4.2.2, without changing installed dependencies.
+
+Pending before completion: normal hooks/freeze, genuine clean mutation/restoration for performance/semantics/cache/error/routing, admitted current-main trusted selector and named aggregate, final build/bundle/stable lint/artifacts, independent review and mandatory hosted checks. No final acceptance or release claim. Existing thresholds and quirks remain exact oracle behavior; any genuine unexpected failure is reported, not suppressed or baseline-expanded.

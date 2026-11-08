@@ -1327,7 +1327,8 @@ Update the row in the same PR that does the work.
 
 | Item | Scope | Source status | Packaged acceptance | Draft |
 | --- | --- | --- | --- | --- |
-| Repair12 | Existing System Diagnostic destination from Home, live command palette and Settings Debug; registry-owned HUD/Ghost/globe shortcuts and Help | Local implementation and focused source/DOM validation; full gate and independent review pending | Pending: browser/desktop focus, native key delivery and VoiceOver | Not published; remote Draft claims paused pending approval |
+| Repair12 — historical 2026-10-18 checkpoint | Existing System Diagnostic destination from Home, live command palette and Settings Debug; registry-owned HUD/Ghost/globe shortcuts and Help | Local implementation and focused source/DOM validation; full gate and independent review pending | Pending: browser/desktop focus, native key delivery and VoiceOver | Not published; remote Draft claims paused pending approval |
+| Repair12 — current 2026-11-08 checkpoint | Same bounded Diagnostics navigation and shortcut design, reconciled with main `8eaa227cc` | Integrated local aggregate, full ESLint baseline, full build/bundle budget and 22 browser cases passed; affected fixture failures repaired with fresh detecting mutation proofs. Final exact-source Sonnet review and hosted gates pending | Still open: packaged/native focus and shortcut delivery, VoiceOver, live-provider and installed/offline acceptance. Browser fixtures are not native acceptance | Existing published draft #1822; Bradley authorized repair and protected merge after the required review and checks |
 
 The canonical navigation label is **Diagnostics**, backed by the unchanged
 `system-diagnostic` panel ID. Algorithm Diagnostic, Feed Health and Self-Test

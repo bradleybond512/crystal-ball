@@ -7,7 +7,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { auditLocks } from '../scripts/audit-npm-locks.mjs';
 
-const roots = ['.', '.github/tools/codex', 'marketing-site', 'scripts', 'tools/cb-control', 'tools/mcp-server'];
+const roots = ['.', '.github/tools/codex', 'marketing-site', 'scripts', 'tools/cb-control', 'tools/mcp-server', '.github/tools/filesystem-mcp'];
 const vendors = { '.': 'vendor/texture-compressor-safe', 'marketing-site': 'vendor/braces' };
 
 function git(repo, ...args) {
@@ -66,7 +66,7 @@ function run(repo, mock, lines = [], registryFetch = async () => Response.json({
   return auditLocks(repo, mock, (line) => lines.push(line), registryFetch);
 }
 
-test('scans all six committed locks separately with isolated public-registry commands', async (t) => {
+test('scans all seven committed locks separately with isolated public-registry commands', async (t) => {
   const repo = fixture(t);
   put(repo, 'scripts/package-lock.json', 'worktree tampering');
   const calls = [];
@@ -99,7 +99,7 @@ test('one non-root high or critical fails without hiding later project results',
       const hit = read(cwd, 'package.json').name === 'project-2';
       return { status: hit ? 1 : 0, stdout: JSON.stringify(response(cwd, hit ? severity : 'low')) };
     }, lines), false);
-    assert.equal(calls, 6);
+    assert.equal(calls, 7);
     assert.match(lines.join('\n'), /marketing-site/);
     assert.match(lines.join('\n'), /tool/);
   }
@@ -255,7 +255,7 @@ test('bulk reads have a bounded deadline and size even when excess bytes are val
     return requested === 1 ? new Response(' '.repeat(8 * 1024 * 1024) + '{}') : Response.json({});
   });
   assert.equal(ok, false);
-  assert.equal(requested, 6);
+  assert.equal(requested, 7);
   assert.equal(scans, 5, 'oversized reply fails before npm');
   assert.match(lines[0], /bulk advisory response too large/);
 });
@@ -290,7 +290,7 @@ function filesystemResponse(cwd, severity) {
   return report;
 }
 
-test('filesystem inventory: the complete reserved pair is audited as a seventh committed project', async t => {
+test('filesystem inventory: the complete mandatory pair is audited as a seventh committed project', async t => {
   const repo = fixture(t, addFilesystemFixture);
   put(repo, join(filesystemProject, 'package-lock.json'), 'untrusted worktree bytes');
   const calls = [], bulk = [], lines = [];
@@ -299,7 +299,7 @@ test('filesystem inventory: the complete reserved pair is audited as a seventh c
     return { status: 0, stdout: JSON.stringify(response(cwd)) };
   }, lines, async (_url, options) => { bulk.push(JSON.parse(options.body)); return Response.json({}); });
   assert.equal(ok, true, lines.join('\n'));
-  assert.deepEqual(calls.sort(), [...roots.map((_, i) => 'project-' + i), 'filesystem-fixture'].sort());
+  assert.deepEqual(calls.sort(), [...roots.slice(0, -1).map((_, i) => 'project-' + i), 'filesystem-fixture'].sort());
   assert.equal(bulk.length, 7);
   assert.ok(bulk.some(body => body.fsprobe?.[0] === '1.1.0'));
   assert.match(lines.join('\n'), /\.github\/tools\/filesystem-mcp: 1 dependencies/);
@@ -361,7 +361,7 @@ test('filesystem inventory: partial, nonregular and near-match pairs fail before
   }
 });
 
-test('filesystem inventory: reserving a future project does not make any original project optional', async t => {
+test('filesystem inventory: all seven projects remain mandatory after adoption', async t => {
   for (const root of roots) {
     for (const file of ['package.json', 'package-lock.json']) {
       const repo = fixture(t, r => rmSync(join(r, root, file)));
@@ -370,4 +370,13 @@ test('filesystem inventory: reserving a future project does not make any origina
       assert.equal(calls, 0, root + '/' + file);
     }
   }
+});
+
+
+test('filesystem inventory: deleting the entire adopted pair fails before registry or npm', async t => {
+  const repo = fixture(t, r => rmSync(join(r, filesystemProject), { recursive: true }));
+  let registryCalls = 0, npmCalls = 0;
+  assert.equal(await run(repo, () => { npmCalls++; throw Error('must not spawn'); }, [],
+    async () => { registryCalls++; return Response.json({}); }), false);
+  assert.equal(registryCalls, 0); assert.equal(npmCalls, 0);
 });

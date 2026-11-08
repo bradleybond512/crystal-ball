@@ -1,4 +1,13 @@
 {
+  ".github/mcp.json": ["test:filesystem-mcp-launch"],
+  ".github/tools/filesystem-mcp/launch.mjs": ["test:filesystem-mcp-launch"],
+  ".github/tools/filesystem-mcp/launch-contract.mjs": ["test:filesystem-mcp-launch"],
+  ".github/tools/filesystem-mcp/launch-trust.mjs": ["test:filesystem-mcp-launch"],
+  ".github/tools/filesystem-mcp/child-lifecycle.mjs": ["test:filesystem-mcp-launch"],
+  ".github/tools/filesystem-mcp/runtime-manifest.json": ["test:filesystem-mcp-launch"],
+  ".github/tools/filesystem-mcp/content-manifest.json": ["test:filesystem-mcp-launch"],
+  ".github/tools/filesystem-mcp/package.json": ["test:filesystem-mcp-launch"],
+  ".github/tools/filesystem-mcp/package-lock.json": ["test:filesystem-mcp-launch"],
   "src/services/foreign-mil-news.ts": ["test:foreign-mil-angle"],
   "src/services/__tests__/fixtures/foreign-mil-original.ts.txt": ["test:foreign-mil-angle"],
   "src/services/spc-mesoscale.ts": ["test:spc-angle"],

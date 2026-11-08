@@ -15,7 +15,7 @@ export interface LightningStrike {
   lat: number;
   lon: number;
   time: number; // Unix ms
-  intensity: number;  // kA (kiloamperes)
+  intensity: number;  // Source-derived scalar; physical unit unverified. Retained for color mapping.
 }
 
 const STRIKES_URL = 'https://map.blitzortung.org/GETjson.php';

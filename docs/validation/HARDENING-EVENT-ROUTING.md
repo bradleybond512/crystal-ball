@@ -1,7 +1,7 @@
 # Event-store routing remainder of #1783
 
 This bounded candidate completes the original four-path local-only restriction
-on main `87cdf928964c36b14d479f10126101bacc0fbc4b`. It does not replay
+on main `93e45f702e8b09d72a720df34bfbe03afb2b8d4b`. It does not replay
 the old #1769/#1778 stack or replace #1800's Unicode-safe comparison implementation.
 All current auth, CSP, confirmed-port, token, supervisor and general cloud
 fallback policies are preserved.
@@ -35,10 +35,24 @@ index admission and selection for both the implementation and test file. Its
 `node --test` prefix is allowlisted and its chained stages remain supported;
 no package, mapping or runner-admission change is needed.
 
-Private source-bound receipts record focused runs, detecting mutations, normal
-hooks and outstanding gates. Heavy aggregate/build/full lint, genuine independent
-review and hosted checks remain pending until explicitly qualified. These unit
-fixtures do not prove packaged/native networking or installed/offline acceptance.
+The source/test-byte-identical provisional integration passed all 78 suites
+selected by the trusted main-owned selector over the combined 25-file future
+stack, including the inherited UI and preview-origin changes. Focused routing,
+normal aggregate validation with build, bundle policies and full ESLint also
+passed under official Node 22.23.3/npm 10.9.9. ESLint reported 1,006 existing
+findings with no increases; no baseline expansion was made. Actual-main
+integration changed only inherited review records, not production or test bytes.
+
+Four genuine earlier clean-snapshot mutations independently removed each event
+path. Each started at 40 passing tests, produced 36 pass / 4 fail, then restored
+40 pass / 0 fail, with no skipped or cancelled tests. Nonempty mutation patches,
+raw logs and restored runtime hashes are retained in private source-bound
+receipts. The restored runtime hash matches this integration. These are retained
+mutation results, not newly executed mutation runs on the rebased commit.
+
+The final HEAD-derived build/bundle, genuine independent review and hosted checks
+remain pending. The provisional build is not final-HEAD artifact evidence. These
+unit fixtures do not prove packaged/native networking or installed/offline acceptance.
 No release, deployment, installation or dispatch is authorized by this note.
 
 The older comparison-only note described event-route availability as a dependency
@@ -46,5 +60,5 @@ of held work. On this candidate's base all four handlers already exist. Only the
 renderer routing restriction remained; auth policy and handler implementation do
 not need to be imported from stale ancestry.
 
-Rollback is the bounded source/test/script/documentation change. There is no data
+Rollback is the bounded three-file production/test/documentation change. There is no data
 migration or saved-state update.

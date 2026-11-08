@@ -41,10 +41,12 @@ function fixture(t, edit = () => {}) {
     put(repo, join(root, '.npmrc'), 'registry=https://evil.invalid/\nomit=dev\n');
   }
   put(repo, 'src-tauri/sidecar/package.json', { name: 'sidecar', version: '1.0.0', type: 'module' });
+  git(repo, 'add', '--', '.'); // Permit deliberate fixture deletions to remain tracked changes.
   edit(repo);
   git(repo, 'add', '--', ...roots.slice(1), 'src-tauri', 'vendor', 'package.json', 'package-lock.json', '.npmrc');
   // Include deliberately unclassified test inputs, if supplied.
   for (const file of ['new', 'npm-shrinkwrap.json', 'pnpm-lock.yaml']) if (existsSync(join(repo, file))) git(repo, 'add', '--', file);
+  git(repo, 'add', '--', '.github'); // Include only owned synthetic tool-project fixtures.
   git(repo, 'commit', '--quiet', '-m', 'fixture');
   return repo;
 }
@@ -268,4 +270,104 @@ test('preserves the strongest matching advisory when npm reports a downgraded fi
     lines, async () => Response.json({tool:rows}));
   assert.equal(ok, false, 'a moderate npm report cannot lower a matching high advisory');
   assert.match(lines[0], /bulk finding tool:high/);
+});
+
+const filesystemProject = '.github/tools/filesystem-mcp';
+function addFilesystemFixture(repo) {
+  const manifest = { name: 'filesystem-fixture', version: '1.0.0', devDependencies: { fsprobe: '^1.0.0' } };
+  put(repo, join(filesystemProject, 'package.json'), manifest);
+  put(repo, join(filesystemProject, 'package-lock.json'), { name: manifest.name, version: manifest.version,
+    lockfileVersion: 3, packages: { '': manifest, 'node_modules/fsprobe': { version: '1.1.0',
+      resolved: 'https://registry.npmjs.org/fsprobe/-/fsprobe-1.1.0.tgz', dev: true } } });
+}
+function filesystemResponse(cwd, severity) {
+  const report = response(cwd, severity);
+  if (severity) {
+    report.vulnerabilities.fsprobe = { ...report.vulnerabilities.tool, name: 'fsprobe',
+      via: [{ name: 'fsprobe', severity, title: 'synthetic filesystem advisory' }], nodes: ['node_modules/fsprobe'] };
+    delete report.vulnerabilities.tool;
+  }
+  return report;
+}
+
+test('filesystem inventory: the complete reserved pair is audited as a seventh committed project', async t => {
+  const repo = fixture(t, addFilesystemFixture);
+  put(repo, join(filesystemProject, 'package-lock.json'), 'untrusted worktree bytes');
+  const calls = [], bulk = [], lines = [];
+  const ok = await run(repo, (_bin, _args, { cwd }) => {
+    calls.push(read(cwd, 'package.json').name);
+    return { status: 0, stdout: JSON.stringify(response(cwd)) };
+  }, lines, async (_url, options) => { bulk.push(JSON.parse(options.body)); return Response.json({}); });
+  assert.equal(ok, true, lines.join('\n'));
+  assert.deepEqual(calls.sort(), [...roots.map((_, i) => 'project-' + i), 'filesystem-fixture'].sort());
+  assert.equal(bulk.length, 7);
+  assert.ok(bulk.some(body => body.fsprobe?.[0] === '1.1.0'));
+  assert.match(lines.join('\n'), /\.github\/tools\/filesystem-mcp: 1 dependencies/);
+});
+
+test('filesystem inventory: seventh-project high, critical and malformed reports fail through the normal audit', async t => {
+  const repo = fixture(t, addFilesystemFixture);
+  for (const severity of ['high', 'critical', 'malformed']) {
+    let seventh = 0, calls = 0;
+    const lines = [];
+    const ok = await run(repo, (_bin, _args, { cwd }) => {
+      calls++;
+      if (read(cwd, 'package.json').name !== 'filesystem-fixture') return { status: 0, stdout: JSON.stringify(response(cwd)) };
+      seventh++;
+      return severity === 'malformed' ? { status: 0, stdout: '{"auditReportVersion":2}' }
+        : { status: 1, stdout: JSON.stringify(filesystemResponse(cwd, severity)) };
+    }, lines);
+    assert.equal(ok, false);
+    assert.equal(calls, 7, lines.join('\n'));
+    assert.equal(seventh, 1);
+    assert.match(lines.join('\n'), /\.github\/tools\/filesystem-mcp:/);
+  }
+});
+
+test('filesystem inventory: npm cannot conceal a direct advisory for the seventh project', async t => {
+  const repo = fixture(t, addFilesystemFixture);
+  let seventh = 0;
+  const lines = [];
+  const ok = await run(repo, (_bin, _args, { cwd }) => {
+    if (read(cwd, 'package.json').name === 'filesystem-fixture') seventh++;
+    return { status: 0, stdout: JSON.stringify(response(cwd)) };
+  }, lines, async (_url, options) => Response.json(JSON.parse(options.body).fsprobe
+    ? { fsprobe: [{ id: 991, severity: 'high', title: 'synthetic direct risk', vulnerable_versions: '>=1 <2' }] } : {}));
+  assert.equal(ok, false);
+  assert.equal(seventh, 1, lines.join('\n'));
+  assert.match(lines.join('\n'), /bulk.*npm|npm.*bulk/i);
+});
+
+test('filesystem inventory: partial, nonregular and near-match pairs fail before any registry or npm call', async t => {
+  const cases = [
+    r => rmSync(join(r, filesystemProject, 'package.json')),
+    r => rmSync(join(r, filesystemProject, 'package-lock.json')),
+    r => { const file = join(r, filesystemProject, 'package-lock.json'); rmSync(file); symlinkSync('../../../package-lock.json', file); },
+    ...['.github/tools/filesystem-mcp-extra', '.github/tools/Filesystem-mcp', filesystemProject + '/nested']
+      .map(dir => r => {
+        // A case-insensitive host cannot hold both spellings simultaneously.
+        if (dir === '.github/tools/Filesystem-mcp') rmSync(join(r, filesystemProject), { recursive: true });
+        put(r, join(dir, 'package.json'), {}); put(r, join(dir, 'package-lock.json'), {});
+      }),
+    r => put(r, join(filesystemProject, 'npm-shrinkwrap.json'), {}),
+  ];
+  for (const change of cases) {
+    const repo = fixture(t, r => { addFilesystemFixture(r); change(r); });
+    let registryCalls = 0, npmCalls = 0;
+    assert.equal(await run(repo, () => { npmCalls++; throw Error('must not reach npm'); }, [],
+      async () => { registryCalls++; return Response.json({}); }), false);
+    assert.equal(registryCalls, 0);
+    assert.equal(npmCalls, 0);
+  }
+});
+
+test('filesystem inventory: reserving a future project does not make any original project optional', async t => {
+  for (const root of roots) {
+    for (const file of ['package.json', 'package-lock.json']) {
+      const repo = fixture(t, r => rmSync(join(r, root, file)));
+      let calls = 0;
+      assert.equal(await run(repo, () => { calls++; throw Error('must not spawn'); }), false);
+      assert.equal(calls, 0, root + '/' + file);
+    }
+  }
 });

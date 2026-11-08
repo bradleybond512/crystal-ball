@@ -159,7 +159,13 @@ test('only the rollout base and matching bootstrap bytes can run; missing or mal
   assert.doesNotMatch(badHash.stdout, /TAMPERED/);
 });
 
-test('the checked-in auditor matches the rollout digest', () => {
+test('filesystem inventory: historical rollout bytes remain pinned while the current checker may evolve', () => {
   assert.ok(audit);
-  assert.equal(sha256(readFileSync(new URL('../' + checker, import.meta.url))), audit.env.ROLLOUT_SHA256);
+  // Exact checker from introduction commit 223dafc4d, not today's evolving evaluator.
+  const historical = readFileSync(new URL('./fixtures/ux054-audit-rollout.mjs.txt', import.meta.url));
+  assert.equal(audit.env.ROLLOUT_BASE, '180f58ed0e15c6453afdc5b5a267fe1af38a7793');
+  assert.equal(audit.env.ROLLOUT_SHA256, '040897891d33714a64fa6def48bfabf0b5944f8585c59b2fd27c21d4c42240bd');
+  assert.equal(sha256(historical), audit.env.ROLLOUT_SHA256);
+  // The real shell history fixtures above independently prove base selection and
+  // rejection of different bootstrap bytes; this fixture never executes code.
 });

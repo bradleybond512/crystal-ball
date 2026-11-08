@@ -1,0 +1,9 @@
+{
+  "reviewedSha": "05f9ecdd717c320b9df9b9cfdccb6906e131b9bb",
+  "reviewer": "claude",
+  "model": "claude-sonnet-4-6",
+  "verdict": "approve",
+  "blockingFindings": 0,
+  "reviewedAt": "2026-11-08T14:54:03.841Z",
+  "evidence": "**Source:** `05f9ecdd717c320b9df9b9cfdccb6906e131b9bb` | **Base:** `91e15989325f0112bf1304747604768a0ff70d7e` | **Model:** `claude-sonnet-4-6` | **Status:** COMPLETE | **Blocking findings:** 0 | **Verdict:** APPROVE\n\nSix files changed: `spc-mesoscale.ts`, `spc-angle.test.mts`, `spc-original.ts.txt` (oracle, SHA256 `e13bd53…` — the immutable original SPC provider), `targeted-tests-overrides.json`, `package.json`, `SONAR-SPC-ANGLE.md`. Production change is exactly one import, one helper substitution replacing `/<[^>]+>/g`, and removal of its obsolete eslint disable. All other provider bytes, error paths, cache logic, and freshness signals are unchanged.\n\nDifferential tests establish equality on tested bounded inputs — not universal proof. Five focused tests cover text/entity/Unicode/date/CDATA extraction, classification/severity/ordering/cap/labels, cache/status/exception/freshness, adversarial 100k-character CDATA performance, and selector routing. Aggregate suite: 230 tests (5 SPC + 159 providers + 66 untrusted-HTML). 13 genuinely detecting mutations each reached exit 1 and restored to 5/0. Stable lint: 979 existing findings, zero increases, baseline unchanged. 680 build artifacts rehashed with bootstrap wiring confirmed.\n\nAdmitted limits: synthetic/Node-only evidence; no native, browser, live-provider, or app acceptance. 47 hosted selector scripts remain mandatory before merge. No security concerns or fail-open regressions identified."
+}

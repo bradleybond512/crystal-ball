@@ -2,6 +2,8 @@
 
 Status: Bradley approved this bounded slice, amended acceptance, documentation-only draft claim and local implementation on 2026-11-08. Draft [#1886](https://github.com/bradleybond512/crystal-ball/pull/1886) claims this slice. Full UX-062 remains open; later production-code publication requires separate approval. Merging, auto-merge, releases, build dispatch, deployment and installation remain paused.
 
+Local implementation and [validation evidence](../validation/UX-062-UNVERIFIED-FORECAST-LABELS.md) are prepared. Full baseline comparison work stays open.
+
 ## Brief and verified selection
 
 Goal: prevent displayed estimates from implying verified baseline performance without supporting evidence. Preserve every existing forecast value, numerical format, bar, warning and action.

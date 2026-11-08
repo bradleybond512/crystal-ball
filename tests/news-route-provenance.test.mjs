@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import newsapi, { __resetNewsApiCacheForTests } from '../api/newsapi-headlines.js';
 import newsdata from '../api/newsdata-feed.js';
+import { createQuotaCache } from '../src-tauri/sidecar/quota-cache.mjs';
+import { QUOTA_TTL_MS } from '../src-tauri/sidecar/quota-policy.mjs';
+import { isPersistedNewsEnvelope } from '../src-tauri/sidecar/quota-news-envelope.mjs';
 
 let savedAppKey;
 beforeEach(() => {
@@ -23,8 +26,9 @@ function localRoute(path, cache = new Map(), context = {}, clock = Date) {
   const start = sidecar.indexOf(path === '/api/news/headlines' ? '  // ── News headlines aggregator' : '  // ── NewsAPI.org headlines');
   const end = sidecar.indexOf(path === '/api/news/headlines' ? '  // ── GDELT Intelligence' : '  // ── USGS Volcano', start);
   const helpers = sidecar.slice(sidecar.indexOf('  // ── News provenance helpers'), sidecar.indexOf('  // ── NewsAPI.org headlines'));
-  const run = new AsyncFunction('requestUrl', 'fetchWithTimeout', 'getCached', 'getCachedStale', 'setCached', 'context', 'json', 'CHROME_UA', 'Date', helpers + sidecar.slice(start, end));
-  return (url) => run(new URL(url), globalThis.fetch, (key) => cache.get(key)?.fresh ? cache.get(key).data : null, (key) => cache.get(key)?.data, (key, data) => cache.set(key, { data, fresh: true }), context, (body, status = 200, headers = {}) => Response.json(body, { status, headers }), 'test', clock);
+  const quotaCache = createQuotaCache({ now: () => clock.now() });
+  const run = new AsyncFunction('requestUrl', 'fetchWithTimeout', 'getCached', 'getCachedStale', 'setCached', 'context', 'json', 'CHROME_UA', 'Date', '_quotaCache', 'QUOTA_TTL_MS', 'isPersistedNewsEnvelope', helpers + sidecar.slice(start, end));
+  return (url) => run(new URL(url), globalThis.fetch, (key) => cache.get(key)?.fresh ? cache.get(key).data : null, (key) => cache.get(key)?.data, (key, data) => cache.set(key, { data, fresh: true }), context, (body, status = 200, headers = {}) => Response.json(body, { status, headers }), 'test', clock, quotaCache, QUOTA_TTL_MS, isPersistedNewsEnvelope);
 }
 const fixtures = {
   newsapi: { articles: [{ title: 'Headline', url: 'https://example.com/a' }] },

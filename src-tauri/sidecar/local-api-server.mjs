@@ -52,6 +52,9 @@ import { buildRecentChanges } from './recent-changes.mjs';
 import { explain as explainEvent } from './explainer.mjs';
 import { EventStore } from './event-store.mjs';
 import { EvidenceFullError, EvidenceInputError, EvidenceStore } from './evidence-store.mjs';
+import { QUOTA_CACHE_FILE, createQuotaCache } from './quota-cache.mjs';
+import { isPersistedNewsEnvelope } from './quota-news-envelope.mjs';
+import { QUOTA_TTL_MS } from './quota-policy.mjs';
 
 // ── Temporal World Store append helpers ──
 // These translate the renderer's observation/situation shapes into EventRecords
@@ -5738,6 +5741,14 @@ function _ensureSidecarCacheSweep() {
   }
 }
 
+// Persisted cache for quota-limited providers (R4-BUG-005). In memory only
+// until startup points it at the data dir, so tests never touch disk unless
+// they ask to.
+let _quotaCache = createQuotaCache({ filePath: null });
+export function initQuotaCache(filePath) {
+  _quotaCache = createQuotaCache({ filePath });
+}
+
 function getCached(key, ttlMs) {
   const entry = _sidecarCache.get(key);
   const effective = ttlMs ?? entry?.ttlMs;
@@ -5783,6 +5794,7 @@ export function odinRequestCanStart(inFlight, cacheKey, maximum = ODIN_IN_FLIGHT
 export function _resetSidecarCacheForTests() {
   nwsSnapshotProvider.reset();
   _sidecarCache.clear();
+  _quotaCache = createQuotaCache({ filePath: null });
   _odinInFlight.clear();
   resetInfrastructureBgpCredentialState();
 }
@@ -10123,8 +10135,10 @@ function legacyNewsItems(items) {
  const rawPageSize = Number.parseInt(requestUrl.searchParams.get('pageSize') ?? '10', 10);
  const pageSize = Math.min(20, Number.isNaN(rawPageSize) ? 10 : rawPageSize);
  const cacheKey = `news-tracked-v1:${provider}:${q}:${provider === 'newsapi' ? pageSize : ''}`;
- const cached = getCached(cacheKey, 10 * 60 * 1000);
- if (cached?.format === 'tracked-v1') return respond(cached.items, { ...cached.acquisition, delivery: 'memory_cache' });
+ const quotaHit = provider === 'newsapi' ? _quotaCache.getWithMetadata(cacheKey, QUOTA_TTL_MS.newsapi) : null;
+ const cached = provider === 'newsapi' ? quotaHit?.data : getCached(cacheKey, 10 * 60 * 1000);
+ const validCache = cached?.format === 'tracked-v1' && (quotaHit?.origin !== 'disk' || isPersistedNewsEnvelope(cached));
+ if (validCache) return respond(cached.items, { ...cached.acquisition, delivery: quotaHit?.origin === 'disk' ? 'persistent_cache' : 'memory_cache' });
  const attemptedAt = Date.now();
  try {
  const params = new URLSearchParams(provider === 'newsapi' ? { q, pageSize: String(pageSize), language: 'en', sortBy: 'publishedAt', apiKey } : { apikey: apiKey, q, language: 'en' });
@@ -10136,7 +10150,8 @@ function legacyNewsItems(items) {
  const items = normalizeNewsRows(data, provider);
  const acquiredAt = Date.now();
  const acquisition = newsAcquisition(items.length ? 'ok' : 'empty', attemptedAt, acquiredAt, items.length, 'upstream', acquiredAt);
- setCached(cacheKey, newsEnvelope(items, acquisition), 10 * 60 * 1000);
+ if (provider === 'newsapi') _quotaCache.set(cacheKey, newsEnvelope(items, acquisition));
+ else setCached(cacheKey, newsEnvelope(items, acquisition), 10 * 60 * 1000);
  return respond(items, acquisition);
  } catch (error) {
  return respond([], newsAcquisition(newsFailure(error), attemptedAt));
@@ -15762,9 +15777,10 @@ function legacyNewsItems(items) {
 
   // ── ADS-B live aircraft tracking (OpenSky Network, no key required) ──────
   // opensky:states:all is a shared raw snapshot used by /api/adsb,
-  // /api/adsb-military, and /api/aviation/flights — one fetch per 55 s.
+  // /api/adsb-military, and /api/aviation/flights — one fetch per 120 s:
+ // 720/day x 4 credits = 72% of OpenSky's 4,000 daily credits (R4-BUG-005).
   if (requestUrl.pathname === '/api/adsb') {
- const OPENSKY_TTL = 55 * 1000;
+ const OPENSKY_TTL = QUOTA_TTL_MS.openskyStates;
  const cached = getCached('opensky:states:all', OPENSKY_TTL);
  if (cached) return json(cached);
 
@@ -16800,8 +16816,15 @@ function legacyNewsItems(items) {
   if (requestUrl.pathname === '/api/greynoise-scanners') {
  const apiKey = process.env.GREYNOISE_API_KEY ?? '';
  if (!apiKey) return json({ error: 'GREYNOISE_API_KEY not configured' });
- const cached = getCached('greynoise-scanners', 15 * 60 * 1000);
+ // 20 lookups per refresh against a 50/week Community quota: refresh
+ // weekly and persist across restarts (R4-BUG-005). After a refresh where
+ // every lookup failed, back off for an hour instead of retrying 20 calls on
+ // every request, and keep serving the last good list.
+ const cached = _quotaCache.get('greynoise-scanners', QUOTA_TTL_MS.greynoiseSeeds);
  if (cached) return json(cached);
+ if (getCached('greynoise-scanners:backoff', 60 * 60 * 1000)) {
+ return json(_quotaCache.getStale('greynoise-scanners') ?? []);
+ }
  const SEED_IPS = [
  '45.83.64.1', '80.82.77.33', '185.220.101.1', '193.32.127.1', '198.20.69.74',
  '198.20.69.98', '198.20.70.114', '198.20.70.242', '205.210.31.1', '209.126.110.1',
@@ -16828,7 +16851,11 @@ function legacyNewsItems(items) {
  await new Promise(r => setTimeout(r, 200));
  }
  }
- setCached('greynoise-scanners', results);
+ if (results.length === 0) {
+ setCached('greynoise-scanners:backoff', true);
+ return json(_quotaCache.getStale('greynoise-scanners') ?? results);
+ }
+ _quotaCache.set('greynoise-scanners', results);
  return json(results);
  } catch (error) {
  return json({ error: `greynoise-scanners error: ${error.message ?? error}` }, 502);
@@ -16870,7 +16897,9 @@ function legacyNewsItems(items) {
   if (requestUrl.pathname === '/api/abuseipdb-reports') {
  const apiKey = process.env.ABUSEIPDB_API_KEY ?? '';
  if (!apiKey) return json({ error: 'ABUSEIPDB_API_KEY not configured' });
- const cached = getCached('abuseipdb-reports', 30 * 60 * 1000);
+ // Blacklist endpoint: 5/day free. 8 h TTL persisted across restarts = 3/day
+ // (R4-BUG-005).
+ const cached = _quotaCache.get('abuseipdb-reports', QUOTA_TTL_MS.abuseipdbBlacklist);
  if (cached) return json(cached);
  try {
  const r = await fetchWithTimeout(
@@ -16889,7 +16918,7 @@ function legacyNewsItems(items) {
  totalReports: entry.totalReports,
  lastReportedAt: entry.lastReportedAt,
  }));
- setCached('abuseipdb-reports', entries);
+ _quotaCache.set('abuseipdb-reports', entries);
  return json(entries);
  } catch (error) {
  return json({ error: `abuseipdb-reports error: ${error.message ?? error}` }, 502);
@@ -16908,7 +16937,7 @@ function legacyNewsItems(items) {
  headers['Authorization'] = `Basic ${creds}`;
  }
  try {
- const OPENSKY_TTL = 55 * 1000;
+ const OPENSKY_TTL = QUOTA_TTL_MS.openskyStates;
  let data = getCached('opensky:states:all', OPENSKY_TTL);
  if (!data) {
  const r = await fetchWithTimeout('https://opensky-network.org/api/states/all', { headers }, 12000);
@@ -17087,7 +17116,7 @@ function legacyNewsItems(items) {
  };
  };
  try {
- const OPENSKY_TTL = 55 * 1000;
+ const OPENSKY_TTL = QUOTA_TTL_MS.openskyStates;
  let data = getCached('opensky:states:all', OPENSKY_TTL);
  if (!data) {
  const r = await fetchWithTimeout('https://opensky-network.org/api/states/all', { headers }, 12000);
@@ -20923,6 +20952,11 @@ export async function createLocalApiServer(options = {}) {
   });
   loadVerboseState(context.dataDir);
   initWatchboardEngine(path.join(context.dataDir, 'watchboards.json'));
+  // Persist only to an explicitly configured data dir (the app always sets
+  // LOCAL_API_DATA_DIR). The resource-dir/cwd fallback used by dev runs and
+  // tests stays memory-only, so no quota cache is written into the repo.
+  const explicitDataDir = options.dataDir ?? process.env.LOCAL_API_DATA_DIR;
+  initQuotaCache(explicitDataDir ? path.join(context.dataDir, QUOTA_CACHE_FILE) : null);
   const routes = await buildRouteTable(context.apiDir);
   const ofacCache = new OfacCache({ dataDir: context.dataDir });
   context.ofacCache = ofacCache;

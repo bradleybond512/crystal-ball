@@ -20225,6 +20225,7 @@ body.is-desktop-macos .replay-scrubber { left: var(--mac-sidebar-width); }
 }
 .analyst-hud-hyp-head {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   font-size: 11px;
   text-transform: uppercase;
@@ -20553,6 +20554,12 @@ body.is-desktop-macos .replay-scrubber { left: var(--mac-sidebar-width); }
   padding-left: 8px;
   border-left: 2px solid rgba(110, 200, 210, 0.35);
 }
+.analyst-hud-superforecast-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
 .analyst-hud-superforecast-line {
   margin: 0 0 4px;
   font-size: 11px;
@@ -20650,8 +20657,25 @@ body.is-desktop-macos .replay-scrubber { left: var(--mac-sidebar-width); }
 }
 
 /* ── Forecast bar ─────────────────────────────────────────────────────── */
+.forecast-unverified {
+  min-width: 0;
+  max-width: 100%;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: normal;
+  text-transform: none;
+  letter-spacing: normal;
+  overflow-wrap: anywhere;
+}
+.forecast-unverified[open] { flex-basis: 100%; }
+.forecast-unverified > summary { cursor: pointer; }
+.forecast-unverified > p {
+  margin: 4px 0 0;
+  line-height: 1.4;
+}
 .analyst-hud-forecast-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 2px 0 4px;
@@ -20664,6 +20688,7 @@ body.is-desktop-macos .replay-scrubber { left: var(--mac-sidebar-width); }
 }
 .analyst-hud-forecast-track {
   flex: 1;
+  min-width: 48px;
   height: 4px;
   background: var(--border-subtle, #333);
   border-radius: var(--r-xs);

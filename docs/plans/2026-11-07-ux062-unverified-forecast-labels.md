@@ -1,6 +1,6 @@
 # UX-062 — Label unmatched forecast estimates
 
-Status: Bradley approved this bounded slice, amended acceptance, documentation-only draft claim and local implementation on 2026-11-08. Full UX-062 remains open; later production-code publication requires separate approval. Merging, auto-merge, releases, build dispatch, deployment and installation remain paused.
+Status: Bradley approved this bounded slice, amended acceptance, documentation-only draft claim and local implementation on 2026-11-08. Draft [#1886](https://github.com/bradleybond512/crystal-ball/pull/1886) claims this slice. Full UX-062 remains open; later production-code publication requires separate approval. Merging, auto-merge, releases, build dispatch, deployment and installation remain paused.
 
 ## Brief and verified selection
 
@@ -38,7 +38,7 @@ Use the existing render paths in `AnalystHUD.ts`, `SituationPanel.ts` and `Comma
 
 Static Unverified labels cannot be promoted by favorable, unfavorable, stale, malformed, unrelated or pooled records. Existing empty states remain unchanged when no forecast/card exists. No additional ledger read, replay, bootstrap, timer, request or subscription is needed. Cost is constant per rendered item.
 
-No new freshness policy is introduced because this slice consumes no baseline evidence. The descriptive metric floor of 20 remains distinct from promotion floors of 200 overall/100 per domain. Neither floor, any scoring formula, nor any champion decision changes.
+No new freshness policy is introduced because this slice consumes no baseline evidence. The paired Brier metric floor of 20 remains distinct from promotion floors of 200 overall/100 per domain and the historical calibration card's minimum of 12. No floor, scoring formula or champion decision changes.
 
 Non-goals: forecast emission/alignment, probabilities/horizons, DTOs, calibration or ledger schemas, persistence, model tuning, providers, warnings, notification policy, native permissions, dependencies, and delivery. No installed-app data acquisition is needed.
 

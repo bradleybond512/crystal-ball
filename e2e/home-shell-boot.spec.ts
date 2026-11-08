@@ -262,3 +262,97 @@ test.describe('home shell default boot', () => {
     await expect(page.locator('.home-shell')).toBeVisible();
   });
 });
+
+// Real app navigation, not a synthetic panel or a claim of provider accuracy.
+test('Home posture Evidence opens the real Storm Posture panel and Escape restores Home', async ({ page }) => {
+  await skipFirstRunDialogs(page);
+  await page.goto('/');
+  const shell = page.locator('.home-shell');
+  await expect(shell).toBeVisible({ timeout: 30_000 });
+  await page.evaluate(() => document.dispatchEvent(new CustomEvent('cb:show-digest')));
+  const digest = page.getByRole('dialog', { name: 'Crystal Ball — Since you last looked' });
+  await expect(digest).toBeVisible();
+  await digest.getByRole('button', { name: 'Close since-you-last-looked brief' }).click();
+  await expect(digest).toBeHidden();
+  const posture = shell.locator('.hs-posture-band');
+  await expect(posture).toBeVisible();
+  const evidence = posture.getByRole('button', { name: 'Evidence and plan' });
+  await evidence.focus();
+  await expect(evidence).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(shell.locator('.hs-focus')).toHaveClass(/hs-focus--open/);
+  await expect(shell.locator('.hs-focus-body [data-panel="storm-posture"]')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(shell.locator('.hs-focus')).not.toHaveClass(/hs-focus--open/);
+  await expect(shell).toBeVisible();
+  await expect(page.locator('#panelsGrid [data-panel="storm-posture"]')).toHaveCount(1);
+});
+
+// Browser/production-component proof with explicit in-memory snapshot and action
+// seams. This does not commit a real survival plan or verify live providers.
+test('Home posture browser controls retain focus and commit only the current selected move', async ({ page }) => {
+  await page.route('**/__home-posture-fixture', (route) => route.fulfill({
+    contentType: 'text/html',
+    body: '<!doctype html><html><head><link rel="stylesheet" href="/src/styles/home-shell.css"></head><body></body></html>',
+  }));
+  await page.goto('/__home-posture-fixture');
+  await page.evaluate(async () => {
+    const [{ HomeShellOverlay }, { HomePostureBand }, { bandForLevel, SURVIVAL_AXES }, { buildContextualDeckView }] = await Promise.all([
+      import('/src/components/HomeShellOverlay.ts'), import('/src/components/HomePostureBand.ts'),
+      import('/src/services/survival/survival-types.ts'), import('/src/services/home-shell/contextual-deck-view.ts'),
+    ]);
+    const now = Date.UTC(2026, 9, 18, 12);
+    const makeSnapshot = (physical: number, supply: number) => {
+      const axes = SURVIVAL_AXES.map((axis) => {
+        const level = axis === 'physical_safety' ? physical : axis === 'supply' ? supply : 0;
+        return { axis, level, band: bandForLevel(level), trend: 'steady',
+          confidence: { total: level, max: 100, items: [] },
+          explanation: { headline: axis, lines: [], missingConfirmation: [] },
+          drivers: level ? ['Synthetic modeled context'] : [],
+          threats: level ? [{ sourceEventId: `${axis}-synthetic-source`, axis, severity: level,
+            threatLevel: 'warning', hazardKind: 'tornado', hazardLabel: `${axis} synthetic threat`,
+            timeToImpactMins: null, arrivalLabel: null, why: 'Synthetic test context', confidenceLabel: 'high' }] : [],
+        };
+      });
+      const worst = axes.reduce((a, b) => a.level >= b.level ? a : b);
+      return { version: 1, capturedAtMs: now,
+        freshness: [{ domain: 'weather', fetchedAtMs: now - 60_000, ageMs: 60_000, ok: true }],
+        weatherAlerts: [], savedPlaces: [], plan: { committed: [] },
+        posture: { axes, overallLevel: worst.level, overallBand: worst.band, worstAxis: worst.axis,
+          headline: 'Synthetic posture', capturedAtMs: now, staleInputs: [] },
+      };
+    };
+    let current = makeSnapshot(50, 85);
+    const commits: string[] = [];
+    const shell = new HomeShellOverlay({
+      getPanel: () => undefined, now: () => now,
+      contextualProjection: { kind: 'ready', build: buildContextualDeckView },
+      contextualSnapshotSource: { get: () => current, hydrate: async () => {}, subscribe: () => () => {} },
+      postureBandLoader: async () => HomePostureBand,
+      commitPostureMove: (move) => commits.push(move.id),
+    });
+    shell.mount(document.body); shell.show();
+    Object.assign(window, { postureBrowserFixture: {
+      commits, changeSelection: () => { current = makeSnapshot(85, 0); },
+      expectedId: () => HomePostureBand.select(current, now).move?.id,
+    } });
+  });
+  const posture = page.locator('.hs-posture-band');
+  await expect(posture).toHaveAttribute('data-state', 'modeled');
+  await expect(posture).toContainText('protection is not verified');
+  await expect(posture).toContainText('Other domain source ages and coverage unknown');
+  const commit = posture.getByRole('button', { name: 'Commit', exact: true });
+  await expect(commit).toBeVisible();
+  const oldId = await commit.getAttribute('data-storm-move');
+  await commit.focus();
+  await expect(commit).toBeFocused();
+  await page.evaluate(() => Reflect.get(window, 'postureBrowserFixture').changeSelection());
+  await page.keyboard.press('Enter');
+  expect(await page.evaluate(() => Reflect.get(window, 'postureBrowserFixture').commits)).toEqual([]);
+  await expect(commit).toBeFocused();
+  const newId = await commit.getAttribute('data-storm-move');
+  expect(newId).not.toBe(oldId);
+  expect(newId).toBe(await page.evaluate(() => Reflect.get(window, 'postureBrowserFixture').expectedId()));
+  await page.keyboard.press('Enter');
+  expect(await page.evaluate(() => Reflect.get(window, 'postureBrowserFixture').commits)).toEqual([newId]);
+});

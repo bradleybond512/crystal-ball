@@ -1477,6 +1477,26 @@ actual packaged npm/Rust payloads before choosing generators and attestation.
   describe the shipped payload. This task definition authorizes no tag,
   workflow dispatch, public release or installation.
 
+### UX-075 — Remove unsupported lightning tooltip measurement
+
+Priority: A
+Dependencies: none
+
+Directly assigned presentation-correctness repair: omit the unsupported `kA`
+measurement row from the lightning tooltip rather than inventing another unit.
+Preserve the source scalar, parsing, thresholds, colors, time, coordinates and
+normal/ghost selection. This does not change provider or prediction policy.
+
+- Acceptance: actual tooltip-method output tests and detecting/restored mutations,
+  the complete map-compatibility suite, normal validation and required independent
+  review/hosted gates. Source tests are not live-provider or packaged acceptance.
+- Late-claim disclosure: implementation and local qualification at `95d5f64167fb`
+  preceded this tracker claim. This row records the direct assignment honestly;
+  it does not imply a pre-implementation draft existed. Draft publication and
+  final current-tip review/validation remain pending at this checkpoint.
+- No release, deployment or installation is authorized. The Pages deployment
+  hold must be freshly verified before eventual merge.
+
 ## What was NOT verified
 
 State these as open questions rather than treating them as settled:
@@ -1599,6 +1619,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-072 | Local user-data backup and restore | NOT STARTED — HIGH ASSURANCE | |
 | UX-073 | Scope cohesive module extractions | NOT STARTED | |
 | UX-074 | Release SBOMs | NOT STARTED — HIGH ASSURANCE | |
+| UX-075 | Remove unsupported lightning tooltip measurement | IN PROGRESS | Late claim after implementation `95d5f64167fb`; draft PR and final current-tip review/hosted gates pending. |
 
 ## Repair 12 — Diagnostics entry and shortcut ownership (2026-10-18)
 

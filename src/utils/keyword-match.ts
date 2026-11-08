@@ -6,12 +6,24 @@ export interface TokenizedTitle {
 const INFLECTION_SUFFIXES = new Set(['s', 'es', 'ian', 'ians', 'ean', 'eans', 'an', 'ans', 'n', 'ns', 'i', 'is', 'ish', 'ese']);
 const MIN_SUFFIX_KEYWORD_LEN = 4;
 
+function isAsciiLetterOrDigit(code: number): boolean {
+  return (code >= 48 && code <= 57) || (code >= 97 && code <= 122);
+}
+
+function trimTokenBoundary(raw: string): string {
+  let start = 0;
+  let end = raw.length;
+  while (start < end && !isAsciiLetterOrDigit(raw.codePointAt(start) ?? -1)) start++;
+  while (end > start && !isAsciiLetterOrDigit(raw.codePointAt(end - 1) ?? -1)) end--;
+  return raw.slice(start, end);
+}
+
 export function tokenizeForMatch(title: string): TokenizedTitle {
   const lower = title.toLowerCase();
   const words = new Set<string>();
   const ordered: string[] = [];
   for (const raw of lower.split(/\s+/)) {
- const cleaned = raw.replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, '');
+ const cleaned = trimTokenBoundary(raw);
  if (!cleaned) continue;
  words.add(cleaned);
  ordered.push(cleaned);

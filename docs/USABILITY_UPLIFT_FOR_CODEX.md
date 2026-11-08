@@ -1219,9 +1219,13 @@ Evidence: #1802 — [bounded map cleanup](validation/MAP-CLARITY-CLEANUP.md). Th
 
 ### UX-062 — Label forecasts that trail their own baseline *(High Assurance)*
 
+Status: IN REVIEW — HIGH ASSURANCE
+
 Priority: S
 
 Dependencies: ACC-008
+
+Claim: `codex/ux062-forecast-baseline-labels`; Bradley approved the [bounded Unverified-labeling design](plans/2026-11-07-ux062-unverified-forecast-labels.md), documentation-only draft claim and local implementation on 2026-11-08. This partial slice labels unmatched HUD/Superforecast/scenario estimates and scopes Command Center's historical summary. The actual SituationDossier's categorical confidence stays unchanged. Full matched-cohort beats/trails, current comparator and freshness requirements below remain open; this task is not DONE or REJECTED. Code publication and all merge/delivery actions remain paused.
 
 The 2026-07-26 baseline put the analyst loop at Brier 0.569 over 32 resolved
 forecasts. Answering 50% every time scores 0.25. Until UX-019 records a
@@ -1587,7 +1591,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-059 | Retain active alerts using authoritative lifecycle evidence | DONE | #1739; [evidence](validation/UX-059-RETENTION.md); ACC-509 integration hold |
 | UX-060 | Preserve onboarding keyboard ownership against proactive digest | DONE | #1735 |
 | UX-061 | Truthful, restrained map presentation | DONE | #1802; [bounded evidence](validation/MAP-CLARITY-CLEANUP.md); native acceptance recorded separately |
-| UX-062 | Label forecasts that trail their baseline | NOT STARTED — HIGH ASSURANCE | |
+| UX-062 | Label forecasts that trail their baseline | IN REVIEW — HIGH ASSURANCE | Approved [bounded Unverified-labeling slice](plans/2026-11-07-ux062-unverified-forecast-labels.md); full matched-baseline comparison and freshness work remains open. Code publication/delivery paused. |
 | UX-063 | Evaluate bounded CI Sonnet review | NOT STARTED — HIGH ASSURANCE | |
 | UX-065 | Round 4 checkpoint and remaining security drafts | NOT STARTED | |
 | UX-066 | Dependabot backlog in reviewed batches | NOT STARTED | |

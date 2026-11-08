@@ -1,9 +1,13 @@
+import { replaceNonemptyAngleSpans } from '@/utils/angle-span-text';
+
 // US Congressional defense activity — HASC/SASC news, defense bills, military votes
 // RSS feeds through /api/rss-proxy
 
 export type CongressDefenseType =
   | 'ndaa' | 'authorization' | 'appropriation' | 'sanction-bill'
   | 'hearing' | 'vote' | 'statement' | 'general';
+
+type CongressDefenseSeverity = 'critical' | 'high' | 'medium' | 'low';
 
 export interface CongressDefenseItem {
   id: string;
@@ -13,7 +17,7 @@ export interface CongressDefenseItem {
   itemType: CongressDefenseType;
   pubDate: Date;
   url: string;
-  severity: 'critical' | 'high' | 'medium' | 'low';
+  severity: CongressDefenseSeverity;
   keywords: string[];
 }
 
@@ -39,8 +43,7 @@ function proxyUrl(feedUrl: string): string {
 }
 
 function stripHtml(html: string): string {
-  return html
- .replace(/<[^>]+>/g, ' ')
+  return replaceNonemptyAngleSpans(html)
  .replace(/&amp;/g, '&')
  .replace(/&lt;/g, '<')
  .replace(/&gt;/g, '>')
@@ -105,7 +108,7 @@ function detectSeverity(
   itemType: CongressDefenseType,
   title: string,
   description: string,
-): 'critical' | 'high' | 'medium' | 'low' {
+): CongressDefenseSeverity {
   if (itemType === 'authorization') return 'critical'; // AUMF is critical
   if (itemType === 'ndaa' || itemType === 'appropriation') return 'high';
   if (itemType === 'sanction-bill') {
@@ -164,7 +167,7 @@ async function fetchFeed(feedUrl: string): Promise<CongressDefenseItem[]> {
  if (!isRelevant(raw.title, raw.description)) continue;
 
  const pubDate = raw.pubDateStr ? new Date(raw.pubDateStr) : new Date();
- if (isNaN(pubDate.getTime())) continue;
+ if (Number.isNaN(pubDate.getTime())) continue;
 
  const itemType = detectItemType(raw.title, raw.description);
  const keywords = extractKeywords(raw.title, raw.description);
@@ -190,7 +193,7 @@ async function fetchFeed(feedUrl: string): Promise<CongressDefenseItem[]> {
   }
 }
 
-const SEVERITY_ORDER: Record<'critical' | 'high' | 'medium' | 'low', number> = {
+const SEVERITY_ORDER: Record<CongressDefenseSeverity, number> = {
   critical: 0,
   high: 1,
   medium: 2,

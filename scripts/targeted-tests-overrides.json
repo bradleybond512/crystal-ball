@@ -1669,5 +1669,9 @@
   ],
   "src/utils/keyword-match.ts": [
     "test:keyword-match"
-  ]
+  ],
+  "src/services/tropical-cyclones.ts": ["test:providers"],
+  "src/components/TropicalCyclonesPanel.ts": ["test:providers"],
+  "tests/cyclone-source-outcome.test.mts": ["test:providers"],
+  "tests/cyclone-source-outcome-matrix.test.mts": ["test:providers"]
 }

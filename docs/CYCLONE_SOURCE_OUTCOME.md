@@ -20,19 +20,22 @@ Expanded tests prepared: real full adapter module compiled in isolated VM with a
 
 JTWC has no admitted success format, so no unused JTWC last-good state or artificial both-success branch is added. The endpoint is fetched with unchanged timeout/cadence and its body consumed, but always reports fixed unavailable coverage; invalid legacy observation parsing and its now-obsolete suppressions were removed. NHC's stored rows retain their original advisory Date objects; no unused succeededAt state is added because aggregate freshness never renews in A. Retry budget uses a separate settled-at record. Supported JTWC ingestion and healthy complete aggregate recovery require a future grounded implementation. Global tracker and forecast code unchanged.
 
-## Current checkpoint and late UX-040 continuation claim
+## Draft-claim checkpoint — 2026-11-08 23:47 UTC
 
 This bounded panel/source-outcome repair continues UX-040. The tracker correction
 is late: signed local implementation `11c5278051c9fc6fd4e1459d1be04b8aaaca9597`
-preceded the draft claim. The actual draft claim remains pending; no PR number or
-preimplementation reservation is implied. Prior #1841 news/status evidence and
+preceded the actual draft claim #1888, verified at this checkpoint with auto-merge
+disabled. No preimplementation reservation is implied. Prior #1841 news/status evidence and
 the HIGH ASSURANCE umbrella remain intact, with broader UX-040 acceptance open.
 
-At this documentation checkpoint, nine intended RED assertions, nine-case GREEN,
+At this dated checkpoint, nine intended RED assertions, nine-case GREEN,
 expanded twelve-case GREEN and normal signed source hooks passed. The earlier
 pending-stage paragraphs above describe their historical preparation state,
 not current failures. Production and test bytes are unchanged by this correction.
 Full providers-alias execution, thirteen real assertion mutants plus one private
 runner-coverage check, aggregate/build/bundle/lints and genuine exact-source Sonnet
-review/hosted checks remain pending. No browser, native or live-provider execution
-is claimed. Coordinate/time and valid-track B work remains separate.
+review/hosted checks were pending. Subsequent exact-source results belong in #1888
+and its immutable review/QA receipts; this paragraph preserves the claim-time
+state rather than asserting a permanent delivery status. No browser, native or
+live-provider execution is claimed. Coordinate/time and valid-track B work remains
+separate; overall UX-040 stays MONITOR with broader acceptance open.

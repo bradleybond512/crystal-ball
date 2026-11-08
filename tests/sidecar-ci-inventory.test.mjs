@@ -114,3 +114,23 @@ test('targeted selection includes the isolated suite for every added test and it
     assert.ok(selectScripts([file], index, overrides).scripts.includes('test:sidecar-ci'), file);
   }
 });
+
+
+test('a following guarded browser job cannot condition the final security smoke step', () => {
+  const smokeOnly = workflow.split('\n  map-e2e:')[0];
+  const followingJob = '\n  browser-fixture:\n    if: false\n    runs-on: ubuntu-24.04\n    steps:\n      - run: echo browser\n';
+  assert.doesNotThrow(() => assertSidecarSmokeWiring(scripts, smokeOnly + followingJob));
+  const security = '      - run: npm run test:sec-hardening';
+  assert.throws(() => assertSidecarSmokeWiring(scripts,
+    (smokeOnly + followingJob).replace(security, `${security}\n        if: false`)),
+  /Conditional smoke step.*test:sec-hardening/);
+});
+
+test('required commands in another job cannot replace missing smoke coverage', () => {
+  const smokeOnly = workflow.split('\n  map-e2e:')[0];
+  const security = '      - run: npm run test:sec-hardening';
+  const moved = smokeOnly.replace(security, '')
+    + `\n  another-job:\n    steps:\n${security}\n`;
+  assert.throws(() => assertSidecarSmokeWiring(scripts, moved),
+    /Missing or duplicate unconditional smoke step.*test:sec-hardening/);
+});

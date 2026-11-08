@@ -341,9 +341,10 @@ function parseAIResponse(response: string): AdviceItem[] {
   try {
  // Try to extract JSON from the response
  let jsonStr = response;
- const jsonMatch = /\{[\s\S]*\}/.exec(response);
- if (jsonMatch) {
- jsonStr = jsonMatch[0];
+ const opening = response.indexOf('{');
+ const closing = response.lastIndexOf('}');
+ if (opening !== -1 && closing > opening) {
+ jsonStr = response.slice(opening, closing + 1);
  }
  const parsed = JSON.parse(jsonStr) as { items?: AdviceItem[] };
  if (Array.isArray(parsed.items)) {

@@ -12,11 +12,9 @@ declare const process: { env: Record<string, string | undefined> };
 // match that could let an unrelated third-party project gain CORS approval.
 const PRODUCTION_PATTERNS: RegExp[] = [
   // `crystalball` (no dash) project previews.
-  /^https:\/\/crystalball-[a-z0-9-]+-elie-[a-z0-9]+\.vercel\.app$/,
   /^https:\/\/crystalball-[a-z0-9-]+-bradleybond512\.vercel\.app$/,
   // `crystal-ball` (hyphenated) project previews — anchored on the trusted user suffix.
   /^https:\/\/crystal-ball-[a-z0-9-]+-bradleybond512\.vercel\.app$/,
-  /^https:\/\/crystal-ball-[a-z0-9-]+-elie-[a-z0-9]+\.vercel\.app$/,
   /^https?:\/\/tauri\.localhost(:\d+)?$/,
   /^https?:\/\/[a-z0-9-]+\.tauri\.localhost(:\d+)?$/i,
   /^tauri:\/\/localhost$/,

@@ -22,3 +22,15 @@ test('server CORS retains the existing Tauri and anchored preview origins', () =
     assert.equal(getCorsHeaders(request)['Access-Control-Allow-Origin'], origin);
   }
 });
+
+test('other-account preview 0 gets no server CORS permission', () => {
+  const request = new Request('http://localhost/api/test', { headers: { Origin: 'https://crystalball-pr-42-elie-abc123.vercel.app' } });
+  assert.equal(isDisallowedOrigin(request), true);
+  assert.equal(getCorsHeaders(request)['Access-Control-Allow-Origin'], undefined);
+});
+
+test('other-account preview 1 gets no server CORS permission', () => {
+  const request = new Request('http://localhost/api/test', { headers: { Origin: 'https://crystal-ball-feature-elie-xyz.vercel.app' } });
+  assert.equal(isDisallowedOrigin(request), true);
+  assert.equal(getCorsHeaders(request)['Access-Control-Allow-Origin'], undefined);
+});

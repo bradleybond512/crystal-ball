@@ -129,8 +129,21 @@ Actual Node 22 commands and results:
 | `npm ci --ignore-scripts --no-audit --no-fund` | Exit `0`, lockfile unchanged |
 
 The final frozen review payload includes the exact-head repository gate's
-actual log and result. Independent Sonnet medium review and publication remain
-pending; no approval verdict has been recorded.
+actual log and result. This repair was subsequently approved by Sonnet 4.6
+for source `59793b222fca1a636fc96aec2c678c8330f85285`, with zero blocking
+findings recorded in
+`.agentic/reviews/59793b222fca1a636fc96aec2c678c8330f85285.json`.
+[PR #1793](https://github.com/bradleybond512/crystal-ball/pull/1793) merged
+on October 9, 2026 at 04:10:36 UTC as
+`64028a9e4ad98500b1c2b8884272afa933400e84`, delivering the reviewed integration
+of #1765 and its strengthened attempt ordering. These are historical review
+and publication results, not approval of subsequent changes.
+
+The November 8 remainder changes only lint-workflow targeted-test mappings,
+their detecting selector regression, and this historical receipt. It preserves
+the delivered runtime gate and all newer mappings. This remainder requires its
+own exact-source qualification and independent review; it is not a new runtime
+installation or a claim that those later checks already passed.
 
 ### Fresh mutation proof
 

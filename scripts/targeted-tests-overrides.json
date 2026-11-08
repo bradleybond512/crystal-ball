@@ -781,7 +781,9 @@
     "test:desktop-identity"
   ],
   ".github/workflows/lint.yml": [
-    "test:workflow-security"
+    "test:workflow-security",
+    "test:main-sync-gate",
+    "test:eslint-runner"
   ],
   ".github/workflows/pages.yml": [
     "test:workflow-security"

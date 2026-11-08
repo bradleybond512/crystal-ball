@@ -316,7 +316,10 @@
     "test:release-capabilities": "node --test tests/release-manifest.test.mjs tests/release-capabilities.test.mjs",
     "test:acc505": "tsx --test src/services/cognition/__tests__/correlation-regime.test.mts src/services/correlation/__tests__/regime-reliability.test.mts src/services/correlation/__tests__/regime-reliability-replay.test.mts",
     "test:acc508": "tsx --test src/services/correlation/__tests__/near-threshold-recall.test.mts src/services/correlation/__tests__/boundary-baseline-migration.test.mts",
-    "test:breaking-stack-lifecycle": "tsx --test src/components/__tests__/breaking-news-stack-lifecycle.test.mts"
+    "test:breaking-stack-lifecycle": "tsx --test src/components/__tests__/breaking-news-stack-lifecycle.test.mts",
+    "test:e2e:map:ci": "playwright test e2e/map-harness.spec.ts e2e/local-basemap.spec.ts --grep-invert \"matches golden screenshots per layer and zoom$\"",
+    "test:e2e:interactions:ci": "playwright test e2e/gods-vision-mode.spec.ts e2e/settings-keyboard.spec.ts e2e/map-clarity.spec.ts e2e/emergency-readiness-offline.spec.ts",
+    "test:e2e:ci-wiring": "node --test tests/e2e-ci-coverage.test.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",

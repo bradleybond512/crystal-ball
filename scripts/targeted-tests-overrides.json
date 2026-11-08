@@ -1656,5 +1656,8 @@
   ],
   "e2e/quota-budgets.spec.ts": [
     "test:e2e:ci-wiring"
+  ],
+  "src/utils/keyword-match.ts": [
+    "test:keyword-match"
   ]
 }

@@ -391,3 +391,100 @@ describe('edge cases', () => {
  assert.ok(matchKeyword(t, 'Iran'));
   });
 });
+
+// Boundary trimming is ASCII-only; punctuation inside the trimmed span is retained.
+describe('keyword boundary scan semantics', () => {
+  it('preserves exact UTF-16, lowercase, internal punctuation and token ordering', () => {
+    const fixtures: Array<[string, string[], string[]]> = [
+      ['!!!A---B???', ['a---b'], ['a---b', 'a', 'b']],
+      ['éFOOéBARé', ['fooébar'], ['fooébar', 'foo', 'bar']],
+      ['😀A😀B😀', ['a😀b'], ['a😀b', 'a', 'b']],
+      ['\ud800A\udc00', ['a'], ['a']],
+      ['\ud800\udc00', [], []],
+      ['İA', ['i\u0307a'], ['i\u0307a', 'i', 'a']],
+      ['K!İ', ['k!i'], ['k!i', 'k', 'i']],
+      ['０1２', ['1'], ['1']],
+      ['A---B a---b\u00a0C', ['a---b', 'a---b', 'c'], ['a---b', 'a', 'b', 'c']],
+      ['\u200bA\u200b', ['a'], ['a']],
+      ['\u2028---\t!?\n', [], []],
+    ];
+    for (const [input, ordered, words] of fixtures) {
+      const tokens = tokenizeForMatch(input);
+      assert.deepEqual(tokens.ordered, ordered, JSON.stringify(input));
+      assert.deepEqual([...tokens.words], words, JSON.stringify(input));
+    }
+  });
+
+  it('bounds long internal punctuation work without truncating or changing tokens', async () => {
+    const { spawn } = await import('node:child_process');
+    const source = new URL('../src/utils/keyword-match.ts', import.meta.url).href;
+    const script = `
+      import assert from 'node:assert/strict';
+      import { tokenizeForMatch, matchKeyword } from ${JSON.stringify(source)};
+      console.log('READY');
+      await new Promise(resolve => process.stdin.once('data', resolve));
+      const title = 'A' + '!'.repeat(200_000) + 'B';
+      const started = performance.now();
+      const tokens = tokenizeForMatch(title);
+      assert.deepEqual(tokens.ordered, [title.toLowerCase()]);
+      assert.deepEqual([...tokens.words], [title.toLowerCase(), 'a', 'b']);
+      assert.equal(matchKeyword(tokens, 'a'), true);
+      assert.equal(matchKeyword(tokens, 'ab'), false);
+      console.log(JSON.stringify({elapsedMs:performance.now()-started,length:tokens.ordered[0].length}));
+    `;
+    // Startup/import readiness has its own limit; the 4s work budget starts only after READY.
+    const result = await new Promise<{
+      ready: boolean; status: number | null; stdout: string; stderr: string; error: string | undefined;
+    }>((resolve) => {
+      const child = spawn(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', script]);
+      let ready = false;
+      let stdout = '';
+      let stderr = '';
+      let error: string | undefined;
+      let timer = setTimeout(() => {
+        error = 'child import/startup exceeded separate 15s budget';
+        child.kill('SIGKILL');
+      }, 15_000);
+      child.stdout.on('data', (chunk: Buffer) => {
+        stdout += chunk.toString();
+        if (!ready && stdout.includes('READY\n')) {
+          ready = true;
+          clearTimeout(timer);
+          timer = setTimeout(() => {
+            error = 'tokenizer work exceeded explicit 4s budget after successful import';
+            child.kill('SIGKILL');
+          }, 4000);
+          child.stdin.end('go\n');
+        }
+      });
+      child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+      child.once('error', (cause) => { error = cause.message; });
+      child.once('close', (status) => {
+        clearTimeout(timer);
+        resolve({ready, status, stdout, stderr, error});
+      });
+    });
+    assert.equal(result.ready, true, result.stderr || result.error);
+    assert.equal(result.error, undefined, result.error);
+    assert.equal(result.status, 0, result.stderr);
+    const summary = result.stdout.trim().split('\n').at(-1) ?? '';
+    assert.equal(JSON.parse(summary).length, 200_002);
+  });
+});
+
+it('routes both keyword source and regression fixture through the real CI selector', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { deriveScriptIndex, selectScripts, mergeOverrides, OVERRIDES, prDeclaredOverrides, commandToStages } = await import('../scripts/targeted-tests.mjs');
+  const scripts = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).scripts;
+  const command = scripts['test:keyword-match'];
+  assert.equal(command, 'node --test --import tsx tests/geo-keyword-matching.test.mts');
+  const index = deriveScriptIndex(scripts);
+  assert.ok(index.has('test:keyword-match'), 'keyword runner must be accepted, not silently skipped');
+  const overrides = mergeOverrides(OVERRIDES, prDeclaredOverrides());
+  for (const changed of ['src/utils/keyword-match.ts', 'tests/geo-keyword-matching.test.mts']) {
+    const selected = selectScripts([changed], index, overrides);
+    assert.ok(selected.scripts.includes('test:keyword-match'), `${changed} must select keyword behavior`);
+    assert.deepEqual(selected.unmapped, []);
+  }
+  assert.deepEqual(commandToStages(command), [{bin: process.execPath, args: ['--test', '--import', 'tsx', 'tests/geo-keyword-matching.test.mts']}]);
+});

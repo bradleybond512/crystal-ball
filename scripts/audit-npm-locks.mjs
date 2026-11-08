@@ -8,6 +8,8 @@ import { pathToFileURL } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 
 const projects = ['.', '.github/tools/codex', 'marketing-site', 'scripts', 'tools/cb-control', 'tools/mcp-server'];
+// Migration prerequisite only: adoption must promote this exact project to mandatory.
+const reservedProject = '.github/tools/filesystem-mcp';
 const vendors = new Map([['.', ['texture-compressor', 'vendor/texture-compressor-safe']], ['marketing-site', ['braces', 'vendor/braces']]]);
 const sidecar = 'src-tauri/sidecar/package.json';
 const dependencyFields = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
@@ -46,19 +48,26 @@ function inventory(repo) {
     const vendor = vendors.get(project);
     if (vendor) expected.add(path.join(project, vendor[1], 'package.json'));
   }
+  const reservedFiles = ['package.json', 'package-lock.json'].map(file => path.join(reservedProject, file));
+  const allowed = new Set([...expected, ...reservedFiles]);
   const blobs = new Map();
   const tree = git(repo, ['ls-tree', '-rz', '--full-tree', 'HEAD']);
   for (const entry of tree.split('\0')) {
     const tab = entry.indexOf('\t');
     const file = entry.slice(tab + 1);
     if (!/^(?:package(?:-lock)?\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?)$/i.test(path.basename(file))) continue;
-    check(expected.has(file), 'unclassified manifest or lockfile');
+    check(allowed.has(file), 'unclassified manifest or lockfile');
     const [mode, type, sha] = entry.slice(0, tab).split(' ');
     check(type === 'blob' && (mode === '100644' || mode === '100755'), 'manifest or lockfile is not a regular Git blob');
     blobs.set(file, sha);
   }
-  check(blobs.size === expected.size, 'required manifest or lockfile is missing');
-  return file => JSON.parse(git(repo, ['cat-file', 'blob', blobs.get(file)]));
+  const reservedPresent = reservedFiles.some(file => blobs.has(file));
+  if (reservedPresent) for (const file of reservedFiles) expected.add(file);
+  check(blobs.size === expected.size && [...expected].every(file => blobs.has(file)), 'required manifest or lockfile is missing');
+  return {
+    read: file => JSON.parse(git(repo, ['cat-file', 'blob', blobs.get(file)])),
+    activeProjects: reservedPresent ? [...projects, reservedProject] : projects,
+  };
 }
 
 function validateSpec(name, spec, vendor) {
@@ -235,7 +244,7 @@ function findings(result, packages, direct) {
 export async function auditLocks(repo, runNpm = spawnSync, log = console.log, registryFetch = fetch) {
   const temp = mkdtempSync(path.join(tmpdir(), 'cb-npm-audit-'));
   try {
-    const read = inventory(repo);
+    const { read, activeProjects } = inventory(repo);
     const marker = read(sidecar);
     check(object(marker) && marker.name === 'sidecar' && marker.type === 'module'
       && typeof marker.version === 'string' && semver.valid(marker.version) === marker.version
@@ -243,9 +252,9 @@ export async function auditLocks(repo, runNpm = spawnSync, log = console.log, re
     const userconfig = path.join(temp, 'user.npmrc'), globalconfig = path.join(temp, 'global.npmrc');
     writeFileSync(userconfig, ''); writeFileSync(globalconfig, '');
     let ok = true;
-    for (const project of projects) {
+    for (const project of activeProjects) {
       try {
-        const dir = path.join(temp, String(projects.indexOf(project)));
+        const dir = path.join(temp, String(activeProjects.indexOf(project)));
         const { packages, versions } = await prepare(project, read, dir);
         const direct = await directFindings(versions, registryFetch);
         const result = runNpm(npmBin, [

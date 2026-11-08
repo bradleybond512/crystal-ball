@@ -1137,6 +1137,23 @@ it. Otherwise, persist outcomes append-only in the sidecar (like the
 
 ---
 
+## Quota reconstruction checkpoint (November 8, 2026)
+
+PR #1868 delivered the bounded #1761 cache reconciliation to main at
+`4bcff12673393cd66e9d10fd5b4114ecddaebf92`. Original PurpleAir cadence/persistence
+and Windows restart acceptance remain open. PurpleAir still uses eight fields,
+no `max_age`, and five-minute memory-only responses.
+
+The #1770 governor and Diagnostics reconstruction is pending final-source QA,
+independent review and delivery. Its preserved policy and verification limits
+are described in [Quota Governor design](QUOTA_GOVERNOR_DESIGN.md). The usage
+ledger is best-effort and distinct from provider response storage. Interactive
+attempts remain counted but app-unblocked, so this is not universal 80% spend
+protection. The original 24-hour/five-restart live soak below has not been
+performed or waived. Synthetic browser and unit evidence is not native,
+Windows restart or live-provider evidence. The October queue remains historical;
+neither bounded delivery marks the original full quota work complete.
+
 ## Unified Queue
 
 Status (October 4, 2026): every row except 16b has an open PR awaiting Codex

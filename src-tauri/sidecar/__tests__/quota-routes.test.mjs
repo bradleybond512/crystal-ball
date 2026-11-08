@@ -11,7 +11,7 @@ import { PassThrough, Readable } from 'node:stream';
 
 process.env.CB_SIDECAR_FILE_LOG = '0';
 process.env.LOCAL_API_TOKEN = 'test-token-quota-routes';
-const { createLocalApiServer, _resetSidecarCacheForTests } = await import('../local-api-server.mjs');
+const { createLocalApiServer, _resetSidecarCacheForTests, initQuotaGovernor } = await import('../local-api-server.mjs');
 
 const quiet = { log() {}, warn() {}, error() {} };
 
@@ -65,7 +65,7 @@ function withEnv(t, vars) {
 
 function tempDataDir(t) {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'cb-quota-routes-'));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  t.after(() => { initQuotaGovernor(null); rmSync(dir, { recursive: true, force: true }); });
   return dir;
 }
 
@@ -103,10 +103,12 @@ test('an all-failed GreyNoise refresh is never cached and backs off instead of r
   const spent = upstream();
   const second = await server.get('/api/greynoise-scanners');
   await server.close();
-  assert.deepEqual(first.body, []);
-  assert.deepEqual(second.body, []);
-  assert.equal(spent, 20);
-  assert.equal(upstream(), 20, 'backoff: no second round of lookups');
+  assert.equal(first.status, 503);
+  assert.equal(first.body.error, 'quota_exhausted');
+  assert.equal(second.status, 503);
+  assert.equal(second.body.error, 'quota_exhausted');
+  assert.equal(spent, 5, 'only the already-started concurrent batch reaches the provider');
+  assert.equal(upstream(), 5, 'provider cooldown: no second round of lookups');
   const file = path.join(dataDir, 'quota-cache.json');
   const persisted = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')).entries : {};
   assert.equal('greynoise-scanners' in persisted, false, 'an empty failure is not cached for a week');
@@ -275,7 +277,7 @@ for (const [ageMinutes, expectedCalls, delivery] of [[19, 0, 'persistent_cache']
   if (!expectedCalls) assert.equal(response.body.acquisition.acquiredAt, time);
 });
 
-for (const [status, payload, outcome, responseStatus] of [[429, {}, 'rate_limited', 429], [200, {}, 'malformed', 502], [500, {}, 'unavailable', 502]]) test(`invalid disk record preserves ${outcome} upstream failure`, async (t) => {
+for (const [status, payload, outcome, responseStatus] of [[429, {}, 'rate_limited', 503], [200, {}, 'malformed', 502], [500, {}, 'unavailable', 502]]) test(`invalid disk record preserves ${outcome} upstream failure`, async (t) => {
   withEnv(t, { NEWSAPI_KEY: 'fixture-newsapi' });
   const dataDir = tempDataDir(t);
   writeFileSync(path.join(dataDir, 'quota-cache.json'), JSON.stringify({ version: 1, entries: { 'news-tracked-v1:newsapi:geopolitics:10': { ts: Date.now(), data: { format: 'tracked-v1', items: [], acquisition: { outcome: 'ok' } } } } }));
@@ -288,9 +290,13 @@ for (const [status, payload, outcome, responseStatus] of [[429, {}, 'rate_limite
       assert.equal(response.status, responseStatus);
       assert.equal(response.body.acquisition.outcome, outcome);
       assert.equal(response.body.acquisition.acquiredAt, null);
+      if (status === 429) {
+        if (i === 0) assert.ok(response.body.acquisition.attemptedAt > 0, 'actual provider attempt retained');
+        else assert.equal(response.body.acquisition.attemptedAt, null, 'cooldown denial invents no upstream attempt');
+      }
     }
   } finally { await server.close(); }
-  assert.equal(mock.requests.filter(u => u.hostname === 'newsapi.org').length, 2, 'failures never become cached healthy emptiness');
+  assert.equal(mock.requests.filter(u => u.hostname === 'newsapi.org').length, status === 429 ? 1 : 2, 'cooldown blocks repeated sends; failure never becomes cached healthy emptiness');
 });
 
 test('NewsAPI failed atomic write never claims disk-loaded delivery', async (t) => {

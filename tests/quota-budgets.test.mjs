@@ -43,13 +43,14 @@ test('quota-limited routes read and write the persisted cache with the policy TT
     assert.match(body, /_quotaCache\.set\(/, `${pathname} persists`);
     assert.doesNotMatch(body, /\bsetCached\((?!'greynoise-scanners:backoff')/, `${pathname} must not bypass the persisted cache`);
   }
-  assert.equal((server.match(/const OPENSKY_TTL = QUOTA_TTL_MS\.openskyStates;/g) ?? []).length, 3);
+  assert.equal((server.match(/await getOpenskyStatesSnapshot\(\)/g) ?? []).length, 3, 'only the three global consumers share the raw snapshot');
+  assert.match(server, /const ttl = _quotaGovernor\.ttlFor\('opensky-states', QUOTA_TTL_MS\.openskyStates\);/);
   assert.doesNotMatch(server, /OPENSKY_TTL = \d/);
 });
 
 test('shared news route keeps provider-specific persistence and TTLs', () => {
   const body = server.slice(server.indexOf('  // ── NewsAPI.org headlines'), server.indexOf('  // ── USGS Volcano'));
-  assert.match(body, /provider === 'newsapi' \? _quotaCache\.getWithMetadata\(cacheKey, QUOTA_TTL_MS.newsapi\)/);
+  assert.match(body, /provider === 'newsapi' \? _quotaCache\.getWithMetadata\(cacheKey, _quotaGovernor\.ttlFor\('newsapi', QUOTA_TTL_MS.newsapi\)\)/);
   assert.match(body, /provider === 'newsapi' \? quotaHit\?\.data : getCached\(cacheKey, 10 \* 60 \* 1000\)/);
   assert.match(body, /if \(provider === 'newsapi'\) _quotaCache\.set\(cacheKey, newsEnvelope\(items, acquisition\)\);\s*else setCached\(cacheKey, newsEnvelope\(items, acquisition\), 10 \* 60 \* 1000\)/);
   assert.equal(QUOTA_TTL_MS.newsapi, 20 * 60 * 1000);
@@ -71,9 +72,9 @@ test('PurpleAir remains outside the quota policy and persisted route changes', (
   assert.equal(Object.hasOwn(QUOTA_TTL_MS, 'purpleairBbox'), false);
 });
 
-test('the cache is pointed at the data dir at startup and both modules ship in the bundle', () => {
+test('the cache is pointed at the data dir at startup and all quota modules ship in the bundle', () => {
   assert.match(server, /const explicitDataDir = options\.dataDir \?\? process\.env\.LOCAL_API_DATA_DIR;\s*initQuotaCache\(explicitDataDir \? path\.join\(context\.dataDir, QUOTA_CACHE_FILE\) : null\);/);
-  for (const file of ['sidecar/quota-cache.mjs', 'sidecar/quota-policy.mjs', 'sidecar/quota-news-envelope.mjs']) {
+  for (const file of ['sidecar/quota-cache.mjs', 'sidecar/quota-policy.mjs', 'sidecar/quota-news-envelope.mjs', 'sidecar/quota-governor.mjs']) {
     assert.ok(tauriConf.bundle.resources.includes(file), `${file} in bundle.resources`);
   }
 });

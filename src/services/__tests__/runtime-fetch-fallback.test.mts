@@ -301,3 +301,21 @@ test('event routing regressions remain selected through the existing trusted rou
     assert.ok(selectScripts([path], index, mergeOverrides(OVERRIDES, declarations)).scripts.includes('test:sidecar-routing'), path);
   }
 });
+
+
+test('quota status remains exact local-only even when unavailable or unconfirmed', async () => {
+  assert.equal(isLocalOnlyApiTarget('/api/quota/status?limit=1'), true);
+  assert.equal(isLocalOnlyApiTarget('/api/quota/status-extra'), false);
+  const response = new Response('unavailable', { status: 503 });
+  const h = harness({ local: () => response });
+  assert.equal(await h.fetch('/api/quota/status'), response);
+  assert.equal(h.calls.length, 1);
+  assert.equal(h.calls[0]!.auth, 'Bearer tok-1');
+  const down = harness({ local: () => { throw new TypeError('quota sidecar down'); } });
+  await assert.rejects(down.fetch('/api/quota/status'), /quota sidecar down/);
+  assert.equal(down.calls.length, 4);
+  assert.ok(down.calls.every(call => call.url.startsWith('http://127.0.0.1:46200/api/quota/status')));
+  const missing = harness({ ports: [null] });
+  await assert.rejects(missing.fetch('/api/quota/status'), /Local API port not confirmed/);
+  assert.deepEqual(missing.calls, []);
+});

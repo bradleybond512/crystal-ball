@@ -74,6 +74,7 @@
       "sidecar/quota-cache.mjs",
       "sidecar/quota-news-envelope.mjs",
       "sidecar/quota-policy.mjs",
+      "sidecar/quota-governor.mjs",
       "sidecar/sms-command-parser.mjs",
       "sidecar/sms-security.mjs",
       "sidecar/sms-response-formatter.mjs",

@@ -139,7 +139,7 @@ jobs:
           VITE_VARIANT: ${{ matrix.variant }}
       - name: Retain map browser evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: map-e2e-${{ matrix.variant }}
           path: test-results/
@@ -165,7 +165,7 @@ jobs:
           VITE_VARIANT: full
       - name: Retain interaction browser evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: interaction-e2e-full
           path: test-results/

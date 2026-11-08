@@ -441,7 +441,8 @@
     "test:domain-retirement",
     "test:ux047",
     "test:sidecar-fallback",
-    "test:ux055"
+    "test:ux055",
+    "test:quota"
   ],
   "src/services/keychain.ts": [
     "test:secret-boundary",
@@ -471,7 +472,8 @@
     "test:domain-retirement",
     "test:desktop-identity",
     "test:ux047",
-    "test:sidecar-fallback"
+    "test:sidecar-fallback",
+    "test:quota"
   ],
   "src-tauri/src/vault_coordinator.rs": [
     "test:vault-writer"
@@ -1595,5 +1597,30 @@
   ],
   "server/crystalball/intelligence/v1/_shared.ts": [
     "test:latent-cloud"
+  ],
+  "src-tauri/sidecar/quota-cache.mjs": [
+    "test:quota",
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/quota-policy.mjs": [
+    "test:quota",
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/quota-news-envelope.mjs": [
+    "test:quota",
+    "test:news-resilience",
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/quota-cache.test.mjs": [
+    "test:quota",
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/quota-news-envelope.test.mjs": [
+    "test:quota",
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/quota-routes.test.mjs": [
+    "test:quota",
+    "test:sidecar-ci"
   ]
 }

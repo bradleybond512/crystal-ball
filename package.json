@@ -44,6 +44,7 @@
     "test:supply-chain-gates": "node --test tests/dependency-age.test.mjs tests/dependency-change-gate.test.mjs tests/dependency-overrides.test.mjs",
     "test:install-scripts": "node --test tests/install-script-drift.test.mjs tests/main-sync-agent.test.mjs tests/install-mcp-deps.test.mjs tests/desktop-package-signing.test.mjs tests/desktop-build-full.test.mjs scripts/install-crystalball-mcp.test.mjs",
     "sidecar:bundle-check": "node scripts/check-sidecar-bundle.mjs",
+    "test:quota": "node --test src-tauri/sidecar/__tests__/quota-cache.test.mjs src-tauri/sidecar/__tests__/quota-news-envelope.test.mjs src-tauri/sidecar/__tests__/quota-routes.test.mjs tests/quota-budgets.test.mjs && node scripts/check-sidecar-bundle.mjs",
     "bundle:check": "node scripts/check-bundle-size.mjs",
     "scenarios:check": "tsx scripts/check-scenario-coverage.mts",
     "version:sync": "node scripts/sync-desktop-version.mjs",

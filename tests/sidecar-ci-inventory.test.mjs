@@ -21,16 +21,16 @@ const second = 'src-tauri/sidecar/__tests__/second.test.mts';
 test('the complete sidecar inventory is assigned once across the three real smoke groups', () => {
   const inventory = discoverSidecarTests(root);
   const groups = sidecarSmokeGroups(scripts, SUITE_STAGES['sidecar-remaining']);
-  assert.equal(inventory.length, 59);
-  assert.deepEqual(Object.values(groups).map((files) => files.length), [19, 6, 34]);
-  assert.equal(assertSidecarInventory(inventory, groups), 59);
-  for (const file of ['sms-auth', 'key-health']) {
+  assert.equal(inventory.length, 62);
+  assert.deepEqual(Object.values(groups).map((files) => files.length), [19, 6, 37]);
+  assert.equal(assertSidecarInventory(inventory, groups), 62);
+  for (const file of ['sms-auth', 'key-health', 'quota-cache', 'quota-news-envelope', 'quota-routes']) {
     assert.ok(groups.remaining.includes(`src-tauri/sidecar/__tests__/${file}.test.mjs`));
   }
 });
 
 test('both fixed stages retain every explicit file and the required TypeScript loader', () => {
-  assert.equal(SIDECAR_REMAINING_NODE_FILES.length, 32);
+  assert.equal(SIDECAR_REMAINING_NODE_FILES.length, 35);
   assert.equal(SIDECAR_REMAINING_TSX_FILES.length, 2);
   assert.deepEqual(SUITE_STAGES['sidecar-remaining'], [
     ['--test', ...SIDECAR_REMAINING_NODE_FILES],

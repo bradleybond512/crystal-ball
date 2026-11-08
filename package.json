@@ -45,6 +45,7 @@
     "test:install-scripts": "node --test tests/install-script-drift.test.mjs tests/main-sync-agent.test.mjs tests/install-mcp-deps.test.mjs tests/desktop-package-signing.test.mjs tests/desktop-build-full.test.mjs scripts/install-crystalball-mcp.test.mjs",
     "sidecar:bundle-check": "node scripts/check-sidecar-bundle.mjs",
     "test:quota": "node --test src-tauri/sidecar/__tests__/quota-cache.test.mjs src-tauri/sidecar/__tests__/quota-news-envelope.test.mjs src-tauri/sidecar/__tests__/quota-routes.test.mjs tests/quota-budgets.test.mjs && node scripts/check-sidecar-bundle.mjs",
+    "test:quota-ui": "tsx --test tests/quota-governor-gates.test.mjs src/services/diagnostics/__tests__/quota-budgets.test.mts",
     "bundle:check": "node scripts/check-bundle-size.mjs",
     "scenarios:check": "tsx scripts/check-scenario-coverage.mts",
     "version:sync": "node scripts/sync-desktop-version.mjs",
@@ -320,7 +321,7 @@
     "test:acc508": "tsx --test src/services/correlation/__tests__/near-threshold-recall.test.mts src/services/correlation/__tests__/boundary-baseline-migration.test.mts",
     "test:breaking-stack-lifecycle": "tsx --test src/components/__tests__/breaking-news-stack-lifecycle.test.mts",
     "test:e2e:map:ci": "playwright test e2e/map-harness.spec.ts e2e/local-basemap.spec.ts --grep-invert \"matches golden screenshots per layer and zoom$\"",
-    "test:e2e:interactions:ci": "playwright test e2e/gods-vision-mode.spec.ts e2e/settings-keyboard.spec.ts e2e/map-clarity.spec.ts e2e/emergency-readiness-offline.spec.ts",
+    "test:e2e:interactions:ci": "playwright test e2e/gods-vision-mode.spec.ts e2e/settings-keyboard.spec.ts e2e/map-clarity.spec.ts e2e/emergency-readiness-offline.spec.ts e2e/quota-budgets.spec.ts",
     "test:e2e:ci-wiring": "node --test tests/e2e-ci-coverage.test.mjs",
     "test:latent-cloud": "node --test api/_api-key.test.mjs api/__tests__/claude-agent.test.mjs api/__tests__/newsapi-headlines.test.mjs && tsx --test tests/latent-cloud-routes.test.mjs tests/redis-caching.test.mjs tests/route-cache-tier.test.mjs"
   },

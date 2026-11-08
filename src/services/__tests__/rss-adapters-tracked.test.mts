@@ -158,3 +158,59 @@ test('RSS rejected links contribute no healthy rows or poisoned cache and recove
     assert.equal((await fetchAndParseRss(serverFeed,'full',new AbortController().signal)).acquisition.outcome,'ok');
   }
 });
+
+test('actual sidecar quota denial survives supplemental parsing and snapshot retention without fresh acquisition', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { createQuotaCache } = await import('../../../src-tauri/sidecar/quota-cache.mjs');
+  const { createQuotaGovernor, QuotaExhaustedError, isQuotaExhausted } = await import('../../../src-tauri/sidecar/quota-governor.mjs');
+  const { QUOTA_TTL_MS } = await import('../../../src-tauri/sidecar/quota-policy.mjs');
+  const { isPersistedNewsEnvelope } = await import('../../../src-tauri/sidecar/quota-news-envelope.mjs');
+  const { NewsSnapshot } = await import('../news-snapshot.ts');
+  const source = readFileSync(new URL('../../../src-tauri/sidecar/local-api-server.mjs', import.meta.url), 'utf8');
+  const start = source.indexOf('  // ── NewsAPI.org headlines');
+  const end = source.indexOf('  // ── USGS Volcano', start);
+  const helpers = source.slice(source.indexOf('  // ── News provenance helpers'), start);
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  const route = new AsyncFunction('requestUrl', 'fetchWithTimeout', 'getCached', 'setCached', 'json', 'CHROME_UA', 'Date', '_quotaCache', 'QUOTA_TTL_MS', 'isPersistedNewsEnvelope', '_quotaGovernor', 'QuotaExhaustedError', 'isQuotaExhausted', 'recordFeedFailure', 'trackFailure', 'recordQuotaRecovery', helpers + source.slice(start, end));
+  const now = Date.now();
+  const acquiredAt = now - 50 * 60_000;
+  const acquisition = { outcome: 'ok', delivery: 'upstream', attemptedAt: acquiredAt - 10, acquiredAt, cacheStoredAt: acquiredAt, acceptedCount: 1 };
+  const item = { id: 'fixture', description: '', title: 'Fixture', link: 'https://example.org/quota', source: 'Fixture', pubDate: new Date(acquiredAt - 60_000).toISOString(), provenance: { ...acquisition, sourceId: 'newsapi', deliveryGroup: 'newsapi', publicationState: 'known', publishedAt: acquiredAt - 60_000, observedAt: null } };
+  let cacheNow = acquiredAt;
+  const quotaCache = createQuotaCache({ now: () => cacheNow });
+  quotaCache.set('news-tracked-v1:newsapi:fixture:10', { format: 'tracked-v1', items: [item], acquisition });
+  cacheNow = now;
+  const governor = createQuotaGovernor();
+  for (let i = 0; i < 80; i++) governor.admit('https://newsapi.org/v2/everything');
+  let calls = 0;
+  const failures: string[] = [];
+  const savedKey = process.env.NEWSAPI_KEY;
+  process.env.NEWSAPI_KEY = 'synthetic';
+  try {
+    const response = await route(new URL('https://local/api/newsapi-headlines?q=fixture&responseMode=tracked-v1'), async (url: string) => {
+      const ticket = governor.admit(url);
+      if (!ticket.allowed) throw new QuotaExhaustedError(ticket);
+      calls++; throw new Error('unexpected transport');
+    }, () => null, () => {}, (body: any, status: number, headers: any) => Response.json(body, { status, headers }), 'test', Date, quotaCache, QUOTA_TTL_MS, isPersistedNewsEnvelope, governor, QuotaExhaustedError, isQuotaExhausted, (_key: string, error: string) => failures.push(error), (_key: string, error: string) => failures.push(error), () => assert.fail('stale quota response must not record recovery'));
+    assert.equal(response.status, 200);
+    fixture.status = response.status;
+    fixture.response = JSON.stringify(await response.json());
+    const parsed = await fetchNewsApiHeadlinesTracked('fixture', 10);
+    assert.equal(parsed.acquisition.outcome, 'rate_limited');
+    assert.equal(parsed.acquisition.acquiredAt, acquiredAt);
+    assert.equal(parsed.acquisition.attemptedAt, acquiredAt - 10, 'no fabricated upstream attempt on denial');
+    assert.equal(parsed.items[0]?.provenance?.publishedAt, acquiredAt - 60_000);
+    const snapshot = new NewsSnapshot();
+    const generation = snapshot.setScope({ variant: 'full', language: 'en', query: 'fixture', configSignature: 'fixture' }, [{ sourceId: 'Fixture', label: 'Fixture', configuredUrl: 'newsapi', enabled: true, category: 'politics' }]);
+    snapshot.publish(generation, 'Fixture', parsed.items, parsed.acquisition);
+    assert.equal(snapshot.getEligibleItems(now).length, 1);
+    assert.equal(snapshot.getSnapshot().sources[0]?.acquisition.outcome, 'rate_limited');
+    assert.equal(snapshot.getEligibleItems(acquiredAt + 2 * 60 * 60_000).length, 0, 'stale rows never gain an acquisition extension');
+    assert.deepEqual(failures, ['quota_exhausted', 'quota_exhausted']);
+    assert.equal(calls, 0);
+    assert.equal(quotaCache.getStale('news-tracked-v1:newsapi:fixture:10').acquisition.outcome, 'ok', 'response-only failure never overwrites saved acquisition');
+  } finally {
+    if (savedKey === undefined) delete process.env.NEWSAPI_KEY; else process.env.NEWSAPI_KEY = savedKey;
+    fixture.status = 200;
+  }
+});

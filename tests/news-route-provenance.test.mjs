@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import newsapi, { __resetNewsApiCacheForTests } from '../api/newsapi-headlines.js';
 import newsdata from '../api/newsdata-feed.js';
+import { createQuotaGovernor, QuotaExhaustedError, isQuotaExhausted } from '../src-tauri/sidecar/quota-governor.mjs';
 import { createQuotaCache } from '../src-tauri/sidecar/quota-cache.mjs';
 import { QUOTA_TTL_MS } from '../src-tauri/sidecar/quota-policy.mjs';
 import { isPersistedNewsEnvelope } from '../src-tauri/sidecar/quota-news-envelope.mjs';
@@ -27,8 +28,8 @@ function localRoute(path, cache = new Map(), context = {}, clock = Date) {
   const end = sidecar.indexOf(path === '/api/news/headlines' ? '  // ── GDELT Intelligence' : '  // ── USGS Volcano', start);
   const helpers = sidecar.slice(sidecar.indexOf('  // ── News provenance helpers'), sidecar.indexOf('  // ── NewsAPI.org headlines'));
   const quotaCache = createQuotaCache({ now: () => clock.now() });
-  const run = new AsyncFunction('requestUrl', 'fetchWithTimeout', 'getCached', 'getCachedStale', 'setCached', 'context', 'json', 'CHROME_UA', 'Date', '_quotaCache', 'QUOTA_TTL_MS', 'isPersistedNewsEnvelope', helpers + sidecar.slice(start, end));
-  return (url) => run(new URL(url), globalThis.fetch, (key) => cache.get(key)?.fresh ? cache.get(key).data : null, (key) => cache.get(key)?.data, (key, data) => cache.set(key, { data, fresh: true }), context, (body, status = 200, headers = {}) => Response.json(body, { status, headers }), 'test', clock, quotaCache, QUOTA_TTL_MS, isPersistedNewsEnvelope);
+  const run = new AsyncFunction('requestUrl', 'fetchWithTimeout', 'getCached', 'getCachedStale', 'setCached', 'context', 'json', 'CHROME_UA', 'Date', '_quotaCache', 'QUOTA_TTL_MS', 'isPersistedNewsEnvelope', '_quotaGovernor', 'QuotaExhaustedError', 'isQuotaExhausted', 'recordFeedFailure', 'trackFailure', 'recordQuotaRecovery', helpers + sidecar.slice(start, end));
+  return (url) => run(new URL(url), globalThis.fetch, (key) => cache.get(key)?.fresh ? cache.get(key).data : null, (key) => cache.get(key)?.data, (key, data) => cache.set(key, { data, fresh: true }), context, (body, status = 200, headers = {}) => Response.json(body, { status, headers }), 'test', clock, quotaCache, QUOTA_TTL_MS, isPersistedNewsEnvelope, createQuotaGovernor({ now: () => clock.now() }), QuotaExhaustedError, isQuotaExhausted, () => {}, () => {}, () => {});
 }
 const fixtures = {
   newsapi: { articles: [{ title: 'Headline', url: 'https://example.com/a' }] },
@@ -107,7 +108,7 @@ for (const [provider, edge] of [['newsapi', newsapi], ['newsdata', newsdata]]) {
         try {
           const route = runtime === 'edge' ? (url) => edge(authorizedRequest(url)) : localRoute(path);
           const response = await route(`https://local${path}?responseMode=tracked-v1`);
-          assert.equal(response.status, status); assert.equal(response.headers.get('cache-control'), 'no-store');
+          assert.equal(response.status, runtime === 'sidecar' && provider === 'newsapi' && outcome === 'rate_limited' ? 503 : status); assert.equal(response.headers.get('cache-control'), 'no-store');
           const body = await response.json();
           assert.equal(body.acquisition.outcome, outcome); assert.equal(body.acquisition.acquiredAt, null);
           assert.equal(body.acquisition.acceptedCount, 0); assert.ok(body.acquisition.attemptedAt > 0);

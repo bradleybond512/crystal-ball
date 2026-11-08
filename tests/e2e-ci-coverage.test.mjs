@@ -24,6 +24,7 @@ const interactionSpecs = [
   'e2e/settings-keyboard.spec.ts',
   'e2e/map-clarity.spec.ts',
   'e2e/emergency-readiness-offline.spec.ts',
+  'e2e/quota-budgets.spec.ts',
 ];
 
 function browserJob(name) {
@@ -147,7 +148,7 @@ test('identity, accessibility and Home Shell browser-harness coverage remain exp
   assert.equal(axe.if, forkGuard);
   assert.equal(axe.steps.find((step) => step.run === 'npx playwright test e2e/a11y-baseline.spec.ts').env.VITE_VARIANT, 'full');
   assert.equal(axe.steps.find((step) => step.run === 'npx playwright test e2e/home-shell-boot.spec.ts --grep "browser harness only"').env.VITE_VARIANT, 'full');
-  assert.equal(new Set(['e2e/variant-identity.spec.ts', 'e2e/a11y-baseline.spec.ts', 'e2e/home-shell-boot.spec.ts', ...mapSpecs, ...interactionSpecs]).size, 9);
+  assert.equal(new Set(['e2e/variant-identity.spec.ts', 'e2e/a11y-baseline.spec.ts', 'e2e/home-shell-boot.spec.ts', ...mapSpecs, ...interactionSpecs]).size, 10);
 });
 
 test('Home startup waits for every reported card and source within the existing budget', async (t) => {

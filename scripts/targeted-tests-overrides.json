@@ -394,7 +394,8 @@
   ],
   "src/components/SystemDiagnosticPanel.ts": [
     "test:sidecar-routing",
-    "test:signing-phase-a"
+    "test:signing-phase-a",
+    "test:quota-ui"
   ],
   "src/services/notifications/quiet-hours.ts": [
     "test:quiet-hours"
@@ -442,7 +443,8 @@
     "test:ux047",
     "test:sidecar-fallback",
     "test:ux055",
-    "test:quota"
+    "test:quota",
+    "test:news-resilience"
   ],
   "src/services/keychain.ts": [
     "test:secret-boundary",
@@ -1622,5 +1624,35 @@
   "src-tauri/sidecar/__tests__/quota-routes.test.mjs": [
     "test:quota",
     "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/quota-governor.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/quota-governor.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/quota-governor-io.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/quota-governor-policy.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/quota-governor-routes.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src/components/system-diagnostic-budgets.ts": [
+    "test:quota-ui"
+  ],
+  "src/services/diagnostics/quota-budgets.ts": [
+    "test:quota-ui"
+  ],
+  "src/services/diagnostics/__tests__/quota-budgets.test.mts": [
+    "test:quota-ui"
+  ],
+  "tests/quota-governor-gates.test.mjs": [
+    "test:quota-ui"
+  ],
+  "e2e/quota-budgets.spec.ts": [
+    "test:e2e:ci-wiring"
   ]
 }

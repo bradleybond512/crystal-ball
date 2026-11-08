@@ -166,7 +166,7 @@ test('every scenario keeps its probability, warning, action, and escaping with i
   assert.equal(card.querySelector('.sit-act-dismiss').dataset.actId, 'act1');
   assert.equal(card.querySelector('.sit-act-dismiss').textContent, 'Dismiss');
   assert.ok(card.querySelector('button.sit-map-btn'));
-  assert.equal(card.querySelector('script, img, strong'), null);
+  assert.equal(card.querySelector('script, img, strong') === null, true, 'untrusted markup remains text');
   const scenarios = [...card.querySelectorAll('.sit-scenario')];
   assert.equal(scenarios.length, 3);
   scenarios.forEach((sc, i) => {

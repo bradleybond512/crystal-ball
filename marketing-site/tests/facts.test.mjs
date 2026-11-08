@@ -3,6 +3,7 @@ import { readFile, access } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { requestWorker } from './helpers/worker-runtime.mjs';
 import { TOOL_CATALOG } from '../../tools/mcp-server/tool-catalog.mjs';
 import ts from 'typescript';
 
@@ -60,8 +61,7 @@ test('source references exist at the pinned revision and license agrees', async 
 });
 
 test('edition examples belong to each actual catalog and assistant examples name registered tools', async () => {
- const {default:worker}=await import('../dist/server/index.js');
- const html=await (await worker.fetch(new Request('https://crystalball.example/'),{},{})).text();
+ const html=await (await requestWorker('https://crystalball.example/')).text();
  const parsed=ts.createSourceFile('panels.ts',await read('src/config/panels.ts'),ts.ScriptTarget.Latest,true);
  const catalogs=new Map();
  for(const statement of parsed.statements) if(ts.isVariableStatement(statement)) {

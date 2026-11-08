@@ -33,7 +33,7 @@
     "react-server-dom-webpack": "19.2.8",
     "tailwindcss": "4.2.1",
     "typescript": "5.9.3",
-    "vinext": "1.0.0-beta.8",
+    "vinext": "1.0.0-beta.13",
     "vite": "8.2.4",
     "wrangler": "4.151.1",
     "lightningcss": "1.31.1",
@@ -41,6 +41,9 @@
     "braces": "file:vendor/braces"
   },
   "overrides": {
+    "satori@0.33.5": {
+      "fflate": "0.7.5"
+    },
     "nanoid": "3.3.18",
     "next": {
       "postcss": "8.5.23",

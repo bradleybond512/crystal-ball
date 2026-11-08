@@ -54,8 +54,6 @@ test('relay CORS: accepts owner-anchored preview origins when flag enabled', () 
   const valid = [
     'https://crystalball-my-branch-bradleybond512.vercel.app',
     'https://crystal-ball-fix-123-bradleybond512.vercel.app',
-    'https://crystalball-pr-42-elie-abc123.vercel.app',
-    'https://crystal-ball-feature-elie-xyz.vercel.app',
   ];
   for (const origin of valid) {
     assert.equal(getCorsOrigin(origin, true), origin, `should accept ${origin}`);
@@ -86,4 +84,14 @@ test('relay CORS: rejects lookalike vercel origins even when flag enabled (R2-SE
 test('relay CORS: rejects empty or missing origin', () => {
   assert.equal(getCorsOrigin('', false), '');
   assert.equal(getCorsOrigin('', true), '');
+});
+
+test('other-account preview 0 gets no relay CORS permission with either preview flag', () => {
+  assert.equal(getCorsOrigin('https://crystalball-pr-42-elie-abc123.vercel.app', false), '');
+  assert.equal(getCorsOrigin('https://crystalball-pr-42-elie-abc123.vercel.app', true), '');
+});
+
+test('other-account preview 1 gets no relay CORS permission with either preview flag', () => {
+  assert.equal(getCorsOrigin('https://crystal-ball-feature-elie-xyz.vercel.app', false), '');
+  assert.equal(getCorsOrigin('https://crystal-ball-feature-elie-xyz.vercel.app', true), '');
 });

@@ -54,7 +54,6 @@ test('relay CORS: accepts existing local and anchored preview origins', async ()
  'http://localhost:5173',
  'https://crystalball-my-branch-bradleybond512.vercel.app',
  'https://crystal-ball-fix-bradleybond512.vercel.app',
- 'https://crystalball-pr-elie-abc123.vercel.app',
   ];
   for (const origin of ok) {
  const res = await handler(makeRequest(`?videoId=iEpJwprxDdk&origin=${encodeURIComponent(origin)}`));
@@ -107,4 +106,28 @@ test('rejects retired origins instead of selecting a public fallback', async () 
     assert.equal(response.status, 400, origin);
     assert.doesNotMatch(await response.text(), /crystalball[.]app/i);
   }
+});
+
+test('other-account preview 0 is rejected for player and parent origins', async () => {
+  const origin = 'https://crystalball-pr-42-elie-abc123.vercel.app';
+  const encoded = encodeURIComponent(origin);
+  const rejected = await handler(makeRequest(`?videoId=iEpJwprxDdk&origin=${encoded}`));
+  assert.equal(rejected.status, 400);
+  const fallback = await handler(makeRequest(`?videoId=iEpJwprxDdk&origin=http://localhost:5173&parentOrigin=${encoded}`));
+  assert.equal(fallback.status, 200);
+  const html = await fallback.text();
+  assert.ok(html.includes('parentOrigin="http://localhost:5173"'));
+  assert.ok(!html.includes(origin));
+});
+
+test('other-account preview 1 is rejected for player and parent origins', async () => {
+  const origin = 'https://crystal-ball-feature-elie-xyz.vercel.app';
+  const encoded = encodeURIComponent(origin);
+  const rejected = await handler(makeRequest(`?videoId=iEpJwprxDdk&origin=${encoded}`));
+  assert.equal(rejected.status, 400);
+  const fallback = await handler(makeRequest(`?videoId=iEpJwprxDdk&origin=http://localhost:5173&parentOrigin=${encoded}`));
+  assert.equal(fallback.status, 200);
+  const html = await fallback.text();
+  assert.ok(html.includes('parentOrigin="http://localhost:5173"'));
+  assert.ok(!html.includes(origin));
 });

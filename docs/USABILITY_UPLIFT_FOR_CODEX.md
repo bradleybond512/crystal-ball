@@ -1504,13 +1504,16 @@ numbered repair queue authorizes this single item to cover the UX-001/UX-002
 presentation seams together and takes precedence over this document's default
 one-UX-task grouping.
 
-Current reconciliation checkpoint (2026-11-08): existing published Draft #1821
-is being integrated with current main, including #1822 Diagnostics ownership.
-Bradley authorized repair and protected merge after genuine required review and
-checks. Fresh exact-source Sonnet review, hosted checks, full integrated source
-qualification and bundle acceptance remain pending. Packaged/native shortcuts,
-VoiceOver, live-provider and installed/offline acceptance remain open; local
-source or browser evidence is not equivalent to packaged acceptance.
+Current qualification checkpoint (2026-11-08): existing published Draft #1821
+is reconciled with main `1fefd27f`, preserving #1822 Diagnostics ownership and
+the #1816 browser/CI coverage. Local qualification passed all 55 selected suites,
+the named aggregate, unchanged bundle limits, serial eight-case Home browser
+coverage and full ESLint baseline comparison. Earlier concurrent browser failures
+and the unchanged serial pass are retained separately in private evidence; no
+timeout or assertion was weakened. Bradley authorized protected merge, but
+fresh exact-source Sonnet review and hosted checks still govern delivery.
+Packaged/native shortcuts, VoiceOver, live-provider and installed/offline
+acceptance remain open; source/browser evidence is not packaged acceptance.
 
 The current shell already shares posture hydration and subscription for contextual
 Deck guidance; the historical zero-reference finding above describes an earlier
@@ -1523,8 +1526,8 @@ source-freshness promotion, stale-action policy or emergency-action precedence.
 
 UX-000 remains MONITOR with packaged acceptance outstanding. UX-001's dependency
 remains unresolved; the rows below are unchanged and are not marked complete by
-local source work. Browser layout, keyboard/VoiceOver, bundle budget, full source
-gate and packaged behavior require separate validation of the actual candidate.
+local source work. Qualified browser controls, bundle budget and source gates
+do not establish native keyboard delivery, VoiceOver or packaged behavior.
 
 | Task | Title | Status | PR |
 |---|---|---|---|

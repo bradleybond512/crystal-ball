@@ -964,7 +964,7 @@ Acceptance: Verify configured and external handle paths, encode safe URL compone
 
 ### UX-040 — Expose unavailable and stale feed outcomes
 
-Status: MONITOR — HIGH ASSURANCE
+Status: IN PROGRESS — bounded cyclone source-outcome continuation; HIGH ASSURANCE umbrella and broader MONITOR acceptance retained
 Evidence: #1841 — merged bounded news/status slice; local qualification, independent review and hosted checks passed.
 Exit condition: Assess remaining feed-outcome gaps from measured failures; complete any warranted broader work only after separate evidence, design and approval, or document why no further work is needed.
 Review after: 2026-11-15
@@ -985,6 +985,30 @@ independent reporting. The approved slice merged in #1841 at
 1509a12e4656a40f6725282c83033f1037018cfc after qualification and opposite-agent
 review. Broader feed-outcome acceptance remains open; this evidence does not
 establish complete app-wide coverage or a deployment.
+
+#### Bounded cyclone continuation — 2026-11-08
+
+Owner: Codex (`codex/cyclone-source-outcome-nov8`). Draft claim pending; no PR
+number has been assigned. This is an explicitly late tracker/claim correction:
+local source `11c5278051c9fc6fd4e1459d1be04b8aaaca9597` was implemented before
+any draft claim existed; the actual draft claim is still pending. This does not
+claim a reservation occurred before implementation.
+
+The separately investigated and approved Standard provider/status slice keeps
+failed-source last-good observations, distinguishes NHC successful empty results
+from failure, preserves the five-minute settled-at request budget and coalescing,
+and exposes unavailable/incomplete coverage in the existing cyclone panel. The
+current JTWC RSS is a regional bulletin index, not supported storm observations;
+no linked bulletin parser or complete global freshness is claimed. Coordinate,
+time and valid-track admission changes belong to separate B work. Prediction,
+permissions, secrets, deployment and installation remain unchanged.
+
+Local evidence before this documentation correction: nine genuine expected RED
+assertion failures, nine-case GREEN, expanded twelve-case GREEN, and normal signed
+source hooks passed. Full providers-alias execution, detecting mutations, named
+aggregate/build/bundle/lints, final exact-source review and hosted checks remain
+pending. See [bounded A brief](CYCLONE_SOURCE_OUTCOME.md). Previous #1841 evidence
+and broader UX-040 acceptance remain open; this continuation is not app-wide DONE.
 
 ### UX-042 — Construct panels when needed without losing coverage
 
@@ -1590,7 +1614,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-036 | Spread refresh work and honor battery policy | NOT STARTED — HIGH ASSURANCE | — |
 | UX-037 | Prevent new unowned stacking levels | NOT STARTED | — |
 | UX-038 | Constrain video-channel link construction | DONE — HIGH ASSURANCE | PR #1840 — two fixed-origin error links; 12 behavioral/helper tests, 46 HLS regressions, five clean-tree mutations and full validation ([QA](validation/UX-038-LINK-SAFETY.md)). |
-| UX-040 | Expose unavailable and stale feed outcomes | MONITOR — HIGH ASSURANCE | #1841 — merged bounded news/status slice; broader acceptance remains open |
+| UX-040 | Expose unavailable and stale feed outcomes | IN PROGRESS — bounded cyclone A; HIGH ASSURANCE umbrella | Draft continuation pending, explicitly late claim; #1841 merged news/status slice remains MONITOR; broader acceptance open |
 | UX-042 | Construct panels when needed without losing coverage | MONITOR | #1714 |
 | UX-043 | Reduce repeated alert subscriber scans | NOT STARTED | — |
 | UX-044 | Announce critical UI changes accessibly | MONITOR | [Evidence](validation/UX-044-CRITICAL-ANNOUNCEMENTS.md) · [Draft #1854](https://github.com/bradleybond512/crystal-ball/pull/1854) |

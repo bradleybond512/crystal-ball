@@ -101,7 +101,14 @@ export function assertSidecarInventory(inventory, groups) {
 
 export function assertSidecarSmokeWiring(scripts, workflow) {
   if (scripts['test:sidecar-ci'] !== SIDECAR_CI_COMMAND) throw new Error('Missing fixed plain Node entry for sidecar CI.');
-  const lines = workflow.split('\n');
+  const workflowLines = workflow.split('\n');
+  const smokeStart = workflowLines.indexOf('  smoke:');
+  if (smokeStart < 0) throw new Error('Missing smoke job.');
+  // A sibling job's guard must not be read as a condition on smoke's last
+  // step, nor may a sibling supply a command missing from the smoke job.
+  const nextBoundary = workflowLines.findIndex((line, index) => index > smokeStart
+    && /^(?:\S| {1,2}\S)/.test(line) && !line.trimStart().startsWith('#'));
+  const lines = workflowLines.slice(smokeStart + 1, nextBoundary < 0 ? undefined : nextBoundary);
   for (const name of ['test:sidecar', 'test:sec-hardening', 'test:sidecar-ci']) {
     const command = `run: npm run ${name}`;
     const matches = lines.flatMap((line, index) => line.trim().replace(/^- /, '') === command ? [index] : []);

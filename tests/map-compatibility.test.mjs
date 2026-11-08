@@ -217,3 +217,37 @@ test('development keeps map extensions and mesh layers in the same optimized gra
     assert.ok(optimize.includes(`'${name}'`), `${name} must be prebundled with deck core`);
   }
 });
+
+
+// These assertions execute the actual production tooltip method, without
+// initializing a renderer or making provider requests. No source regex oracle.
+for (const [label, intensity] of [
+  ['finite', 72.6], ['zero', 0], ['negative', -33], ['missing', undefined],
+  ['null', null], ['NaN', Number.NaN], ['infinite', Number.POSITIVE_INFINITY],
+]) {
+  test(`lightning tooltip omits unsupported physical measurement for ${label} intensity`, () => {
+    const tooltip = componentMethod('src/components/DeckGLMap.ts', 'DeckGLMap', 'getTooltip', {
+      Date: { now: () => 600000 },
+    });
+    const object = { intensity, time: 480000, lat: 12.5, lon: -45.25 };
+    const before = { ...object };
+    const expected = '<div class="deckgl-tooltip"><strong>⚡ Lightning Strike</strong><br/>2m ago</div>';
+    assert.equal(tooltip.call({}, { layer: { id: 'lightning-strikes' }, object }).html, expected);
+    assert.equal(tooltip.call({}, { layer: { id: 'lightning-strikes-ghost' }, object }).html, expected);
+    assert.deepEqual(object, before, 'presentation cannot mutate the selected strike');
+  });
+}
+
+test('lightning tooltip preserves existing time and empty-selection behavior', () => {
+  const tooltip = componentMethod('src/components/DeckGLMap.ts', 'DeckGLMap', 'getTooltip', {
+    Date: { now: () => 600000 },
+  });
+  assert.equal(tooltip.call({}, { layer: { id: 'lightning-strikes' }, object: null }), null);
+  assert.equal(tooltip.call({}, { layer: { id: 'unrelated-missing-layer' }, object: {} }), null);
+  for (const time of [undefined, 0]) {
+    assert.equal(tooltip.call({}, { layer: { id: 'lightning-strikes' }, object: { time } }).html,
+      '<div class="deckgl-tooltip"><strong>⚡ Lightning Strike</strong></div>');
+  }
+  assert.equal(tooltip.call({}, { layer: { id: 'lightning-strikes' }, object: { time: 660000 } }).html,
+    '<div class="deckgl-tooltip"><strong>⚡ Lightning Strike</strong><br/>-1m ago</div>');
+});

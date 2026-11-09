@@ -1278,7 +1278,7 @@ do not complete the remaining backlog or native/release acceptance.
 
 Status: IN REVIEW — HIGH ASSURANCE
 
-Claim: `codex/ux063-review-path-evaluation`; Bradley approved the [documentation-only retained-path design](plans/2026-11-08-ux063-review-path-decision.md), draft claim and local completion work on 2026-11-08. Preserve the existing Sonnet path; no CI runner, credential, billing or permission change. Completion publication and all merge/delivery actions remain paused.
+Claim: draft [#1890](https://github.com/bradleybond512/crystal-ball/pull/1890), `codex/ux063-review-path-evaluation`; Bradley approved the [documentation-only retained-path design](plans/2026-11-08-ux063-review-path-decision.md), draft claim and local completion work on 2026-11-08. Preserve the existing Sonnet path; no CI runner, credential, billing or permission change. Completion publication and all merge/delivery actions remain paused.
 
 Priority: S
 Dependencies: none
@@ -1616,7 +1616,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-060 | Preserve onboarding keyboard ownership against proactive digest | DONE | #1735 |
 | UX-061 | Truthful, restrained map presentation | DONE | #1802; [bounded evidence](validation/MAP-CLARITY-CLEANUP.md); native acceptance recorded separately |
 | UX-062 | Label forecasts that trail their baseline | NOT STARTED — HIGH ASSURANCE | |
-| UX-063 | Evaluate bounded CI Sonnet review | IN REVIEW — HIGH ASSURANCE | Approved [documentation-only design](plans/2026-11-08-ux063-review-path-decision.md); draft claim pending. Completion publication and delivery paused. |
+| UX-063 | Evaluate bounded CI Sonnet review | IN REVIEW — HIGH ASSURANCE | Approved [documentation-only design](plans/2026-11-08-ux063-review-path-decision.md); draft [#1890](https://github.com/bradleybond512/crystal-ball/pull/1890). Completion publication and delivery paused. |
 | UX-065 | Round 4 checkpoint and remaining security drafts | NOT STARTED | |
 | UX-066 | Dependabot backlog in reviewed batches | NOT STARTED | |
 | UX-067 | Green release-integrity signal on main | WAITING | |

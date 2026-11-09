@@ -1,6 +1,6 @@
 # UX-063 — Retain the existing Sonnet review path
 
-Status: Bradley approved this documentation-only design, draft claim and local completion work on 2026-11-08. Claim publication is authorized; later completion-commit publication requires separate approval. Merging, auto-merge, releases, deployment and installation remain paused.
+Status: Bradley approved this documentation-only design, draft claim and local completion work on 2026-11-08. Draft [#1890](https://github.com/bradleybond512/crystal-ball/pull/1890) publishes the approved claim; later completion-commit publication requires separate approval. Merging, auto-merge, releases, deployment and installation remain paused.
 
 ## Brief and selection
 
@@ -25,7 +25,7 @@ node --test tests/agentic-pipeline.test.mjs
 # fail 0
 ```
 
-They exercise source binding, stale-verdict rejection, reviewer/model policy, malformed verdicts, smuggled changes, missing tooling/credentials, install failures and fork/off-mode routing. Fixtures do not establish live Sonnet denial handling or CI service reliability. UX-062's two denied read-only Bash inspection calls are tool permission denials, not denied review transmissions.
+They exercise source binding, stale-verdict rejection, reviewer/model policy, invalid verdict fields, smuggled changes, missing tooling/credentials, install failures and fork/off-mode routing. Fixtures do not establish live Sonnet denial handling or CI service reliability. UX-062's two denied read-only Bash inspection calls are tool permission denials, not denied review transmissions.
 
 ## Boundaries and alternatives
 

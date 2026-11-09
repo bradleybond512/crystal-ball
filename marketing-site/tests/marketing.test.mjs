@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { requestWorker } from './helpers/worker-runtime.mjs';
 
 async function request(path = '/', headers = {}) {
-  const { default: worker } = await import('../dist/server/index.js');
-  return worker.fetch(new Request(`https://crystalball.example${path}`, { headers }), { ASSETS: { fetch: async (request) => { try { return new Response(await readFile(new URL('../dist/client'+new URL(request.url).pathname, import.meta.url))); } catch { return new Response('Not found', {status:404}); } } } }, {waitUntil(){},passThroughOnException(){}});
+  return requestWorker(`https://crystalball.example${path}`, { headers });
 }
 
 test('serves separate accessible product, download, docs and trust pages', async () => {
@@ -126,8 +126,7 @@ test('serves the exact build-generated sitemap without a rendering route',async(
 });
 
  test('serves the static sitemap without a Cloudflare asset binding', async()=>{
- const {default:worker}=await import('../dist/server/index.js');
- const response=await worker.fetch(new Request('http://localhost/sitemap.xml'), {}, {});
+ const response=await requestWorker('http://localhost/sitemap.xml', {}, { assets: false });
  assert.equal(response.status,200);
  assert.match(response.headers.get('content-type'),/application\/xml/);
  assert.equal(await response.text(),await readFile(new URL('../dist/client/sitemap.xml',import.meta.url),'utf8'));
@@ -243,4 +242,13 @@ test('links section caveats to readable notes and keeps the map-based hero', asy
  for(const [,id] of refs) assert.equal((html.match(new RegExp(`id="${id}"`,'g'))||[]).length,1);
  assert.match(html,/Use official guidance in emergencies/);
  assert.match(html,/Read-only and analyst profiles arrive in the next update/);
+});
+
+test('retains complete installed Vinext and bundled third-party notices in built output', async()=>{
+ for(const [source,output] of [['LICENSE','vinext-LICENSE.txt'],['THIRD_PARTY_LICENSES.md','vinext-THIRD_PARTY_LICENSES.txt']]) {
+  const expected=await readFile(new URL(`../node_modules/vinext/${source}`,import.meta.url),'utf8');
+  assert.ok(expected.length>1000);
+  assert.equal(await readFile(new URL(`../public/third-party/${output}`,import.meta.url),'utf8'),expected);
+  assert.equal(await readFile(new URL(`../dist/client/third-party/${output}`,import.meta.url),'utf8'),expected);
+ }
 });

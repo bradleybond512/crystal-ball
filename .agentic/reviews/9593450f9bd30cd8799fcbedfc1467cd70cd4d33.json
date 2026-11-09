@@ -1,0 +1,9 @@
+{
+  "reviewedSha": "9593450f9bd30cd8799fcbedfc1467cd70cd4d33",
+  "reviewer": "claude",
+  "model": "claude-sonnet-4-6",
+  "verdict": "approve",
+  "blockingFindings": 0,
+  "reviewedAt": "2026-11-08T15:47:38.913Z",
+  "evidence": "**Source:** `9593450f9bd30cd8799fcbedfc1467cd70cd4d33` | **Base:** `9aa2c979ec8a57030ed92dc9ec23921782c02031` | **Model:** `claude-sonnet-4-6` | **Status:** Complete\n\n**Scope inspected:** `src/services/foreign-mil-news.ts`, `src/utils/angle-span-text.ts`, `src/services/__tests__/foreign-mil-angle.test.mts`, fixture, `package.json`, `targeted-tests-overrides.json`, supplied diff, mutation receipt, coordinator verification. Read-only; no test execution.\n\n**Change:** `replaceNonemptyAngleSpans` substituted for `/<[^>]+>/g` in `stripHtml`; ESLint suppression removed; helper import added.\n\n**Correctness:** I independently traced helper semantics against `<>`, `<<x>tail`, `<tail`, `<foo>` — all match the original regex. Behavioral equivalence is structurally sound for these cases; I cannot claim universal input coverage.\n\n**Mutation proof (supplied evidence):** 15 genuine detecting mutations; `regex` mutation specifically detects the performance regression. All 14 test names covered. Fingerprint oracle guards against semantic drift on supplied fixtures.\n\n**No blocking findings.** Feed/proxy/health policy, fail-open vote, `fulfilled`-empty/`recordUpdate(0)` semantics, and cache boundary are unchanged from base.\n\n**Acceptance limits:** Happy-dom CDATA limitation retained; no browser/live/native parity. Mandatory hosted CI checks and existing release hold remain outstanding.\n\n**Verdict: APPROVE — 0 blocking findings.**"
+}

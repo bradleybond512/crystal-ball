@@ -1,11 +1,22 @@
 {
+  "src/services/foreign-mil-news.ts": ["test:foreign-mil-angle"],
+  "src/services/__tests__/fixtures/foreign-mil-original.ts.txt": ["test:foreign-mil-angle"],
+  "src/services/spc-mesoscale.ts": ["test:spc-angle"],
+  "src/services/__tests__/fixtures/spc-original.ts.txt": ["test:spc-angle"],
+  "src/services/dsca-arms-transfers.ts": ["test:dsca-angle"],
+  "src/services/__tests__/fixtures/dsca-original.ts.txt": ["test:dsca-angle"],
+  "src/services/aerospace-reentry.ts": ["test:aerospace-angle"],
+  "src/services/__tests__/fixtures/aerospace-original.ts.txt": ["test:aerospace-angle"],
+  "src/services/congress-defense.ts": ["test:angle-span-text"],
+  "src/services/__tests__/fixtures/congress-defense-original.ts.txt": ["test:angle-span-text"],
   "scripts/acc008-production-baseline.mts": [
     "test:acc008"
   ],
   "api/_api-key.js": [
     "test:key-compare",
     "test:api",
-    "test:domain-retirement"
+    "test:domain-retirement",
+    "test:latent-cloud"
   ],
   "api/_auth.js": [
     "test:key-compare",
@@ -32,6 +43,32 @@
   ],
   "tests/secret-scan-automation.test.mjs": [
     "test:secret-scan"
+  ],
+  "src/components/HomePostureBand.ts": [
+    "test:home-posture"
+  ],
+  "src/components/StormMoveActions.ts": [
+    "test:home-posture"
+  ],
+  "src/components/HomeShellOverlay.ts": [
+    "test:home-posture",
+    "test:home-reassurance",
+    "test:homeshell",
+    "test:repair12"
+  ],
+  "src/components/StormPosturePanel.ts": [
+    "test:home-posture"
+  ],
+  "src/styles/home-shell.css": [
+    "test:home-posture",
+    "test:ux050"
+  ],
+  "src/components/__tests__/home-posture-band.test.mts": [
+    "test:home-posture"
+  ],
+  "src/components/__tests__/home-shell-reassurance.test.mts": [
+    "test:home-posture",
+    "test:home-reassurance"
   ],
   "scripts/install-mcp-deps.mjs": [
     "test:mcp-deps",
@@ -216,7 +253,8 @@
     "test:install-scripts",
     "test:workflow-security",
     "test:domain-retirement",
-    "test:desktop-identity"
+    "test:desktop-identity",
+    "test:e2e:ci-wiring"
   ],
   "scripts/desktop-build-full.mjs": [
     "test:install-scripts"
@@ -302,12 +340,10 @@
     "test:ux053",
     "test:ux018",
     "test:ux049",
-    "test:ux044"
+    "test:ux044",
+    "test:repair12"
   ],
   "src/styles/alerts.css": [
-    "test:ux050"
-  ],
-  "src/styles/home-shell.css": [
     "test:ux050"
   ],
   "src/main.ts": [
@@ -368,7 +404,8 @@
   ],
   "src/components/SystemDiagnosticPanel.ts": [
     "test:sidecar-routing",
-    "test:signing-phase-a"
+    "test:signing-phase-a",
+    "test:quota-ui"
   ],
   "src/services/notifications/quiet-hours.ts": [
     "test:quiet-hours"
@@ -415,7 +452,9 @@
     "test:domain-retirement",
     "test:ux047",
     "test:sidecar-fallback",
-    "test:ux055"
+    "test:ux055",
+    "test:quota",
+    "test:news-resilience"
   ],
   "src/services/keychain.ts": [
     "test:secret-boundary",
@@ -445,7 +484,8 @@
     "test:domain-retirement",
     "test:desktop-identity",
     "test:ux047",
-    "test:sidecar-fallback"
+    "test:sidecar-fallback",
+    "test:quota"
   ],
   "src-tauri/src/vault_coordinator.rs": [
     "test:vault-writer"
@@ -751,7 +791,9 @@
     "test:desktop-identity"
   ],
   ".github/workflows/lint.yml": [
-    "test:workflow-security"
+    "test:workflow-security",
+    "test:main-sync-gate",
+    "test:eslint-runner"
   ],
   ".github/workflows/pages.yml": [
     "test:workflow-security"
@@ -772,7 +814,8 @@
     "test:workflow-security"
   ],
   ".github/workflows/accessibility.yml": [
-    "test:workflow-security"
+    "test:workflow-security",
+    "test:e2e:ci-wiring"
   ],
   ".github/workflows/auto-tag.yml": [
     "test:workflow-security"
@@ -802,7 +845,8 @@
   ],
   ".github/workflows/smoke.yml": [
     "test:workflow-security",
-    "test:sidecar-ci"
+    "test:sidecar-ci",
+    "test:e2e:ci-wiring"
   ],
   ".github/workflows/targeted-tests.yml": [
     "test:workflow-security"
@@ -814,7 +858,8 @@
     "test:workflow-security"
   ],
   ".github/workflows/variant-e2e.yml": [
-    "test:workflow-security"
+    "test:workflow-security",
+    "test:e2e:ci-wiring"
   ],
   "scripts/push-auto-tag.mjs": [
     "test:workflow-security"
@@ -886,7 +931,8 @@
   ],
   "src/services/country-geometry.ts": [
     "test:pwa-deployment",
-    "test:local-basemap"
+    "test:local-basemap",
+    "test:latent-cloud"
   ],
   "src/services/emergency-pack/emergency-pack-map-style.ts": [
     "test:pwa-deployment",
@@ -1480,5 +1526,148 @@
   ],
   "src/components/__tests__/breaking-news-stack-lifecycle.test.mts": [
     "test:breaking-stack-lifecycle"
+  ],
+  "src/services/keyboard/shortcut-bootstrap.ts": [
+    "test:repair12"
+  ],
+  "src/services/keyboard/shortcut-registry.ts": [
+    "test:repair12"
+  ],
+  "src/services/command-palette/built-in-commands.ts": [
+    "test:repair12"
+  ],
+  "src/app/event-handlers.ts": [
+    "test:repair12"
+  ],
+  "src/components/HelpOverlay.ts": [
+    "test:repair12"
+  ],
+  "src/components/CommandPalettePanel.ts": [
+    "test:repair12"
+  ],
+  "src/components/UnifiedSettings.ts": [
+    "test:repair12",
+    "test:ux032"
+  ],
+  "src/config/panel-metadata.ts": [
+    "test:repair12"
+  ],
+  "tests/e2e-ci-coverage.test.mjs": [
+    "test:e2e:ci-wiring"
+  ],
+  "playwright.config.ts": [
+    "test:e2e:ci-wiring"
+  ],
+  "e2e/home-shell-boot.spec.ts": [
+    "test:e2e:ci-wiring"
+  ],
+  "e2e/map-harness.spec.ts": [
+    "test:e2e:ci-wiring"
+  ],
+  "e2e/local-basemap.spec.ts": [
+    "test:e2e:ci-wiring"
+  ],
+  "e2e/gods-vision-mode.spec.ts": [
+    "test:e2e:ci-wiring"
+  ],
+  "e2e/settings-keyboard.spec.ts": [
+    "test:e2e:ci-wiring"
+  ],
+  "e2e/map-clarity.spec.ts": [
+    "test:e2e:ci-wiring"
+  ],
+  "e2e/emergency-readiness-offline.spec.ts": [
+    "test:e2e:ci-wiring"
+  ],
+  "api/claude-agent.js": [
+    "test:latent-cloud"
+  ],
+  "api/newsapi-headlines.js": [
+    "test:latent-cloud"
+  ],
+  "api/mediastack-news.js": [
+    "test:latent-cloud"
+  ],
+  "api/[domain]/v1/[rpc].ts": [
+    "test:latent-cloud"
+  ],
+  "server/_shared/rate-limit.ts": [
+    "test:latent-cloud"
+  ],
+  "server/_shared/llm-guard.ts": [
+    "test:latent-cloud"
+  ],
+  "server/_shared/country-codes.ts": [
+    "test:latent-cloud"
+  ],
+  "server/crystalball/intelligence/v1/get-country-intel-brief.ts": [
+    "test:latent-cloud"
+  ],
+  "scripts/generate-country-code-allowlist.mjs": [
+    "test:latent-cloud"
+  ],
+  "public/data/countries.geojson": [
+    "test:latent-cloud"
+  ],
+  "server/crystalball/intelligence/v1/_shared.ts": [
+    "test:latent-cloud"
+  ],
+  "src-tauri/sidecar/quota-cache.mjs": [
+    "test:quota",
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/quota-policy.mjs": [
+    "test:quota",
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/quota-news-envelope.mjs": [
+    "test:quota",
+    "test:news-resilience",
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/quota-cache.test.mjs": [
+    "test:quota",
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/quota-news-envelope.test.mjs": [
+    "test:quota",
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/quota-routes.test.mjs": [
+    "test:quota",
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/quota-governor.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/quota-governor.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/quota-governor-io.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/quota-governor-policy.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src-tauri/sidecar/__tests__/quota-governor-routes.test.mjs": [
+    "test:sidecar-ci"
+  ],
+  "src/components/system-diagnostic-budgets.ts": [
+    "test:quota-ui"
+  ],
+  "src/services/diagnostics/quota-budgets.ts": [
+    "test:quota-ui"
+  ],
+  "src/services/diagnostics/__tests__/quota-budgets.test.mts": [
+    "test:quota-ui"
+  ],
+  "tests/quota-governor-gates.test.mjs": [
+    "test:quota-ui"
+  ],
+  "e2e/quota-budgets.spec.ts": [
+    "test:e2e:ci-wiring"
+  ],
+  "src/utils/keyword-match.ts": [
+    "test:keyword-match"
   ]
 }

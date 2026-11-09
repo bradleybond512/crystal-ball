@@ -76,7 +76,6 @@ test('allows Vercel preview deploy origins', () => {
   const validPreviews = [
  'https://crystalball-my-branch-bradleybond512.vercel.app',
  'https://crystal-ball-fix-123-bradleybond512.vercel.app',
- 'https://crystalball-pr-42-elie-abc123.vercel.app',
   ];
   for (const origin of validPreviews) {
  const result = validateApiKey(makeRequest({
@@ -135,4 +134,26 @@ test('requires API key for trusted browser non-read requests', () => {
   assert.equal(result.valid, false);
   assert.equal(result.required, true);
   assert.match(result.error || '', /non-read requests/i);
+});
+
+test('other-account preview 0 cannot bypass API-key authentication', () => {
+  const result = validateApiKey(makeRequest({
+    Origin: 'https://crystalball-pr-42-elie-abc123.vercel.app',
+    'Sec-Fetch-Site': 'same-origin',
+    'Sec-Fetch-Mode': 'cors',
+  }));
+  assert.equal(result.valid, false);
+  assert.equal(result.required, true);
+  assert.match(result.error || '', /API key required/);
+});
+
+test('other-account preview 1 cannot bypass API-key authentication', () => {
+  const result = validateApiKey(makeRequest({
+    Origin: 'https://crystal-ball-feature-elie-xyz.vercel.app',
+    'Sec-Fetch-Site': 'same-origin',
+    'Sec-Fetch-Mode': 'cors',
+  }));
+  assert.equal(result.valid, false);
+  assert.equal(result.required, true);
+  assert.match(result.error || '', /API key required/);
 });

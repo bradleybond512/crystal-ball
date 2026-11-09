@@ -2647,8 +2647,6 @@ const ALLOWED_ORIGINS = [
 const ALLOWED_PREVIEW_PATTERNS = [
   /^https:\/\/crystalball-[a-z0-9-]+-bradleybond512\.vercel\.app$/,
   /^https:\/\/crystal-ball-[a-z0-9-]+-bradleybond512\.vercel\.app$/,
-  /^https:\/\/crystalball-[a-z0-9-]+-elie-[a-z0-9]+\.vercel\.app$/,
-  /^https:\/\/crystal-ball-[a-z0-9-]+-elie-[a-z0-9]+\.vercel\.app$/,
 ];
 
 function getCorsOrigin(req) {

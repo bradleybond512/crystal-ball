@@ -260,6 +260,13 @@ const LOCAL_ONLY_API_TARGETS = new Set([
   // dead sidecar would read as healthy (R4-BUG-004).
   '/api/health',
   '/api/diag',
+  '/api/quota/status', // Local accounting must never be replaced by cloud data.
+  // The sidecar's event store is local machine state; never substitute a
+  // cloud response or forward its query parameters when the store is down.
+  '/api/events/health',
+  '/api/events/query',
+  '/api/events/count',
+  '/api/events/prune',
 ]);
 
 export function isLocalOnlyApiTarget(target: string): boolean {

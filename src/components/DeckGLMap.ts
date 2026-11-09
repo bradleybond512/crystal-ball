@@ -4407,9 +4407,8 @@ export class DeckGLMap {
  return { html: `<div class="deckgl-tooltip"><strong>SIGINT Convergence</strong><br/>Score: ${obj.score}/100 · ${obj.events?.length ?? 0} events<br/>${text(obj.maxSeverity)} severity · ${obj.typeCount} types</div>` };
  }
  case 'lightning-strikes': {
- const kA = obj.intensity != null ? `${Math.round(obj.intensity)} kA` : '';
  const ago = obj.time ? `${Math.round((Date.now() - obj.time) / 60_000)}m ago` : '';
- return { html: `<div class="deckgl-tooltip"><strong>\u26A1 Lightning Strike</strong>${kA ? `<br/>${kA}` : ''}${ago ? `<br/>${ago}` : ''}</div>` };
+ return { html: `<div class="deckgl-tooltip"><strong>\u26A1 Lightning Strike</strong>${ago ? `<br/>${ago}` : ''}</div>` };
  }
  case 'red-flag-warnings': {
  return { html: `<div class="deckgl-tooltip"><strong>\uD83D\uDEA9 ${text(obj.event || 'Red Flag Warning')}</strong><br/>${text(obj.areaDesc || '')}<br/>${text(obj.severity || '')}</div>` };

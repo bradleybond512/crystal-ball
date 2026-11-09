@@ -13,7 +13,7 @@
  */
 
 import { getCorsHeaders, isDisallowedOrigin } from './_cors.js';
-import { validateApiKey } from './_api-key.js';
+import { isSidecarRuntime, validateApiKey } from './_api-key.js';
 
 // @upstash/ratelimit and @upstash/redis are imported dynamically inside
 // getClaudeAgentRatelimit() so the desktop sidecar (which doesn't bundle
@@ -48,8 +48,10 @@ export function serializeUntrustedToolResult(result) {
 // Every successful request burns Anthropic tokens server-side. Limit is
 // deliberately tight — legitimate usage is a handful of queries per session,
 // so 10/min/IP leaves plenty of headroom while capping the damage from an
-// abusive client. Upstash credentials are set in Vercel; fail-open if the
-// limiter can't reach Upstash so a Redis outage doesn't wedge the endpoint.
+// abusive client. In a cloud deployment a missing or failing limiter now fails
+// CLOSED (R4-SEC-007): spending Anthropic tokens without a limit is worse than
+// a short outage. The desktop sidecar (single user, LOCAL_API_TOKEN) keeps
+// working without Upstash.
 let claudeAgentRatelimit = null;
 
 async function getClaudeAgentRatelimit() {
@@ -84,9 +86,16 @@ function getClientIp(request) {
   );
 }
 
+function limiterUnavailable(corsHeaders) {
+  return Response.json({ error: 'Rate limit unavailable' }, {
+ status: 503,
+ headers: { 'Content-Type': 'application/json', 'Retry-After': '1', ...corsHeaders },
+  });
+}
+
 async function checkRateLimit(request, corsHeaders) {
   const rl = await getClaudeAgentRatelimit();
-  if (!rl) return null;
+  if (!rl) return isSidecarRuntime() ? null : limiterUnavailable(corsHeaders);
 
   try {
  const { success, limit, reset } = await rl.limit(getClientIp(request));
@@ -103,9 +112,7 @@ async function checkRateLimit(request, corsHeaders) {
  },
  });
   } catch {
- // Upstash unavailable — fail open. Better to serve the request than to
- // black-hole the endpoint if Redis has a blip.
- return null;
+ return isSidecarRuntime() ? null : limiterUnavailable(corsHeaders);
   }
 }
 const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';

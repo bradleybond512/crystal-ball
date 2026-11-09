@@ -70,10 +70,8 @@ test('rejects non-enumerated crystalball.app subdomains', () => {
 
 test('allows Vercel preview deploy origins', () => {
   const origins = [
- 'https://crystalball-abc123-elie-xyz.vercel.app',
  'https://crystalball-main-bradleybond512.vercel.app',
  'https://crystal-ball-feature-abc-bradleybond512.vercel.app',
- 'https://crystal-ball-preview-elie-xyz.vercel.app',
  'http://localhost:5173',
  'http://localhost',
  'https://localhost:3000',
@@ -126,4 +124,18 @@ test('getCorsHeaders returns correct default methods', () => {
 test('getCorsHeaders accepts custom methods parameter', () => {
   const cors = getCorsHeaders(makeRequest('https://crystalball.app'), 'GET, POST, OPTIONS');
   assert.equal(cors['Access-Control-Allow-Methods'], 'GET, POST, OPTIONS');
+});
+
+test('other-account preview 0 gets no edge CORS permission', () => {
+  const req = makeRequest('https://crystalball-pr-42-elie-abc123.vercel.app');
+  assert.equal(isDisallowedOrigin(req), true);
+  assert.equal(getCorsHeaders(req)['Access-Control-Allow-Origin'], undefined);
+  assert.equal(getCorsHeaders(req)['Access-Control-Expose-Headers'], 'Date, Age');
+});
+
+test('other-account preview 1 gets no edge CORS permission', () => {
+  const req = makeRequest('https://crystal-ball-feature-elie-xyz.vercel.app');
+  assert.equal(isDisallowedOrigin(req), true);
+  assert.equal(getCorsHeaders(req)['Access-Control-Allow-Origin'], undefined);
+  assert.equal(getCorsHeaders(req)['Access-Control-Expose-Headers'], 'Date, Age');
 });

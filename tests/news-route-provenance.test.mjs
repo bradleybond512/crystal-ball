@@ -1,8 +1,25 @@
-import test from 'node:test';
+import test, { beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import newsapi from '../api/newsapi-headlines.js';
+import newsapi, { __resetNewsApiCacheForTests } from '../api/newsapi-headlines.js';
 import newsdata from '../api/newsdata-feed.js';
+import { createQuotaGovernor, QuotaExhaustedError, isQuotaExhausted } from '../src-tauri/sidecar/quota-governor.mjs';
+import { createQuotaCache } from '../src-tauri/sidecar/quota-cache.mjs';
+import { QUOTA_TTL_MS } from '../src-tauri/sidecar/quota-policy.mjs';
+import { isPersistedNewsEnvelope } from '../src-tauri/sidecar/quota-news-envelope.mjs';
+
+let savedAppKey;
+beforeEach(() => {
+  savedAppKey = process.env.CRYSTALBALL_APP_KEY;
+  process.env.CRYSTALBALL_APP_KEY = 'provenance-fixture';
+  __resetNewsApiCacheForTests();
+});
+afterEach(() => {
+  if (savedAppKey === undefined) delete process.env.CRYSTALBALL_APP_KEY;
+  else process.env.CRYSTALBALL_APP_KEY = savedAppKey;
+  __resetNewsApiCacheForTests();
+});
+const authorizedRequest = (url) => new Request(url, { headers: { 'X-CrystalBall-Key': 'provenance-fixture' } });
 
 const sidecar = readFileSync(new URL('../src-tauri/sidecar/local-api-server.mjs', import.meta.url), 'utf8');
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
@@ -10,8 +27,9 @@ function localRoute(path, cache = new Map(), context = {}, clock = Date) {
   const start = sidecar.indexOf(path === '/api/news/headlines' ? '  // ── News headlines aggregator' : '  // ── NewsAPI.org headlines');
   const end = sidecar.indexOf(path === '/api/news/headlines' ? '  // ── GDELT Intelligence' : '  // ── USGS Volcano', start);
   const helpers = sidecar.slice(sidecar.indexOf('  // ── News provenance helpers'), sidecar.indexOf('  // ── NewsAPI.org headlines'));
-  const run = new AsyncFunction('requestUrl', 'fetchWithTimeout', 'getCached', 'getCachedStale', 'setCached', 'context', 'json', 'CHROME_UA', 'Date', helpers + sidecar.slice(start, end));
-  return (url) => run(new URL(url), globalThis.fetch, (key) => cache.get(key)?.fresh ? cache.get(key).data : null, (key) => cache.get(key)?.data, (key, data) => cache.set(key, { data, fresh: true }), context, (body, status = 200, headers = {}) => Response.json(body, { status, headers }), 'test', clock);
+  const quotaCache = createQuotaCache({ now: () => clock.now() });
+  const run = new AsyncFunction('requestUrl', 'fetchWithTimeout', 'getCached', 'getCachedStale', 'setCached', 'context', 'json', 'CHROME_UA', 'Date', '_quotaCache', 'QUOTA_TTL_MS', 'isPersistedNewsEnvelope', '_quotaGovernor', 'QuotaExhaustedError', 'isQuotaExhausted', 'recordFeedFailure', 'trackFailure', 'recordQuotaRecovery', helpers + sidecar.slice(start, end));
+  return (url) => run(new URL(url), globalThis.fetch, (key) => cache.get(key)?.fresh ? cache.get(key).data : null, (key) => cache.get(key)?.data, (key, data) => cache.set(key, { data, fresh: true }), context, (body, status = 200, headers = {}) => Response.json(body, { status, headers }), 'test', clock, quotaCache, QUOTA_TTL_MS, isPersistedNewsEnvelope, createQuotaGovernor({ now: () => clock.now() }), QuotaExhaustedError, isQuotaExhausted, () => {}, () => {}, () => {});
 }
 const fixtures = {
   newsapi: { articles: [{ title: 'Headline', url: 'https://example.com/a' }] },
@@ -24,7 +42,7 @@ for (const [provider, edge] of [['newsapi', newsapi], ['newsdata', newsdata]]) {
       process.env.NEWSAPI_KEY = 'fixture'; process.env.NEWSDATA_API_KEY = 'fixture';
       const old = globalThis.fetch; globalThis.fetch = async () => Response.json(fixtures[provider]);
       try {
-        const route = runtime === 'edge' ? (url) => edge(new Request(url)) : localRoute(path);
+        const route = runtime === 'edge' ? (url) => edge(authorizedRequest(url)) : localRoute(path);
         const response = await route(`https://local${path}?responseMode=tracked-v1`);
         assert.equal(response.headers.get('cache-control'), 'no-store');
         const body = await response.json();
@@ -33,7 +51,7 @@ for (const [provider, edge] of [['newsapi', newsapi], ['newsdata', newsdata]]) {
         assert.equal(body.items[0].provenance.publicationState, 'missing');
         assert.equal(body.items[0].provenance.publishedAt, null);
         const legacy = await route(`https://local${path}`);
-        assert.equal(legacy.headers.get('cache-control'), runtime === 'edge' ? 'public, max-age=120, s-maxage=300' : null);
+        assert.equal(legacy.headers.get('cache-control'), runtime === 'edge' ? (provider === 'newsapi' ? 'private, max-age=120' : 'public, max-age=120, s-maxage=300') : null);
         assert.ok(Array.isArray(await legacy.json()));
         assert.equal((await route(`https://local${path}?responseMode=future`)).status, 400);
       } finally { globalThis.fetch = old; }
@@ -43,7 +61,7 @@ for (const [provider, edge] of [['newsapi', newsapi], ['newsdata', newsdata]]) {
         const old = globalThis.fetch; let calls = 0;
         globalThis.fetch = async () => { calls++; return Response.json(payload); };
         try {
-          const route = runtime === 'edge' ? (url) => edge(new Request(url)) : localRoute(path);
+          const route = runtime === 'edge' ? (url) => edge(authorizedRequest(url)) : localRoute(path);
           for (let i = 0; i < 2; i++) {
             const response = await route(`https://local${path}?responseMode=tracked-v1`);
             assert.equal(response.status, 502); assert.equal(response.headers.get('cache-control'), 'no-store');
@@ -88,9 +106,9 @@ for (const [provider, edge] of [['newsapi', newsapi], ['newsdata', newsdata]]) {
       test(`${runtime} ${provider} reports ${outcome} without false acquisition or exception leaks`, async () => {
         const old = globalThis.fetch; globalThis.fetch = async () => makeResponse();
         try {
-          const route = runtime === 'edge' ? (url) => edge(new Request(url)) : localRoute(path);
+          const route = runtime === 'edge' ? (url) => edge(authorizedRequest(url)) : localRoute(path);
           const response = await route(`https://local${path}?responseMode=tracked-v1`);
-          assert.equal(response.status, status); assert.equal(response.headers.get('cache-control'), 'no-store');
+          assert.equal(response.status, runtime === 'sidecar' && provider === 'newsapi' && outcome === 'rate_limited' ? 503 : status); assert.equal(response.headers.get('cache-control'), 'no-store');
           const body = await response.json();
           assert.equal(body.acquisition.outcome, outcome); assert.equal(body.acquisition.acquiredAt, null);
           assert.equal(body.acquisition.acceptedCount, 0); assert.ok(body.acquisition.attemptedAt > 0);
@@ -102,11 +120,12 @@ for (const [provider, edge] of [['newsapi', newsapi], ['newsdata', newsdata]]) {
       const old = globalThis.fetch;
       globalThis.fetch = async () => Response.json(provider === 'newsapi' ? { articles: [] } : { results: [] });
       try {
-        let route = runtime === 'edge' ? (url) => edge(new Request(url)) : localRoute(path);
+        let route = runtime === 'edge' ? (url) => edge(authorizedRequest(url)) : localRoute(path);
         const empty = await (await route(`https://local${path}?responseMode=tracked-v1`)).json();
         assert.equal(empty.acquisition.outcome, 'empty'); assert.equal(empty.acquisition.acceptedCount, 0);
         globalThis.fetch = async () => Response.json(provider === 'newsapi' ? { articles: [{ ...fixtures[provider].articles[0], publishedAt: 'invalid' }] } : { results: [{ ...fixtures[provider].results[0], pubDate: 'invalid' }] });
-        route = runtime === 'edge' ? (url) => edge(new Request(url)) : localRoute(path);
+        if (runtime === 'edge' && provider === 'newsapi') __resetNewsApiCacheForTests();
+        route = runtime === 'edge' ? (url) => edge(authorizedRequest(url)) : localRoute(path);
         const invalidDate = await (await route(`https://local${path}?responseMode=tracked-v1`)).json();
         assert.equal(invalidDate.items[0].provenance.publicationState, 'invalid'); assert.equal(invalidDate.items[0].provenance.publishedAt, null);
         const key = provider === 'newsapi' ? 'NEWSAPI_KEY' : 'NEWSDATA_API_KEY'; const value = process.env[key]; delete process.env[key];
@@ -171,7 +190,7 @@ for (const [provider, edge] of [['newsapi', newsapi], ['newsdata', newsdata]]) {
       const rows = ['http://', 'javascript:alert(1)'].map((link) => provider === 'newsapi' ? { title: 'Headline', url: link } : { title: 'Headline', link });
       globalThis.fetch = async () => { calls++; return Response.json(provider === 'newsapi' ? { articles: rows } : { results: rows }); };
       try {
-        const route = runtime === 'edge' ? (url) => edge(new Request(url)) : localRoute(path);
+        const route = runtime === 'edge' ? (url) => edge(authorizedRequest(url)) : localRoute(path);
         for (let i = 0; i < 2; i++) {
           const response = await route(`https://local${path}?responseMode=tracked-v1`);
           assert.equal(response.status, 502); assert.equal((await response.json()).acquisition.outcome, 'malformed');

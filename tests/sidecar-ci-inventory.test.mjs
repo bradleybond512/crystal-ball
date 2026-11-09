@@ -21,16 +21,16 @@ const second = 'src-tauri/sidecar/__tests__/second.test.mts';
 test('the complete sidecar inventory is assigned once across the three real smoke groups', () => {
   const inventory = discoverSidecarTests(root);
   const groups = sidecarSmokeGroups(scripts, SUITE_STAGES['sidecar-remaining']);
-  assert.equal(inventory.length, 59);
-  assert.deepEqual(Object.values(groups).map((files) => files.length), [19, 6, 34]);
-  assert.equal(assertSidecarInventory(inventory, groups), 59);
-  for (const file of ['sms-auth', 'key-health']) {
+  assert.equal(inventory.length, 66);
+  assert.deepEqual(Object.values(groups).map((files) => files.length), [19, 6, 41]);
+  assert.equal(assertSidecarInventory(inventory, groups), 66);
+  for (const file of ['sms-auth', 'key-health', 'quota-cache', 'quota-news-envelope', 'quota-routes', 'quota-governor', 'quota-governor-io', 'quota-governor-policy', 'quota-governor-routes']) {
     assert.ok(groups.remaining.includes(`src-tauri/sidecar/__tests__/${file}.test.mjs`));
   }
 });
 
 test('both fixed stages retain every explicit file and the required TypeScript loader', () => {
-  assert.equal(SIDECAR_REMAINING_NODE_FILES.length, 32);
+  assert.equal(SIDECAR_REMAINING_NODE_FILES.length, 39);
   assert.equal(SIDECAR_REMAINING_TSX_FILES.length, 2);
   assert.deepEqual(SUITE_STAGES['sidecar-remaining'], [
     ['--test', ...SIDECAR_REMAINING_NODE_FILES],
@@ -99,6 +99,7 @@ test('targeted selection includes the isolated suite for every added test and it
   const files = [
     ...SIDECAR_REMAINING_NODE_FILES, ...SIDECAR_REMAINING_TSX_FILES,
     'src-tauri/sidecar/local-api-server.mjs', 'src-tauri/sidecar/biosurveillance-wastewater.mjs',
+    'src-tauri/sidecar/quota-governor.mjs',
     'src-tauri/sidecar/ofac-cache.mjs', 'src-tauri/sidecar/sidecar-logger.mjs',
     'src-tauri/sidecar/event-store.mjs', 'src-tauri/sidecar/evidence-store.mjs',
     'src-tauri/sidecar/watchboard-engine.mjs', 'src-tauri/sidecar/hrrr-smoke.mjs',
@@ -113,4 +114,31 @@ test('targeted selection includes the isolated suite for every added test and it
   for (const file of files) {
     assert.ok(selectScripts([file], index, overrides).scripts.includes('test:sidecar-ci'), file);
   }
+});
+
+
+test('a following guarded browser job cannot condition the final security smoke step', () => {
+  const smokeOnly = workflow.split('\n  map-e2e:')[0];
+  const followingJob = '\n  browser-fixture:\n    if: false\n    runs-on: ubuntu-24.04\n    steps:\n      - run: echo browser\n';
+  assert.doesNotThrow(() => assertSidecarSmokeWiring(scripts, smokeOnly + followingJob));
+  const security = '      - run: npm run test:sec-hardening';
+  assert.throws(() => assertSidecarSmokeWiring(scripts,
+    (smokeOnly + followingJob).replace(security, `${security}\n        if: false`)),
+  /Conditional smoke step.*test:sec-hardening/);
+});
+
+test('required commands in another job cannot replace missing smoke coverage', () => {
+  const smokeOnly = workflow.split('\n  map-e2e:')[0];
+  const security = '      - run: npm run test:sec-hardening';
+  const moved = smokeOnly.replace(security, '')
+    + `\n  another-job:\n    steps:\n${security}\n`;
+  assert.throws(() => assertSidecarSmokeWiring(scripts, moved),
+    /Missing or duplicate unconditional smoke step.*test:sec-hardening/);
+});
+
+test('runtime quota route selection retains real tracked-news consumer coverage', () => {
+  const index = deriveScriptIndex(scripts);
+  const selected = selectScripts(['src-tauri/sidecar/local-api-server.mjs'], index, overrides).scripts;
+  assert.ok(selected.includes('test:sidecar-ci'));
+  assert.ok(selected.includes('test:news-resilience'), 'runtime acquisition changes must execute the real news adapter/snapshot proof');
 });

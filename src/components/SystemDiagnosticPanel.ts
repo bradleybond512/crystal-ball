@@ -91,7 +91,7 @@ const LOCAL_ENGINE_TONE_COLOR: Record<LocalEngineTone, string> = {
 };
 const REFRESH_MS = 5000;
 
-type Tab = 'overview' | 'features' | 'panels' | 'notifications' | 'feeds' | 'quality_debt' | 'self_test';
+type Tab = 'overview' | 'features' | 'panels' | 'notifications' | 'feeds' | 'budgets' | 'quality_debt' | 'self_test';
 
 const STATUS_COLOR: Record<HealthStatus, string> = {
   healthy: 'var(--severity-ok)',
@@ -132,6 +132,13 @@ export class SystemDiagnosticPanel extends Panel {
   /** Keys & signing status (R3-SEC-003 phase A); desktop only. */
   private vaultDiagnostics: VaultDiagnostics | null = null;
 
+  private quotaController: ReturnType<typeof import('./system-diagnostic-budgets').createQuotaBudgetsController> | null = null;
+  private quotaLoad: Promise<void> | null = null;
+  private quotaLoadAttemptAt: number | null = null;
+  private quotaLoadError = false;
+  private quotaActive = false;
+  private quotaDisposed = false;
+
   private unsubscribeNews: (() => void) | null = null;
 
   constructor(private readonly newsSnapshot?: NewsSnapshot) {
@@ -160,7 +167,15 @@ export class SystemDiagnosticPanel extends Panel {
     this.unsubscribeDisclosure = disclosureService.subscribe('system-diagnostic', () => this.render());
   }
 
+  public override hide(): void {
+    this.syncQuotaPanel(false);
+    super.hide();
+  }
+
   public override destroy(): void {
+    this.quotaDisposed = true;
+    this.quotaController?.destroy();
+    this.quotaController = null;
     if (this.refreshTimer !== null) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
@@ -184,12 +199,24 @@ export class SystemDiagnosticPanel extends Panel {
     }
   }
 
+  protected override captureContentFocus(): (() => void) | undefined {
+    if (this.activeTab !== 'budgets' || !this.getContentElement().contains(document.activeElement)) return undefined;
+    const focused = (document.activeElement as HTMLElement)?.closest<HTMLButtonElement>('.syd-tab')?.dataset.tab;
+    if (!focused) return undefined;
+    return () => {
+      for (const button of this.getContentElement().querySelectorAll<HTMLButtonElement>('.syd-tab')) {
+        if (button.dataset.tab === focused) { button.focus({ preventScroll: true }); break; }
+      }
+    };
+  }
+
   private buildHtml(): string {
     const ctx = this.collect();
     this.setCount(ctx.unhealthyCount);
     const switcher = renderDisclosureSwitcherHtml('system-diagnostic', { showRaw: true });
     const switcherRow = `<div style="display:flex;justify-content:flex-end;padding:6px 12px 0;">${switcher}</div>`;
     const level = disclosureService.getLevel('system-diagnostic');
+    this.syncQuotaPanel(level === 'detail' && this.activeTab === 'budgets' && this.isPanelInView() && document.visibilityState !== 'hidden' && !this.getElement().classList.contains('hidden'));
 
     if (level === 'raw') {
       const bundle = {
@@ -288,13 +315,14 @@ export class SystemDiagnosticPanel extends Panel {
       { id: 'panels', label: 'Panels' },
       { id: 'notifications', label: 'Notifications' },
       { id: 'feeds', label: 'Feeds' },
+      { id: 'budgets', label: 'API Budgets' },
       { id: 'quality_debt', label: 'Quality Debt' },
       { id: 'self_test', label: 'Self-Test' },
     ];
-    return `<div class="syd-tabs" style="display:flex;gap:0;border-bottom:1px solid var(--border-subtle,#333);">
+    return `<div class="syd-tabs" style="display:flex;flex-wrap:wrap;gap:0;border-bottom:1px solid var(--border-subtle,#333);">
       ${tabs.map((t) => {
         const isActive = t.id === this.activeTab;
-        return `<button data-tab="${t.id}" class="syd-tab" style="flex:1;padding:6px 8px;font-size:11px;background:${isActive ? 'var(--bg-elevated,#1a1a1a)' : 'transparent'};color:${isActive ? 'var(--text-primary,#fff)' : 'var(--text-secondary,#aaa)'};border:none;border-bottom:2px solid ${isActive ? 'var(--accent,#4a9eff)' : 'transparent'};cursor:pointer;">${escapeHtml(t.label)}</button>`;
+        return `<button data-tab="${t.id}" aria-pressed="${isActive}" class="syd-tab" style="flex:1;padding:6px 8px;font-size:11px;background:${isActive ? 'var(--bg-elevated,#1a1a1a)' : 'transparent'};color:${isActive ? 'var(--text-primary,#fff)' : 'var(--text-secondary,#aaa)'};border:none;border-bottom:2px solid ${isActive ? 'var(--accent,#4a9eff)' : 'transparent'};cursor:pointer;">${escapeHtml(t.label)}</button>`;
       }).join('')}
     </div>`;
   }
@@ -316,6 +344,9 @@ export class SystemDiagnosticPanel extends Panel {
       case 'feeds': {
         return this.renderFeeds(ctx);
       }
+      case 'budgets': {
+        return this.quotaController?.html() ?? `<div style="padding:12px;">${this.quotaLoadError ? 'API budgets are unavailable. Retry shortly.' : 'Loading API budgets…'}</div>`;
+      }
       case 'quality_debt': {
         return this.renderQualityDebt();
       }
@@ -323,6 +354,30 @@ export class SystemDiagnosticPanel extends Panel {
         return this.renderSelfTest();
       }
     }
+  }
+
+  private loadQuotaModule() { return import('./system-diagnostic-budgets'); }
+
+  private syncQuotaPanel(enabled: boolean): void {
+    if (this.quotaDisposed) return;
+    this.quotaActive = enabled;
+    this.quotaController?.setActive(enabled);
+    if (!enabled || this.quotaController || this.quotaLoad) return;
+    if (this.quotaLoadAttemptAt !== null && Date.now() - this.quotaLoadAttemptAt < 30_000) return;
+    this.quotaLoadAttemptAt = Date.now();
+    this.quotaLoadError = false;
+    this.quotaLoad = this.loadQuotaModule().then(module => {
+      if (this.quotaDisposed) return;
+      this.quotaController = module.createQuotaBudgetsController(() => {
+        if (!this.quotaDisposed && this.quotaActive) this.renderWhenVisible(() => this.render());
+      });
+      this.quotaController.setActive(this.quotaActive);
+      if (this.quotaActive) this.renderWhenVisible(() => this.render());
+    }).catch(() => {
+      if (this.quotaDisposed) return;
+      this.quotaLoadError = true;
+      if (this.quotaActive) this.renderWhenVisible(() => this.render());
+    }).finally(() => { this.quotaLoad = null; });
   }
 
   private renderQualityDebt(): string {

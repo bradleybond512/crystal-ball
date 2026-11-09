@@ -19,11 +19,12 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - run: npm run test:e2e:ci-wiring
       - run: npm run smoke:offline
       # Full renderer unit-test sweep. Globs EVERY src/**/__tests__ dir (depths
       # 2-4) so the ~100 test:* suites that previously ran in NO CI workflow —
@@ -110,3 +111,62 @@ jobs:
       # allowlist, webhook dispatch, IPv4 redirect) — the Node sidecar tests live
       # under src-tauri/ so test:renderer can't reach them; this gates them.
       - run: npm run test:sec-hardening
+
+  map-e2e:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        variant:
+          - full
+          - tech
+          - finance
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # Golden image comparison remains local; all other map checks and their
+      # screenshot evidence run for every supported map variant.
+      - run: npm run test:e2e:map:ci
+        env:
+          VITE_VARIANT: ${{ matrix.variant }}
+      - name: Retain map browser evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: map-e2e-${{ matrix.variant }}
+          path: test-results/
+          retention-days: 7
+
+  interaction-e2e:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # This is browser-harness coverage of local evidence restoration and UI
+      # interactions; installed-PWA offline startup requires separate proof.
+      - run: npm run test:e2e:interactions:ci
+        env:
+          VITE_VARIANT: full
+      - name: Retain interaction browser evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: interaction-e2e-full
+          path: test-results/
+          retention-days: 7

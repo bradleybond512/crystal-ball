@@ -90,7 +90,7 @@ never restates a status or a count.
 | PR | Scope | Class | Depends on | Bradley gate | Status | PR # |
 |---|---|---|---|---|---|---|
 | RC-1 | Priority-aware next-task selection | Standard | — | D1 | DONE | #1804 |
-| RC-2 | Board triage: priorities, overdue reviews, ACC-008, UX-062, ACC-703 | Standard | RC-1 | D1, D2, D3 | IN PROGRESS | |
+| RC-2 | Board triage: priorities, overdue reviews, ACC-008, UX-062, ACC-703 | Standard | RC-1 | D1, D2, D3 | DONE | #1805 |
 | RC-3 | Public-repo hygiene | Standard | Consumer/backup review | D1, D5 before changes | PARTIAL | #1806 |
 | RC-4 | Slim both boards | Standard | RC-2 | D1 | TODO | |
 | RC-5 | Archive superseded plans; `ROADMAP.md` becomes an index | Standard | RC-4, orphan reconciliation | D1, D4, D6; no open-file overlap | TODO | |
@@ -98,6 +98,12 @@ never restates a status or a count.
 
 RC-1 merged in [PR #1804](https://github.com/bradleybond512/crystal-ball/pull/1804)
 on 2026-10-16 at 04:03:41 UTC, main `f29059c`.
+
+RC-2 merged in [PR #1805](https://github.com/bradleybond512/crystal-ball/pull/1805)
+on 2026-10-17 at 13:40:05 UTC, main `7e3bfed`. Its historical review relay
+is not a prerequisite for subsequent RCs: genuine CLI Sonnet reviews have
+since completed. UX-063 proposes evaluation of an optional CI path, not
+permission to bypass a denied review or change the current verdict protocol.
 
 **Scoped approval — 2026-10-16:** Bradley authorized RC-2's documentation-only
 implementation, validation, Sonnet medium review and protected PR delivery,

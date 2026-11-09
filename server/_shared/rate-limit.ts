@@ -30,12 +30,30 @@ export function getClientIp(request: Request): string {
   );
 }
 
+function limiterUnavailable(corsHeaders: Record<string, string>): Response {
+  return new Response(JSON.stringify({ error: 'Rate limit unavailable' }), {
+    status: 503,
+    headers: {
+      'Content-Type': 'application/json',
+      'Retry-After': '1',
+      ...corsHeaders,
+    },
+  });
+}
+
+export interface RateLimitOptions {
+  /** Cost-bearing routes in cloud mode (R4-SEC-007): with no limiter
+   *  configured, refuse with 503 instead of serving unlimited requests. */
+  failClosed?: boolean;
+}
+
 export async function checkRateLimit(
   request: Request,
   corsHeaders: Record<string, string>,
+  options: RateLimitOptions = {},
 ): Promise<Response | null> {
   const rl = getRatelimit();
-  if (!rl) return null;
+  if (!rl) return options.failClosed ? limiterUnavailable(corsHeaders) : null;
 
   const ip = getClientIp(request);
 
@@ -58,13 +76,6 @@ export async function checkRateLimit(
 
  return null;
   } catch {
- return new Response(JSON.stringify({ error: 'Rate limit unavailable' }), {
- status: 503,
- headers: {
- 'Content-Type': 'application/json',
- 'Retry-After': '1',
- ...corsHeaders,
- },
- });
+ return limiterUnavailable(corsHeaders);
   }
 }

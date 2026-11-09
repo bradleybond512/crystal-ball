@@ -669,6 +669,8 @@ describe('country intel brief caching behavior', { concurrency: 1 }, () => {
  './_shared': resolve(root, 'server/crystalball/intelligence/v1/_shared.ts'),
  '../../../_shared/constants': resolve(root, 'server/_shared/constants.ts'),
  '../../../_shared/redis': resolve(root, 'server/_shared/redis.ts'),
+ '../../../_shared/country-codes': resolve(root, 'server/_shared/country-codes.ts'),
+ '../../../_shared/llm-guard': resolve(root, 'server/_shared/llm-guard.ts'),
  });
   }
 
@@ -734,8 +736,10 @@ describe('country intel brief caching behavior', { concurrency: 1 }, () => {
  assert.equal(alpha.brief, 'brief-1');
  assert.equal(beta.brief, 'brief-2');
  assert.equal(alphaCached.brief, 'brief-1', 'same context should hit cache');
- assert.match(userPrompts[0], /Context snapshot:\s*alpha/);
- assert.match(userPrompts[1], /Context snapshot:\s*beta/);
+ // R4-SEC-007: context now arrives fenced as untrusted data.
+ assert.match(userPrompts[0], /Context snapshot:\n[\s\S]*<untrusted_context>\nalpha\n<\/untrusted_context>/);
+ // R4-SEC-007: context now arrives fenced as untrusted data.
+ assert.match(userPrompts[1], /Context snapshot:\n[\s\S]*<untrusted_context>\nbeta\n<\/untrusted_context>/);
  } finally {
  cleanup();
  globalThis.fetch = originalFetch;

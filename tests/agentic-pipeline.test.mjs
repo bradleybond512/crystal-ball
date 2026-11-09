@@ -1339,3 +1339,15 @@ test('the PWA budget alias does not broaden npm or shell admission', () => {
       /untrusted stage runner/, command);
   }
 });
+
+
+test('lint workflow selects main-sync, ESLint and workflow-security regressions', () => {
+  const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
+  const declared = prDeclaredOverrides(() => readFileSync(join(root, 'scripts/targeted-tests-overrides.json'), 'utf8'));
+  const index = deriveScriptIndex(scripts, root);
+  const selected = selectScripts(['.github/workflows/lint.yml'], index, mergeOverrides(OVERRIDES, declared));
+  for (const suite of ['test:main-sync-gate', 'test:eslint-runner', 'test:workflow-security']) {
+    assert.ok(selected.scripts.includes(suite), `lint.yml must select ${suite}`);
+  }
+  assert.deepEqual(selected.unmapped, []);
+});

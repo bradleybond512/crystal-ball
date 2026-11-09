@@ -35,12 +35,20 @@ test('system tier is populated and confined to the system-health domain', () => 
   }
 });
 
-test('every domain has at least 4 featured panels', () => {
+test('domains retain featured coverage and System Health has its exact canonical destinations', () => {
   for (const domain of DOMAINS) {
     const featured = Object.entries(PANEL_METADATA).filter(
       ([, m]) => m.domain === domain && m.featured,
     );
-    assert.ok(featured.length >= 4, `${domain}: only ${featured.length} featured`);
+    if (domain === 'system-health') {
+      assert.deepEqual(featured.map(([id]) => id).sort(), ['source-confidence', 'system-diagnostic']);
+      for (const id of ['algorithm-diagnostic', 'feed-health', 'self-test']) {
+        assert.equal(PANEL_METADATA[id]?.domain, 'system-health');
+        assert.equal(PANEL_METADATA[id]?.featured, undefined);
+      }
+    } else {
+      assert.ok(featured.length >= 4, `${domain}: only ${featured.length} featured`);
+    }
   }
 });
 

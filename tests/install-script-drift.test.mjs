@@ -186,3 +186,16 @@ test('CLI: CI Codex command addition remains gated by human install-scripts revi
   assert.equal(repo.run(['--base', 'HEAD'], { PR_LABELS: OVERRIDE_LABEL }).status, 0);
   assert.equal(repo.run(['--base', 'HEAD'], { PR_LABELS: 'dependency-change-approved' }).status, 1, 'dependency approval does not grant install-scripts review');
 });
+
+test('filesystem inventory: new filesystem executable requires the human install-script review label', t => {
+  const repo = gitRepo(t);
+  mkdirSync(path.join(repo.dir, '.github/tools/filesystem-mcp'), { recursive: true });
+  repo.write('.github/tools/filesystem-mcp/package-lock.json', lock({
+    'node_modules/@modelcontextprotocol/server-filesystem': { version: '2.2.0', bin: { 'mcp-server-filesystem': 'dist/index.js' } },
+  }));
+  const denied = repo.run(['--base', 'HEAD']);
+  assert.equal(denied.status, 1, denied.out);
+  assert.match(denied.out, /filesystem-mcp\/package-lock\.json: NEW command\(s\) mcp-server-filesystem/);
+  assert.equal(repo.run(['--base', 'HEAD'], { PR_LABELS: 'dependency-change-approved,dependency-age-reviewed' }).status, 1);
+  assert.equal(repo.run(['--base', 'HEAD'], { PR_LABELS: OVERRIDE_LABEL }).status, 0);
+});

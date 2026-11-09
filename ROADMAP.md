@@ -2,7 +2,15 @@
 
 > Last updated: 2026-07-26 | Current version: v2.25.x
 
-This file is the canonical to-do list across all build sessions. Update status markers as work completes.
+> **Not the live task list (2026-10-18).** Task status and priorities now live
+> only in [`docs/USABILITY_UPLIFT_FOR_CODEX.md`](docs/USABILITY_UPLIFT_FOR_CODEX.md)
+> and [`docs/PREDICTION_ACCURACY_ROADMAP.md`](docs/PREDICTION_ACCURACY_ROADMAP.md).
+> Run `npm run roadmap:check` for the next eligible task. The tiers below are a
+> historical record until RC-5 in
+> [`docs/ROADMAP_CONSOLIDATION_FOR_CODEX.md`](docs/ROADMAP_CONSOLIDATION_FOR_CODEX.md)
+> turns this file into an index.
+
+This file was the canonical to-do list through July 2026; do not update its status markers.
 
 ## Status
 

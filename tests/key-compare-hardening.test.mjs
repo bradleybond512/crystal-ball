@@ -281,10 +281,10 @@ test('API key preserves exact trusted-browser origin allowlist and production lo
     const allowed = [
       'https://crystalball-pr-42-bradleybond512.vercel.app',
       'https://crystal-ball-pr-42-bradleybond512.vercel.app',
-      'https://crystalball-pr-42-elie-abc123.vercel.app',
-      'https://crystal-ball-pr-42-elie-abc123.vercel.app',
     ];
     const denied = [
+      'https://crystalball-pr-42-elie-abc123.vercel.app',
+      'https://crystal-ball-pr-42-elie-abc123.vercel.app',
       'https://crystalball.app',
       ...['tech', 'finance', 'happy', 'api'].map(subdomain => `https://${subdomain}.crystalball.app`),
       undefined, 'https://unknown.example', 'http://crystalball.app', 'https://CRYSTALBALL.app',

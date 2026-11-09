@@ -174,3 +174,20 @@ test('gate: new CI Codex tool versions receive actual release-age checks', async
   assert.ok(logs.some((line) => line.includes('.github/tools/codex/package-lock.json: a@1.1.0')));
   assert.equal(await run([OVERRIDE_LABEL]), 0, 'only the existing age-review label can approve');
 });
+
+test('filesystem inventory: newly reserved lock receives release-age and unknown-version checks', async t => {
+  gitRepo(t);
+  mkdirSync('.github/tools/filesystem-mcp', { recursive: true });
+  const file = '.github/tools/filesystem-mcp/package-lock.json';
+  const logs = [];
+  const run = (labels = []) => runAgeGate({ baseRef: 'HEAD', labels, fetchImpl: fakeFetch(ROUTES).impl, now: NOW, log: line => logs.push(line) });
+  writeFileSync(file, JSON.stringify(npmLock({ 'node_modules/a': pkg('a', '1.1.0') })));
+  assert.equal(await run(), 1, 'the nested two-day version must be checked');
+  assert.ok(logs.some(line => line.includes(file + ': a@1.1.0')));
+  assert.equal(await run(['dependency-change-approved']), 1);
+  assert.equal(await run([OVERRIDE_LABEL]), 0);
+  writeFileSync(file, JSON.stringify(npmLock({ 'node_modules/a': pkg('a', '1.0.1') })));
+  assert.equal(await run(), 0, 'the nested aged version passes');
+  writeFileSync(file, JSON.stringify(npmLock({ 'node_modules/a': pkg('a', '99.0.0') })));
+  assert.equal(await run(), 1, 'unknown publication date fails closed');
+});

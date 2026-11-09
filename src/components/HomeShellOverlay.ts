@@ -2,7 +2,7 @@
  * Home Shell — Phase 1 of the UI shell re-imagination
  * (docs/superpowers/specs/2026-07-11-ui-shell-reimagination-design.md).
  *
- * Full-screen overlay: map canvas backdrop + three briefing bands +
+ * Full-screen overlay: map canvas backdrop + four briefing bands +
  * pinned panel deck + status ribbon. Default-on since Phase 2 for the
  * full desktop variant — see src/services/home-shell/shell-gate.ts for
  * the gate and the classic-view opt-out. Composition logic lives in the
@@ -70,8 +70,10 @@ import {
   getStormSnapshot,
   hydrateStormPosture,
   subscribeStormPosture,
+  commitStormMove,
 } from '@/services/survival/storm-posture-state';
-import type { WorldSnapshot } from '@/services/survival/survival-types';
+import type { SurvivalMove, WorldSnapshot } from '@/services/survival/survival-types';
+import type { HomePostureBand } from './HomePostureBand';
 
 const DECK_PINS_KEY = STORAGE_KEYS.deckPins;
 const CHANGED_WINDOW_MS = 60 * 60 * 1000;
@@ -126,6 +128,10 @@ export interface HomeShellOptions {
   };
   /** Pure contextual projection seam; production loads it only when the shell opens. */
   contextualProjection?: ContextualProjectionSource;
+  /** Lazy presentation seam; acquisition stays with the shared snapshot source. */
+  postureBandLoader?: () => Promise<typeof HomePostureBand>;
+  /** Explicit action seam; production uses the existing survival plan commit. */
+  commitPostureMove?: (move: SurvivalMove) => void;
 }
 
 function matchingGhostControl(from: HTMLElement | null, to: HTMLElement | null): HTMLButtonElement | undefined {
@@ -143,6 +149,11 @@ export class HomeShellOverlay {
   private readinessEl: HTMLElement | null = null;
   private readinessPresenter: HomeShellStartupReadinessPresenter | null = null;
   private briefingEl: HTMLElement | null = null;
+  private contextBandsEl: HTMLElement | null = null;
+  private postureSlot: HTMLElement | null = null;
+  private postureBand: HomePostureBand | null = null;
+  private postureBandLoad: Promise<typeof HomePostureBand> | null = null;
+  private postureBandFailed = false;
   private deckEl: HTMLElement | null = null;
   private contextualEl: HTMLElement | null = null;
   private ribbonEl: HTMLElement | null = null;
@@ -173,6 +184,8 @@ export class HomeShellOverlay {
   private readonly now: () => number;
   private readonly contextualSnapshotSource: NonNullable<HomeShellOptions['contextualSnapshotSource']>;
   private readonly contextualProjection: ContextualProjectionSource;
+  private readonly postureBandLoader: () => Promise<typeof HomePostureBand>;
+  private readonly commitPostureMove: (move: SurvivalMove) => void;
 
   private readonly measureHeader = (): void => {
     const height = this.headerEl?.offsetHeight;
@@ -187,6 +200,9 @@ export class HomeShellOverlay {
     this.getPanel = options.getPanel;
     this.ensurePanel = options.ensurePanel;
     this.now = options.now ?? Date.now;
+    this.postureBandLoader = options.postureBandLoader
+      ?? (() => import('./HomePostureBand').then((module) => module.HomePostureBand));
+    this.commitPostureMove = options.commitPostureMove ?? commitStormMove;
     this.contextualProjection = options.contextualProjection ?? DEFAULT_CONTEXTUAL_PROJECTION;
     if (this.contextualProjection.kind === 'ready') {
       this.contextualBuilder = this.contextualProjection.build;
@@ -218,6 +234,7 @@ export class HomeShellOverlay {
       button('home-shell-cmdk', 'cmdk', '⌘K — panels, places, situations…'),
       el('span', 'home-shell-topbar-spacer'),
       button('home-shell-library', 'library', '📚 Library'),
+      button('home-shell-diagnostics', 'diagnostics', 'Diagnostics'),
       button('home-shell-exit', 'exit', 'Classic view ⎋'),
     );
     // Drag the window by its top bar. The shell has no classic toolbar, so
@@ -233,6 +250,14 @@ export class HomeShellOverlay {
 
     this.readinessEl = el('div', 'home-shell-readiness-slot');
     this.briefingEl = el('div', 'home-shell-briefing');
+    this.contextBandsEl = el('div', 'hs-context-bands');
+    this.postureSlot = el('section', 'hs-band hs-tone-info hs-posture-band');
+    this.postureSlot.append(
+      el('div', 'hs-band-label', 'Survival posture'),
+      el('div', 'hs-band-headline', 'Loading posture display…'),
+      button('hs-posture-evidence', 'posture-evidence', 'Evidence and plan'),
+    );
+    this.briefingEl.append(this.contextBandsEl, this.postureSlot);
     // The map backdrop now owns wheel/drag (scroll-zoom + pan), so wheeling
     // over empty areas zooms the map instead of scrolling to the deck — make
     // the hint an explicit scroll-to-deck button.
@@ -352,6 +377,7 @@ export class HomeShellOverlay {
     document.addEventListener('keydown', this.onKeydown);
     this.adoptMap();
     this.startContextualView();
+    this.startPostureBand();
     this.loop = registerRecurringLoop('home-shell-refresh', () => this.refresh(), REFRESH_MS, {
       priority: 'low',
       runImmediately: true,
@@ -415,6 +441,10 @@ export class HomeShellOverlay {
     this.contextualEl = null;
     this.contextualSemanticKey = null;
     this.pendingContextualView = null;
+    this.postureBand?.destroy();
+    this.postureBand = null;
+    this.postureSlot = null;
+    this.contextBandsEl = null;
   }
 
   // ── Data + render ─────────────────────────────────────────────────
@@ -464,7 +494,7 @@ export class HomeShellOverlay {
     const cards = this.buildDeckView(now);
     this.renderReadiness(cards);
     if (!this.deckEl?.contains(document.activeElement)) this.renderDeck(cards);
-    this.renderCurrentContextualView();
+    this.renderCurrentContextualView(now);
     this.renderRibbon(now);
     this.syncSituationCommand(getActiveSituation());
   }
@@ -491,8 +521,7 @@ export class HomeShellOverlay {
   }
 
   private renderBriefing(view: BriefingView): void {
-    if (!this.briefingEl) return;
-    this.briefingEl.replaceChildren(...view.bands.map((b) => renderBand(b)));
+    this.contextBandsEl?.replaceChildren(...view.bands.map((b) => renderBand(b)));
   }
 
   private buildDeckView(now: number): DeckCardView[] {
@@ -595,6 +624,33 @@ export class HomeShellOverlay {
     this.contextualUnsubscribe?.();
     this.contextualUnsubscribe = null;
     this.pendingContextualView = null;
+    this.postureBandLoad = null;
+  }
+
+  private startPostureBand(): void {
+    if (this.postureBand || this.postureBandLoad || this.postureBandFailed) return;
+    const generation = this.contextualGeneration;
+    const pending = this.postureBandLoader();
+    this.postureBandLoad = pending;
+    void pending.then((Band) => {
+      if (!this.visible || !this.root || !this.postureSlot || generation !== this.contextualGeneration) return;
+      this.postureBand = new Band(this.postureSlot, {
+        openEvidence: () => { if (this.visible) this.openInFocus('storm-posture'); },
+        commitMoveId: (id) => {
+          if (!this.visible) return;
+          const snapshot = this.contextualSnapshotSource.get();
+          const selected = snapshot && Band.select(snapshot, this.now()).move;
+          if (selected?.id === id) this.commitPostureMove(selected);
+          this.renderCurrentContextualView();
+        },
+      });
+      this.renderCurrentContextualView();
+    }, () => {
+      if (!this.visible || !this.postureSlot || generation !== this.contextualGeneration) return;
+      this.postureBandFailed = true;
+      const headline = this.postureSlot.querySelector('.hs-band-headline');
+      if (headline) headline.textContent = 'Posture display unavailable. Open evidence and plan.';
+    });
   }
 
   private startContextualProjectionLoad(): void {
@@ -625,8 +681,8 @@ export class HomeShellOverlay {
     if (this.visible && this.root) this.renderCurrentContextualView();
   }
 
-  private renderCurrentContextualView(): void {
-    if (!this.contextualBuilder) {
+  private renderCurrentContextualView(now = this.now()): void {
+    if (!this.contextualBuilder && !this.postureBand) {
       this.renderContextualView(
         this.contextualProjectionFailed ? CONTEXTUAL_FAILED_VIEW : CONTEXTUAL_LOADING_VIEW,
       );
@@ -634,12 +690,19 @@ export class HomeShellOverlay {
     }
     const current = this.contextualSnapshotSource.get();
     const snapshot = current ?? (this.contextualHydrationSettled ? null : undefined);
+    this.postureBand?.update(snapshot, now);
+    if (!this.contextualBuilder) {
+      this.renderContextualView(
+        this.contextualProjectionFailed ? CONTEXTUAL_FAILED_VIEW : CONTEXTUAL_LOADING_VIEW,
+      );
+      return;
+    }
     this.renderContextualView(this.contextualBuilder({
       snapshot,
       pins: this.pins,
       panels: DEFAULT_PANELS,
       metadata: PANEL_METADATA,
-    }, this.now()));
+    }, now));
   }
 
   private renderContextualView(view: ContextualDeckView): void {
@@ -780,8 +843,16 @@ export class HomeShellOverlay {
       document.dispatchEvent(new CustomEvent('cb:toggle-library'));
       return;
     }
+    if (action === 'diagnostics') {
+      document.dispatchEvent(new CustomEvent('cb:open-diagnostics'));
+      return;
+    }
     if (action === 'exit') {
       this.hide();
+      return;
+    }
+    if (action === 'posture-evidence') {
+      this.openInFocus('storm-posture');
       return;
     }
     const situationId = target.closest<HTMLElement>('[data-situation-id]')?.dataset.situationId;

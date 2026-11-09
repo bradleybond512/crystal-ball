@@ -1,3 +1,5 @@
+import { replaceNonemptyAngleSpans } from '@/utils/angle-span-text';
+
 export interface ArmsTransfer {
   id: string;
   title: string;
@@ -34,8 +36,7 @@ function proxyFeedUrl(feedUrl: string): string {
 }
 
 function stripHtml(html: string): string {
-  return html
- .replace(/<[^>]+>/g, ' ')
+  return replaceNonemptyAngleSpans(html)
  .replace(/&amp;/g, '&')
  .replace(/&lt;/g, '<')
  .replace(/&gt;/g, '>')
@@ -53,7 +54,10 @@ const WEAPON_SYSTEMS = [
   'radar', 'missile', 'helicopter',
 ];
 
-const MAJOR_DEFENSE_SYSTEMS = /aircraft|f-16|f-35|f-15|c-130|ah-64|uh-60|m1a2|abrams|patriot|himars|jdam|aim-120|harpoon|javelin|stinger|apache|black hawk|submarine|frigate|destroyer|corvette|radar/i;
+function hasMajorDefenseSystem(text: string): boolean {
+  return /aircraft|f-16|f-35|f-15|c-130|ah-64|uh-60|m1a2|abrams|patriot|himars|jdam/i.test(text)
+    || /aim-120|harpoon|javelin|stinger|apache|black hawk|submarine|frigate|destroyer|corvette|radar/i.test(text);
+}
 
 function extractSystems(text: string): string[] {
   const found: string[] = [];
@@ -64,16 +68,73 @@ function extractSystems(text: string): string[] {
   return found;
 }
 
+function recipientWhitespace(char: string | undefined): boolean {
+  return char !== undefined && /\s/.test(char);
+}
+
+function recipientUpper(char: string | undefined): boolean {
+  return char !== undefined && char >= 'A' && char <= 'Z';
+}
+
+function recipientLetter(char: string | undefined): boolean {
+  return recipientUpper(char) || (char !== undefined && char >= 'a' && char <= 'z');
+}
+
+function recipientWord(char: string | undefined): boolean {
+  return recipientLetter(char) || (char !== undefined && char >= '0' && char <= '9') || char === '_';
+}
+
+function recipientWhitespaceEnd(text: string, start: number): number {
+  let end = start;
+  while (end < text.length && recipientWhitespace(text[end])) end++;
+  return end;
+}
+
+function recipientStart(text: string, index: number, government: boolean): number {
+  if (government) {
+    return text.startsWith('Government of ', index) && recipientUpper(text[index + 14]) ? index + 14 : -1;
+  }
+  if (!text.startsWith('to', index) || recipientWord(text[index - 1]) || !recipientWhitespace(text[index + 2])) return -1;
+  const start = recipientWhitespaceEnd(text, index + 2);
+  return recipientUpper(text[start]) ? start : -1;
+}
+
+function recipientSuffix(text: string, index: number, whitespaceEnd: number, government: boolean): boolean {
+  const whitespace = recipientWhitespace(text[index]);
+  const end = whitespace ? whitespaceEnd : index;
+  if (index === text.length || text[end] === ',' || text[end] === '.' || text[end] === '(') return true;
+  if (!whitespace) return false;
+  if (text.startsWith('for', end)) return true;
+  if (government) return text.startsWith('to', end);
+  return (text[end] === 'a' && recipientWhitespace(text[end + 1]))
+    || (text.startsWith('the', end) && recipientWhitespace(text[end + 3]));
+}
+
+// Earliest viable capture dominates later prefixes in the same allowed run.
+// Separate passes preserve Government-of priority, not textual-prefix priority.
+// Whitespace endpoints advance monotonically: linear work, constant extra state.
+function findRecipient(text: string, government: boolean): string | null {
+  let start = -1;
+  let whitespaceEnd = 0;
+  let index = 0;
+  while (index <= text.length) {
+    const char = text[index];
+    const whitespace = recipientWhitespace(char);
+    if (whitespace && index >= whitespaceEnd) whitespaceEnd = recipientWhitespaceEnd(text, index);
+    // A suffix is outside capture: check before invalidating on punctuation.
+    if (start >= 0 && index >= start + 2 && recipientSuffix(text, index, whitespaceEnd, government)) return text.slice(start, index).trim();
+    if (start >= 0 && !(recipientLetter(char) || whitespace || char === '-')) start = -1;
+    if (start < 0) {
+      start = recipientStart(text, index, government);
+      if (start >= 0) index = start - 1;
+    }
+    index++;
+  }
+  return null;
+}
+
 function extractRecipient(text: string): string {
-  // "Government of [Country]"
-  const govMatch = /Government of ([A-Z][A-Za-z\s\-]+?)(?:\s+for|\s+to|\s*[,.(]|$)/.exec(text);
-  if (govMatch?.[1]) return govMatch[1].trim();
-
-  // "to [Country]"
-  const toMatch = /\bto\s+([A-Z][A-Za-z\s\-]+?)(?:\s+for|\s+a\s|\s+the\s|\s*[,.(]|$)/.exec(text);
-  if (toMatch?.[1]) return toMatch[1].trim();
-
-  return 'Unknown';
+  return findRecipient(text, true) ?? findRecipient(text, false) ?? 'Unknown';
 }
 
 function extractValue(text: string): string | null {
@@ -88,10 +149,10 @@ function extractTransmittal(text: string): string | null {
 
 function detectCategory(text: string, systems: string[]): ArmsTransfer['category'] {
   const t = text.toLowerCase();
-  if (t.includes('training') && !MAJOR_DEFENSE_SYSTEMS.test(t)) return 'training';
-  if (/spare parts|logistics|maintenance|support/.test(t) && !MAJOR_DEFENSE_SYSTEMS.test(t)) return 'logistics';
-  if (/letter of offer|commercial/.test(t) && !MAJOR_DEFENSE_SYSTEMS.test(t)) return 'commercial';
-  if (systems.length > 0 || MAJOR_DEFENSE_SYSTEMS.test(t)) return 'major-defense';
+  if (t.includes('training') && !hasMajorDefenseSystem(t)) return 'training';
+  if (/spare parts|logistics|maintenance|support/.test(t) && !hasMajorDefenseSystem(t)) return 'logistics';
+  if (/letter of offer|commercial/.test(t) && !hasMajorDefenseSystem(t)) return 'commercial';
+  if (systems.length > 0 || hasMajorDefenseSystem(t)) return 'major-defense';
   return 'general';
 }
 
@@ -212,18 +273,18 @@ export async function fetchArmsTransfers(): Promise<ArmsTransfer[]> {
  fetch(FEDERAL_REGISTER_URL, {
  signal: AbortSignal.timeout(12_000),
  headers: { Accept: 'application/json' },
- }).then(res => {
+ }).then(async (res): Promise<ArmsTransfer[]> => {
  if (!res.ok) return [] as ArmsTransfer[];
- return res.json().then((json: { results?: FederalRegisterDoc[] }) =>
+ return res.json().then((json: { results?: FederalRegisterDoc[] }): ArmsTransfer[] =>
  parseFederalRegisterDocs(json.results ?? []),
  );
  }),
  fetch(proxyFeedUrl(DSCA_RSS_URL), {
  signal: AbortSignal.timeout(12_000),
  headers: { Accept: 'application/rss+xml, application/xml, text/xml, */*' },
- }).then(res => {
+ }).then(async (res): Promise<ArmsTransfer[]> => {
  if (!res.ok) return [] as ArmsTransfer[];
- return res.text().then(parseDscaRss);
+ return parseDscaRss(await res.text());
  }),
   ]);
 

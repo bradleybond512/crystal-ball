@@ -4,6 +4,7 @@
  * Data source: https://www.spc.noaa.gov/products/md/rss.xml (via rss-proxy)
  */
 
+import { replaceNonemptyAngleSpans } from '@/utils/angle-span-text';
 import { dataFreshness } from '@/services/data-freshness';
 
 export type MdType = 'tornado' | 'severe-thunderstorm' | 'fire-weather' | 'flooding' | 'winter' | 'general';
@@ -36,9 +37,7 @@ const US_STATE_ABBREVS = new Set([
 ]);
 
 function stripHtml(html: string): string {
-  return html
- // eslint-disable-next-line sonarjs/slow-regex -- bounded NOAA RSS-feed text
- .replace(/<[^>]+>/g, ' ')
+  return replaceNonemptyAngleSpans(html)
  .replace(/&amp;/g, '&')
  .replace(/&lt;/g, '<')
  .replace(/&gt;/g, '>')

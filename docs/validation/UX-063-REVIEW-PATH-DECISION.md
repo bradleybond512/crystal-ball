@@ -1,6 +1,6 @@
 # UX-063 — Retain the existing Sonnet review path
 
-Decision dated 2026-11-08; local validation passed and independent review pending. Approved design: [review-path decision](../plans/2026-11-08-ux063-review-path-decision.md). Claim: draft [#1890](https://github.com/bradleybond512/crystal-ball/pull/1890), `4709daa157b437d9e70ac9a3f0d7755835a70269`; evaluated canonical base: `3a9786c45daa9fcf643331ac004ae62e97793f7a`.
+Decision dated 2026-11-08; local validation and independent decision review passed. Approved design: [review-path decision](../plans/2026-11-08-ux063-review-path-decision.md). Claim: draft [#1890](https://github.com/bradleybond512/crystal-ball/pull/1890), `4709daa157b437d9e70ac9a3f0d7755835a70269`; evaluated canonical base: `3a9786c45daa9fcf643331ac004ae62e97793f7a`.
 
 Retain local Sonnet review followed by the existing SHA-pinned verdict gate. Three genuine successful review results and their successful hosted gates support keeping this working path. They do not demonstrate an incremental reliability benefit from adding a CI Sonnet runner. UX-063 permits completion through a reviewed retained-path decision; no runner is implemented by this decision.
 
@@ -13,6 +13,14 @@ The [compact certificate](UX063-REVIEW-EVIDENCE.json) contains exact source/head
 | ACC-510, [#1858](https://github.com/bradleybond512/crystal-ball/pull/1858) | `caa41bd88cfe00359005e432946f52f98a67d9d5` → `14e0fdf2f6b6b5fffc013d8a6f3196c653f669ca` | 300.201 / 296.506 seconds | 56 | 1.4118435 | [success](https://github.com/bradleybond512/crystal-ball/actions/runs/42340093779) |
 | UX-035, [#1859](https://github.com/bradleybond512/crystal-ball/pull/1859) | `24901ebc8f33c8c5c66dfcfc5c6bf9aecf5c2e56` → `84b401c8615abf99aa454da6b26db2473bf50fa7` | 183.580 / 181.744 seconds | 30 | 0.9134199 | [success](https://github.com/bradleybond512/crystal-ball/actions/runs/42342045708) |
 | UX-062, [#1886](https://github.com/bradleybond512/crystal-ball/pull/1886) | `31979f2a157dc58c84746bacd0c0e35ebea2d654` → `cba94b041e559351823864d2080d4f91240c6392` | 183.725 / 175.877 seconds | 32 | 1.0199028 | [success](https://github.com/bradleybond512/crystal-ball/actions/runs/42527940922) |
+
+The first independent audit found that the direct hosted-run responses had not been retained. Fresh read-only rechecks now preserve the command, complete stdout, exit status, raw-file path and hash in each certificate sample. Their actual output, in sample order, was:
+
+```json
+{"conclusion":"success","headSha":"14e0fdf2f6b6b5fffc013d8a6f3196c653f669ca","status":"completed","url":"https://github.com/bradleybond512/crystal-ball/actions/runs/42340093779","workflowName":"Cross-agent review gate"}
+{"conclusion":"success","headSha":"84b401c8615abf99aa454da6b26db2473bf50fa7","status":"completed","url":"https://github.com/bradleybond512/crystal-ball/actions/runs/42342045708","workflowName":"Cross-agent review gate"}
+{"conclusion":"success","headSha":"cba94b041e559351823864d2080d4f91240c6392","status":"completed","url":"https://github.com/bradleybond512/crystal-ball/actions/runs/42527940922","workflowName":"Cross-agent review gate"}
+```
 
 ACC-510's result identifies production commit `13b4312beb7ec9e2e1465fe3e0c27db9c74db911`, test supplement `65ba8bd80b16622f7b78e93a2469ce963863ca39` and the docs-only review HEAD `caa41bd88cfe00359005e432946f52f98a67d9d5`. Its verdict pins that final HEAD. For every sample, the verdict head's parent and recorded `reviewedSha` agree, and the verdict commit changes only its review JSON.
 
@@ -71,7 +79,7 @@ Tests run: test:agentic-pipeline test:roadmap-controller
 
 The gate also passed strict lint, all TypeScript configurations, secret scanning, documentation checks and build. After both report files were written, `npm run docs:check` reported `[docs:check] Documentation appears fresh.` and `npm run secrets:scan` reported `Secret scan passed for 6117 file(s).`, both exit 0. Certificate JSON parsing and `git diff --check` passed. This is existing-control evidence on unchanged executable code; later documentation/verdict commits are not relabeled as full gate executions.
 
-Independent diff review and required exact-source Sonnet review remain pending at this evidence checkpoint. The preceding sample reviews do not approve UX-063. Final review records must identify their actual source and preserve publication holds.
+Independent Sol review (`gpt-6.1-sol`, medium) found zero blocking findings after one evidence-only repair: retain and quote the direct hosted-run responses. It inspected the complete documentation scope, source controls, tests, raw review results, verdict ancestry and validation logs. It did not rerun tests or make network calls. The approved reviewed-decision exit completes UX-063 locally; the preceding sample reviews do not themselves approve UX-063. Required exact-source Sonnet review remains pending at this evidence checkpoint and must be recorded separately before publication approval is requested. Publication and delivery holds remain.
 
 Residual risks: local-session availability, attested reviewer identity/model and policy-only effort selection remain. CI Sonnet's incremental reliability, spending bounds and denial/fork behavior remain unmeasured. No installed-app or native acceptance is claimed. Manual verification: compare certificate hashes with the retained local artifacts; inspect each verdict's parent and changed file; inspect each linked hosted gate's `headSha`; confirm the final diff stays within approved documentation and preserves UX-062's open baseline scope.
 
@@ -79,4 +87,4 @@ Release stance: completion publication, merge, auto-merge, releases, build dispa
 
 Proposed commit: `docs: retain the evidenced Sonnet review path`.
 
-Draft PR description: Retain the existing local Sonnet and SHA-pinned verdict path because three genuine reviews and their hosted gates support continued use, while an incremental benefit from CI Sonnet remains unproven. Record exact-source evidence, fixture limits and reconsideration criteria. Documentation only; UX-062 baseline work and all delivery holds remain open. Local validation passed; final review records remain pending at this checkpoint.
+Draft PR description: Retain the existing local Sonnet and SHA-pinned verdict path because three genuine reviews and their hosted gates support continued use, while an incremental benefit from CI Sonnet remains unproven. Record exact-source evidence, fixture limits and reconsideration criteria. Documentation only; UX-062 baseline work and all delivery holds remain open. Local validation and independent decision review passed; required final Sonnet review remains separately pending at this checkpoint.

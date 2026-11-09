@@ -2,6 +2,8 @@
 
 Status: Bradley approved this documentation-only design, draft claim and local completion work on 2026-11-08. Draft [#1890](https://github.com/bradleybond512/crystal-ball/pull/1890) publishes the approved claim; later completion-commit publication requires separate approval. Merging, auto-merge, releases, deployment and installation remain paused.
 
+Local completion: [reviewed retained-path decision and validation](../validation/UX-063-REVIEW-PATH-DECISION.md). No executable changes; final Sonnet review and completion-publication approval remain separate.
+
 ## Brief and selection
 
 Goal: decide whether optional CI Sonnet review adds enough demonstrated reliability to justify new execution, credential and spending boundaries. User value is a dependable review process with minimum unnecessary infrastructure.

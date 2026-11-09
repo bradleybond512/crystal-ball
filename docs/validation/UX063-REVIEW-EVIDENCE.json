@@ -1,7 +1,7 @@
 {
   "task": "UX-063",
   "decision": "retain-existing-local-sonnet-and-sha-pinned-verdict",
-  "status": "local-validation-passed-independent-review-pending",
+  "status": "reviewed-local-decision-final-sonnet-and-publication-pending",
   "evaluatedBaseSha": "3a9786c45daa9fcf643331ac004ae62e97793f7a",
   "claimSha": "4709daa157b437d9e70ac9a3f0d7755835a70269",
   "claimPullRequest": "https://github.com/bradleybond512/crystal-ball/pull/1890",
@@ -57,7 +57,15 @@
           "localArtifact": "acc510/pr1858-final.json",
           "sha256": "84211b94f4de114b5052e92149a085bcce4c4de105410779899425593cce50ee"
         }
-      ]
+      ],
+      "hostedGateCommandEvidence": {
+        "command": "gh run view 42340093779 --repo bradleybond512/crystal-ball --json headSha,conclusion,status,url,workflowName",
+        "phase": "fresh read-only recheck after first independent evidence audit",
+        "exitCode": 0,
+        "stdout": "{\"conclusion\":\"success\",\"headSha\":\"14e0fdf2f6b6b5fffc013d8a6f3196c653f669ca\",\"status\":\"completed\",\"url\":\"https://github.com/bradleybond512/crystal-ball/actions/runs/42340093779\",\"workflowName\":\"Cross-agent review gate\"}\n",
+        "localArtifact": "next-nov8/hosted-gate-42340093779.json",
+        "sha256": "3e720b8f06bf1b2a2d162a0da7404435758e146ed8fe872ef8dd227df2fe523c"
+      }
     },
     {
       "task": "UX-035",
@@ -108,7 +116,15 @@
           "localArtifact": "ux035/pr1859-final.json",
           "sha256": "3f54b23fb8b874047d79728001ef87f0696e4ae97da96e79ecc27c69cc16fb40"
         }
-      ]
+      ],
+      "hostedGateCommandEvidence": {
+        "command": "gh run view 42342045708 --repo bradleybond512/crystal-ball --json headSha,conclusion,status,url,workflowName",
+        "phase": "fresh read-only recheck after first independent evidence audit",
+        "exitCode": 0,
+        "stdout": "{\"conclusion\":\"success\",\"headSha\":\"84b401c8615abf99aa454da6b26db2473bf50fa7\",\"status\":\"completed\",\"url\":\"https://github.com/bradleybond512/crystal-ball/actions/runs/42342045708\",\"workflowName\":\"Cross-agent review gate\"}\n",
+        "localArtifact": "next-nov8/hosted-gate-42342045708.json",
+        "sha256": "47daa9d331c157a44be003d2e0ab6228d83d0cd4783eded1d520ccf0c0a46c40"
+      }
     },
     {
       "task": "UX-062",
@@ -155,7 +171,15 @@
           "localArtifact": "ux062/hosted-runs.json",
           "sha256": "cddaddddd17977474e04dcda0d2e8b5867653852bf1dfffccaf0aa2d79aa6616"
         }
-      ]
+      ],
+      "hostedGateCommandEvidence": {
+        "command": "gh run view 42527940922 --repo bradleybond512/crystal-ball --json headSha,conclusion,status,url,workflowName",
+        "phase": "fresh read-only recheck after first independent evidence audit",
+        "exitCode": 0,
+        "stdout": "{\"conclusion\":\"success\",\"headSha\":\"cba94b041e559351823864d2080d4f91240c6392\",\"status\":\"completed\",\"url\":\"https://github.com/bradleybond512/crystal-ball/actions/runs/42527940922\",\"workflowName\":\"Cross-agent review gate\"}\n",
+        "localArtifact": "next-nov8/hosted-gate-42527940922.json",
+        "sha256": "db02617f059c0026b12d98dc2c1fdceb74c5583ffba4e31174e38c97d8bcb738"
+      }
     }
   ],
   "existingControlRuns": [
@@ -228,7 +252,14 @@
     ]
   },
   "independentReview": {
-    "status": "pending"
+    "status": "passed",
+    "reviewer": "gpt-6.1-sol",
+    "effort": "medium",
+    "reviewedCheckpoint": "1db4f07f343ec3bde7b2771c8f27d082a8e548f5 plus retained hosted-response evidence repair",
+    "blockingFindings": 0,
+    "repairCycles": 1,
+    "repair": "UX063-R1: retain, hash and quote all three direct hosted-run responses",
+    "limits": "Read-only audit; tests and network calls not independently rerun."
   },
   "requiredSonnetReview": {
     "status": "pending"

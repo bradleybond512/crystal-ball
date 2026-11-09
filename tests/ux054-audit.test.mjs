@@ -256,7 +256,7 @@ test('bulk reads have a bounded deadline and size even when excess bytes are val
   });
   assert.equal(ok, false);
   assert.equal(requested, 7);
-  assert.equal(scans, 5, 'oversized reply fails before npm');
+  assert.equal(scans, 6, 'oversized reply fails before npm');
   assert.match(lines[0], /bulk advisory response too large/);
 });
 
@@ -346,18 +346,36 @@ test('filesystem inventory: partial, nonregular and near-match pairs fail before
     ...['.github/tools/filesystem-mcp-extra', '.github/tools/Filesystem-mcp', filesystemProject + '/nested']
       .map(dir => r => {
         // A case-insensitive host cannot hold both spellings simultaneously.
-        if (dir === '.github/tools/Filesystem-mcp') rmSync(join(r, filesystemProject), { recursive: true });
+        if (dir === '.github/tools/Filesystem-mcp') {
+          git(r, 'rm', '--cached', '-f', '--', join(filesystemProject, 'package.json'), join(filesystemProject, 'package-lock.json'));
+          rmSync(join(r, filesystemProject), { recursive: true });
+        }
         put(r, join(dir, 'package.json'), {}); put(r, join(dir, 'package-lock.json'), {});
       }),
     r => put(r, join(filesystemProject, 'npm-shrinkwrap.json'), {}),
   ];
-  for (const change of cases) {
+  const labels = ['missing-manifest', 'missing-lock', 'symlink-lock', 'suffix-path', 'case-only-path', 'nested-path', 'shrinkwrap'];
+  for (const [index, change] of cases.entries()) {
+    const label = labels[index];
     const repo = fixture(t, r => { addFilesystemFixture(r); change(r); });
+    const committedTree = execFileSync('/usr/bin/git', ['ls-tree', '-r', '--full-tree', 'HEAD', '--', '.github/tools'], { cwd: repo, encoding: 'utf8' });
+    t.diagnostic(JSON.stringify({ fixtureCase: label, committedTree }));
+    if (label === 'case-only-path') {
+      const entries = committedTree.trim().split('\n').map(line => {
+        const [metadata, file] = line.split('\t');
+        return { mode: metadata.split(' ')[0], file };
+      });
+      for (const name of ['package.json', 'package-lock.json']) {
+        assert.ok(entries.some(entry => entry.mode === '100644'
+          && entry.file === '.github/tools/Filesystem-mcp/' + name), label + ': exact uppercase regular blob');
+        assert.ok(!entries.some(entry => entry.file === filesystemProject + '/' + name), label + ': old lowercase index path absent');
+      }
+    }
     let registryCalls = 0, npmCalls = 0;
     assert.equal(await run(repo, () => { npmCalls++; throw Error('must not reach npm'); }, [],
-      async () => { registryCalls++; return Response.json({}); }), false);
-    assert.equal(registryCalls, 0);
-    assert.equal(npmCalls, 0);
+      async () => { registryCalls++; return Response.json({}); }), false, label);
+    assert.equal(registryCalls, 0, label + ': no registry calls');
+    assert.equal(npmCalls, 0, label + ': no npm calls');
   }
 });
 

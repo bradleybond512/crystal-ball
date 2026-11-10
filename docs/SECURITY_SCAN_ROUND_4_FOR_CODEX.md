@@ -104,7 +104,9 @@ bounded by the disposition below, not by the older PR's complete file list.
 
 ### Checkpoint limits and handoff
 
-UX-065 remains **IN REVIEW** until independent review confirms these dispositions.
+Independent review confirmed these seven dispositions. UX-065 remains **IN REVIEW**
+pending draft publication and its PR-linked reconciliation completion entry.
+Completion of this checkpoint does not complete the underlying security holds.
 This is local documentation preparation, not fresh execution of historical
 replacement tests, live probes, native checks, account settings or installations.
 Any new executable boundary change requires its own high-assurance design

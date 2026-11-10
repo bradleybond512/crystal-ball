@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "nodeVersion": "24.22.2",
+  "packageVersion": "2.2.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "contentManifestSha256": "df3e4f8a21794cba8e6f1315d3bd3a4bc20ffa7a81df39fe48e613e5926c1759",
+  "runtimeSha256": "b6fb419f0f43bb2fbca273700294dd2f3b685a64b60e8417c295f47646a70e4a",
+  "packageSha256": "adb3637d93ba9133d90c67ea8f3700272077f43d7772af65bb4e048aefb5aecd",
+  "lockSha256": "ef77e658afc593e8220362668e739e1444c82ea03e7e28b5fb93c180e3915639"
+}

@@ -7,9 +7,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 
-const projects = ['.', '.github/tools/codex', 'marketing-site', 'scripts', 'tools/cb-control', 'tools/mcp-server'];
-// Migration prerequisite only: adoption must promote this exact project to mandatory.
-const reservedProject = '.github/tools/filesystem-mcp';
+const projects = ['.', '.github/tools/codex', 'marketing-site', 'scripts', 'tools/cb-control', 'tools/mcp-server', '.github/tools/filesystem-mcp'];
 const vendors = new Map([['.', ['texture-compressor', 'vendor/texture-compressor-safe']], ['marketing-site', ['braces', 'vendor/braces']]]);
 const sidecar = 'src-tauri/sidecar/package.json';
 const dependencyFields = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
@@ -48,8 +46,7 @@ function inventory(repo) {
     const vendor = vendors.get(project);
     if (vendor) expected.add(path.join(project, vendor[1], 'package.json'));
   }
-  const reservedFiles = ['package.json', 'package-lock.json'].map(file => path.join(reservedProject, file));
-  const allowed = new Set([...expected, ...reservedFiles]);
+  const allowed = expected;
   const blobs = new Map();
   const tree = git(repo, ['ls-tree', '-rz', '--full-tree', 'HEAD']);
   for (const entry of tree.split('\0')) {
@@ -61,12 +58,10 @@ function inventory(repo) {
     check(type === 'blob' && (mode === '100644' || mode === '100755'), 'manifest or lockfile is not a regular Git blob');
     blobs.set(file, sha);
   }
-  const reservedPresent = reservedFiles.some(file => blobs.has(file));
-  if (reservedPresent) for (const file of reservedFiles) expected.add(file);
   check(blobs.size === expected.size && [...expected].every(file => blobs.has(file)), 'required manifest or lockfile is missing');
   return {
     read: file => JSON.parse(git(repo, ['cat-file', 'blob', blobs.get(file)])),
-    activeProjects: reservedPresent ? [...projects, reservedProject] : projects,
+    activeProjects: projects,
   };
 }
 

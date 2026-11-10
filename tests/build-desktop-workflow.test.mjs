@@ -9,6 +9,28 @@ const workflow = readFileSync(
   'utf8',
 );
 
+test('desktop build jobs use one resolved commit for checkout and release metadata', () => {
+  assert.match(workflow, /RELEASE_REF: \$\{\{ github\.ref_name \}\}/);
+  assert.match(workflow, /RELEASE_TAG_INPUT: \$\{\{ inputs\.release_tag \|\| '' \}\}/);
+  assert.match(workflow, /--release-tag-input "\$RELEASE_TAG_INPUT"/);
+  assert.doesNotMatch(workflow, /ref: \$\{\{ needs\.release-context\.outputs\.tag \|\| github\.ref \}\}/);
+  assert.equal((workflow.match(/ref: \$\{\{ needs\.release-context\.outputs\.commit_sha \}\}/g) || []).length, 2);
+  assert.equal((workflow.match(/name: Verify source checkout/g) || []).length, 2);
+  assert.match(workflow, /RELEASE_COMMIT_SHA: \$\{\{ needs\.release-context\.outputs\.commit_sha \}\}/);
+});
+
+test('publisher independently rejects a source SHA differing from its OIDC workflow SHA before attestation', () => {
+  const publisher = workflow.slice(workflow.indexOf('  publish-release:'));
+  const guard = publisher.indexOf('name: Verify attested source matches workflow event');
+  const attest = publisher.indexOf('name: Attest build provenance for release artifacts');
+  assert.ok(guard > 0 && attest > guard);
+  const step = publisher.slice(guard, attest);
+  assert.match(step, /SOURCE_SHA: \$\{\{ needs\.release-context\.outputs\.commit_sha \}\}/);
+  assert.match(step, /WORKFLOW_SHA: \$\{\{ github\.sha \}\}/);
+  assert.match(step, /test "\$SOURCE_SHA" = "\$WORKFLOW_SHA"/);
+  assert.match(step, /exit 1/);
+});
+
 test('desktop build workflow is tag-driven and publishes only after artifact verification', () => {
   // Workflow dispatch has two modes (build / publish-recovery) but the default
  // and most common use is build-only — verify a variant input exists with
@@ -74,4 +96,21 @@ test('variant builds pass an allowlisted native config and measure macOS identit
   assert.doesNotMatch(section, /apple-signing/);
   assert.match(section, /src-tauri\/target\/\$NODE_TARGET\/release\/bundle/);
   assert.match(section, /--tag "\$RELEASE_TAG".*--built-after.*--include-dmg/);
+});
+
+
+test('release assets remain draft until separately authorized artifact acceptance', () => {
+  assert.match(workflow, /gh release create[^\n]*--draft/);
+  assert.doesNotMatch(workflow, /gh release edit[^\n]*--draft(?:=| )false/);
+  const create = workflow.indexOf('name: Create or update GitHub release');
+  const upload = workflow.indexOf('name: Upload release assets and manifest');
+  const verify = workflow.indexOf('name: Verify uploaded release payload');
+  assert.ok(create > 0 && upload > create && verify > upload);
+  for (const name of ['Create or update GitHub release', 'Upload release assets and manifest', 'Generate and update release notes']) {
+    const start = workflow.indexOf(`name: ${name}`);
+    const end = workflow.indexOf('\n      - name:', start);
+    const section = workflow.slice(start, end === -1 ? undefined : end);
+    assert.match(section, /--json isDraft --jq \.isDraft/);
+    assert.match(section, /Refusing to mutate a public release/);
+  }
 });

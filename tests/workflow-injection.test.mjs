@@ -43,11 +43,12 @@ test('hardened workflows never paste ${{ }} expressions into script text', () =>
   }
 });
 
-test('build-desktop resolves the release ref through env', () => {
+test('build-desktop separates dispatched ref and recovery tag through env', () => {
   const wf = read('.github/workflows/build-desktop.yml');
   const start = wf.indexOf('- name: Resolve release context');
   const step = wf.slice(start, wf.indexOf('\n\n', start));
-  assert.match(step, /RELEASE_REF: \$\{\{ inputs\.release_tag \|\| github\.ref_name \}\}/);
+  assert.match(step, /RELEASE_REF: \$\{\{ github\.ref_name \}\}/);
+  assert.match(step, /RELEASE_TAG_INPUT: \$\{\{ inputs\.release_tag \|\| '' \}\}/);
   for (const block of scriptBlocks(step)) {
     for (const { text } of block) assert.equal(text.includes('${{'), false, text);
   }

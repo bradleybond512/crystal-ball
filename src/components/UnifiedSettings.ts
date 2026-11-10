@@ -694,12 +694,15 @@ export class UnifiedSettings {
     }
   }
 
-  private finishImessage(request: number, result: ImessageResult, success: string): void {
+  private finishImessage(request: number, result: ImessageResult, success: string, submittedDraft?: { enabled: boolean; recipient: string }): void {
     if (request !== this.imessageGeneration) return;
     this.imessagePending = false;
     this.imessageSaved = getImessageSettings();
-    this.imessageDraft = { enabled: this.imessageSaved.enabled, recipient: this.imessageSaved.recipient };
+    const retainDraft = submittedDraft && !result.ok
+      && (result.code === 'invalid_recipient' || result.code === 'persistence_failed' || result.code === 'unavailable');
+    this.imessageDraft = retainDraft ? submittedDraft : { enabled: this.imessageSaved.enabled, recipient: this.imessageSaved.recipient };
     this.imessageStatus = result.ok ? success : result.reason;
+    if (retainDraft) this.imessageStatus += ' Changes not saved. Your draft is retained; correct it if needed, then Save and confirm to retry.';
     this.updateImessageControls();
   }
 
@@ -707,10 +710,11 @@ export class UnifiedSettings {
     if (this.imessageLoading || this.imessagePending || !this.imessageDraft.recipient) return;
     const request = ++this.imessageGeneration;
     this.imessagePending = true;
+    const submittedDraft = { ...this.imessageDraft };
     this.imessageStatus = 'Confirm the exact recipient in the macOS dialog.';
     this.updateImessageControls();
-    const result = await configureImessage(this.imessageDraft.recipient, this.imessageDraft.enabled);
-    this.finishImessage(request, result, 'Settings saved.');
+    const result = await configureImessage(submittedDraft.recipient, submittedDraft.enabled);
+    this.finishImessage(request, result, 'Settings saved.', submittedDraft);
   }
 
   private async turnOffImessage(): Promise<void> {
@@ -745,7 +749,7 @@ export class UnifiedSettings {
           <label class="ai-flow-switch"><input type="checkbox" id="us-imessage-enabled" aria-label="Enable iMessage alerts" ${this.imessageDraft.enabled ? 'checked' : ''} ${this.imessageLoading ? 'disabled' : ''}><span class="ai-flow-slider"></span></label>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;width:100%">
-          <input id="us-imessage-recipient" type="text" aria-label="iMessage recipient" aria-describedby="us-imessage-saved" placeholder="International phone number or email" maxlength="64" value="${escapeHtml(this.imessageDraft.recipient)}" ${this.imessageLoading || this.imessagePending ? 'disabled' : ''} style="flex:1 1 220px;min-width:0;width:100%;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
+          <input id="us-imessage-recipient" type="text" aria-label="iMessage recipient" aria-describedby="us-imessage-format us-imessage-saved" placeholder="International phone number or email" maxlength="64" value="${escapeHtml(this.imessageDraft.recipient)}" ${this.imessageLoading || this.imessagePending ? 'disabled' : ''} style="flex:1 1 220px;min-width:0;width:100%;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
           <select id="us-imessage-threshold" aria-label="iMessage alert threshold" style="max-width:100%;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
             <option value="critical"${im.threshold === 'critical' ? ' selected' : ''}>Critical only</option>
             <option value="high+critical"${im.threshold === 'high+critical' ? ' selected' : ''}>High + Critical</option>
@@ -753,6 +757,7 @@ export class UnifiedSettings {
           <button type="button" id="us-imessage-save" class="spm-btn spm-btn--primary spm-btn--sm" ${this.imessageLoading || this.imessagePending || !this.imessageDraft.recipient ? 'disabled' : ''}>Save and confirm</button>
           <button type="button" id="us-imessage-test" class="spm-btn spm-btn--sm" ${this.canTestImessage() ? '' : 'disabled'}>Test</button>
         </div>
+        <span id="us-imessage-format" style="font-size:11px;color:var(--text-muted)">Use +countrycode followed by digits, with no spaces or punctuation (for example, +15551234567), or an email address.</span>
         <span id="us-imessage-saved" style="font-size:11px;overflow-wrap:anywhere">${escapeHtml(saved)}</span>
         <span id="us-imessage-status" role="status" aria-live="polite" style="font-size:11px;color:var(--text-muted);min-height:14px">${escapeHtml(this.imessageStatus)}</span>
       </div>`;

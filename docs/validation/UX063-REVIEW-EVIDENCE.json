@@ -1,0 +1,277 @@
+{
+  "task": "UX-063",
+  "decision": "retain-existing-local-sonnet-and-sha-pinned-verdict",
+  "status": "reviewed-local-decision-final-sonnet-and-publication-pending",
+  "evaluatedBaseSha": "3a9786c45daa9fcf643331ac004ae62e97793f7a",
+  "claimSha": "4709daa157b437d9e70ac9a3f0d7755835a70269",
+  "claimPullRequest": "https://github.com/bradleybond512/crystal-ball/pull/1890",
+  "observedAtUtc": "2026-11-09T05:32:55.502724+00:00",
+  "artifactLocator": "Local Codex visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098; raw artifacts are not committed.",
+  "samples": [
+    {
+      "task": "ACC-510",
+      "pullRequest": "https://github.com/bradleybond512/crystal-ball/pull/1858",
+      "reviewedSourceSha": "caa41bd88cfe00359005e432946f52f98a67d9d5",
+      "verdictHeadSha": "14e0fdf2f6b6b5fffc013d8a6f3196c653f669ca",
+      "verdictFile": ".agentic/reviews/caa41bd88cfe00359005e432946f52f98a67d9d5.json",
+      "verdictBlobSha256": "5ea051c5bad3be3b53e604f1e9ebd95f0bc685b98d0296a3ad81e5a92bd82f23",
+      "recordedReviewer": "claude",
+      "recordedModel": "claude-sonnet-4-6",
+      "recordedAt": "2026-11-07T04:37:00.359Z",
+      "recordedVerdict": "approve",
+      "blockingFindings": 0,
+      "rawResult": {
+        "type": "result",
+        "subtype": "success",
+        "isError": false,
+        "models": [
+          "claude-sonnet-4-6"
+        ],
+        "durationMs": 300201,
+        "durationApiMs": 296506,
+        "numTurns": 56,
+        "reportedCostUsd": 1.4118435000000003,
+        "permissionDenialCount": 0
+      },
+      "hostedGate": {
+        "conclusion": "success",
+        "headSha": "14e0fdf2f6b6b5fffc013d8a6f3196c653f669ca",
+        "status": "completed",
+        "url": "https://github.com/bradleybond512/crystal-ball/actions/runs/42340093779",
+        "workflowName": "Cross-agent review gate"
+      },
+      "artifacts": [
+        {
+          "localArtifact": "acc510/sonnet.json",
+          "sha256": "0590b66d2fc567df71e3d6c66fe1c8ca5d0493793d23a3cf7b40b3395ad33d87"
+        },
+        {
+          "localArtifact": "acc510/HOSTED-CHECKPOINT.md",
+          "sha256": "3fe21c391fa760f6b442fa5afc2ae8d419886b1d7c074f0c0de403d2f0332e33"
+        },
+        {
+          "localArtifact": "acc510/pr1858-ci-latest.json",
+          "sha256": "87833318b9ee35d14b2721cf43a6dd361159b57dc7c24f5be997df7ef00a59ef"
+        },
+        {
+          "localArtifact": "acc510/pr1858-final.json",
+          "sha256": "84211b94f4de114b5052e92149a085bcce4c4de105410779899425593cce50ee"
+        }
+      ],
+      "hostedGateCommandEvidence": {
+        "command": "gh run view 42340093779 --repo bradleybond512/crystal-ball --json headSha,conclusion,status,url,workflowName",
+        "phase": "fresh read-only recheck after first independent evidence audit",
+        "exitCode": 0,
+        "stdout": "{\"conclusion\":\"success\",\"headSha\":\"14e0fdf2f6b6b5fffc013d8a6f3196c653f669ca\",\"status\":\"completed\",\"url\":\"https://github.com/bradleybond512/crystal-ball/actions/runs/42340093779\",\"workflowName\":\"Cross-agent review gate\"}\n",
+        "localArtifact": "next-nov8/hosted-gate-42340093779.json",
+        "sha256": "3e720b8f06bf1b2a2d162a0da7404435758e146ed8fe872ef8dd227df2fe523c"
+      }
+    },
+    {
+      "task": "UX-035",
+      "pullRequest": "https://github.com/bradleybond512/crystal-ball/pull/1859",
+      "reviewedSourceSha": "24901ebc8f33c8c5c66dfcfc5c6bf9aecf5c2e56",
+      "verdictHeadSha": "84b401c8615abf99aa454da6b26db2473bf50fa7",
+      "verdictFile": ".agentic/reviews/24901ebc8f33c8c5c66dfcfc5c6bf9aecf5c2e56.json",
+      "verdictBlobSha256": "a2e9a223bc732419f2a621b7051d65d3c4c8e5973442959160a4c759295a5bbd",
+      "recordedReviewer": "claude",
+      "recordedModel": "claude-sonnet-4-6",
+      "recordedAt": "2026-11-07T05:11:42.141Z",
+      "recordedVerdict": "approve",
+      "blockingFindings": 0,
+      "rawResult": {
+        "type": "result",
+        "subtype": "success",
+        "isError": false,
+        "models": [
+          "claude-sonnet-4-6"
+        ],
+        "durationMs": 183580,
+        "durationApiMs": 181744,
+        "numTurns": 30,
+        "reportedCostUsd": 0.9134199000000001,
+        "permissionDenialCount": 0
+      },
+      "hostedGate": {
+        "conclusion": "success",
+        "headSha": "84b401c8615abf99aa454da6b26db2473bf50fa7",
+        "status": "completed",
+        "url": "https://github.com/bradleybond512/crystal-ball/actions/runs/42342045708",
+        "workflowName": "Cross-agent review gate"
+      },
+      "artifacts": [
+        {
+          "localArtifact": "ux035/sonnet.json",
+          "sha256": "971f220562c55456a5990b1f5693eaf94cb0ff7bd1095aab665649e1348b9fa7"
+        },
+        {
+          "localArtifact": "ux035/HOSTED-CHECKPOINT.md",
+          "sha256": "b7aa57f719a401bdb61efa88411c4410f2c37bda4810174d91a696281276dbee"
+        },
+        {
+          "localArtifact": "ux035/pr1859-ci-latest.json",
+          "sha256": "7455f3c59d7aad1ef2fcdc9ed15d3f363d8faac365a5340feff71639b73bafb9"
+        },
+        {
+          "localArtifact": "ux035/pr1859-final.json",
+          "sha256": "3f54b23fb8b874047d79728001ef87f0696e4ae97da96e79ecc27c69cc16fb40"
+        }
+      ],
+      "hostedGateCommandEvidence": {
+        "command": "gh run view 42342045708 --repo bradleybond512/crystal-ball --json headSha,conclusion,status,url,workflowName",
+        "phase": "fresh read-only recheck after first independent evidence audit",
+        "exitCode": 0,
+        "stdout": "{\"conclusion\":\"success\",\"headSha\":\"84b401c8615abf99aa454da6b26db2473bf50fa7\",\"status\":\"completed\",\"url\":\"https://github.com/bradleybond512/crystal-ball/actions/runs/42342045708\",\"workflowName\":\"Cross-agent review gate\"}\n",
+        "localArtifact": "next-nov8/hosted-gate-42342045708.json",
+        "sha256": "47daa9d331c157a44be003d2e0ab6228d83d0cd4783eded1d520ccf0c0a46c40"
+      }
+    },
+    {
+      "task": "UX-062",
+      "pullRequest": "https://github.com/bradleybond512/crystal-ball/pull/1886",
+      "reviewedSourceSha": "31979f2a157dc58c84746bacd0c0e35ebea2d654",
+      "verdictHeadSha": "cba94b041e559351823864d2080d4f91240c6392",
+      "verdictFile": ".agentic/reviews/31979f2a157dc58c84746bacd0c0e35ebea2d654.json",
+      "verdictBlobSha256": "fa2b3ef1f06466ea9b450fc2d1ff129c466e0ccc75146c68b113fb469d4ae032",
+      "recordedReviewer": "claude",
+      "recordedModel": "claude-sonnet-4-6",
+      "recordedAt": "2026-11-08T21:39:09.319Z",
+      "recordedVerdict": "approve",
+      "blockingFindings": 0,
+      "rawResult": {
+        "type": "result",
+        "subtype": "success",
+        "isError": false,
+        "models": [
+          "claude-sonnet-4-6"
+        ],
+        "durationMs": 183725,
+        "durationApiMs": 175877,
+        "numTurns": 32,
+        "reportedCostUsd": 1.0199028,
+        "permissionDenialCount": 2
+      },
+      "hostedGate": {
+        "conclusion": "success",
+        "headSha": "cba94b041e559351823864d2080d4f91240c6392",
+        "status": "completed",
+        "url": "https://github.com/bradleybond512/crystal-ball/actions/runs/42527940922",
+        "workflowName": "Cross-agent review gate"
+      },
+      "artifacts": [
+        {
+          "localArtifact": "ux062/sonnet.json",
+          "sha256": "86dd04cb5d5cd15c97886317b9fc37d9ba67d2cad29e4340d9e1746a87b834a5"
+        },
+        {
+          "localArtifact": "ux062/HOSTED-CHECKPOINT.md",
+          "sha256": "38c6455c132e36113c79152dff4643792954277f513782f7aeb567a22cd45d5f"
+        },
+        {
+          "localArtifact": "ux062/hosted-runs.json",
+          "sha256": "cddaddddd17977474e04dcda0d2e8b5867653852bf1dfffccaf0aa2d79aa6616"
+        }
+      ],
+      "hostedGateCommandEvidence": {
+        "command": "gh run view 42527940922 --repo bradleybond512/crystal-ball --json headSha,conclusion,status,url,workflowName",
+        "phase": "fresh read-only recheck after first independent evidence audit",
+        "exitCode": 0,
+        "stdout": "{\"conclusion\":\"success\",\"headSha\":\"cba94b041e559351823864d2080d4f91240c6392\",\"status\":\"completed\",\"url\":\"https://github.com/bradleybond512/crystal-ball/actions/runs/42527940922\",\"workflowName\":\"Cross-agent review gate\"}\n",
+        "localArtifact": "next-nov8/hosted-gate-42527940922.json",
+        "sha256": "db02617f059c0026b12d98dc2c1fdceb74c5583ffba4e31174e38c97d8bcb738"
+      }
+    }
+  ],
+  "existingControlRuns": [
+    {
+      "command": "node --test tests/agentic-pipeline.test.mjs",
+      "phase": "discovery baseline, Node 22",
+      "tests": 85,
+      "pass": 85,
+      "fail": 0,
+      "artifact": {
+        "localArtifact": "next-nov8/agentic-pipeline.log",
+        "sha256": "e7b7ab9f590173a0cd0f566588244681102bb6b7aff0e7ef2e93205451ce8006"
+      }
+    },
+    {
+      "command": "npm run test:agentic-pipeline",
+      "phase": "approved local work, before final report",
+      "tests": 85,
+      "pass": 85,
+      "fail": 0,
+      "artifact": {
+        "localArtifact": "next-nov8/approved-pipeline.log",
+        "sha256": "4cd9ecbec5fe1c25dd996092591da6da9fdd461a5d8a6ca341e8de44bf77b883"
+      }
+    },
+    {
+      "command": "npm run test:roadmap-controller",
+      "phase": "approved local work, before final report",
+      "tests": 126,
+      "pass": 126,
+      "fail": 0,
+      "artifact": {
+        "localArtifact": "next-nov8/approved-roadmap.log",
+        "sha256": "6fc8df71df3f2d959d8a761eab0a4af638e80ac2805fb00afa29e18aca33f024"
+      }
+    }
+  ],
+  "limitations": [
+    "Three selected successful local reviews are examples, not an availability or success-rate estimate.",
+    "Cost fields are reported estimates, not invoices or enforced budgets.",
+    "Reviewer identity and model are recorder attestations; medium effort is policy, not a verifier condition.",
+    "UX-062 has two Bash tool-permission denials; neither demonstrates a denied review transmission.",
+    "Existing negative controls are fixtures, not live CI Sonnet denial or fork-isolation evidence.",
+    "Hosted review-gate success validates the recorded-verdict route; it does not establish hosted Sonnet execution.",
+    "No private transcript, session identifier, tool input, environment value or credential is copied into this certificate."
+  ],
+  "finalValidation": {
+    "status": "passed",
+    "executableSourceSha": "3a9786c45daa9fcf643331ac004ae62e97793f7a",
+    "scope": "Existing executable code unchanged; gate ran during report assembly, final docs and secret checks ran after report files were written.",
+    "results": [
+      {
+        "command": "bash scripts/agentic-validate.sh --tests 'test:agentic-pipeline test:roadmap-controller'",
+        "exitCode": 0,
+        "localArtifact": "next-nov8/gate.log",
+        "sha256": "f0e8a705053008e4a98fce8c28ff109fdb86e2677a464eaa6b69cfb0e012464a"
+      },
+      {
+        "command": "npm run docs:check",
+        "exitCode": 0,
+        "localArtifact": "next-nov8/final-docs.log",
+        "sha256": "705046657185d1cd79419c8dc15f59618ba174e844688c992acf1fc548988dd6"
+      },
+      {
+        "command": "npm run secrets:scan",
+        "exitCode": 0,
+        "localArtifact": "next-nov8/final-secrets.log",
+        "sha256": "413de8f0a40daf9f3b2d6362828b363d0bfbe097d5766232221c3f2388b6f8db"
+      }
+    ]
+  },
+  "independentReview": {
+    "status": "passed",
+    "reviewer": "gpt-6.1-sol",
+    "effort": "medium",
+    "reviewedCheckpoint": "1db4f07f343ec3bde7b2771c8f27d082a8e548f5 plus retained hosted-response evidence repair",
+    "blockingFindings": 0,
+    "repairCycles": 1,
+    "repair": "UX063-R1: retain, hash and quote all three direct hosted-run responses",
+    "limits": "Read-only audit; tests and network calls not independently rerun."
+  },
+  "requiredSonnetReview": {
+    "status": "pending"
+  },
+  "deliveryHolds": [
+    "completion-publication",
+    "merge",
+    "auto-merge",
+    "release",
+    "build-dispatch",
+    "deployment",
+    "installation"
+  ],
+  "ux062FullBaselineWork": "open"
+}

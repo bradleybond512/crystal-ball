@@ -663,6 +663,7 @@ export class CommandCenterPanel extends Panel {
         ${chip(card.overall.label)}
       </div>
       <div style="font-size:11px;color:var(--text-secondary,#aaa);margin-bottom:6px;line-height:1.4;">${escapeHtml(card.overall.summary)}</div>
+      <p class="calibration-baseline-note" style="font-size:11px;color:var(--text-secondary,#aaa);margin:0 0 6px;line-height:1.4;">Baseline comparison: Unverified. This summary combines historical forecasts and does not verify individual forecast skill.</p>
       ${rows}
     </div>`;
   }

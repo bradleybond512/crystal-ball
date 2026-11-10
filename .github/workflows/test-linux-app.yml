@@ -34,7 +34,7 @@ jobs:
           toolchain: stable
 
       - name: Rust cache
-        uses: swatinem/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db
+        uses: swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31
         with:
           workspaces: './src-tauri -> target'
           cache-on-failure: true

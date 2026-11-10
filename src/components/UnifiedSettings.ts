@@ -699,10 +699,10 @@ export class UnifiedSettings {
     this.imessagePending = false;
     this.imessageSaved = getImessageSettings();
     const retainDraft = submittedDraft && !result.ok
-      && (result.code === 'invalid_recipient' || result.code === 'persistence_failed' || result.code === 'unavailable');
+      && (result.code === 'invalid_recipient' || result.code === 'persistence_failed' || result.code === 'unavailable' || result.code === 'busy');
     this.imessageDraft = retainDraft ? submittedDraft : { enabled: this.imessageSaved.enabled, recipient: this.imessageSaved.recipient };
     this.imessageStatus = result.ok ? success : result.reason;
-    if (retainDraft) this.imessageStatus += ' Changes not saved. Your draft is retained; correct it if needed, then Save and confirm to retry.';
+    if (retainDraft) this.imessageStatus += ' Save was not confirmed. Your draft is retained; correct it if needed, then Save and confirm to retry.';
     this.updateImessageControls();
   }
 

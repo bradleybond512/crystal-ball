@@ -8,7 +8,7 @@ No release beyond 2.25.148 is prepared. See [2.25.148 readiness](docs/releases/2
 
 ## [2.25.148] - unreleased
 
-Source preparation only; no 2.25.148 tag, signed artifacts or public release are claimed. Release automation requires the explicit `DESKTOP_RELEASE_ENABLED` opt-in. Its upload path leaves a draft release for artifact acceptance and separately authorized publication.
+Source preparation only; no 2.25.148 tag, signed artifacts or public release are claimed. Release automation is hard-paused in source regardless of `DESKTOP_RELEASE_ENABLED`; resuming it requires a separately approved and reviewed source change plus the existing opt-in. Its upload path remains draft-only for artifact acceptance and separately authorized publication.
 
 ### Fixed
 
@@ -30,7 +30,7 @@ Source preparation only; no 2.25.148 tag, signed artifacts or public release are
 - **Critical notification delivery** records native outcomes and retries undelivered reactor alerts; iMessage pause state remains visible. (commits `26306a96`, `2d6d66ed`, `9bf0aff7`, `e96a91d1`)
 - **PWA subpath deployments** retain correct asset and service-worker URLs. (commit `1892a60d`)
 - **Cmd+K keyboard behavior** improves foreground dismissal and capture. Cmd+K itself was already a 2.25.147 capability. (commits `6972023d`, `8f10b641`)
-- **Release safety** requires opt-in before automatic tagging or publisher dispatch, rejects missing Apple signing/notarization credentials in publish mode, and keeps uploaded releases draft until maintainer acceptance.
+- **Release safety** hard-pauses automatic tagging, publish recovery and the publisher regardless of repository opt-in, preserves explicit build-only dispatch, rejects missing Apple signing/notarization credentials in publish mode, and keeps uploaded releases draft until maintainer acceptance.
 
 - **Fail-closed macOS relaunches**: the local installer now waits for the prior
   Crystal Ball process to exit before replacing the bundle, checks `open`

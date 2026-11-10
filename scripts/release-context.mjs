@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { appendFile, readFile } from 'node:fs/promises';
+import { appendFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -22,6 +22,7 @@ const VALUE_FLAGS = new Map([
   ['--sha', 'sha'],
   ['--github-output', 'githubOutput'],
   ['--publish-mode', 'publishMode'],
+  ['--release-tag-input', 'releaseTagInput'],
 ]);
 
 const BOOLEAN_FLAGS = new Map([
@@ -50,6 +51,7 @@ function parseArgs(argv) {
  githubOutput: '',
  enforceMain: true,
  publishMode: 'build',
+ releaseTagInput: '',
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -79,13 +81,21 @@ function validateParsedOptions(options) {
   if (!options.sha) {
  throw new Error('Missing --sha');
   }
+  if (!['build', 'publish'].includes(options.publishMode)) {
+ throw new Error(`Unsupported publish mode: ${options.publishMode}`);
+  }
+  if (options.event === 'workflow_dispatch' && options.publishMode === 'build' && options.releaseTagInput) {
+ throw new Error('release_tag is only valid in publish mode');
+  }
+  if (options.event === 'workflow_dispatch' && options.publishMode === 'publish' && !options.releaseTagInput) {
+ throw new Error('Missing release_tag for publish-mode workflow_dispatch');
+  }
   if (options.event === 'workflow_dispatch' && options.publishMode !== 'publish') {
  options.variant = options.variant || 'full';
  return;
   }
-  if (!options.ref) {
- const context = options.event === 'push' ? 'tag-driven release context' : 'publish-mode workflow_dispatch';
- throw new Error(`Missing --ref for ${context}`);
+  if (options.event === 'push' && !options.ref) {
+ throw new Error('Missing --ref for tag-driven release context');
   }
 }
 
@@ -102,18 +112,43 @@ function runCommand(command, args) {
   return result.stdout.trim();
 }
 
-export async function readSynchronizedVersions() {
-  const packageJsonPath = path.join(repoRoot, 'package.json');
-  const tauriConfPath = path.join(repoRoot, 'src-tauri', 'tauri.conf.json');
-  const cargoTomlPath = path.join(repoRoot, 'src-tauri', 'Cargo.toml');
-  const cargoLockPath = path.join(repoRoot, 'src-tauri', 'Cargo.lock');
-  const infoPlistPath = path.join(repoRoot, 'src-tauri', 'Info.plist');
+export function resolveAnnotatedTagCommit(tag, git = runCommand) {
+  const ref = `refs/tags/${tag}`;
+  if (git('git', ['cat-file', '-t', ref]) !== 'tag') {
+ throw new Error(`Release tag ${tag} must be annotated`);
+  }
+  return git('git', ['rev-parse', `${ref}^{commit}`]);
+}
 
-  const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
-  const tauriConf = JSON.parse(await readFile(tauriConfPath, 'utf8'));
-  const cargoToml = await readFile(cargoTomlPath, 'utf8');
-  const cargoLock = await readFile(cargoLockPath, 'utf8');
-  const infoPlist = await readFile(infoPlistPath, 'utf8');
+export function selectReleaseSourceCommit({ event, refName, releaseTagInput = '', publishMode = 'build', sha }, resolveTag = resolveAnnotatedTagCommit) {
+  if (!['push', 'workflow_dispatch'].includes(event)) throw new Error(`Unsupported release event: ${event}`);
+  if (!['build', 'publish'].includes(publishMode)) throw new Error(`Unsupported publish mode: ${publishMode}`);
+  if (!/^[a-f0-9]{40}$/i.test(sha)) throw new Error('Invalid event SHA');
+  if (event === 'workflow_dispatch' && publishMode === 'build') {
+ if (releaseTagInput) throw new Error('release_tag is only valid in publish mode');
+ return sha;
+  }
+  const releaseRef = event === 'workflow_dispatch' ? releaseTagInput : refName;
+  if (!releaseRef) throw new Error('Missing release_tag for publish-mode workflow_dispatch');
+  const tag = parseReleaseRef(releaseRef).tag;
+  const tagSha = resolveTag(tag);
+  if (!/^[a-f0-9]{40}$/i.test(tagSha)) throw new Error('Invalid tagged commit SHA');
+  if (sha.toLowerCase() !== tagSha.toLowerCase()) {
+ throw new Error(event === 'push'
+   ? 'Tag commit does not match event SHA'
+   : 'Source commit differs from workflow event SHA; refusing misleading provenance');
+  }
+  return tagSha;
+}
+
+export async function readSynchronizedVersions(commitSha, readVersionFile = (sha, file) => runCommand('git', ['show', `${sha}:${file}`])) {
+  if (!/^[a-f0-9]{40}$/i.test(commitSha)) throw new Error('Invalid source commit SHA');
+  const read = (file) => readVersionFile(commitSha, file);
+  const packageJson = JSON.parse(read('package.json'));
+  const tauriConf = JSON.parse(read('src-tauri/tauri.conf.json'));
+  const cargoToml = read('src-tauri/Cargo.toml');
+  const cargoLock = read('src-tauri/Cargo.lock');
+  const infoPlist = read('src-tauri/Info.plist');
   const cargoPackage = parseCargoPackageMetadata(cargoToml);
   const infoPlistVersionMatch = infoPlist.match(/<key>CFBundleGetInfoString<\/key>\s*<string>Crystal Ball ([^<]+)<\/string>/);
 
@@ -132,9 +167,9 @@ export function resolveReleaseContext({ event, refName, inputVariant, packageVer
   // Workflow dispatch with publish_mode=publish is the recovery path when the
   // tag-push trigger was suppressed (e.g. tag pushed by GITHUB_TOKEN from
   // auto-tag.yml, which per GitHub anti-loop rules does not fire downstream
-  // workflows). The workflow gets dispatched with --ref <tag> and
-  // -f publish_mode=publish; from here it's indistinguishable from a real
-  // tag push.
+  // workflows). Recovery supplies --release-tag-input <tag>; both paths
+  // resolve that annotated tag to the immutable commit used for metadata
+  // and artifact builds.
   if (event === 'workflow_dispatch' && publishMode === 'publish') {
  const parsed = parseReleaseRef(refName);
  if (parsed.version !== packageVersion) {
@@ -214,7 +249,18 @@ async function writeGithubOutputs(outputPath, context) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const versions = await readSynchronizedVersions();
+  const checkoutSha = runCommand('git', ['rev-parse', 'HEAD']);
+  if (checkoutSha.toLowerCase() !== options.sha.toLowerCase()) {
+ throw new Error(`Context checkout ${checkoutSha} does not match event SHA ${options.sha}`);
+  }
+  const sourceSha = selectReleaseSourceCommit({
+ event: options.event,
+ refName: options.ref,
+ releaseTagInput: options.releaseTagInput,
+ publishMode: options.publishMode,
+ sha: options.sha,
+  });
+  const versions = await readSynchronizedVersions(sourceSha);
   const mismatches = validateVersionSync(versions);
   if (mismatches.length > 0) {
  throw new Error(`Version files are out of sync: ${mismatches.join(', ')}`);
@@ -222,21 +268,18 @@ async function main() {
 
   const context = resolveReleaseContext({
  event: options.event,
- refName: options.ref,
+ refName: options.event === 'workflow_dispatch' && options.publishMode === 'publish'
+   ? options.releaseTagInput : options.ref,
  inputVariant: options.variant,
  packageVersion: versions.packageVersion,
- sha: options.sha,
+ sha: sourceSha,
  publishMode: options.publishMode,
   });
 
   if (options.enforceMain && context.publish) {
- const branches = runCommand('git', ['branch', '-r', '--contains', options.sha]);
+ const branches = runCommand('git', ['branch', '-r', '--contains', sourceSha]);
  if (!commitIsOnRemoteMain(branches)) {
- throw new Error(`Tagged commit ${options.sha} is not on origin/main`);
- }
- const tagType = runCommand('git', ['cat-file', '-t', context.tag]);
- if (tagType !== 'tag') {
- throw new Error(`Release tag ${context.tag} must be annotated`);
+ throw new Error(`Tagged commit ${sourceSha} is not on origin/main`);
  }
   }
 

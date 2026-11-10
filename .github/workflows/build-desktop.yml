@@ -9,8 +9,10 @@ on:
     #             auto-tag.yml don't trigger downstream workflows). Dispatch
     #             with publish_mode=publish and release_tag=<tag>. The workflow
     #             runs at main (so it always uses the latest automation code),
-    #             then checks out release_tag for the actual build, and
-    #             release-context treats it exactly like a tag push.
+    #             then resolves release_tag to one immutable commit used by
+    #             the context, build checkouts and release manifest. Recovery
+    #             fails closed if that commit differs from the workflow SHA,
+    #             because the pinned attestation records the workflow SHA.
     inputs:
       variant:
         description: 'Variant to build (build mode only; publish mode derives variant from release_tag)'
@@ -22,7 +24,7 @@ on:
           - tech
           - finance
       publish_mode:
-        description: 'build = artifacts only, publish = cut a GitHub release from release_tag'
+        description: 'build = artifacts only, publish = prepare a draft GitHub release from release_tag'
         required: true
         default: build
         type: choice
@@ -50,6 +52,10 @@ permissions:
 
 jobs:
   release-context:
+    # Explicit build-only dispatches remain available for candidate artifacts.
+    # Source hard pause blocks tags/recovery regardless of the repository opt-in.
+    # Remove the literal false only in a separately approved release change.
+    if: (false && vars.DESKTOP_RELEASE_ENABLED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.publish_mode == 'build')
     runs-on: ubuntu-latest
     outputs:
       publish: ${{ steps.context.outputs.publish }}
@@ -66,6 +72,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+          ref: ${{ github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
@@ -78,20 +85,20 @@ jobs:
         shell: bash
         env:
           # R4-LOW-002: through env, never pasted into the script text.
-          RELEASE_REF: ${{ inputs.release_tag || github.ref_name }}
+          RELEASE_REF: ${{ github.ref_name }}
+          RELEASE_TAG_INPUT: ${{ inputs.release_tag || '' }}
           EVENT_NAME: ${{ github.event_name }}
           VARIANT: ${{ inputs.variant || 'full' }}
           PUBLISH_MODE: ${{ inputs.publish_mode || 'build' }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
-          # For publish-mode workflow_dispatch, the tag comes from the
-          # release_tag input (because the workflow runs at main, not at the
-          # tag — see trigger comment). For everything else, github.ref_name
-          # is either the pushed tag or the dispatched branch.
+          # Keep the dispatched ref and optional recovery tag separate. The
+          # context script resolves one source commit for metadata and builds.
           REF_NAME="$RELEASE_REF"
           node scripts/release-context.mjs \
             --event "$EVENT_NAME" \
             --ref "$REF_NAME" \
+            --release-tag-input "$RELEASE_TAG_INPUT" \
             --variant "$VARIANT" \
             --publish-mode "$PUBLISH_MODE" \
             --sha "$COMMIT_SHA" \
@@ -143,7 +150,13 @@ jobs:
           # always use the latest automation code — but the build must reflect
           # the tagged release. The release-context job resolves the tag, so
           # we reuse its output here.
-          ref: ${{ needs.release-context.outputs.tag || github.ref }}
+          ref: ${{ needs.release-context.outputs.commit_sha }}
+
+      - name: Verify source checkout
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ needs.release-context.outputs.commit_sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
 
       - name: Start job timer
         shell: bash
@@ -214,11 +227,20 @@ jobs:
       - name: Check Apple signing secrets
         if: contains(matrix.platform, 'macos')
         id: apple-signing
+        env:
+          PUBLISH: ${{ needs.release-context.outputs.publish }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         shell: bash
         run: |
-          if [ -n "${{ secrets.APPLE_CERTIFICATE }}" ] && [ -n "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" ] && [ -n "${{ secrets.KEYCHAIN_PASSWORD }}" ]; then
+          if [ -n "$APPLE_CERTIFICATE" ] && [ -n "$APPLE_CERTIFICATE_PASSWORD" ] && [ -n "$KEYCHAIN_PASSWORD" ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
+            if [ "$PUBLISH" = 'true' ]; then
+              echo "::error::Publish mode requires complete Apple Developer ID signing credentials."
+              exit 1
+            fi
             echo "available=false" >> "$GITHUB_OUTPUT"
             echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
             echo "Apple signing secrets unavailable; using ad-hoc signing identity (-)."
@@ -249,17 +271,23 @@ jobs:
           echo "APPLE_SIGNING_IDENTITY=$CERT_ID" >> "$GITHUB_ENV"
 
       - name: Configure Apple notarization credentials
+        id: apple-notarization
         if: contains(matrix.platform, 'macos')
+        env:
+          PUBLISH: ${{ needs.release-context.outputs.publish }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         shell: bash
         run: |
-          if [ -n "${{ secrets.APPLE_ID }}" ] && [ -n "${{ secrets.APPLE_PASSWORD }}" ] && [ -n "${{ secrets.APPLE_TEAM_ID }}" ]; then
-            {
-              echo "APPLE_ID=${{ secrets.APPLE_ID }}"
-              echo "APPLE_PASSWORD=${{ secrets.APPLE_PASSWORD }}"
-              echo "APPLE_TEAM_ID=${{ secrets.APPLE_TEAM_ID }}"
-            } >> "$GITHUB_ENV"
+          if [ -n "$APPLE_ID" ] && [ -n "$APPLE_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
             echo "Apple notarization secrets found."
+          elif [ "$PUBLISH" = 'true' ]; then
+            echo "::error::Publish mode requires complete Apple notarization credentials."
+            exit 1
           else
+            echo "available=false" >> "$GITHUB_OUTPUT"
             echo "Apple notarization secrets unavailable; skipping notarization."
           fi
 
@@ -272,6 +300,9 @@ jobs:
       - name: Build Tauri app
         shell: bash
         env:
+          APPLE_ID: ${{ steps.apple-notarization.outputs.available == 'true' && secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ steps.apple-notarization.outputs.available == 'true' && secrets.APPLE_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ steps.apple-notarization.outputs.available == 'true' && secrets.APPLE_TEAM_ID || '' }}
           VITE_VARIANT: ${{ needs.release-context.outputs.variant }}
           VITE_DESKTOP_RUNTIME: '1'
           WM_BUILD_VARIANT: ${{ needs.release-context.outputs.variant }}
@@ -428,7 +459,8 @@ jobs:
     needs:
       - release-context
       - build-tauri
-    if: needs.release-context.outputs.publish == 'true'
+    # Independent source hard pause, even if an upstream publish output is true.
+    if: false && vars.DESKTOP_RELEASE_ENABLED == 'true' && needs.release-context.outputs.publish == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -441,7 +473,13 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-          ref: ${{ needs.release-context.outputs.tag || github.ref }}
+          ref: ${{ needs.release-context.outputs.commit_sha }}
+
+      - name: Verify source checkout
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ needs.release-context.outputs.commit_sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
 
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
@@ -469,6 +507,17 @@ jobs:
       # `gh attestation verify <file> --repo <owner>/<repo>`. Generated before
       # upload so a provenance failure aborts the publish rather than shipping
       # un-attested binaries.
+      - name: Verify attested source matches workflow event
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ needs.release-context.outputs.commit_sha }}
+          WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          test "$SOURCE_SHA" = "$WORKFLOW_SHA" || {
+            echo "::error::Attested source differs from workflow event SHA" >&2
+            exit 1
+          }
+
       - name: Attest build provenance for release artifacts
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
@@ -484,9 +533,19 @@ jobs:
         shell: bash
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
+            IS_DRAFT=$(gh release view "$TAG" --json isDraft --jq .isDraft) || {
+              echo "::error::Could not verify draft release state."
+              exit 1
+            }
+            if [ "$IS_DRAFT" != 'true' ]; then
+              echo "::error::Refusing to mutate a public release."
+              exit 1
+            fi
             gh release edit "$TAG" --title "$TITLE"
           else
-            gh release create "$TAG" --title "$TITLE" --notes "See changelog below." --verify-tag
+            # Upload/verification is preparation. A maintainer publishes only
+            # after the exact draft artifacts pass native smoke acceptance.
+            gh release create "$TAG" --title "$TITLE" --notes "See changelog below." --verify-tag --draft
           fi
 
       - name: Upload release assets and manifest
@@ -495,6 +554,14 @@ jobs:
           TAG: ${{ needs.release-context.outputs.tag }}
         shell: bash
         run: |
+          IS_DRAFT=$(gh release view "$TAG" --json isDraft --jq .isDraft) || {
+            echo "::error::Could not verify draft release state."
+            exit 1
+          }
+          if [ "$IS_DRAFT" != 'true' ]; then
+            echo "::error::Refusing to mutate a public release."
+            exit 1
+          fi
           mapfile -t ASSET_FILES < <(find downloaded-bundles -type f -path '*/assets/*' | sort)
           gh release upload "$TAG" "${ASSET_FILES[@]}" release-manifest.json --clobber
 
@@ -519,6 +586,14 @@ jobs:
           SHORT_SHA: ${{ needs.release-context.outputs.short_sha }}
         shell: bash
         run: |
+          IS_DRAFT=$(gh release view "$TAG" --json isDraft --jq .isDraft) || {
+            echo "::error::Could not verify draft release state."
+            exit 1
+          }
+          if [ "$IS_DRAFT" != 'true' ]; then
+            echo "::error::Refusing to mutate a public release."
+            exit 1
+          fi
           PREV_TAG=$(node --input-type=module -e "import { execSync } from 'node:child_process'; const tag = process.env.TAG; const tags = execSync('git tag --sort=-version:refname', { encoding: 'utf8' }).trim().split('\\n').filter(Boolean); const matcher = /^v\\d+\\.\\d+\\.\\d+$/; const previous = tags.find((candidate) => candidate !== tag && matcher.test(candidate)) || ''; process.stdout.write(previous);")
           if [ -z "$PREV_TAG" ]; then
             COMMITS="Initial release"

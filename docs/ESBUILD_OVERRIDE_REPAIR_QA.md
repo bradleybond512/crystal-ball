@@ -17,12 +17,14 @@ It failed with `EOVERRIDE: Override for esbuild@0.28.2 conflicts with direct
 dependency`. The direct dependency and override previously duplicated `^0.28.1`;
 npm requires direct-dependency override specifications to match exactly.
 
-Use npm's `$esbuild` reference instead of a second literal. The direct requirement
-remains `^0.28.1`; the reference also constrains transitive esbuild requests.
+Use npm's `$esbuild` reference instead of a second literal. The standalone #1862
+repair kept the direct requirement at `^0.28.1`; #1863 subsequently advanced it
+to `^0.28.2`. The reference also constrains transitive esbuild requests.
 Synchronizing two literals would recreate the same failure on the next update;
 removing the override would lose the transitive floor. No schema, runtime,
 workflow, permission, migration or release/install changes are needed. No package
-is added or upgraded, so maintenance, licensing and bundle contents are unchanged.
+was added or upgraded by standalone #1862. The later #1863 upgrade is documented
+below.
 Existing age, provenance, lockfile and lifecycle-script checks remain mandatory.
 
 ## Bounded plan and validation
@@ -53,8 +55,13 @@ The coordinator must retain clean-tree mutation evidence and run
 `bash scripts/agentic-validate.sh --tests "test:supply-chain-gates test:workflow-security"`
 and independent review before reporting completion.
 
-Package-lock SHA-256 remains
+The standalone #1862 change preserved main's package-lock SHA-256,
 `fa0fc7a76d31ce38c5b03b52e88b4c61956e444dc5171e89fab9a105e02e147f`.
+The initial #1838 integration preserved that branch's happy-dom lockfile,
+SHA-256 `5466eee89b22fc5ccf1af96878380e196241dee47671c596ceea75fd3220ca8c`.
+The later #1863 integration retains happy-dom and includes esbuild 0.28.2 and
+vite-plugin-pwa 2.0.0; the resulting lockfile SHA-256 is
+`cfcfabb3d4b63614aef5b559fa89130ff128cb1cde3c29295b6203e95d3c9719`.
 No new security exception or dependency-age exception is requested. Release tag
 integrity is a separate known issue, outside this repair. Rollback is reverting
 this metadata/test change; no persistent data migration is involved. Merging,

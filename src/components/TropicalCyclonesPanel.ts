@@ -1,4 +1,5 @@
 import { Panel } from './Panel';
+import { dataFreshness } from '@/services/data-freshness';
 import type { TropicalCyclone } from '@/services/tropical-cyclones';
 import { tcSeverityClass, tcCategoryLabel } from '@/services/tropical-cyclones';
 import { escapeHtml } from '@/utils/sanitize';
@@ -24,8 +25,12 @@ export class TropicalCyclonesPanel extends Panel {
   }
 
   private render(): void {
+ const status = dataFreshness.getSource('tropical-cyclones')?.status;
+ const incomplete = status !== 'fresh';
  if (this.storms.length === 0) {
- this.setContent('<div class="panel-empty">No active tropical cyclones.</div>');
+ this.setContent(incomplete
+   ? '<div class="panel-empty">Tropical cyclone data unavailable or incomplete.</div>'
+   : '<div class="panel-empty">No active tropical cyclones.</div>');
  return;
  }
 
@@ -47,6 +52,7 @@ export class TropicalCyclonesPanel extends Panel {
 
  this.setContent(`
  <div class="tc-panel-content">
+ ${incomplete ? '<div class="panel-empty">Incomplete cyclone coverage; retained observations may be stale.</div>' : ''}
  <table class="eq-table">
  <thead>
  <tr>

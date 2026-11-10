@@ -1521,7 +1521,7 @@ State these as open questions rather than treating them as settled:
 Status: IN REVIEW
 Evidence: [Draft #1900](https://github.com/bradleybond512/crystal-ball/pull/1900); [bounded UI design](plans/2026-11-10-ux076-imessage-draft-recovery.md).
 
-Preserve a submitted recipient after invalid-format, unavailable, or persistence failures so it can be corrected and explicitly retried. Native validation, exact-recipient confirmation, storage authority, cancellation and immediate disable remain unchanged. Test must use only confirmed saved state. Do not persist drafts or send messages during verification.
+Preserve a submitted recipient after invalid-format, unavailable, persistence, or busy-retry failures so it can be corrected and explicitly retried. Native validation, exact-recipient confirmation, storage authority, cancellation and immediate disable remain unchanged. Test must use only confirmed saved state. Do not persist drafts or send messages during verification.
 
 Acceptance: behavioral regression tests for initial/replacement drafts, retry and successful reopen, cancellation and stale completion, plus mutation evidence, aggregate checks and independent Sonnet review. Packaged acceptance is separate from isolated tests.
 

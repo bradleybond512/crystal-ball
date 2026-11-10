@@ -1321,11 +1321,11 @@ stronger repairs. Replaying their old ancestry can overwrite those fixes.
 - Done when each draft is safely delivered, superseded with verified coverage,
   or has an explicit unresolved hold. Do not close unique work without approval.
 
-November 9 reconciliation is **IN REVIEW**: the [dated checkpoint](SECURITY_SCAN_ROUND_4_FOR_CODEX.md#reconciliation-checkpoint--november-9-2026)
+November 9 reconciliation is **DONE** in [draft PR #1899](https://github.com/bradleybond512/crystal-ball/pull/1899): the [dated checkpoint](SECURITY_SCAN_ROUND_4_FOR_CODEX.md#reconciliation-checkpoint--november-9-2026)
 records three open and four closed originals, verified replacement receipts,
 remaining scopes and explicit ownership/acceptance holds. Independent review
-confirmed the dispositions; draft publication and its PR-linked reconciliation
-completion entry remain pending. Underlying security and delivery holds remain.
+confirmed the dispositions. Completion covers reconciliation and explicit holds;
+the underlying security work and delivery holds remain open.
 
 ### UX-066 — Clear the dependency backlog in technically reviewed batches
 
@@ -1619,7 +1619,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-061 | Truthful, restrained map presentation | DONE | #1802; [bounded evidence](validation/MAP-CLARITY-CLEANUP.md); native acceptance recorded separately |
 | UX-062 | Label forecasts that trail their baseline | NOT STARTED — HIGH ASSURANCE | |
 | UX-063 | Evaluate bounded CI Sonnet review | NOT STARTED — HIGH ASSURANCE | |
-| UX-065 | Round 4 checkpoint and remaining security drafts | IN REVIEW | [November 9 checkpoint](SECURITY_SCAN_ROUND_4_FOR_CODEX.md#reconciliation-checkpoint--november-9-2026) — seven reviewed dispositions; draft publication pending, remaining scope and delivery holds preserved. |
+| UX-065 | Round 4 checkpoint and remaining security drafts | DONE | [PR #1899](https://github.com/bradleybond512/crystal-ball/pull/1899), [November 9 checkpoint](SECURITY_SCAN_ROUND_4_FOR_CODEX.md#reconciliation-checkpoint--november-9-2026) — seven reviewed dispositions; reconciliation complete, remaining security scope and delivery holds preserved. |
 | UX-066 | Dependabot backlog in reviewed batches | NOT STARTED | |
 | UX-067 | Green release-integrity signal on main | WAITING | |
 | UX-068 | Inventory branches and worktrees before cleanup | NOT STARTED — HIGH ASSURANCE | |

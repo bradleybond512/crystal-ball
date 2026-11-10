@@ -104,10 +104,10 @@ bounded by the disposition below, not by the older PR's complete file list.
 
 ### Checkpoint limits and handoff
 
-Independent review confirmed these seven dispositions. UX-065 remains **IN REVIEW**
-pending draft publication and its PR-linked reconciliation completion entry.
+Independent review confirmed these seven dispositions. UX-065 reconciliation is
+**DONE**, recorded in [draft PR #1899](https://github.com/bradleybond512/crystal-ball/pull/1899).
 Completion of this checkpoint does not complete the underlying security holds.
-This is local documentation preparation, not fresh execution of historical
+This is a documentation checkpoint, not fresh execution of historical
 replacement tests, live probes, native checks, account settings or installations.
 Any new executable boundary change requires its own high-assurance design
 approval, current-base tests, detecting mutations and genuine final reviews.
@@ -115,7 +115,7 @@ Never replay the old stacked branches over newer main protections.
 
 UX-062's baseline-comparison work remains open. Merge/auto-merge, release/tag,
 build-dispatch, deployment and installation holds remain unchanged. This
-checkpoint authorizes no PR closure/reopening, account changes or publication.
+checkpoint authorizes no PR closure/reopening, account changes or further publication.
 Rollback of this documentation leaves the historical checkpoints intact.
 
 ## Private Batch Checkpoint — October 11, 2026

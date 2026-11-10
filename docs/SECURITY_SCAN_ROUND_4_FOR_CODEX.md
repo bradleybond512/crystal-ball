@@ -1,5 +1,121 @@
 # Security Scan Round 4 For Codex
 
+## Reconciliation Checkpoint — November 9, 2026
+
+Evaluated canonical main: **`3a9786c45daa9fcf643331ac004ae62e97793f7a`**.
+PR evidence was captured November 9, America/Chicago (November 10 UTC).
+This checkpoint reconciles the seven drafts named in UX-065; the October 11
+checkpoint and subsequent historical records remain unchanged below.
+Original PR state is distinct from replacement delivery: **three remain open
+and four are closed; none of these seven originals merged**. #1770 still
+bases on #1761's branch. Closed #1781 is unresolved, not completed.
+
+### Verified replacement receipts
+
+Each merge below was verified as an ancestor of evaluated main. Coverage is
+bounded by the disposition below, not by the older PR's complete file list.
+
+| Replacement | Verified merge SHA | Bounded coverage |
+|---|---|---|
+| [#1793](https://github.com/bradleybond512/crystal-ball/pull/1793) | `64028a9e4ad98500b1c2b8884272afa933400e84` | Newest pinned check attempt for #1765 |
+| [#1873](https://github.com/bradleybond512/crystal-ball/pull/1873) | `5f6f9d85aa9f518e3eec106b6de1f632deedcdf0` | Remaining lint-workflow mappings/regression receipt for #1765 |
+| [#1868](https://github.com/bradleybond512/crystal-ball/pull/1868) | `4bcff12673393cd66e9d10fd5b4114ecddaebf92` | Validated quota caches/cadence; excludes PurpleAir changes |
+| [#1870](https://github.com/bradleybond512/crystal-ball/pull/1870) | `59707cd8c9e784d03a9a4076b90bd71f60261891` | Bounded quota governor and API Budgets diagnostics |
+| [#1864](https://github.com/bradleybond512/crystal-ball/pull/1864) | `93e45f702e8b09d72a720df34bfbe03afb2b8d4b` | Other-account preview-origin restriction only |
+| [#1866](https://github.com/bradleybond512/crystal-ball/pull/1866) | `f657f813d4c556249df7210ebf76290ca637abf9` | #1778's own cloud key/quota/feed-cache scope |
+| [#1800](https://github.com/bradleybond512/crystal-ball/pull/1800) | `d8385565d3ebf0a8a0da0640309efa6709c193ff` | Corrected Unicode-safe full-traversal key comparison |
+| [#1865](https://github.com/bradleybond512/crystal-ball/pull/1865) | `248d1ea6a1cf057a8dd00c8e329956fea4f461b5` | Four exact local-only event-store routes |
+
+### Original dispositions and remaining scope
+
+1. **[#1761](https://github.com/bradleybond512/crystal-ball/pull/1761): OPEN DRAFT,
+   partially delivered by #1868.** Its [reconciliation receipt](https://github.com/bradleybond512/crystal-ball/pull/1761#issuecomment-6718091682)
+   retains PurpleAir query/cadence/persistence work and safe portable Windows
+   disk loading. PurpleAir still uses eight fields, no `max_age`, and a
+   five-minute memory cache. Unsupported safe-open flags fail closed; writes
+   do not establish restart reuse. Live-provider qualification remains held.
+   Proposed owners, **unclaimed**: provider engineer for PurpleAir and live
+   request/body evidence; Tauri security engineer for Windows persistence.
+   Release condition: approved bounded design, live response-shape evidence,
+   current-base behavioral/mutation review, and relevant platform acceptance.
+
+2. **[#1770](https://github.com/bradleybond512/crystal-ball/pull/1770): OPEN DRAFT,
+   stacked on #1761, partially delivered by #1870.** Its [reconciliation receipt](https://github.com/bradleybond512/crystal-ball/pull/1770#issuecomment-6718800710)
+   preserves the outstanding **24-hour / five-restart live soak**, native and
+   Windows acceptance, and shared step-one gaps. Step one owns shared
+   PurpleAir/response-persistence work before step two's end-to-end
+   qualification; do not open duplicate implementation scopes. Proposed
+   qualification owner: test engineer with provider/Tauri support, **unclaimed**.
+   Release condition: step-one acceptance or explicit retained exclusions,
+   approved live/native qualification, then the recorded soak. Interactive
+   requests remain counted but app-unblocked; background limits are not a hard
+   global-spend guarantee. Best-effort ledger persistence is not response reuse.
+
+3. **[#1765](https://github.com/bradleybond512/crystal-ball/pull/1765): CLOSED,
+   superseded by #1793 and #1873.** The [closure receipt](https://github.com/bradleybond512/crystal-ball/pull/1765#issuecomment-6719151286)
+   accounts for runtime integration and remaining targeted coverage. Preserve
+   pinned requirements, pagination and newest-attempt fail-closed selection in
+   [the evaluated sync gate](https://github.com/bradleybond512/crystal-ball/blob/3a9786c45daa9fcf643331ac004ae62e97793f7a/scripts/sync-main-to-mac.mjs).
+   No unique implementation remains assigned here. GitHub protection settings,
+   main-sync execution and installed-upgrade acceptance are not established.
+
+4. **[#1769](https://github.com/bradleybond512/crystal-ball/pull/1769): OPEN DRAFT,
+   explicit unresolved hold.** #1864 covers only preview origins. Hold CSP
+   eval/font restrictions, build gate/SPZ shim, violation reporting and **all
+   unreconciled unique hunks** at legacy head
+   `bc8d83adfc929975bfc29fd1768f876f07e29247`. Known examples are
+   `unsafe-eval`/broad image/font HTTPS, absent eval gate/shim/reporter, feed XML
+   escaping, score-zero/share attribution details and retired-domain User-Agent
+   strings. These examples are **nonexhaustive**, not a completed hunk audit.
+   Separate inherited supervisor/secret-boundary history from unique work.
+   Proposed owner: Tauri security engineer, **unclaimed**, with bounded UI/build
+   contributors. Release condition: full unique-hunk inventory on fresh main,
+   approved design for each retained change, current-base tests/mutations and
+   final review; native/build acceptance remains separate. Preserve later
+   domain, auth, confirmed-port and disabled-public-sharing protections.
+
+5. **[#1778](https://github.com/bradleybond512/crystal-ball/pull/1778): CLOSED,
+   superseded by #1866.** The [closure receipt](https://github.com/bradleybond512/crystal-ball/pull/1778#issuecomment-6716752786)
+   reconciles its complete 16-file own scope while preserving newer Unicode,
+   owned-origin and tracked-news semantics. No unique implementation remains
+   assigned here. This does not establish cloud deployment or live acceptance.
+
+6. **[#1783](https://github.com/bradleybond512/crystal-ball/pull/1783): CLOSED,
+   superseded by #1800 and #1865.** The [closure receipt](https://github.com/bradleybond512/crystal-ball/pull/1783#issuecomment-6716459721)
+   covers corrected comparison and the remaining local-only event routes.
+   No unique implementation remains assigned here. Preserve exact Unicode
+   equality and full traversal; do not restore the old TextEncoder comparison.
+
+7. **[#1781](https://github.com/bradleybond512/crystal-ball/pull/1781): CLOSED
+   automatically for inactivity, unresolved.** The [cleanup comment](https://github.com/bradleybond512/crystal-ball/pull/1781#issuecomment-6749072143)
+   is not a completion receipt. Workflow hardening is present on evaluated main
+   ([regression scope](https://github.com/bradleybond512/crystal-ball/blob/3a9786c45daa9fcf643331ac004ae62e97793f7a/tests/workflow-injection.test.mjs));
+   [three external MCP launchers](https://github.com/bradleybond512/crystal-ball/blob/3a9786c45daa9fcf643331ac004ae62e97793f7a/.github/mcp.json)
+   still lack the intended pins. [#1889](https://github.com/bradleybond512/crystal-ball/pull/1889)
+   owns **filesystem only**, OPEN DRAFT at
+   `d356c40809dcbb6e7d8998b54089fe53a93f8aed`; it is not merged or activated.
+   Do not duplicate that work or treat its synthetic merge field as delivery.
+   Human-only `install-scripts-reviewed`, unknown actual consumer,
+   release-probe design/repair and real-user activation holds remain.
+   Proposed GitHub/fetch launcher owner: Tauri security engineer, **unclaimed**.
+   Release condition: separately approved bounded pin/provenance design,
+   required human install review, consumer qualification and applicable delivery
+   authorization. #1889's filesystem ownership does not cover GitHub/fetch.
+
+### Checkpoint limits and handoff
+
+UX-065 remains **IN REVIEW** until independent review confirms these dispositions.
+This is local documentation preparation, not fresh execution of historical
+replacement tests, live probes, native checks, account settings or installations.
+Any new executable boundary change requires its own high-assurance design
+approval, current-base tests, detecting mutations and genuine final reviews.
+Never replay the old stacked branches over newer main protections.
+
+UX-062's baseline-comparison work remains open. Merge/auto-merge, release/tag,
+build-dispatch, deployment and installation holds remain unchanged. This
+checkpoint authorizes no PR closure/reopening, account changes or publication.
+Rollback of this documentation leaves the historical checkpoints intact.
+
 ## Private Batch Checkpoint — October 11, 2026
 
 The September scan, environment observations, provider budget table and

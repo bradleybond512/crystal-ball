@@ -232,7 +232,7 @@ for (const initial of [true, false]) {
       assert.equal(el<HTMLButtonElement>('us-imessage-save').disabled, false);
       assert.equal(el<HTMLButtonElement>('us-imessage-test').disabled, true);
       assert.equal(el('us-imessage-saved').textContent, initial ? 'Sending is disabled.' : `Test destination: ${savedRecipient}`);
-      assert.match(el('us-imessage-status').textContent!, /Save failed.*not saved.*retained/i);
+      assert.match(el('us-imessage-status').textContent!, /Save failed.*Save was not confirmed.*retained/i);
       el('us-imessage-test').click(); await flush();
       assert.equal(calls.length, 1, 'a retained draft cannot send a Test');
     });
@@ -368,3 +368,62 @@ test('recoverable disable failure discards an unsaved recipient and reconciles n
   assert.equal(el('us-imessage-status').textContent, 'Disable not persisted.');
   assert.equal(el<HTMLButtonElement>('us-imessage-test').disabled, true);
 });
+
+
+for (const firstCode of ['persistence_failed', 'unavailable']) {
+  test(`${firstCode} then busy retains the proposal through explicit eventual success`, async () => {
+    const proposal = '+15550000000';
+    const previousRecipient = state.recipient;
+    let attempts = 0;
+    configure = async (recipient, enabled) => {
+      attempts++;
+      if (attempts === 1) return { ok: false, code: firstCode, reason: 'Initial save failed.' };
+      if (attempts === 2) {
+        // Native authority can change independently while a retry is rejected.
+        state = { ...state, enabled: false, ready: false };
+        return { ok: false, code: 'busy', reason: 'Try again when the operation finishes.' };
+      }
+      state = { ...state, recipient, enabled, ready: true };
+      return { ok: true };
+    };
+    mount(); await flush();
+    change('us-imessage-recipient', proposal); el('us-imessage-save').click(); await flush();
+    assert.equal(el('us-imessage-recipient').value, proposal);
+    assert.equal(el('us-imessage-saved').textContent, `Test destination: ${previousRecipient}`);
+    assert.equal(el<HTMLButtonElement>('us-imessage-test').disabled, true);
+    el('us-imessage-save').click(); await flush();
+    assert.equal(el('us-imessage-recipient').value, proposal);
+    assert.equal(el('us-imessage-enabled').checked, true);
+    assert.equal(el('us-imessage-saved').textContent, 'Sending is disabled.');
+    assert.equal(el<HTMLButtonElement>('us-imessage-test').disabled, true);
+    assert.match(el('us-imessage-status').textContent!, /Try again.*Save was not confirmed.*retained/);
+    assert.equal(attempts, 2, 'busy does not trigger an automatic retry');
+    el('us-imessage-test').click(); await flush();
+    assert.equal(calls.filter(call => call[0] === 'send').length, 0);
+    el('us-imessage-save').click(); await flush();
+    assert.deepEqual(calls, Array.from({ length: 3 }, () => ['configure', proposal, true]));
+    assert.equal(el('us-imessage-recipient').value, proposal);
+    assert.equal(el('us-imessage-enabled').checked, true);
+    assert.equal(el('us-imessage-saved').textContent, `Test destination: ${proposal}`);
+    assert.equal(el<HTMLButtonElement>('us-imessage-test').disabled, false);
+    assert.equal(el('us-imessage-status').textContent, 'Settings saved.');
+  });
+}
+
+for (const code of ['persistence_failed', 'unavailable']) {
+  test(`${code} feedback stays honest when refreshed native state already matches the proposal`, async () => {
+    const proposal = '+15550000000';
+    configure = async (recipient, enabled) => {
+      state = { ...state, recipient, enabled, ready: true };
+      return { ok: false, code, reason: 'The operation could not be confirmed.' };
+    };
+    mount(); await flush();
+    change('us-imessage-recipient', proposal); el('us-imessage-save').click(); await flush();
+    assert.equal(el('us-imessage-recipient').value, proposal);
+    assert.equal(el('us-imessage-saved').textContent, `Test destination: ${proposal}`);
+    assert.equal(el<HTMLButtonElement>('us-imessage-test').disabled, false, 'Test follows confirmed native authority, not the response status');
+    assert.match(el('us-imessage-status').textContent!, /Save was not confirmed/);
+    assert.doesNotMatch(el('us-imessage-status').textContent!, /not saved/i);
+    assert.equal(calls.filter(call => call[0] === 'send').length, 0);
+  });
+}

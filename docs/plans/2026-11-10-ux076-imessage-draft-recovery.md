@@ -32,3 +32,16 @@ Capture the submitted Save proposal. Retain it only for those three recoverable 
 ## Unknowns, risk, and rollback
 
 The user's exact trigger is not yet verified; this repairs the demonstrated input-loss path, not every possible native persistence fault. Risk is incorrectly treating a draft as saved; tests cover authority and races. Rollback reverts UI/tests only, with no migration.
+
+## Local validation evidence (2026-11-10)
+
+Node 22.23.1; isolated synthetic recipients only. No real send or installed settings write occurred.
+
+- Component suite before the fix: `# tests 33`, `# pass 22`, `# fail 11`.
+- Restored final component suite: `# tests 33`, `# pass 33`, `# fail 0`.
+- `npm run test:imessage`: native source-boundary tests `# pass 6`, `# fail 0`; TypeScript suites `# pass 133`, `# fail 0`.
+- `bash scripts/agentic-validate.sh --tests "test:imessage"`: `Agentic validation gate passed.` Includes lockfile, strict lint, all typechecks, secret scan, cross-agent configuration, docs/roadmap checks and production build. Existing dynamic-import build advisories remain; no check was weakened.
+- Clean-commit mutation of `src/components/UnifiedSettings.ts`: removing only retained-draft selection produced `# pass 23`, `# fail 10` (first failure: initial Save retains exact draft after invalid_recipient). Removing accessible formatting guidance produced `# pass 32`, `# fail 1` (recipient has accessible compact international phone or email guidance). Each applied diff was inspected, then exact source and clean Git status restored.
+- Source SHA-256 before and after both mutations: `821ac8996eee5231320b945fb3351343790a3053704c2a5c8457adc780223636`.
+
+Independent Sonnet review and hosted checks govern delivery. Packaged UI acceptance, native persistence verification and message delivery are not claimed by these isolated UI tests. The user's precise failure trigger remains unconfirmed. Release pauses remain unchanged.

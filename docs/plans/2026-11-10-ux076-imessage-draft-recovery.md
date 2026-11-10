@@ -10,9 +10,9 @@ Standard UI error recovery. Production scope is src/components/UnifiedSettings.t
 
 ## Discovery and design
 
-Repository analysis at main 5955a8d9860ad2f616008a3d738d423fbb8e5415 confirms finishImessage replaces the draft with native saved state even after invalid_recipient, persistence_failed, or unavailable. Native validation requires an exact compact international phone number or email; a formatting failure therefore erases the proposal.
+Repository analysis at main 5955a8d9860ad2f616008a3d738d423fbb8e5415 confirms finishImessage replaces the draft with native saved state even after invalid_recipient, persistence_failed, unavailable, or busy. Native validation requires an exact compact international phone number or email; a formatting failure therefore erases the proposal.
 
-Capture the submitted Save proposal. Retain it only for those three recoverable errors after the existing generation guard. Always refresh the authoritative saved state. Keep cancellation, stale consent, disable, Test, successful Save, and close/reopen behavior unchanged. Explain compact phone formatting and identify retained text as unsaved. No persistent draft storage or automatic normalization.
+Capture the submitted Save proposal. Retain it only for those four recoverable errors after the existing generation guard. Always refresh the authoritative saved state. Keep cancellation, stale consent, disable, Test, successful Save, and close/reopen behavior unchanged. Explain compact phone formatting and identify an unconfirmed Save without contradicting refreshed native authority. No persistent draft storage or automatic normalization.
 
 ## Acceptance criteria
 
@@ -37,11 +37,15 @@ The user's exact trigger is not yet verified; this repairs the demonstrated inpu
 
 Node 22.23.1; isolated synthetic recipients only. No real send or installed settings write occurred.
 
-- Component suite before the fix: `# tests 33`, `# pass 22`, `# fail 11`.
-- Restored final component suite: `# tests 33`, `# pass 33`, `# fail 0`.
-- `npm run test:imessage`: native source-boundary tests `# pass 6`, `# fail 0`; TypeScript suites `# pass 133`, `# fail 0`.
-- `bash scripts/agentic-validate.sh --tests "test:imessage"`: `Agentic validation gate passed.` Includes lockfile, strict lint, all typechecks, secret scan, cross-agent configuration, docs/roadmap checks and production build. Existing dynamic-import build advisories remain; no check was weakened.
-- Clean-commit mutation of `src/components/UnifiedSettings.ts`: removing only retained-draft selection produced `# pass 23`, `# fail 10` (first failure: initial Save retains exact draft after invalid_recipient). Removing accessible formatting guidance produced `# pass 32`, `# fail 1` (recipient has accessible compact international phone or email guidance). Each applied diff was inspected, then exact source and clean Git status restored.
-- Source SHA-256 before and after both mutations: `821ac8996eee5231320b945fb3351343790a3053704c2a5c8457adc780223636`.
+- Original component regression: `# tests 33`, `# pass 22`, `# fail 11`.
+- Independent Sonnet review found a retry edge case: native 30-second prompt cooldown returns busy, which originally discarded the draft. Repair cycle 1 adds busy retention and truthful uncertain-save feedback. Its red was `# tests 37`, `# pass 27`, `# fail 10`; green was `# tests 37`, `# pass 37`, `# fail 0`.
+- Updated `npm run test:imessage`: native source-boundary tests `# pass 6`, `# fail 0`; TypeScript suites `# pass 137`, `# fail 0`.
+- The first candidate passed `bash scripts/agentic-validate.sh --tests "test:imessage"`, reporting `Agentic validation gate passed.` The final corrected candidate must pass the same gate and fresh Sonnet review before delivery; exact-tip results are recorded in the PR. Existing dynamic-import build advisories remain; no check was weakened.
+- Four clean-commit mutations of `src/components/UnifiedSettings.ts` were actually applied and their diffs inspected:
+  - Remove retained-draft selection: `# pass 25`, `# fail 12`.
+  - Remove busy from retention: `# pass 35`, `# fail 2` (failure then busy retry tests).
+  - Restore inaccurate changes-not-saved feedback: `# pass 27`, `# fail 10` (including matching native authority).
+  - Remove accessible format guidance: `# pass 36`, `# fail 1`.
+- Each mutation restored exact source SHA-256 `8ea05400c6c8bd33414408f05fea234ce784e8fc12a3fced83453dc87835b7f1` and empty Git status. Baseline was `# pass 37`, `# fail 0`.
 
 Independent Sonnet review and hosted checks govern delivery. Packaged UI acceptance, native persistence verification and message delivery are not claimed by these isolated UI tests. The user's precise failure trigger remains unconfirmed. Release pauses remain unchanged.

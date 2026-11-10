@@ -1516,6 +1516,17 @@ State these as open questions rather than treating them as settled:
 
 ---
 
+### UX-076 — Preserve failed iMessage setup drafts
+
+Status: IN REVIEW
+Evidence: [Draft #1900](https://github.com/bradleybond512/crystal-ball/pull/1900); [bounded UI design](plans/2026-11-10-ux076-imessage-draft-recovery.md).
+
+Preserve a submitted recipient after invalid-format, unavailable, persistence, or busy-retry failures so it can be corrected and explicitly retried. Native validation, exact-recipient confirmation, storage authority, cancellation and immediate disable remain unchanged. Test must use only confirmed saved state. Do not persist drafts or send messages during verification.
+
+Acceptance: behavioral regression tests for initial/replacement drafts, retry and successful reopen, cancellation and stale completion, plus mutation evidence, aggregate checks and independent Sonnet review. Packaged acceptance is separate from isolated tests.
+
+---
+
 ## Progress Tracker
 
 Update the row in the same PR that does the work.
@@ -1624,6 +1635,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-073 | Scope cohesive module extractions | NOT STARTED | |
 | UX-074 | Release SBOMs | NOT STARTED — HIGH ASSURANCE | |
 | UX-075 | Remove unsupported lightning tooltip measurement | DONE | #1887; late claim after implementation `95d5f64167fb`. At the pre-merge source checkpoint, final exact-tip validation, independent review and hosted gates remain required before merge. No browser/native acceptance claimed. |
+| UX-076 | Preserve failed iMessage setup drafts | IN REVIEW | [Draft #1900](https://github.com/bradleybond512/crystal-ball/pull/1900); [bounded design](plans/2026-11-10-ux076-imessage-draft-recovery.md). UI-only retry recovery; native consent and sending authority unchanged. |
 
 ## Repair 12 — Diagnostics entry and shortcut ownership (2026-10-18)
 

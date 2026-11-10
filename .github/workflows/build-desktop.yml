@@ -53,8 +53,9 @@ permissions:
 jobs:
   release-context:
     # Explicit build-only dispatches remain available for candidate artifacts.
-    # Tags and publish recovery require separate maintainer release opt-in.
-    if: vars.DESKTOP_RELEASE_ENABLED == 'true' || (github.event_name == 'workflow_dispatch' && inputs.publish_mode == 'build')
+    # Source hard pause blocks tags/recovery regardless of the repository opt-in.
+    # Remove the literal false only in a separately approved release change.
+    if: (false && vars.DESKTOP_RELEASE_ENABLED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.publish_mode == 'build')
     runs-on: ubuntu-latest
     outputs:
       publish: ${{ steps.context.outputs.publish }}
@@ -458,7 +459,8 @@ jobs:
     needs:
       - release-context
       - build-tauri
-    if: vars.DESKTOP_RELEASE_ENABLED == 'true' && needs.release-context.outputs.publish == 'true'
+    # Independent source hard pause, even if an upstream publish output is true.
+    if: false && vars.DESKTOP_RELEASE_ENABLED == 'true' && needs.release-context.outputs.publish == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write

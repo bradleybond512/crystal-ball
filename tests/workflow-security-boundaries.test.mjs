@@ -41,7 +41,7 @@ test('every checkout discards its authentication while retaining narrowly scoped
   const wf = workflow('build-desktop.yml');
   assert.deepEqual(wf.jobs['publish-release'].permissions, { contents: 'write', 'id-token': 'write', attestations: 'write' });
   assert.deepEqual(wf.jobs['publish-release'].environment, { name: 'release' });
-  assert.equal(wf.jobs['publish-release'].if, "vars.DESKTOP_RELEASE_ENABLED == 'true' && needs.release-context.outputs.publish == 'true'");
+  assert.equal(wf.jobs['publish-release'].if, "false && vars.DESKTOP_RELEASE_ENABLED == 'true' && needs.release-context.outputs.publish == 'true'");
   assert.deepEqual(wf.jobs['publish-release'].needs, ['release-context', 'build-tauri']);
   assert.deepEqual(workflow('auto-tag.yml').permissions, { contents: 'write', actions: 'write' });
 });
@@ -88,33 +88,61 @@ test('dependency policy retains base-only trusted execution and read-only trigge
 });
 
 
-test('release entry points require opt-in before any privileged work', () => {
-  const autoTag = workflow('auto-tag.yml').jobs['auto-tag'];
-  const desktop = workflow('build-desktop.yml');
-  assert.equal(autoTag.if, "vars.DESKTOP_RELEASE_ENABLED == 'true'");
-  assert.equal(desktop.jobs['release-context'].if, "vars.DESKTOP_RELEASE_ENABLED == 'true' || (github.event_name == 'workflow_dispatch' && inputs.publish_mode == 'build')");
-  assert.equal(desktop.jobs['publish-release'].if, "vars.DESKTOP_RELEASE_ENABLED == 'true' && needs.release-context.outputs.publish == 'true'");
-  // Evaluate the actual restricted expressions across the trigger matrix. GitHub
-  // string comparisons are case-insensitive. An
-  // absent guard means true, exactly as GitHub would permit the whole job.
-  const evaluate = (expression, { enabled, event, mode, publish }) => {
-    const values = {
-      'vars.DESKTOP_RELEASE_ENABLED': JSON.stringify((enabled ?? '').toLowerCase()),
-      'github.event_name': JSON.stringify(event),
-      'inputs.publish_mode': JSON.stringify(mode),
-      'needs.release-context.outputs.publish': JSON.stringify(publish),
-    };
-    let resolved = expression ?? 'true';
-    for (const [key, value] of Object.entries(values)) resolved = resolved.replaceAll(key, value);
-    assert.match(resolved, /^[a-zA-Z0-9_\s'"=|&().-]+$/);
-    return runInNewContext(resolved.replaceAll('==', '==='), Object.create(null), { timeout: 100 });
+// These fixtures evaluate the actual guards, not a duplicated policy function.
+// This restricted subset has the same boolean and case-insensitive string
+// equality semantics as GitHub Actions. An absent guard permits the whole job.
+function evaluateReleaseGuard(expression, { enabled, event, mode, publish } = {}) {
+  const values = {
+    'vars.DESKTOP_RELEASE_ENABLED': enabled,
+    'github.event_name': event,
+    'inputs.publish_mode': mode,
+    'needs.release-context.outputs.publish': publish,
   };
-  for (const enabled of [undefined, '', 'false', 'TRUE', 'true']) {
-    for (const [event, mode, publishing] of [['push', '', true], ['workflow_dispatch', 'publish', true], ['workflow_dispatch', 'build', false]]) {
-      const context = { enabled, event, mode, publish: String(publishing) };
-      assert.equal(evaluate(autoTag.if, context), enabled?.toLowerCase() === 'true');
-      assert.equal(evaluate(desktop.jobs['release-context'].if, context), enabled?.toLowerCase() === 'true' || !publishing);
-      assert.equal(evaluate(desktop.jobs['publish-release'].if, context), enabled?.toLowerCase() === 'true' && publishing);
+  let resolved = expression ?? 'true';
+  for (const [key, value] of Object.entries(values)) {
+    resolved = resolved.replaceAll(key, JSON.stringify((value ?? '').toLowerCase()));
+  }
+  assert.match(resolved, /^[a-zA-Z0-9_\s'"=|&().-]+$/);
+  return runInNewContext(resolved.replaceAll('==', '==='), Object.create(null), { timeout: 100 });
+}
+
+const releaseOptIns = [undefined, '', 'false', 'FALSE', 'true', 'TRUE', 'TrUe', '1', 'unexpected'];
+
+test('release pause retains opt-in, explicit build mode and publisher output checks', () => {
+  const desktop = workflow('build-desktop.yml');
+  assert.equal(workflow('auto-tag.yml').jobs['auto-tag'].if, "false && vars.DESKTOP_RELEASE_ENABLED == 'true'");
+  assert.equal(desktop.jobs['release-context'].if, "(false && vars.DESKTOP_RELEASE_ENABLED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.publish_mode == 'build')");
+  assert.equal(desktop.jobs['publish-release'].if, "false && vars.DESKTOP_RELEASE_ENABLED == 'true' && needs.release-context.outputs.publish == 'true'");
+  assert.equal(desktop.on.workflow_dispatch.inputs.publish_mode.default, 'build');
+  assert.deepEqual(desktop.jobs['build-tauri'].needs, 'release-context');
+});
+
+test('auto-tag hard pause blocks tag creation and dispatch regardless of repository opt-in', () => {
+  const guard = workflow('auto-tag.yml').jobs['auto-tag'].if;
+  for (const enabled of releaseOptIns) {
+    assert.equal(evaluateReleaseGuard(guard, { enabled }), false, `opt-in=${enabled}`);
+  }
+});
+
+test('release-context hard pause permits only explicit build-only dispatches', () => {
+  const guard = workflow('build-desktop.yml').jobs['release-context'].if;
+  for (const enabled of releaseOptIns) {
+    for (const event of ['push', 'workflow_dispatch', 'pull_request']) {
+      for (const mode of [undefined, '', 'publish', 'PUBLISH', 'build', 'BUILD', 'unexpected']) {
+        const expected = event === 'workflow_dispatch' && mode?.toLowerCase() === 'build';
+        assert.equal(evaluateReleaseGuard(guard, { enabled, event, mode }), expected,
+          `opt-in=${enabled}, event=${event}, mode=${mode}`);
+      }
+    }
+  }
+});
+
+test('publisher hard pause rejects even a true publish output regardless of repository opt-in', () => {
+  const guard = workflow('build-desktop.yml').jobs['publish-release'].if;
+  for (const enabled of releaseOptIns) {
+    for (const publish of [undefined, '', 'false', 'true', 'TRUE', 'unexpected']) {
+      assert.equal(evaluateReleaseGuard(guard, { enabled, publish }), false,
+        `opt-in=${enabled}, publish=${publish}`);
     }
   }
 });

@@ -26,8 +26,9 @@ permissions:
 
 jobs:
   auto-tag:
-    # Unset/false is the source-preparation state: no tag or dispatch.
-    if: vars.DESKTOP_RELEASE_ENABLED == 'true'
+    # Source hard pause: no tag or dispatch even if the repository opt-in is true.
+    # Remove the literal false only in a separately approved release change.
+    if: false && vars.DESKTOP_RELEASE_ENABLED == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

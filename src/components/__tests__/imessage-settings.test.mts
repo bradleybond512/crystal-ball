@@ -31,6 +31,7 @@ let legacy: { enabled: boolean; recipient: string } | null = null;
 let pause: Record<string, unknown> = { paused: false };
 let refresh = async () => ({ ok: true });
 let configure = async (_recipient: string, _enabled: boolean): Promise<any> => ({ ok: true });
+let send = async (): Promise<any> => ({ ok: true });
 let disable = async (): Promise<any> => { state.enabled = false; return { ok: true }; };
 const bridge = {
   getImessageSettings: () => ({ ...state }), getLegacyImessageSuggestion: () => legacy,
@@ -39,7 +40,7 @@ const bridge = {
   configureImessage: (recipient: string, enabled: boolean) => { calls.push(['configure', recipient, enabled]); return configure(recipient, enabled); },
   disableImessage: () => { calls.push(['disable']); return disable(); },
   saveImessageThreshold: () => {},
-  sendImessage: async (...args: unknown[]) => { calls.push(['send', ...args]); return { ok: true }; },
+  sendImessage: async (...args: unknown[]) => { calls.push(['send', ...args]); return send(); },
 };
 const dependencies: Record<string, unknown> = {
   '@/services/i18n': i18n, '@/utils/sanitize': sanitize, '@/services/saved-places': savedPlaces,
@@ -86,7 +87,7 @@ function mount() {
 afterEach(() => {
   settings?.destroy(); document.body.replaceChildren(); calls.length = 0; legacy = null; pause = { paused: false };
   state = { enabled: true, recipient: '+15551234567', ready: true, migrationAvailable: false, threshold: 'critical' };
-  refresh = async () => ({ ok: true }); configure = async () => ({ ok: true });
+  refresh = async () => ({ ok: true }); configure = async () => ({ ok: true }); send = async () => ({ ok: true });
   disable = async () => { state.enabled = false; return { ok: true }; };
 });
 test('loading blocks Save/Test and supplies names and polite feedback', async () => {
@@ -210,4 +211,160 @@ test('the paused notice deep link focuses the iMessage recipient once loaded', a
   assert.ok(document.activeElement === el('us-imessage-recipient'), 'the recipient has focus');
   settings.close(); settings.open(); await flush();
   assert.ok(document.activeElement !== el('us-imessage-recipient'), 'a plain open does not jump to iMessage');
+});
+
+// UX-076: failed Save proposals are recoverable, never saved authority.
+for (const initial of [true, false]) {
+  for (const code of ['invalid_recipient', 'persistence_failed', 'unavailable']) {
+    test(`${initial ? 'initial' : 'replacement'} Save retains exact draft after ${code}`, async () => {
+      if (initial) state = { ...state, enabled: false, recipient: '' };
+      const savedRecipient = state.recipient;
+      configure = async () => ({ ok: false, code, reason: 'Save failed.' });
+      mount(); await flush();
+      const proposal = ' +1 (555) 000-0000 ';
+      change('us-imessage-recipient', proposal);
+      change('us-imessage-enabled', true);
+      el('us-imessage-save').click(); await flush();
+      assert.deepEqual(calls, [['configure', proposal, true]]);
+      assert.equal(el('us-imessage-recipient').value, proposal);
+      assert.equal(el('us-imessage-enabled').checked, true);
+      assert.equal(el('us-imessage-recipient').disabled, false);
+      assert.equal(el<HTMLButtonElement>('us-imessage-save').disabled, false);
+      assert.equal(el<HTMLButtonElement>('us-imessage-test').disabled, true);
+      assert.equal(el('us-imessage-saved').textContent, initial ? 'Sending is disabled.' : `Test destination: ${savedRecipient}`);
+      assert.match(el('us-imessage-status').textContent!, /Save failed.*not saved.*retained/i);
+      el('us-imessage-test').click(); await flush();
+      assert.equal(calls.length, 1, 'a retained draft cannot send a Test');
+    });
+  }
+}
+
+test('recovery refreshes saved authority even when failure changes native readiness', async () => {
+  configure = async () => {
+    state = { ...state, enabled: false, ready: false, recipient: '' };
+    return { ok: false, code: 'persistence_failed', reason: 'Save failed.' };
+  };
+  mount(); await flush();
+  change('us-imessage-recipient', '+15550000000'); el('us-imessage-save').click(); await flush();
+  assert.equal(el('us-imessage-recipient').value, '+15550000000');
+  assert.equal(el('us-imessage-saved').textContent, 'Sending is disabled.');
+  assert.equal(el<HTMLButtonElement>('us-imessage-test').disabled, true);
+});
+
+test('correction and repeated explicit retry succeed and survive close/reopen', async () => {
+  state = { ...state, enabled: false, recipient: '' };
+  let attempts = 0;
+  configure = async (recipient, enabled) => {
+    attempts++;
+    if (attempts < 3) return { ok: false, code: attempts === 1 ? 'invalid_recipient' : 'unavailable', reason: 'Save failed.' };
+    state = { ...state, enabled, recipient, ready: true };
+    return { ok: true };
+  };
+  mount(); await flush();
+  change('us-imessage-recipient', '+1 555 000 0000'); change('us-imessage-enabled', true);
+  el('us-imessage-save').click(); await flush();
+  assert.equal(el('us-imessage-recipient').value, '+1 555 000 0000');
+  change('us-imessage-recipient', '+15550000000');
+  el('us-imessage-save').click(); await flush();
+  assert.equal(el('us-imessage-recipient').value, '+15550000000');
+  assert.equal(el<HTMLButtonElement>('us-imessage-test').disabled, true);
+  assert.equal(attempts, 2, 'no automatic retry');
+  el('us-imessage-save').click(); await flush();
+  assert.equal(attempts, 3);
+  assert.equal(el('us-imessage-status').textContent, 'Settings saved.');
+  assert.equal(el<HTMLButtonElement>('us-imessage-test').disabled, false);
+  settings.close(); settings.open(); await flush();
+  assert.equal(el('us-imessage-recipient').value, '+15550000000');
+  assert.equal(el('us-imessage-enabled').checked, true);
+  assert.equal(el('us-imessage-saved').textContent, 'Test destination: +15550000000');
+  assert.equal(calls.filter(call => call[0] === 'send').length, 0);
+});
+
+for (const code of ['canceled', 'stale_consent', 'disabled', 'unknown']) {
+  test(`${code} Save failure reconciles rather than retaining a proposal`, async () => {
+    configure = async () => ({ ok: false, code, reason: 'Not saved.' });
+    mount(); await flush();
+    change('us-imessage-recipient', '+15550000000'); el('us-imessage-save').click(); await flush();
+    assert.equal(el('us-imessage-recipient').value, state.recipient);
+    assert.equal(el('us-imessage-status').textContent, 'Not saved.');
+    assert.equal(el<HTMLButtonElement>('us-imessage-test').disabled, false);
+  });
+}
+
+for (const ok of [true, false]) {
+  test(`disable ignores late Save ${ok ? 'success' : 'recoverable failure'}`, async () => {
+    let complete!: (result: unknown) => void;
+    configure = () => new Promise(resolve => { complete = resolve; });
+    mount(); await flush();
+    change('us-imessage-recipient', '+15550000000'); el('us-imessage-save').click();
+    change('us-imessage-enabled', false); await flush();
+    const disabledStatus = el('us-imessage-status').textContent;
+    complete(ok ? { ok: true } : { ok: false, code: 'unavailable', reason: 'Late failure.' }); await flush();
+    assert.equal(el('us-imessage-enabled').checked, false);
+    assert.equal(el('us-imessage-recipient').value, state.recipient);
+    assert.equal(el('us-imessage-status').textContent, disabledStatus);
+    assert.equal(el<HTMLButtonElement>('us-imessage-test').disabled, true);
+  });
+}
+
+test('close/reopen discards retained draft and ignores late recovery from previous opening', async () => {
+  configure = async () => ({ ok: false, code: 'invalid_recipient', reason: 'Save failed.' });
+  mount(); await flush();
+  change('us-imessage-recipient', '+1 555 000 0000'); el('us-imessage-save').click(); await flush();
+  assert.equal(el('us-imessage-recipient').value, '+1 555 000 0000');
+  let complete!: (result: unknown) => void;
+  configure = () => new Promise(resolve => { complete = resolve; });
+  el('us-imessage-save').click();
+  settings.close(); settings.open(); await flush();
+  const loadedStatus = el('us-imessage-status').textContent;
+  complete({ ok: false, code: 'persistence_failed', reason: 'Old failure.' }); await flush();
+  assert.equal(el('us-imessage-recipient').value, state.recipient);
+  assert.equal(el('us-imessage-status').textContent, loadedStatus);
+  assert.equal(el<HTMLButtonElement>('us-imessage-test').disabled, false);
+});
+
+test('recipient has accessible compact international phone or email guidance', async () => {
+  mount(); await flush();
+  const descriptions = el('us-imessage-recipient').getAttribute('aria-describedby')!.split(/\s+/);
+  assert.ok(descriptions.includes('us-imessage-format'));
+  assert.match(el('us-imessage-format').textContent!, /\+countrycode.*digits/i);
+  assert.match(el('us-imessage-format').textContent!, /no spaces.*punctuation/i);
+  assert.match(el('us-imessage-format').textContent!, /email/i);
+});
+
+
+test('a disabled Save proposal also retains its exact recipient after failure', async () => {
+  state.enabled = false;
+  configure = async () => ({ ok: false, code: 'unavailable', reason: 'Unavailable.' });
+  mount(); await flush();
+  change('us-imessage-recipient', 'draft@example.test'); el('us-imessage-save').click(); await flush();
+  assert.equal(el('us-imessage-recipient').value, 'draft@example.test');
+  assert.equal(el('us-imessage-enabled').checked, false);
+  assert.deepEqual(calls, [['configure', 'draft@example.test', false]]);
+  assert.equal(el<HTMLButtonElement>('us-imessage-test').disabled, true);
+});
+
+test('recoverable Test failure reconciles native state without retained-draft feedback', async () => {
+  send = async () => {
+    state = { ...state, enabled: false, ready: false, recipient: '' };
+    return { ok: false, code: 'unavailable', reason: 'Sending unavailable.' };
+  };
+  mount(); await flush(); el('us-imessage-test').click(); await flush();
+  assert.equal(el('us-imessage-recipient').value, '');
+  assert.equal(el('us-imessage-enabled').checked, false);
+  assert.equal(el('us-imessage-status').textContent, 'Sending unavailable.');
+  assert.equal(el<HTMLButtonElement>('us-imessage-test').disabled, true);
+});
+
+test('recoverable disable failure discards an unsaved recipient and reconciles native state', async () => {
+  disable = async () => {
+    state = { ...state, enabled: false, ready: false };
+    return { ok: false, code: 'persistence_failed', reason: 'Disable not persisted.' };
+  };
+  mount(); await flush(); change('us-imessage-recipient', 'draft@example.test');
+  change('us-imessage-enabled', false); await flush();
+  assert.equal(el('us-imessage-recipient').value, state.recipient);
+  assert.equal(el('us-imessage-enabled').checked, false);
+  assert.equal(el('us-imessage-status').textContent, 'Disable not persisted.');
+  assert.equal(el<HTMLButtonElement>('us-imessage-test').disabled, true);
 });

@@ -159,12 +159,14 @@ graph before accepting the proposed 19.3.1 update in
 [PR #1901](https://github.com/bradleybond512/crystal-ball/pull/1901).
 Runtime reachability and remediation remain open.
 
-## Bounded next step
+## Zizmor implementation
 
-The approved Zizmor slice verifies the 1.32.0 pin, downloaded artifacts and
-workflow coverage using isolated scanner installations. Keep the existing
-offline command, severity threshold and binary-only installation policy.
-The other updates remain held for separate technical review.
+The candidate pin matches #1897 and the twelve PyPI release hashes.
+Isolated scans of the 23 production workflows returned zero findings at
+the CI threshold with both versions. Version 1.32.0 also detected the
+wrapped-expression regression. [Validation evidence](UX-066-ZIZMOR-VALIDATION.md)
+records artifact inspection, controls, timing and remaining platform limits.
+The other dependency updates and the marketing security audit remain open.
 
 The documentation checkpoint passed all 135 roadmap tests and the full local
 validation gate. Both reviewers reported zero blockers on source

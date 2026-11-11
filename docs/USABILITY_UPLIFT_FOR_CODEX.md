@@ -1333,8 +1333,10 @@ snapshot. At draft publication, a tenth update (#1901) and two critical alerts
 covered the marketing site's react-server-dom-webpack 19.2.8 dependency.
 Artifact review, compatibility checks and alert remediation remain open.
 
-The approved local Zizmor 1.32.0 work includes isolated artifact and
-workflow-coverage tests. Each dependency update requires technical review.
+The Zizmor 1.32.0 candidate covered all 23 production workflows and detected
+the wrapped-expression regression in isolated testing.
+[Scanner validation](validation/UX-066-ZIZMOR-VALIDATION.md) records the
+artifact hashes, controls and platform limits. Each dependency update requires technical review.
 Diagnose failed checks and rerun them on the reconciled candidate.
 
 - Build a per-PR assessment of necessity, maintenance, license, release age,
@@ -1621,7 +1623,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-062 | Label forecasts that trail their baseline | NOT STARTED — HIGH ASSURANCE | |
 | UX-063 | Evaluate bounded CI Sonnet review | NOT STARTED — HIGH ASSURANCE | |
 | UX-065 | Round 4 checkpoint and remaining security drafts | NOT STARTED | |
-| UX-066 | Dependabot backlog in reviewed batches | IN REVIEW | [PR #1902](https://github.com/bradleybond512/crystal-ball/pull/1902), [assessment](validation/UX-066-DEPENDENCY-ASSESSMENT.md). Local Zizmor verification approved. |
+| UX-066 | Dependabot backlog in reviewed batches | IN REVIEW | [PR #1902](https://github.com/bradleybond512/crystal-ball/pull/1902), [assessment](validation/UX-066-DEPENDENCY-ASSESSMENT.md). [Zizmor 1.32.0 verification](validation/UX-066-ZIZMOR-VALIDATION.md) complete locally. |
 | UX-067 | Green release-integrity signal on main | WAITING | |
 | UX-068 | Inventory branches and worktrees before cleanup | NOT STARTED — HIGH ASSURANCE | |
 | UX-069 | Auto-PR workflow warning | NOT STARTED | |

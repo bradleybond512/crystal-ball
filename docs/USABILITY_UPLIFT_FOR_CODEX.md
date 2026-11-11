@@ -1326,19 +1326,16 @@ stronger repairs. Replaying their old ancestry can overwrite those fixes.
 Priority: S
 Dependencies: none
 
-The November 10 snapshot has nine open dependency PRs; the November 7 count
-of 13 is historical. The [local assessment checkpoint](validation/UX-066-DEPENDENCY-ASSESSMENT.md)
-records their exact heads, metadata, observed failures and explicit holds against
-main `5955a8d9860ad2f616008a3d738d423fbb8e5415`. It is unpublished, not a
-public claim PR or dependency approval. All nine remain held. Five dependency
-alerts have applicable versions in current-main locks; 94 code-scanning alerts
-remain unresolved. Alert triage and dependency delivery are incomplete.
+[Draft #1902](https://github.com/bradleybond512/crystal-ball/pull/1902) claims
+UX-066. The [November 10 assessment](validation/UX-066-DEPENDENCY-ASSESSMENT.md)
+records nine dependency PRs and five open dependency alerts at its initial
+snapshot. At draft publication, a tenth update (#1901) and two critical alerts
+covered the marketing site's react-server-dom-webpack 19.2.8 dependency.
+Artifact review, compatibility checks and alert remediation remain open.
 
-A green bot review gate alone is not a genuine agent review. Old failed checks
-must be diagnosed and rerun after reconciliation rather than waived. The first
-proposed bounded candidate is #1897 Zizmor pin/hash review, subject to separate
-High Assurance design approval before implementation. No dependency, workflow,
-label or delivery state changes in this checkpoint; all delivery holds remain.
+The approved local Zizmor 1.32.0 work includes isolated artifact and
+workflow-coverage tests. Each dependency update requires technical review.
+Diagnose failed checks and rerun them on the reconciled candidate.
 
 - Build a per-PR assessment of necessity, maintenance, license, release age,
   official integrity/provenance, install scripts/bin changes, compatibility,
@@ -1624,7 +1621,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-062 | Label forecasts that trail their baseline | NOT STARTED — HIGH ASSURANCE | |
 | UX-063 | Evaluate bounded CI Sonnet review | NOT STARTED — HIGH ASSURANCE | |
 | UX-065 | Round 4 checkpoint and remaining security drafts | NOT STARTED | |
-| UX-066 | Dependabot backlog in reviewed batches | NOT STARTED | [November 10 assessment](validation/UX-066-DEPENDENCY-ASSESSMENT.md) prepared locally; draft claim awaiting publication approval; nine held, alert triage open |
+| UX-066 | Dependabot backlog in reviewed batches | IN REVIEW | [PR #1902](https://github.com/bradleybond512/crystal-ball/pull/1902), [assessment](validation/UX-066-DEPENDENCY-ASSESSMENT.md). Local Zizmor verification approved. |
 | UX-067 | Green release-integrity signal on main | WAITING | |
 | UX-068 | Inventory branches and worktrees before cleanup | NOT STARTED — HIGH ASSURANCE | |
 | UX-069 | Auto-PR workflow warning | NOT STARTED | |

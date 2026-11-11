@@ -1,16 +1,13 @@
 # UX-066 dependency assessment — November 10, 2026
 
-Status: **Prepared locally, unpublished; not a dependency approval.**
+Status: **IN REVIEW** in [draft #1902](https://github.com/bradleybond512/crystal-ball/pull/1902).
 Evaluated main: `5955a8d9860ad2f616008a3d738d423fbb8e5415`.
 Inventory snapshot: `2026-11-10T16:14:13.254499+00:00`; 18 open main PRs,
 including nine dependency PRs. The November 7 count of 13 is historical.
 
-This Standard documentation assessment assigns explicit holds and a bounded next
-candidate. It changes no dependency, executable, workflow, label or PR state.
-There is no public UX-066 claim PR yet. UX-062 remains open. Merge, auto-merge,
-release, tag, build-dispatch, deployment and installation holds remain in force.
-Any dependency, CI or native implementation requires its own High Assurance
-approval after design. No approval follows from this inventory.
+The draft records this dated assessment and claims UX-066. Local implementation
+approval covers Zizmor 1.32.0 and isolated scanner testing. UX-062 baseline
+comparisons and the delivery holds remain open.
 
 ## Evidence and limits
 
@@ -151,20 +148,25 @@ reachable inputs and existing repairs, then rerun/reconcile analysis before
 claiming fixed, false positive or currently exploitable. All 94 remain unresolved
 in this checkpoint. Alert triage is incomplete, so UX-066 is not DONE.
 
-## Bounded next step and delivery boundary
+## Publication update
 
-First proposed candidate: **#1897 Zizmor pin/hash review**, because the repository
-patch is confined to one requirements file. It is still executable security
-tooling, not a low-risk automatic approval. Prepare its exact artifact/hash,
-license, entry-point, provenance and workflow-rule assessment; obtain separate
-High Assurance approval before implementing a replacement/reconciliation.
-Preserve all install flags and enforcement. No other dependency is bundled into
-that candidate. All remaining candidates retain the holds above.
+At draft creation on November 10 (US Central), GitHub listed ten open dependency
+updates and seven open Dependabot alerts. Two new critical alerts (#204 and
+alert #205) cover one advisory in the marketing site's development manifest and
+lockfile. Both specify react-server-dom-webpack 19.2.8. The advisory lists
+19.2.9 as the first patched release. Assess the marketing build and dependency
+graph before accepting the proposed 19.3.1 update in
+[PR #1901](https://github.com/bradleybond512/crystal-ball/pull/1901).
+Runtime reachability and remediation remain open.
 
-This checkpoint has no runtime behavior change, so behavior mutation proof is
-not applicable. Documentation/type/gate results and independent review must be
-recorded from actual execution before sign-off; none of the historical hosted
-runs above substitutes for checkpoint validation. Rollback of this unpublished
-checkpoint is confined to its two documentation files. A future dependency
-rollback must restore its reviewed prior graph/pins through the normal PR path,
-with no implicit release or installation authorization.
+## Bounded next step
+
+The approved Zizmor slice verifies the 1.32.0 pin, downloaded artifacts and
+workflow coverage using isolated scanner installations. Keep the existing
+offline command, severity threshold and binary-only installation policy.
+The other updates remain held for separate technical review.
+
+The documentation checkpoint passed all 135 roadmap tests and the full local
+validation gate. Both reviewers reported zero blockers on source
+`705c131490568b68a73fae4cf54418c2c0d6b601`. Revert the two documentation
+files to roll back the checkpoint.

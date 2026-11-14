@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFileSync, mkdtempSync, writeFileSync, mkdirSync, rmSync, renameSync } from 'node:fs';
+import { readFileSync, mkdtempSync, writeFileSync, mkdirSync, rmSync, renameSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -118,6 +118,56 @@ test('the stage process has bounded output, timeout and clean credential-free en
   assert.equal((await run(['-e', 'process.stdout.write("x".repeat(2048))'])).status, 'failed');
   assert.equal((await run(['-e', 'process.exit(3)'])).status, 'failed');
   assert.equal((await run(['-e', 'console.log("ok")'])).status, 'passed');
+});
+
+test('real npm starts with isolated distinct user and global configuration', async t => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'dependency-npm-config-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const metadata = { scripts: JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).scripts };
+  const env = { ...runner.isolatedEnvironment(dir, { PATH: process.env.PATH, NPM_TOKEN: 'fixture-token', NPM_CONFIG_USERCONFIG: '/untrusted/user.rc', NPM_CONFIG_GLOBALCONFIG: '/untrusted/global.rc' }), NPM_CONFIG_OFFLINE: 'true', NPM_CONFIG_UPDATE_NOTIFIER: 'false' };
+  const version = runner.graphStages('root', root, metadata).find(stage => stage.id === 'npm-version');
+  const result = await runner.executeStage(version, { cwd: dir, env });
+  assert.equal(result.status, 'passed', result.stderr);
+  assert.match(result.stdout.trim(), /^\d+\.\d+\.\d+$/);
+  t.diagnostic(`isolated npm --version: ${result.stdout.trim()}`);
+  assert.notEqual(realpathSync(env.NPM_CONFIG_USERCONFIG), realpathSync(env.NPM_CONFIG_GLOBALCONFIG));
+  for (const key of ['NPM_CONFIG_USERCONFIG', 'NPM_CONFIG_GLOBALCONFIG']) {
+    assert.ok(env[key].startsWith(dir + path.sep));
+    assert.equal(readFileSync(env[key], 'utf8'), '');
+  }
+  assert.equal(env.NPM_TOKEN, undefined);
+});
+
+test('install arguments preserve the isolated npm config instead of overriding it', async t => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'dependency-npm-install-config-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const metadata = { scripts: JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).scripts };
+  const env = { ...runner.isolatedEnvironment(dir), NPM_CONFIG_OFFLINE: 'true', NPM_CONFIG_UPDATE_NOTIFIER: 'false' };
+  const install = runner.graphStages('root', root, metadata).find(stage => stage.args.includes('ci'));
+  const probe = { ...install, args: install.args.map(arg => arg === 'ci' ? '--version' : arg), kind: 'probe', timeoutMs: 10_000 };
+  const result = await runner.executeStage(probe, { cwd: dir, env });
+  assert.equal(result.status, 'passed', result.stderr);
+  assert.match(result.stdout.trim(), /^\d+\.\d+\.\d+$/);
+  for (const graph of selector.DEPENDENCY_GRAPHS) {
+    for (const stage of runner.graphStages(graph, root, metadata).filter(item => item.args.includes('ci'))) {
+      assert.ok(stage.args.includes('--ignore-scripts'));
+      assert.ok(stage.args.every(arg => !/^--(?:userconfig|globalconfig)(?:=|$)/.test(arg)), stage.id);
+    }
+  }
+});
+
+test('the real empty-fixture lifecycle probe runs only its explicit target', t => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'dependency-npm-lifecycle-test-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const result = spawnSync(process.execPath, [path.join(root, 'scripts/dependency-test-runner.mjs'), 'lifecycle-probe'], {
+    cwd: dir, env: { ...runner.isolatedEnvironment(dir), NPM_CONFIG_USERCONFIG: '/dev/null', NPM_CONFIG_GLOBALCONFIG: '/dev/null', NPM_CONFIG_OFFLINE: 'true', NPM_CONFIG_UPDATE_NOTIFIER: 'false' }, encoding: 'utf8', timeout: 20_000,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const receipt = JSON.parse(result.stdout);
+  assert.equal(receipt.lifecycleProbe, 'only explicit target executed');
+  assert.match(receipt.npm, /^\d+\.\d+\.\d+$/);
+  assert.match(receipt.nodeGyp, /^\d+\.\d+\.\d+$/);
+  t.diagnostic(JSON.stringify(receipt));
 });
 
 test('graph execution refuses a local or unclassified host before dependency setup', () => {

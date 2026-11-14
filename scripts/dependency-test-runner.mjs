@@ -45,7 +45,7 @@ function stage(id, bin, args, kind = 'setup', extra = {}) {
 
 export function graphStages(graph, repo, metadata) {
   check(DEPENDENCY_GRAPHS.includes(graph), 'unknown dependency graph');
-  const install = dir => stage(`install-${dir === '.' ? 'root' : Object.keys(projects).find(id => projects[id] === dir)}`, npm, ['--prefix', dir, 'ci', '--ignore-scripts', '--no-audit', '--no-fund', '--userconfig=/dev/null', '--globalconfig=/dev/null']);
+  const install = dir => stage(`install-${dir === '.' ? 'root' : Object.keys(projects).find(id => projects[id] === dir)}`, npm, ['--prefix', dir, 'ci', '--ignore-scripts', '--no-audit', '--no-fund']);
   const stages = [stage('npm-version', npm, ['--version'], 'probe', { timeoutMs: 30_000 }), install('.')];
   if (projects[graph] !== '.') stages.push(install(projects[graph]));
   if (['root', 'codex'].includes(graph)) stages.push(install(projects.mcp));
@@ -123,7 +123,11 @@ export function isolatedEnvironment(dir, inherited = process.env) {
     env[key] = path.join(dir, folder);
     mkdirSync(env[key], { recursive: true });
   }
-  return { ...env, NO_COLOR: '1', NPM_CONFIG_USERCONFIG: '/dev/null', NPM_CONFIG_GLOBALCONFIG: '/dev/null' };
+  for (const [key, file] of Object.entries({ NPM_CONFIG_USERCONFIG: 'npm-user.rc', NPM_CONFIG_GLOBALCONFIG: 'npm-global.rc' })) {
+    env[key] = path.join(dir, file);
+    writeFileSync(env[key], '', { mode: 0o600 });
+  }
+  return { ...env, NO_COLOR: '1' };
 }
 
 export async function executeStage(stage, { cwd, env }) {
@@ -272,9 +276,10 @@ function lifecycleProbe() {
       return `${quote(process.execPath)} ${word}.cjs`;
     };
     writeJson(path.join(dir, 'package.json'), { private: true, scripts: { preinstall: command('pre'), install: command('target'), postinstall: command('post') } });
-    const result = spawnSync(npm, ['--ignore-scripts', 'run', 'install'], { cwd: dir, env: isolatedEnvironment(dir), encoding: 'utf8', timeout: 10_000, maxBuffer: 64 * 1024 });
+    const env = { ...isolatedEnvironment(dir), NPM_CONFIG_OFFLINE: 'true', NPM_CONFIG_UPDATE_NOTIFIER: 'false' };
+    const result = spawnSync(npm, ['--ignore-scripts', 'run', 'install'], { cwd: dir, env, encoding: 'utf8', timeout: 10_000, maxBuffer: 64 * 1024 });
     check(result.status === 0 && readFileSync(marker, 'utf8') === 'target', 'explicit npm target lifecycle isolation failed');
-    const npmVersion = execFileSync(npm, ['--version'], { encoding: 'utf8', timeout: 10_000 }).trim();
+    const npmVersion = execFileSync(npm, ['--version'], { env, encoding: 'utf8', timeout: 10_000 }).trim();
     const nodeGypVersion = JSON.parse(readFileSync(path.resolve(realpathSync(npm), '../../node_modules/node-gyp/package.json'), 'utf8')).version;
     console.log(JSON.stringify({ node: process.version, npm: npmVersion, nodeGyp: nodeGypVersion, lifecycleProbe: 'only explicit target executed' }));
   } finally { rmSync(dir, { recursive: true, force: true }); }

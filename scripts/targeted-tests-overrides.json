@@ -1,4 +1,9 @@
 {
+  "scripts/native-test-driver.mjs": ["test:native-ci-driver", "test:native-ci-workflow"],
+  "scripts/native-test-inventory.json": ["test:native-ci-driver", "test:native-ci-workflow"],
+  ".github/workflows/native-tests.yml": ["test:native-ci-driver", "test:native-ci-workflow", "test:workflow-security"],
+  "tests/native-ci-driver.test.mjs": ["test:native-ci-driver"],
+  "tests/native-ci-workflow.test.mjs": ["test:native-ci-workflow"],
   "src/services/foreign-mil-news.ts": ["test:foreign-mil-angle"],
   "src/services/__tests__/fixtures/foreign-mil-original.ts.txt": ["test:foreign-mil-angle"],
   "src/services/spc-mesoscale.ts": ["test:spc-angle"],

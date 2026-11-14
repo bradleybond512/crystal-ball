@@ -1630,7 +1630,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-068 | Inventory branches and worktrees before cleanup | NOT STARTED — HIGH ASSURANCE | |
 | UX-069 | Auto-PR workflow warning | NOT STARTED | |
 | UX-070 | Design dependency and scheduled test coverage | NOT STARTED — HIGH ASSURANCE | |
-| UX-071 | Design safe Rust tests and Clippy CI | NOT STARTED — HIGH ASSURANCE | |
+| UX-071 | Design safe Rust tests and Clippy CI | IN PROGRESS — HIGH ASSURANCE | [Draft #1904](https://github.com/bradleybond512/crystal-ball/pull/1904); [approved design](plans/2026-11-14-ux071-native-test-gates.md). Actual Linux/macOS execution and strict Clippy acceptance remain open. |
 | UX-072 | Local user-data backup and restore | NOT STARTED — HIGH ASSURANCE | |
 | UX-073 | Scope cohesive module extractions | NOT STARTED | |
 | UX-074 | Release SBOMs | NOT STARTED — HIGH ASSURANCE | |

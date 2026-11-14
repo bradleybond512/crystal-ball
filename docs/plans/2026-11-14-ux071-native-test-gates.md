@@ -1,7 +1,8 @@
 # UX-071 — Safe Rust tests and strict Clippy checks
 
 Status: design, draft claim and local implementation approved November 14;
-claim publication and implementation pending.
+[draft #1904](https://github.com/bradleybond512/crystal-ball/pull/1904) published;
+local implementation in progress, hosted acceptance pending.
 Base: `5955a8d9860ad2f616008a3d738d423fbb8e5415`.
 
 ## Objective and boundaries

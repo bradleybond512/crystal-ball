@@ -1,7 +1,8 @@
 # UX-070 — Dependency test coverage and bounded weekly runs
 
 Status: design, draft claim and local implementation approved November 13;
-claim publication and implementation pending.
+[draft #1903](https://github.com/bradleybond512/crystal-ball/pull/1903) published;
+local implementation in progress. Hosted acceptance remains open.
 Base: `5955a8d9860ad2f616008a3d738d423fbb8e5415`.
 
 ## Objective and evidence

@@ -1,0 +1,507 @@
+{
+  "schemaVersion": 1,
+  "baseSha": "5955a8d9860ad2f616008a3d738d423fbb8e5415",
+  "counts": {
+    "rootScripts": 327,
+    "rootTestColonScripts": 239,
+    "rootOtherTestAliases": [
+      "mcp:test"
+    ],
+    "allPackageScriptEntries": 347,
+    "allPackageTestCommandEntries": 242,
+    "trackedJsTsTestFiles": 1514,
+    "testFilesByTopDirectory": {
+      "api": 51,
+      "e2e": 22,
+      "marketing-site": 7,
+      "scripts": 13,
+      "server": 1,
+      "src": 893,
+      "src-tauri": 83,
+      "tests": 412,
+      "tools": 32
+    },
+    "rustLiteralTestDeclarations": 234,
+    "rustFilesWithLiteralTests": 12,
+    "browserSpecFiles": 22,
+    "actualExecutedCases": null,
+    "testsExecutedByInventory": 0
+  },
+  "countCaveats": [
+    "Commands overlap, aliases recurse, and glob entries cover many files; never sum command counts into test counts.",
+    "Test file discovery is tracked .test/.spec JS/TS extensions only; bespoke harnesses, Rust contracts and benches are separately listed.",
+    "Rust #[test] source declarations are duplicated through #[path] module inclusion and platform cfg; not runtime cases.",
+    "No --list was run because collection/import may execute project code.",
+    "Direct lexical files are a static token mapping, not the trusted selector index or a complete transitive execution graph."
+  ],
+  "packages": [
+    {
+      "path": ".github/tools/codex/package.json",
+      "sha256": "2fe37b7d8544f8f47a715c80683a27d4d56680aadd87a831d08ee45054131f05",
+      "engines": {},
+      "scriptCount": 0,
+      "testCommandEntryCount": 0
+    },
+    {
+      "path": "marketing-site/package.json",
+      "sha256": "a946bdb4acdd250a5f770cfab1a267cf851cc1dbdc2c16ff0bf66ac2b3fbcafa",
+      "engines": {
+        "node": ">=22.13.0"
+      },
+      "scriptCount": 7,
+      "testCommandEntryCount": 1
+    },
+    {
+      "path": "marketing-site/vendor/braces/package.json",
+      "sha256": "79559da67f170860b03e66f00409b6e5e8df9b06fce9fb40281544ce1249aaf3",
+      "engines": {
+        "node": ">=8"
+      },
+      "scriptCount": 0,
+      "testCommandEntryCount": 0
+    },
+    {
+      "path": "package.json",
+      "sha256": "3cc0832c4b7ebf860e36c5105c4afbd99dcfdc1fd96d52d23ece8fbeb3e57c3a",
+      "engines": {
+        "node": ">=22.0.0 <23.0.0"
+      },
+      "scriptCount": 327,
+      "testCommandEntryCount": 240
+    },
+    {
+      "path": "scripts/package.json",
+      "sha256": "ced4f5b57c2c6b4dd5e82f41b2fc78742e984e067cdfaa196f5366204ddf9e37",
+      "engines": {
+        "node": ">=18"
+      },
+      "scriptCount": 2,
+      "testCommandEntryCount": 0
+    },
+    {
+      "path": "src-tauri/sidecar/package.json",
+      "sha256": "0dac6fcef8b46e90c3305b8e9c39a3b962e6af515a0a165cd3bf41d6188f19f3",
+      "engines": {},
+      "scriptCount": 0,
+      "testCommandEntryCount": 0
+    },
+    {
+      "path": "tools/cb-control/package.json",
+      "sha256": "c844e7980c416312654cd16d6e0c24f917c461f7d5af350d8c9aa20c5545f034",
+      "engines": {
+        "node": ">=20"
+      },
+      "scriptCount": 7,
+      "testCommandEntryCount": 0
+    },
+    {
+      "path": "tools/mcp-server/package.json",
+      "sha256": "8115ced51c299eb6f6474f594e9ff0aebe6ac03f72ee7f667fc413db3b17b302",
+      "engines": {
+        "node": ">=20"
+      },
+      "scriptCount": 4,
+      "testCommandEntryCount": 1
+    },
+    {
+      "path": "vendor/texture-compressor-safe/package.json",
+      "sha256": "fb4ed6dfeb3135d577aa323650e62636f17743b69d091794d5122604f1d208da",
+      "engines": {},
+      "scriptCount": 0,
+      "testCommandEntryCount": 0
+    }
+  ],
+  "environments": [
+    {
+      "id": "node-fixtures",
+      "platform": "Linux ubuntu-24.04 or macOS POSIX",
+      "dependencies": [
+        "Node 22 (root >=22 <23)",
+        "root locked npm dependencies",
+        "tsx",
+        "typescript"
+      ],
+      "setup": [
+        "npm ci --ignore-scripts",
+        "npm --prefix tools/mcp-server ci --ignore-scripts"
+      ],
+      "notes": "Root plain npm ci runs prepare: writes Git core.hooksPath and may install MCP dependencies. Install in disposable checkout; ignore-scripts changes dependency preparation and must be validated against reviewed install policy, not silently substituted in CI."
+    },
+    {
+      "id": "mcp-sidecar",
+      "platform": "POSIX only (existing process-group isolation rejects Windows)",
+      "dependencies": [
+        "root deps",
+        "tools/mcp-server locked deps",
+        "real npm CLI adjacent to selected Node"
+      ],
+      "commands": [
+        "npm run test:sidecar",
+        "npm run test:sidecar-ci",
+        "npm run test:mcp-untrusted",
+        "npm run test:mcp-companion"
+      ],
+      "notes": "Install-smoke additionally needs locally cached locked tarballs; absent cache is explicit setup failure, not skipped success."
+    },
+    {
+      "id": "browser",
+      "platform": "ubuntu-24.04 (Playwright dependency map)",
+      "dependencies": [
+        "root deps",
+        "Chromium",
+        "Linux browser shared libraries"
+      ],
+      "setup": [
+        "npx playwright install --with-deps chromium"
+      ],
+      "commands": [
+        "npm run test:e2e:map:ci",
+        "npm run test:e2e:interactions:ci",
+        "npm run test:summary-strip-layout",
+        "npx playwright test e2e/variant-identity.spec.ts",
+        "npx playwright test e2e/a11y-baseline.spec.ts"
+      ],
+      "notes": "VITE_VARIANT full/tech/finance map; full/tech/finance/happy identity. E2E_PORT defaults4173, workers1, timeout90s, retries0, Vite reuseExistingServer=false. One browser worker per checkout/port/output; separate artifacts."
+    },
+    {
+      "id": "native-fixture",
+      "platform": "disposable Linux ubuntu-24.04; macOS framework-specific followup",
+      "dependencies": [
+        "Rust1.93.1 matching targeted workflow",
+        "root deps/esbuild",
+        "libwebkit2gtk-4.1-dev",
+        "libappindicator3-dev",
+        "librsvg2-dev"
+      ],
+      "commands": [
+        "npm run test:imessage-native",
+        "npm run test:vault-writer",
+        "npm run test:native-responsiveness",
+        "npm run test:sidecar-supervisor",
+        "npm run test:ux010-native"
+      ],
+      "notes": "Existing cargo wrappers omit --locked. No explicit workflow cargo test/clippy. Do not add jobs or change wrappers before approved UX070/UX071 design."
+    },
+    {
+      "id": "marketing",
+      "platform": "Node >=22.13 on isolated Linux checkout",
+      "dependencies": [
+        "root deps for typescript/catalog imports",
+        "marketing-site locked deps",
+        "vinext / vite build stack"
+      ],
+      "setup": [
+        "npm --prefix marketing-site ci --ignore-scripts"
+      ],
+      "commands": [
+        "npm run test:marketing"
+      ],
+      "notes": "Build generator makes external read requests and writes generated files; retain generated inputs/sourceSha and dist logs."
+    }
+  ],
+  "remainingCoverage": [
+    {
+      "scope": [
+        "backup-keys",
+        "restore-keys",
+        "main-sync:run",
+        "main-sync:setup",
+        "desktop:*",
+        "release:prepare",
+        "mcp:install-local",
+        "checkup:schedule",
+        "tools/cb-control install-* / setup-https",
+        "scripts telegram:session"
+      ],
+      "reason": "Actual credential, install, signing, LaunchAgent, host configuration, auth or app-state entry points; not test fixtures."
+    },
+    {
+      "scope": [
+        "test:feeds",
+        "smoke",
+        "checkup",
+        "doctor",
+        "doctor:claude-auth"
+      ],
+      "reason": "Live provider/network or real local service/config/auth diagnostics; use a separately authorized live probe lane, never call fixture coverage."
+    },
+    {
+      "scope": [
+        "test:marketing",
+        "marketing-site test",
+        "marketing-site typecheck"
+      ],
+      "reason": "Generate runs before build/typecheck; generator fetches GitHub release/manifest and writes data/generated.json + sitemap. Requires disposable checkout and explicit network-read policy."
+    },
+    {
+      "scope": [
+        "test:imessage-native",
+        "test:vault-writer",
+        "test:native-responsiveness",
+        "test:sidecar-supervisor",
+        "test:ux010-native",
+        "test:ux010"
+      ],
+      "reason": "Fixture contracts are safe subjects but npm wrappers regenerate shared sidecar bundle; Cargo build.rs prunes repository dist. Separate serial disposable native checkout; no shared-tree broad sweep."
+    },
+    {
+      "scope": [
+        "test:data",
+        "test:renderer",
+        "test:coverage",
+        "mcp:test",
+        "test:diagnostics",
+        "all remaining unreviewed test scripts"
+      ],
+      "reason": "Transitive runtime effects not exhaustively audited. Globs/aliases can include native/build/live-client imports; do not infer safety from name or Node runner shape. Pending isolation audit, not excluded for runtime cost."
+    },
+    {
+      "scope": [
+        "test:e2e:*",
+        "*-browser",
+        "test:warning-stack-layout",
+        "test:summary-strip-layout"
+      ],
+      "reason": "Browser lane needs Chromium/Vite/ports/profile/output isolation; whole-app fixtures may contact providers. Snapshot-update aliases intentionally write golden files and must not run in verification. runtime-fetch known failing comment is not permission to weaken checks."
+    },
+    {
+      "scope": [
+        "test-linux-app workflow",
+        "cargo test without explicit targets"
+      ],
+      "reason": "Real native application startup/default test targets have different side effects and platform dependencies; do not infer Keychain isolation from fake HOME. Review explicit targets and native runner separately."
+    }
+  ],
+  "historicalHostedSample": {
+    "pr": 1902,
+    "headSha": "4d1158146f46666165d45c0bd1e2c5bad3e1c14f",
+    "date": "2026-11-11",
+    "limitation": "Specific jobs, not a complete sweep. Smoke failed during renderer; later main-job stages did not execute. Targeted selection only covered the Zizmor diff.",
+    "jobs": [
+      {
+        "workflow": "Auto-PR for AI agent branches",
+        "run": 42942834109,
+        "job": "Create or update PR",
+        "conclusion": "success",
+        "seconds": 10.0
+      },
+      {
+        "workflow": "Auto-PR for AI agent branches",
+        "run": 42942834109,
+        "job": "Auto-merge when checks pass",
+        "conclusion": "success",
+        "seconds": 10.0
+      },
+      {
+        "workflow": "Dependency change gate",
+        "run": 42942931485,
+        "job": "dependency-change-gate",
+        "conclusion": "success",
+        "seconds": 10.0
+      },
+      {
+        "workflow": "Security Audit",
+        "run": 42942839280,
+        "job": "sidecar-http-guardrail",
+        "conclusion": "success",
+        "seconds": 7.0
+      },
+      {
+        "workflow": "Security Audit",
+        "run": 42942839280,
+        "job": "cargo-deny",
+        "conclusion": "success",
+        "seconds": 17.0
+      },
+      {
+        "workflow": "Security Audit",
+        "run": 42942839280,
+        "job": "npm-audit",
+        "conclusion": "failure",
+        "seconds": 98.0
+      },
+      {
+        "workflow": "Security Audit",
+        "run": 42942839280,
+        "job": "cargo-audit",
+        "conclusion": "success",
+        "seconds": 196.0
+      },
+      {
+        "workflow": "Accessibility",
+        "run": 42942839316,
+        "job": "axe",
+        "conclusion": "success",
+        "seconds": 342.0
+      },
+      {
+        "workflow": "Smoke",
+        "run": 42942839353,
+        "job": "smoke",
+        "conclusion": "failure",
+        "seconds": 269.0
+      },
+      {
+        "workflow": "Smoke",
+        "run": 42942839353,
+        "job": "interaction-e2e",
+        "conclusion": "success",
+        "seconds": 320.0
+      },
+      {
+        "workflow": "Smoke",
+        "run": 42942839353,
+        "job": "map-e2e (full)",
+        "conclusion": "success",
+        "seconds": 256.0
+      },
+      {
+        "workflow": "Smoke",
+        "run": 42942839353,
+        "job": "map-e2e (finance)",
+        "conclusion": "success",
+        "seconds": 247.0
+      },
+      {
+        "workflow": "Smoke",
+        "run": 42942839353,
+        "job": "map-e2e (tech)",
+        "conclusion": "success",
+        "seconds": 245.0
+      },
+      {
+        "workflow": "Secret Scan",
+        "run": 42942839384,
+        "job": "secret-scan",
+        "conclusion": "success",
+        "seconds": 10.0
+      },
+      {
+        "workflow": "SAST (Semgrep)",
+        "run": 42942839388,
+        "job": "Semgrep static analysis",
+        "conclusion": "success",
+        "seconds": 18.0
+      },
+      {
+        "workflow": "Cross-agent review gate",
+        "run": 42942839412,
+        "job": "cross-agent-review",
+        "conclusion": "success",
+        "seconds": 11.0
+      },
+      {
+        "workflow": "ESLint",
+        "run": 42942839417,
+        "job": "ESLint",
+        "conclusion": "success",
+        "seconds": 436.0
+      },
+      {
+        "workflow": "Variant E2E",
+        "run": 42942839473,
+        "job": "identity (happy)",
+        "conclusion": "success",
+        "seconds": 105.0
+      },
+      {
+        "workflow": "Variant E2E",
+        "run": 42942839473,
+        "job": "identity (full)",
+        "conclusion": "success",
+        "seconds": 61.0
+      },
+      {
+        "workflow": "Variant E2E",
+        "run": 42942839473,
+        "job": "identity (finance)",
+        "conclusion": "success",
+        "seconds": 90.0
+      },
+      {
+        "workflow": "Variant E2E",
+        "run": 42942839473,
+        "job": "identity (tech)",
+        "conclusion": "success",
+        "seconds": 78.0
+      },
+      {
+        "workflow": "Release Integrity",
+        "run": 42942930659,
+        "job": "integrity-checks",
+        "conclusion": "success",
+        "seconds": 9.0
+      },
+      {
+        "workflow": "Release Integrity",
+        "run": 42942930659,
+        "job": "scenario-coverage",
+        "conclusion": "success",
+        "seconds": 40.0
+      },
+      {
+        "workflow": "Release Integrity",
+        "run": 42942930659,
+        "job": "release-doctor",
+        "conclusion": "success",
+        "seconds": 11.0
+      },
+      {
+        "workflow": "Roadmap controller",
+        "run": 42942839497,
+        "job": "validate",
+        "conclusion": "success",
+        "seconds": 31.0
+      },
+      {
+        "workflow": "Roadmap controller",
+        "run": 42942839497,
+        "job": "watchdog",
+        "conclusion": "skipped",
+        "seconds": 0.0
+      },
+      {
+        "workflow": "Typecheck",
+        "run": 42942839509,
+        "job": "typecheck",
+        "conclusion": "success",
+        "seconds": 59.0
+      },
+      {
+        "workflow": "Targeted tests",
+        "run": 42942839518,
+        "job": "targeted-tests",
+        "conclusion": "success",
+        "seconds": 82.0
+      },
+      {
+        "workflow": "Lint",
+        "run": 42942839616,
+        "job": "static-lint",
+        "conclusion": "success",
+        "seconds": 56.0
+      },
+      {
+        "workflow": "Actionlint",
+        "run": 42942839639,
+        "job": "actionlint",
+        "conclusion": "success",
+        "seconds": 9.0
+      },
+      {
+        "workflow": "Actionlint",
+        "run": 42942839639,
+        "job": "zizmor",
+        "conclusion": "success",
+        "seconds": 7.0
+      }
+    ]
+  },
+  "actualBaseline": {
+    "script": "test:agentic-pipeline",
+    "node": "22.23.1",
+    "pass": 85,
+    "fail": 0,
+    "constraint": "Canonical macOS TMPDIR required; initial noncanonical run was84/1 without source changes."
+  }
+}

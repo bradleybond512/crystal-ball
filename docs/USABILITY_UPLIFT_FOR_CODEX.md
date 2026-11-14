@@ -1326,9 +1326,18 @@ stronger repairs. Replaying their old ancestry can overwrite those fixes.
 Priority: S
 Dependencies: none
 
-The November 7 inventory has 13 open dependency PRs, not the original twelve.
-A green bot review gate alone is not a genuine agent review. Old failed checks
-must be diagnosed and rerun after reconciliation rather than waived.
+[Draft #1902](https://github.com/bradleybond512/crystal-ball/pull/1902) claims
+UX-066. The [November 10 assessment](validation/UX-066-DEPENDENCY-ASSESSMENT.md)
+records nine dependency PRs and five open dependency alerts at its initial
+snapshot. At draft publication, a tenth update (#1901) and two critical alerts
+covered the marketing site's react-server-dom-webpack 19.2.8 dependency.
+Artifact review, compatibility checks and alert remediation remain open.
+
+The Zizmor 1.32.0 candidate covered all 23 production workflows and detected
+the wrapped-expression regression in isolated testing.
+[Scanner validation](validation/UX-066-ZIZMOR-VALIDATION.md) records the
+artifact hashes, controls and platform limits. Each dependency update requires technical review.
+Diagnose failed checks and rerun them on the reconciled candidate.
 
 - Build a per-PR assessment of necessity, maintenance, license, release age,
   official integrity/provenance, install scripts/bin changes, compatibility,
@@ -1614,7 +1623,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-062 | Label forecasts that trail their baseline | NOT STARTED — HIGH ASSURANCE | |
 | UX-063 | Evaluate bounded CI Sonnet review | NOT STARTED — HIGH ASSURANCE | |
 | UX-065 | Round 4 checkpoint and remaining security drafts | NOT STARTED | |
-| UX-066 | Dependabot backlog in reviewed batches | NOT STARTED | |
+| UX-066 | Dependabot backlog in reviewed batches | IN REVIEW | [PR #1902](https://github.com/bradleybond512/crystal-ball/pull/1902), [assessment](validation/UX-066-DEPENDENCY-ASSESSMENT.md). [Zizmor 1.32.0 verification](validation/UX-066-ZIZMOR-VALIDATION.md) complete locally. |
 | UX-067 | Green release-integrity signal on main | WAITING | |
 | UX-068 | Inventory branches and worktrees before cleanup | NOT STARTED — HIGH ASSURANCE | |
 | UX-069 | Auto-PR workflow warning | NOT STARTED | |

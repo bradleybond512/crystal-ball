@@ -1618,7 +1618,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-067 | Green release-integrity signal on main | WAITING | |
 | UX-068 | Inventory branches and worktrees before cleanup | NOT STARTED — HIGH ASSURANCE | |
 | UX-069 | Auto-PR workflow warning | NOT STARTED | |
-| UX-070 | Design dependency and scheduled test coverage | NOT STARTED — HIGH ASSURANCE | |
+| UX-070 | Design dependency and scheduled test coverage | IN PROGRESS — HIGH ASSURANCE | [Draft #1903](https://github.com/bradleybond512/crystal-ball/pull/1903); [approved design](plans/2026-11-13-ux070-dependency-test-coverage.md). Runtime execution and hosted acceptance remain open. |
 | UX-071 | Design safe Rust tests and Clippy CI | NOT STARTED — HIGH ASSURANCE | |
 | UX-072 | Local user-data backup and restore | NOT STARTED — HIGH ASSURANCE | |
 | UX-073 | Scope cohesive module extractions | NOT STARTED | |

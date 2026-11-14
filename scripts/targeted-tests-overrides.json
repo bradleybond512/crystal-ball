@@ -1,4 +1,11 @@
 {
+  ".github/workflows/dependency-coverage.yml": ["test:dependency-coverage-workflow", "test:workflow-security", "test:dependency-coverage"],
+  "tests/dependency-runtime-contracts.test.mjs": ["test:dependency-runtime-contracts"],
+  "tests/dependency-runtime/cb-control.test.mjs": ["test:dependency-runtime-contracts", "test:dependency-coverage"],
+  "tests/dependency-runtime/scripts.test.mjs": ["test:dependency-runtime-contracts", "test:dependency-coverage"],
+  "tests/helpers/dependency-runtime-fixture.mjs": ["test:dependency-runtime-contracts", "test:dependency-coverage"],
+  "scripts/dependency-runtime-mutations.mjs": ["test:dependency-coverage", "test:dependency-runtime-contracts"],
+  "scripts/dependency-test-runner.mjs": ["test:dependency-coverage"],
   "src/services/foreign-mil-news.ts": ["test:foreign-mil-angle"],
   "src/services/__tests__/fixtures/foreign-mil-original.ts.txt": ["test:foreign-mil-angle"],
   "src/services/spc-mesoscale.ts": ["test:spc-angle"],
@@ -848,9 +855,7 @@
     "test:sidecar-ci",
     "test:e2e:ci-wiring"
   ],
-  ".github/workflows/targeted-tests.yml": [
-    "test:workflow-security"
-  ],
+  ".github/workflows/targeted-tests.yml": ["test:workflow-security", "test:dependency-coverage-workflow"],
   ".github/workflows/test-linux-app.yml": [
     "test:workflow-security"
   ],

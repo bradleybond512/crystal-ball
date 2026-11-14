@@ -4,8 +4,8 @@ name: Targeted tests
 # required checks run zero unit tests; the full sweep is too slow per-PR.
 # scripts/targeted-tests.mjs derives the mapping from package.json itself
 # (each test:* script lists its files; src/<area>/__tests__/ covers
-# src/<area>/) and runs everything the diff touches — no cap. Docs-only and
-# dependency-only PRs select nothing and pass after npm ci.
+# src/<area>/) and runs everything the diff touches — no cap. Docs-only PRs
+# may select nothing; dependency paths carry mandatory coverage obligations.
 #
 # The selector is executed FROM origin/main, never from the PR head: a PR
 # must not control which tests judge it. (The test files themselves run from
@@ -66,9 +66,7 @@ jobs:
       - name: Select and run targeted suites
         run: |
           git fetch origin main --quiet
-          if git cat-file -e origin/main:scripts/targeted-tests.mjs 2>/dev/null; then
-            git show origin/main:scripts/targeted-tests.mjs > "$RUNNER_TEMP/targeted-tests.mjs"
-            node "$RUNNER_TEMP/targeted-tests.mjs" --ci
-          else
-            echo "targeted-tests.mjs not on origin/main yet (gate rollout); passing."
-          fi
+          policy_sha=$(git rev-parse origin/main)
+          [[ "$policy_sha" =~ ^[a-f0-9]{40}$ ]]
+          git show "$policy_sha:scripts/targeted-tests.mjs" > "$RUNNER_TEMP/targeted-tests.mjs"
+          CB_TARGETED_POLICY_SHA="$policy_sha" node "$RUNNER_TEMP/targeted-tests.mjs" --ci

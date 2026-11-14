@@ -1194,10 +1194,11 @@ function targetedCliFixture(t, { extraScripts = {}, trustedFiles = {} } = {}) {
   git('update-ref', 'refs/remotes/origin/main', 'HEAD');
   return {
     dir, scripts, write, packageJson, markerTest,
-    run(files) {
+    run(files, inheritedEnv = process.env) {
       git('add', ...files);
       git('commit', '-q', '-m', 'fixture: PR changes');
-      const env = { ...process.env };
+      const env = { ...inheritedEnv };
+      delete env.CB_TARGETED_POLICY_SHA;
       delete env.GITHUB_BASE_REF;
       delete env.GITHUB_STEP_SUMMARY;
       delete env.NODE_TEST_CONTEXT;
@@ -1207,6 +1208,16 @@ function targetedCliFixture(t, { extraScripts = {}, trustedFiles = {} } = {}) {
     },
   };
 }
+
+test('selector fixture uses its own trusted revision despite outer CI policy', (t) => {
+  const f = targetedCliFixture(t);
+  f.write('src/app/data-loader.ts', 'export const value = 1;\n');
+  const result = f.run(['src/app/data-loader.ts'], { ...process.env, CB_TARGETED_POLICY_SHA: 'f'.repeat(40) });
+  assert.equal(result.status, 0, result.stderr);
+  const fixtureSha = execFileSync('git', ['rev-parse', 'origin/main'], { cwd: f.dir, encoding: 'utf8' }).trim();
+  assert.ok(result.stdout.includes(`[targeted-tests] policy SHA: ${fixtureSha}`));
+  assert.equal(readFileSync(join(f.dir, 'trusted-ran.txt'), 'utf8'), 'executed');
+});
 
 function desktopUpdaterCliFixture(t, { failUpdater = false } = {}) {
   const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;

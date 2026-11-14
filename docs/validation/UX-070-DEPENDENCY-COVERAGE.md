@@ -1,7 +1,7 @@
 # UX-070 dependency coverage — local validation
 
 Draft: [#1903](https://github.com/bradleybond512/crystal-ball/pull/1903).
-Implementation checkpoint: `4c25e205134a0ebeb9dc998c5245e1306754c100`.
+Original implementation checkpoint: `4c25e205134a0ebeb9dc998c5245e1306754c100`.
 Status: locally validated candidate; hosted runtime acceptance remains open.
 
 ## Behavior and scope
@@ -94,6 +94,63 @@ Restored SHA-256 values:
 | `src/services/__tests__/spc-angle.test.mts` | `89f6e45e96f028480155b9fd502d463dfee42a211410f98cea828079f0f23571` |
 
 ## Rollout and remaining acceptance
+
+### November 14 hosted failures and local repairs
+
+Approved tip `7b810edbc` was published and the approved
+`dependency-change-approved` label applied. Dependency Coverage run
+`43606597994` stopped all seven graphs at npm's version probe, before any
+dependency installation or runtime contract execution. Actual diagnostic:
+
+```text
+Exit prior to config file resolving
+cause
+double-loading config "/dev/null" as "global", previously loaded as "user"
+```
+
+Repair `9f4e67ffb` gives npm separate owned empty user/global configuration
+files, removes conflicting install arguments, and isolates the lifecycle
+probe's version lookup. Actual npm regression checks use version commands
+and fixed empty fixtures, with no dependency installation or native build.
+The focused suite changed from `# pass 13` / `# fail 3` to `# pass 16` /
+`# fail 0`. Three new mutations and all 13 previous policy mutations were
+detected: duplicate environment paths 13/3; duplicate CLI paths 15/1;
+inherited probe environment 15/1; graph obligations 13/3; NUL paths and
+credential environment 14/2 each; remaining ten controls 15/1 each. Clean
+detached copies restored to 16/0 and matching checksums. Updated runner
+SHA-256: `e947ee745faaeec541ec625763636e7fddf0ecc0e2e0d46cd501ebffbb5355da`.
+The earlier hash table records the original checkpoint, not this repair.
+
+Targeted Tests run `43606597837` also exposed five fixture failures because
+temporary Git repositories inherited the real CI `CB_TARGETED_POLICY_SHA`.
+That commit does not exist in the fixtures. Repair `fb055e879` removes that
+outer setting only from the fixture environment; production trusted-policy
+enforcement and all existing assertions remain intact. Reproduction with
+the hosted setting returned `# pass 80` / `# fail 5`; the repaired suite,
+including an explicit hostile-environment regression, returned `# pass 86` /
+`# fail 0`. The new regression was observed failing before the repair.
+Its clean-copy mutation removed only the fixture environment cleanup:
+`# pass 1` / `# fail 0` became `# pass 0` / `# fail 1`, then restored to 1/0.
+The applied diff was inspected and the restored test SHA-256 was
+`20ad5e2042502142b9aac5bcb029995e5bfceaac5038514cc60ac67b85e385a6`.
+
+Final repair validation used the real hosted policy setting:
+
+```sh
+CB_TARGETED_POLICY_SHA=5955a8d9860ad2f616008a3d738d423fbb8e5415 bash scripts/agentic-validate.sh --tests "test:dependency-coverage test:dependency-coverage-workflow test:dependency-runtime-contracts test:agentic-pipeline test:workflow-security test:supply-chain-gates test:install-scripts"
+```
+
+Actual output pairs (`# pass N` / `# fail 0`) in that order were 16/0, 12/0,
+7/0, 86/0, 96/0, 27/0 and 63/0. The final output was
+`Agentic validation gate passed.` Both TypeScript configurations, strict
+lint, secret scanning, documentation checks and the build passed.
+
+Raw logs, actual applied mutation diffs and reproduction scripts are retained
+under the session's `next-nov14/npm-config-fix` and `policy-fixture-fix`
+evidence directories. Manual recheck requires the focused suites with the
+hosted policy setting, then all seven actual graph receipts after publication.
+Reverting these two repairs restores the startup/fixture failures without
+changing application behavior or data. Hosted runtime acceptance remains open.
 
 Main does not contain the new policy while merging is paused. Mixing the new
 selector with old main metadata correctly fails for unavailable mandatory

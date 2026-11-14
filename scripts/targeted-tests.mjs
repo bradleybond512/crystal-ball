@@ -37,6 +37,7 @@ const PR_OVERRIDES_FILE = 'scripts/targeted-tests-overrides.json';
 // TEXT of another file, and scripts exercised by a suite that does not live
 // beside them.
 export const OVERRIDES = {
+  'scripts/dependency-test-runner.mjs': ['test:dependency-coverage'],
   'api/_bounded-json.js': ['test:lifelines'],
   'api/grid-outages.js': ['test:lifelines-grid'],
   'api/osrm-route.js': ['test:lifelines-map'],
@@ -66,6 +67,101 @@ export const OVERRIDES = {
   'tools/mcp-server/tools/evaluation-report.mjs': ['test:mcp-evaluation-report'],
   'tools/mcp-server/weekly-evaluation-report.mjs': ['test:mcp-evaluation-report'],
 };
+
+export const DEPENDENCY_POLICY_VERSION = 1;
+export const DEPENDENCY_GRAPHS = ['cb-control', 'codex', 'fixtures', 'marketing', 'mcp', 'root', 'scripts'];
+const GRAPH_DIRS = { root: '.', codex: '.github/tools/codex', marketing: 'marketing-site', scripts: 'scripts', 'cb-control': 'tools/cb-control', mcp: 'tools/mcp-server' };
+const GRAPH_PATHS = new Map(Object.entries(GRAPH_DIRS).flatMap(([graph, dir]) =>
+  ['package.json', 'package-lock.json', '.npmrc'].map(name => [path.posix.join(dir, name), graph])));
+GRAPH_PATHS.set('vendor/texture-compressor-safe/package.json', 'root');
+GRAPH_PATHS.set('marketing-site/vendor/braces/package.json', 'marketing');
+GRAPH_PATHS.set('src-tauri/sidecar/package.json', 'root');
+const DEPENDENCY_FILE = /^(?:package(?:-lock)?\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|Cargo\.(?:toml|lock)|requirements(?:[-.][^/]*)?\.txt|pyproject\.toml)$/i;
+const GOVERNANCE = ['test:supply-chain-gates', 'test:ux054'];
+const ROOT_MANDATORY = ['test:install-scripts', 'test:workflow-security', 'test:domain-retirement', 'test:desktop-identity', 'test:e2e:ci-wiring', ...GOVERNANCE];
+
+export function dependencySelection(files) {
+  const graphs = new Set();
+  const scripts = new Set();
+  const gaps = new Set();
+  const add = names => { for (const name of names) scripts.add(name); };
+  for (const file of files) {
+    const graph = GRAPH_PATHS.get(file);
+    if (graph) {
+      graphs.add(graph);
+      add(GOVERNANCE);
+      if (graph === 'root') add(ROOT_MANDATORY);
+      if (graph === 'codex') add(['test:agentic-pipeline', 'test:install-scripts']);
+      if (graph === 'mcp') add(['test:mcp-companion', 'test:mcp-untrusted']);
+    } else if (['src-tauri/Cargo.toml', 'src-tauri/Cargo.lock'].includes(file)) {
+      add(['test:node-pinning', 'test:install-scripts']);
+      gaps.add('Cargo runtime coverage pending UX-071');
+    } else if (['.node-version', '.nvmrc'].includes(file)) {
+      add(['test:node-pinning', 'test:workflow-security', 'test:install-scripts']);
+    } else if (['.mcp.json', '.github/mcp.json'].includes(file)) {
+      add(['test:workflow-security', 'test:mcp-companion', 'test:mcp-untrusted']);
+    } else if (file === '.github/tools/zizmor/requirements.txt' || file === '.github/dependabot.yml') {
+      add(['test:workflow-security']);
+    } else if (/^\.github\/workflows\/[^/]+\.ya?ml$/.test(file)) {
+      add(['test:workflow-security']);
+      if (file === '.github/workflows/dependency-coverage.yml') for (const id of DEPENDENCY_GRAPHS) graphs.add(id);
+    } else if (file === 'scripts/dependency-test-runner.mjs' || file === 'scripts/targeted-tests.mjs') {
+      for (const id of DEPENDENCY_GRAPHS) graphs.add(id);
+      add(['test:dependency-coverage']);
+    } else if (file.startsWith('tests/dependency-runtime/') || file === 'tests/helpers/dependency-runtime-fixture.mjs' || file === 'scripts/dependency-runtime-mutations.mjs') {
+      if (!file.endsWith('/cb-control.test.mjs')) graphs.add('scripts');
+      if (!file.endsWith('/scripts.test.mjs')) graphs.add('cb-control');
+      add(['test:dependency-runtime-contracts', 'test:dependency-coverage']);
+    } else if (DEPENDENCY_FILE.test(path.posix.basename(file))) {
+      throw new Error(`unclassified dependency path: ${JSON.stringify(file)}`);
+    }
+  }
+  return { graphs: [...graphs].sort(), scripts: [...scripts].sort(), gaps: [...gaps].sort() };
+}
+
+export function mandatoryDependencyScripts(files, index, trustedOverrides) {
+  const selection = dependencySelection(files);
+  const required = new Set(selection.scripts);
+  for (const file of files) {
+    if (dependencySelection([file]).scripts.length === 0) continue;
+    for (const name of trustedOverrides[file] ?? []) required.add(name);
+  }
+  for (const name of required) {
+    if (!index.has(name)) throw new Error(`mandatory dependency suite unavailable: ${name}`);
+  }
+  return [...required].sort();
+}
+
+export function parseChangedPaths(output) {
+  if (output !== '' && !output.endsWith('\0')) throw new Error('changed paths require NUL termination');
+  return output === '' ? [] : output.slice(0, -1).split('\0');
+}
+
+export function changedFilesBetween(repo, baseSha, executionSha) {
+  if (![baseSha, executionSha].every(value => /^[a-f0-9]{40}$/.test(value))) throw new Error('changed paths require exact commit SHAs');
+  return parseChangedPaths(execFileSync('git', ['diff', '--no-renames', '--name-only', '-z', `${baseSha}...${executionSha}`], {
+    cwd: repo, encoding: 'utf8', timeout: 30_000, maxBuffer: 8 * 1024 * 1024,
+  }));
+}
+
+export function readTrustedPolicy(repo, sha) {
+  if (!/^[a-f0-9]{40}$/.test(sha)) throw new Error('trusted policy requires an exact SHA');
+  try {
+    const read = file => JSON.parse(execFileSync('git', ['show', `${sha}:${file}`], {
+      cwd: repo, encoding: 'utf8', timeout: 30_000, maxBuffer: 8 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'],
+    }));
+    const scripts = read('package.json').scripts;
+    const overrides = read(PR_OVERRIDES_FILE);
+    if (!scripts || typeof scripts !== 'object' || Array.isArray(scripts)
+        || !overrides || typeof overrides !== 'object' || Array.isArray(overrides)
+        || Object.values(overrides).some(value => !Array.isArray(value) || value.some(name => typeof name !== 'string'))) {
+      throw new Error('invalid trusted metadata');
+    }
+    return { scripts, overrides, sha };
+  } catch {
+    throw new Error(`trusted policy unavailable at ${sha}`);
+  }
+}
 
 const RUNNER_ALLOWLIST = [
   /^tsx --test /,
@@ -271,26 +367,14 @@ export function ciVerdict({ indexSize, selected, unmapped, unbaselined = [] }) {
 function changedFilesFromGit() {
   const baseRef = process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : 'origin/main';
   const mergeBase = execFileSync('git', ['merge-base', baseRef, 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
-  return execFileSync('git', ['diff', '--name-only', `${mergeBase}...HEAD`], { cwd: root, encoding: 'utf8' })
-    .split('\n').map((l) => l.trim()).filter(Boolean);
+  const executionSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+  return changedFilesBetween(root, mergeBase, executionSha);
 }
 
 function summarize(lines) {
   for (const line of lines) console.log(line);
   if (process.env.GITHUB_STEP_SUMMARY) {
     appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join('\n\n')}\n`);
-  }
-}
-
-function mainPackageScripts() {
-  // The DECISION index comes from origin/main's package.json so a PR cannot
-  // fabricate its own gate. Before the gate first lands on main, fall back to
-  // the working copy.
-  try {
-    const raw = execFileSync('git', ['show', 'origin/main:package.json'], { cwd: root, encoding: 'utf8' });
-    return JSON.parse(raw).scripts ?? {};
-  } catch {
-    return JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).scripts ?? {};
   }
 }
 
@@ -308,12 +392,16 @@ function baselinePaths() {
 function main() {
   const args = new Set(process.argv.slice(2));
   const prScripts = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).scripts ?? {};
-  const mainScripts = mainPackageScripts();
+  const policySha = process.env.CB_TARGETED_POLICY_SHA
+    ?? execFileSync('git', ['rev-parse', 'origin/main'], { cwd: root, encoding: 'utf8' }).trim();
+  const policy = readTrustedPolicy(root, policySha);
+  const mainScripts = policy.scripts;
   const mainIndex = deriveScriptIndex(mainScripts);
   const prIndex = deriveScriptIndex(prScripts);
   const changed = changedFilesFromGit();
 
   const mainSel = selectScripts(changed, mainIndex);
+  mainSel.scripts = [...new Set([...mainSel.scripts, ...mandatoryDependencyScripts(changed, mainIndex, policy.overrides)])].sort();
   const prSel = selectScripts(changed, prIndex, mergeOverrides(OVERRIDES, prDeclaredOverrides()));
   // Main's mapping decides what MUST run; the PR's copy may only add suites
   // (new tests shipped alongside new code).
@@ -326,6 +414,7 @@ function main() {
   const unbaselined = unmapped.filter((f) => !baseline.has(f));
 
   summarize([
+    `[targeted-tests] policy SHA: ${policy.sha}`,
     `[targeted-tests] ${changed.length} changed file(s) → ${selected.length} test script(s): ${selected.join(', ') || '(none)'}`,
     ...(unmapped.length > 0 ? [
       [

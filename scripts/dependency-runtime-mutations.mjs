@@ -23,8 +23,10 @@ test('actual dependency runtime mutation controls', { timeout: 180_000 }, async 
   const original = readFileSync(file);
   const checksum = digest(original);
   const run = () => {
+    const env = { ...process.env };
+    delete env.NODE_TEST_CONTEXT;
     const result = spawnSync(process.execPath, ['--test', '--test-reporter=tap', relative], {
-      cwd: runtimeRepo, env: process.env, encoding: 'utf8', timeout: 35_000, maxBuffer: 2 * 1024 * 1024,
+      cwd: runtimeRepo, env, encoding: 'utf8', timeout: 35_000, maxBuffer: 2 * 1024 * 1024,
     });
     assert.equal(result.error, undefined);
     assert.equal(result.signal, null);

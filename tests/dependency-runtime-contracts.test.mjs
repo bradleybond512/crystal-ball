@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { runInNewContext } from 'node:vm';
 import { assertHostedLinux, graphRequire, ownedRuntimeFixture, runtimeMutations, tapCounts, websocketExchange } from './helpers/dependency-runtime-fixture.mjs';
 
 test('native contracts refuse local and self-hosted execution before dependency imports', () => {
@@ -89,6 +90,31 @@ test('mutation oracle rejects empty, skipped, cancelled and truncated execution'
     const text = '# tests 2\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n';
     assert.throws(() => tapCounts(text.replace(`# ${field} 0`, `# ${field} 1`)), /complete positive TAP/);
   }
+});
+
+test('mutation subprocess executes real TAP cases outside the parent test context', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'cb-runtime-nested-test-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const source = readFileSync(new URL('../scripts/dependency-runtime-mutations.mjs', import.meta.url), 'utf8');
+  const runSource = source.match(/  const run = \(\) => \{[\s\S]+?\n  \};/)?.[0];
+  assert.ok(runSource, 'execute the actual mutation harness subprocess closure');
+  const relative = 'inert.test.mjs';
+  const run = runInNewContext(`${runSource}\nrun`, {
+    assert, spawnSync, tapCounts, runtimeRepo: root, relative,
+    process: { execPath: process.execPath, env: { PATH: process.env.PATH, NODE_TEST_CONTEXT: 'child-v8', CB_DEPENDENCY_GRAPH: 'fixture' } },
+  });
+  const writeFixture = expected => writeFileSync(join(root, relative),
+    `import test from 'node:test'; import assert from 'node:assert/strict'; test('inert runtime case', () => assert.equal(process.env.CB_DEPENDENCY_GRAPH, ${JSON.stringify(expected)}));\n`);
+  writeFixture('fixture');
+  const baseline = run();
+  assert.equal(baseline.status, 0, baseline.stderr);
+  assert.deepEqual(baseline.counts, { tests: 1, pass: 1, fail: 0 });
+  assert.doesNotMatch(baseline.stderr, /recursively|skipping running files/);
+  writeFixture('changed-fixture-observation');
+  const red = run();
+  assert.equal(red.status, 1);
+  assert.deepEqual(red.counts, { tests: 1, pass: 0, fail: 1 });
+  assert.match(red.stdout, /ERR_ASSERTION/);
 });
 
 test('actual runtime entrypoints retain loopback guard and are absent from broad npm aliases', () => {

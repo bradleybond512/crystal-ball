@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFileSync, mkdtempSync, writeFileSync, mkdirSync, rmSync, renameSync, realpathSync } from 'node:fs';
+import { readFileSync, mkdtempSync, writeFileSync, mkdirSync, rmSync, renameSync, realpathSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -118,6 +118,75 @@ test('the stage process has bounded output, timeout and clean credential-free en
   assert.equal((await run(['-e', 'process.stdout.write("x".repeat(2048))'])).status, 'failed');
   assert.equal((await run(['-e', 'process.exit(3)'])).status, 'failed');
   assert.equal((await run(['-e', 'console.log("ok")'])).status, 'passed');
+});
+
+test('isolated npm cache is the same owned cache consumed by the MCP fixture', async t => {
+  const dir = realpathSync(mkdtempSync(path.join(tmpdir(), 'dependency-cache-home-')));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const env = runner.isolatedEnvironment(dir, { PATH: process.env.PATH, HOME: '/untrusted/home', NPM_CONFIG_CACHE: '/untrusted/cache', npm_config_cache: '/untrusted/cache' });
+  const npmCache = await runner.executeStage({ bin: path.join(path.dirname(process.execPath), 'npm'), args: ['config', 'get', 'cache'], timeoutMs: 5000 }, { cwd: dir, env });
+  assert.equal(npmCache.status, 'passed', npmCache.stderr);
+  assert.equal(realpathSync(npmCache.stdout.trim()), env.NPM_CONFIG_CACHE);
+  writeFileSync(path.join(env.NPM_CONFIG_CACHE, 'fixture-marker'), 'owned cache');
+  const probe = await runner.executeStage({ bin: process.execPath, args: ['--input-type=module', '-e', `
+    import { isolatedEnv } from './tests/helpers/mcp-runtime-fixture.mjs';
+    import { readFileSync } from 'node:fs';
+    import path from 'node:path';
+    const nested = isolatedEnv(path.join(process.env.TMPDIR, 'nested'));
+    console.log(readFileSync(path.join(nested.CB_TEST_MCP_TARBALL_SOURCE, 'fixture-marker'), 'utf8'));
+  `], timeoutMs: 5000 }, { cwd: root, env });
+  assert.equal(probe.status, 'passed', probe.stderr);
+  assert.equal(probe.stdout.trim(), 'owned cache');
+  assert.equal(env.NPM_CONFIG_CACHE, path.join(env.HOME, '.npm'));
+});
+
+function rustEnvironmentFixture(t) {
+  const dir = realpathSync(mkdtempSync(path.join(tmpdir(), 'dependency-rust-env-')));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const repo = path.join(dir, 'repo'), owned = path.join(dir, 'owned'), home = path.join(dir, 'host-home');
+  const rustup = path.join(home, '.rustup'), explicit = path.join(dir, 'explicit-rustup');
+  for (const folder of [repo, owned, rustup, explicit]) mkdirSync(folder, { recursive: true });
+  const inherited = { PATH: process.env.PATH, HOME: home, GITHUB_ACTIONS: 'true', RUNNER_ENVIRONMENT: 'github-hosted',
+    RUSTUP_HOME: explicit, CARGO_HOME: '/untrusted/cargo', RUSTUP_TOOLCHAIN: 'untrusted', RUSTC: '/untrusted/rustc',
+    RUSTC_WRAPPER: '/untrusted/wrapper', RUSTFLAGS: 'untrusted', CARGO_REGISTRIES_CRATES_IO_TOKEN: 'fixture-token' };
+  return { dir, repo, owned, home, rustup, explicit, inherited };
+}
+
+test('only the hosted root graph retains explicit or default Rust metadata with owned HOME', async t => {
+  const fixture = rustEnvironmentFixture(t);
+  const { repo, owned, home, rustup, explicit, inherited } = fixture;
+  for (const [source, selected] of [[inherited, explicit], [{ ...inherited, RUSTUP_HOME: undefined }, rustup]]) {
+    writeFileSync(path.join(selected, 'fixture-metadata'), 'hosted toolchain');
+    const env = runner.graphEnvironment('root', repo, owned, source);
+    assert.equal(env.RUSTUP_HOME, selected);
+    assert.equal(env.HOME, path.join(owned, 'home'));
+    assert.notEqual(env.HOME, home);
+    for (const key of ['CARGO_HOME', 'RUSTUP_TOOLCHAIN', 'RUSTC', 'RUSTC_WRAPPER', 'RUSTFLAGS', 'CARGO_REGISTRIES_CRATES_IO_TOKEN']) assert.equal(env[key], undefined);
+    const probe = await runner.executeStage({ bin: process.execPath, args: ['-e', `console.log(require('node:fs').readFileSync(require('node:path').join(process.env.RUSTUP_HOME, 'fixture-metadata'), 'utf8'))`], timeoutMs: 5000 }, { cwd: repo, env });
+    assert.equal(probe.status, 'passed', probe.stderr);
+    assert.equal(probe.stdout.trim(), 'hosted toolchain');
+  }
+  for (const graph of selector.DEPENDENCY_GRAPHS.filter(graph => graph !== 'root')) {
+    assert.equal(runner.graphEnvironment(graph, repo, owned, inherited).RUSTUP_HOME, undefined, graph);
+  }
+});
+
+test('hosted Rust metadata fails closed for missing, redirected or overlapping paths', t => {
+  const { dir, repo, owned, explicit, inherited } = rustEnvironmentFixture(t);
+  const file = path.join(dir, 'not-directory'), link = path.join(dir, 'redirect');
+  writeFileSync(file, 'fixture');
+  symlinkSync(explicit, link, 'dir');
+  mkdirSync(path.join(explicit, 'nested'));
+  const checkoutMetadata = path.join(repo, '.rustup'), ownedMetadata = path.join(owned, '.rustup');
+  mkdirSync(checkoutMetadata); mkdirSync(ownedMetadata);
+  for (const RUSTUP_HOME of ['', 'relative/path', '/does-not-exist/fixture-rustup', file, link, path.join(link, 'nested'), repo, owned, checkoutMetadata, ownedMetadata, dir, '/']) {
+    assert.throws(() => runner.graphEnvironment('root', repo, owned, { ...inherited, RUSTUP_HOME }), { message: 'hosted Rust metadata is unavailable or unsafe' }, RUSTUP_HOME);
+  }
+  assert.throws(() => runner.graphEnvironment('root', repo, owned, { ...inherited, RUSTUP_HOME: undefined, HOME: 'relative/home' }), /hosted Rust metadata/);
+  for (const host of [{ GITHUB_ACTIONS: 'false' }, { RUNNER_ENVIRONMENT: 'self-hosted' }]) {
+    assert.throws(() => runner.graphEnvironment('root', repo, owned, { ...inherited, ...host }), /hosted/);
+  }
+  assert.throws(() => runner.graphEnvironment('unknown', repo, owned, inherited), /unknown dependency graph/);
 });
 
 test('real npm starts with isolated distinct user and global configuration', async t => {

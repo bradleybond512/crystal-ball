@@ -119,7 +119,7 @@ export function parseTestCounts(stdout) {
 export function isolatedEnvironment(dir, inherited = process.env) {
   const env = {};
   for (const key of ['PATH', 'LANG', 'LC_ALL', 'CI', 'GITHUB_ACTIONS', 'RUNNER_ENVIRONMENT']) if (inherited[key]) env[key] = inherited[key];
-  for (const [key, folder] of Object.entries({ HOME: 'home', TMPDIR: 'tmp', XDG_CONFIG_HOME: 'config', XDG_DATA_HOME: 'data', CB_CONTROL_DIR: 'cb-control', NPM_CONFIG_CACHE: 'npm-cache' })) {
+  for (const [key, folder] of Object.entries({ HOME: 'home', TMPDIR: 'tmp', XDG_CONFIG_HOME: 'config', XDG_DATA_HOME: 'data', CB_CONTROL_DIR: 'cb-control', NPM_CONFIG_CACHE: 'home/.npm' })) {
     env[key] = path.join(dir, folder);
     mkdirSync(env[key], { recursive: true });
   }
@@ -128,6 +128,26 @@ export function isolatedEnvironment(dir, inherited = process.env) {
     writeFileSync(env[key], '', { mode: 0o600 });
   }
   return { ...env, NO_COLOR: '1' };
+}
+
+export function graphEnvironment(graph, repo, owned, inherited = process.env) {
+  check(DEPENDENCY_GRAPHS.includes(graph), 'unknown dependency graph');
+  const env = isolatedEnvironment(owned, inherited);
+  if (graph !== 'root') return env;
+  check(inherited.GITHUB_ACTIONS === 'true' && inherited.RUNNER_ENVIRONMENT === 'github-hosted', 'Rust metadata requires a disposable hosted runner');
+  const source = inherited.RUSTUP_HOME ?? (typeof inherited.HOME === 'string' && path.isAbsolute(inherited.HOME) ? path.join(inherited.HOME, '.rustup') : undefined);
+  try {
+    check(typeof source === 'string' && path.isAbsolute(source) && lstatSync(source).isDirectory(), 'invalid metadata directory');
+    const resolved = realpathSync(source);
+    check(resolved === path.resolve(source), 'redirected metadata directory');
+    for (const protectedPath of [repo, owned]) {
+      const boundary = realpathSync(protectedPath);
+      check(resolved !== boundary && !resolved.startsWith(`${boundary}${path.sep}`)
+        && !boundary.startsWith(resolved.endsWith(path.sep) ? resolved : `${resolved}${path.sep}`), 'overlapping metadata directory');
+    }
+    env.RUSTUP_HOME = resolved;
+  } catch { throw new Error('hosted Rust metadata is unavailable or unsafe'); }
+  return env;
 }
 
 export async function executeStage(stage, { cwd, env }) {
@@ -232,7 +252,6 @@ async function runGraph(opts, repo) {
   const output = path.resolve(opts.out, opts.graph);
   check(!output.startsWith(`${path.resolve(repo)}${path.sep}`), 'receipts must be outside the checkout');
   const owned = mkdtempSync(path.join(tmpdir(), 'dependency-run-'));
-  const env = isolatedEnvironment(owned);
   const receipt = { schemaVersion: 1, graph: opts.graph, policySha: plan.policySha, executionSha: plan.executionSha, mode: plan.mode, event: plan.event,
     nodeVersion: process.version, lockSha256: createHash('sha256').update(readFileSync(path.join(repo, projects[opts.graph], 'package-lock.json'))).digest('hex'),
     stages: stages.map(stage => ({ stageId: stage.id, kind: stage.kind, commandId: stage.id, status: 'not_executed', exitCode: null })) };
@@ -240,6 +259,7 @@ async function runGraph(opts, repo) {
   writeJson(receiptPath, receipt);
   let failed = false;
   try {
+    const env = graphEnvironment(opts.graph, repo, owned);
     for (const [i, stage] of stages.entries()) {
       if (failed) break;
       const result = await executeStage(stage, { cwd: repo, env });

@@ -438,7 +438,7 @@ impl Effects for NativeEffects {
         #[cfg(not(target_os = "macos"))]
         {
             let _ = (recipient, enabled);
-            return Err(error("unavailable"));
+            Err(error("unavailable"))
         }
         #[cfg(target_os = "macos")]
         {
@@ -467,7 +467,7 @@ end run"#;
         #[cfg(not(target_os = "macos"))]
         {
             let _ = (recipient, body);
-            return Err(error("unavailable"));
+            Err(error("unavailable"))
         }
         #[cfg(target_os = "macos")]
         {

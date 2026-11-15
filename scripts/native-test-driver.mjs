@@ -60,26 +60,46 @@ export function parseTestResult(stdout, expectedNames) {
   return counts;
 }
 
-export function prepareWatchdogMutation(original) {
-  const marker = 'assert!(!focus.snapshot().focused);';
-  const source = original.toString();
-  requireThat(source.split(marker).length === 2, 'Mutation marker must be unique');
-  return source.replace(marker, 'assert!(focus.snapshot().focused);');
+const mutationControls = [
+  { id: 'watchdog', source: 'src-tauri/tests/watchdog_contract.rs', target: 'watchdog_contract', failureNames: ['main_focus_tracks_gain_and_loss'] },
+  { id: 'crypto-nonce-rejection', source: 'src-tauri/src/main.rs', target: 'crystalball', failureNames: ['vault_shadow_crypto_tests::malformed_nonce_lengths_are_rejected'] },
+  { id: 'crypto-auth-rejection', source: 'src-tauri/src/main.rs', target: 'crystalball', failureNames: ['modified_nonce_is_rejected', 'modified_tag_is_rejected', 'tampered_ciphertext_is_rejected', 'wrong_key_fails_authentication'].map(name => `vault_shadow_crypto_tests::${name}`) },
+];
+
+export function prepareControlMutation(id, original) {
+  const replacements = {
+    watchdog: [['assert!(!focus.snapshot().focused);', 'assert!(focus.snapshot().focused);']],
+    'crypto-nonce-rejection': [
+      ['let env: ShadowEnvelope = serde_json::from_str(raw).ok()?;', 'let mut env: ShadowEnvelope = serde_json::from_str(raw).ok()?;'],
+      ['if env.v != 2 || env.n.len() != 12 {', 'if env.v != 2 {'],
+      ['let nonce_bytes: [u8; 12] = env.n.as_slice().try_into().ok()?;', 'env.n.resize(12, 0);\n let nonce_bytes: [u8; 12] = env.n.as_slice().try_into().ok()?;'],
+    ],
+    'crypto-auth-rejection': [['cipher.decrypt(&nonce, env.c.as_ref()).ok()?', 'cipher.decrypt(&nonce, env.c.as_ref()).unwrap_or_default()']],
+  };
+  requireThat(Object.hasOwn(replacements, id), 'Unknown mutation control');
+  let source = original.toString();
+  for (const [before, after] of replacements[id]) {
+    requireThat(source.split(before).length === 2, 'Mutation marker must be unique');
+    source = source.replace(before, after);
+  }
+  return source;
 }
 
-export function validateMutationFailure(result, expectedNames) {
+export function validateMutationFailure(result, expectedNames, failureNames) {
   expectedTests(expectedNames);
-  requireThat(expectedNames.includes('main_focus_tracks_gain_and_loss'), 'Mutation target test missing');
-  requireThat(result.status === 'failed' && Number.isInteger(result.exitCode) && result.exitCode > 0, 'Mutation process did not fail');
+  expectedTests(failureNames);
+  requireThat(failureNames.every(name => expectedNames.includes(name)), 'Mutation target test missing');
+  requireThat(result.status === 'failed' && !result.failure && Number.isInteger(result.exitCode) && result.exitCode > 0, 'Mutation process did not fail');
   const results = [...result.stdout.matchAll(/^test ([\w:]+) \.\.\. (\S+)$/gm)];
-  requireThat(results.length === expectedNames.length && unique(results.map(m => m[1])) && results.every(m => expectedNames.includes(m[1]) && m[2] === (m[1] === 'main_focus_tracks_gain_and_loss' ? 'FAILED' : 'ok')), 'Unexpected mutation failures');
-  const repaired = result.stdout.replace('test main_focus_tracks_gain_and_loss ... FAILED', 'test main_focus_tracks_gain_and_loss ... ok')
-    .replace(`test result: FAILED. ${expectedNames.length - 1} passed; 1 failed;`, `test result: ok. ${expectedNames.length} passed; 0 failed;`);
+  requireThat(results.length === expectedNames.length && unique(results.map(m => m[1])) && results.every(m => expectedNames.includes(m[1]) && m[2] === (failureNames.includes(m[1]) ? 'FAILED' : 'ok')), 'Unexpected mutation failures');
+  let repaired = result.stdout;
+  for (const name of failureNames) repaired = repaired.replace(`test ${name} ... FAILED`, `test ${name} ... ok`);
+  repaired = repaired.replace(`test result: FAILED. ${expectedNames.length - failureNames.length} passed; ${failureNames.length} failed;`, `test result: ok. ${expectedNames.length} passed; 0 failed;`);
   const counts = parseTestResult(repaired, expectedNames);
   let rejected = false;
   try { parseTestResult(result.stdout, expectedNames); } catch { rejected = true; }
   requireThat(rejected, 'Failed test result was accepted');
-  return { ...counts, passed: expectedNames.length - 1, failed: 1 };
+  return { ...counts, passed: expectedNames.length - failureNames.length, failed: failureNames.length };
 }
 
 export function validateLock(bytes, expectedSHA256) {
@@ -217,12 +237,25 @@ function validExecutionCounts(stage, platform) {
     && [c.failed, c.ignored, c.measured, c.filtered].every(n => n === 0);
 }
 
+function validMutationControls(controls, platform) {
+  if (!Array.isArray(controls) || controls.length !== mutationControls.length || !controls.every(control => control && typeof control.id === 'string') || !unique(controls.map(control => control.id))) return false;
+  return mutationControls.every(spec => {
+    const control = controls.find(control => control.id === spec.id);
+    if (!control || control.source !== spec.source || control.target !== spec.target || control.appliedDiff !== true || control.detectedFailure !== true || control.restored !== true) return false;
+    if (![control.originalHash, control.mutatedHash, control.restoredHash].every(value => /^[a-f0-9]{64}$/.test(value ?? '')) || control.originalHash !== control.restoredHash || control.mutatedHash === control.originalHash) return false;
+    if (!Array.isArray(control.failureNames) || !unique(control.failureNames) || control.failureNames.length !== spec.failureNames.length || !spec.failureNames.every(name => control.failureNames.includes(name))) return false;
+    if (!validExecutionCounts({ id: `test:${spec.target}`, kind: 'test', counts: control.counts }, platform)) return false;
+    const red = control.redCounts, total = control.counts.tests, failed = spec.failureNames.length;
+    return red && red.tests === total && red.passed === total - failed && red.failed === failed && [red.ignored, red.measured, red.filtered].every(count => count === 0);
+  });
+}
+
 function stageFailures(stage, platform) {
   const failures = [];
   if (stage.kind !== stageKind(stage.id)) failures.push('Invalid stage evidence kind');
   if (stage.status !== 'passed' || stage.exitCode !== 0) failures.push(`${platform}/${stage.id} did not pass`);
   if (stage.id.startsWith('test:') && !validExecutionCounts(stage, platform)) failures.push('Incomplete test evidence');
-  if (stage.id === 'mutation' && (stage.kind !== 'control' || stage.detectedFailure !== true || stage.restored !== true)) failures.push('Missing mutation evidence');
+  if (stage.id === 'mutation' && (stage.kind !== 'control' || stage.detectedFailure !== true || stage.restored !== true || !validMutationControls(stage.controls, platform))) failures.push('Missing mutation evidence');
   return failures;
 }
 
@@ -324,28 +357,39 @@ async function runHosted() {
     validateLock(readFileSync(lockFile), receipt.lockHash);
   });
   await stage('mutation', 'control', async () => {
-    requireThat(receipt.stages.find(s => s.id === 'test:watchdog_contract')?.status === 'passed', 'Green watchdog baseline required');
-    requireThat(passed(await command('mutation-clean', 'git', ['status', '--porcelain'])).trim() === '', 'Mutation baseline must be clean');
-    const filename = path.join(repo, 'src-tauri/tests/watchdog_contract.rs');
-    const original = readFileSync(filename), checksum = hash(original), mutated = prepareWatchdogMutation(original);
-    let detectedFailure = false, redCounts;
-    const target = inventory.targets.find(t => t.name === 'watchdog_contract');
-    const compileArgs = ['+1.93.1', 'test', '--locked', '--manifest-path', 'src-tauri/Cargo.toml', '--test', target.name, '--no-run', '--message-format=json'];
-    try {
-      writeFileSync(filename, mutated);
-      const diff = passed(await command('mutation-diff', 'git', ['diff', '--', target.source]));
-      requireThat(diff.includes('-    assert!(!focus.snapshot().focused);') && diff.includes('+    assert!(focus.snapshot().focused);'), 'Mutation did not apply');
-      const binaries = selectTestExecutables(passed(await command('mutation-compile', cargo, compileArgs, 5 * 60_000)), [target], env.CARGO_TARGET_DIR);
-      const result = await command('mutation-red', binaries[target.name], ['--test-threads=1']);
-      redCounts = validateMutationFailure(result, target.tests);
-      detectedFailure = true;
-    } finally { writeFileSync(filename, original); }
-    requireThat(hash(readFileSync(filename)) === checksum, 'Mutation restoration checksum mismatch');
-    requireThat(passed(await command('mutation-restored', 'git', ['status', '--porcelain'])).trim() === '', 'Mutation did not restore clean checkout');
-    const binaries = selectTestExecutables(passed(await command('mutation-green-compile', cargo, compileArgs, 5 * 60_000)), [target], env.CARGO_TARGET_DIR);
-    const counts = parseTestResult(passed(await command('mutation-green', binaries[target.name], ['--test-threads=1'])), target.tests);
-    validateLock(readFileSync(lockFile), receipt.lockHash);
-    return { detectedFailure, restored: true, checksum, counts, redCounts };
+    const controls = [];
+    for (const spec of mutationControls) {
+      requireThat(receipt.stages.find(s => s.id === `test:${spec.target}`)?.status === 'passed', 'Green mutation baseline required');
+      requireThat(passed(await command(`${spec.id}-clean`, 'git', ['status', '--porcelain'])).trim() === '', 'Mutation baseline must be clean');
+      const filename = path.join(repo, spec.source), original = readFileSync(filename);
+      const originalHash = hash(original), mutated = prepareControlMutation(spec.id, original), mutatedHash = hash(mutated);
+      requireThat(originalHash !== mutatedHash, 'Mutation did not change source');
+      const target = inventory.targets.find(target => target.name === spec.target);
+      const names = [...target.tests, ...(platform === 'darwin-arm64' ? target.darwinOnly : [])];
+      const compileArgs = ['+1.93.1', 'test', '--locked', '--manifest-path', 'src-tauri/Cargo.toml', `--${target.kind}`, target.name, '--no-run', '--message-format=json'];
+      const temp = path.join(state, `mutation-${spec.id}`); mkdirSync(temp);
+      const testEnv = { ...env, TMPDIR: temp, TMP: temp, TEMP: temp };
+      let redCounts;
+      try {
+        writeFileSync(filename, mutated);
+        requireThat(hash(readFileSync(filename)) === mutatedHash, 'Mutation bytes did not apply');
+        const diff = passed(await command(`${spec.id}-diff`, 'git', ['diff', '--', spec.source]));
+        requireThat(/^-(?!-).+/m.test(diff) && /^\+(?!\+).+/m.test(diff), 'Mutation diff missing');
+        const binaries = selectTestExecutables(passed(await command(`${spec.id}-compile`, cargo, compileArgs, 5 * 60_000)), [target], env.CARGO_TARGET_DIR);
+        const result = await command(`${spec.id}-red`, binaries[target.name], ['--test-threads=1'], 120_000, testEnv);
+        redCounts = validateMutationFailure(result, names, spec.failureNames);
+      } finally {
+        writeFileSync(filename, original);
+        requireThat(hash(readFileSync(filename)) === originalHash, 'Mutation restoration checksum mismatch');
+        requireThat(passed(await command(`${spec.id}-restored`, 'git', ['status', '--porcelain'])).trim() === '', 'Mutation did not restore clean checkout');
+        validateLock(readFileSync(lockFile), receipt.lockHash);
+      }
+      const binaries = selectTestExecutables(passed(await command(`${spec.id}-green-compile`, cargo, compileArgs, 5 * 60_000)), [target], env.CARGO_TARGET_DIR);
+      const counts = parseTestResult(passed(await command(`${spec.id}-green`, binaries[target.name], ['--test-threads=1'], 120_000, testEnv)), names);
+      validateLock(readFileSync(lockFile), receipt.lockHash);
+      controls.push({ ...spec, appliedDiff: true, detectedFailure: true, restored: true, originalHash, mutatedHash, restoredHash: hash(readFileSync(filename)), redCounts, counts });
+    }
+    return { detectedFailure: true, restored: true, controls };
   });
   if (receipt.stages.some(s => s.status !== 'passed')) process.exitCode = 1;
   console.log(JSON.stringify({ platform, stages: receipt.stages.map(s => ({ id: s.id, status: s.status, counts: s.counts })) }));

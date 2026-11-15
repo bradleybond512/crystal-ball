@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { inventory, stageIds } from '../scripts/native-test-driver.mjs';
+import { validReceipt } from './fixtures/native-ci/receipts.mjs';
 import test from 'node:test';
 import { parse } from 'yaml';
 
@@ -69,18 +69,6 @@ test('native and build-policy changes trigger the dedicated workflow', () => {
   assert.deepEqual(workflow.on.push.branches, ['main']);
   assert.deepEqual(workflow.on.push.paths, paths);
 });
-
-function validReceipt(platform, sourceSha) {
-  return { schemaVersion: 1, platform, sourceSha, lockHash: 'b'.repeat(64), stages: stageIds.map(id => {
-    const target = inventory.targets.find(target => id === `test:${target.name}`);
-    const count = target ? target.tests.length + (platform === 'darwin-arm64' ? target.darwinOnly.length : 0) : 0;
-    return { id, status: 'passed', exitCode: 0,
-      kind: target ? 'test' : id.startsWith('list:') ? 'inventory' : id === 'mutation' ? 'control' : 'build',
-      ...(target ? { counts: { tests: count, passed: count, failed: 0, ignored: 0, measured: 0, filtered: 0 } } : {}),
-      ...(id === 'mutation' ? { detectedFailure: true, restored: true } : {}),
-    };
-  }) };
-}
 
 test('actual report shell rejects stale, missing, malformed or failed platform evidence', t => {
   const dir = mkdtempSync(path.join(tmpdir(), 'native report fixture-'));

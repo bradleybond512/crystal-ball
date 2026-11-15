@@ -1,8 +1,11 @@
 {
   "scripts/native-test-driver.mjs": ["test:native-ci-driver", "test:native-ci-workflow"],
-  "scripts/native-test-inventory.json": ["test:native-ci-driver", "test:native-ci-workflow"],
+  "scripts/native-test-inventory.json": ["test:native-ci-driver", "test:native-ci-workflow", "test:native-crypto-boundary"],
+  "tests/native-crypto-boundary.test.mjs": ["test:native-crypto-boundary"],
   ".github/workflows/native-tests.yml": ["test:native-ci-driver", "test:native-ci-workflow", "test:workflow-security"],
   "tests/native-ci-driver.test.mjs": ["test:native-ci-driver"],
+  "tests/native-ci-controls.test.mjs": ["test:native-ci-driver"],
+  "tests/fixtures/native-ci/receipts.mjs": ["test:native-ci-driver", "test:native-ci-workflow"],
   "tests/fixtures/native-ci/linux-reviewed-lists.json": ["test:native-ci-driver"],
   "tests/native-ci-workflow.test.mjs": ["test:native-ci-workflow"],
   "src/services/foreign-mil-news.ts": ["test:foreign-mil-angle"],
@@ -178,6 +181,7 @@
     "test:gdacs-map"
   ],
   "src-tauri/src/main.rs": [
+    "test:native-crypto-boundary",
     "test:desktop-updater",
     "test:imessage",
     "test:imessage-native",

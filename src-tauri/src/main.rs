@@ -833,8 +833,9 @@ fn encrypt_vault_shadow(key: &[u8; 32], plaintext: &str) -> Option<String> {
  let cipher = Aes256Gcm::new_from_slice(key).ok()?;
  let mut nonce_bytes = [0u8; 12];
  getrandom::fill(&mut nonce_bytes).ok()?;
+ let nonce = Nonce::from(nonce_bytes);
  let ct = cipher
-     .encrypt(Nonce::from_slice(&nonce_bytes), plaintext.as_bytes())
+     .encrypt(&nonce, plaintext.as_bytes())
      .ok()?;
  serde_json::to_string(&ShadowEnvelope { v: 2, n: nonce_bytes.to_vec(), c: ct }).ok()
 }
@@ -848,7 +849,9 @@ fn decrypt_vault_shadow(key: &[u8; 32], raw: &str) -> Option<String> {
      return None;
  }
  let cipher = Aes256Gcm::new_from_slice(key).ok()?;
- let pt = cipher.decrypt(Nonce::from_slice(&env.n), env.c.as_ref()).ok()?;
+ let nonce_bytes: [u8; 12] = env.n.as_slice().try_into().ok()?;
+ let nonce = Nonce::from(nonce_bytes);
+ let pt = cipher.decrypt(&nonce, env.c.as_ref()).ok()?;
  String::from_utf8(pt).ok()
 }
 
@@ -1683,7 +1686,7 @@ fn open_path_in_shell(path: &Path) -> Result<(), String> {
 fn is_172_16_range(host: &str) -> bool {
  if let Some(rest) = host.strip_prefix("172.") {
   if let Some(s) = rest.split('.').next() {
-   if let Ok(n) = s.parse::<u8>() { return n >= 16 && n <= 31; }
+   if let Ok(n) = s.parse::<u8>() { return (16..=31).contains(&n); }
   }
  }
  false
@@ -1693,7 +1696,7 @@ fn is_172_16_range(host: &str) -> bool {
 fn is_cgnat_range(host: &str) -> bool {
  if let Some(rest) = host.strip_prefix("100.") {
   if let Some(s) = rest.split('.').next() {
-   if let Ok(n) = s.parse::<u8>() { return n >= 64 && n <= 127; }
+   if let Ok(n) = s.parse::<u8>() { return (64..=127).contains(&n); }
   }
  }
  false
@@ -1830,7 +1833,7 @@ fn send_notification(
  #[cfg(not(target_os = "macos"))]
  {
  let _ = (title, body, sound, priority);
- return Ok(NativeOutcome::Unsupported);
+ Ok(NativeOutcome::Unsupported)
  }
  #[cfg(target_os = "macos")]
  {
@@ -1926,7 +1929,7 @@ fn speak_aloud(
  #[cfg(not(target_os = "macos"))]
  {
  let _ = (text, voice, rate);
- return Ok(NativeOutcome::Unsupported);
+ Ok(NativeOutcome::Unsupported)
  }
  #[cfg(target_os = "macos")]
  {
@@ -2312,7 +2315,7 @@ async fn stage_latest_update(webview: Webview) -> Result<UpdateOutcome, UpdateEr
  updater_policy::version(current).map_err(|_| UpdateError::check())?;
  if !is_semver_newer(&version, current) { return Ok(UpdateOutcome::UpToDate { current_version: current.into(), checked_at }); }
  #[cfg(not(target_os = "macos"))]
- { let _ = guard; return Ok(UpdateOutcome::browser(&version, BrowserReason::UnsupportedPlatform, checked_at)); }
+ { let _ = guard; Ok(UpdateOutcome::browser(&version, BrowserReason::UnsupportedPlatform, checked_at)) }
  #[cfg(target_os = "macos")]
  {
  let selected = match updater_policy::select_assets(&release, std::env::consts::ARCH) {
@@ -3115,10 +3118,8 @@ fn update_mode_label(webview: Webview, app: AppHandle, mode: String) -> Result<(
  _ => "Mode: \u{1F54A} Peace",
  };
  if let Some(menu) = app.menu() {
- if let Some(item_kind) = menu.get(MENU_VIEW_MODE_ID) {
- if let MenuItemKind::MenuItem(item) = item_kind {
+ if let Some(MenuItemKind::MenuItem(item)) = menu.get(MENU_VIEW_MODE_ID) {
  item.set_text(label).map_err(|e| format!("Failed to update mode label: {e}"))?;
- }
  }
  }
  Ok(())
@@ -3652,7 +3653,10 @@ mod keychain_read_tests {
 
 #[cfg(test)]
 mod vault_shadow_crypto_tests {
- use super::{decrypt_vault_shadow, encrypt_vault_shadow};
+ use super::{decrypt_vault_shadow, encrypt_vault_shadow, ShadowEnvelope};
+
+ const FIXTURE_ENVELOPE: &str = r#"{"v":2,"n":[0,1,2,3,4,5,6,7,8,9,10,11],"c":[99,163,143,25,101,125,172,59,18,144,223,190,151,32,92,205,208,17,192,188,58,31,129,22,226,4,227,111,126,136,165,131,145,53,169,158,45,191]}"#;
+ const ZERO_NONCE_ENVELOPE: &str = r#"{"v":2,"n":[0,0,0,0,0,0,0,0,0,0,0,0],"c":[26,250,194,219,131,230,126,154,132,37,181,70,177,3,123,153,140,194,223,203,81,161,83,34,68,56,252,54,232,13,210,96,71,121,137,242,36,128]}"#;
 
  #[test]
  fn roundtrip_recovers_plaintext_and_hides_secret() {
@@ -3688,6 +3692,40 @@ mod vault_shadow_crypto_tests {
  let tampered = enc.replacen("\"c\":[", "\"c\":[255,", 1);
  assert!(decrypt_vault_shadow(&key, &tampered).is_none());
  }
+
+ #[test]
+ fn existing_v2_ciphertext_fixture_decrypts() {
+ assert_eq!(decrypt_vault_shadow(&[7u8; 32], FIXTURE_ENVELOPE).as_deref(), Some(r#"{"fixture":"ux071-v2"}"#));
+ assert_eq!(decrypt_vault_shadow(&[7u8; 32], ZERO_NONCE_ENVELOPE).as_deref(), Some(r#"{"fixture":"ux071-v2"}"#));
+ }
+
+ #[test]
+ fn malformed_nonce_lengths_are_rejected() {
+ for length in [0, 1, 11, 13, 16] {
+ let mut envelope: ShadowEnvelope = serde_json::from_str(ZERO_NONCE_ENVELOPE).expect("fixture envelope");
+ envelope.n.resize(length, 0);
+ let malformed = serde_json::to_string(&envelope).expect("serialize fixture");
+ assert!(decrypt_vault_shadow(&[7u8; 32], &malformed).is_none(), "accepted nonce length {length}");
+ }
+ }
+
+ #[test]
+ fn modified_nonce_is_rejected() {
+ let mut envelope: ShadowEnvelope = serde_json::from_str(FIXTURE_ENVELOPE).expect("fixture envelope");
+ envelope.n[0] ^= 1;
+ let modified = serde_json::to_string(&envelope).expect("serialize fixture");
+ assert!(decrypt_vault_shadow(&[7u8; 32], &modified).is_none());
+ }
+
+ #[test]
+ fn modified_tag_is_rejected() {
+ let mut envelope: ShadowEnvelope = serde_json::from_str(FIXTURE_ENVELOPE).expect("fixture envelope");
+ let tag_end = envelope.c.len() - 1;
+ envelope.c[tag_end] ^= 1;
+ let modified = serde_json::to_string(&envelope).expect("serialize fixture");
+ assert!(decrypt_vault_shadow(&[7u8; 32], &modified).is_none());
+ }
+
 }
 
 #[cfg(test)]
@@ -5290,7 +5328,7 @@ fn main() {
  ])
  .setup(|app| {
  // Load persistent cache into memory (avoids 14MB file I/O on every IPC call)
- let cache_path = cache_file_path(&app.handle()).unwrap_or_default();
+ let cache_path = cache_file_path(app.handle()).unwrap_or_default();
  app.manage(PersistentCache::load(&cache_path));
 
  // ── Renderer watchdog ──────────────────────────────────────────────────
@@ -5317,7 +5355,7 @@ fn main() {
  // Heartbeat tick to the dated log (~every 30s) — steady proof-of-life
  // that both the watchdog thread and the renderer's beat are alive,
  // regardless of focus.
- if tick % 10 == 0 {
+ if tick.is_multiple_of(10) {
  let beat_age = renderer_now_ms().saturating_sub(LAST_RENDERER_HEARTBEAT_MS.load(Ordering::Relaxed));
  let focused = MAIN_WINDOW_FOCUS.snapshot().focused;
  append_watchdog_log(&app_handle, "INFO", &format!("heartbeat: renderer last beat {beat_age}ms ago, focused={focused}"));
@@ -5401,7 +5439,7 @@ fn main() {
  }
 
  append_desktop_log(
- &app.handle(),
+ app.handle(),
  "INFO",
  &format!(
  "════════ SESSION START pid={} version={} bundle={} ════════",

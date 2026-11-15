@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import * as driver from '../scripts/native-test-driver.mjs';
+import { validReceipt as receipt } from './fixtures/native-ci/receipts.mjs';
 
 const targets = [
   { name: 'current_location_contract', kind: 'test' },
@@ -192,25 +193,11 @@ test('timeout terminates the process group rather than leaving a writing descend
   assert.equal(existsSync(marker), false, 'descendant cannot write after stage timeout');
 });
 
-function receipt(platform) {
-  return {
-    schemaVersion: 1, platform, sourceSha: 'a'.repeat(40), lockHash: 'b'.repeat(64),
-    stages: driver.stageIds.map(id => {
-      const target = driver.inventory.targets.find(target => id === `test:${target.name}`);
-      const count = target ? target.tests.length + (platform === 'darwin-arm64' ? target.darwinOnly.length : 0) : 0;
-      return { id, status: 'passed', exitCode: 0,
-      kind: id.startsWith('test:') ? 'test' : id.startsWith('list:') ? 'inventory' : id === 'mutation' ? 'control' : 'build',
-      ...(id.startsWith('test:') ? { counts: { ...counts, tests: count, passed: count } } : {}), ...(id === 'mutation' ? { detectedFailure: true, restored: true } : {}),
-      };
-    }),
-  };
-}
-
 test('aggregate checks both exact platform receipts and never converts missing execution to success', () => {
   assert.equal(driver.stageIds.filter(id => id.startsWith('test:')).length, 8);
   assert.deepEqual(driver.stageIds.filter(id => id.startsWith('test:')).map(id => id.slice(5)).sort(), targets.map(target => target.name).sort());
   assert.equal(driver.stageIds.at(-1), 'mutation');
-  const good = platforms.map(receipt);
+  const good = platforms.map(platform => receipt(platform));
   assert.equal(driver.aggregateReceipts(platforms, good).passed, true);
   const cases = [[], [null, good[1]], [good[0], { ...good[1], schemaVersion: 2 }], [good[0], { ...good[1], stages: [...good[1].stages, good[1].stages[0]] }], [good[0]], [...good, good[0]], [good[0], { ...good[1], platform: 'darwin-x64' }],
     [good[0], { ...good[1], sourceSha: 'c'.repeat(40) }], [good[0], { ...good[1], lockHash: 'd'.repeat(64) }],
@@ -235,13 +222,13 @@ test('aggregate checks both exact platform receipts and never converts missing e
 
 test('hosted mutation changes exactly one reviewed assertion and requires the expected Rust failure', () => {
   const original = '    assert!(!focus.snapshot().focused);\n';
-  assert.equal(driver.prepareWatchdogMutation(Buffer.from(original)), '    assert!(focus.snapshot().focused);\n');
-  for (const input of ['', original + original, 'assert!(!other.focused);']) assert.throws(() => driver.prepareWatchdogMutation(input));
+  assert.equal(driver.prepareControlMutation('watchdog', Buffer.from(original)), '    assert!(focus.snapshot().focused);\n');
+  for (const input of ['', original + original, 'assert!(!other.focused);']) assert.throws(() => driver.prepareControlMutation('watchdog', input));
   const expectedNames = driver.inventory.targets.find(target => target.name === 'watchdog_contract').tests;
   assert.equal(expectedNames.length, 9);
   const output = 'running 9 tests\n' + expectedNames.map(name => `test ${name} ... ${name === 'main_focus_tracks_gain_and_loss' ? 'FAILED' : 'ok'}`).join('\n') + '\n\ntest result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s\n';
   const result = { status: 'failed', exitCode: 101, stdout: output, stderr: '' };
-  assert.deepEqual(driver.validateMutationFailure(result, expectedNames), { tests: 9, passed: 8, failed: 1, ignored: 0, measured: 0, filtered: 0 });
+  assert.deepEqual(driver.validateMutationFailure(result, expectedNames, ['main_focus_tracks_gain_and_loss']), { tests: 9, passed: 8, failed: 1, ignored: 0, measured: 0, filtered: 0 });
   for (const changed of [
     { ...result, status: 'passed', exitCode: 0 }, { ...result, exitCode: 0 },
     { ...result, status: 'timed_out', exitCode: null },
@@ -251,7 +238,7 @@ test('hosted mutation changes exactly one reviewed assertion and requires the ex
     { ...result, stdout: output.replace('main_focus_tracks_gain_and_loss ... FAILED', 'unreviewed ... FAILED') },
     { ...result, stdout: output.replace('test main_focus_tracks_gain_and_loss ... FAILED\n', '') },
     { ...result, stdout: output + output },
-  ]) assert.throws(() => driver.validateMutationFailure(changed, expectedNames));
+  ]) assert.throws(() => driver.validateMutationFailure(changed, expectedNames, ['main_focus_tracks_gain_and_loss']));
 });
 
 test('Rust shims resolve from runner PATH independently of Cargo cache home', async t => {
@@ -300,10 +287,13 @@ test('reviewed inventory matches the captured Linux vault and binary lists witho
   assert.equal(evidence.platform, 'linux-x64');
   const source = readFileSync(new URL('../src-tauri/src/vault_coordinator.rs', import.meta.url), 'utf8');
   assert.match(source, /#\[cfg\(test\)\]\s+mod transport_tests \{/);
+  const added = ['malformed_nonce_lengths_are_rejected', 'modified_nonce_is_rejected', 'modified_tag_is_rejected', 'existing_v2_ciphertext_fixture_decrypts'].map(name => `vault_shadow_crypto_tests::${name}`);
   for (const [name, count] of [['vault_coordinator_contract', 45], ['crystalball', 115]]) {
     const target = driver.inventory.targets.find(target => target.name === name);
-    assert.equal(target.tests.length, count);
-    assert.equal(driver.validateTestInventory(evidence.lists[name], target.tests).length, count);
+    const historicalNames = target.tests.filter(name => !added.includes(name));
+    assert.equal(target.tests.length, count + (name === 'crystalball' ? 4 : 0));
+    assert.equal(driver.validateTestInventory(evidence.lists[name], historicalNames).length, count);
+    if (name === 'crystalball') assert.deepEqual(target.tests.filter(name => added.includes(name)).sort(), [...added].sort());
     assert.equal(target.tests.filter(name => name.startsWith('vault_coordinator::transport_tests::')).length, 5);
   }
 });

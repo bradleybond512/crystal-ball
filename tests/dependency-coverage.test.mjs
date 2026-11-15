@@ -258,6 +258,9 @@ test('aggregation fails missing, wrong-identity, zero-case and unfinished receip
 });
 
 test('fixed graph commands use explicit files and preserve runtime mutation stages', () => {
+  const source = readFileSync(path.join(root, 'scripts/dependency-test-runner.mjs'), 'utf8');
+  const execution = source.slice(source.indexOf('async function runGraph('), source.indexOf('function lifecycleProbe('));
+  assert.match(execution, /try \{\s+const env = graphEnvironment\(opts\.graph, repo, owned\);[\s\S]*?await executeStage\(stage, \{ cwd: repo, env \}\);[\s\S]*?\} finally \{ rmSync\(owned,/, 'graph-specific environment must reach stage dispatch inside owned-state cleanup');
   const metadata = { scripts: JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).scripts };
   for (const graph of selector.DEPENDENCY_GRAPHS) {
     const stages = runner.graphStages(graph, root, metadata);

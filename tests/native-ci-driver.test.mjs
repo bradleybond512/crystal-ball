@@ -283,6 +283,14 @@ test('Rust shims resolve from runner PATH independently of Cargo cache home', as
   writeFileSync(path.join(incomplete, 'cargo'), '', { mode: 0o600 });
   mkdirSync(path.join(incomplete, 'rustc'));
   assert.throws(() => driver.resolveRustTools({ PATH: incomplete }, checkout));
+  const nonExecutable = path.join(dir, 'non-executable'); mkdirSync(nonExecutable);
+  writeFileSync(path.join(nonExecutable, 'cargo'), '', { mode: 0o600 });
+  symlinkSync(shim, path.join(nonExecutable, 'rustc'));
+  assert.throws(() => driver.resolveRustTools({ PATH: nonExecutable }, checkout), /EACCES/);
+  const nonRegular = path.join(dir, 'non-regular'); mkdirSync(nonRegular);
+  symlinkSync(shim, path.join(nonRegular, 'cargo'));
+  mkdirSync(path.join(nonRegular, 'rustc'), { mode: 0o700 });
+  assert.throws(() => driver.resolveRustTools({ PATH: nonRegular }, checkout), /Unsafe Rust executable/);
 });
 
 

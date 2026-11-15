@@ -1,0 +1,9 @@
+{
+  "reviewedSha": "fb9636d4e72e5a4ab19fc7b4729262d484a55792",
+  "reviewer": "claude",
+  "model": "claude-sonnet-4-6",
+  "verdict": "approve",
+  "blockingFindings": 0,
+  "reviewedAt": "2026-11-14T15:15:14.956Z",
+  "evidence": "### Conclusion\n\n**Zero blocking findings. Ready for next draft CI push.**\n\nThe two code commits are minimal, targeted fixes for confirmed CI failures. No production trusted-policy weakening, no assertion weakening, no security regression. Evidence matches diffs. Hosted graph receipts are the remaining gate after publication."
+}

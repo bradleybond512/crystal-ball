@@ -171,3 +171,23 @@ Driver SHA-256: `58d2c693ef5c6eeef70fbb1cbe2a700050d8e4eb609ae423ebe0768d3ffd9b0
 Inventory SHA-256: `d481ab7581cae00673d9155c1f93fb9179d1b6a08090034515b39787cd748826`.
 Raw evidence: `next-nov15/native-repair-mutations/final/REPORT.md` and adjacent
 diffs/logs. This proof did not execute Rust or establish hosted acceptance.
+
+## Reconciled hosted run and first cleanup
+
+Published `b27fe912e` and applied the separately approved CI-policy label.
+Its replacement approval check passed. Native run `43743059321` on merge
+source `fd5a01e8904f6f8a135f17f02a0eaae9ba7aa9da` executed all eight targets:
+Linux 256 passed / 0 failed, macOS ARM64 258 passed / 0 failed. Both platforms
+used Rust 1.93.1 and the same unchanged lock hash. Both watchdog mutations
+returned 8 passed / 1 failed, then 9 passed / 0 failed after checksum restoration.
+This supersedes the earlier unobserved platform/withheld-target status.
+
+Strict Clippy failed on both platforms, so native jobs and aggregation remain
+red. The separate marketing audit also remains red; all other checks succeeded
+apart from the intended watchdog skip. No check was weakened. Both PRs remain
+drafts with auto-merge unset.
+
+The separately approved first lint cleanup and its local evidence are recorded
+in [the stage1 report](UX-071-NATIVE-LINT-STAGE1.md). New crypto tests and actual
+Rust mutation proof remain pending separately approved hosted publication.
+Broader platform/dead-code cleanup requires a separate design; UX-071 is open.

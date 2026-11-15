@@ -253,3 +253,49 @@ test('hosted mutation changes exactly one reviewed assertion and requires the ex
     { ...result, stdout: output + output },
   ]) assert.throws(() => driver.validateMutationFailure(changed, expectedNames));
 });
+
+test('Rust shims resolve from runner PATH independently of Cargo cache home', async t => {
+  const dir = temporary(t), checkout = path.join(dir, 'checkout'), bin = path.join(dir, 'host-bin');
+  mkdirSync(checkout); mkdirSync(bin);
+  const shim = path.join(bin, 'rustup');
+  writeFileSync(shim, `#!${process.execPath}\nconsole.log(JSON.stringify(process.argv.slice(2)))\n`, { mode: 0o700 });
+  for (const name of ['cargo', 'rustc']) symlinkSync(shim, path.join(bin, name));
+  const inherited = { PATH: bin, CARGO_HOME: path.join(dir, 'cache-without-proxies') };
+  const tools = driver.resolveRustTools(inherited, checkout);
+  assert.deepEqual(tools, { cargo: path.join(bin, 'cargo'), rustc: path.join(bin, 'rustc') }, 'retain shim names for rustup dispatch');
+  for (const bin of Object.values(tools)) {
+    const result = await driver.executeStage({ bin, args: ['+1.93.1', '--version'], timeoutMs: 2000 }, { cwd: checkout, env: driver.isolatedEnvironment(path.join(dir, path.basename(bin) + '-state'), inherited) });
+    assert.equal(result.status, 'passed');
+    assert.deepEqual(JSON.parse(result.stdout), ['+1.93.1', '--version']);
+  }
+  for (const PATH of ['', '.', `:${bin}`, `${bin}:relative`, checkout]) assert.throws(() => driver.resolveRustTools({ PATH }, checkout));
+  assert.throws(() => driver.resolveRustTools({}, checkout));
+  const linked = path.join(checkout, 'linked'); mkdirSync(linked);
+  for (const name of ['cargo', 'rustc']) symlinkSync(shim, path.join(linked, name));
+  assert.throws(() => driver.resolveRustTools({ PATH: linked }, checkout));
+  const unsafe = path.join(checkout, 'tools'); mkdirSync(unsafe);
+  for (const name of ['cargo', 'rustc']) writeFileSync(path.join(unsafe, name), '', { mode: 0o700 });
+  assert.throws(() => driver.resolveRustTools({ PATH: unsafe }, checkout));
+  const indirect = path.join(dir, 'indirect'); mkdirSync(indirect);
+  for (const name of ['cargo', 'rustc']) symlinkSync(path.join(unsafe, name), path.join(indirect, name));
+  assert.throws(() => driver.resolveRustTools({ PATH: indirect }, checkout));
+  const incomplete = path.join(dir, 'incomplete'); mkdirSync(incomplete);
+  writeFileSync(path.join(incomplete, 'cargo'), '', { mode: 0o600 });
+  mkdirSync(path.join(incomplete, 'rustc'));
+  assert.throws(() => driver.resolveRustTools({ PATH: incomplete }, checkout));
+});
+
+
+test('reviewed inventory matches the captured Linux vault and binary lists without losing cases', () => {
+  const evidence = JSON.parse(readFileSync(new URL('fixtures/native-ci/linux-reviewed-lists.json', import.meta.url), 'utf8'));
+  assert.equal(evidence.sourceSha, 'e64401902c952c6c20a97d658c762b244f2486b1');
+  assert.equal(evidence.platform, 'linux-x64');
+  const source = readFileSync(new URL('../src-tauri/src/vault_coordinator.rs', import.meta.url), 'utf8');
+  assert.match(source, /#\[cfg\(test\)\]\s+mod transport_tests \{/);
+  for (const [name, count] of [['vault_coordinator_contract', 45], ['crystalball', 115]]) {
+    const target = driver.inventory.targets.find(target => target.name === name);
+    assert.equal(target.tests.length, count);
+    assert.equal(driver.validateTestInventory(evidence.lists[name], target.tests).length, count);
+    assert.equal(target.tests.filter(name => name.startsWith('vault_coordinator::transport_tests::')).length, 5);
+  }
+});

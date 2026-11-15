@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, readdirSync, writeFileSync } from 'node:fs';
+import { accessSync, constants, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -85,6 +85,28 @@ export function validateMutationFailure(result, expectedNames) {
 export function validateLock(bytes, expectedSHA256) {
   requireThat(/^[a-f0-9]{64}$/.test(expectedSHA256) && hash(bytes) === expectedSHA256, 'Cargo lock changed');
   return true;
+}
+
+export function resolveRustTools(inherited, checkout) {
+  requireThat(typeof inherited.PATH === 'string', 'Runner PATH required');
+  const directories = inherited.PATH.split(path.delimiter);
+  requireThat(directories.every(dir => path.isAbsolute(dir)), 'Runner PATH must contain only absolute directories');
+  const root = realpathSync(checkout);
+  const selected = {};
+  for (const name of ['cargo', 'rustc']) {
+    for (const directory of directories) {
+      const candidate = path.join(directory, name);
+      if (!existsSync(candidate)) continue;
+      const canonical = realpathSync(candidate), parent = realpathSync(directory);
+      requireThat(parent !== root && !inside(root, parent), 'Rust executable path is inside checkout');
+      requireThat(statSync(canonical).isFile() && !inside(root, canonical) && canonical !== root, 'Unsafe Rust executable');
+      accessSync(candidate, constants.X_OK);
+      selected[name] = candidate;
+      break;
+    }
+    requireThat(selected[name], 'Installed Rust executable missing from PATH');
+  }
+  return selected;
 }
 
 export function validateToolchain(rustVersion, clippyVersion, platformId) {
@@ -234,8 +256,7 @@ async function runHosted() {
   const state = path.join(runnerTemp, 'ux071-native');
   requireThat(!existsSync(state), 'Native state already exists');
   const originalHome = homedir();
-  const cargo = path.join(process.env.CARGO_HOME ?? path.join(originalHome, '.cargo'), 'bin', 'cargo');
-  const rustc = path.join(path.dirname(cargo), 'rustc');
+  const { cargo, rustc } = resolveRustTools(process.env, repo);
   const env = isolatedEnvironment(state, { ...process.env, RUSTUP_HOME: process.env.RUSTUP_HOME ?? path.join(originalHome, '.rustup') });
   const frontend = path.join(state, 'frontend'); mkdirSync(frontend); writeFileSync(path.join(frontend, 'index.html'), '<!doctype html><title>Native test fixture</title>');
   env.TAURI_CONFIG = JSON.stringify({ build: { frontendDist: frontend } });

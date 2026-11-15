@@ -7,7 +7,8 @@ import { dataFreshness } from '@/services/data-freshness';
  *  - NHC (National Hurricane Center): Atlantic + East/Central Pacific basins
  * https://www.nhc.noaa.gov/CurrentStorms.json  — real-time active storms
  *  - JTWC (Joint Typhoon Warning Center): West Pacific, Indian Ocean, Southern Hemisphere
- * Parsed from JTWC RSS advisory at https://www.metoc.navy.mil/jtwc/products/
+ * The current JTWC RSS endpoint is a regional bulletin index, not an observation feed.
+ * Observation coverage remains unavailable; linked bulletins are not parsed.
  * (proxied via rss-proxy because metoc.navy.mil blocks CORS)
  *
  * Both are public government data — no API key required.
@@ -55,7 +56,10 @@ const NHC_STORMS_URL = 'https://www.nhc.noaa.gov/CurrentStorms.json';
 const JTWC_RSS = 'https://www.metoc.navy.mil/jtwc/rss/jtwc.rss';
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 min — cyclones are fast-moving
-let cache: { storms: TropicalCyclone[]; fetchedAt: number } | null = null;
+type SourceOutcome = { ok: true; storms: TropicalCyclone[] } | { ok: false; reason: string };
+let nhcSnapshot: TropicalCyclone[] = [];
+let lastAttempt: { storms: TropicalCyclone[]; settledAt: number } | null = null;
+let inFlight: Promise<TropicalCyclone[]> | null = null;
 
 function categoryFromWind(windKts: number): TcCategory {
   if (windKts < 34) return 'tropical_depression';
@@ -124,17 +128,18 @@ function basinFromAtcf(atcf: string): TcBasin {
   }
 }
 
-async function fetchNhcStorms(): Promise<TropicalCyclone[]> {
+async function fetchNhcStorms(): Promise<SourceOutcome> {
   try {
  const res = await fetch(NHC_STORMS_URL, {
  signal: AbortSignal.timeout(10_000),
  headers: { Accept: 'application/json' },
  });
- if (!res.ok) return [];
+ if (!res.ok) return { ok: false, reason: 'NHC HTTP failure' };
  const data = (await res.json()) as NhcResponse;
- const storms = data.activeStorms ?? [];
+ if (!data || !Array.isArray(data.activeStorms)) return { ok: false, reason: 'NHC response unavailable' };
+ const storms = data.activeStorms;
 
- return storms.map(s => {
+ return { ok: true, storms: storms.map(s => {
  const windKts = Number.parseInt(s.intensity, 10) || null;
  const category = windKts === null ? 'unknown' : categoryFromWind(windKts);
  const lat = Number.parseFloat(s.lat) || 0;
@@ -154,98 +159,49 @@ async function fetchNhcStorms(): Promise<TropicalCyclone[]> {
  advisoryUrl: `https://www.nhc.noaa.gov/text/${s.wallet}.shtml`,
  severity: categoryFromSaffirSimpson(category),
  };
- });
+ }) };
   } catch {
- return [];
+ return { ok: false, reason: 'NHC response unavailable' };
   }
 }
 
-// eslint-disable-next-line sonarjs/cognitive-complexity -- JTWC RSS regex parser; refactor deferred
-async function fetchJtwcStorms(): Promise<TropicalCyclone[]> {
+async function fetchJtwcStorms(): Promise<SourceOutcome> {
   try {
- const proxyUrl = `/api/rss-proxy?url=${encodeURIComponent(JTWC_RSS)}`;
- const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(12_000) });
- if (!res.ok) return [];
-
- const text = await res.text();
- const parser = new DOMParser();
- const doc = parser.parseFromString(text, 'text/xml');
- if (doc.querySelector('parsererror')) return [];
-
- const items = doc.querySelectorAll('item');
- const storms: TropicalCyclone[] = [];
-
- for (const item of items) {
- const title = item.querySelector('title')?.textContent?.trim() ?? '';
- const description = item.querySelector('description')?.textContent?.trim() ?? '';
- const link = item.querySelector('link')?.textContent?.trim() ?? '';
- const pubDateStr = item.querySelector('pubDate')?.textContent?.trim() ?? '';
-
- // JTWC titles like: "Tropical Storm 01W Advisory 001"
- /* eslint-disable sonarjs/slow-regex -- bounded JTWC RSS-feed text */
- const windMatch = /(\d+)\s*KT/i.exec(description);
- const latMatch = /(\d+\.\d+)[NS]/i.exec(description);
- const lonMatch = /(\d+\.\d+)[EW]/i.exec(description);
- const latNeg = /S\b/.test((/\d+\.\d+([NS])/i.exec(description))?.[0] ?? '' );
- const lonNeg = /W\b/.test((/\d+\.\d+([EW])/i.exec(description))?.[0] ?? '' );
- /* eslint-enable sonarjs/slow-regex */
-
- const windKts = windMatch?.[1] ? Number.parseInt(windMatch[1], 10) : null;
- const latSign = latNeg ? -1 : 1;
- const lonSign = lonNeg ? -1 : 1;
- const lat = latMatch?.[1] ? Number.parseFloat(latMatch[1]) * latSign : 0;
- const lon = lonMatch?.[1] ? Number.parseFloat(lonMatch[1]) * lonSign : 0;
- const category = windKts === null ? 'unknown' : categoryFromWind(windKts);
-
- // Determine basin from lon/lat
- let basin: TcBasin = 'west_pacific';
- if (lat < 0 && lon > 30 && lon < 90) basin = 'south_indian';
- else if (lat < 0) basin = 'south_pacific';
- else if (lon > 40 && lon < 100) basin = 'north_indian';
-
- storms.push({
- id: `jtwc-${title.replace(/\s+/g, '-').toLowerCase().slice(0, 30)}`,
- name: title.split(' Advisory')[0]?.trim() ?? title,
- basin,
- category,
- windKts,
- pressureMb: null,
- lat,
- lon,
- movement: '',
- headline: description.slice(0, 200),
- advisoryTime: pubDateStr ? new Date(pubDateStr) : new Date(),
- advisoryUrl: link,
- severity: categoryFromSaffirSimpson(category),
- });
- }
-
- return storms;
+    const proxyUrl = `/api/rss-proxy?url=${encodeURIComponent(JTWC_RSS)}`;
+    const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(12_000) });
+    if (!res.ok) return { ok: false, reason: 'JTWC HTTP failure' };
+    await res.text();
+    // The current endpoint is a regional bulletin index, not storm observations.
+    // Empty or parseable RSS cannot establish authoritative storm absence.
+    return { ok: false, reason: 'JTWC observation coverage unavailable' };
   } catch {
- return [];
+    return { ok: false, reason: 'JTWC response unavailable' };
   }
+}
+
+async function refreshTropicalCyclones(): Promise<TropicalCyclone[]> {
+  const [nhc, jtwc] = await Promise.all([fetchNhcStorms(), fetchJtwcStorms()]);
+  if (nhc.ok) nhcSnapshot = nhc.storms;
+  const storms = [...nhcSnapshot];
+  const severityOrder: Record<TropicalCyclone['severity'], number> = { critical: 0, high: 1, medium: 2, low: 3 };
+  storms.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+  lastAttempt = { storms, settledAt: Date.now() };
+  const failures = [nhc, jtwc].filter((outcome) => !outcome.ok);
+  // JTWC has no supported observation-success format in this slice. A valid
+  // NHC empty result is source-local success, never complete global coverage.
+  dataFreshness.recordError('tropical-cyclones', failures.map((outcome) => outcome.reason).join('; '));
+  return storms;
 }
 
 export async function fetchTropicalCyclones(): Promise<TropicalCyclone[]> {
-  if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) return cache.storms;
-
-  const [nhcResult, jtwcResult] = await Promise.allSettled([
- fetchNhcStorms(),
- fetchJtwcStorms(),
-  ]);
-
-  const storms: TropicalCyclone[] = [
- ...(nhcResult.status === 'fulfilled' ? nhcResult.value : []),
- ...(jtwcResult.status === 'fulfilled' ? jtwcResult.value : []),
-  ];
-
-  // Sort most intense first
-  const severityOrder: Record<TropicalCyclone['severity'], number> = { critical: 0, high: 1, medium: 2, low: 3 };
-  storms.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
-
-  cache = { storms, fetchedAt: Date.now() };
-  dataFreshness.recordUpdate('tropical-cyclones', storms.length);
-  return storms;
+  if (inFlight) return inFlight;
+  if (lastAttempt && Date.now() - lastAttempt.settledAt < CACHE_TTL_MS) return lastAttempt.storms;
+  inFlight = refreshTropicalCyclones();
+  try {
+    return await inFlight;
+  } finally {
+    inFlight = null;
+  }
 }
 
 export function tcSeverityClass(severity: TropicalCyclone['severity']): string {

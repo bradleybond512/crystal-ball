@@ -180,3 +180,69 @@ receipts while preserving existing tests and exposing remaining coverage.
 
 Merging, auto-merge, releases, deployment and application installation remain
 paused.
+
+## November 15 hosted execution and environment repairs
+
+Approved tip `d22ce0447` was published. Its checks finished with 33 successes,
+seven failures and one intended skip. Dependency run `43684596587` used
+candidate-preview merge source `ea40e48bcbce3addc4965149f298f8edd685919f`.
+The npm startup and selector-fixture repairs passed hosted execution.
+
+Three complete graph jobs passed: Codex (86/0, 63/0, 27/0), fixtures
+(8/0, 18/0, 22/0, 2/0, 4/0, 4/0, 5/0, 14/0, 7/0) and marketing (51/0).
+cb-control built its native dependencies and passed runtime contracts at 4/0;
+scripts passed AIS 15/0 and runtime 3/0. Their mutation subprocesses then
+failed before baseline execution. Inheriting NODE_TEST_CONTEXT caused Node
+to skip nested test files with exit zero and empty TAP; the positive-execution
+parser correctly rejected that. The harness now clears only this inherited
+test-runner setting. Inert pass/fail fixtures reproduce actual nested execution.
+
+Root progressed through 63/0, 96/0, 2/0 and 46/0 before its existing native
+identity fixture failed: isolated HOME hid installed Rust metadata. Only the
+hosted root graph now receives a validated original Rust metadata directory.
+Relative, missing, redirected and checkout/state-overlapping paths fail closed;
+HOME remains owned and compiler hooks, Cargo configuration and credentials
+remain excluded. No new Rust suite or dependency was introduced.
+
+MCP's first suites passed 1/0 and 10/0; its package suite returned 269/1.
+The installer fixture expected the public package cache at owned HOME/.npm,
+but the runner stored it elsewhere. Cache now resides at owned HOME/.npm.
+The fix preserves the offline fixture and its assertions. No local dependency
+installation or native execution was used to verify these repairs.
+
+Both branches were rebased onto main `92ff943df`. The stale UX-076 claim for
+merged #1900 is reconciled as MONITOR, retaining packaged acceptance. The
+marketing critical audit remains unresolved; passing marketing tests do not
+clear a dependency audit.
+
+At repair source `4e13c04be`, the full gate used the same seven-suite command
+above plus `test:roadmap-controller`, with CB_TARGETED_POLICY_SHA set to
+`92ff943dfc96c31c1c9f399baf9e1429e75bbd75`. Actual pass totals, each with
+`# fail 0`, were 19, 12, 8, 86, 96, 27, 63 and 135. Final output:
+`Agentic validation gate passed.` Types, lint, secrets and build passed.
+Subsequent test-only commits add durable production-wiring and independent
+relative-path assertions; focused checks remain 19/0 and hooks reran types.
+
+The nested-test mutation at `4e13c04be` changed `# pass 8` / `# fail 0` to
+`# pass 7` / `# fail 1`, then restored 8/0 and clean status. Applied diff
+inspected; restored harness SHA-256:
+`811c5eec9d07da3662e7eae2ed1bbd2104a449b5a9d303e9bdaeeca7357a5062`.
+
+Raw receipts, bounded logs, regression output and mutation diffs are retained
+under session evidence `next-nov15`. All seven complete hosted graph receipts
+remain required after publication. Reverting these environment repairs restores
+the demonstrated setup failures without changing application data or behavior.
+
+Final environment proof at `2c88d98c8` detected all 29 controls: 13 new and
+16 repeated policy controls. Every clean baseline/restored suite returned
+`# pass 19` / `# fail 0`. The explicit Rust-source mutation returned 17/2;
+the other 12 new controls returned 18/1 each. Repeated graph obligations
+returned 16/3; NUL paths 17/2; credential and npm configuration mutations
+15/4 each; other 12 repeated controls 18/1 each. Production call-site bypass,
+lost stage environment and environment setup outside cleanup each returned
+18/1 through the shipped source-scoped wiring assertion. Applied diffs were
+inspected; all detached trees restored cleanly with matching checksums.
+Restored runner SHA-256:
+`702d84f94ab8e685cda23a0f8ea44e9b87de87a391f6bc1b9b100273a57369b1`.
+The separate nested-test proof above adds one detecting mutation. Hosted
+execution remains distinct from these 30 local controls.

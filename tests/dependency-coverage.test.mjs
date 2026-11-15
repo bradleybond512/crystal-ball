@@ -179,7 +179,7 @@ test('hosted Rust metadata fails closed for missing, redirected or overlapping p
   mkdirSync(path.join(explicit, 'nested'));
   const checkoutMetadata = path.join(repo, '.rustup'), ownedMetadata = path.join(owned, '.rustup');
   mkdirSync(checkoutMetadata); mkdirSync(ownedMetadata);
-  for (const RUSTUP_HOME of ['', 'relative/path', '/does-not-exist/fixture-rustup', file, link, path.join(link, 'nested'), repo, owned, checkoutMetadata, ownedMetadata, dir, '/']) {
+  for (const RUSTUP_HOME of ['', 'relative/path', path.relative(process.cwd(), explicit), '/does-not-exist/fixture-rustup', file, link, path.join(link, 'nested'), repo, owned, checkoutMetadata, ownedMetadata, dir, '/']) {
     assert.throws(() => runner.graphEnvironment('root', repo, owned, { ...inherited, RUSTUP_HOME }), { message: 'hosted Rust metadata is unavailable or unsafe' }, RUSTUP_HOME);
   }
   assert.throws(() => runner.graphEnvironment('root', repo, owned, { ...inherited, RUSTUP_HOME: undefined, HOME: 'relative/home' }), /hosted Rust metadata/);

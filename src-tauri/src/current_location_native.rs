@@ -489,4 +489,3 @@ static PLATFORM_CONTROLLER: OnceLock<OneShotController<MacBackend>> = OnceLock::
 fn platform_controller(app: tauri::AppHandle) -> &'static OneShotController<MacBackend> {
     PLATFORM_CONTROLLER.get_or_init(|| OneShotController::new(MacBackend::new(app)))
 }
-

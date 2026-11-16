@@ -1,8 +1,8 @@
 # UX-071 remaining native gates — fixed proof contract
 
 Status: exact contract accepted by the Tauri specialist and architect; no
-architectural blockers. Await parent implementation signal. User approved the
-encompassing design. Base
+architectural blockers. Implemented under the approved encompassing design;
+actual native proof execution awaits hosted CI. Base
 `4f3e4731e2822cfccc5aa417fe8a8e4405a4ae38`.
 
 ## Owners and limits

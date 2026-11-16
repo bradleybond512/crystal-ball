@@ -1669,5 +1669,7 @@
   ],
   "src/utils/keyword-match.ts": [
     "test:keyword-match"
-  ]
+  ],
+  "scripts/check-unreachable.mjs": ["test:unreachable-source"],
+  "scripts/unreachable-baseline.json": ["test:unreachable-source"]
 }

@@ -110,3 +110,32 @@ and add fixed-format crypto cases with hosted red/green evidence requirements;
 leave wider lint cleanup and actual hosted acceptance open.
 
 Merging, auto-merge, releases, deployment and installation remain paused.
+
+## Published stage1 hosted acceptance — November 15
+
+Approved tip `d759723d4` was published to draft #1904. Native run
+[43781733830](https://github.com/bradleybond512/crystal-ball/actions/runs/43781733830)
+used merge source `62651a7f8a6d47433648e2d8cda30fb162347b07`.
+All eight target runs passed: Linux 260/0, macOS ARM64 262/0, including all four
+new crypto tests. This supersedes stage1's earlier pending native execution.
+
+Actual hosted mutations (passed/failed):
+
+| Control | Linux red → restored green | macOS red → restored green |
+| --- | --- | --- |
+| Watchdog | 8/1 → 9/0 | 8/1 → 9/0 |
+| Nonce rejection | 118/1 → 119/0 | 120/1 → 121/0 |
+| Authentication rejection | 115/4 → 119/0 | 117/4 → 121/0 |
+
+Both receipts confirm all three applied diffs, exact expected failures and
+original/restored hash equality. Restored crypto source SHA-256 is
+`60372d0e77a4767395dfecaf48512c65cad150f532e04b904b9d3d96a404b78a`;
+watchdog SHA-256 is
+`8610640b6586a663f02749a2a7ad73a999074de871dafdf2d41d90d3b6900481`.
+Raw receipts, compile/test logs and applied diffs are retained under session
+`next-nov15/stage1-hosted/linux` and `darwin`; `summary.json` records totals.
+
+Strict Clippy was the only failed native stage on both platforms, so both
+native jobs and aggregation remain red. The separate marketing audit remains
+red. These results do not establish acceptance for the subsequent stage2
+source changes. UX-071 remains open; all delivery holds remain.

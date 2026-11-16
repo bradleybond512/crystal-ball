@@ -104,3 +104,33 @@ syntax while retaining exact bytes, ABI, assertions and strict checks; retain
 remaining native lint and audit blockers and all delivery holds.
 
 Merging, auto-merge, releases, deployment and installation remain paused.
+
+## Main reconciliation after approved publication
+
+Approved tip `3c68c88d7` was pushed to draft #1904. Its dependency-policy check
+passed, but the PR was conflicting and no native/test matrix started. Canonical
+main advanced to `ffb3f3ccb4` with the alternate SPC test-clock fix and its review.
+
+Rebased onto that main and dropped only the superseded one-file clock-shim
+commit `6cffa282cb`; the SPC test now exactly matches main. The existing
+READY/GO handshake, one-second work deadline, hostile payload and assertions
+are unchanged. Removed the stale verdict-only tip for fresh exact-tip review.
+All native Rust, driver, inventory, workflow and remaining test code is unchanged
+from approved `3c68c88d7`; source parity and mutation hashes still match.
+
+Reconciled source `5ee1e42c72b8c49edca68673ff695803cb136d9b` passed:
+
+```sh
+bash scripts/agentic-validate.sh --tests "test:native-ci-driver test:native-ci-workflow test:native-crypto-boundary test:native-lows test:roadmap-controller test:spc-angle"
+```
+
+Actual output, in order: `# pass 19`, `# pass 4`, `# pass 3`, `# pass 2`,
+`# pass 135`, `# pass 5`, each with `# fail 0`; exit 0 and
+`Agentic validation gate passed.` No test timing/assertion was weakened.
+The previously disclosed intermittent 400 ms fixture issue remains open;
+this successful run does not establish repeatability.
+
+Evidence: session `next-nov15/stage2-reconcile/full-gate.log` and `parity.json`.
+No new native execution is claimed. The reconciled tip requires fresh review
+and publication approval before hosted acceptance can continue. All merge and
+delivery holds remain.

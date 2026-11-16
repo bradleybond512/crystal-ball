@@ -351,7 +351,7 @@
     "eslint-plugin-sonarjs": "^4.0.3",
     "eslint-plugin-unicorn": "^63.0.0",
     "happy-dom": "^21.0.4",
-    "lint-staged": "^17.3.0",
+    "lint-staged": "^17.6.0",
     "markdownlint": "^0.41.1",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",

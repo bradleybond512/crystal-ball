@@ -176,14 +176,14 @@ pub async fn get_native_location(webview: Webview) -> NativeLocationResponse {
     #[cfg(target_os = "macos")]
     {
         let app = webview.app_handle().clone();
-        return match tauri::async_runtime::spawn_blocking(move || {
+        match tauri::async_runtime::spawn_blocking(move || {
             platform_controller(app).run(Duration::from_millis(LOCATION_DEADLINE_MS))
         })
         .await
         {
             Ok(response) => response,
             Err(_) => NativeLocationResponse::failure(NativeLocationErrorCode::Unavailable),
-        };
+        }
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -347,7 +347,7 @@ mod macos {
 
     unsafe fn callback_state(delegate: *mut c_void) -> Option<&'static CallbackState> {
         let cls = delegate_class()?;
-        let ivar = class_getInstanceVariable(cls, b"_rustState\0".as_ptr());
+        let ivar = class_getInstanceVariable(cls, c"_rustState".as_ptr().cast::<u8>());
         if ivar.is_null() {
             return None;
         }
@@ -451,18 +451,18 @@ mod macos {
         if let Some(class) = DELEGATE_CLASS.get() {
             return Some(*class as *mut c_void);
         }
-        let existing = objc_getClass(b"CrystalBallCurrentLocationDelegate\0".as_ptr());
+        let existing = objc_getClass(c"CrystalBallCurrentLocationDelegate".as_ptr().cast::<u8>());
         if !existing.is_null() {
             let _ = DELEGATE_CLASS.set(existing as usize);
             return Some(existing);
         }
-        let superclass = objc_getClass(b"NSObject\0".as_ptr());
+        let superclass = objc_getClass(c"NSObject".as_ptr().cast::<u8>());
         if superclass.is_null() {
             return None;
         }
         let class = objc_allocateClassPair(
             superclass,
-            b"CrystalBallCurrentLocationDelegate\0".as_ptr(),
+            c"CrystalBallCurrentLocationDelegate".as_ptr().cast::<u8>(),
             0,
         );
         if class.is_null() {
@@ -471,28 +471,28 @@ mod macos {
         let alignment = std::mem::align_of::<*mut c_void>().trailing_zeros() as u8;
         let valid = class_addIvar(
             class,
-            b"_rustState\0".as_ptr(),
+            c"_rustState".as_ptr().cast::<u8>(),
             std::mem::size_of::<*mut c_void>(),
             alignment,
-            b"^v\0".as_ptr(),
+            c"^v".as_ptr().cast::<u8>(),
         ) != 0
             && class_addMethod(
                 class,
                 selector(b"locationManager:didUpdateLocations:\0"),
                 did_update_locations as *const () as *mut c_void,
-                b"v@:@@\0".as_ptr(),
+                c"v@:@@".as_ptr().cast::<u8>(),
             ) != 0
             && class_addMethod(
                 class,
                 selector(b"locationManager:didFailWithError:\0"),
                 did_fail as *const () as *mut c_void,
-                b"v@:@@\0".as_ptr(),
+                c"v@:@@".as_ptr().cast::<u8>(),
             ) != 0
             && class_addMethod(
                 class,
                 selector(b"locationManagerDidChangeAuthorization:\0"),
                 did_change_authorization as *const () as *mut c_void,
-                b"v@:@\0".as_ptr(),
+                c"v@:@".as_ptr().cast::<u8>(),
             ) != 0;
         if !valid {
             objc_disposeClassPair(class);
@@ -546,7 +546,7 @@ mod macos {
     unsafe fn start_session(
         sender: SyncSender<BackendEvent>,
     ) -> Result<u64, NativeLocationErrorCode> {
-        let manager_class = objc_getClass(b"CLLocationManager\0".as_ptr());
+        let manager_class = objc_getClass(c"CLLocationManager".as_ptr().cast::<u8>());
         let delegate_class = delegate_class().ok_or(NativeLocationErrorCode::Unavailable)?;
         if manager_class.is_null() {
             return Err(NativeLocationErrorCode::Unsupported);
@@ -570,7 +570,7 @@ mod macos {
 
         let request_id = NEXT_SESSION_ID.fetch_add(1, Ordering::Relaxed);
         let state = Box::into_raw(Box::new(CallbackState { request_id, sender }));
-        let ivar = class_getInstanceVariable(delegate_class, b"_rustState\0".as_ptr());
+        let ivar = class_getInstanceVariable(delegate_class, c"_rustState".as_ptr().cast::<u8>());
         if ivar.is_null() {
             drop(Box::from_raw(state));
             objc_release(manager);
@@ -607,7 +607,7 @@ mod macos {
             };
             send_object(session.manager, b"setDelegate:\0", std::ptr::null_mut());
             if let Some(class) = delegate_class() {
-                let ivar = class_getInstanceVariable(class, b"_rustState\0".as_ptr());
+                let ivar = class_getInstanceVariable(class, c"_rustState".as_ptr().cast::<u8>());
                 if !ivar.is_null() {
                     object_setIvar(session.delegate, ivar, std::ptr::null_mut());
                 }

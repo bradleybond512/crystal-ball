@@ -984,20 +984,20 @@ fn begin_activity_macos() -> Option<usize> {
     const NS_USER_INITIATED: u64 = 0x00FF_FFFF | NS_SUDDEN_TERM_DISABLED;
     let options: u64 = NS_USER_INITIATED & !NS_IDLE_SYSTEM_SLEEP_DISABLED;
     unsafe {
-        let pi_cls = objc_getClass(b"NSProcessInfo\0".as_ptr());
-        let str_cls = objc_getClass(b"NSString\0".as_ptr());
+        let pi_cls = objc_getClass(c"NSProcessInfo".as_ptr().cast::<u8>());
+        let str_cls = objc_getClass(c"NSString".as_ptr().cast::<u8>());
         if pi_cls.is_null() || str_cls.is_null() {
             return None;
         }
-        let process_info = objc_msgSend(pi_cls, sel_registerName(b"processInfo\0".as_ptr()));
+        let process_info = objc_msgSend(pi_cls, sel_registerName(c"processInfo".as_ptr().cast::<u8>()));
         if process_info.is_null() {
             return None;
         }
-        let with_utf8 = sel_registerName(b"stringWithUTF8String:\0".as_ptr());
+        let with_utf8 = sel_registerName(c"stringWithUTF8String:".as_ptr().cast::<u8>());
         let reason_fn: unsafe extern "C" fn(*mut c_void, *mut c_void, *const u8) -> *mut c_void =
             std::mem::transmute(objc_msgSend as *const ());
-        let reason = reason_fn(str_cls, with_utf8, b"Crystal Ball 24/7 monitoring\0".as_ptr());
-        let begin_sel = sel_registerName(b"beginActivityWithOptions:reason:\0".as_ptr());
+        let reason = reason_fn(str_cls, with_utf8, c"Crystal Ball 24/7 monitoring".as_ptr().cast::<u8>());
+        let begin_sel = sel_registerName(c"beginActivityWithOptions:reason:".as_ptr().cast::<u8>());
         let begin_fn: unsafe extern "C" fn(*mut c_void, *mut c_void, u64, *mut c_void) -> *mut c_void =
             std::mem::transmute(objc_msgSend as *const ());
         let token = begin_fn(process_info, begin_sel, options, reason);
@@ -1005,7 +1005,7 @@ fn begin_activity_macos() -> Option<usize> {
             return None;
         }
         // retain so it survives past this scope
-        objc_msgSend(token, sel_registerName(b"retain\0".as_ptr()));
+        objc_msgSend(token, sel_registerName(c"retain".as_ptr().cast::<u8>()));
         Some(token as usize)
     }
 }
@@ -1019,16 +1019,16 @@ fn end_activity_macos(token: usize) {
         fn objc_msgSend(receiver: *mut c_void, sel: *mut c_void, ...) -> *mut c_void;
     }
     unsafe {
-        let pi_cls = objc_getClass(b"NSProcessInfo\0".as_ptr());
+        let pi_cls = objc_getClass(c"NSProcessInfo".as_ptr().cast::<u8>());
         if pi_cls.is_null() {
             return;
         }
-        let process_info = objc_msgSend(pi_cls, sel_registerName(b"processInfo\0".as_ptr()));
-        let end_sel = sel_registerName(b"endActivity:\0".as_ptr());
+        let process_info = objc_msgSend(pi_cls, sel_registerName(c"processInfo".as_ptr().cast::<u8>()));
+        let end_sel = sel_registerName(c"endActivity:".as_ptr().cast::<u8>());
         let end_fn: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void) -> *mut c_void =
             std::mem::transmute(objc_msgSend as *const ());
         end_fn(process_info, end_sel, token as *mut c_void);
-        objc_msgSend(token as *mut c_void, sel_registerName(b"release\0".as_ptr()));
+        objc_msgSend(token as *mut c_void, sel_registerName(c"release".as_ptr().cast::<u8>()));
     }
 }
 
@@ -2181,9 +2181,9 @@ fn reject_symlinked_path(path: &str, label: &str) -> Result<(), String> {
 /// `requirement` and `expected_version` are captured ONCE from the live install
 /// before validation and threaded in here, so this re-checks integrity + bundle ID
 /// + that same immutable pin + that the landed version EXACTLY equals the one that
-/// was validated. This closes both the rename-window TOCTOU (a local process swaps
-/// the staged directory after validation but before the move) and the downgrade
-/// window (substituting an older but legitimately-signed bundle post-validation).
+///   was validated. This closes both the rename-window TOCTOU (a local process swaps
+///   the staged directory after validation but before the move) and the downgrade
+///   window (substituting an older but legitimately-signed bundle post-validation).
 #[cfg(target_os = "macos")]
 fn swap_staged_into_place(
  staged: &str,
@@ -2193,7 +2193,7 @@ fn swap_staged_into_place(
  expected_version: &str,
 ) -> Result<(), String> {
  swap_staged_into_place_with(staged, dest, backup, |dest| {
- verify_app_bundle_signature(&dest, "Installed app")
+ verify_app_bundle_signature(dest, "Installed app")
  .and_then(|_| verify_update_bundle_identifier(dest))
  .and_then(|_| verify_bundle_satisfies_requirement(dest, requirement))
  .and_then(|_| {
@@ -3003,22 +3003,22 @@ fn set_dock_badge(webview: Webview, count: u32) -> Result<(), String> {
    let msgsend_obj: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void) -> *mut c_void =
     std::mem::transmute(objc_msgSend as *const ());
 
-   let nsapp_cls = objc_getClass(b"NSApplication\0".as_ptr());
+   let nsapp_cls = objc_getClass(c"NSApplication".as_ptr().cast::<u8>());
    if nsapp_cls.is_null() { return Ok(()); }
-   let shared_sel = sel_registerName(b"sharedApplication\0".as_ptr());
+   let shared_sel = sel_registerName(c"sharedApplication".as_ptr().cast::<u8>());
    let app_inst = objc_msgSend(nsapp_cls, shared_sel);
    if app_inst.is_null() { return Ok(()); }
-   let dock_tile_sel = sel_registerName(b"dockTile\0".as_ptr());
+   let dock_tile_sel = sel_registerName(c"dockTile".as_ptr().cast::<u8>());
    let tile = objc_msgSend(app_inst, dock_tile_sel);
    if tile.is_null() { return Ok(()); }
 
    // Build an NSString from the count (or empty string to clear).
    let cstr = if count == 0 { CString::new("").unwrap() } else { CString::new(count.to_string()).unwrap() };
-   let nsstring_cls = objc_getClass(b"NSString\0".as_ptr());
-   let from_utf8_sel = sel_registerName(b"stringWithUTF8String:\0".as_ptr());
+   let nsstring_cls = objc_getClass(c"NSString".as_ptr().cast::<u8>());
+   let from_utf8_sel = sel_registerName(c"stringWithUTF8String:".as_ptr().cast::<u8>());
    let label = msgsend_cstr(nsstring_cls, from_utf8_sel, cstr.as_ptr());
 
-   let set_label_sel = sel_registerName(b"setBadgeLabel:\0".as_ptr());
+   let set_label_sel = sel_registerName(c"setBadgeLabel:".as_ptr().cast::<u8>());
    msgsend_obj(tile, set_label_sel, label);
   }
  }
@@ -3078,13 +3078,13 @@ unsafe fn ensure_menubar_status_item(title: &str) {
 
  // Lazily create the NSStatusItem once.
  let item_ptr = MENUBAR_STATUS_ITEM.get_or_init(|| {
-  let bar_cls = objc_getClass(b"NSStatusBar\0".as_ptr());
+  let bar_cls = objc_getClass(c"NSStatusBar".as_ptr().cast::<u8>());
   if bar_cls.is_null() { return 0; }
-  let system_sel = sel_registerName(b"systemStatusBar\0".as_ptr());
+  let system_sel = sel_registerName(c"systemStatusBar".as_ptr().cast::<u8>());
   let bar = objc_msgSend(bar_cls, system_sel);
   if bar.is_null() { return 0; }
   // -1 == NSVariableStatusItemLength so the title sizes the item.
-  let new_item_sel = sel_registerName(b"statusItemWithLength:\0".as_ptr());
+  let new_item_sel = sel_registerName(c"statusItemWithLength:".as_ptr().cast::<u8>());
   let item = msgsend_f64(bar, new_item_sel, -1.0f64);
   if item.is_null() { return 0; }
   // Retain so the system status bar can't drop it after our scope.
@@ -3095,14 +3095,14 @@ unsafe fn ensure_menubar_status_item(title: &str) {
  let item = *item_ptr as *mut c_void;
 
  // statusItem.button.title = title
- let button_sel = sel_registerName(b"button\0".as_ptr());
+ let button_sel = sel_registerName(c"button".as_ptr().cast::<u8>());
  let btn = objc_msgSend(item, button_sel);
  if btn.is_null() { return; }
  let cstr = CString::new(title).unwrap_or_else(|_| CString::new("Crystal Ball").unwrap());
- let nsstring_cls = objc_getClass(b"NSString\0".as_ptr());
- let from_utf8_sel = sel_registerName(b"stringWithUTF8String:\0".as_ptr());
+ let nsstring_cls = objc_getClass(c"NSString".as_ptr().cast::<u8>());
+ let from_utf8_sel = sel_registerName(c"stringWithUTF8String:".as_ptr().cast::<u8>());
  let ns_title = msgsend_cstr(nsstring_cls, from_utf8_sel, cstr.as_ptr());
- let set_title_sel = sel_registerName(b"setTitle:\0".as_ptr());
+ let set_title_sel = sel_registerName(c"setTitle:".as_ptr().cast::<u8>());
  msgsend_obj(btn, set_title_sel, ns_title);
 }
 
@@ -5431,7 +5431,7 @@ fn main() {
  Some(12.0),
  ) {
  append_desktop_log(
- &app.handle(),
+ app.handle(),
  "WARN",
  &format!("apply_vibrancy failed (continuing without vibrancy): {err}"),
  );

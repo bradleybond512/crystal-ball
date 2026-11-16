@@ -54,6 +54,11 @@ const Z_SCORE_THRESHOLD = 2.5;
 const BURST_MULTIPLIER = 10;
 const SILENCE_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2 hours without update = silence
 const MIN_OBSERVATIONS = 3; // lowered 5→3: reduces cold-start gap from ~25min to ~15min
+// Prior observations required before a z-score is trusted. A standard deviation
+// estimated from fewer points is too noisy at a 2.5-sigma threshold (roughly one
+// false alarm in six with a three-point baseline). Eight matches when z-score
+// detection first became reachable before the baseline excluded the new value.
+const MIN_BASELINE_FOR_ZSCORE = 8;
 const REVERSAL_Z_THRESHOLD = 1.5; // Lower threshold for reversals — inherently notable
 const COMPOUND_WINDOW_MS = 30 * 60 * 1000; // 30 minutes — temporal convergence window
 const MIN_COMPOUND_DOMAINS = 2; // need anomalies from at least 2 different domains
@@ -315,16 +320,32 @@ class AnomalyDetectionEngine {
  if (state.observations.length < MIN_OBSERVATIONS) return;
 
  const values = state.observations.map(o => o.value);
- const m = mean(values);
- const sd = stdDev(values);
+ // ingest() has already pushed the new observation, so it is the last entry.
+ // The baseline must exclude it: a value scored against a sample that
+ // contains itself can never exceed (n - 1) / sqrt(n) sigma, which stays
+ // below Z_SCORE_THRESHOLD until n = 9 and makes the burst test unreachable
+ // until n = 11, however extreme the value is.
+ const baseline = values.slice(0, -1);
+ const m = mean(baseline);
+ const sd = stdDev(baseline);
+ // Preserve burst eligibility; arbitrate only within this ingestion.
+ const hasCriticalBurst = baseline.length >= MIN_OBSERVATIONS
+   && !(m <= 0 || value < m * BURST_MULTIPLIER);
 
- this.detectZScoreAnomaly(source, value, m, sd, timestamp);
+ if (baseline.length >= MIN_BASELINE_FOR_ZSCORE) {
+ this.detectZScoreAnomaly(source, value, m, sd, timestamp, hasCriticalBurst);
+ }
+ if (hasCriticalBurst) {
  this.detectBurst(source, value, m, sd, timestamp);
- this.detectReversal(source, state, values, value, sd, timestamp);
+ }
+ // Reversals retain their legacy inclusive-window normalization.
+ this.detectReversal(source, state, values, value, stdDev(values), timestamp);
   }
 
   /** Detect Z-score anomaly: value significantly above/below rolling mean. */
-  private detectZScoreAnomaly(source: string, value: number, m: number, sd: number, timestamp: number): void {
+  private detectZScoreAnomaly(
+ source: string, value: number, m: number, sd: number, timestamp: number, hasCriticalBurst: boolean,
+  ): void {
  if (sd <= 0) return;
 
  const zScore = (value - m) / sd;
@@ -333,6 +354,9 @@ class AnomalyDetectionEngine {
  const isSpike = zScore > 0;
  const anomalyType: AnomalyType = isSpike ? 'spike' : 'deviation';
  const severity = classifySeverity(zScore, anomalyType);
+ // Let the critical burst win; keep the existing z-score metadata on ties.
+ // Cross-ingestion suppression remains solely in emitAnomaly().
+ if (isSpike && hasCriticalBurst && severity !== 'critical') return;
  const sigmaLabel = `${Math.abs(Math.round(zScore * 10) / 10)}\u03C3`;
  const direction = isSpike ? 'above' : 'below';
 
@@ -350,10 +374,8 @@ class AnomalyDetectionEngine {
  });
   }
 
-  /** Detect burst: current value >= 10x rolling mean. */
+  /** Emit a critical burst already qualified by runDetection(). */
   private detectBurst(source: string, value: number, m: number, sd: number, timestamp: number): void {
- if (m <= 0 || value < m * BURST_MULTIPLIER) return;
-
  const zScore = sd > 0 ? (value - m) / sd : BURST_MULTIPLIER;
  this.emitAnomaly({
  id: generateId(),

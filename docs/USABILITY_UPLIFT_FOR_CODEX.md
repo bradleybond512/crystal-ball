@@ -1633,7 +1633,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-068 | Inventory branches and worktrees before cleanup | NOT STARTED — HIGH ASSURANCE | |
 | UX-069 | Auto-PR workflow warning | NOT STARTED | |
 | UX-070 | Design dependency and scheduled test coverage | NOT STARTED — HIGH ASSURANCE | |
-| UX-071 | Design safe Rust tests and Clippy CI | IN PROGRESS — HIGH ASSURANCE | [Draft #1904](https://github.com/bradleybond512/crystal-ball/pull/1904); [approved design](plans/2026-11-14-ux071-native-test-gates.md). Published second cleanup passed Linux 260/0, macOS 262/0 and all three hosted mutation controls; strict Clippy remains red. [Remaining native and marketing repair](validation/UX-071-REMAINING-GATES.md) passes the local validation gate and all-six-lock audit (zero high/critical); new native compilation, proof controls and strict Clippy await approved publication and hosted CI. |
+| UX-071 | Design safe Rust tests and Clippy CI | IN PROGRESS — HIGH ASSURANCE | [Draft #1904](https://github.com/bradleybond512/crystal-ball/pull/1904); [approved design](plans/2026-11-14-ux071-native-test-gates.md). Published `4690b0b45d` passed Linux 269/0, macOS 272/0, macOS Clippy and the full security audit. [Bounded hosted-gate repair](validation/UX-071-HOSTED-GATE-REPAIR.md) addresses the last Linux constructor warning, addition-only mutation diffs and stale wrapper count; local gate and five mutation proofs pass. New publication, full eight/nine native mutation controls and hosted acceptance remain open. |
 | UX-072 | Local user-data backup and restore | NOT STARTED — HIGH ASSURANCE | |
 | UX-073 | Scope cohesive module extractions | NOT STARTED | |
 | UX-074 | Release SBOMs | NOT STARTED — HIGH ASSURANCE | |

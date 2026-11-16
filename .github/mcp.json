@@ -17,10 +17,9 @@
  },
  "filesystem": {
  "type": "stdio",
- "command": "npx",
+ "command": "node",
  "args": [
- "-y",
- "@modelcontextprotocol/server-filesystem",
+ "${workspaceFolder}/.github/tools/filesystem-mcp/launch.mjs",
  "${workspaceFolder}"
  ]
  },

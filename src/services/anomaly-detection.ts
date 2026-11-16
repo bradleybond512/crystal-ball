@@ -328,18 +328,24 @@ class AnomalyDetectionEngine {
  const baseline = values.slice(0, -1);
  const m = mean(baseline);
  const sd = stdDev(baseline);
+ // Preserve burst eligibility; arbitrate only within this ingestion.
+ const hasCriticalBurst = baseline.length >= MIN_OBSERVATIONS
+   && !(m <= 0 || value < m * BURST_MULTIPLIER);
 
  if (baseline.length >= MIN_BASELINE_FOR_ZSCORE) {
- this.detectZScoreAnomaly(source, value, m, sd, timestamp);
+ this.detectZScoreAnomaly(source, value, m, sd, timestamp, hasCriticalBurst);
  }
- if (baseline.length >= MIN_OBSERVATIONS) {
+ if (hasCriticalBurst) {
  this.detectBurst(source, value, m, sd, timestamp);
  }
- this.detectReversal(source, state, values, value, sd, timestamp);
+ // Reversals retain their legacy inclusive-window normalization.
+ this.detectReversal(source, state, values, value, stdDev(values), timestamp);
   }
 
   /** Detect Z-score anomaly: value significantly above/below rolling mean. */
-  private detectZScoreAnomaly(source: string, value: number, m: number, sd: number, timestamp: number): void {
+  private detectZScoreAnomaly(
+ source: string, value: number, m: number, sd: number, timestamp: number, hasCriticalBurst: boolean,
+  ): void {
  if (sd <= 0) return;
 
  const zScore = (value - m) / sd;
@@ -348,6 +354,9 @@ class AnomalyDetectionEngine {
  const isSpike = zScore > 0;
  const anomalyType: AnomalyType = isSpike ? 'spike' : 'deviation';
  const severity = classifySeverity(zScore, anomalyType);
+ // Let the critical burst win; keep the existing z-score metadata on ties.
+ // Cross-ingestion suppression remains solely in emitAnomaly().
+ if (isSpike && hasCriticalBurst && severity !== 'critical') return;
  const sigmaLabel = `${Math.abs(Math.round(zScore * 10) / 10)}\u03C3`;
  const direction = isSpike ? 'above' : 'below';
 
@@ -365,10 +374,8 @@ class AnomalyDetectionEngine {
  });
   }
 
-  /** Detect burst: current value >= 10x rolling mean. */
+  /** Emit a critical burst already qualified by runDetection(). */
   private detectBurst(source: string, value: number, m: number, sd: number, timestamp: number): void {
- if (m <= 0 || value < m * BURST_MULTIPLIER) return;
-
  const zScore = sd > 0 ? (value - m) / sd : BURST_MULTIPLIER;
  this.emitAnomaly({
  id: generateId(),

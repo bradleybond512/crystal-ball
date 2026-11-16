@@ -28,7 +28,8 @@
   ],
   "src/styles/main.css": [
     "test:ux032",
-    "test:ux058"
+    "test:ux058",
+    "test:ux062"
   ],
   "scripts/targeted-tests-overrides.json": [
     "test:agentic-pipeline",
@@ -138,7 +139,8 @@
   ],
   "src/components/SituationPanel.ts": [
     "test:acc509",
-    "test:acc510"
+    "test:acc510",
+    "test:ux062"
   ],
   "src/services/alert-retention.ts": [
     "test:ux059"
@@ -530,7 +532,8 @@
     "test:release-capabilities"
   ],
   "src/components/AnalystHUD.ts": [
-    "test:mcp-untrusted"
+    "test:mcp-untrusted",
+    "test:ux062"
   ],
   "src/components/agent-suggestions-view.ts": [
     "test:mcp-untrusted"
@@ -1669,5 +1672,14 @@
   ],
   "src/utils/keyword-match.ts": [
     "test:keyword-match"
+  ],
+  "src/components/CommandCenterPanel.ts": [
+    "test:ux062"
+  ],
+  "src/styles/panels.css": [
+    "test:ux062"
+  ],
+  "tests/ux062-forecast-baseline-labels.test.mjs": [
+    "test:ux062"
   ]
 }

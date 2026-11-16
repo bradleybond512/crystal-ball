@@ -354,6 +354,7 @@ export class SituationPanel extends Panel {
  <div class="sit-sc-header">
  <span class="sit-sc-label">${this.esc(sc.label)}</span>
  <span class="sit-sc-prob" style="color:${SEVERITY_COLORS[sc.severity]}">${Math.round(sc.probability * 100)}%</span>
+ <details class="forecast-unverified"><summary>Unverified</summary><p>No matching baseline evidence.</p></details>
  </div>
  <div class="sit-sc-bar">
  <div class="sit-sc-fill" style="width:${Math.round(sc.probability * 100)}%;background:${SEVERITY_COLORS[sc.severity]}"></div>

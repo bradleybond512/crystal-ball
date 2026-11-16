@@ -1,0 +1,9 @@
+{
+  "sourceTestRevision": "99260927fa61c1d5d8843949d5f196596c17f295",
+  "canonicalDecisionRevision": "4432188fedbaba28938608cc07da6a25d11ca0c9",
+  "command": "node <evidence>/trusted-ci.mjs --ci",
+  "runnerSha256": "b1cf2ebb917248edaa8bb1033b853da14d5b0a0970f58f7522ad17b7a4d83070",
+  "logSha256": "634b3a2849f383aed03732f3e56ca5014a2f2efef9e791cb9acc064f40c3b26f",
+  "actualResult": "[targeted-tests] 59 script(s) passed.",
+  "limit": "Predates only the equivalent bounded assertion diagnostic supplement and later evidence documentation."
+}

@@ -1,4 +1,14 @@
 {
+  "src-tauri/src/current_location.rs": ["test:ux010-native", "test:native-boundaries"],
+  "src-tauri/src/current_location_native.rs": ["test:ux010-native", "test:native-boundaries"],
+  "tests/ux010-location-startup.test.mjs": ["test:native-boundaries"],
+  "tests/imessage-native-boundary.test.mjs": ["test:native-boundaries"],
+  "tests/native-notify-boundary.test.mjs": ["test:native-boundaries"],
+  "tests/vault-writer-boundary.test.mjs": ["test:native-boundaries"],
+  "tests/desktop-updater-signature.test.mjs": ["test:native-boundaries"],
+  "tests/desktop-updater-authority.test.mjs": ["test:native-boundaries"],
+  "tests/native-responsiveness-boundary.test.mjs": ["test:native-boundaries"],
+  "tests/native-lows.test.mjs": ["test:native-boundaries"],
   "scripts/native-test-driver.mjs": ["test:native-ci-driver", "test:native-ci-workflow"],
   "scripts/native-test-inventory.json": ["test:native-ci-driver", "test:native-ci-workflow", "test:native-crypto-boundary"],
   "tests/native-crypto-boundary.test.mjs": ["test:native-crypto-boundary"],
@@ -181,6 +191,7 @@
     "test:gdacs-map"
   ],
   "src-tauri/src/main.rs": [
+    "test:native-boundaries",
     "test:native-crypto-boundary",
     "test:desktop-updater",
     "test:imessage",
@@ -197,10 +208,12 @@
     "test:desktop-identity"
   ],
   "src-tauri/src/updater_policy.rs": [
+    "test:native-boundaries",
     "test:desktop-updater",
     "test:desktop-identity"
   ],
   "src-tauri/src/imessage.rs": [
+    "test:native-boundaries",
     "test:imessage",
     "test:imessage-native"
   ],
@@ -498,6 +511,7 @@
     "test:quota"
   ],
   "src-tauri/src/vault_coordinator.rs": [
+    "test:native-boundaries",
     "test:vault-writer"
   ],
   "src-tauri/tests/vault_coordinator_contract.rs": [

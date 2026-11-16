@@ -55,8 +55,8 @@ test('all old and new Rust crypto cases remain in the strict binary inventory', 
   for (const name of added) assert.ok(names.includes(name), name);
   const target = inventory.targets.find(target => target.name === 'crystalball');
   assert.deepEqual(target.tests.filter(name => name.startsWith('vault_shadow_crypto_tests::')).sort(), names.map(name => `vault_shadow_crypto_tests::${name}`).sort());
-  assert.equal(target.tests.length, 119);
-  assert.equal(target.tests.length + target.darwinOnly.length, 121);
+  assert.equal(target.tests.length, 125);
+  assert.equal(target.tests.length + target.darwinOnly.length, 128);
   assert.equal(inventory.targets.length, 8);
   assert.match(cryptoTests, /serde_json::from_str\(ZERO_NONCE_ENVELOPE\)/);
   assert.match(cryptoTests, /envelope\.n\.resize\(length, 0\)/);

@@ -21,12 +21,17 @@ test('macOS startup no longer requests or retains CoreLocation authorization', (
   assert.doesNotMatch(main, /requestWhenInUseAuthorization/);
   assert.doesNotMatch(main, /Get device location via native CoreLocation/);
   assert.match(main, /mod current_location;/);
-  assert.match(main, /current_location::get_native_location/);
-  assert.match(main, /current_location::cleanup_on_exit/);
+  assert.match(main, /mod current_location_native;/);
+  assert.match(main, /current_location_native::get_native_location/);
+  assert.match(main, /current_location_native::cleanup_on_exit/);
 });
 
 test('native location module is bounded, one-shot, main-only, and subprocess-free', () => {
-  const source = read('src-tauri/src/current_location.rs');
+  const pure = read('src-tauri/src/current_location.rs');
+  const adapter = read('src-tauri/src/current_location_native.rs');
+  const source = pure + '\n' + adapter;
+  assert.doesNotMatch(pure, /use tauri|extern "C"|fn start_session/);
+  assert.match(adapter, /if !is_main_window\(webview\.label\(\)\)/);
 
   assert.match(source, /LOCATION_DEADLINE_MS:\s*u64\s*=\s*15_000/);
   assert.match(source, /label\s*==\s*"main"/);
@@ -38,7 +43,7 @@ test('native location module is bounded, one-shot, main-only, and subprocess-fre
 });
 
 test('app-exit cleanup runs synchronously on the macOS event-loop thread', () => {
-  const source = read('src-tauri/src/current_location.rs');
+  const source = read('src-tauri/src/current_location_native.rs');
 
   assert.match(source, /pub fn cleanup_on_exit\(\) \{\s*#\[cfg\(target_os = "macos"\)\]\s*unsafe \{\s*macos::cleanup_all_sessions_on_main_thread\(\);\s*\}\s*\}/);
   assert.doesNotMatch(source, /pub fn cleanup_on_exit\(\)[\s\S]{0,180}run_on_main_thread/);

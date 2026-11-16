@@ -79,6 +79,7 @@
     "test:signing-phase-a": "node --test tests/desktop-signing.test.mjs tests/desktop-package-signing.test.mjs tests/main-sync-signing.test.mjs tests/vault-diagnostics-boundary.test.mjs && tsx --test src/services/diagnostics/__tests__/vault-diagnostics.test.mts",
     "test:node-pinning": "node --test tests/node-pinning-boundary.test.mjs && tsx --test src/services/diagnostics/__tests__/local-engine-status.test.mts",
     "test:native-lows": "node --test tests/native-lows.test.mjs",
+    "test:native-boundaries": "node --test tests/ux010-location-startup.test.mjs tests/imessage-native-boundary.test.mjs tests/native-notify-boundary.test.mjs tests/vault-writer-boundary.test.mjs tests/desktop-updater-signature.test.mjs tests/desktop-updater-authority.test.mjs tests/native-responsiveness-boundary.test.mjs tests/native-lows.test.mjs",
     "test:vault-writer": "node --test tests/vault-writer-boundary.test.mjs tests/vault-writer-native.test.mjs && tsx --test src/services/__tests__/secret-write-pending.test.mts",
     "test:native-ci-driver": "node --test tests/native-ci-driver.test.mjs tests/native-ci-controls.test.mjs",
     "test:native-crypto-boundary": "node --test tests/native-crypto-boundary.test.mjs",

@@ -64,9 +64,67 @@ const mutationControls = [
   { id: 'watchdog', source: 'src-tauri/tests/watchdog_contract.rs', target: 'watchdog_contract', failureNames: ['main_focus_tracks_gain_and_loss'] },
   { id: 'crypto-nonce-rejection', source: 'src-tauri/src/main.rs', target: 'crystalball', failureNames: ['vault_shadow_crypto_tests::malformed_nonce_lengths_are_rejected'] },
   { id: 'crypto-auth-rejection', source: 'src-tauri/src/main.rs', target: 'crystalball', failureNames: ['modified_nonce_is_rejected', 'modified_tag_is_rejected', 'tampered_ciphertext_is_rejected', 'wrong_key_fails_authentication'].map(name => `vault_shadow_crypto_tests::${name}`) },
+  { id: 'updater-dto-required-fields', source: 'src-tauri/src/updater_policy.rs', target: 'crystalball', failureNames: ['updater_policy::tests::release_asset_wire_shape_is_required_on_every_platform'] },
+  { id: 'updater-serialization', source: 'src-tauri/src/updater_policy.rs', target: 'crystalball', failureNames: ['updater_policy::tests::result_contract_uses_native_versions_and_camel_case_fields', 'updater_policy::tests::outcome_and_reason_serialization_preserves_wire_values'] },
+  { id: 'native-outcome-serialization', source: 'src-tauri/src/main.rs', target: 'crystalball', failureNames: ['native_outcome_tests::native_outcome_serialization_preserves_wire_values'] },
+  { id: 'location-error-serialization', source: 'src-tauri/src/current_location.rs', target: 'current_location_contract', failureNames: ['current_location::tests::native_envelopes_are_exact_and_camel_case', 'current_location::tests::native_error_serialization_preserves_wire_values'] },
+  { id: 'vault-accessor-authority', source: 'src-tauri/src/vault_coordinator.rs', target: 'crystalball', failureNames: ['vault_coordinator::transport_tests::test_accessor_reads_authoritative_state', 'vault_coordinator::transport_tests::coordinator_accessor_preserves_state_identity'] },
+  { id: 'updater-lock-nontruncation', source: 'src-tauri/src/main.rs', target: 'crystalball', platforms: ['darwin-arm64'], failureNames: ['updater_gate_tests::lock_reopen_preserves_bytes_inode_and_exclusion'] },
 ];
 
+function requiredMutationControls(platform) {
+  requireThat(Object.hasOwn(triples, platform), 'Unsupported mutation platform');
+  return mutationControls.filter(control => !control.platforms || control.platforms.includes(platform));
+}
+
+function replaceUnique(source, before, after) {
+  requireThat(source.split(before).length === 2, 'Mutation marker must be unique');
+  return source.replace(before, after);
+}
+
+function mutateDeclaration(source, marker, transform) {
+  requireThat(source.split(marker).length === 2, 'Mutation declaration must be unique');
+  const start = source.indexOf(marker), open = source.indexOf('{', start);
+  requireThat(open !== -1, 'Mutation declaration body missing');
+  let depth = 1, end = open + 1;
+  for (; end < source.length && depth; end += 1) {
+    if (source[end] === '{') depth += 1;
+    if (source[end] === '}') depth -= 1;
+  }
+  requireThat(depth === 0, 'Mutation declaration end missing');
+  return source.slice(0, start) + transform(source.slice(start, end)) + source.slice(end);
+}
+
+function mutateSerde(source, declaration, before, after) {
+  requireThat(source.split(declaration).length === 2, 'Mutation declaration must be unique');
+  const end = source.indexOf(declaration), start = source.lastIndexOf('#[serde(', end);
+  requireThat(start !== -1 && !source.slice(start, end).includes('}'), 'Serde mutation attribute missing');
+  return source.slice(0, start) + replaceUnique(source.slice(start, end), before, after) + source.slice(end);
+}
+
+function mutateRequiredSize(source) {
+  return mutateDeclaration(source, 'pub struct ReleaseAsset {', body => {
+    const fields = /^([ \t]*)(?:pub(?:\(crate\))? )?(size|_size): u64,$/gm;
+    const matches = [...body.matchAll(fields)];
+    requireThat(matches.length === 2 && new Set(matches.map(match => match[2])).size === 2, 'Required size fields must be unique');
+    return body.replace(fields, (line, indent) => `${indent}#[serde(default)]\n${line}`);
+  });
+}
+
 export function prepareControlMutation(id, original) {
+  const source = original.toString();
+  if (id === 'updater-dto-required-fields') return mutateRequiredSize(source);
+  if (id === 'updater-serialization') {
+    const changed = mutateSerde(source, 'pub enum UpdateOutcome {', 'rename_all = "snake_case"', 'rename_all = "camelCase"');
+    return mutateSerde(changed, 'pub enum BrowserReason {', 'rename_all = "snake_case"', 'rename_all = "camelCase"');
+  }
+  if (id === 'native-outcome-serialization') return mutateSerde(source, 'enum NativeOutcome {', 'rename_all = "snake_case"', 'rename_all = "camelCase"');
+  if (id === 'location-error-serialization') return mutateSerde(source, 'pub enum NativeLocationErrorCode {', 'rename_all = "lowercase"', 'rename_all = "UPPERCASE"');
+  if (id === 'vault-accessor-authority') {
+    const changed = mutateDeclaration(source, 'pub fn get(', body => replaceUnique(body, '.get(key).cloned()', '.get(key).filter(|_| false).cloned()'));
+    return mutateDeclaration(changed, 'pub fn state(', body => replaceUnique(body, '&self.state', 'Box::leak(Box::new(Arc::new(VaultState::new())))'));
+  }
+  if (id === 'updater-lock-nontruncation') return mutateDeclaration(source, 'fn open_lockfile(', body => replaceUnique(body, '.truncate(false)', '.truncate(true)'));
   const replacements = {
     watchdog: [['assert!(!focus.snapshot().focused);', 'assert!(focus.snapshot().focused);']],
     'crypto-nonce-rejection': [
@@ -77,12 +135,9 @@ export function prepareControlMutation(id, original) {
     'crypto-auth-rejection': [['cipher.decrypt(&nonce, env.c.as_ref()).ok()?', 'cipher.decrypt(&nonce, env.c.as_ref()).unwrap_or_default()']],
   };
   requireThat(Object.hasOwn(replacements, id), 'Unknown mutation control');
-  let source = original.toString();
-  for (const [before, after] of replacements[id]) {
-    requireThat(source.split(before).length === 2, 'Mutation marker must be unique');
-    source = source.replace(before, after);
-  }
-  return source;
+  let changed = source;
+  for (const [before, after] of replacements[id]) changed = replaceUnique(changed, before, after);
+  return changed;
 }
 
 export function validateMutationFailure(result, expectedNames, failureNames) {
@@ -238,8 +293,10 @@ function validExecutionCounts(stage, platform) {
 }
 
 function validMutationControls(controls, platform) {
-  if (!Array.isArray(controls) || controls.length !== mutationControls.length || !controls.every(control => control && typeof control.id === 'string') || !unique(controls.map(control => control.id))) return false;
-  return mutationControls.every(spec => {
+  if (!Object.hasOwn(triples, platform)) return false;
+  const expectedControls = requiredMutationControls(platform);
+  if (!Array.isArray(controls) || controls.length !== expectedControls.length || !controls.every(control => control && typeof control.id === 'string') || !unique(controls.map(control => control.id))) return false;
+  return expectedControls.every(spec => {
     const control = controls.find(control => control.id === spec.id);
     if (!control || control.source !== spec.source || control.target !== spec.target || control.appliedDiff !== true || control.detectedFailure !== true || control.restored !== true) return false;
     if (![control.originalHash, control.mutatedHash, control.restoredHash].every(value => /^[a-f0-9]{64}$/.test(value ?? '')) || control.originalHash !== control.restoredHash || control.mutatedHash === control.originalHash) return false;
@@ -358,7 +415,7 @@ async function runHosted() {
   });
   await stage('mutation', 'control', async () => {
     const controls = [];
-    for (const spec of mutationControls) {
+    for (const spec of requiredMutationControls(platform)) {
       requireThat(receipt.stages.find(s => s.id === `test:${spec.target}`)?.status === 'passed', 'Green mutation baseline required');
       requireThat(passed(await command(`${spec.id}-clean`, 'git', ['status', '--porcelain'])).trim() === '', 'Mutation baseline must be clean');
       const filename = path.join(repo, spec.source), original = readFileSync(filename);

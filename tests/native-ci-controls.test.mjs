@@ -6,7 +6,7 @@ import { controlDefinitions, validReceipt } from './fixtures/native-ci/receipts.
 
 const platforms = ['linux-x64', 'darwin-arm64'];
 
-test('aggregate requires all three independently identified mutation controls and exact evidence', () => {
+test('aggregate requires independently identified platform mutation controls and exact evidence', () => {
   const good = platforms.map(platform => validReceipt(platform));
   assert.equal(driver.aggregateReceipts(platforms, good).passed, true);
   const valid = good[1].stages.find(stage => stage.id === 'mutation').controls;
@@ -42,6 +42,23 @@ test('fixed production mutation specifications change the intended rejection gua
       assert.doesNotMatch(mutated, /env\.v != 2 \|\| env\.n\.len\(\) != 12/);
     }
     if (control.id === 'crypto-auth-rejection') assert.match(mutated, /decrypt\(&nonce, env\.c\.as_ref\(\)\)\.unwrap_or_default\(\)/);
+    if (control.id === 'updater-dto-required-fields') {
+      const restored = mutated.replace(/^[ \t]*#\[serde\(default\)\]\n(?=[ \t]*(?:pub(?:\(crate\))? )?_?size: u64,)/gm, '');
+      assert.equal((mutated.match(/#\[serde\(default\)\]\s*(?:pub(?:\(crate\))? )?_?size: u64,/g) ?? []).length, 2);
+      assert.equal(restored, original, 'only the two target-OS size fields gain defaults');
+    }
+    if (control.id === 'native-outcome-serialization') assert.match(mutated, /#\[serde\(rename_all = "camelCase"\)\]\s*enum NativeOutcome/);
+    if (control.id === 'location-error-serialization') assert.match(mutated, /#\[serde\(rename_all = "UPPERCASE"\)\]\s*pub enum NativeLocationErrorCode/);
+    if (control.id === 'updater-serialization') {
+      assert.match(mutated, /rename_all = "camelCase",\s*rename_all_fields = "camelCase"/);
+      assert.match(mutated, /#\[serde\(rename_all = "camelCase"\)\]\s*pub enum BrowserReason/);
+    }
+    if (control.id === 'vault-accessor-authority') {
+      assert.match(mutated, /\.get\(key\)\.filter\(\|_\| false\)\.cloned\(\)/);
+      assert.match(mutated, /pub fn state\([^]*?Box::leak\(Box::new\(Arc::new\(VaultState::new\(\)\)\)\)/);
+    }
+    if (control.id === 'updater-lock-nontruncation') assert.match(mutated, /fn open_lockfile\([^]*?\.truncate\(true\)/);
+
   }
   assert.throws(() => driver.prepareControlMutation('unknown', 'anything'));
 });
@@ -64,7 +81,7 @@ test('crypto red validator requires complete case execution and only fixed expec
 test('hosted orchestration source keeps full harness runs, bounded stages and unconditional restoration', () => {
   const source = readFileSync(new URL('../scripts/native-test-driver.mjs', import.meta.url), 'utf8');
   const mutation = source.slice(source.indexOf("  await stage('mutation', 'control', async () => {"), source.indexOf('  if (receipt.stages.some'));
-  assert.match(mutation, /for \(const spec of mutationControls\)/);
+  assert.match(mutation, /for \(const spec of requiredMutationControls\(platform\)\)/);
   assert.match(mutation, /receipt\.stages\.find\(s => s\.id === `test:\$\{spec\.target\}`\)\?\.status === 'passed'/);
   assert.match(mutation, /const names = \[\.\.\.target\.tests, \.\.\.\(platform === 'darwin-arm64' \? target\.darwinOnly : \[\]\)\]/);
   assert.match(mutation, /`--\$\{target\.kind\}`, target\.name, '--no-run', '--message-format=json'/);
@@ -78,4 +95,42 @@ test('hosted orchestration source keeps full harness runs, bounded stages and un
   assert.match(mutation, /controls\.push\(\{ \.\.\.spec,[^\n]+originalHash, mutatedHash, restoredHash: hash\(readFileSync\(filename\)\), redCounts, counts \}\)/);
   assert.match(source, /const deadline = Date\.now\(\) \+ 43 \* 60_000/);
   assert.match(source, /timeoutMs: Math\.min\(timeoutMs, remaining\)/);
+});
+
+
+test('Linux requires eight controls and macOS nine without invented lock evidence', () => {
+  const good = platforms.map(platform => validReceipt(platform));
+  const controls = receipt => receipt.stages.find(stage => stage.id === 'mutation').controls;
+  assert.equal(controls(good[0]).length, 8);
+  assert.equal(controls(good[1]).length, 9);
+  assert.ok(!controls(good[0]).some(control => control.id === 'updater-lock-nontruncation'));
+  assert.equal(driver.aggregateReceipts(platforms, good).passed, true);
+  const missing = structuredClone(good);
+  missing[1].stages.find(stage => stage.id === 'mutation').controls = controls(missing[1]).filter(control => control.id !== 'updater-lock-nontruncation');
+  assert.equal(driver.aggregateReceipts(platforms, missing).passed, false);
+  const invented = structuredClone(good);
+  controls(invented[0]).push(structuredClone(controls(good[1]).find(control => control.id === 'updater-lock-nontruncation')));
+  assert.equal(driver.aggregateReceipts(platforms, invented).passed, false);
+  for (const receipt of good) for (const control of controls(receipt)) {
+    const target = driver.inventory.targets.find(target => target.name === control.target);
+    const names = [...target.tests, ...(receipt.platform === 'darwin-arm64' ? target.darwinOnly : [])];
+    assert.ok(control.failureNames.every(name => names.includes(name)), control.id);
+    const changed = structuredClone(good);
+    const index = platforms.indexOf(receipt.platform);
+    changed[index].stages.find(stage => stage.id === 'mutation').controls = controls(changed[index]).filter(item => item.id !== control.id);
+    assert.equal(driver.aggregateReceipts(platforms, changed).passed, false, control.id);
+    for (const invalid of [
+      { source: 'src-tauri/unreviewed.rs' }, { target: 'unreviewed' },
+      { failureNames: control.failureNames.map((name, i) => i === 0 ? 'unexpected::case' : name) },
+      { redCounts: { ...control.redCounts, failed: 0 } },
+      { redCounts: { ...control.redCounts, filtered: 1 } },
+      { counts: { ...control.counts, filtered: 1 } },
+      { restoredHash: 'e'.repeat(64) }, { originalHash: 'invalid', restoredHash: 'invalid' },
+      { detectedFailure: false }, { restored: false },
+    ]) {
+      const corrupted = structuredClone(good);
+      Object.assign(controls(corrupted[index]).find(item => item.id === control.id), invalid);
+      assert.equal(driver.aggregateReceipts(platforms, corrupted).passed, false, `${receipt.platform}/${control.id}/${Object.keys(invalid)}`);
+    }
+  }
 });

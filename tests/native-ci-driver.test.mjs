@@ -287,13 +287,19 @@ test('reviewed inventory matches the captured Linux vault and binary lists witho
   assert.equal(evidence.platform, 'linux-x64');
   const source = readFileSync(new URL('../src-tauri/src/vault_coordinator.rs', import.meta.url), 'utf8');
   assert.match(source, /#\[cfg\(test\)\]\s+mod transport_tests \{/);
-  const added = ['malformed_nonce_lengths_are_rejected', 'modified_nonce_is_rejected', 'modified_tag_is_rejected', 'existing_v2_ciphertext_fixture_decrypts'].map(name => `vault_shadow_crypto_tests::${name}`);
+  const cryptoAdditions = ['malformed_nonce_lengths_are_rejected', 'modified_nonce_is_rejected', 'modified_tag_is_rejected', 'existing_v2_ciphertext_fixture_decrypts'].map(name => `vault_shadow_crypto_tests::${name}`);
+  const accessors = ['test_accessor_reads_authoritative_state', 'coordinator_accessor_preserves_state_identity'].map(name => `vault_coordinator::transport_tests::${name}`);
+  const additions = {
+    vault_coordinator_contract: accessors,
+    crystalball: [...cryptoAdditions, ...accessors, 'updater_policy::tests::release_asset_wire_shape_is_required_on_every_platform', 'updater_policy::tests::outcome_and_reason_serialization_preserves_wire_values', 'native_outcome_tests::native_outcome_serialization_preserves_wire_values', 'current_location::tests::native_error_serialization_preserves_wire_values'],
+  };
   for (const [name, count] of [['vault_coordinator_contract', 45], ['crystalball', 115]]) {
     const target = driver.inventory.targets.find(target => target.name === name);
+    const added = additions[name];
     const historicalNames = target.tests.filter(name => !added.includes(name));
-    assert.equal(target.tests.length, count + (name === 'crystalball' ? 4 : 0));
+    assert.equal(target.tests.length, count + added.length);
     assert.equal(driver.validateTestInventory(evidence.lists[name], historicalNames).length, count);
-    if (name === 'crystalball') assert.deepEqual(target.tests.filter(name => added.includes(name)).sort(), [...added].sort());
-    assert.equal(target.tests.filter(name => name.startsWith('vault_coordinator::transport_tests::')).length, 5);
+    assert.deepEqual(target.tests.filter(name => added.includes(name)).sort(), [...added].sort());
+    assert.equal(target.tests.filter(name => name.startsWith('vault_coordinator::transport_tests::')).length, 7);
   }
 });

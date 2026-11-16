@@ -260,6 +260,7 @@ fn safe_body(value: &str) -> Result<String> {
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+#[cfg(target_os = "macos")]
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
@@ -268,6 +269,7 @@ pub struct NativeEffects {
     directory: PathBuf,
 }
 impl NativeEffects {
+    #[cfg(any(target_os = "macos", test))]
     pub fn new(directory: PathBuf) -> Self {
         Self { directory }
     }
@@ -492,7 +494,9 @@ end run"#;
         Instant::now()
     }
 }
+#[cfg(target_os = "macos")]
 struct NativeSend(Child);
+#[cfg(target_os = "macos")]
 impl PendingSend for NativeSend {
     fn wait(self: Box<Self>) -> Result<()> {
         let (success, _) = bounded_wait(self.0, Duration::from_secs(30), false)?;
@@ -503,15 +507,18 @@ impl PendingSend for NativeSend {
         }
     }
 }
+#[cfg(any(target_os = "macos", test))]
 pub trait Process {
     fn poll(&mut self) -> Result<Option<bool>>;
     fn output(&mut self) -> Result<Option<Vec<u8>>>;
     fn terminate(&mut self);
 }
+#[cfg(any(target_os = "macos", test))]
 pub trait WaitClock {
     fn now(&self) -> Instant;
     fn pause(&self);
 }
+#[cfg(any(target_os = "macos", test))]
 pub fn wait_process<P: Process, C: WaitClock>(
     mut child: P,
     timeout: Duration,
@@ -542,7 +549,9 @@ pub fn wait_process<P: Process, C: WaitClock>(
         clock.pause();
     }
 }
+#[cfg(target_os = "macos")]
 struct NativeClock;
+#[cfg(target_os = "macos")]
 impl WaitClock for NativeClock {
     fn now(&self) -> Instant {
         Instant::now()
@@ -551,10 +560,12 @@ impl WaitClock for NativeClock {
         std::thread::sleep(Duration::from_millis(10));
     }
 }
+#[cfg(target_os = "macos")]
 struct NativeProcess {
     child: Child,
     output: Vec<u8>,
 }
+#[cfg(target_os = "macos")]
 impl Process for NativeProcess {
     fn poll(&mut self) -> Result<Option<bool>> {
         self.child
@@ -585,6 +596,7 @@ impl Process for NativeProcess {
         let _ = self.child.wait();
     }
 }
+#[cfg(target_os = "macos")]
 fn bounded_wait(child: Child, timeout: Duration, dialog: bool) -> Result<(bool, Vec<u8>)> {
     let mut process = NativeProcess {
         child,
@@ -608,6 +620,7 @@ fn bounded_wait(child: Child, timeout: Duration, dialog: bool) -> Result<(bool, 
     }
     wait_process(process, timeout, dialog, &NativeClock)
 }
+#[cfg(any(target_os = "macos", test))]
 pub fn consent_result(success: bool, output: &[u8]) -> bool {
     success && output == b"Allow\n"
 }

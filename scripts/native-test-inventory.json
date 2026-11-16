@@ -11,6 +11,7 @@
         "current_location::tests::concurrent_attempts_fail_busy_without_starting_a_second_session",
         "current_location::tests::lifecycle_cleans_up_exactly_once_on_success",
         "current_location::tests::native_envelopes_are_exact_and_camel_case",
+        "current_location::tests::native_error_serialization_preserves_wire_values",
         "current_location::tests::native_fix_validation_accepts_zero_and_rejects_invalid_values",
         "current_location::tests::only_the_main_window_is_allowed",
         "current_location::tests::the_native_deadline_is_exactly_fifteen_seconds",
@@ -178,6 +179,8 @@
         "vault_coordinator::transport_tests::actual_state_snapshot_and_launch_allocate_after_current_owner",
         "vault_coordinator::transport_tests::actual_transport_allocates_from_authoritative_map_not_detached_clone",
         "vault_coordinator::transport_tests::actual_transport_reservation_occurs_inside_inner_for_snapshot_and_launch",
+        "vault_coordinator::transport_tests::coordinator_accessor_preserves_state_identity",
+        "vault_coordinator::transport_tests::test_accessor_reads_authoritative_state",
         "writer_thread_stops_when_all_coordinators_drop"
       ],
       "darwinOnly": []
@@ -208,6 +211,7 @@
         "current_location::tests::concurrent_attempts_fail_busy_without_starting_a_second_session",
         "current_location::tests::lifecycle_cleans_up_exactly_once_on_success",
         "current_location::tests::native_envelopes_are_exact_and_camel_case",
+        "current_location::tests::native_error_serialization_preserves_wire_values",
         "current_location::tests::native_fix_validation_accepts_zero_and_rejects_invalid_values",
         "current_location::tests::only_the_main_window_is_allowed",
         "current_location::tests::the_native_deadline_is_exactly_fifteen_seconds",
@@ -224,6 +228,7 @@
         "log_rotation::tests::copy_truncate_shifts_backups_and_drops_the_oldest",
         "log_rotation::tests::rename_rotation_moves_the_file",
         "log_rotation::tests::small_files_are_left_alone",
+        "native_outcome_tests::native_outcome_serialization_preserves_wire_values",
         "navigation_guard_tests::main_window_allows_localhost_dev_only_in_debug",
         "navigation_guard_tests::main_window_allows_tauri_scheme",
         "navigation_guard_tests::main_window_allows_windows_app_origin",
@@ -305,6 +310,8 @@
         "updater_policy::tests::fingerprints_not_names_bind_local_signer",
         "updater_policy::tests::newer_existing_bundle_only_wins_after_verification",
         "updater_policy::tests::only_observed_cdn_redirect_is_allowed",
+        "updater_policy::tests::outcome_and_reason_serialization_preserves_wire_values",
+        "updater_policy::tests::release_asset_wire_shape_is_required_on_every_platform",
         "updater_policy::tests::result_contract_uses_native_versions_and_camel_case_fields",
         "updater_policy::tests::self_signed_anchor_fingerprint_supports_both_conjunction_orders",
         "updater_policy::tests::strict_versions_do_not_guess",
@@ -314,6 +321,8 @@
         "vault_coordinator::transport_tests::actual_state_snapshot_and_launch_allocate_after_current_owner",
         "vault_coordinator::transport_tests::actual_transport_allocates_from_authoritative_map_not_detached_clone",
         "vault_coordinator::transport_tests::actual_transport_reservation_occurs_inside_inner_for_snapshot_and_launch",
+        "vault_coordinator::transport_tests::coordinator_accessor_preserves_state_identity",
+        "vault_coordinator::transport_tests::test_accessor_reads_authoritative_state",
         "vault_shadow_crypto_tests::existing_v2_ciphertext_fixture_decrypts",
         "vault_shadow_crypto_tests::legacy_plaintext_is_not_a_v2_envelope",
         "vault_shadow_crypto_tests::malformed_nonce_lengths_are_rejected",
@@ -325,6 +334,7 @@
         "watchdog_log_tests::epoch_to_utc_known_instants"
       ],
       "darwinOnly": [
+        "updater_gate_tests::lock_reopen_preserves_bytes_inode_and_exclusion",
         "updater_gate_tests::post_swap_rejection_restores_old_install_without_real_verifier",
         "updater_gate_tests::symlinked_staged_root_never_reaches_swap_or_verifier"
       ]

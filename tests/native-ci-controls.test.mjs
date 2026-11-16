@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import * as driver from '../scripts/native-test-driver.mjs';
 import { controlDefinitions, validReceipt } from './fixtures/native-ci/receipts.mjs';
@@ -89,6 +92,7 @@ test('hosted orchestration source keeps full harness runs, bounded stages and un
   assert.equal((mutation.match(/\['--test-threads=1'\], 120_000, testEnv/g) ?? []).length, 2);
   assert.match(mutation, /const temp = path\.join\(state, `mutation-\$\{spec\.id\}`\)/);
   assert.match(mutation, /TMPDIR: temp, TMP: temp, TEMP: temp/);
+  assert.match(mutation, /validateMutationDiff\(diff\)/);
   assert.match(mutation, /redCounts = validateMutationFailure\(result, names, spec\.failureNames\)/);
   assert.match(mutation, /finally \{\s*writeFileSync\(filename, original\);\s*requireThat\(hash\(readFileSync\(filename\)\) === originalHash,[\s\S]*?command\(`\$\{spec\.id\}-restored`, 'git', \['status', '--porcelain'\]\)[\s\S]*?validateLock\(readFileSync\(lockFile\), receipt\.lockHash\);\s*\}/);
   assert.match(mutation, /const counts = parseTestResult\(passed\(await command\(`\$\{spec\.id\}-green`/);
@@ -132,5 +136,42 @@ test('Linux requires eight controls and macOS nine without invented lock evidenc
       Object.assign(controls(corrupted[index]).find(item => item.id === control.id), invalid);
       assert.equal(driver.aggregateReceipts(platforms, corrupted).passed, false, `${receipt.platform}/${control.id}/${Object.keys(invalid)}`);
     }
+  }
+});
+
+
+test('tracked mutation diffs accept additions, deletions and replacements but require changed hunk lines', t => {
+  const repo = mkdtempSync(path.join(tmpdir(), 'native-mutation-diff-'));
+  t.after(() => rmSync(repo, { recursive: true, force: true }));
+  const git = (...args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8', env: { PATH: process.env.PATH, HOME: repo, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' } });
+  git('init', '--quiet');
+  const originals = new Map();
+  for (const { source } of controlDefinitions) {
+    if (originals.has(source)) continue;
+    const original = readFileSync(new URL('../' + source, import.meta.url), 'utf8');
+    originals.set(source, original);
+    mkdirSync(path.dirname(path.join(repo, source)), { recursive: true });
+    writeFileSync(path.join(repo, source), original);
+    git('add', '--', source);
+  }
+  assert.equal(git('diff', '--'), '');
+  for (const control of controlDefinitions) {
+    const original = originals.get(control.source);
+    try {
+      writeFileSync(path.join(repo, control.source), driver.prepareControlMutation(control.id, original));
+      const diff = git('diff', '--', control.source);
+      assert.ok(diff.includes(`diff --git a/${control.source} b/${control.source}`), control.id);
+      assert.doesNotThrow(() => driver.validateMutationDiff(diff), control.id);
+    } finally {
+      writeFileSync(path.join(repo, control.source), original);
+    }
+    assert.equal(git('diff', '--'), '');
+  }
+  const source = 'src-tauri/src/updater_policy.rs', original = originals.get(source);
+  writeFileSync(path.join(repo, source), original.replace('    pub size: u64,\n', ''));
+  assert.doesNotThrow(() => driver.validateMutationDiff(git('diff', '--', source)), 'deletion-only diff');
+  writeFileSync(path.join(repo, source), original);
+  for (const invalid of ['', 'diff --git a/x b/x\n--- a/x\n+++ b/x\n', '@@ -1 +1 @@\n unchanged\n', '+added without hunk\n']) {
+    assert.throws(() => driver.validateMutationDiff(invalid), /Mutation diff missing/);
   }
 });

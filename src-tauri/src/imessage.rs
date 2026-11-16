@@ -56,6 +56,7 @@ pub struct Service<E: Effects> {
     state: Mutex<State>,
 }
 impl<E: Effects> Service<E> {
+    #[cfg(any(target_os = "macos", test))]
     pub fn new(effects: E) -> Self {
         Self {
             effects,

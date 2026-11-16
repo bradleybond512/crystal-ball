@@ -13,6 +13,10 @@ const requireThat = (condition, message) => { if (!condition) throw new Error(me
 const unique = values => new Set(values).size === values.length;
 const inside = (base, child) => { const relative = path.relative(base, child); return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative); };
 
+export function validateMutationDiff(diff) {
+  requireThat(/^@@ /m.test(diff) && (/^-(?!-).*/m.test(diff) || /^\+(?!\+).*/m.test(diff)), 'Mutation diff missing');
+}
+
 export function assertHostedPlatform({ platform = process.platform, arch = process.arch, env = process.env } = {}) {
   const id = `${platform}-${arch}`;
   requireThat(env.GITHUB_ACTIONS === 'true' && env.RUNNER_ENVIRONMENT === 'github-hosted', 'Hosted runner required');
@@ -431,7 +435,7 @@ async function runHosted() {
         writeFileSync(filename, mutated);
         requireThat(hash(readFileSync(filename)) === mutatedHash, 'Mutation bytes did not apply');
         const diff = passed(await command(`${spec.id}-diff`, 'git', ['diff', '--', spec.source]));
-        requireThat(/^-(?!-).+/m.test(diff) && /^\+(?!\+).+/m.test(diff), 'Mutation diff missing');
+        validateMutationDiff(diff);
         const binaries = selectTestExecutables(passed(await command(`${spec.id}-compile`, cargo, compileArgs, 5 * 60_000)), [target], env.CARGO_TARGET_DIR);
         const result = await command(`${spec.id}-red`, binaries[target.name], ['--test-threads=1'], 120_000, testEnv);
         redCounts = validateMutationFailure(result, names, spec.failureNames);

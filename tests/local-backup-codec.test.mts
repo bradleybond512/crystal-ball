@@ -49,6 +49,8 @@ test('unsupported and malformed envelopes reject before any KDF operation', asyn
   for (const [offset, value] of [[0, 0], [8, 2], [9, 2], [10, 1], [11, 1], [12, 1], [44, 255]]) { const changed = bytes(); changed[offset] = value; cases.push(changed); }
   const lowCount = bytes(); new DataView(lowCount.buffer).setUint32(12, 599_999); cases.push(lowCount);
   const shortTag = bytes(); new DataView(shortTag.buffer).setUint32(44, 15); cases.push(shortTag);
+  const oversized = new Uint8Array(1_048_641); oversized.set(bytes().subarray(0, 48));
+  new DataView(oversized.buffer).setUint32(44, 1_048_593); cases.push(oversized);
   let calls = 0; const never = () => { calls++; throw new Error('KDF must not run'); };
   await withGlobal('crypto', cryptoSpy({ importKey: never, deriveKey: never, deriveBits: never }), async () => { for (const archive of cases) await reject(decryptBackup(archive, passphrase)); });
   assert.equal(calls, 0);

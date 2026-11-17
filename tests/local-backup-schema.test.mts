@@ -69,6 +69,9 @@ test('record counts and cumulative byte budget reject rather than truncate', () 
     invalid(one(id, [...rows, id === ids[2] ? '1000' : { ...rows[0], id: '1000', ...(id === ids[0] ? { primary: false } : {}) }]));
   }
   invalid(one(ids[0], Array.from({ length: 150 }, (_, i) => place({ id: `${i}`, primary: i === 0, notes: 'x'.repeat(8192) }))));
+  const escaped = one(ids[0], Array.from({ length: 40 }, (_, i) => place({ id: `${i}`, primary: i === 0, notes: '\0'.repeat(8192) })));
+  assert.ok(Buffer.byteLength(canonical(escaped)) > 1_048_576);
+  invalid(escaped);
 });
 
 test('decoder rejects duplicate keys, noncanonical encodings, invalid UTF8 and oversize bytes', () => {

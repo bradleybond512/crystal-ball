@@ -1,7 +1,8 @@
 # UX-036 — scheduler and battery fixture evidence
 
 Date: November 16, 2026. Draft #1912. Test/measurement implementation source:
-`c14352c377b9f0dd6e83c25cc070259f137d83de`.
+`15cfdf31bbeb77c0e12d7d328a39352970f9da03`; final test-only strengthening:
+`5a9bf5d2f2bb1304219cdfe0526f56b517401766`.
 
 ## Result and remaining acceptance
 
@@ -40,7 +41,7 @@ model that existing caller lifecycle, rather than altering scheduler ownership.
 ## Executed validation
 
 Node 22.23.1. Existing four-file baseline: `# pass 41` / `# fail 0`.
-Final candidate command:
+Complete repaired gate at `15cfdf31bb`:
 
 ```sh
 bash scripts/agentic-validate.sh --tests "test:ux036 test:agentic-pipeline test:sidecar-ci test:domain-retirement test:roadmap-controller"
@@ -49,7 +50,7 @@ bash scripts/agentic-validate.sh --tests "test:ux036 test:agentic-pipeline test:
 Actual output excerpts, in command order:
 
 ```text
-# pass 58
+# pass 62
 # fail 0
 # pass 85
 # fail 0
@@ -74,7 +75,8 @@ script. Its actual export, CLI output and invalid arguments are exercised.
 An earlier parallel gate was deliberately interrupted at typecheck (exit 143)
 to reduce machine contention. It is not counted as a passing gate; the complete
 serial rerun above passed. Commit hooks also passed all type checks and scans.
-Initial new characterization was already green; the applied mutations below,
+The final test-only combined-failure strengthening also passed `test:ux036`
+62/0 and all type checks in its commit hook. Initial new characterization was already green; the applied mutations below,
 not a claimed first-red development order, establish detection.
 
 `node scripts/targeted-tests.mjs --list --strict` exited 0: 50 scripts selected,
@@ -121,70 +123,111 @@ timers. Hidden callbacks pause even with always-on enabled. These are measured
 fixture properties, not warning-detection, event-loop, CPU or energy guarantees.
 The fake clock uses 32 microtask checkpoints and does not model browser throttling.
 
-## Applied mutation proof
+## Review repair and applied mutation proof
 
-Clean detached candidate at the source SHA above. The campaign saved a nonempty
-applied diff and actual assertion failures for every change, restored the original
-checksum and empty status after each, and ended with `22 pass / 0 fail` again.
-All 31 mutations were caught; no survivors. Counts are pass/fail.
+Independent Sol review at `89a14e4a74` found one P2 fixture bug: exhausting the
+trace budget could make cancellation throw before globals were restored, and a
+related path could strand an owned loader. No production module was affected.
+Repair cycle 1 moved setup and teardown restoration into unconditional cleanup,
+settles owned loaders, clears owned timers and retains/report original errors.
+Normal residual-timer metrics are observed before forced cleanup, preserving
+cancellation-failure detection.
+
+Actual new regression output on old/fixed helper:
+
+```text
+# pass 0
+# fail 3
+# pass 3
+# fail 0
+```
+
+A fourth canary verifies that a residual timer reports 1 before forced cleanup
+clears it to 0. The original 31 controls were rerun on clean repaired source
+`15cfdf31bb`: all caught, baseline/restored `26 pass / 0 fail`. Counts below are
+pass/fail; every mutation has an inspected applied diff, actual failing assertions,
+matching restored hashes and a clean scratch tree.
 
 | Mutation | Mutated file | Before | Mutated |
 | --- | --- | --- | --- |
-| `jitter-removed` | refresh-scheduler.ts | 22/0 | 20/2 |
-| `minimum-delay` | refresh-scheduler.ts | 22/0 | 21/1 |
-| `hidden-multiplier` | refresh-scheduler.ts | 22/0 | 21/1 |
-| `ghost-policy` | refresh-scheduler.ts | 22/0 | 21/1 |
-| `context-policy` | refresh-scheduler.ts | 22/0 | 20/2 |
-| `hidden-pause` | refresh-scheduler.ts | 22/0 | 20/2 |
-| `condition-refusal` | refresh-scheduler.ts | 22/0 | 21/1 |
-| `in-flight-refusal` | refresh-scheduler.ts | 22/0 | 21/1 |
-| `completion-rearming` | refresh-scheduler.ts | 22/0 | 17/5 |
-| `unchanged-backoff` | refresh-scheduler.ts | 22/0 | 21/1 |
-| `failure-backoff` | refresh-scheduler.ts | 22/0 | 20/2 |
-| `backoff-cap` | refresh-scheduler.ts | 22/0 | 21/1 |
-| `successful-reset` | refresh-scheduler.ts | 22/0 | 21/1 |
-| `in-flight-release` | refresh-scheduler.ts | 22/0 | 18/4 |
-| `success-freshness` | refresh-scheduler.ts | 22/0 | 21/1 |
-| `recovery-deduplication` | refresh-scheduler.ts | 22/0 | 21/1 |
-| `recovery-stale-timer-cancel` | refresh-scheduler.ts | 22/0 | 20/2 |
-| `recovery-priority` | refresh-scheduler.ts | 22/0 | 21/1 |
-| `recovery-stagger` | refresh-scheduler.ts | 22/0 | 21/1 |
-| `recovery-six-slots` | refresh-scheduler.ts | 22/0 | 21/1 |
-| `recovery-base-freshness` | refresh-scheduler.ts | 22/0 | 20/2 |
-| `destroy-cancels` | refresh-scheduler.ts | 22/0 | 19/3 |
-| `destroy-blocks-rearming` | refresh-scheduler.ts | 22/0 | 19/3 |
-| `battery-polarity` | adaptive-cadence.ts | 22/0 | 9/13 |
-| `battery-initial-sample` | adaptive-cadence.ts | 22/0 | 21/1 |
-| `battery-event-listener` | adaptive-cadence.ts | 22/0 | 20/2 |
-| `stacked-battery` | adaptive-cadence.ts | 22/0 | 21/1 |
-| `stacked-low-power` | adaptive-cadence.ts | 22/0 | 19/3 |
-| `measurement-window-edge` | refresh-scheduler-clock.mjs | 22/0 | 21/1 |
-| `measurement-unavailable-gap` | refresh-scheduler-clock.mjs | 22/0 | 21/1 |
-| `measurement-gap-calculation` | refresh-scheduler-clock.mjs | 22/0 | 21/1 |
+| `jitter-removed` | refresh-scheduler.ts | 26/0 | 24/2 |
+| `minimum-delay` | refresh-scheduler.ts | 26/0 | 25/1 |
+| `hidden-multiplier` | refresh-scheduler.ts | 26/0 | 25/1 |
+| `ghost-policy` | refresh-scheduler.ts | 26/0 | 25/1 |
+| `context-policy` | refresh-scheduler.ts | 26/0 | 24/2 |
+| `hidden-pause` | refresh-scheduler.ts | 26/0 | 24/2 |
+| `condition-refusal` | refresh-scheduler.ts | 26/0 | 25/1 |
+| `in-flight-refusal` | refresh-scheduler.ts | 26/0 | 25/1 |
+| `completion-rearming` | refresh-scheduler.ts | 26/0 | 21/5 |
+| `unchanged-backoff` | refresh-scheduler.ts | 26/0 | 25/1 |
+| `failure-backoff` | refresh-scheduler.ts | 26/0 | 24/2 |
+| `backoff-cap` | refresh-scheduler.ts | 26/0 | 25/1 |
+| `successful-reset` | refresh-scheduler.ts | 26/0 | 25/1 |
+| `in-flight-release` | refresh-scheduler.ts | 26/0 | 22/4 |
+| `success-freshness` | refresh-scheduler.ts | 26/0 | 25/1 |
+| `recovery-deduplication` | refresh-scheduler.ts | 26/0 | 25/1 |
+| `recovery-stale-timer-cancel` | refresh-scheduler.ts | 26/0 | 24/2 |
+| `recovery-priority` | refresh-scheduler.ts | 26/0 | 25/1 |
+| `recovery-stagger` | refresh-scheduler.ts | 26/0 | 25/1 |
+| `recovery-six-slots` | refresh-scheduler.ts | 26/0 | 25/1 |
+| `recovery-base-freshness` | refresh-scheduler.ts | 26/0 | 24/2 |
+| `destroy-cancels` | refresh-scheduler.ts | 26/0 | 22/4 |
+| `destroy-blocks-rearming` | refresh-scheduler.ts | 26/0 | 23/3 |
+| `battery-polarity` | adaptive-cadence.ts | 26/0 | 11/15 |
+| `battery-initial-sample` | adaptive-cadence.ts | 26/0 | 25/1 |
+| `battery-event-listener` | adaptive-cadence.ts | 26/0 | 24/2 |
+| `stacked-battery` | adaptive-cadence.ts | 26/0 | 25/1 |
+| `stacked-low-power` | adaptive-cadence.ts | 26/0 | 23/3 |
+| `measurement-window-edge` | refresh-scheduler-clock.mjs | 26/0 | 25/1 |
+| `measurement-unavailable-gap` | refresh-scheduler-clock.mjs | 26/0 | 25/1 |
+| `measurement-gap-calculation` | refresh-scheduler-clock.mjs | 26/0 | 25/1 |
+
+The initial cleanup campaign caught 6/7 controls. Its survivor replaced captured
+`scheduler.destroy()` with a direct call: the fixture lacked a simultaneous active
+loader and future scheduler timer. That survivor remains in
+`repair1-mutations/cleanup/results.json`. Test-only commit `5a9bf5d2f2` adds that
+combined failure; the final seven cleanup controls all fail as intended:
+
+| Cleanup mutation (helper file) | Before | Mutated |
+| --- | --- | --- |
+| `dispose-restores-globals` | 4/0 | 1/3 |
+| `dispose-clears-owned-timers` | 4/0 | 2/2 |
+| `dispose-resolves-owned-loaders` | 4/0 | 3/1 |
+| `dispose-reports-original-failure` | 4/0 | 2/2 |
+| `setup-restores-earlier-globals` | 4/0 | 3/1 |
+| `cleanup-counts-before-force-clear` | 4/0 | 3/1 |
+| `destroy-failure-still-releases-loaders` | 4/0 | 3/1 |
+
+All seven restored to `4 pass / 0 fail`, with clean scratch state. This gives
+38 distinct detected final controls (31 at repaired source, seven at final
+stronger tests); it is not a claim that every historical attempt was caught.
+The original pre-review 31-control campaign and initial 6/7 cleanup run remain
+preserved alongside the final proofs.
 
 Representative actual red assertions:
 
 ```text
-not ok 11 - real scheduling preserves lower/mid/upper jitter bounds and the one-second floor
-not ok 17 - recovery prioritizes base intervals, cancels stale timers and staggers six blocked admissions
-not ok 6 - real battery monitor samples initial charging and follows both chargingchange transitions
-not ok 21 - measurement windows are half-open, replay deterministic and cleanup is included
+not ok 1 - normal disposal reports residual timers before forced cleanup
+not ok 3 - trace exhaustion cannot strand a delayed loader during disposal
+not ok 4 - failed partial fixture setup restores earlier global replacements
+not ok 1 - normal disposal reports residual timers before forced cleanup
 ```
 
-Before/restored SHA-256 values:
+Before/restored SHA-256 for repaired/final proofs:
 
 ```text
 refresh-scheduler.ts 9d88c369c4fc4657d308896d0d4119a8b5e7aa65ba43045dd97d96e9e4999dfe
 adaptive-cadence.ts  1bbffe5096b70e2c2042ae5a02395003e157542cfcad15da63e02ddd4f235000
-refresh-scheduler-clock.mjs 6d999e15c7004f97bcb50ea5d48a6ba19be77d309594f0f2ec73abe3c3a9ec6f
+refresh-scheduler-clock.mjs 6e10b2289ede9e0d0e87613e1abf877d285a117bd6ef707ddc9fb3de5c4fcd96
 ```
 
-Raw local task evidence under `next-nov16/ux036/`: `final-gate.log`,
-`existing-baseline.log`, `synthetic-measurement.json`, independent
-`parent-measurement-replay.json`, `selected-suites.log`, `TEST-CLOSEOUT.md`,
-`mutations/results.json`, and every named applied `.diff`, red log and restored
-baseline. The interrupted gate is separately preserved. No production mutant
-was applied to the candidate worktree.
+Raw local task evidence under `next-nov16/ux036/`: `repaired-gate.log`,
+`existing-baseline.log`, `synthetic-measurement.json`, independent original and
+repaired measurement replays, `selected-suites.log`, `TEST-CLOSEOUT.md`,
+`repair1/{first-red,green,all-green}.log`, `repair1-mutations/results.json`,
+`repair1-mutations/{cleanup,final-cleanup}/results.json`, every named applied
+`.diff`, red log and restored baseline. The earlier gate/interruption and review
+findings remain preserved. No production mutant was applied to the candidate.
 
 ## Review, CI, manual verification and rollback
 
@@ -207,5 +250,6 @@ cadence tests without removing their coverage. There is no data migration.
 Proposed PR description: characterize existing scheduler and battery policy with
 bounded deterministic fixtures, actual charging events and reproducible synthetic
 reports. Preserve production timing and full UX-036 acceptance. Local tests, type
-checks and full gate pass; 31 mutations prove detection. Wider hosted acceptance
+checks and full repaired gate pass; 38 final controls prove detection, with
+the original cleanup survivor and repair disclosed. Wider hosted acceptance
 and the separate marketing audit remain open; all merge/delivery holds remain.

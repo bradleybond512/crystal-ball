@@ -70,8 +70,10 @@ export function startCorrelationFeedback(): void {
     const nowAcked = new Set<string>();
     const nowPinned = new Set<string>();
     const currentIds = new Set<string>();
+    const currentAlerts = new Map<string, UnifiedAlert>();
     for (const a of unifiedAlertStore.getAll()) {
       if (a.source !== 'correlation') continue;
+      currentAlerts.set(a.id, a);
       currentIds.add(a.id);
       if (!firstSeen.has(a.id)) firstSeen.set(a.id, now);
       if (a.acknowledged) nowAcked.add(a.id);
@@ -80,7 +82,7 @@ export function startCorrelationFeedback(): void {
     let changed = false;
     for (const id of nowAcked) {
       if (prevAcked.has(id)) continue;
-      const a = unifiedAlertStore.getAll().find(x => x.id === id);
+      const a = currentAlerts.get(id);
       if (!a) continue;
       const pk = pairKeyFor(a);
       if (!pk) continue;
@@ -93,7 +95,7 @@ export function startCorrelationFeedback(): void {
     }
     for (const id of nowPinned) {
       if (prevPinned.has(id)) continue;
-      const a = unifiedAlertStore.getAll().find(x => x.id === id);
+      const a = currentAlerts.get(id);
       if (!a) continue;
       const pk = pairKeyFor(a);
       if (!pk) continue;

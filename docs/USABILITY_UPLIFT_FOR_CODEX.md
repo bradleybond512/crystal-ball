@@ -1003,7 +1003,9 @@ and tracking update do not authorize it. Current bounded evidence and limits:
 
 ### UX-043 — Reduce repeated alert subscriber scans
 
-Status: NOT STARTED
+Status: IN PROGRESS — HIGH ASSURANCE
+Approval: November 17, Bradley approved the bounded correlation-feedback lookup design, documentation draft claim and local implementation.
+Evidence: [Draft #1914](https://github.com/bradleybond512/crystal-ball/pull/1914); [approved design](plans/2026-11-17-ux043-correlation-subscriber-design.md). Full subscriber-contract and app-wide fan-out acceptance remain open; implementation publication requires separate approval.
 Priority: B
 Source findings: PR1731 M7.
 
@@ -1518,8 +1520,11 @@ State these as open questions rather than treating them as settled:
 
 ### UX-076 — Preserve failed iMessage setup drafts
 
-Status: IN REVIEW
-Evidence: [Draft #1900](https://github.com/bradleybond512/crystal-ball/pull/1900); [bounded UI design](plans/2026-11-10-ux076-imessage-draft-recovery.md).
+Status: MONITOR
+Evidence: [Merged #1900](https://github.com/bradleybond512/crystal-ball/pull/1900), November 14, 2026, at `92ff943dfc96c31c1c9f399baf9e1429e75bbd75`; [bounded UI design](plans/2026-11-10-ux076-imessage-draft-recovery.md).
+Exit condition: Complete the separately scoped packaged acceptance for failed-save draft recovery, correction, cancellation and confirmed saved authority when delivery holds permit; source merge alone is not packaged acceptance.
+Review after: 2026-11-22
+Reviewed November 15: GitHub confirms the source PR is merged. This reconciles stale claim metadata only; no application launch, real message, installed-settings write, release or installation is claimed. The review date is a manual checkpoint, not an automation.
 
 Preserve a submitted recipient after invalid-format, unavailable, persistence, or busy-retry failures so it can be corrected and explicitly retried. Native validation, exact-recipient confirmation, storage authority, cancellation and immediate disable remain unchanged. Test must use only confirmed saved state. Do not persist drafts or send messages during verification.
 
@@ -1603,7 +1608,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-038 | Constrain video-channel link construction | DONE — HIGH ASSURANCE | PR #1840 — two fixed-origin error links; 12 behavioral/helper tests, 46 HLS regressions, five clean-tree mutations and full validation ([QA](validation/UX-038-LINK-SAFETY.md)). |
 | UX-040 | Expose unavailable and stale feed outcomes | MONITOR — HIGH ASSURANCE | #1841 — merged bounded news/status slice; broader acceptance remains open |
 | UX-042 | Construct panels when needed without losing coverage | MONITOR | #1714 |
-| UX-043 | Reduce repeated alert subscriber scans | NOT STARTED | — |
+| UX-043 | Reduce repeated alert subscriber scans | IN PROGRESS | Approved bounded [correlation subscriber design](plans/2026-11-17-ux043-correlation-subscriber-design.md); [Draft #1914](https://github.com/bradleybond512/crystal-ball/pull/1914); [local evidence](validation/UX-043-CORRELATION-SUBSCRIBER.md). Bounded implementation passes 79 tests and 12 mutation controls; full-store combined feedback scans reduced 1001 to 1 with unchanged fixture results. Code publication and hosted acceptance pending. Full subscriber-contract and fan-out acceptance remain open. |
 | UX-044 | Announce critical UI changes accessibly | MONITOR | [Evidence](validation/UX-044-CRITICAL-ANNOUNCEMENTS.md) · [Draft #1854](https://github.com/bradleybond512/crystal-ball/pull/1854) |
 | UX-045 | Keep advisories from suppressing warnings | DONE | #1733 |
 | UX-046 | Preserve alert priorities at capacity | DONE — HIGH ASSURANCE | #1734 |
@@ -1635,7 +1640,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-073 | Scope cohesive module extractions | NOT STARTED | |
 | UX-074 | Release SBOMs | NOT STARTED — HIGH ASSURANCE | |
 | UX-075 | Remove unsupported lightning tooltip measurement | DONE | #1887; late claim after implementation `95d5f64167fb`. At the pre-merge source checkpoint, final exact-tip validation, independent review and hosted gates remain required before merge. No browser/native acceptance claimed. |
-| UX-076 | Preserve failed iMessage setup drafts | IN REVIEW | [Draft #1900](https://github.com/bradleybond512/crystal-ball/pull/1900); [bounded design](plans/2026-11-10-ux076-imessage-draft-recovery.md). UI-only retry recovery; native consent and sending authority unchanged. |
+| UX-076 | Preserve failed iMessage setup drafts | MONITOR | [Merged #1900](https://github.com/bradleybond512/crystal-ball/pull/1900); [bounded design](plans/2026-11-10-ux076-imessage-draft-recovery.md). Source merged November 14; separately scoped packaged acceptance remains open. |
 
 ## Repair 12 — Diagnostics entry and shortcut ownership (2026-10-18)
 

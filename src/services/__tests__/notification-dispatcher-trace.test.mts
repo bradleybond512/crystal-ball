@@ -432,3 +432,89 @@ test('an explicit malformed stored domain cannot implicitly enable system delive
     assert.equal(prompts.mock.callCount(), 0, raw);
   }
 });
+
+// ── Desktop shell without the web Notification API (W1) ──────────────────────
+
+function desktopWindow(result: unknown, calls: Array<Record<string, unknown>>) {
+  Reflect.deleteProperty(globalThis, 'Notification');
+  Object.assign(globalThis, {
+    window: {
+      __TAURI_INTERNALS__: {
+        invoke: async (command: string, payload?: Record<string, unknown>) => {
+          calls.push({ command, ...payload });
+          if (result instanceof Error) throw result;
+          return result;
+        },
+      },
+    },
+  });
+}
+
+const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+
+test('a desktop shell without the web Notification API hands a critical alert to the native command', async () => {
+  const calls: Array<Record<string, unknown>> = [];
+  desktopWindow('delivered', calls);
+  const { notificationDispatcher } = await loadFresh();
+
+  notificationDispatcher.dispatchNotification(alert('native-critical', 'critical'), 'sound+banner');
+  await settle();
+
+  assert.deepEqual(calls, [{
+    command: 'send_notification', title: 'Alert native-critical', body: 'body', sound: 'Basso', priority: 'critical',
+  }]);
+  const [entry] = getNotificationTraceRegistry().all();
+  assert.deepEqual(entry?.nativeResult, { delivered: true, surface: 'critical' });
+});
+
+test('a high alert uses the high native lane without a sound', async () => {
+  const calls: Array<Record<string, unknown>> = [];
+  desktopWindow('delivered', calls);
+  const { notificationDispatcher } = await loadFresh();
+
+  notificationDispatcher.dispatchNotification(alert('native-high', 'high'), 'banner');
+  await settle();
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.priority, 'high');
+  assert.equal(calls[0]?.sound, undefined);
+  assert.deepEqual(getNotificationTraceRegistry().all()[0]?.nativeResult, { delivered: true, surface: 'banner' });
+});
+
+test('a rate-limited or failing native command is never recorded as delivered', async () => {
+  for (const [result, error] of [['rate_limited', 'native-rate_limited'], [null, 'native-failed'],
+    [new Error('boom'), 'native-failed']] as const) {
+    resetDiagnosticsState();
+    desktopWindow(result, []);
+    const { notificationDispatcher } = await loadFresh();
+    notificationDispatcher.dispatchNotification(alert(`native-${error}-${String(result)}`, 'critical'), 'sound+banner');
+    await settle();
+    assert.deepEqual(getNotificationTraceRegistry().all()[0]?.nativeResult,
+      { delivered: false, surface: 'failed', error });
+  }
+});
+
+test('held alerts never reach the native command', async () => {
+  const calls: Array<Record<string, unknown>> = [];
+  desktopWindow('delivered', calls);
+  setMode('ghost');
+  const { notificationDispatcher } = await loadFresh();
+
+  notificationDispatcher.dispatchNotification(alert('native-ghost', 'critical'), 'sound+banner');
+  notificationDispatcher.dispatchNotification(alert('native-badge', 'medium'), 'badge');
+  await settle();
+
+  assert.deepEqual(calls, []);
+});
+
+test('a browser without either API still reports the API as unavailable', async () => {
+  Reflect.deleteProperty(globalThis, 'Notification');
+  Object.assign(globalThis, { window: {} });
+  const { notificationDispatcher } = await loadFresh();
+
+  notificationDispatcher.dispatchNotification(alert('no-api', 'high'), 'banner');
+  await settle();
+
+  assert.deepEqual(getNotificationTraceRegistry().all()[0]?.nativeResult,
+    { delivered: false, surface: 'failed', error: 'notification-api-unavailable' });
+});

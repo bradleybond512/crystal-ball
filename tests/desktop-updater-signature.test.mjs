@@ -29,7 +29,7 @@ test('macOS updater preserves bundle signatures when installing app updates', ()
   );
   assert.match(
  mainRs,
- /verify_app_bundle_signature\(&dest, "Installed app"\)/,
+ /verify_app_bundle_signature\(dest, "Installed app"\)/,
  'updater should verify the installed bundle signature after copying before relaunching',
   );
   assert.match(

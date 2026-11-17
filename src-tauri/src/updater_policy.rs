@@ -2,8 +2,10 @@ use serde::{Deserialize, Serialize};
 
 pub const LATEST_RELEASE_URL: &str =
     "https://api.github.com/repos/bradleybond512/crystal-ball/releases/latest";
+#[cfg(any(target_os = "macos", test))]
 pub const BUNDLE_ID: &str = "com.bradleybond.crystalball";
 pub const MAX_JSON_BYTES: u64 = 1024 * 1024;
+#[cfg(any(target_os = "macos", test))]
 pub const MAX_ARTIFACT_BYTES: u64 = 512 * 1024 * 1024;
 const RELEASE_BASE: &str = "https://github.com/bradleybond512/crystal-ball/releases";
 
@@ -29,6 +31,7 @@ pub enum UpdateOutcome {
         current_version: String,
         checked_at: u64,
     },
+    #[cfg(any(target_os = "macos", test))]
     Ready {
         version: String,
         checked_at: u64,
@@ -53,11 +56,17 @@ impl UpdateOutcome {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BrowserReason {
+    #[cfg(any(not(target_os = "macos"), test))]
     UnsupportedPlatform,
+    #[cfg(any(target_os = "macos", test))]
     UnsupportedArchitecture,
+    #[cfg(any(target_os = "macos", test))]
     NoSignerPin,
+    #[cfg(any(target_os = "macos", test))]
     MissingManifest,
+    #[cfg(any(target_os = "macos", test))]
     InvalidRelease,
+    #[cfg(any(target_os = "macos", test))]
     SignerMismatch,
 }
 #[derive(Debug, Serialize)]
@@ -72,6 +81,7 @@ impl UpdateError {
             message: "Could not verify the latest release. Please try again.",
         }
     }
+    #[cfg(any(target_os = "macos", test))]
     pub fn stage() -> Self {
         Self {
             code: "stage_failed",
@@ -84,14 +94,63 @@ pub struct Release {
     pub tag_name: String,
     pub draft: bool,
     pub prerelease: bool,
+    #[cfg(target_os = "macos")]
     pub assets: Vec<ReleaseAsset>,
+    #[cfg(not(target_os = "macos"))]
+    #[serde(rename = "assets")]
+    _assets: Vec<ReleaseAsset>,
 }
 #[derive(Debug, Clone, Deserialize)]
 pub struct ReleaseAsset {
+    #[cfg(target_os = "macos")]
     pub name: String,
+    #[cfg(not(target_os = "macos"))]
+    #[serde(rename = "name")]
+    _name: String,
+    #[cfg(target_os = "macos")]
     pub size: u64,
+    #[cfg(not(target_os = "macos"))]
+    #[serde(rename = "size")]
+    _size: u64,
+    #[cfg(target_os = "macos")]
     pub browser_download_url: String,
+    #[cfg(not(target_os = "macos"))]
+    #[serde(rename = "browser_download_url")]
+    _browser_download_url: String,
 }
+#[cfg(any(target_os = "macos", test))]
+impl Release {
+    fn assets(&self) -> &[ReleaseAsset] {
+        #[cfg(target_os = "macos")]
+        { &self.assets }
+        #[cfg(not(target_os = "macos"))]
+        { &self._assets }
+    }
+    #[cfg(test)]
+    fn assets_mut(&mut self) -> &mut Vec<ReleaseAsset> {
+        #[cfg(target_os = "macos")]
+        { &mut self.assets }
+        #[cfg(not(target_os = "macos"))]
+        { &mut self._assets }
+    }
+}
+#[cfg(any(target_os = "macos", test))]
+impl ReleaseAsset {
+    fn fields(&self) -> (&str, u64, &str) {
+        #[cfg(target_os = "macos")]
+        { (&self.name, self.size, &self.browser_download_url) }
+        #[cfg(not(target_os = "macos"))]
+        { (&self._name, self._size, &self._browser_download_url) }
+    }
+    #[cfg(test)]
+    fn fields_mut(&mut self) -> (&mut String, &mut u64, &mut String) {
+        #[cfg(target_os = "macos")]
+        { (&mut self.name, &mut self.size, &mut self.browser_download_url) }
+        #[cfg(not(target_os = "macos"))]
+        { (&mut self._name, &mut self._size, &mut self._browser_download_url) }
+    }
+}
+#[cfg(any(target_os = "macos", test))]
 #[derive(Debug, Deserialize)]
 pub struct Manifest {
     pub version: String,
@@ -99,12 +158,14 @@ pub struct Manifest {
     pub variant: String,
     pub assets: Vec<ManifestAsset>,
 }
+#[cfg(any(target_os = "macos", test))]
 #[derive(Debug, Clone, Deserialize)]
 pub struct ManifestAsset {
     pub name: String,
     pub size: u64,
     pub sha256: String,
 }
+#[cfg(any(target_os = "macos", test))]
 #[derive(Debug)]
 pub struct SelectedAssets {
     pub version: String,
@@ -141,10 +202,12 @@ pub fn release_version(release: &Release) -> Result<String, ()> {
     version(raw)?;
     Ok(raw.to_string())
 }
+#[cfg(any(target_os = "macos", test))]
 pub fn asset_url(tag: &str, name: &str) -> String {
     format!("{RELEASE_BASE}/download/{tag}/{name}")
 }
 
+#[cfg(any(target_os = "macos", test))]
 pub fn validate_initial_url(raw: &str, expected: &str) -> Result<(), ()> {
     if raw != expected
         || raw.bytes().any(|b| b <= 32 || b >= 127)
@@ -166,6 +229,7 @@ pub fn validate_initial_url(raw: &str, expected: &str) -> Result<(), ()> {
     }
     Ok(())
 }
+#[cfg(any(target_os = "macos", test))]
 pub fn validate_redirect(raw: &str, initial: &str, hops: usize) -> Result<(), ()> {
     if hops > 3 || raw.bytes().any(|b| b <= 32 || b >= 127) || raw.contains('\\') {
         return Err(());
@@ -199,6 +263,7 @@ pub fn validate_redirect(raw: &str, initial: &str, hops: usize) -> Result<(), ()
     }
     Ok(())
 }
+#[cfg(any(target_os = "macos", test))]
 pub fn select_assets(release: &Release, arch: &str) -> Result<SelectedAssets, BrowserReason> {
     let version = release_version(release).map_err(|_| BrowserReason::InvalidRelease)?;
     let arch = match arch {
@@ -208,22 +273,23 @@ pub fn select_assets(release: &Release, arch: &str) -> Result<SelectedAssets, Br
     };
     let name = format!("Crystal.Ball_{version}_{arch}.dmg");
     let unique = |name: &str| -> Result<ReleaseAsset, BrowserReason> {
-        let mut matches = release.assets.iter().filter(|a| a.name == name);
+        let mut matches = release.assets().iter().filter(|a| a.fields().0 == name);
         let asset = matches.next().ok_or(if name == "release-manifest.json" {
             BrowserReason::MissingManifest
         } else {
             BrowserReason::InvalidRelease
         })?;
+        let (_, size, download_url) = asset.fields();
         if matches.next().is_some()
-            || asset.size == 0
-            || asset.size
+            || size == 0
+            || size
                 > if name == "release-manifest.json" {
                     MAX_JSON_BYTES
                 } else {
                     MAX_ARTIFACT_BYTES
                 }
             || validate_initial_url(
-                &asset.browser_download_url,
+                download_url,
                 &asset_url(&release.tag_name, name),
             )
             .is_err()
@@ -239,6 +305,7 @@ pub fn select_assets(release: &Release, arch: &str) -> Result<SelectedAssets, Br
         manifest: unique("release-manifest.json")?,
     })
 }
+#[cfg(any(target_os = "macos", test))]
 pub fn validate_manifest(manifest: &Manifest, selected: &SelectedAssets) -> Result<String, ()> {
     if manifest.version != selected.version
         || manifest.tag != selected.tag
@@ -255,10 +322,10 @@ pub fn validate_manifest(manifest: &Manifest, selected: &SelectedAssets) -> Resu
     let mut matching = manifest
         .assets
         .iter()
-        .filter(|a| normalized(&a.name) == selected.asset.name);
+        .filter(|a| normalized(&a.name) == selected.asset.fields().0);
     let asset = matching.next().ok_or(())?;
     if matching.next().is_some()
-        || asset.size != selected.asset.size
+        || asset.size != selected.asset.fields().1
         || asset.sha256.len() != 64
         || !asset.sha256.bytes().all(|c| c.is_ascii_hexdigit())
     {
@@ -267,8 +334,10 @@ pub fn validate_manifest(manifest: &Manifest, selected: &SelectedAssets) -> Resu
     Ok(asset.sha256.to_ascii_lowercase())
 }
 
+#[cfg(any(target_os = "macos", test))]
 #[derive(Debug, Clone)]
 pub struct SignerRequirement(String);
+#[cfg(any(target_os = "macos", test))]
 impl SignerRequirement {
     pub fn as_str(&self) -> &str {
         &self.0
@@ -323,6 +392,7 @@ impl SignerRequirement {
         Ok(Self(requirement.into()))
     }
 }
+#[cfg(any(target_os = "macos", test))]
 pub fn choose_signer(
     intact: bool,
     apple_anchor: bool,
@@ -343,6 +413,7 @@ pub fn choose_signer(
     }
     Ok(pin)
 }
+#[cfg(any(target_os = "macos", test))]
 pub fn check_candidate(
     candidate: &str,
     current: &str,
@@ -358,6 +429,7 @@ pub fn check_candidate(
     }
     Ok(())
 }
+#[cfg(any(target_os = "macos", test))]
 pub fn published_version(candidate: &str, verified_existing: Result<String, String>) -> String {
     match verified_existing {
         Ok(existing) if is_newer(&existing, candidate) => existing,
@@ -365,13 +437,16 @@ pub fn published_version(candidate: &str, verified_existing: Result<String, Stri
     }
 }
 
+#[cfg(any(target_os = "macos", test))]
 #[derive(Debug)]
 pub struct VerifiedDownload(Vec<u8>);
+#[cfg(any(target_os = "macos", test))]
 impl VerifiedDownload {
     pub fn into_bytes(self) -> Vec<u8> {
         self.0
     }
 }
+#[cfg(any(target_os = "macos", test))]
 pub fn verify_download(
     bytes: Vec<u8>,
     expected_sha256: &str,
@@ -412,6 +487,59 @@ pub fn check_body_length(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn release_asset_wire_shape_is_required_on_every_platform() {
+        let valid = json!({"tag_name":"v1.2.3","draft":false,"prerelease":false,"assets":[{"name":"fixture.dmg","size":0,"browser_download_url":"https://example.invalid/fixture"}]});
+        let parsed: Release = serde_json::from_value(valid.clone()).unwrap();
+        assert_eq!(parsed.assets()[0].fields().1, 0, "zero remains a valid wire integer before asset policy");
+        for (field, wrong) in [("tag_name", json!(0)), ("draft", json!("false")), ("prerelease", json!(0)), ("assets", json!({}))] {
+            let mut missing = valid.clone(); missing.as_object_mut().unwrap().remove(field);
+            assert!(serde_json::from_value::<Release>(missing).is_err(), "missing {field}");
+            for value in [serde_json::Value::Null, wrong] {
+                let mut malformed = valid.clone(); malformed[field] = value;
+                assert!(serde_json::from_value::<Release>(malformed).is_err(), "invalid {field}");
+            }
+        }
+        for (field, wrong) in [("name", json!(0)), ("size", json!("0")), ("browser_download_url", json!(false))] {
+            let mut missing = valid.clone(); missing["assets"][0].as_object_mut().unwrap().remove(field);
+            assert!(serde_json::from_value::<Release>(missing).is_err(), "missing asset {field}");
+            for value in [serde_json::Value::Null, wrong] {
+                let mut malformed = valid.clone(); malformed["assets"][0][field] = value;
+                assert!(serde_json::from_value::<Release>(malformed).is_err(), "invalid asset {field}");
+            }
+        }
+        for asset in [serde_json::Value::Null, json!(0), json!("not an asset")] {
+            let mut malformed = valid.clone(); malformed["assets"] = json!([asset]);
+            assert!(serde_json::from_value::<Release>(malformed).is_err());
+        }
+        let raw = serde_json::to_string(&valid).unwrap();
+        for field in ["tag_name", "draft", "prerelease", "assets", "name", "size", "browser_download_url"] {
+            let value = valid.get(field).unwrap_or(&valid["assets"][0][field]);
+            let marker = format!("\"{field}\":");
+            let duplicate = raw.replacen(&marker, &format!("{marker}{value},{marker}"), 1);
+            assert!(serde_json::from_str::<Release>(&duplicate).is_err(), "duplicate {field}");
+        }
+        for size in ["-1", "0.5", "18446744073709551616"] {
+            assert!(serde_json::from_str::<Release>(&raw.replace("\"size\":0", &format!("\"size\":{size}"))).is_err());
+        }
+        let maximum = raw.replace("\"size\":0", "\"size\":18446744073709551615");
+        assert_eq!(serde_json::from_str::<Release>(&maximum).unwrap().assets()[0].fields().1, u64::MAX);
+        let mut extended = valid;
+        extended["unknown"] = json!({"any":"shape"});
+        extended["assets"][0]["unknown"] = json!([1, null]);
+        assert!(serde_json::from_value::<Release>(extended).is_ok());
+    }
+
+    #[test]
+    fn outcome_and_reason_serialization_preserves_wire_values() {
+        for (reason, wire) in [(BrowserReason::UnsupportedPlatform, "unsupported_platform"), (BrowserReason::UnsupportedArchitecture, "unsupported_architecture"), (BrowserReason::NoSignerPin, "no_signer_pin"), (BrowserReason::MissingManifest, "missing_manifest"), (BrowserReason::InvalidRelease, "invalid_release"), (BrowserReason::SignerMismatch, "signer_mismatch")] {
+            assert_eq!(serde_json::to_value(reason).unwrap(), json!(wire));
+            assert_eq!(serde_json::to_value(UpdateOutcome::browser("1.2.3", reason, 7)).unwrap(), json!({"status":"browser_download","version":"1.2.3","downloadUrl":"https://github.com/bradleybond512/crystal-ball/releases/tag/v1.2.3","reason":wire,"checkedAt":7}));
+        }
+        assert_eq!(serde_json::to_value(UpdateOutcome::Ready { version: "1.2.3".into(), checked_at: 7 }).unwrap(), json!({"status":"ready","version":"1.2.3","checkedAt":7}));
+        assert_eq!(serde_json::to_value(UpdateOutcome::UpToDate { current_version: "1.2.3".into(), checked_at: 7 }).unwrap(), json!({"status":"up_to_date","currentVersion":"1.2.3","checkedAt":7}));
+    }
+
     use super::*;
     use serde_json::json;
 
@@ -528,31 +656,33 @@ mod tests {
             BrowserReason::UnsupportedArchitecture
         );
         let mut x64 = release();
-        x64.assets[0].name = "Crystal.Ball_2.25.148_x64.dmg".into();
-        x64.assets[0].browser_download_url = asset_url("v2.25.148", &x64.assets[0].name);
+        let (name, _, download_url) = x64.assets_mut()[0].fields_mut();
+        *name = "Crystal.Ball_2.25.148_x64.dmg".into();
+        *download_url = asset_url("v2.25.148", name);
         assert!(select_assets(&x64, "x86_64").is_ok());
     }
     #[test]
     fn ambiguous_or_mismatched_metadata_is_rejected() {
         let mut r = release();
-        r.assets.push(r.assets[0].clone());
+        let duplicate = r.assets()[0].clone();
+        r.assets_mut().push(duplicate);
         assert!(select_assets(&r, "aarch64").is_err());
         let mut r = release();
-        r.assets.pop();
+        r.assets_mut().pop();
         assert_eq!(
             select_assets(&r, "aarch64").unwrap_err(),
             BrowserReason::MissingManifest
         );
         let mut r = release();
-        r.assets.push(r.assets[1].clone());
+        let duplicate = r.assets()[1].clone();
+        r.assets_mut().push(duplicate);
         assert!(select_assets(&r, "aarch64").is_err());
         let mut r = release();
-        r.assets[0].browser_download_url = r.assets[0]
-            .browser_download_url
-            .replace("bradleybond512", "evil");
+        let untrusted_url = r.assets()[0].fields().2.replace("bradleybond512", "evil");
+        *r.assets_mut()[0].fields_mut().2 = untrusted_url;
         assert!(select_assets(&r, "aarch64").is_err());
         let mut r = release();
-        r.assets[0].size = MAX_ARTIFACT_BYTES + 1;
+        *r.assets_mut()[0].fields_mut().1 = MAX_ARTIFACT_BYTES + 1;
         assert!(select_assets(&r, "aarch64").is_err());
         let s = select_assets(&release(), "aarch64").unwrap();
         for field in [
@@ -574,7 +704,7 @@ mod tests {
                 "name" => m.assets[0].name = "Crystal Ball_2.25.148_x64.dmg".into(),
                 _ => {
                     let mut duplicate = m.assets[0].clone();
-                    duplicate.name = s.asset.name.clone();
+                    duplicate.name = s.asset.fields().0.to_owned();
                     m.assets.push(duplicate);
                 }
             };

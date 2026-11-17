@@ -201,6 +201,7 @@ impl VaultState {
         self.lock().map.clone()
     }
 
+    #[cfg(test)]
     pub fn get(&self, key: &str) -> Option<String> {
         self.lock().map.get(key).cloned()
     }
@@ -353,6 +354,7 @@ impl VaultCoordinator {
         Ok((VaultCoordinator { state, tx, pending }, handle))
     }
 
+    #[cfg(test)]
     pub fn state(&self) -> &Arc<VaultState> {
         &self.state
     }
@@ -634,6 +636,26 @@ fn merge_without_overriding(inner: &mut Inner, entries: &HashMap<String, String>
 
 #[cfg(test)]
 mod transport_tests {
+    #[test]
+    fn test_accessor_reads_authoritative_state() {
+        let state = VaultState::new();
+        assert_eq!(state.get("key"), None);
+        state.lock().map.insert("key".into(), "current".into());
+        assert_eq!(state.get("key").as_deref(), Some("current"));
+        state.lock().map.insert("key".into(), "rotated".into());
+        assert_eq!(state.get("key").as_deref(), Some("rotated"));
+        state.lock().map.remove("key");
+        assert_eq!(state.get("key"), None);
+    }
+
+    #[test]
+    fn coordinator_accessor_preserves_state_identity() {
+        let original = Arc::new(VaultState::new());
+        let (tx, _receiver) = mpsc::sync_channel(1);
+        let coordinator = VaultCoordinator { state: original.clone(), tx, pending: Arc::new(AtomicU64::new(0)) };
+        assert!(Arc::ptr_eq(&original, coordinator.state()));
+    }
+
     use super::*;
     use crate::secret_sync::{self, Outcome, RevisionClock};
     const DEADLINE: Duration = Duration::from_secs(3);

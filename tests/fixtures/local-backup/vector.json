@@ -1,0 +1,6 @@
+{
+  "provenance": "Independent Node crypto PBKDF2-SHA256 + AES-256-GCM; synthetic data only",
+  "passphrase": "synthetic backup password",
+  "plaintext": "{\"createdAtMs\":123,\"stores\":[{\"count\":2,\"id\":\"webcam-pins\",\"records\":[\"cam-a\",\"cam-b\"],\"schemaVersion\":1}],\"version\":1}",
+  "archiveHex": "434253544154450001010000000927c0000102030405060708090a0b0c0d0e0f101112131415161718191a1b00000087a6904e67d206f55e58c8836ba6dc3cfb7dc425747d1af4e88115cfd6e7102d73c8552d041b96334a704d234a440b66c2300598718d7e329e3360214fedddb3885b42eb1ec8381c0440c9a2d249482b8d3837e0dc5da59859f2d2dfeec2fa079eb4f8b0566f9894eb5343dd44a9fbcd53494c76eeb658dda56425562b03db9e466d860e080446c1"
+}

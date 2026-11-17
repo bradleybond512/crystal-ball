@@ -1,4 +1,10 @@
 {
+  "tests/helpers/refresh-scheduler-clock.mjs": ["test:ux036"],
+  "tests/refresh-scheduler-characterization.test.mts": ["test:ux036"],
+  "src/services/__tests__/adaptive-cadence.test.mts": ["test:ux036"],
+  "scripts/measure-refresh-scheduling.mts": ["test:ux036"],
+  "src/app/refresh-scheduler.ts": ["test:ux036"],
+  "src/services/adaptive-cadence.ts": ["test:ux036"],
   "src/services/foreign-mil-news.ts": ["test:foreign-mil-angle"],
   "src/services/__tests__/fixtures/foreign-mil-original.ts.txt": ["test:foreign-mil-angle"],
   "src/services/spc-mesoscale.ts": ["test:spc-angle"],

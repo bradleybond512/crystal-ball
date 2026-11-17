@@ -1,55 +1,46 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createSchedulerHarness } from '../../../tests/helpers/refresh-scheduler-clock.mjs';
 
-const store: Record<string, string> = {};
-const G = globalThis as Record<string, unknown>;
-G.localStorage = {
-  getItem: (k: string) => store[k] ?? null,
-  setItem: (k: string, v: string) => { store[k] = v; },
-  removeItem: (k: string) => { delete store[k]; },
-} as Storage;
-// setPreset / setLowPowerMode dispatch CustomEvents.
-G.document = { dispatchEvent: () => true, addEventListener: () => { /* noop */ } };
-G.CustomEvent = class { constructor(public type: string, public detail?: unknown) {} };
-
-const { getContextCadenceMultiplier, _setOnBatteryForTest } = await import('../adaptive-cadence.ts');
-const { setPreset } = await import('../alerting-prefs.ts');
-const { setLowPowerMode } = await import('../low-power.ts');
-
-function reset(): void {
-  for (const k of Object.keys(store)) delete store[k];
-  _setOnBatteryForTest(false);
-  setPreset('loud');
-  setLowPowerMode(false);
+async function fixture(t) {
+  const harness = await createSchedulerHarness({ randomValues: [0.5] }); t.after(() => harness.dispose()); return harness;
 }
 
-test('default context ⇒ multiplier 1', () => {
-  reset();
-  assert.equal(getContextCadenceMultiplier(), 1);
+test('default context ⇒ multiplier 1', async t => {
+  const h = await fixture(t); assert.equal(h.cadence.getContextCadenceMultiplier(), 1);
 });
 
-test('silent preset halves cadence (×2)', () => {
-  reset();
-  setPreset('silent');
-  assert.equal(getContextCadenceMultiplier(), 2);
+test('silent preset halves cadence (×2)', async t => {
+  const h = await fixture(t); await h.policy({ silent: true }); assert.equal(h.cadence.getContextCadenceMultiplier(), 2);
 });
 
-test('on battery halves cadence (×2)', () => {
-  reset();
-  _setOnBatteryForTest(true);
-  assert.equal(getContextCadenceMultiplier(), 2);
+test('on battery halves cadence (×2)', async t => {
+  const h = await fixture(t); h.cadence._setOnBatteryForTest(true); assert.equal(h.cadence.getContextCadenceMultiplier(), 2);
 });
 
-test('low power mode quarters cadence (×4)', () => {
-  reset();
-  setLowPowerMode(true);
-  assert.equal(getContextCadenceMultiplier(), 4);
+test('low power mode quarters cadence (×4)', async t => {
+  const h = await fixture(t); await h.policy({ lowPower: true }); assert.equal(h.cadence.getContextCadenceMultiplier(), 4);
 });
 
-test('signals do not stack — strongest wins', () => {
-  reset();
-  setPreset('silent');       // ×2
-  _setOnBatteryForTest(true); // ×2
-  setLowPowerMode(true);      // ×4
-  assert.equal(getContextCadenceMultiplier(), 4);
+test('signals do not stack — strongest wins', async t => {
+  const h = await fixture(t); await h.policy({ silent: true, onBattery: true, lowPower: true }); assert.equal(h.cadence.getContextCadenceMultiplier(), 4);
+});
+
+test('real battery monitor samples initial charging and follows both chargingchange transitions', async t => {
+  const h = await fixture(t), battery = new EventTarget(); battery.charging = false; let requests = 0;
+  h.navigator.getBattery = async () => { requests++; return battery; };
+  h.cadence.installBatteryMonitor(); await h.clock.flushMicrotasks(); assert.equal(requests, 1); assert.equal(h.cadence.getContextCadenceMultiplier(), 2);
+  battery.charging = true; battery.dispatchEvent(new Event('chargingchange')); assert.equal(h.cadence.getContextCadenceMultiplier(), 1);
+  battery.charging = false; battery.dispatchEvent(new Event('chargingchange')); assert.equal(h.cadence.getContextCadenceMultiplier(), 2);
+  await h.policy({ silent: true }); assert.equal(h.cadence.getContextCadenceMultiplier(), 2);
+  await h.policy({ lowPower: true }); assert.equal(h.cadence.getContextCadenceMultiplier(), 4);
+});
+
+test('absent battery API leaves fresh context unchanged', async t => {
+  const h = await fixture(t); delete h.navigator.getBattery; h.cadence.installBatteryMonitor(); await h.clock.flushMicrotasks(); assert.equal(h.cadence.getContextCadenceMultiplier(), 1);
+});
+
+test('rejected battery promise leaves fresh context unchanged without unhandled failure', async t => {
+  const h = await fixture(t); h.navigator.getBattery = async () => { throw new Error('Synthetic permission refusal'); };
+  h.cadence.installBatteryMonitor(); await h.clock.flushMicrotasks(); assert.equal(h.cadence.getContextCadenceMultiplier(), 1); assert.deepEqual(h.messages, []);
 });

@@ -1,4 +1,12 @@
 {
+  "src/services/local-backup/schema.ts": ["test:local-backup"],
+  "src/services/local-backup/codec.ts": ["test:local-backup"],
+  "src/services/local-backup/preflight.ts": ["test:local-backup"],
+  "tests/local-backup-schema.test.mts": ["test:local-backup"],
+  "tests/local-backup-codec.test.mts": ["test:local-backup"],
+  "tests/local-backup-preflight.test.mts": ["test:local-backup"],
+  "tests/fixtures/local-backup/fixtures.mts": ["test:local-backup"],
+  "tests/fixtures/local-backup/vector.json": ["test:local-backup"],
   "src/services/foreign-mil-news.ts": ["test:foreign-mil-angle"],
   "src/services/__tests__/fixtures/foreign-mil-original.ts.txt": ["test:foreign-mil-angle"],
   "src/services/spc-mesoscale.ts": ["test:spc-angle"],

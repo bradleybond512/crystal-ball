@@ -53,9 +53,10 @@ test('trace exhaustion during timer cancellation still restores globals and repo
 });
 
 test('trace exhaustion cannot strand a delayed loader during disposal', async () => {
-  const ambient = ambientSnapshot(); const h = await createSchedulerHarness({ maxTrace: 3, randomValues: [0.5] });
+  const ambient = ambientSnapshot(); const h = await createSchedulerHarness({ maxTrace: 4, randomValues: [0.5] });
   try {
     h.scheduler.scheduleRefresh('slow', h.job('slow', { durationMs: 5000 }), 1000);
+    h.scheduler.scheduleRefresh('future', h.job('future'), 2000);
     await h.clock.advanceBy(1000); assert.equal(h.active, 1);
     assert.throws(() => h.clock.setTimeout(() => {}, 500), /Clock trace budget exceeded/);
     await assert.rejects(h.dispose(), /Clock trace budget exceeded/);

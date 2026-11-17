@@ -46,19 +46,22 @@ export async function createSchedulerHarness(options = {}) {
     const descriptor = Object.getOwnPropertyDescriptor(object, key); originals.push(() => descriptor ? Object.defineProperty(object, key, descriptor) : Reflect.deleteProperty(object, key));
     Object.defineProperty(object, key, { configurable: true, writable: true, value });
   };
+  const capture = (errors, action) => { try { action(); } catch (error) { errors.push(error); } };
+  const restoreGlobals = errors => { for (const restore of originals.reverse()) capture(errors, restore); originals.length = 0; };
+  const reportFailures = errors => { if (errors.length) throw errors.length === 1 ? errors[0] : new AggregateError(errors, errors[0].message); };
   const document = new EventTarget(); document.visibilityState = 'visible';
   const battery = new EventTarget(); battery.charging = true;
   const navigator = { getBattery: () => Promise.resolve(battery) };
-  replace(globalThis, 'localStorage', { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, String(value)), removeItem: key => storage.delete(key) });
-  replace(globalThis, 'document', document); replace(globalThis, 'window', new EventTarget()); replace(globalThis, 'navigator', navigator);
-  replace(globalThis, 'CustomEvent', class extends Event { constructor(type, options = {}) { super(type); this.detail = options.detail; } });
-  replace(globalThis, 'setTimeout', clock.setTimeout); replace(globalThis, 'clearTimeout', clock.clearTimeout);
-  replace(Date, 'now', () => clock.now); replace(Math, 'random', clock.random); replace(globalThis, 'performance', { now: () => clock.elapsed });
-  for (const level of ['warn', 'error']) replace(console, level, (...args) => { assert.ok(messages.length < 10_000); messages.push({ level, at: clock.elapsed, message: String(args[0]) }); });
-  replace(globalThis, 'fetch', () => { throw new Error('Network forbidden in scheduler fixture'); });
   let scheduler, cadence, mode, prefs, power;
   const ctx = { isDestroyed: false, inFlight: new Set() };
   try {
+    replace(globalThis, 'localStorage', { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, String(value)), removeItem: key => storage.delete(key) });
+    replace(globalThis, 'document', document); replace(globalThis, 'window', new EventTarget()); replace(globalThis, 'navigator', navigator);
+    replace(globalThis, 'CustomEvent', class extends Event { constructor(type, options = {}) { super(type); this.detail = options.detail; } });
+    replace(globalThis, 'setTimeout', clock.setTimeout); replace(globalThis, 'clearTimeout', clock.clearTimeout);
+    replace(Date, 'now', () => clock.now); replace(Math, 'random', clock.random); replace(globalThis, 'performance', { now: () => clock.elapsed });
+    for (const level of ['warn', 'error']) replace(console, level, (...args) => { assert.ok(messages.length < 10_000); messages.push({ level, at: clock.elapsed, message: String(args[0]) }); });
+    replace(globalThis, 'fetch', () => { throw new Error('Network forbidden in scheduler fixture'); });
     const modules = await Promise.all([
       import('../../src/app/refresh-scheduler.ts'), import('../../src/services/adaptive-cadence.ts'),
       import('../../src/services/mode-manager.ts'), import('../../src/services/alerting-prefs.ts'), import('../../src/services/low-power.ts'),
@@ -67,7 +70,11 @@ export async function createSchedulerHarness(options = {}) {
     cadence = cadenceModule; mode = modeModule; prefs = prefsModule; power = powerModule;
     cadence._setOnBatteryForTest(false); mode.setMode(null); prefs.setPreset('loud'); power.setLowPowerMode(false);
     cadence.installBatteryMonitor(); await clock.flushMicrotasks(); scheduler = new RefreshScheduler(ctx);
-  } catch (error) { for (const restore of originals.reverse()) restore(); throw error; }
+  } catch (error) {
+    const errors = [error];
+    try { clock.clear(); } finally { restoreGlobals(errors); }
+    reportFailures(errors);
+  }
   const harness = {
     scheduler, ctx, clock, starts, completions, messages, battery, navigator, cadence,
     get maxActive() { return maxActive; }, get active() { return active; },
@@ -102,11 +109,23 @@ export async function createSchedulerHarness(options = {}) {
     },
     async dispose() {
       if (disposed) return { pendingTimers: clock.pending().length, active };
-      disposed = true; ctx.isDestroyed = true; scheduler.destroy();
-      for (const load of [...loads]) harness.release(load.name);
-      await clock.flushMicrotasks(); const cleanup = { pendingTimers: clock.pending().length, active };
-      cadence._setOnBatteryForTest(false); mode.setMode(null); prefs.setPreset('loud'); power.setLowPowerMode(false);
-      clock.clear(); for (const restore of originals.reverse()) restore(); return cleanup;
+      disposed = true; ctx.isDestroyed = true;
+      const errors = []; let cleanup;
+      try {
+        capture(errors, () => scheduler.destroy());
+        for (const load of [...loads]) {
+          loads.delete(load);
+          try { if (load.timer) capture(errors, () => clock.clearTimeout(load.timer)); } finally { load.resolve(); }
+        }
+        await clock.flushMicrotasks();
+        cleanup = { pendingTimers: clock.pending().length, active };
+        capture(errors, () => cadence._setOnBatteryForTest(false)); capture(errors, () => mode.setMode(null));
+        capture(errors, () => prefs.setPreset('loud')); capture(errors, () => power.setLowPowerMode(false));
+      } catch (error) { errors.push(error); } finally {
+        try { clock.clear(); } finally { restoreGlobals(errors); }
+      }
+      reportFailures(errors);
+      return cleanup;
     },
   };
   return harness;

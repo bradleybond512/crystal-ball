@@ -24,6 +24,57 @@ test('fixture restores all ambient descriptors even after an assertion or pendin
   targets.forEach(([object, key], index) => assert.deepEqual(Object.getOwnPropertyDescriptor(object, key), before[index]));
 });
 
+function ambientSnapshot() {
+  const targets = [[globalThis, 'localStorage'], [globalThis, 'document'], [globalThis, 'navigator'], [globalThis, 'window'], [globalThis, 'CustomEvent'], [globalThis, 'setTimeout'], [globalThis, 'clearTimeout'], [globalThis, 'performance'], [globalThis, 'fetch'], [Date, 'now'], [Math, 'random'], [console, 'warn'], [console, 'error']];
+  const before = targets.map(([object, key]) => Object.getOwnPropertyDescriptor(object, key));
+  return {
+    assertRestored() { targets.forEach(([object, key], index) => assert.deepEqual(Object.getOwnPropertyDescriptor(object, key), before[index], String(key))); },
+    emergencyRestore() { targets.forEach(([object, key], index) => before[index] ? Object.defineProperty(object, key, before[index]) : Reflect.deleteProperty(object, key)); },
+  };
+}
+
+test('normal disposal reports residual timers before forced cleanup', async () => {
+  const ambient = ambientSnapshot(); const h = await createSchedulerHarness();
+  try {
+    h.clock.setTimeout(() => {}, 1000);
+    assert.deepEqual(await h.dispose(), { pendingTimers: 1, active: 0 });
+    assert.equal(h.clock.pending().length, 0); ambient.assertRestored();
+  } finally { h.clock.clear(); ambient.emergencyRestore(); }
+});
+
+test('trace exhaustion during timer cancellation still restores globals and reports failure', async () => {
+  const ambient = ambientSnapshot(); const h = await createSchedulerHarness({ maxTrace: 2, randomValues: [0.5] });
+  try {
+    h.scheduler.registerAll(['a', 'b'].map(name => ({ name, intervalMs: 1000, fn: h.job(name) })));
+    await assert.rejects(h.clock.advanceBy(1000), /Clock trace budget exceeded/);
+    await assert.rejects(h.dispose(), /Clock trace budget exceeded/);
+    ambient.assertRestored(); assert.equal(h.clock.pending().length, 0); assert.equal(h.active, 0);
+  } finally { h.clock.clear(); ambient.emergencyRestore(); }
+});
+
+test('trace exhaustion cannot strand a delayed loader during disposal', async () => {
+  const ambient = ambientSnapshot(); const h = await createSchedulerHarness({ maxTrace: 3, randomValues: [0.5] });
+  try {
+    h.scheduler.scheduleRefresh('slow', h.job('slow', { durationMs: 5000 }), 1000);
+    await h.clock.advanceBy(1000); assert.equal(h.active, 1);
+    assert.throws(() => h.clock.setTimeout(() => {}, 500), /Clock trace budget exceeded/);
+    await assert.rejects(h.dispose(), /Clock trace budget exceeded/);
+    ambient.assertRestored(); assert.equal(h.clock.pending().length, 0); assert.equal(h.active, 0);
+  } finally { h.clock.clear(); ambient.emergencyRestore(); }
+});
+
+test('failed partial fixture setup restores earlier global replacements', async () => {
+  const ambient = ambientSnapshot(), define = Object.defineProperty; let failures = 0;
+  Object.defineProperty = (object, key, descriptor) => {
+    if (object === globalThis && key === 'navigator' && failures === 0) { failures++; throw new Error('Synthetic navigator replacement failure'); }
+    return define(object, key, descriptor);
+  };
+  try {
+    await assert.rejects(createSchedulerHarness(), /Synthetic navigator replacement failure/);
+    assert.equal(failures, 1); ambient.assertRestored();
+  } finally { Object.defineProperty = define; ambient.emergencyRestore(); }
+});
+
 test('real scheduling preserves lower/mid/upper jitter bounds and the one-second floor', async t => {
   const h = await fixture(t, { randomValues: [0, 0.5, 1, 0] });
   h.scheduler.registerAll([9000, 10_000, 11_000].map((expected, index) => ({ name: `${expected}`, intervalMs: 10_000, fn: h.job(`${expected}`) })));

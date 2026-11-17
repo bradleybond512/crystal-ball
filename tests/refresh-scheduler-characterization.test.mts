@@ -71,7 +71,7 @@ test('recovery prioritizes base intervals, cancels stale timers and staggers six
   h.scheduler.registerAll([8000, 7000, 6000, 5000, 4000, 3000, 2000, 1000].map(intervalMs => ({ name: `${intervalMs}`, intervalMs, fn: h.job(`${intervalMs}`, { blocked: true }) })));
   await h.clock.advanceBy(10_000); const staleTimerIds = h.clock.pending().map(row => row.id); h.resume(); const origin = h.clock.elapsed;
   assert.ok(staleTimerIds.every(id => !h.clock.pending().some(task => task.id === id)));
-  await h.clock.advanceBy(750); assert.deepEqual(h.starts.map(row => row.at - origin), [0, 150, 300, 450, 600, 750]); assert.deepEqual(h.starts.map(row => row.name), ['1000', '2000', '3000', '4000', '5000', '6000']); assert.equal(h.maxActive, 6);
+  await h.clock.advanceBy(1000); assert.deepEqual(h.starts.map(row => row.at - origin), [0, 150, 300, 450, 600, 750]); assert.deepEqual(h.starts.map(row => row.name), ['1000', '2000', '3000', '4000', '5000', '6000']); assert.equal(h.maxActive, 6);
   h.hidden(true); h.resume(); h.scheduler.flushStaleRefreshes(); await h.clock.advanceBy(0); assert.equal(h.starts.length, 6);
   h.release('1000', true); await h.clock.flushMicrotasks(); await h.clock.advanceBy(750); assert.equal(h.starts.at(-1).name, '7000'); assert.equal(h.maxActive, 6);
   h.release('2000'); await h.clock.flushMicrotasks(); await h.clock.advanceBy(750); assert.equal(h.starts.at(-1).name, '8000'); assert.equal(h.maxActive, 6);
@@ -84,6 +84,15 @@ test('resume freshness uses base intervals and destruction cancels queued work a
   h.ctx.isDestroyed = true; h.scheduler.destroy(); h.release('stale'); await h.clock.flushMicrotasks(); assert.equal(h.clock.pending().length, 0); await h.clock.advanceBy(10_000); assert.equal(h.starts.length, 1);
 });
 
+test('a completed run refreshes the resume freshness baseline without replacing its armed timer', async t => {
+  const h = await fixture(t, { randomValues: [1] });
+  h.scheduler.scheduleRefresh('recent', h.job('recent'), 1000);
+  await h.clock.advanceBy(1100); assert.deepEqual(h.starts.map(row => row.at), [1100]);
+  const pending = h.clock.pending(); assert.deepEqual(pending.map(row => row.at), [2200]);
+  h.hidden(true); await h.clock.advanceBy(950); h.resume(); await h.clock.advanceBy(0);
+  assert.deepEqual(h.starts.map(row => row.at), [1100]); assert.deepEqual(h.clock.pending(), pending);
+});
+
 test('steady-state traffic is not capped by the six recovery slots', async t => {
   const h = await fixture(t, { randomValues: [0.5] }); h.scheduler.registerAll(Array.from({ length: 8 }, (_, i) => ({ name: `same-${i}`, intervalMs: 1000, fn: h.job(`same-${i}`, { blocked: true }) })));
   await h.clock.advanceBy(1000); assert.equal(h.starts.length, 8); assert.equal(h.maxActive, 8);
@@ -91,6 +100,7 @@ test('steady-state traffic is not capped by the six recovery slots', async t => 
 
 test('measurement windows are half-open, replay deterministic and cleanup is included', async () => {
   assert.deepEqual(summarizeStarts([0, 149, 150, 999, 1000].map(at => ({ name: 'job', at }))).maxStartsInWindow, { '1': 1, '150': 2, '1000': 4 });
+  assert.equal(summarizeStarts([0, 149, 150, 999, 1000].map(at => ({ name: 'job', at }))).perJob.job.maximumStartGapMs, 849);
   const input = { seed: 867, horizonMs: 60_000, intervals: [1000, 3000], durationMs: 200, cohortSize: 2 };
   const first = await runSchedulingScenario(input), second = await runSchedulingScenario(input); assert.deepEqual(first, second); assert.deepEqual(first.cleanup, { pendingTimers: 0, active: 0 });
   const unobserved = await runSchedulingScenario({ horizonMs: 1000, intervals: [7_200_000], policy: { onBattery: true, ghost: true } });

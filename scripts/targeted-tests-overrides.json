@@ -1,4 +1,8 @@
 {
+  "src/services/correlation-feedback.ts": ["test:ux043", "test:acc505", "test:correlation"],
+  "src/services/__tests__/correlation-feedback-subscriber.test.mts": ["test:ux043"],
+  "tests/helpers/correlation-feedback-fixture.mts": ["test:ux043"],
+  "scripts/measure-alert-feedback.mts": ["test:ux043"],
   "src/services/foreign-mil-news.ts": ["test:foreign-mil-angle"],
   "src/services/__tests__/fixtures/foreign-mil-original.ts.txt": ["test:foreign-mil-angle"],
   "src/services/spc-mesoscale.ts": ["test:spc-angle"],

@@ -1005,7 +1005,7 @@ and tracking update do not authorize it. Current bounded evidence and limits:
 
 Status: IN PROGRESS — HIGH ASSURANCE
 Approval: November 17, Bradley approved the bounded correlation-feedback lookup design, documentation draft claim and local implementation.
-Evidence: [approved design](plans/2026-11-17-ux043-correlation-subscriber-design.md). Full subscriber-contract and app-wide fan-out acceptance remain open; implementation publication requires separate approval.
+Evidence: [Draft #1914](https://github.com/bradleybond512/crystal-ball/pull/1914); [approved design](plans/2026-11-17-ux043-correlation-subscriber-design.md). Full subscriber-contract and app-wide fan-out acceptance remain open; implementation publication requires separate approval.
 Priority: B
 Source findings: PR1731 M7.
 
@@ -1608,7 +1608,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-038 | Constrain video-channel link construction | DONE — HIGH ASSURANCE | PR #1840 — two fixed-origin error links; 12 behavioral/helper tests, 46 HLS regressions, five clean-tree mutations and full validation ([QA](validation/UX-038-LINK-SAFETY.md)). |
 | UX-040 | Expose unavailable and stale feed outcomes | MONITOR — HIGH ASSURANCE | #1841 — merged bounded news/status slice; broader acceptance remains open |
 | UX-042 | Construct panels when needed without losing coverage | MONITOR | #1714 |
-| UX-043 | Reduce repeated alert subscriber scans | IN PROGRESS | Approved bounded [correlation subscriber design](plans/2026-11-17-ux043-correlation-subscriber-design.md); documentation claim being prepared. Full subscriber-contract and fan-out acceptance remain open. |
+| UX-043 | Reduce repeated alert subscriber scans | IN PROGRESS | Approved bounded [correlation subscriber design](plans/2026-11-17-ux043-correlation-subscriber-design.md); [Draft #1914](https://github.com/bradleybond512/crystal-ball/pull/1914) published; implementation in progress. Full subscriber-contract and fan-out acceptance remain open. |
 | UX-044 | Announce critical UI changes accessibly | MONITOR | [Evidence](validation/UX-044-CRITICAL-ANNOUNCEMENTS.md) · [Draft #1854](https://github.com/bradleybond512/crystal-ball/pull/1854) |
 | UX-045 | Keep advisories from suppressing warnings | DONE | #1733 |
 | UX-046 | Preserve alert priorities at capacity | DONE — HIGH ASSURANCE | #1734 |

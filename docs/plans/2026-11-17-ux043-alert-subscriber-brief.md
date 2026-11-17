@@ -18,7 +18,7 @@ No alert policy, severity, eligibility, cooldown, delivery, persistence, provide
 
 ## Unknowns and risk
 
-Whether existing work already removes the scans; exact subscriber topology, mutation ordering and full-store cost; interactions with unmerged alert work. The roadmap classifies this as Standard, but subscriber contract or architecture changes may require High Assurance design approval. No timing or energy benefit is assumed.
+Whether existing work already removes the scans; exact subscriber topology, mutation ordering and full-store cost; interactions with unmerged alert work. Although the overall roadmap item is Standard, this bounded change is High Assurance because it feeds correlation confidence. Bradley approved its design, documentation claim and local implementation on November 17. No timing or energy benefit is assumed.
 
 ## Selection
 

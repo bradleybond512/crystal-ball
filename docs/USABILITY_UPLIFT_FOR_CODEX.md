@@ -946,7 +946,7 @@ Source findings: PR1731 M1/M3.
 
 Acceptance: Measure synchronized refresh cost and introduce bounded staggering through existing scheduling conventions; preserve maximum warning-detection latency and foreground recovery.
 
-Approved bounded first stage: [scheduler/battery fixture evidence](plans/2026-11-16-ux036-scheduling-evidence-design.md), claimed on `codex/ux036-refresh-scheduling`. Characterize existing timing and actual battery-event wiring without production timing changes. Full runtime staggering, actual power/cost measurements and packaged acceptance remain open.
+Approved bounded first stage: [scheduler/battery fixture evidence](plans/2026-11-16-ux036-scheduling-evidence-design.md), claimed in [draft #1912](https://github.com/bradleybond512/crystal-ball/pull/1912). Characterize existing timing and actual battery-event wiring without production timing changes. Full runtime staggering, actual power/cost measurements and packaged acceptance remain open.
 
 ### UX-037 — Prevent new unowned stacking levels
 
@@ -1603,7 +1603,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-033 | Keep content reachable during stacked warnings | MONITOR | #1839 — bounded cap and Chromium geometry validated; installed macOS/WebKit acceptance remains open. |
 | UX-034 | Assign ownership of top-of-window surfaces | MONITOR | #1730, #1861 |
 | UX-035 | Gate background panel work by actual need | MONITOR — HIGH ASSURANCE | #1859 merged; bounded two-panel slice validated ([QA](validation/UX-035-HIDDEN-PRESENTATION.md)). Native background and broader acceptance remain open; installation/release/deployment paused. |
-| UX-036 | Spread refresh work and honor battery policy | IN PROGRESS — HIGH ASSURANCE | Approved [test-only design](plans/2026-11-16-ux036-scheduling-evidence-design.md); draft claim on `codex/ux036-refresh-scheduling`. Existing scheduler and battery behavior will be measured with fixtures; production timing unchanged. Implementation/validation and full runtime/power/packaged acceptance remain open. |
+| UX-036 | Spread refresh work and honor battery policy | IN PROGRESS — HIGH ASSURANCE | [Draft #1912](https://github.com/bradleybond512/crystal-ball/pull/1912); approved [test-only design](plans/2026-11-16-ux036-scheduling-evidence-design.md). Existing scheduler and battery behavior will be measured with fixtures; production timing unchanged. Implementation/validation and full runtime/power/packaged acceptance remain open. |
 | UX-037 | Prevent new unowned stacking levels | NOT STARTED | — |
 | UX-038 | Constrain video-channel link construction | DONE — HIGH ASSURANCE | PR #1840 — two fixed-origin error links; 12 behavioral/helper tests, 46 HLS regressions, five clean-tree mutations and full validation ([QA](validation/UX-038-LINK-SAFETY.md)). |
 | UX-040 | Expose unavailable and stale feed outcomes | MONITOR — HIGH ASSURANCE | #1841 — merged bounded news/status slice; broader acceptance remains open |

@@ -1105,7 +1105,7 @@ Evidence: #1846 — [Ghost Mode behavior, verification and limitations](validati
 
 Status: IN PROGRESS — HIGH ASSURANCE
 Approval: November 17, Bradley approved the bounded eight-second total RSS budget design, documentation draft claim and local implementation.
-Evidence: [Draft #1915](https://github.com/bradleybond512/crystal-ball/pull/1915); [approved design](plans/2026-11-17-ux051-rss-total-budget-design.md). Implementation publication requires separate reviewed-tip approval; installed-runtime and live-network acceptance remain open.
+Evidence: [Draft #1915](https://github.com/bradleybond512/crystal-ball/pull/1915); [approved design](plans/2026-11-17-ux051-rss-total-budget-design.md); [fixture validation and limits](validation/UX-051-RSS-REQUEST-BUDGET.md). Local gate and 25 mutation checks passed. Final reviews and separate reviewed-tip approval govern implementation publication; installed-runtime and live-network acceptance remain open.
 Priority: B
 Source findings: PR1731 M12.
 
@@ -1616,7 +1616,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-048 | Restore verified GDACS ingestion | DONE — HIGH ASSURANCE | #1740 — approved five-feed repair; [validation](validation/UX-048-GDACS.md) and [alert burst performance evidence](validation/UX-048-PERFORMANCE.md); final review/CI govern delivery |
 | UX-049 | Distinguish quiet sensors from missing observations | DONE — HIGH ASSURANCE | #1845 — [Evidence and verified scope](validation/UX-049-THREAT-COVERAGE.md) |
 | UX-050 | Make Ghost Mode suppression unmistakable | MONITOR — HIGH ASSURANCE | #1846 candidate evidence — [Verification and coverage](validation/UX-050-GHOST-MODE.md). Final integrated packaged acceptance remains open; installation/release/deployment paused. |
-| UX-051 | Align RSS request budgets across boundaries | IN PROGRESS | Approved [eight-second RSS budget design](plans/2026-11-17-ux051-rss-total-budget-design.md); [Draft #1915](https://github.com/bradleybond512/crystal-ball/pull/1915) published; local implementation in progress. Installed-runtime and live-network acceptance remain open. |
+| UX-051 | Align RSS request budgets across boundaries | IN PROGRESS | Approved [eight-second RSS budget design](plans/2026-11-17-ux051-rss-total-budget-design.md); [Draft #1915](https://github.com/bradleybond512/crystal-ball/pull/1915); [local fixture evidence](validation/UX-051-RSS-REQUEST-BUDGET.md), full gate and 25 mutation checks passed. Final reviews/publication approval, hosted implementation CI, installed-runtime and live-network acceptance remain open. |
 | UX-052 | Restrain derived alert interruptions | MONITOR — HIGH ASSURANCE | #1847 candidate evidence; [validation and integration evidence](validation/UX-052-DERIVED-ALERTS.md). Final integrated packaged acceptance open; installation/release/deployment paused. |
 | UX-053 | Finish boot without awaiting all data sources | MONITOR — HIGH ASSURANCE | #1848 candidate evidence; [startup timings, tests and integration](validation/UX-053-BOOT-READINESS.md). Final integrated packaged acceptance open; installation/release/deployment paused. |
 | UX-054 | Cover subproject dependencies in security checks | DONE — HIGH ASSURANCE | #1849; [audit coverage and evidence](validation/UX-054-DEPENDENCY-AUDIT.md). Six npm locks covered; high-severity marketing fixes verified. External MCP pins remain separate. |

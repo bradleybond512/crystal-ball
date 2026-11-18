@@ -1,4 +1,6 @@
 {
+  "src/services/__tests__/rss-adapters-tracked.test.mts": ["test:ux051"],
+  "src-tauri/sidecar/__tests__/rss-request-budget.test.mjs": ["test:ux051"],
   "src/services/foreign-mil-news.ts": ["test:foreign-mil-angle"],
   "src/services/__tests__/fixtures/foreign-mil-original.ts.txt": ["test:foreign-mil-angle"],
   "src/services/spc-mesoscale.ts": ["test:spc-angle"],
@@ -454,7 +456,8 @@
     "test:sidecar-fallback",
     "test:ux055",
     "test:quota",
-    "test:news-resilience"
+    "test:news-resilience",
+    "test:ux051"
   ],
   "src/services/keychain.ts": [
     "test:secret-boundary",
@@ -1239,7 +1242,9 @@
     "test:domain-retirement"
   ],
   "src/services/__tests__/runtime-fetch-fallback.test.mts": [
-    "test:domain-retirement"
+    "test:domain-retirement",
+    "test:ux051",
+    "test:sidecar-routing"
   ],
   "src/services/__tests__/story-share.test.mts": [
     "test:domain-retirement"

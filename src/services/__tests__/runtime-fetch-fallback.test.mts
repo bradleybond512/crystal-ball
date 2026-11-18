@@ -67,6 +67,22 @@ test('a 5xx falls back with coordinates coarsened and without the bearer token',
   assert.equal(cloud.auth, null, 'the local bearer token never goes to the cloud');
 });
 
+test('RSS local504 retains cloud fallback without leaking the local bearer', async () => {
+  const target = '/api/rss-proxy?url=https%3A%2F%2Fexample.org%2Ffeed';
+  const h = harness({ local: () => Response.json({ error: 'Feed timeout' }, { status: 504 }) });
+  const response = await h.fetch(target, { signal: AbortSignal.timeout(10_000) });
+  assert.equal(await response.text(), 'cloud');
+  assert.equal(h.calls.length, 2);
+  assert.equal(h.calls[0]!.auth, 'Bearer tok-1');
+  assert.equal(h.calls[1]!.url, `${REMOTE}${target}`);
+  assert.equal(h.calls[1]!.auth, null);
+  assert.equal(h.invalidations(), 0, 'an HTTP deadline response does not invalidate a confirmed port');
+
+  const local = harness({ local: status(504), remote: '' });
+  assert.equal((await local.fetch(target)).status, 504);
+  assert.equal(local.calls.length, 1);
+});
+
 test('personal parameters and request bodies never reach the cloud, even on 5xx', async () => {
   for (const [target, init] of [
     ['/api/signal-watch?q=my%20term', undefined],

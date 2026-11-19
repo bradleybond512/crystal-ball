@@ -1,4 +1,5 @@
 {
+  "src/services/storage-measurement.ts": ["test:storage-measurement"],
   "src/services/foreign-mil-news.ts": ["test:foreign-mil-angle"],
   "src/services/__tests__/fixtures/foreign-mil-original.ts.txt": ["test:foreign-mil-angle"],
   "src/services/spc-mesoscale.ts": ["test:spc-angle"],

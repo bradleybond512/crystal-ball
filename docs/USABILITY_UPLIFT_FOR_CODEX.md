@@ -1153,7 +1153,7 @@ Acceptance: Show validation age and distinguish unavailable validation from an i
 
 Status: IN PROGRESS — HIGH ASSURANCE
 Approval: November 18, Bradley approved the bounded fixture-only measurement design, documentation draft claim and local implementation.
-Evidence: [approved design](plans/2026-11-18-ux056-storage-measurement-design.md). Live measurement, retention, cleanup and full acceptance remain open; implementation publication requires separate reviewed-tip approval.
+Evidence: [Draft #1916](https://github.com/bradleybond512/crystal-ball/pull/1916); [approved design](plans/2026-11-18-ux056-storage-measurement-design.md). Live measurement, retention, cleanup and full acceptance remain open; implementation publication requires separate reviewed-tip approval.
 Priority: B
 Source findings: PR1731 M9.
 
@@ -1621,7 +1621,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-053 | Finish boot without awaiting all data sources | MONITOR — HIGH ASSURANCE | #1848 candidate evidence; [startup timings, tests and integration](validation/UX-053-BOOT-READINESS.md). Final integrated packaged acceptance open; installation/release/deployment paused. |
 | UX-054 | Cover subproject dependencies in security checks | DONE — HIGH ASSURANCE | #1849; [audit coverage and evidence](validation/UX-054-DEPENDENCY-AUDIT.md). Six npm locks covered; high-severity marketing fixes verified. External MCP pins remain separate. |
 | UX-055 | Surface stale credential validation honestly | DONE — HIGH ASSURANCE | [Evidence](validation/UX-055-CREDENTIAL-VALIDATION.md) · [Candidate #1851](https://github.com/bradleybond512/crystal-ball/pull/1851) |
-| UX-056 | Bound retained storage without losing user evidence | IN PROGRESS — HIGH ASSURANCE | Approved [fixture-only measurement design](plans/2026-11-18-ux056-storage-measurement-design.md); documentation claim being prepared. Live baseline and full acceptance remain open. |
+| UX-056 | Bound retained storage without losing user evidence | IN PROGRESS — HIGH ASSURANCE | Approved [fixture-only measurement design](plans/2026-11-18-ux056-storage-measurement-design.md); [Draft #1916](https://github.com/bradleybond512/crystal-ball/pull/1916) published; local implementation in progress. Live baseline and full acceptance remain open. |
 | UX-057 | Persist panel state only when it changes | NOT STARTED | — |
 | UX-058 | Account for deferred and updated warnings | MONITOR — HIGH ASSURANCE | [Evidence](validation/UX-058-DEFERRED-WARNINGS.md) · [Draft #1852](https://github.com/bradleybond512/crystal-ball/pull/1852) |
 | UX-059 | Retain active alerts using authoritative lifecycle evidence | DONE | #1739; [evidence](validation/UX-059-RETENTION.md); ACC-509 integration hold |

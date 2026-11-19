@@ -116,6 +116,23 @@ test('RSS failures keep denied, rate limited, and timeout states', async () => {
   fixture.error=null;
 });
 
+test('RSS local504 remains unavailable and never persists timeout JSON as feed data', async () => {
+  const saved = { status: fixture.status, response: fixture.response, error: fixture.error, desktop: fixture.desktop };
+  const url = '/api/rss-proxy?url=https%3A%2F%2Fexample.org%2Fdeadline';
+  try {
+    fixture.status = 504;
+    fixture.response = JSON.stringify({ error: 'Feed timeout' });
+    fixture.error = null;
+    fixture.desktop = true;
+    const result = await fetchFeedTracked({ name: 'local deadline fixture', url });
+    assert.equal(result.acquisition.outcome, 'unavailable');
+    assert.equal(result.acquisition.acceptedCount, 0);
+    assert.deepEqual(result.items, []);
+    assert.equal(cache.has(`api-response:${url}`), false);
+    assert.equal(cache.has('feed:local deadline fixture::en'), false);
+  } finally { Object.assign(fixture, saved); }
+});
+
 test('malformed RSS proxy payloads are not persisted', async () => {
   const url='/api/rss-proxy?url=https%3A%2F%2Fexample.org%2Fchallenge';
   fixture.response='<html>challenge</html>';

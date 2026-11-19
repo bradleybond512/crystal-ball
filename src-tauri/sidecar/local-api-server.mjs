@@ -1952,7 +1952,8 @@ const _dnsCache = new Map(); // hostname → addresses[]
 const _DNS_CACHE_TTL = 5 * 60_000;
 setInterval(() => _dnsCache.clear(), _DNS_CACHE_TTL).unref();
 
-async function isSafeUrl(urlString) {
+export async function isSafeUrl(urlString, { resolver = dns, signal, checkActive = () => signal?.throwIfAborted() } = {}) {
+  checkActive();
   let parsed;
   try {
  parsed = new URL(urlString);
@@ -1991,19 +1992,25 @@ async function isSafeUrl(urlString) {
   if (!addresses) {
     addresses = [];
     try {
- try {
- const v4 = await dns.resolve4(hostname);
- addresses = addresses.concat(v4);
- } catch { /* no A records — try AAAA */ }
- try {
- const v6 = await dns.resolve6(hostname);
- addresses = addresses.concat(v6);
- } catch { /* no AAAA records */ }
+      const v4 = await resolver.resolve4(hostname);
+      checkActive();
+      addresses = addresses.concat(v4);
     } catch {
- return { safe: false, reason: 'DNS resolution failed' };
+      checkActive();
     }
+    checkActive();
+    try {
+      const v6 = await resolver.resolve6(hostname);
+      checkActive();
+      addresses = addresses.concat(v6);
+    } catch {
+      checkActive();
+    }
+    checkActive();
     if (addresses.length > 0) _dnsCache.set(hostname, addresses);
   }
+
+  checkActive();
 
   if (addresses.length === 0) {
  return { safe: false, reason: 'Could not resolve hostname' };
@@ -2016,6 +2023,92 @@ async function isSafeUrl(urlString) {
   }
 
   return { safe: true, resolvedAddresses: addresses };
+}
+
+const RSS_REQUEST_BUDGET_MS = 8_000;
+
+export async function fetchRssWithBudget(feedUrl, { request, headers } = {}, deps = {}) {
+  const now = deps.now ?? (() => performance.now());
+  const setTimer = deps.setTimer ?? setTimeout;
+  const clearTimer = deps.clearTimer ?? clearTimeout;
+  const deadline = now() + RSS_REQUEST_BUDGET_MS;
+  const controller = new AbortController();
+  const { signal } = controller;
+  const resolver = (deps.createResolver ?? (() => new dns.Resolver()))();
+  const fetchImpl = deps.fetchImpl ?? fetchWithTimeout;
+  const deadlineError = Object.assign(new Error('Feed timeout'), { code: 'RSS_DEADLINE' });
+  const disconnectError = Object.assign(new Error('Client disconnected'), { code: 'RSS_CLIENT_DISCONNECTED' });
+  let resolverReleased = false;
+  const releaseResolver = () => {
+    if (resolverReleased) return;
+    resolverReleased = true;
+    resolver.cancel();
+  };
+  const abort = (reason) => {
+    controller.abort(reason);
+    releaseResolver();
+  };
+  const checkActive = () => {
+    if (!signal.aborted && now() >= deadline) abort(deadlineError);
+    signal.throwIfAborted();
+  };
+  const onDisconnect = () => abort(disconnectError);
+  const socket = request?.socket;
+  const timer = setTimer(() => abort(deadlineError), Math.max(0, deadline - now()));
+  timer?.unref?.();
+  request?.once('aborted', onDisconnect);
+  socket?.once('close', onDisconnect);
+  const awaitStage = async (start) => {
+    checkActive();
+    let onAbort;
+    const cancelled = new Promise((_, reject) => {
+      onAbort = () => reject(signal.reason);
+      signal.addEventListener('abort', onAbort, { once: true });
+    });
+    try {
+      const result = await Promise.race([start(), cancelled]);
+      checkActive();
+      return result;
+    } catch (error) {
+      checkActive();
+      throw error;
+    } finally {
+      signal.removeEventListener('abort', onAbort);
+    }
+  };
+  try {
+    if (request?.aborted || socket?.destroyed) abort(disconnectError);
+    let currentUrl = feedUrl;
+    for (let hop = 0; hop <= 3; hop++) {
+      const safety = await awaitStage(() => isSafeUrl(currentUrl, { resolver, signal, checkActive }));
+      if (!safety.safe) throw Object.assign(new SsrfBlockedError(safety.reason), { blockedUrl: currentUrl, redirect: hop > 0 });
+      const pinnedV4 = safety.resolvedAddresses?.find((address) => address.includes('.'));
+      const response = await awaitStage(() => fetchImpl(currentUrl, {
+        headers,
+        redirect: 'manual',
+        signal,
+        ...(pinnedV4 ? { resolvedAddress: pinnedV4 } : {}),
+      }, RSS_REQUEST_BUDGET_MS));
+      const location = response.status >= 300 && response.status < 400
+        ? response.headers?.get?.('location') : null;
+      if (location) {
+        if (hop === 3) throw Object.assign(new Error('Too many redirects'), { code: 'RSS_REDIRECT_LIMIT' });
+        currentUrl = new URL(location, currentUrl).href;
+        continue;
+      }
+      const body = await awaitStage(() => response.text());
+      return {
+        status: response.status,
+        contentType: response.headers?.get?.('content-type') || 'application/xml',
+        body,
+      };
+    }
+  } finally {
+    clearTimer(timer);
+    request?.removeListener('aborted', onDisconnect);
+    socket?.removeListener('close', onDisconnect);
+    releaseResolver();
+  }
 }
 
 // Selects the validated IPv4 address to PIN on the outbound connection, closing
@@ -5524,8 +5617,9 @@ async function transportFetchWithTimeout(url, options = {}, timeoutMs = 12_000) 
   }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
   try {
- return await fetch(fetchUrl, { ...options, headers: fetchHeaders, signal: controller.signal });
+ return await fetch(fetchUrl, { ...options, headers: fetchHeaders, signal });
   } finally {
  clearTimeout(timer);
   }
@@ -15341,68 +15435,38 @@ function legacyNewsItems(items) {
   }
 
   if (requestUrl.pathname === '/api/rss-proxy') {
- const feedUrl = requestUrl.searchParams.get('url');
- if (!feedUrl) return json({ error: 'Missing url parameter' }, 400);
-
- // SSRF protection: block private IPs, reserved ranges, and DNS rebinding
- const safety = await isSafeUrl(feedUrl);
- if (!safety.safe) {
- const blockedHost = (() => { try { return new URL(feedUrl).hostname; } catch { return 'invalid-url'; } })();
- context.logger.warn(`[local-api] rss-proxy SSRF blocked: ${safety.reason} (host=${blockedHost})`);
- return json({ error: safety.reason }, 403);
- }
-
- try {
- const parsed = new URL(feedUrl);
- const timeoutMs = parsed.hostname.includes('news.google.com') ? 20_000 : 12_000;
- const RSS_HEADERS = {
- 'User-Agent': CHROME_UA,
- 'Accept': 'application/rss+xml, application/xml, text/xml, */*',
- 'Accept-Language': 'en-US,en;q=0.9',
- };
-
- // Manually follow redirects so the IP-pinning we apply on the first
- // hop doesn't accidentally short-circuit a legitimate http→https
- // upgrade or hostname change. Each redirect target is re-validated
- // against isSafeUrl() to keep SSRF protection intact across hops.
- const MAX_REDIRECTS = 3;
- let currentUrl = feedUrl;
- let pinnedV4 = safety.resolvedAddresses?.find(a => a.includes('.'));
- let response;
- for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
- response = await fetchWithTimeout(currentUrl, {
- headers: RSS_HEADERS,
- redirect: 'manual',
- ...(pinnedV4 ? { resolvedAddress: pinnedV4 } : {}),
- }, timeoutMs);
- if (response.status < 300 || response.status >= 400) break;
- const location = response.headers?.get?.('location');
- if (!location) break;
- if (hop === MAX_REDIRECTS) {
- return json({ error: 'Too many redirects' }, 502, makeCorsHeaders(req));
- }
- const next = new URL(location, currentUrl).href;
- const nextSafety = await isSafeUrl(next);
- if (!nextSafety.safe) {
- const blockedRedirectHost = (() => { try { return new URL(next).hostname; } catch { return 'invalid-url'; } })();
- context.logger.warn(`[local-api] rss-proxy SSRF blocked on redirect: ${nextSafety.reason} (host=${blockedRedirectHost})`);
- return json({ error: nextSafety.reason }, 403, makeCorsHeaders(req));
- }
- currentUrl = next;
- pinnedV4 = nextSafety.resolvedAddresses?.find(a => a.includes('.'));
- }
-
- const contentType = response.headers?.get?.('content-type') || 'application/xml';
- const rssBody = await response.text();
- const corsOrigin = getSidecarCorsOrigin(req);
- return new Response(rssBody || '', {
- status: response.status,
- headers: { 'content-type': contentType, 'access-control-allow-origin': corsOrigin, 'vary': 'Origin' },
- });
- } catch (error) {
- const isTimeout = error.name === 'AbortError' || error.message?.includes('timeout');
- return json({ error: isTimeout ? 'Feed timeout' : 'Failed to fetch feed' }, isTimeout ? 504 : 502, makeCorsHeaders(req));
- }
+    const feedUrl = requestUrl.searchParams.get('url');
+    if (!feedUrl) return json({ error: 'Missing url parameter' }, 400);
+    try {
+      const result = await fetchRssWithBudget(feedUrl, {
+        request: req,
+        headers: {
+          'User-Agent': CHROME_UA,
+          'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+      });
+      return new Response(result.body || '', {
+        status: result.status,
+        headers: {
+          'content-type': result.contentType,
+          'access-control-allow-origin': getSidecarCorsOrigin(req),
+          'vary': 'Origin',
+        },
+      });
+    } catch (error) {
+      if (error.code === 'RSS_CLIENT_DISCONNECTED') return null;
+      if (error instanceof SsrfBlockedError) {
+        const blockedHost = (() => { try { return new URL(error.blockedUrl).hostname; } catch { return 'invalid-url'; } })();
+        context.logger.warn(`[local-api] rss-proxy SSRF blocked${error.redirect ? ' on redirect' : ''}: ${error.message} (host=${blockedHost})`);
+        return json({ error: error.message }, 403, makeCorsHeaders(req));
+      }
+      if (error.code === 'RSS_REDIRECT_LIMIT') {
+        return json({ error: 'Too many redirects' }, 502, makeCorsHeaders(req));
+      }
+      const isTimeout = error.code === 'RSS_DEADLINE';
+      return json({ error: isTimeout ? 'Feed timeout' : 'Failed to fetch feed' }, isTimeout ? 504 : 502, makeCorsHeaders(req));
+    }
   }
 
   if (requestUrl.pathname === '/api/local-webhook-dispatch' && req.method === 'POST') {
@@ -21680,6 +21744,7 @@ export async function createLocalApiServer(options = {}) {
 
  try {
  const response = await dispatch(requestUrl, req, routes, context);
+ if (requestUrl.pathname === '/api/rss-proxy' && (!response || req.aborted || req.socket.destroyed || res.destroyed)) return;
  const durationMs = Date.now() - start;
  let body = Buffer.from(await response.arrayBuffer());
  const headers = Object.fromEntries(response.headers.entries());
@@ -21717,12 +21782,14 @@ export async function createLocalApiServer(options = {}) {
  delete headers['content-length'];
  }
 
+ if (requestUrl.pathname === '/api/rss-proxy' && (req.aborted || req.socket.destroyed || res.destroyed)) return;
  res.writeHead(response.status, headers);
  res.end(body);
  if (SIDECAR_TRACE && !skipRecord) {
  context.logger.log(`[req] ${req.method} ${requestUrl.pathname} → ${response.status} ${durationMs}ms`);
  }
  } catch (error) {
+ if (requestUrl.pathname === '/api/rss-proxy' && (req.aborted || req.socket.destroyed || res.destroyed)) return;
  const durationMs = Date.now() - start;
  const localOnly = isLocalOnlyApiTarget(requestUrl.pathname);
  const privateSessionRequest = requestUrl.pathname === '/api/local-logistics' && req.method === 'POST';

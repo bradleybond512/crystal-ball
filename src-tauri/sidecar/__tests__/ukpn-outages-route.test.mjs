@@ -163,14 +163,23 @@ test('UKPN stale publication remains unavailable and never records healthy outpu
 });
 
 test('UKPN route rejects redirects without requesting the redirected destination', async () => {
-  // eslint-disable-next-line sonarjs/no-clear-text-protocols -- synthetic insecure metadata redirect must be rejected without an outbound request
-  await withRoute(() => ({ status: 302, body: '', headers: { location: 'http://169.254.169.254/latest/meta-data/' } }), async ({ url, requests }) => {
+  const fixture = snapshot();
+  let calls = 0;
+  await withRoute((request) => {
+    calls += 1;
+    const response = fixture.respond(request);
+    if (calls !== 1) return response;
+    // eslint-disable-next-line sonarjs/no-clear-text-protocols -- synthetic insecure metadata redirect must be rejected without an outbound request
+    return { ...response, status: 302, headers: { location: 'http://169.254.169.254/latest/meta-data/' } };
+  }, async ({ url, requests }) => {
     const response = await fetch(url, { headers: AUTH });
     assert.equal(response.status, 503);
     const body = await response.json();
     assert.equal(body.state, 'unavailable');
     assert.deepEqual(body.incidents, []);
     assert.equal(requests.length, 1);
+    assert.equal(requests[0].hostname, 'ukpowernetworks.opendatasoft.com');
+    assert.equal(requests[0].path, DATASET);
     assert.equal(JSON.stringify(body).includes('169.254'), false);
     assert.equal(getFeedStatus(FEED).lastSuccess, null);
   });

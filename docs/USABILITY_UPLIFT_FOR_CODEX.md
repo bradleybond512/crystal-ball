@@ -1161,7 +1161,7 @@ Acceptance: Measure live storage and classify owned cache versus user evidence b
 
 Status: IN PROGRESS — HIGH ASSURANCE
 Approval: November 19, Bradley approved the test-only six-writer design, documentation draft claim and local implementation.
-Evidence: [approved design](plans/2026-11-18-ux057-timer-persistence-design.md). Full lifecycle/storage-recovery acceptance remains open; production behavior is unchanged and implementation publication requires separate reviewed-tip approval.
+Evidence: [Draft #1917](https://github.com/bradleybond512/crystal-ball/pull/1917); [approved design](plans/2026-11-18-ux057-timer-persistence-design.md). Full lifecycle/storage-recovery acceptance remains open; production behavior is unchanged and implementation publication requires separate reviewed-tip approval.
 Priority: B
 Source findings: PR1731 L2.
 
@@ -1622,7 +1622,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-054 | Cover subproject dependencies in security checks | DONE — HIGH ASSURANCE | #1849; [audit coverage and evidence](validation/UX-054-DEPENDENCY-AUDIT.md). Six npm locks covered; high-severity marketing fixes verified. External MCP pins remain separate. |
 | UX-055 | Surface stale credential validation honestly | DONE — HIGH ASSURANCE | [Evidence](validation/UX-055-CREDENTIAL-VALIDATION.md) · [Candidate #1851](https://github.com/bradleybond512/crystal-ball/pull/1851) |
 | UX-056 | Bound retained storage without losing user evidence | NOT STARTED — HIGH ASSURANCE | — |
-| UX-057 | Persist panel state only when it changes | IN PROGRESS — HIGH ASSURANCE | Approved [six-writer fixture design](plans/2026-11-18-ux057-timer-persistence-design.md); documentation claim being prepared. Full lifecycle/storage-recovery acceptance remains open. |
+| UX-057 | Persist panel state only when it changes | IN PROGRESS — HIGH ASSURANCE | Approved [six-writer fixture design](plans/2026-11-18-ux057-timer-persistence-design.md); [Draft #1917](https://github.com/bradleybond512/crystal-ball/pull/1917) published; fixture implementation in progress. Full lifecycle/storage-recovery acceptance remains open. |
 | UX-058 | Account for deferred and updated warnings | MONITOR — HIGH ASSURANCE | [Evidence](validation/UX-058-DEFERRED-WARNINGS.md) · [Draft #1852](https://github.com/bradleybond512/crystal-ball/pull/1852) |
 | UX-059 | Retain active alerts using authoritative lifecycle evidence | DONE | #1739; [evidence](validation/UX-059-RETENTION.md); ACC-509 integration hold |
 | UX-060 | Preserve onboarding keyboard ownership against proactive digest | DONE | #1735 |

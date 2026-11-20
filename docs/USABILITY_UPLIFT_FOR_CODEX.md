@@ -452,6 +452,8 @@ ship only Call/Open in Maps/confirm-directly actions and retain `unknown` status
 
 ### UX-014 — Fuel operational evidence *(High Assurance provider task)*
 
+Status: IN PROGRESS — HIGH ASSURANCE
+Evidence: [Draft #1918](https://github.com/bradleybond512/crystal-ball/pull/1918); [approved documentation checkpoint](plans/2026-11-19-ux014-fuel-qualification.md); [France qualification evidence and open requirements](validation/UX-014-FUEL-SOURCE-QUALIFICATION.md). Rights/schema and snapshot publication verified; operational confirmation, withdrawal and timestamp contracts remain unresolved. Checkpoint publication approved November 19; no provider implementation approved. Full UX-014 acceptance remains open.
 Priority: C
 
 Keep OSM fuel sites as directory-only. Add operational fuel evidence only behind
@@ -1518,8 +1520,11 @@ State these as open questions rather than treating them as settled:
 
 ### UX-076 — Preserve failed iMessage setup drafts
 
-Status: IN REVIEW
-Evidence: [Draft #1900](https://github.com/bradleybond512/crystal-ball/pull/1900); [bounded UI design](plans/2026-11-10-ux076-imessage-draft-recovery.md).
+Status: MONITOR
+Evidence: [Merged #1900](https://github.com/bradleybond512/crystal-ball/pull/1900), November 14, 2026, at `92ff943dfc96c31c1c9f399baf9e1429e75bbd75`; [bounded UI design](plans/2026-11-10-ux076-imessage-draft-recovery.md).
+Exit condition: Complete the separately scoped packaged acceptance for failed-save draft recovery, correction, cancellation and confirmed saved authority when delivery holds permit; source merge alone is not packaged acceptance.
+Review after: 2026-11-22
+Reviewed November 15: GitHub confirms the source PR is merged. This reconciles stale claim metadata only; no application launch, real message, installed-settings write, release or installation is claimed. The review date is a manual checkpoint, not an automation.
 
 Preserve a submitted recipient after invalid-format, unavailable, persistence, or busy-retry failures so it can be corrected and explicitly retried. Native validation, exact-recipient confirmation, storage authority, cancellation and immediate disable remain unchanged. Test must use only confirmed saved state. Do not persist drafts or send messages during verification.
 
@@ -1580,7 +1585,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-011 | Hazard/closure exposure | DONE | #1688 |
 | UX-012 | Outage coverage + telemetry | DONE | #1683 |
 | UX-013 | Hotel operational evidence | DONE | #1699 |
-| UX-014 | Fuel operational evidence | NOT STARTED — HIGH ASSURANCE | — |
+| UX-014 | Fuel operational evidence | IN PROGRESS — HIGH ASSURANCE | [Draft #1918](https://github.com/bradleybond512/crystal-ball/pull/1918); [documentation-only qualification checkpoint](plans/2026-11-19-ux014-fuel-qualification.md); [9,824-station probe and open requirements](validation/UX-014-FUEL-SOURCE-QUALIFICATION.md). Checkpoint published; provider implementation unapproved and operational acceptance remains open. |
 | UX-015 | New outage provider integration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-016 | Timeline controller + cursor wiring | NOT STARTED — HIGH ASSURANCE | — |
 | UX-017 | Complete Mac main-sync toolchain repair | DONE | #1693 |
@@ -1635,7 +1640,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-073 | Scope cohesive module extractions | NOT STARTED | |
 | UX-074 | Release SBOMs | NOT STARTED — HIGH ASSURANCE | |
 | UX-075 | Remove unsupported lightning tooltip measurement | DONE | #1887; late claim after implementation `95d5f64167fb`. At the pre-merge source checkpoint, final exact-tip validation, independent review and hosted gates remain required before merge. No browser/native acceptance claimed. |
-| UX-076 | Preserve failed iMessage setup drafts | IN REVIEW | [Draft #1900](https://github.com/bradleybond512/crystal-ball/pull/1900); [bounded design](plans/2026-11-10-ux076-imessage-draft-recovery.md). UI-only retry recovery; native consent and sending authority unchanged. |
+| UX-076 | Preserve failed iMessage setup drafts | MONITOR | [Merged #1900](https://github.com/bradleybond512/crystal-ball/pull/1900); [bounded design](plans/2026-11-10-ux076-imessage-draft-recovery.md). Source merged November 14; separately scoped packaged acceptance remains open. |
 
 ## Repair 12 — Diagnostics entry and shortcut ownership (2026-10-18)
 

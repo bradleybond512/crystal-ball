@@ -1587,7 +1587,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-012 | Outage coverage + telemetry | DONE | #1683 |
 | UX-013 | Hotel operational evidence | DONE | #1699 |
 | UX-014 | Fuel operational evidence | NOT STARTED — HIGH ASSURANCE | — |
-| UX-015 | New outage provider integration | IN PROGRESS — HIGH ASSURANCE | [Draft #1919](https://github.com/bradleybond512/crystal-ball/pull/1919); [approved UKPN design](plans/2026-11-19-ux015-ukpn-design.md). Local implementation in progress. Regional reports only; implementation/installed acceptance unverified. All merge/delivery holds remain. |
+| UX-015 | New outage provider integration | IN PROGRESS — HIGH ASSURANCE | [Draft #1919](https://github.com/bradleybond512/crystal-ball/pull/1919); [approved UKPN design](plans/2026-11-19-ux015-ukpn-design.md). Bounded local implementation and fixture evidence in [QA report](validation/UX-015-UKPN-REGIONAL-REPORTS.md). Latest live acquisition rejects 101 records above the approved cap; positive live coherence, sustained and installed acceptance remain open. Code publication awaits separate approval; all merge/delivery holds remain. |
 | UX-016 | Timeline controller + cursor wiring | NOT STARTED — HIGH ASSURANCE | — |
 | UX-017 | Complete Mac main-sync toolchain repair | DONE | #1693 |
 | UX-018 | Timely authoritative forecast resolution | MONITOR — HIGH ASSURANCE | [Local evidence](validation/UX-018-RESOLVER-RUNS.md) · [Draft #1853](https://github.com/bradleybond512/crystal-ball/pull/1853) |

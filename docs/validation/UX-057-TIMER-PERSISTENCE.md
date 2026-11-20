@@ -86,7 +86,12 @@ publication approval; these local runs are not hosted results.
 Early independent Sol review found a fixture gap: a disabled scheduler was tested
 before its deadline, allowing the not-due guard to mask a missing disabled guard.
 The fixture now tests disabled work at its deadline. Removing that guard produces
-10 pass / 2 fail; restoration returns 12 pass / 0 fail. This was one repair cycle.
+10 pass / 2 fail; restoration returns 12 pass / 0 fail. The first repair cycle closed that gap. A second review found that the TV
+storage-exception and self-tuning storage-denial tests had not turned red under
+any original control. Two additional source mutations now make each fail 11/1
+and restore to 12/0, with unchanged source hashes and clean scratch state. All
+12 new tests have now been observed failing under at least one of 13 controls.
+This second cycle changed proof evidence only; candidate tests/code stayed fixed.
 Final exact-tip Sol and actual Sonnet review must clear before the recorded
 verdict and separate implementation-publication approval.
 
@@ -160,3 +165,22 @@ The first runner stopped before applying digest-idle because its exact indentati
 ### Proof limits
 
 Synthetic in-memory storage and deterministic captured callbacks only. Actual six source modules and internal grading/drift logic execute, with explicit synthetic dependencies. No installed storage, native app, network data, device energy, or elapsed-time benefit is measured. Consolidation/self-tuning lack production stop APIs; fixture disposal is not a lifecycle guarantee. TV storage exceptions remain characterized. Production candidate code is unchanged.
+
+## Additional storage-failure proofs
+
+Source: `600ad703c60b4d0c4ec13dc75f6880f24ee1d4f5`. Shared candidate unchanged; no test/production edits.
+
+Command: `/opt/homebrew/opt/node@22/bin/node --import tsx --test tests/ux057/timer-persistence.test.mts` in detached `/tmp/ux057-mutations-600ad703c60b`.
+
+Fresh baseline 12 pass / 0 fail / 0 cancelled.
+
+| Control | Applied mutation | Red | Restored | Failing assertion |
+| --- | --- | --- | --- | --- |
+| tv-exception-swallowed | `src/services/tv-mode.ts` | 11 pass / 1 fail | 12 pass / 0 fail | TV storage read and write exceptions stay observable without claiming recovery |
+| self-tuning-containment-removed | `src/services/cognition/self-tuning.ts` | 11 pass / 1 fail | 12 pass / 0 fail | self-tuning storage denial is contained and does not invent a persisted completion |
+
+Both actual applied diffs, red/restored logs and source/diff SHA256s are preserved here. Exact source hash restoration and clean Git status were checked after each control. No cancellations/skips.
+
+Combined with the unchanged prior eleven proofs, 13/13 controls were caught and all twelve new test cases were observed failing under at least one applied mutation. Prior eleven receipts remain unchanged. This closes the two previously unhit test cases; it does not claim exhaustive coverage.
+
+Same synthetic-storage and lifecycle limitations as the original report apply. No native/live/installed data was accessed.

@@ -1,8 +1,9 @@
 # UX-014 — qualify operational fuel evidence
 
 High Assurance provider task. Base `ffb3f3ccb4`; isolated
-`codex/ux014-fuel-qualification` branch. User authorized continued discovery;
-production implementation and draft publication need a concrete approved design.
+`codex/ux014-fuel-qualification` branch. Bradley approved the documentation-only
+checkpoint publication and PR-link recording on November 19; [draft #1918](https://github.com/bradleybond512/crystal-ball/pull/1918)
+records it. Production implementation still needs a concrete approved design.
 All merge, auto-merge, release, deployment and installation holds remain.
 
 ## Objective and acceptance

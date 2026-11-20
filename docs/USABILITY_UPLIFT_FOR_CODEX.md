@@ -453,7 +453,7 @@ ship only Call/Open in Maps/confirm-directly actions and retain `unknown` status
 ### UX-014 — Fuel operational evidence *(High Assurance provider task)*
 
 Status: IN PROGRESS — HIGH ASSURANCE
-Evidence: [Proposed documentation checkpoint](plans/2026-11-19-ux014-fuel-qualification.md); [France qualification evidence and open requirements](validation/UX-014-FUEL-SOURCE-QUALIFICATION.md). Rights/schema and snapshot publication verified; operational confirmation, withdrawal and timestamp contracts remain unresolved. No provider implementation or publication approved; full UX-014 acceptance remains open.
+Evidence: [Draft #1918](https://github.com/bradleybond512/crystal-ball/pull/1918); [approved documentation checkpoint](plans/2026-11-19-ux014-fuel-qualification.md); [France qualification evidence and open requirements](validation/UX-014-FUEL-SOURCE-QUALIFICATION.md). Rights/schema and snapshot publication verified; operational confirmation, withdrawal and timestamp contracts remain unresolved. Checkpoint publication approved November 19; no provider implementation approved. Full UX-014 acceptance remains open.
 Priority: C
 
 Keep OSM fuel sites as directory-only. Add operational fuel evidence only behind
@@ -1585,7 +1585,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-011 | Hazard/closure exposure | DONE | #1688 |
 | UX-012 | Outage coverage + telemetry | DONE | #1683 |
 | UX-013 | Hotel operational evidence | DONE | #1699 |
-| UX-014 | Fuel operational evidence | IN PROGRESS — HIGH ASSURANCE | [Documentation-only qualification checkpoint](plans/2026-11-19-ux014-fuel-qualification.md); [9,824-station probe and open requirements](validation/UX-014-FUEL-SOURCE-QUALIFICATION.md). Provider implementation/publication unapproved; operational acceptance remains open. |
+| UX-014 | Fuel operational evidence | IN PROGRESS — HIGH ASSURANCE | [Draft #1918](https://github.com/bradleybond512/crystal-ball/pull/1918); [documentation-only qualification checkpoint](plans/2026-11-19-ux014-fuel-qualification.md); [9,824-station probe and open requirements](validation/UX-014-FUEL-SOURCE-QUALIFICATION.md). Checkpoint published; provider implementation unapproved and operational acceptance remains open. |
 | UX-015 | New outage provider integration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-016 | Timeline controller + cursor wiring | NOT STARTED — HIGH ASSURANCE | — |
 | UX-017 | Complete Mac main-sync toolchain repair | DONE | #1693 |

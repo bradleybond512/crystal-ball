@@ -1,6 +1,8 @@
 # UX-014 — documentation-only source qualification checkpoint
 
-Proposed bounded decision; publication approval pending. This checkpoint records
+Bradley approved checkpoint publication and PR-link recording on November 19.
+[Draft #1918](https://github.com/bradleybond512/crystal-ball/pull/1918) records this
+bounded decision. This checkpoint records
 completed public-source research and its limits. It approves no provider or
 application behavior. UX-014 operational acceptance remains open.
 
@@ -24,9 +26,9 @@ owns source/schema/lifecycle research. Independent review verifies raw receipts,
 truthful claims and preserved holds. No production implementation, dependency,
 fixture suite, API route, provider enum, setting or stored data changes.
 
-Proposed publication is one documentation-only UX-014 draft claim. It must not
-mark the task complete or imply approval of a current-status adapter. Following
-approval, record its PR link and run hosted documentation gates. A later provider
+Publication is one documentation-only UX-014 draft claim. It must not
+mark the task complete or imply approval of a current-status adapter. The approved
+publication records its PR link and runs hosted documentation gates. A later provider
 design needs separate approval after its temporal and withdrawal contracts are
 established. No contact, account creation or credentials are authorized here.
 

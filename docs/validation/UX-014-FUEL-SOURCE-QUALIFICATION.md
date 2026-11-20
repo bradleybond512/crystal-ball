@@ -80,7 +80,9 @@ cross-agent configuration, docs/roadmap checks and web build exited zero.
 Existing changelog/roadmap advisories and Vite loader/chunk warnings remain.
 The complete live roadmap snapshot selects UX-014 with `blocking: []` after
 carrying forward the already-reviewed UX-076 merged-PR metadata reconciliation.
-Final exact-tip independent reviews and publication approval remain required.
+Final independent Sol and Sonnet reviews found zero blockers at `ae4e9f0f2d`;
+the verified verdict `6fe7d537f1` was approved and published to [draft #1918](https://github.com/bradleybond512/crystal-ball/pull/1918).
+The authorized PR-link documentation update receives fresh review before publication.
 No new executable behavior is added, so there is no new behavior mutation claim.
 Provider and installed acceptance remain open. Manual verification can reproduce
 the bounded public download and inspect retained report dates separately from

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import http from 'node:http';
 import { readBoundedJson } from '../../../api/_bounded-json.js';
 import { createUkpnSnapshotProvider, normalizeUkpnSnapshot, UKPN_METADATA_URL, UKPN_RECORDS_URL } from '../ukpn-live-faults.mjs';
 
@@ -199,4 +200,28 @@ test('UKPN uses remaining overall budget and rejects completion beyond it', asyn
   } });
   const result = await provider.get(); assert.equal(result.reasonCode, 'timeout');
   assert.deepEqual(budgets, [8000, 5000, 2000]);
+});
+
+
+test('UKPN closes rejected streaming response bodies when the acquisition settles', async (t) => {
+  for (const status of [429, 503, 302]) {
+    let onClosed;
+    const closed = new Promise(resolve => { onClosed = resolve; });
+    const server = http.createServer((_req, res) => {
+      res.writeHead(status, { 'content-type': 'application/json' });
+      res.write('{');
+      res.on('close', onClosed);
+    });
+    t.after(() => { server.closeAllConnections(); server.close(); });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    let upstreamSignal;
+    const { provider } = harness({ fetchFn: (_url, options) => {
+      upstreamSignal = options.signal;
+      return fetch(`http://127.0.0.1:${server.address().port}`, options);
+    } });
+    const result = await provider.get();
+    assert.equal(result.state, 'unavailable');
+    assert.equal(upstreamSignal.aborted, true, 'settled acquisition must abort unread streaming error bodies');
+    await closed;
+  }
 });

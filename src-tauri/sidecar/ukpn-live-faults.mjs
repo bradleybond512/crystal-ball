@@ -144,6 +144,7 @@ export function createUkpnSnapshotProvider({ fetchFn, readJson, clock = Date.now
     } finally {
       clearTimeout(timer);
       controller.signal.removeEventListener('abort', rejectAbort);
+      controller.abort();
     }
   }
 

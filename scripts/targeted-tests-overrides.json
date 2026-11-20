@@ -1,4 +1,10 @@
 {
+  "src-tauri/sidecar/ukpn-live-faults.mjs": ["test:ukpn"],
+  "api/ukpn-outages.js": ["test:ukpn"],
+  "src/services/infrastructure/ukpn-outages.ts": ["test:ukpn"],
+  "src/services/infrastructure/grid-intelligence-loader.ts": ["test:ukpn"],
+  "src/components/GridIntelligencePanel.ts": ["test:ukpn"],
+  "src/services/diagnostics/feed-catalog.ts": ["test:ukpn"],
   "src/services/foreign-mil-news.ts": ["test:foreign-mil-angle"],
   "src/services/__tests__/fixtures/foreign-mil-original.ts.txt": ["test:foreign-mil-angle"],
   "src/services/spc-mesoscale.ts": ["test:spc-angle"],
@@ -454,7 +460,8 @@
     "test:sidecar-fallback",
     "test:ux055",
     "test:quota",
-    "test:news-resilience"
+    "test:news-resilience",
+    "test:ukpn"
   ],
   "src/services/keychain.ts": [
     "test:secret-boundary",
@@ -485,7 +492,8 @@
     "test:desktop-identity",
     "test:ux047",
     "test:sidecar-fallback",
-    "test:quota"
+    "test:quota",
+    "test:ukpn"
   ],
   "src-tauri/src/vault_coordinator.rs": [
     "test:vault-writer"

@@ -464,7 +464,7 @@ separate PRs so one provider cannot broaden the other's truth boundary.
 
 Status: IN PROGRESS — HIGH ASSURANCE
 Approval: November 19, Bradley approved the UKPN design, documentation draft claim and local implementation.
-Evidence: [Approved bounded UKPN design](plans/2026-11-19-ux015-ukpn-design.md). Documentation claim being prepared before implementation; no provider acceptance claimed. Installed and sustained live-feed acceptance remain open; merging and delivery remain paused.
+Evidence: [Draft #1919](https://github.com/bradleybond512/crystal-ball/pull/1919); [approved bounded UKPN design](plans/2026-11-19-ux015-ukpn-design.md). Claim published before local implementation; no provider acceptance claimed. Installed and sustained live-feed acceptance remain open; merging and delivery remain paused.
 Priority: C
 
 Add at most one new outage origin per PR after a live response-body probe,
@@ -1587,7 +1587,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-012 | Outage coverage + telemetry | DONE | #1683 |
 | UX-013 | Hotel operational evidence | DONE | #1699 |
 | UX-014 | Fuel operational evidence | NOT STARTED — HIGH ASSURANCE | — |
-| UX-015 | New outage provider integration | IN PROGRESS — HIGH ASSURANCE | [Approved UKPN design](plans/2026-11-19-ux015-ukpn-design.md); documentation claim being prepared. Regional reports only; implementation/installed acceptance unverified. All merge/delivery holds remain. |
+| UX-015 | New outage provider integration | IN PROGRESS — HIGH ASSURANCE | [Draft #1919](https://github.com/bradleybond512/crystal-ball/pull/1919); [approved UKPN design](plans/2026-11-19-ux015-ukpn-design.md). Local implementation in progress. Regional reports only; implementation/installed acceptance unverified. All merge/delivery holds remain. |
 | UX-016 | Timeline controller + cursor wiring | NOT STARTED — HIGH ASSURANCE | — |
 | UX-017 | Complete Mac main-sync toolchain repair | DONE | #1693 |
 | UX-018 | Timely authoritative forecast resolution | MONITOR — HIGH ASSURANCE | [Local evidence](validation/UX-018-RESOLVER-RUNS.md) · [Draft #1853](https://github.com/bradleybond512/crystal-ball/pull/1853) |

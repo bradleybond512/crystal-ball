@@ -1,8 +1,8 @@
 # UX-015 — UKPN reported incidents, separate from US county evidence
 
 High Assurance design approved by Bradley on November 19, including the
-documentation draft claim and local implementation. No provider implementation
-has started. Keep
+documentation draft claim and local implementation. [Draft #1919](https://github.com/bradleybond512/crystal-ball/pull/1919)
+was published before local implementation began. Keep
 merging, auto-merge, releases, deployment and installation paused.
 
 ## User-visible outcome and truth boundary

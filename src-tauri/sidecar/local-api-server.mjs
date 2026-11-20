@@ -40,6 +40,7 @@ import {
 } from './acled-token-helpers.mjs';
 import { fetchWithFallback } from './feed-resilience.mjs';
 import { createNwsSnapshotProvider } from './nws-alert-snapshot.mjs';
+import { createUkpnSnapshotProvider } from './ukpn-live-faults.mjs';
 import { fetchEnviroflashCap, alertMatchesArea } from './enviroflash-cap.mjs';
 import { normalizeAirnowForecast, peakForecastAqi } from './airnow-forecast.mjs';
 import { trackSuccess, trackFailure, getAllFeedStatuses, getFeedStatus } from './feed-health-tracker.mjs';
@@ -5874,6 +5875,7 @@ export function _resetSidecarCacheForTests() {
   _quotaGovernor = createQuotaGovernor({ filePath: null });
   _openskySnapshotPending = null;
   nwsSnapshotProvider.reset();
+  ukpnSnapshotProvider.reset();
   _sidecarCache.clear();
   _quotaCache = createQuotaCache({ filePath: null });
   _odinInFlight.clear();
@@ -6556,6 +6558,12 @@ function parseSeaIceForSidecar(csv) {
 }
 
 const nwsSnapshotProvider = createNwsSnapshotProvider({
+  fetchFn: fetchWithTimeout,
+  readJson: (response) => response.json(),
+  clock: () => Date.now(),
+});
+
+const ukpnSnapshotProvider = createUkpnSnapshotProvider({
   fetchFn: fetchWithTimeout,
   readJson: (response) => response.json(),
   clock: () => Date.now(),
@@ -18992,6 +19000,40 @@ function legacyNewsItems(items) {
  const result = { recalls, count: recalls.length, type, fetchedAt: Date.now(), degraded: false };
  setCached(cacheKey, result, RECALL_TTL);
  return json(result);
+  }
+
+  if (requestUrl.pathname === '/api/ukpn-outages') {
+    const headers = { 'cache-control': 'no-store' };
+    if (req.method !== 'GET') return json({ error: 'method_not_allowed' }, 405, { ...headers, allow: 'GET, OPTIONS' });
+    if (requestUrl.search) return json({ error: 'invalid_query' }, 400, headers);
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    req.once('aborted', abort);
+    req.socket.once('close', abort);
+    if (req.aborted || req.socket.destroyed) abort();
+    try {
+      const snapshot = await ukpnSnapshotProvider.get({ signal: controller.signal });
+      const healthy = snapshot.state === 'reported' && snapshot.incidents.length > 0
+        && Date.parse(snapshot.expiresAt) > Date.now();
+      if (healthy) {
+        const publishedAt = Date.parse(snapshot.publishedAt);
+        recordFeedSuccess('ukpn-live-faults', publishedAt);
+        trackSuccess('ukpn-live-faults', 'primary', publishedAt);
+      } else {
+        const reason = snapshot.reasonCode ?? 'no_contributed_rows';
+        recordFeedFailure('ukpn-live-faults', reason);
+        trackFailure('ukpn-live-faults', reason);
+      }
+      return json(snapshot, snapshot.state === 'reported' || snapshot.state === 'empty' ? 200 : 503, headers);
+    } catch {
+      if (controller.signal.aborted) return json({ error: 'request_cancelled' }, 499, headers);
+      recordFeedFailure('ukpn-live-faults', 'upstream_unavailable');
+      trackFailure('ukpn-live-faults', 'upstream_unavailable');
+      return json({ error: 'upstream_unavailable' }, 503, headers);
+    } finally {
+      req.removeListener('aborted', abort);
+      req.socket.removeListener('close', abort);
+    }
   }
 
   // GET /api/grid-outages — ORNL ODIN real-time power outages by county (~15 min cache)

@@ -1,4 +1,9 @@
 {
+  "src/components/PhishstatsFeedPanel.ts": ["test:ux057"],
+  "src/services/tv-mode.ts": ["test:ux057"],
+  "src/services/intelligence/improvement-scheduler.ts": ["test:ux057"],
+  "src/services/cognition/consolidation-cadence.ts": ["test:ux057"],
+  "src/services/cognition/self-tuning.ts": ["test:ux057"],
   "src/services/foreign-mil-news.ts": ["test:foreign-mil-angle"],
   "src/services/__tests__/fixtures/foreign-mil-original.ts.txt": ["test:foreign-mil-angle"],
   "src/services/spc-mesoscale.ts": ["test:spc-angle"],
@@ -1376,7 +1381,8 @@
     "test:ux047"
   ],
   "src/services/notification-digest.ts": [
-    "test:ux047"
+    "test:ux047",
+    "test:ux057"
   ],
   "src/services/alert-reactions.ts": [
     "test:ux047"

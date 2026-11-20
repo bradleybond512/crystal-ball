@@ -230,6 +230,16 @@ src/services/cognition/consolidation-cadence.ts:20
 
 **Suggested fix:** write on state change, or coalesce to a single debounced persist per store.
 
+**November 19 correction (UX-057, draft #1917):** executable fixtures against
+current source do not support the original every-tick claim. Phishstats refresh
+and TV cycling write no preferences; explicit settings changes do. Empty/retired
+digests and disabled/not-due scheduler or cognition ticks write nothing. Actual
+deliverable/due work persists and reloads. All six real callback paths passed,
+with 13 deliberately broken variants detected. This is a test-only investigation;
+no redundant runtime write was removed and no energy saving was measured.
+[Validation and limits](validation/UX-057-TIMER-PERSISTENCE.md) preserve open TV
+storage exceptions and missing cognition stop APIs; full UX-057 remains open.
+
 ---
 
 ## What is already right

@@ -1,0 +1,9 @@
+{
+  "reviewedSha": "331a84b83726720c5d0ca7e7afd28130a228e84d",
+  "reviewer": "claude",
+  "model": "claude-sonnet-4-6",
+  "verdict": "approve",
+  "blockingFindings": 0,
+  "reviewedAt": "2026-11-20T03:38:33.639Z",
+  "evidence": "## Incremental Review — SHA 331a84b83726720c5d0ca7e7afd28130a228e84d\n\n**Scope**: docs-only delta — three documentation files updated, two new mutation proofs added. Fixture, production source, package, and mappings confirmed unchanged.\n\n---\n\n### New receipt verification\n\nBoth controls in the new receipt:\n- `sourceSha: 600ad703c60b4d0c4ec13dc75f6880f24ee1d4f5` — matches prior candidate ✓\n- `beforeSha256 === restoredSha256`, `clean: true` for both ✓\n- `tv-exception-swallowed`: `tv-mode.ts` SHA `3ea405d3…` matches original eleven-receipt ✓\n- `self-tuning-containment-removed`: `self-tuning.ts` SHA `32c1bef6…` matches original eleven-receipt ✓\n\n**Mutation semantics correct**: wrapping `setItem` in silent `try/catch{}` removes the observable throw → test 4 (`assert.throws`) fails 11/1 as recorded. Removing the cadence `catch {}` re-propagates the fixture read-denial error → test 12 fails 11/1 as recorded. Both restored logs return 12/0. TAP line counts match receipt JSON exactly.\n\n**Coverage closure**: the two previously unhit tests are now each observed red under exactly one control. Combined with the eleven prior proofs: 13/13 controls caught, all 12 new tests have a red proof. Documentation updated consistently across all three files (11→13 in every occurrence).\n\n---\n\n### Zero blocking findings\n\n**CLEARED** at SHA **331a84b83726720c5d0ca7e7afd28130a228e84d**.\n\nPre-existing open items unchanged: TV storage exceptions unrecovered, no cognition stop API, `react-server-dom-webpack` marketing audit finding, hosted/installed execution unverified."
+}

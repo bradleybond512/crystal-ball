@@ -21,9 +21,12 @@ const second = 'src-tauri/sidecar/__tests__/second.test.mts';
 test('the complete sidecar inventory is assigned once across the three real smoke groups', () => {
   const inventory = discoverSidecarTests(root);
   const groups = sidecarSmokeGroups(scripts, SUITE_STAGES['sidecar-remaining']);
-  assert.equal(inventory.length, 66);
-  assert.deepEqual(Object.values(groups).map((files) => files.length), [19, 6, 41]);
-  assert.equal(assertSidecarInventory(inventory, groups), 66);
+  assert.equal(inventory.length, 68);
+  assert.deepEqual(Object.values(groups).map((files) => files.length), [21, 6, 41]);
+  assert.equal(assertSidecarInventory(inventory, groups), 68);
+  for (const file of ['ukpn-live-faults', 'ukpn-outages-route']) {
+    assert.ok(groups.sidecar.includes(`src-tauri/sidecar/__tests__/${file}.test.mjs`));
+  }
   for (const file of ['sms-auth', 'key-health', 'quota-cache', 'quota-news-envelope', 'quota-routes', 'quota-governor', 'quota-governor-io', 'quota-governor-policy', 'quota-governor-routes']) {
     assert.ok(groups.remaining.includes(`src-tauri/sidecar/__tests__/${file}.test.mjs`));
   }

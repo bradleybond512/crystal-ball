@@ -19,6 +19,7 @@ import type {
   Severity,
 } from '@/services/infrastructure/grid-monitor';
 import { escapeHtml } from '@/utils/sanitize';
+import { ageUkpnOutages, type UkpnOutageSummary } from '@/services/infrastructure/ukpn-outages';
 
 type Tab = 'grid' | 'outages' | 'internet' | 'radiation';
 
@@ -35,6 +36,7 @@ export class GridIntelligencePanel extends Panel {
   private outages: OutageSummary | null = null;
   private bgp: BgpSummary | null = null;
   private radiation: RadSummary | null = null;
+  private ukpn: UkpnOutageSummary | null = null;
   private activeTab: Tab = readStoredTab();
 
   constructor() {
@@ -43,7 +45,7 @@ export class GridIntelligencePanel extends Panel {
       title: 'Grid & Internet Intelligence',
       showCount: true,
       trackActivity: true,
-      infoTooltip: 'Descriptive EIA demand and net generation, ORNL ODIN exact-county outage reports from Disaster Lifelines, Cloudflare Radar BGP hijacks, and EPA RadNet gross gamma. EIA total net interchange is not ingested, so the panel does not infer supply adequacy or transfer direction from D versus NG.',
+      infoTooltip: 'Descriptive EIA demand and net generation, ORNL ODIN exact-county outage reports from Disaster Lifelines, separate UK Power Networks regional reports, Cloudflare Radar BGP hijacks, and EPA RadNet gross gamma. EIA total net interchange is not ingested, so the panel does not infer supply adequacy or transfer direction from D versus NG.',
     });
     this.showLoading('Loading infrastructure intelligence…');
   }
@@ -53,11 +55,13 @@ export class GridIntelligencePanel extends Panel {
     outages?: OutageSummary | null;
     bgp?: BgpSummary | null;
     radiation?: RadSummary | null;
+    ukpn?: UkpnOutageSummary | null;
   }): void {
     if (input.grid !== undefined) this.grid = input.grid;
     if (input.outages !== undefined) this.outages = input.outages;
     if (input.bgp !== undefined) this.bgp = input.bgp;
     if (input.radiation !== undefined) this.radiation = input.radiation;
+    if (input.ukpn !== undefined) this.ukpn = input.ukpn;
     this.setCount(this.computeAlertCount());
     this.render();
   }
@@ -125,6 +129,39 @@ export class GridIntelligencePanel extends Panel {
   }
 
   private renderOutagesTab(): string {
+    return `${this.renderOdinOutages()}${this.renderUkpnOutages()}`;
+  }
+
+  private renderUkpnOutages(): string {
+    const summary = this.ukpn ? ageUkpnOutages(this.ukpn, Date.now()) : null;
+    let body = '<p class="panel-empty">Loading UK Power Networks regional reports…</p>';
+    if (summary) {
+      if (summary.state === 'reported') {
+        body = `<ul style="margin:8px 0;padding-left:20px">${summary.incidents.map((incident) => renderUkpnIncident(incident)).join('')}</ul>`;
+        if (summary.counts.invalid > 0) body += '<p>Some invalid reports were omitted from this partial list.</p>';
+      } else if (summary.state === 'empty') {
+        body = '<p>No usable unplanned incident reports; coverage remains partial.</p>';
+      } else {
+        body = `<p><strong>${summary.state === 'stale' ? 'UKPN publication stale.' : 'UKPN reports unavailable.'}</strong> ${escapeHtml(ukpnUnavailableMessage(summary.reasonCode))}</p>`;
+      }
+    }
+    const publication = summary?.publishedAt
+      ? `Dataset publication: ${escapeHtml(summary.publishedAt)}.` : 'Dataset publication unavailable.';
+    const retrieval = summary ? ` Response retrieved: ${escapeHtml(summary.retrievedAt)}.` : '';
+    return `<section class="gi-ukpn-outages" aria-labelledby="gi-ukpn-heading" style="margin-top:16px;border-top:1px solid var(--border-color);padding-top:12px;min-width:0;overflow-wrap:anywhere">
+      <h4 id="gi-ukpn-heading" style="margin:0 0 8px;font-size:13px">UK Power Networks regional reports — not selected-place coverage</h4>
+      <p style="font-size:11px">Eastern, London and South Eastern networks only. Coverage is partial; small faults may be omitted and locations aggregated. Missing reports do not establish power availability, safe access or no outage.</p>
+      ${body}
+      <p style="font-size:11px">Unplanned incidents only; restored, planned, multiple and unknown types are excluded. Invalid reports are omitted. Reported zero is not an all-clear. An incident absent from a later list is not confirmed restored.</p>
+      <div class="fires-footer" style="margin-top:8px;font-size:11px;overflow-wrap:anywhere">
+        <a data-gi-focus="ukpn-source" href="https://ukpowernetworks.opendatasoft.com/explore/dataset/ukpn-live-faults/" target="_blank" rel="noopener noreferrer">UK Power Networks / Live Faults</a>
+        · <a data-gi-focus="ukpn-licence" href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>
+        <div>${publication}${retrieval} Publication is not incident onset or recent operator confirmation. Refresh every 5 minutes; publications expire after 15 minutes.</div>
+      </div>
+    </section>`;
+  }
+
+  private renderOdinOutages(): string {
     if (!this.outages) return emptyState('Outage data not yet loaded.');
     const {
       coverage, completeness, placeName, countyFips, county, state,
@@ -290,8 +327,22 @@ export class GridIntelligencePanel extends Panel {
       case 'internet': { body = this.renderInternetTab(); break; }
       case 'radiation': { body = this.renderRadiationTab(); break; }
     }
-    this.setContent(`${this.renderTabStrip()}${body}`);
-    this.wireTabHandlers();
+    this.setContent(`${this.renderTabStrip()}${body}`, () => this.wireTabHandlers());
+  }
+
+  protected override captureContentFocus(): (() => void) | undefined {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement) || !this.content.contains(active)) return;
+    const tab = active.dataset.tab;
+    const link = active.dataset.giFocus;
+    const selector = tab && Object.prototype.hasOwnProperty.call(TAB_LABELS, tab)
+      ? `.gi-tab[data-tab="${tab}"]`
+      : (link === 'ukpn-source' || link === 'ukpn-licence' ? `[data-gi-focus="${link}"]` : null);
+    if (!selector) return;
+    return () => {
+      if (document.activeElement !== document.body) return;
+      this.content.querySelector<HTMLElement>(selector)?.focus({ preventScroll: true });
+    };
   }
 
   private wireTabHandlers(): void {
@@ -311,6 +362,35 @@ export class GridIntelligencePanel extends Panel {
 }
 
 // ─── Renderers ────────────────────────────────────────────────────────
+
+function renderUkpnIncident(incident: UkpnOutageSummary['incidents'][number]): string {
+  const zone = incident.operatingZone ? ` · ${escapeHtml(incident.operatingZone)}` : '';
+  return `<li style="margin-bottom:8px;overflow-wrap:anywhere">
+    <strong>Incident ${escapeHtml(incident.id)}</strong>${zone}
+    <div>Reported customers affected: ${incident.customersAffected.toLocaleString()}</div>
+  </li>`;
+}
+
+function ukpnUnavailableMessage(reason: UkpnOutageSummary['reasonCode']): string {
+  switch (reason) {
+    case 'publication_stale': { return 'The dataset publication is at least 15 minutes old; current incident status is unknown.';
+    }
+    case 'publication_future': { return 'The dataset publication is future-dated; current incident status is unknown.';
+    }
+    case 'incomplete_snapshot': { return 'The API snapshot is incomplete or exceeds the 100-record limit.';
+    }
+    case 'version_changed': { return 'The dataset changed during retrieval; no current list was accepted.';
+    }
+    case 'malformed_response': { return 'The response failed validation; no current list was accepted.';
+    }
+    case 'rate_limited': { return 'The provider limited requests. The next scheduled refresh will retry.';
+    }
+    case 'timeout': { return 'The request timed out. The next scheduled refresh will retry.';
+    }
+    default: { return 'The provider is unavailable. The next scheduled refresh will retry.';
+    }
+  }
+}
 
 function renderRegionRow(r: RegionBalance, maxValue: number): string {
   const dPct = r.demandMwh === null ? 0 : Math.round((r.demandMwh / maxValue) * 100);

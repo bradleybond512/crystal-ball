@@ -124,6 +124,9 @@ export const FEED_CATALOG: FeedDefinition[] = [
   { id: 'usgs-surface-water', name: 'USGS Surface Water', category: 'natural',
     endpoint: 'https://api.waterdata.usgs.gov/ogcapi/v0/collections/latest-continuous/items',
     pollIntervalMs: 30 * MIN, sidecarKey: 'usgs-surface-water' },
+  { id: 'ukpn-live-faults', name: 'UK Power Networks Regional Reports', category: 'energy',
+    endpoint: 'https://ukpowernetworks.opendatasoft.com/api/explore/v2.1/catalog/datasets/ukpn-live-faults/records?limit=100',
+    pollIntervalMs: 5 * MIN, sidecarKey: 'ukpn-live-faults' },
 ];
 
 /** Spec-mandated minimum count — the panel wires up at least this many feeds. */

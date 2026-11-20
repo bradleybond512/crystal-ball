@@ -4,10 +4,12 @@
  * Exact-county outage context arrives through the validated Disaster
  * Lifelines snapshot event; it is never replaced with a partial national
  * query or interpreted as an all-clear when ODIN has no accepted report.
+ * UKPN regional reports poll independently and never enter overlays or totals.
  *
  * Per the spec polling cadence:
  *   - grid:      15 min
  *   - outages:    re-evaluate expiry every 5 min (no network poll)
+ *   - UKPN:       5 min, with a publication-bound expiry timer
  *   - bgp:       10 min
  *   - radiation: 30 min
  *
@@ -18,6 +20,7 @@
  */
 
 import { getApiBaseUrl } from '@/services/runtime';
+import { ageUkpnOutages, parseUkpnOutages, type UkpnOutageSummary } from './ukpn-outages';
 import {
   buildGridSnapshot,
   buildOutageSummary,
@@ -51,6 +54,7 @@ import {
 
 const POLL_GRID_MS = 15 * 60 * 1000;
 const POLL_OUTAGES_MS = 5 * 60 * 1000;
+const POLL_UKPN_MS = 5 * 60 * 1000;
 const POLL_BGP_MS = 10 * 60 * 1000;
 const POLL_RADIATION_MS = 30 * 60 * 1000;
 
@@ -183,10 +187,12 @@ export function startGridIntelligenceLoader(
   let outages: OutageSummary = latestOutageSummary;
   let bgp: BgpSummary | null = null;
   let radiation: RadSummary | null = null;
+  let ukpn: UkpnOutageSummary | null = null;
+  let ukpnExpiryTimer: ReturnType<typeof setTimeout> | undefined;
   const subscribers = new Set<OverlaySubscriber>();
   let lastState: InfrastructureOverlayState = EMPTY_OVERLAY;
   let stopped = false;
-  const generations = { grid: 0, bgp: 0, radiation: 0 };
+  const generations = { grid: 0, bgp: 0, radiation: 0, ukpn: 0 };
   const controllers: Partial<Record<keyof typeof generations, AbortController>> = {};
 
   const beginSourceRefresh = (source: keyof typeof generations): { generation: number; controller: AbortController } => {
@@ -294,11 +300,30 @@ export function startGridIntelligenceLoader(
     panel.update({ radiation });
     recomputeAndPushOverlay();
   };
+  const refreshUkpn = async (): Promise<void> => {
+    if (stopped) return;
+    const { generation, controller } = beginSourceRefresh('ukpn');
+    const data = await fetchJson('/api/ukpn-outages', controller.signal, true);
+    if (!isCurrentSourceRefresh('ukpn', generation, controller)) return;
+    ukpn = parseUkpnOutages(data, Date.now());
+    clearTimeout(ukpnExpiryTimer);
+    ukpnExpiryTimer = undefined;
+    panel.update({ ukpn });
+    if ((ukpn.state === 'reported' || ukpn.state === 'empty') && ukpn.expiresAt !== null) {
+      const snapshot = ukpn;
+      ukpnExpiryTimer = setTimeout(() => {
+        if (stopped || ukpn !== snapshot) return;
+        ukpnExpiryTimer = undefined;
+        ukpn = ageUkpnOutages(snapshot, Date.now());
+        panel.update({ ukpn });
+      }, Math.max(0, Date.parse(ukpn.expiresAt) - Date.now()));
+    }
+  };
 
   const refreshAll = async (): Promise<void> => {
     if (stopped) return;
     refreshOutages();
-    await Promise.allSettled([refreshGrid(), refreshBgp(), refreshRadiation()]);
+    await Promise.allSettled([refreshGrid(), refreshBgp(), refreshRadiation(), refreshUkpn()]);
   };
   if (typeof document !== 'undefined') {
     document.addEventListener(ACTIVE_LOCAL_LOGISTICS_SNAPSHOT_EVENT, onLifelineSnapshot);
@@ -312,6 +337,7 @@ export function startGridIntelligenceLoader(
     setInterval(refreshOutages, POLL_OUTAGES_MS),
     setInterval(() => { refreshBgp().catch(reportRefreshFailure); }, POLL_BGP_MS),
     setInterval(() => { refreshRadiation().catch(reportRefreshFailure); }, POLL_RADIATION_MS),
+    setInterval(() => { refreshUkpn().catch(reportRefreshFailure); }, POLL_UKPN_MS),
   ];
 
   return {
@@ -324,6 +350,7 @@ export function startGridIntelligenceLoader(
         delete controllers[source];
       }
       for (const id of intervals) clearInterval(id);
+      clearTimeout(ukpnExpiryTimer);
       if (typeof document !== 'undefined') {
         document.removeEventListener(ACTIVE_LOCAL_LOGISTICS_SNAPSHOT_EVENT, onLifelineSnapshot);
         document.removeEventListener(LOCAL_LOGISTICS_ACTIVE_PLACE_EVENT, onActivePlaceChanged);

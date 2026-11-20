@@ -197,7 +197,7 @@ test('stopping a loader aborts pending sources and prevents late panel or banner
   const panel = { update: (patch: Record<string, unknown>) => { updates.push(patch); } };
   const handle = startGridIntelligenceLoader(panel as never, { getActivePlaceId: () => null });
   t.after(() => handle.stop());
-  assert.equal(pending.length, 3);
+  assert.equal(pending.length, 4);
   const updatesAtStop = updates.length;
 
   handle.stop();
@@ -213,15 +213,15 @@ test('a superseded refresh cannot overwrite newer grid, BGP, or radiation state'
   const handle = startGridIntelligenceLoader(panel as never, { getActivePlaceId: () => null });
   t.after(() => handle.stop());
 
-  for (const request of pending.splice(0, 3)) request.resolve(responseFor(request.path, 50));
+  for (const request of pending.splice(0, 4)) request.resolve(responseFor(request.path, 50));
   await flushAsync();
 
   const older = handle.refresh();
-  const olderRequests = pending.splice(0, 3);
+  const olderRequests = pending.splice(0, 4);
   const newer = handle.refresh();
-  const newerRequests = pending.splice(0, 3);
-  assert.equal(olderRequests.length, 3);
-  assert.equal(newerRequests.length, 3);
+  const newerRequests = pending.splice(0, 4);
+  assert.equal(olderRequests.length, 4);
+  assert.equal(newerRequests.length, 4);
   assert.equal(olderRequests.every((request) => request.signal?.aborted), true);
 
   for (const request of newerRequests) request.resolve(responseFor(request.path, 222));

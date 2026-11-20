@@ -67,6 +67,18 @@ test('FEED_CATALOG active grid path contains ODIN and no PowerOutage.us entry', 
   assert.equal(FEED_CATALOG.some((feed) => /poweroutage\.us/i.test(feed.name)), false);
 });
 
+test('UKPN feed health has an independent identity and bounded polling', () => {
+  const ukpn = FEED_CATALOG.find((feed) => feed.id === 'ukpn-live-faults');
+  assert.ok(ukpn, 'UKPN regional reports must be independently visible');
+  assert.equal(ukpn.sidecarKey, 'ukpn-live-faults');
+  assert.equal(ukpn.sourceId, undefined, 'an unrelated freshness source must not lend UKPN health');
+  assert.equal(ukpn.pollIntervalMs, 5 * MIN);
+  const rows = buildFeedRows([ukpn], {
+    'ornl-odin': { id: 'ornl-odin', lastSuccessAt: NOW, lastAttemptAt: NOW, lastError: null },
+  }, NOW);
+  assert.equal(rows[0]!.status, 'never', 'healthy US county evidence cannot mark UKPN healthy');
+});
+
 test('FEED_CATALOG poll intervals are positive and ≤ 24h', () => {
   for (const def of FEED_CATALOG) {
     assert.ok(def.pollIntervalMs > 0, `${def.id} interval ${def.pollIntervalMs}`);

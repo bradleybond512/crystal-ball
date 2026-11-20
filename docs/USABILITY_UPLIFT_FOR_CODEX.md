@@ -462,6 +462,9 @@ separate PRs so one provider cannot broaden the other's truth boundary.
 
 ### UX-015 — New outage provider integration *(High Assurance provider task)*
 
+Status: IN PROGRESS — HIGH ASSURANCE
+Approval: November 19, Bradley approved the UKPN design, documentation draft claim and local implementation.
+Evidence: [Approved bounded UKPN design](plans/2026-11-19-ux015-ukpn-design.md). Documentation claim being prepared before implementation; no provider acceptance claimed. Installed and sustained live-feed acceptance remain open; merging and delivery remain paused.
 Priority: C
 
 Add at most one new outage origin per PR after a live response-body probe,
@@ -1518,8 +1521,11 @@ State these as open questions rather than treating them as settled:
 
 ### UX-076 — Preserve failed iMessage setup drafts
 
-Status: IN REVIEW
-Evidence: [Draft #1900](https://github.com/bradleybond512/crystal-ball/pull/1900); [bounded UI design](plans/2026-11-10-ux076-imessage-draft-recovery.md).
+Status: MONITOR
+Evidence: [Merged #1900](https://github.com/bradleybond512/crystal-ball/pull/1900), November 14, 2026, at `92ff943dfc96c31c1c9f399baf9e1429e75bbd75`; [bounded UI design](plans/2026-11-10-ux076-imessage-draft-recovery.md).
+Exit condition: Complete the separately scoped packaged acceptance for failed-save draft recovery, correction, cancellation and confirmed saved authority when delivery holds permit; source merge alone is not packaged acceptance.
+Review after: 2026-11-22
+Reviewed November 15: GitHub confirms the source PR is merged. This reconciles stale claim metadata only; no application launch, real message, installed-settings write, release or installation is claimed. The review date is a manual checkpoint, not an automation.
 
 Preserve a submitted recipient after invalid-format, unavailable, persistence, or busy-retry failures so it can be corrected and explicitly retried. Native validation, exact-recipient confirmation, storage authority, cancellation and immediate disable remain unchanged. Test must use only confirmed saved state. Do not persist drafts or send messages during verification.
 
@@ -1581,7 +1587,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-012 | Outage coverage + telemetry | DONE | #1683 |
 | UX-013 | Hotel operational evidence | DONE | #1699 |
 | UX-014 | Fuel operational evidence | NOT STARTED — HIGH ASSURANCE | — |
-| UX-015 | New outage provider integration | NOT STARTED — HIGH ASSURANCE | — |
+| UX-015 | New outage provider integration | IN PROGRESS — HIGH ASSURANCE | [Approved UKPN design](plans/2026-11-19-ux015-ukpn-design.md); documentation claim being prepared. Regional reports only; implementation/installed acceptance unverified. All merge/delivery holds remain. |
 | UX-016 | Timeline controller + cursor wiring | NOT STARTED — HIGH ASSURANCE | — |
 | UX-017 | Complete Mac main-sync toolchain repair | DONE | #1693 |
 | UX-018 | Timely authoritative forecast resolution | MONITOR — HIGH ASSURANCE | [Local evidence](validation/UX-018-RESOLVER-RUNS.md) · [Draft #1853](https://github.com/bradleybond512/crystal-ball/pull/1853) |
@@ -1635,7 +1641,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-073 | Scope cohesive module extractions | NOT STARTED | |
 | UX-074 | Release SBOMs | NOT STARTED — HIGH ASSURANCE | |
 | UX-075 | Remove unsupported lightning tooltip measurement | DONE | #1887; late claim after implementation `95d5f64167fb`. At the pre-merge source checkpoint, final exact-tip validation, independent review and hosted gates remain required before merge. No browser/native acceptance claimed. |
-| UX-076 | Preserve failed iMessage setup drafts | IN REVIEW | [Draft #1900](https://github.com/bradleybond512/crystal-ball/pull/1900); [bounded design](plans/2026-11-10-ux076-imessage-draft-recovery.md). UI-only retry recovery; native consent and sending authority unchanged. |
+| UX-076 | Preserve failed iMessage setup drafts | MONITOR | [Merged #1900](https://github.com/bradleybond512/crystal-ball/pull/1900); [bounded design](plans/2026-11-10-ux076-imessage-draft-recovery.md). Source merged November 14; separately scoped packaged acceptance remains open. |
 
 ## Repair 12 — Diagnostics entry and shortcut ownership (2026-10-18)
 

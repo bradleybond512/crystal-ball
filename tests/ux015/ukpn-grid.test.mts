@@ -137,7 +137,7 @@ test('actual panel keeps UK reports separate, escapes untrusted text and preserv
   const section = f.root.querySelector('.gi-ukpn-outages'); assert.ok(section);
   assert.match(section.textContent ?? '', /UK Power Networks.*regional reports/i);
   assert.match(section.textContent ?? '', /not selected-place coverage/i); assert.match(section.textContent ?? '', /reported.*0|0.*reported/i);
-  assert.equal(section.querySelector('img,script'), null); assert.match(section.textContent ?? '', /<img src=x/);
+  assert.equal(section.querySelector('img,script') === null, true, 'provider text must not create executable DOM'); assert.match(section.textContent ?? '', /<img src=x/);
   assert.match(f.root.textContent ?? '', /ODIN/); assert.match(section.textContent ?? '', /partial/i);
   assert.equal((f.panel as any).computeAlertCount(), 0);
   assert.match(section.querySelector('[data-gi-focus="ukpn-source"]')?.getAttribute('href') ?? '', /^https:\/\/ukpowernetworks\.opendatasoft\.com\//);

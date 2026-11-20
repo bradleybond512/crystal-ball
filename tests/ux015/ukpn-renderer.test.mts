@@ -73,7 +73,7 @@ test('publication expiry is authoritative at the boundary and retrieval never re
 
 test('renderer rejects ambiguous, future and inconsistent timestamps', () => {
   for (const patch of [
-    { publishedAt: '2026-11-19T11:59:00' }, { publishedAt: '2026-02-30T00:00:00.000Z' },
+    { publishedAt: '2026-11-19T11:59:00' }, { publishedAt: '2026-02-30T00:00:00.000Z', expiresAt: iso(Date.parse('2026-02-30T00:00:00.000Z') + 900_000) },
     { retrievedAt: 'invalid' }, { retrievedAt: iso(NOW + 1) },
     { expiresAt: iso(NOW + 840_001) }, { publishedAt: null },
   ]) unavailable({ ...envelope(), ...patch });

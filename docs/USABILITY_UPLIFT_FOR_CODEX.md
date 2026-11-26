@@ -1585,7 +1585,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-013 | Hotel operational evidence | DONE | #1699 |
 | UX-014 | Fuel operational evidence | NOT STARTED — HIGH ASSURANCE | — |
 | UX-015 | New outage provider integration | NOT STARTED — HIGH ASSURANCE | — |
-| UX-016 | Timeline controller + cursor wiring | IN REVIEW | [Draft #1922](https://github.com/bradleybond512/crystal-ball/pull/1922); [bounded design](plans/2026-11-25-ux016-timeline-design.md). Control consolidation in progress; full opacity, arrival and historical acceptance remain open. |
+| UX-016 | Timeline controller + cursor wiring | IN REVIEW | [Draft #1922](https://github.com/bradleybond512/crystal-ball/pull/1922); [bounded design](plans/2026-11-25-ux016-timeline-design.md). [Validation](validation/UX-016-TIMELINE-CONTROL.md): bounded control consolidation validated locally; full opacity, arrival and historical acceptance remain open. |
 | UX-017 | Complete Mac main-sync toolchain repair | DONE | #1693 |
 | UX-018 | Timely authoritative forecast resolution | MONITOR — HIGH ASSURANCE | [Local evidence](validation/UX-018-RESOLVER-RUNS.md) · [Draft #1853](https://github.com/bradleybond512/crystal-ball/pull/1853) |
 | UX-019 | Safe forecast algorithm recalibration | NOT STARTED — HIGH ASSURANCE | — |

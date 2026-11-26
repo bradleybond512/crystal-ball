@@ -221,6 +221,47 @@ function dynamicProperty(node, source) {
 function embeddedLiteral(node, fragments) {
   return ts.isStringLiteralLike(node) && !fragments.has(node) && !(ts.isPropertyAssignment(node.parent) && node.parent.name === node) && !(ts.isElementAccessExpression(node.parent) && node.parent.argumentExpression === node) && !(ts.isCallExpression(node.parent) && accessName(node.parent.expression) === 'setProperty');
 }
+function embeddedTokenEnd(input, index) {
+  if (['"', "'"].includes(input[index])) return quotedEnd(input, index);
+  if (!input.startsWith('/*', index)) return null;
+  const end = input.indexOf('*/', index + 2);
+  return end === -1 ? -1 : end + 2;
+}
+function isMarkup(input) {
+  let index = 0;
+  while (index < input.length) {
+    const end = embeddedTokenEnd(input, index);
+    if (end !== null) {
+      if (end === -1) return false;
+      index = end;
+      continue;
+    }
+    const char = input[index];
+    if (['{', ';'].includes(char)) return false;
+    if (char === '<' && /[a-z!]/i.test(input[index + 1] ?? '')) return true;
+    index++;
+  }
+  return false;
+}
+function hasStyleMarkup(input) {
+  const stripped = input.replace(/<!--[\s\S]*?-->/g, '');
+  if (/<style\b/i.test(stripped)) return true;
+  for (const match of stripped.matchAll(/<[a-z](?:[^>"']|"[^"]*"|'[^']*')*>/gi)) {
+    if (/\sstyle\s*=/i.test(match[0])) return true;
+  }
+  return false;
+}
+function jsUpdate(node, emit, source, dependencies) {
+  if (!ts.isPrefixUnaryExpression(node) && !ts.isPostfixUnaryExpression(node)) return;
+  if (node.operator !== ts.SyntaxKind.PlusPlusToken && node.operator !== ts.SyntaxKind.MinusMinusToken) return;
+  const name = accessName(node.operand);
+  if (stackingName(name)) emit(node, 'unsupported', name, jsText(node, source), dependencies(node.operand));
+}
+function runtimeHeritage(node) {
+  if (!ts.isExpressionWithTypeArguments(node) || !ts.isHeritageClause(node.parent)) return false;
+  const declaration = node.parent.parent;
+  return node.parent.token === ts.SyntaxKind.ExtendsKeyword && (ts.isClassDeclaration(declaration) || ts.isClassExpression(declaration));
+}
 function decodeHtmlStyle(value) {
   const names = new Map([['quot', '"'], ['apos', "'"], ['amp', '&'], ['lt', '<'], ['gt', '>']]);
   let unsupported = false;
@@ -270,8 +311,9 @@ export function extractDeclarations(text, { path: sourcePath } = {}) {
     }
   };
   const embedded = (input, base, position, bindings = [], replacements = new Map()) => {
-    if (/<(?:[a-z]|!)/i.test(input)) markup(input, base, position, bindings, replacements);
-    else if (containsCss(input)) css(input, `${base} > css`, position, bindings, replacements);
+    if (isMarkup(input)) { markup(input, base, position, bindings, replacements); return; }
+    if (containsCss(input)) css(input, `${base} > css`, position, bindings, replacements);
+    if (hasStyleMarkup(input)) add('unsupported', `${base} > ambiguous-markup`, JSON.stringify(restoreInterpolations(input, replacements)), position, interpolationBindings(input, [], replacements));
   };
   if (sourcePath.endsWith('.css')) css(text, 'css', 0);
   else if (sourcePath.endsWith('.html')) markup(text, 'html', 0, [], new Map());
@@ -335,8 +377,10 @@ export function extractDeclarations(text, { path: sourcePath } = {}) {
       embedded(input, jsAnchor(node, source), node.getStart(source), [], replacements);
     };
     const visit = (node) => {
+      if (runtimeHeritage(node)) { visit(node.expression); return; }
       if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node)) return;
       jsSink(node, emit, source, dependencies);
+      jsUpdate(node, emit, source, dependencies);
       jsPropertyCall(node, emit, source, dependencies);
       if (dynamicProperty(node, source)) emit(node, 'unsupported', 'dynamic-property', jsText(node, source), dependencies(node));
       if (isPlus(node) && !isPlus(node.parent) && /z-index|--z-|&#/.test(node.getText(source))) concatenated(node);

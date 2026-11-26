@@ -530,3 +530,72 @@ test('named HTML entities in interpolated templates cannot escape inventory', t 
   assert.ok(scan.declarations.length > 0 || scan.errors.length > 0, 'named entity template requires explicit extraction or unsupported handling');
   rejects(reconcileInventory(scan, { version: 1, entries: [] }, { root }), 'interpolated entity-encoded stacking declaration');
 });
+
+for (const [label, source] of [
+  ['literal', 'const css = \'.dialog::before { content: "<span>"; z-index:9; }\';'],
+  ['template', 'const css = `.dialog::before { content: "<span>"; color: ${color}; z-index:9; }`;'],
+]) {
+  test(`CSS ${label} containing quoted markup retains its stacking declaration`, t => {
+    const root = fixture(t, { 'src/a.ts': source });
+    const scan = scanRepository(root);
+    assert.deepEqual(scan.errors, []);
+    assert.equal(scan.declarations.length, 1);
+    assert.equal(scan.declarations[0].kind, 'css-z-index');
+    assert.equal(scan.declarations[0].expression, '9');
+    rejects(reconcileInventory(scan, { version: 1, entries: [] }, { root }), 'CSS quoted markup cannot hide stacking');
+  });
+}
+
+for (const [label, source, changed] of [
+  ['prefix increment', '++el.style.zIndex;', '--el.style.zIndex;'],
+  ['postfix increment', 'el.style["z-index"]++;', 'el.style["z-index"]--;'],
+  ['prefix decrement', '--el.style["z-index"];', '++el.style["z-index"];'],
+  ['postfix decrement', 'el.style.zIndex--;', 'el.style.zIndex++;'],
+]) {
+  test(`stacking ${label} requires an exact unsupported allowance`, t => {
+    const root = fixture(t, { 'src/a.ts': source });
+    const scan = scanRepository(root);
+    assert.deepEqual(scan.errors, []);
+    assert.equal(scan.declarations.length, 1);
+    assert.equal(scan.declarations[0].kind, 'unsupported');
+    assert.match(scan.declarations[0].expression, /\+\+|--/);
+    rejects(reconcileInventory(scan, { version: 1, entries: [] }, { root }), 'stacking update requires review');
+    const inventory = inventoryFor(scan);
+    assert.deepEqual(reconcileInventory(scan, inventory, { root }), []);
+    writeFileSync(path.join(root, 'src/a.ts'), changed);
+    rejects(reconcileInventory(scanRepository(root), inventory, { root }), 'changed update operator requires review');
+  });
+}
+
+test('runtime class heritage expressions retain stacking object properties', t => {
+  const root = fixture(t, { 'src/a.ts': 'class A extends Base({ zIndex: 5 }) {}' });
+  const scan = scanRepository(root);
+  assert.deepEqual(scan.errors, []);
+  assert.equal(scan.declarations.length, 1);
+  assert.equal(scan.declarations[0].kind, 'js-z-index');
+  assert.equal(scan.declarations[0].expression, '5');
+  rejects(reconcileInventory(scan, { version: 1, entries: [] }, { root }), 'runtime heritage declaration requires review');
+});
+
+test('type-only class and interface heritage do not create stacking declarations', () => {
+  const source = 'interface I extends Base<{ zIndex: 5 }> {} class A implements Base<{ zIndex: 6 }> {} class B extends Base<{ zIndex: 7 }> {}';
+  assert.deepEqual(extract(source), []);
+});
+
+for (const [label, source] of [
+  ['literal', `const html = "It's <div style='z-index:9'></div>";`],
+  ['template', "const html = `It's <div style='z-index:9'>${body}</div>`;"],
+]) {
+  test(`HTML ${label} preceded by an apostrophe cannot hide stacking`, t => {
+    const root = fixture(t, { 'src/a.ts': source });
+    const scan = scanRepository(root);
+    assert.ok(scan.declarations.length > 0 || scan.errors.length > 0, 'apostrophe-prefixed HTML requires extraction or explicit unsupported handling');
+    rejects(reconcileInventory(scan, { version: 1, entries: [] }, { root }), 'apostrophe-prefixed HTML stacking requires review');
+    if (scan.errors.length === 0) {
+      const inventory = inventoryFor(scan);
+      assert.deepEqual(reconcileInventory(scan, inventory, { root }), []);
+      writeFileSync(path.join(root, 'src/a.ts'), source.replace('z-index:9', 'z-index:10'));
+      rejects(reconcileInventory(scanRepository(root), inventory, { root }), 'changed HTML fallback fingerprint requires review');
+    }
+  });
+}

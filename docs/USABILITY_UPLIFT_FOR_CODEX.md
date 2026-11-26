@@ -1602,7 +1602,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-034 | Assign ownership of top-of-window surfaces | MONITOR | #1730, #1861 |
 | UX-035 | Gate background panel work by actual need | MONITOR — HIGH ASSURANCE | #1859 merged; bounded two-panel slice validated ([QA](validation/UX-035-HIDDEN-PRESENTATION.md)). Native background and broader acceptance remain open; installation/release/deployment paused. |
 | UX-036 | Spread refresh work and honor battery policy | NOT STARTED — HIGH ASSURANCE | — |
-| UX-037 | Prevent new unowned stacking levels | IN REVIEW | [Draft #1923](https://github.com/bradleybond512/crystal-ball/pull/1923); [approved design](plans/2026-11-25-ux037-stacking-design.md). Inventory and ratchet implementation in progress. |
+| UX-037 | Prevent new unowned stacking levels | IN REVIEW | [Draft #1923](https://github.com/bradleybond512/crystal-ball/pull/1923); [approved design](plans/2026-11-25-ux037-stacking-design.md). [Validation](validation/UX-037-STACKING-INVENTORY.md): 214 reviewed declarations, 89 tests and 15 mutation proofs; hosted acceptance pending. |
 | UX-038 | Constrain video-channel link construction | DONE — HIGH ASSURANCE | PR #1840 — two fixed-origin error links; 12 behavioral/helper tests, 46 HLS regressions, five clean-tree mutations and full validation ([QA](validation/UX-038-LINK-SAFETY.md)). |
 | UX-040 | Expose unavailable and stale feed outcomes | MONITOR — HIGH ASSURANCE | #1841 — merged bounded news/status slice; broader acceptance remains open |
 | UX-042 | Construct panels when needed without losing coverage | MONITOR | #1714 |

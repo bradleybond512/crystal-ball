@@ -1,7 +1,8 @@
 # UX-037 — reviewed stacking declaration inventory
 
 High Assurance tooling/CI design approved by Bradley on November 25, including
-the documentation draft claim and local implementation. See [brief](2026-11-25-ux037-stacking-brief.md). No application
+the documentation draft claim and local implementation. [Draft #1923](https://github.com/bradleybond512/crystal-ball/pull/1923)
+was published before implementation. See [brief](2026-11-25-ux037-stacking-brief.md). No application
 source, rendering, focus, modal ordering or critical-banner behavior changes.
 
 ## Contract and limits
@@ -11,7 +12,7 @@ duplicates and stale allowances. A per-file count cannot detect replacing one
 declaration with another, so use path, structural anchor, exact expression and
 occurrence count. Line numbers aid navigation but are not identity.
 
-Source discovery found eleven CSS overlay tokens, literal levels, inline style
+Source inventory confirmed ten CSS overlay tokens, literal levels, inline style
 objects/assignments, templates and constant references. Home has an isolated
 stacking context; body-level toast/palette levels do not establish global order
 for Home descendants. Lens metadata also uses `zIndex` without setting DOM style.

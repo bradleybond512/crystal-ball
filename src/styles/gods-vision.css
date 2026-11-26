@@ -879,8 +879,12 @@ body.gods-vision-lock {
   align-items: center;
   gap: 10px;
   padding: 8px 14px;
-  min-width: 420px;
-  max-width: 68vw;
+  box-sizing: border-box;
+  width: min(760px, calc(100% - 24px));
+  min-width: 0;
+  max-height: calc(100% - 48px);
+  overflow: auto;
+  flex-wrap: wrap;
   background: rgba(0, 0, 0, 0.55);
   backdrop-filter: var(--ge-blur, blur(12px));
   border: 1px solid var(--ge-hud-border, rgba(255, 255, 255, 0.12));
@@ -889,11 +893,13 @@ body.gods-vision-lock {
   color: var(--ge-hud-fg, rgba(255, 255, 255, 0.9));
   pointer-events: auto;
 }
-.time-scrubber-hud__play {
+.time-scrubber-hud__play,
+.time-scrubber-hud__latest,
+.time-scrubber-hud__speed {
   flex: 0 0 auto;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
+  min-height: 30px;
+  padding: 4px 8px;
+  border-radius: 6px;
   border: 1px solid var(--ge-hud-border-strong, rgba(255, 255, 255, 0.2));
   background: var(--ge-hud-btn-bg, rgba(255, 255, 255, 0.06));
   color: inherit;
@@ -909,14 +915,32 @@ body.gods-vision-lock {
   opacity: 0.85;
   min-width: 62px;
 }
-.time-scrubber-hud__zone[data-zone="replay"] { color: var(--ge-amber, #fbbf24); }
-.time-scrubber-hud__zone[data-zone="projected"] { color: var(--ge-cyan, #22d3ee); }
-.time-scrubber-hud__track { flex: 1 1 auto; accent-color: var(--ge-blue, #60a5fa); cursor: pointer; }
-.time-scrubber-hud__cursor {
-  flex: 0 0 auto;
+.time-scrubber-hud__zone[data-zone="selected"] { color: var(--ge-amber, #fbbf24); }
+.time-scrubber-hud__track { flex: 1 1 160px; min-width: 0; accent-color: var(--ge-blue, #60a5fa); cursor: pointer; }
+.time-scrubber-hud__cursor,
+.time-scrubber-hud__anchor {
+  flex: 1 1 260px;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   min-width: 44px;
   text-align: right;
   opacity: 0.9;
+}
+
+.time-scrubber-hud__explanation {
+  flex: 1 0 100%;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.time-scrubber-hud :is(button, select, input):focus-visible {
+  outline: 2px solid var(--ge-blue, #60a5fa);
+  outline-offset: 3px;
+}
+@media (max-width: 480px) {
+  .time-scrubber-hud { bottom: 12px; gap: 8px; padding: 8px; }
+  .time-scrubber-hud__track { flex-basis: 100%; order: 1; }
+  .time-scrubber-hud__cursor,
+  .time-scrubber-hud__anchor,
+  .time-scrubber-hud__explanation,
+  .time-scrubber-hud .globe-timeline-sync-badge { order: 2; text-align: left; }
 }

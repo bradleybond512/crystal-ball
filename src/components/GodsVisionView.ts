@@ -244,15 +244,14 @@ export class GodsVisionView {
  });
  }
 
- // Time Machine scrubber (24h replay)
+ // Current-record time filtering (fixed 24-hour range)
  if (viewer && this.dataManager) {
- this.timeMachine = new GlobeTimeMachine(viewer, this.dataManager, this.container);
+ this.timeMachine = new GlobeTimeMachine(viewer, this.dataManager);
  this.timeMachine.mount();
+ this.timeScrubber = new TimeScrubberHud(this.container, this.timeMachine);
 
- // Bridge cursor → timeline-cursor visibility helper. Renders a
- // small "N events @ cursor" badge above the scrubber + dispatches
- // `wm:globe-timeline-cursor` events for layer managers to react.
- this.timelineSync = new GlobeTimelineSync(this.timeMachine, this.container);
+ // Retained timeline counts share the control and its cursor.
+ this.timelineSync = new GlobeTimelineSync(this.timeMachine, this.timeScrubber.element);
  this.timelineSync.mount();
  this.cleanupHandlers.push(() => { this.timelineSync?.destroy(); this.timelineSync = null; });
  }
@@ -275,8 +274,6 @@ export class GodsVisionView {
 
  // HUD overlay
  this.hud = new GlobeHUD(this.container);
- // World Stage time scrubber (E4): replay ⟵ now ⟶ projected, render-gated.
- this.timeScrubber = new TimeScrubberHud(this.container);
  this.hud.setOnExit(() => this.exit());
  this.hud.setOnLayerToggle((key, enabled) => {
  if (key === 'autoFollow') {
@@ -705,8 +702,12 @@ export class GodsVisionView {
  return;
  }
 
- // Space toggles Time Machine play/pause
+ // Space toggles playback without taking native control or editing keys.
  if (ke.key === ' ' || ke.code === 'Space') {
+ const target = ke.target instanceof Element ? ke.target : null;
+ if (ke.defaultPrevented || ke.repeat || ke.metaKey || ke.ctrlKey || ke.altKey
+ || target?.closest('input, textarea, select, button, a[href], summary, [contenteditable]:not([contenteditable="false"]), [role="button"], [role="slider"], [role="textbox"]')) return;
+ if (!this.timeMachine) return;
  ke.preventDefault();
  this.timeMachine?.togglePlay();
  return;

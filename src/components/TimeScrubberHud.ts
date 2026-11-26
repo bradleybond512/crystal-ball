@@ -1,71 +1,37 @@
-// src/components/TimeScrubberHud.ts
-/**
- * World Stage time-scrubber HUD (Grand-Strategy Survival OS, E4c mount). A thin,
- * self-contained overlay: a track slider (replay ⟵ now ⟶ projected), a play/pause
- * button, a zone badge and a cursor label. All state + formatting lives in the
- * pure, tested `time-scrubber` / `scrubber-view` modules; this file only builds
- * DOM and drives a RENDER-GATED playback loop.
- *
- * Idle-CPU discipline (the map-render lesson): the rAF loop advances only when
- * `shouldTick` allows (playing AND the document is visible AND past the throttle
- * interval). Paused/hidden burns nothing, and the rAF is always cancelled on
- * `destroy()` so no loop leaks.
- */
-import {
-  createScrubber, advance, togglePlay, seekFraction, shouldTick,
-  type ScrubberState,
-} from '@/services/survival/time-scrubber';
-import {
-  scrubberCursorLabel, scrubberZoneLabel, scrubberThumbFraction, playButtonLabel,
-} from '@/services/survival/scrubber-view';
+import type { GlobeTimeMachine, GlobeTimeMachineState } from '@/components/GlobeTimeMachine';
 
-export interface TimeScrubberHudOptions {
-  /** Anchor "now", ms. Defaults to Date.now(). */
-  nowMs?: number;
-  pastSpanMs?: number;
-  futureSpanMs?: number;
-  /** Playback throttle: min wall-ms between cursor advances. Default 200ms (5fps
-   *  is plenty for a scrubbing timeline and stays light). */
-  minTickMs?: number;
-  /** Called whenever the cursor moves (drag or playback) with the timeline ms. */
-  onCursor?: (cursorMs: number) => void;
-}
-
-const HOUR = 3_600_000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const SPEEDS = [1, 4, 16, 64] as const;
 
 export class TimeScrubberHud {
   private readonly el: HTMLElement;
   private readonly slider: HTMLInputElement;
   private readonly playBtn: HTMLButtonElement;
+  private readonly latestBtn: HTMLButtonElement;
+  private readonly speedSelect: HTMLSelectElement;
   private readonly zoneBadge: HTMLElement;
   private readonly cursorLabel: HTMLElement;
+  private readonly anchorLabel: HTMLElement;
+  private readonly unsubscribe: () => void;
+  private readonly formatTime = new Intl.DateTimeFormat(undefined, {
+    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit',
+    minute: '2-digit', second: '2-digit', hour12: false, timeZoneName: 'short',
+  });
+  private readonly onTogglePlay = (): void => this.controller.togglePlay();
+  private readonly onScrub = (): void => this.controller.setTime(Number(this.slider.value));
+  private readonly onLatest = (): void => this.controller.snapToNow();
+  private readonly onSpeed = (): void => this.controller.setSpeed(Number(this.speedSelect.value));
 
-  private state: ScrubberState;
-  private rafId: number | null = null;
-  private lastTickMs: number | null = null;
-  private lastFrameMs = 0;
-  private readonly minTickMs: number;
-  private readonly onCursor?: (cursorMs: number) => void;
-  private destroyed = false;
-
-  constructor(parent: HTMLElement, opts: TimeScrubberHudOptions = {}) {
-    const now = opts.nowMs ?? Date.now();
-    this.state = createScrubber(now, {
-      pastSpanMs: opts.pastSpanMs ?? 24 * HOUR,
-      futureSpanMs: opts.futureSpanMs ?? 48 * HOUR,
-    });
-    this.minTickMs = opts.minTickMs ?? 200;
-    this.onCursor = opts.onCursor;
-
+  constructor(parent: HTMLElement, private readonly controller: GlobeTimeMachine) {
     this.el = document.createElement('div');
     this.el.className = 'time-scrubber-hud';
     this.el.setAttribute('role', 'group');
-    this.el.setAttribute('aria-label', 'Time scrubber: replay, now, projected');
+    this.el.setAttribute('aria-label', 'Current-record time filter');
 
     this.playBtn = document.createElement('button');
     this.playBtn.type = 'button';
     this.playBtn.className = 'time-scrubber-hud__play';
-    this.playBtn.addEventListener('click', () => this.onTogglePlay());
+    this.playBtn.addEventListener('click', this.onTogglePlay);
 
     this.zoneBadge = document.createElement('span');
     this.zoneBadge.className = 'time-scrubber-hud__zone';
@@ -73,98 +39,66 @@ export class TimeScrubberHud {
     this.slider = document.createElement('input');
     this.slider.type = 'range';
     this.slider.className = 'time-scrubber-hud__track';
-    this.slider.min = '0';
-    this.slider.max = '1000';
-    this.slider.step = '1';
-    this.slider.setAttribute('aria-label', 'Timeline position');
-    this.slider.addEventListener('input', () => this.onScrub());
+    this.slider.step = '1000';
+    this.slider.setAttribute('aria-label', 'Selected time');
+    this.slider.addEventListener('input', this.onScrub);
+
+    this.speedSelect = document.createElement('select');
+    this.speedSelect.className = 'time-scrubber-hud__speed';
+    this.speedSelect.setAttribute('aria-label', 'Playback speed');
+    for (const speed of SPEEDS) {
+      const option = document.createElement('option');
+      option.value = String(speed);
+      option.textContent = `${speed}x`;
+      this.speedSelect.append(option);
+    }
+    this.speedSelect.addEventListener('change', this.onSpeed);
+
+    this.latestBtn = document.createElement('button');
+    this.latestBtn.type = 'button';
+    this.latestBtn.className = 'time-scrubber-hud__latest';
+    this.latestBtn.textContent = 'Latest';
+    this.latestBtn.addEventListener('click', this.onLatest);
 
     this.cursorLabel = document.createElement('span');
     this.cursorLabel.className = 'time-scrubber-hud__cursor';
+    this.anchorLabel = document.createElement('span');
+    this.anchorLabel.className = 'time-scrubber-hud__anchor';
+    const explanation = document.createElement('span');
+    explanation.className = 'time-scrubber-hud__explanation';
+    explanation.textContent = 'Filters timestamps in currently loaded data. Positions are not historical.';
 
-    this.el.append(this.playBtn, this.zoneBadge, this.slider, this.cursorLabel);
+    this.el.append(this.playBtn, this.zoneBadge, this.slider, this.speedSelect,
+      this.latestBtn, this.cursorLabel, this.anchorLabel, explanation);
     parent.append(this.el);
-    this.render();
+    this.render(controller.getState());
+    this.unsubscribe = controller.onStateChange(state => this.render(state));
   }
 
-  /** Root element, in case a host wants to reposition it. */
-  get element(): HTMLElement {
-    return this.el;
+  get element(): HTMLElement { return this.el; }
+  get cursorMs(): number { return this.controller.getCurrentMs(); }
+
+  private render(state: GlobeTimeMachineState): void {
+    this.playBtn.textContent = state.playing ? 'Pause' : 'Play';
+    this.playBtn.setAttribute('aria-pressed', String(state.playing));
+    this.zoneBadge.textContent = state.mode === 'latest' ? 'Current records' : 'Selected time';
+    this.zoneBadge.dataset.zone = state.mode;
+    const cursorTime = this.formatTime.format(state.cursorMs);
+    this.cursorLabel.textContent = `Selected: ${cursorTime}`;
+    this.anchorLabel.textContent = `Range ends: ${this.formatTime.format(state.anchorMs)}`;
+    this.slider.min = String(state.anchorMs - DAY_MS);
+    this.slider.max = String(state.anchorMs);
+    this.slider.value = String(state.cursorMs);
+    this.slider.setAttribute('aria-valuetext', cursorTime);
+    this.speedSelect.value = String(state.speed);
   }
 
-  /** Current cursor position on the timeline (ms since epoch). */
-  get cursorMs(): number {
-    return this.state.cursorMs;
-  }
-
-  private onTogglePlay(): void {
-    this.state = togglePlay(this.state);
-    if (this.state.playing) this.startLoop();
-    else this.stopLoop();
-    this.render();
-  }
-
-  private onScrub(): void {
-    // Dragging pauses playback so the user stays in control.
-    const fraction = Number(this.slider.value) / 1000;
-    this.state = { ...seekFraction(this.state, fraction), playing: false };
-    this.stopLoop();
-    this.render();
-    this.onCursor?.(this.state.cursorMs);
-  }
-
-  private startLoop(): void {
-    if (this.rafId !== null || this.destroyed) return;
-    this.lastFrameMs = 0;
-    this.lastTickMs = null; // fresh (re)start: first tick isn't throttled and advances 0
-    const frame = (tMs: number): void => {
-      if (this.destroyed) return;
-      this.rafId = requestAnimationFrame(frame);
-      const nowMs = Date.now();
-      const visible = typeof document === 'undefined' || document.visibilityState === 'visible';
-      // Paused or hidden: drop the frame baseline so a resume/reveal starts fresh
-      // and never advances by the accumulated hidden gap (no catch-up jump).
-      if (!this.state.playing || !visible) {
-        this.lastFrameMs = 0;
-        return;
-      }
-      // Throttle by minTickMs (via shouldTick) WITHOUT resetting the baseline, so a
-      // throttled frame just defers and the next tick advances by the real elapsed.
-      if (!shouldTick(this.state, { visible, nowMs, lastTickMs: this.lastTickMs, minIntervalMs: this.minTickMs })) return;
-      // First tick after a (re)start records the baseline and advances 0.
-      const wallElapsed = this.lastFrameMs === 0 ? 0 : tMs - this.lastFrameMs;
-      this.lastFrameMs = tMs;
-      this.lastTickMs = nowMs;
-      this.state = advance(this.state, wallElapsed);
-      this.render();
-      this.onCursor?.(this.state.cursorMs);
-      if (!this.state.playing) this.stopLoop(); // advance() pinned to the end
-    };
-    this.rafId = requestAnimationFrame(frame);
-  }
-
-  private stopLoop(): void {
-    if (this.rafId !== null) {
-      cancelAnimationFrame(this.rafId);
-      this.rafId = null;
-    }
-    this.lastFrameMs = 0;
-  }
-
-  private render(): void {
-    this.playBtn.textContent = playButtonLabel(this.state);
-    this.playBtn.setAttribute('aria-pressed', String(this.state.playing));
-    this.zoneBadge.textContent = scrubberZoneLabel(this.state);
-    this.zoneBadge.dataset.zone = scrubberZoneLabel(this.state).toLowerCase();
-    this.cursorLabel.textContent = scrubberCursorLabel(this.state);
-    // Reflect state into the slider without retriggering `input`.
-    this.slider.value = String(Math.round(scrubberThumbFraction(this.state) * 1000));
-  }
-
-  /** Tear down: cancel the loop and remove the element (no leaked rAF). */
   destroy(): void {
-    this.destroyed = true;
-    this.stopLoop();
+    this.unsubscribe();
+    this.playBtn.removeEventListener('click', this.onTogglePlay);
+    this.slider.removeEventListener('input', this.onScrub);
+    this.latestBtn.removeEventListener('click', this.onLatest);
+    this.speedSelect.removeEventListener('change', this.onSpeed);
     this.el.remove();
   }
 }

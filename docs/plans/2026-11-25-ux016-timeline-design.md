@@ -2,7 +2,8 @@
 
 Status: approved to proceed by Bradley’s November 25 “finish the roadmap”
 instruction following the design approval request. High Assurance; documentation
-draft claim precedes local implementation. Full UX-016 remains open after this stage. See the [brief](2026-11-25-ux016-timeline-brief.md).
+draft [#1922](https://github.com/bradleybond512/crystal-ball/pull/1922) was published
+before implementation. Full UX-016 remains open after this stage. See the [brief](2026-11-25-ux016-timeline-brief.md).
 
 ## Outcome and evidence boundary
 

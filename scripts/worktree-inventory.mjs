@@ -109,20 +109,32 @@ function executor(limits, dependencies) {
         result = spawn('/usr/bin/git', ['--no-optional-locks', '-c', 'protocol.allow=never', '-c', 'core.fsmonitor=false',
           '-c', 'maintenance.auto=false', '-c', 'gc.auto=0', '-c', 'core.untrackedCache=false',
           '-c', 'core.hooksPath=/dev/null', ...args], {
-          cwd: repo, env: gitEnvironment(), encoding: 'utf8', input, shell: false,
+          cwd: repo, env: gitEnvironment(), encoding: null, input, shell: false,
           timeout: Math.max(1, Math.min(limits.commandMs, remaining)), killSignal: 'SIGKILL',
           maxBuffer: Math.min(limits.outputBytes, outputCap), stdio: ['pipe', 'pipe', 'pipe'],
         });
       } catch { return { ok: false, reason: 'git-execution-failed' }; }
-      const stdout = result.stdout ?? '';
-      if (result.error || result.signal || Buffer.byteLength(stdout) > Math.min(limits.outputBytes, outputCap)) {
-        return { ok: false, reason: result.error?.code === 'ETIMEDOUT' ? 'command-time-limit' : 'command-output-or-execution-limit' };
-      }
-      if (result.stderr) return { ok: false, reason: 'git-warning-or-error' };
-      if (result.status !== 0 && !(['ancestor', 'config'].includes(operation) && result.status === 1)) return { ok: false, reason: 'git-command-failed' };
-      return { ok: true, status: result.status, text: stdout };
+      return capturedOutput(result, operation, Math.min(limits.outputBytes, outputCap));
     },
   };
+}
+
+function capturedOutput(result, operation, cap) {
+  const stdout = result.stdout ?? '';
+  const stderr = result.stderr ?? '';
+  const observedBytes = Buffer.byteLength(stdout) + Buffer.byteLength(stderr);
+  const overflow = result.error?.code === 'ENOBUFS' || observedBytes > cap;
+  const receipt = { observedBytes, overflow };
+  if (result.error || result.signal || overflow) {
+    return { ...receipt, ok: false, reason: result.error?.code === 'ETIMEDOUT' ? 'command-time-limit' : 'command-output-or-execution-limit' };
+  }
+  if (stderr.length) return { ...receipt, ok: false, reason: 'git-warning-or-error' };
+  if (result.status !== 0 && !(['ancestor', 'config'].includes(operation) && result.status === 1)) return { ...receipt, ok: false, reason: 'git-command-failed' };
+  const text = stdout.toString('utf8');
+  if (!Buffer.isBuffer(stdout) || !Buffer.from(text, 'utf8').equals(stdout)) {
+    return { ...receipt, ok: false, reason: operation === 'patch' ? 'patch-encoding-unsupported' : 'git-output-encoding-unsupported' };
+  }
+  return { ...receipt, ok: true, status: result.status, text };
 }
 
 function remoteIdentity(value) {
@@ -336,11 +348,16 @@ function commitItems(text) {
 function patchFor(repo, item, index, run, limits, budget) {
   if (index >= limits.commitsPerRef || budget.commits >= limits.totalCommits) return { reason: 'commit-limit' };
   if (item.parents.length > 1) return { reason: 'merge-commit-unassessed' };
+  if (budget.stopped) return { reason: 'prior-patch-output-overflow' };
   if (budget.bytes >= limits.totalPatchBytes) return { reason: 'aggregate-patch-byte-limit' };
   budget.commits++;
-  const patch = run.run(repo, 'patch', [item.oid], undefined, Math.min(limits.patchBytes, limits.totalPatchBytes - budget.bytes));
+  const cap = Math.min(limits.outputBytes, limits.patchBytes, limits.totalPatchBytes - budget.bytes);
+  budget.bytes += cap;
+  const patch = run.run(repo, 'patch', [item.oid], undefined, cap);
+  budget.bytes += Math.max(0, (patch.observedBytes ?? 0) - cap);
+  if (patch.overflow) budget.stopped = true;
   if (!patch.ok) return { reason: patch.reason };
-  budget.bytes += Buffer.byteLength(patch.text);
+  budget.bytes -= cap - patch.observedBytes;
   if (!patch.text) return { reason: 'empty-commit' };
   if (/^GIT binary patch$/m.test(patch.text) || /^Binary files /m.test(patch.text)) return { reason: 'binary-patch-unassessed' };
   const id = run.run(repo, 'patch-id', [], patch.text);

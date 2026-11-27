@@ -541,7 +541,7 @@ test('command timeout yields partial status and redacts subprocess error text', 
 test('malformed status cannot be accepted as a clean observation', async t => {
   const { repo } = fixture(t);
   const report = await collect(repo, { statusWorktrees: [repo] }, { spawn(bin, args, options) {
-    if (args.includes('status')) return { status: 0, stdout: `invalid ${filename}\0`, stderr: '' };
+    if (args.includes('status')) return { status: 0, stdout: Buffer.from(`invalid ${filename}\0`), stderr: Buffer.alloc(0) };
     return fixtureSpawn(bin, args, options);
   } });
   assert.equal(status(report, repo).complete, false);
@@ -632,7 +632,7 @@ for (const malformed of ['1 ..\0', '? \0', '2 R. N... 100644 100644 100644 a a R
   test(`truncated porcelain record ${JSON.stringify(malformed)} stays unavailable`, async t => {
     const { repo } = fixture(t);
     const report = await collect(repo, { statusWorktrees: [repo] }, { spawn(bin, args, options) {
-      if (args.includes('status')) return { status: 0, stdout: malformed, stderr: '' };
+      if (args.includes('status')) return { status: 0, stdout: Buffer.from(malformed), stderr: Buffer.alloc(0) };
       return fixtureSpawn(bin, args, options);
     } });
     assert.equal(status(report, repo).complete, false);
@@ -692,10 +692,18 @@ test('aggregate patch byte budget remains partial without leaking truncated cont
   git(repo, 'checkout', '--quiet', '-b', 'topic');
   commit(repo, 'large.txt', `${marker.repeat(100)}\n`);
   git(repo, 'checkout', '--quiet', 'main');
-  const report = await collect(repo, { patchRefs: ['refs/heads/topic'], limits: { totalPatchBytes: 100 } });
+  let receivedBytes = 0;
+  const report = await collect(repo, { patchRefs: ['refs/heads/topic'], limits: { totalPatchBytes: 100 } }, {
+    spawn(bin, args, options) {
+      const result = fixtureSpawn(bin, args, options);
+      if (args.includes('show')) receivedBytes += Buffer.byteLength(result.stdout ?? '') + Buffer.byteLength(result.stderr ?? '');
+      return result;
+    },
+  });
   assert.equal(patch(report).complete, false);
   assert.equal(report.exitCode, 2);
-  assert.ok(report.counters.patchBytes <= 100);
+  assert.ok(receivedBytes > 100, 'fixture must exercise the final OS read chunk beyond the capture threshold');
+  assert.ok(report.counters.patchBytes >= receivedBytes, 'counter must retain actual final-chunk overshoot');
   confidential(report);
 });
 
@@ -812,4 +820,101 @@ test('explicit malformed falsey supplied evidence cannot count as completed requ
       assert.equal(evidence.state, 'unknown');
     }
   }
+});
+
+test('different non-UTF8 text patches cannot collapse into an equivalent patch match', async t => {
+  const { repo } = fixture(t);
+  git(repo, 'checkout', '--quiet', '-b', 'topic');
+  const topic = commit(repo, 'raw.txt', Buffer.from([0x80, 0x0a]));
+  git(repo, 'checkout', '--quiet', 'main');
+  const main = commit(repo, 'raw.txt', Buffer.from([0x81, 0x0a]));
+  const report = await collect(repo, { patchRefs: ['refs/heads/topic'] });
+  const evidence = patch(report);
+  assert.equal(evidence.treeEquality, 'different');
+  assert.deepEqual(evidence.matches, [], 'different raw bytes must not match after replacement-character decoding');
+  assert.equal(evidence.complete, false);
+  assert.ok(evidence.omitted.some(item => item.oid === topic && /utf|encoding/i.test(item.reason)));
+  assert.ok(evidence.omitted.some(item => item.oid === main && /utf|encoding/i.test(item.reason)));
+  assert.equal(report.exitCode, 2);
+});
+
+test('failed oversized patch reads consume the shared aggregate byte budget', async t => {
+  const { repo } = fixture(t);
+  git(repo, 'checkout', '--quiet', '-b', 'topic');
+  for (let i = 0; i < 3; i++) commit(repo, `oversized-${i}.txt`, `${marker.repeat(30)}\n`);
+  git(repo, 'checkout', '--quiet', 'main');
+  for (const totalPatchBytes of [32, 32_768]) {
+    let patchAttempts = 0;
+    let receivedBytes = 0;
+    const report = await collect(repo, { patchRefs: ['refs/heads/topic'], limits: { patchBytes: 16, totalPatchBytes } }, {
+      spawn(bin, args, options) {
+        const result = fixtureSpawn(bin, args, options);
+        if (args.includes('show')) { patchAttempts++; receivedBytes += Buffer.byteLength(result.stdout ?? '') + Buffer.byteLength(result.stderr ?? ''); }
+        return result;
+      },
+    });
+    assert.ok(receivedBytes > 32, 'fixture must return oversized output before spawnSync reports ENOBUFS');
+    assert.equal(patchAttempts, 1, 'the first output overflow must stop subsequent patch reads');
+    assert.ok(report.counters.patchBytes >= receivedBytes, 'failed patch attempts must retain actual captured-byte charges');
+    assert.equal(patch(report).complete, false);
+    assert.equal(report.exitCode, 2);
+    confidential(report);
+  }
+});
+
+test('failed patch attempts without output retain their reserved byte allowance', async t => {
+  const { repo } = fixture(t);
+  git(repo, 'checkout', '--quiet', '-b', 'topic');
+  for (let i = 0; i < 3; i++) commit(repo, `timed-${i}.txt`, `${i}\n`);
+  git(repo, 'checkout', '--quiet', 'main');
+  let attempts = 0;
+  const report = await collect(repo, { patchRefs: ['refs/heads/topic'], limits: { patchBytes: 16, totalPatchBytes: 32 } }, {
+    spawn(bin, args, options) {
+      if (args.includes('show')) {
+        attempts++;
+        return { status: null, error: Object.assign(new Error(marker), { code: 'ETIMEDOUT' }), stdout: '', stderr: '' };
+      }
+      return fixtureSpawn(bin, args, options);
+    },
+  });
+  assert.equal(attempts, 2);
+  assert.equal(report.counters.patchBytes, 32);
+  assert.equal(report.exitCode, 2);
+  confidential(report);
+});
+
+test('completed small patches refund unused reservations and charge captured bytes exactly', async t => {
+  const { repo } = fixture(t);
+  git(repo, 'checkout', '--quiet', '-b', 'topic');
+  for (let i = 0; i < 3; i++) commit(repo, `refund-${i}.txt`, `${i}\n`);
+  git(repo, 'checkout', '--quiet', 'main');
+  let attempts = 0;
+  let receivedBytes = 0;
+  const report = await collect(repo, { patchRefs: ['refs/heads/topic'], limits: { patchBytes: 1024, totalPatchBytes: 1024 } }, {
+    spawn(bin, args, options) {
+      const result = fixtureSpawn(bin, args, options);
+      if (args.includes('show')) { attempts++; receivedBytes += Buffer.byteLength(result.stdout ?? '') + Buffer.byteLength(result.stderr ?? ''); }
+      return result;
+    },
+  });
+  assert.ok(receivedBytes < 1024);
+  assert.equal(attempts, 3);
+  assert.equal(report.counters.patchBytes, receivedBytes);
+  assert.equal(patch(report).complete, true);
+  assert.equal(patch(report).unmatched.length, 3);
+  assert.equal(report.exitCode, 0);
+});
+
+test('distinct non-UTF8 packed ref names cannot collapse into complete duplicate metadata', async t => {
+  const { repo, base } = fixture(t);
+  writeFileSync(join(repo, '.git/packed-refs'), Buffer.concat([
+    Buffer.from('# pack-refs with: peeled fully-peeled sorted\n'),
+    Buffer.from(`${base} refs/heads/topic-`), Buffer.from([0x80, 0x0a]),
+    Buffer.from(`${base} refs/heads/topic-`), Buffer.from([0x81, 0x0a]),
+  ]));
+  const report = await collect(repo);
+  assert.equal(report.complete, false, 'lossy decoded ref names cannot be represented as complete metadata');
+  assert.equal(report.exitCode, 1);
+  assert.equal(report.repositories.length, 0);
+  assert.ok(!JSON.stringify(report).includes('\uFFFD'));
 });

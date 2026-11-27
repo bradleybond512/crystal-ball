@@ -79,7 +79,8 @@ function argumentsFor(operation, values) {
       if (!Number.isSafeInteger(values[2]) || values[2] < 1 || values[2] > DEFAULT_LIMITS.commitsPerRef + 1) throw new Error('invalid-limit');
       return ['rev-list', '--left-right', '--parents', `--max-count=${values[2]}`, `${oid(values[0])}...${oid(values[1])}`, '--'];
     }
-    case 'patch': { return ['show', '--format=', '--root', '--no-ext-diff', '--no-textconv', '--no-renames', '--binary', oid(values[0]), '--'];
+    case 'patch': { return ['show', '--format=', '--root', '--no-show-signature', '--no-notes', '--no-color',
+      '--submodule=short', '--no-relative', '--ignore-submodules=none', '--no-ext-diff', '--no-textconv', '--no-renames', '--binary', oid(values[0]), '--'];
     }
     case 'patch-id': { return ['patch-id', '--stable'];
     }

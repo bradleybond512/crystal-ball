@@ -918,3 +918,117 @@ test('distinct non-UTF8 packed ref names cannot collapse into complete duplicate
   assert.equal(report.repositories.length, 0);
   assert.ok(!JSON.stringify(report).includes('\uFFFD'));
 });
+
+test('configured signature verification cannot execute an external helper during patch collection', async t => {
+  const { root, repo, base } = fixture(t);
+  git(repo, 'checkout', '--quiet', '-b', 'topic');
+  commit(repo, 'signed-change.txt', 'signed change\n');
+  const tree = git(repo, 'rev-parse', 'HEAD^{tree}');
+  git(repo, 'checkout', '--quiet', 'main');
+  const signed = `tree ${tree}\nparent ${base}\nauthor Fixture <fixture@localhost> 1700000000 +0000\ncommitter Fixture <fixture@localhost> 1700000000 +0000\ngpgsig -----BEGIN PGP SIGNATURE-----\n fake\n -----END PGP SIGNATURE-----\n\nfixture signed object\n`;
+  const hashed = spawnSync('/usr/bin/git', ['hash-object', '-t', 'commit', '-w', '--stdin'], { cwd: repo, env: fixtureEnv, encoding: 'utf8', input: signed });
+  assert.equal(hashed.status, 0, hashed.stderr);
+  git(repo, 'update-ref', 'refs/heads/topic', hashed.stdout.trim());
+  const helper = join(root, 'signature-helper');
+  const sentinel = join(root, 'signature-ran');
+  writeFileSync(helper, '#!/bin/sh\nprintf executed > "${0%/*}/signature-ran"\nexit 0\n', { mode: 0o755 });
+  git(repo, 'config', 'log.showSignature', 'true');
+  git(repo, 'config', 'gpg.program', helper);
+  const report = await collect(repo, { patchRefs: ['refs/heads/topic'] });
+  assert.equal(existsSync(sentinel), false, 'collector invoked the repository-configured signature helper');
+  assert.equal(patch(report).complete, true);
+  assert.equal(patch(report).unmatched.length, 1);
+  assert.equal(report.exitCode, 0);
+});
+
+test('configured notes and colors cannot contaminate normalized patch evidence', async t => {
+  const { repo } = fixture(t);
+  git(repo, 'checkout', '--quiet', '-b', 'topic');
+  const topic = commit(repo, 'color-change.txt', 'same change\n');
+  git(repo, 'checkout', '--quiet', 'main');
+  commit(repo, 'main-only.txt', 'main-only\n');
+  git(repo, 'cherry-pick', topic);
+  const main = git(repo, 'rev-parse', 'HEAD');
+  git(repo, 'notes', 'add', '-m', `${marker}-topic-note`, topic);
+  git(repo, 'notes', 'add', '-m', `${marker}-main-note`, main);
+  git(repo, 'config', 'notes.displayRef', 'refs/notes/commits');
+  git(repo, 'config', 'log.showNotes', 'true');
+  git(repo, 'config', 'color.ui', 'always');
+  git(repo, 'config', 'color.diff', 'always');
+  const patchOutput = [];
+  const report = await collect(repo, { patchRefs: ['refs/heads/topic'] }, { spawn(bin, args, options) {
+    const result = fixtureSpawn(bin, args, options);
+    if (args.includes('show')) patchOutput.push(result.stdout.toString('utf8'));
+    return result;
+  } });
+  assert.equal(patch(report).complete, true);
+  assert.equal(patch(report).matches.length, 1);
+  assert.equal(patch(report).matches[0].tipCommit, topic);
+  assert.equal(patch(report).matches[0].baseCommit, main);
+  assert.ok(patchOutput.length > 0);
+  assert.ok(patchOutput.every(output => !output.includes('\u001b') && !output.includes('-topic-note') && !output.includes('-main-note')));
+  confidential(report);
+});
+
+test('relative diff configuration cannot hide outside changes from a nested repository alias', async t => {
+  const { repo } = fixture(t);
+  commit(repo, 'inside/keep.txt', 'keep directory\n');
+  git(repo, 'checkout', '--quiet', '-b', 'topic');
+  put(repo, 'inside/shared.txt', 'same visible change\n');
+  put(repo, 'outside.txt', 'topic outside change\n');
+  git(repo, 'add', '--', 'inside/shared.txt', 'outside.txt');
+  git(repo, 'commit', '--quiet', '-m', marker);
+  git(repo, 'checkout', '--quiet', 'main');
+  put(repo, 'inside/shared.txt', 'same visible change\n');
+  put(repo, 'outside.txt', 'main outside change\n');
+  git(repo, 'add', '--', 'inside/shared.txt', 'outside.txt');
+  git(repo, 'commit', '--quiet', '-m', marker);
+  git(repo, 'config', 'diff.relative', 'true');
+  const report = await collect(join(repo, 'inside'), { patchRefs: ['refs/heads/topic'] });
+  assert.equal(patch(report).treeEquality, 'different');
+  assert.deepEqual(patch(report).matches, [], 'outside changes were hidden by relative diff configuration');
+  assert.equal(patch(report).unmatched.length, 2);
+  assert.equal(patch(report).complete, true);
+  assert.equal(report.exitCode, 0);
+});
+
+test('submodule configuration cannot hide gitlink changes or expand nested repository contents', async t => {
+  const { repo } = fixture(t);
+  const child = join(repo, 'child');
+  mkdirSync(child);
+  git(child, 'init', '--quiet', '--initial-branch=main');
+  const childBase = commit(child, 'module.txt', 'base module\n');
+  git(child, 'checkout', '--quiet', '-b', 'topic');
+  const childTopic = commit(child, 'module.txt', 'topic module\n');
+  git(child, 'checkout', '--quiet', 'main');
+  const childMain = commit(child, 'module.txt', 'main module\n');
+  put(repo, '.gitmodules', '[submodule "child"]\n\tpath = child\n\turl = https://example.invalid/never-fetch\n');
+  git(repo, 'add', '--', '.gitmodules');
+  git(repo, 'update-index', '--add', '--cacheinfo', `160000,${childBase},child`);
+  git(repo, 'commit', '--quiet', '-m', marker);
+  for (const [branch, target] of [['topic', childTopic], ['main', childMain]]) {
+    if (branch === 'topic') git(repo, 'checkout', '--quiet', '-b', branch);
+    else git(repo, 'checkout', '--quiet', branch);
+    put(repo, 'shared.txt', 'same visible change\n');
+    git(repo, 'add', '--', 'shared.txt');
+    git(repo, 'update-index', '--cacheinfo', `160000,${target},child`);
+    git(repo, 'commit', '--quiet', '-m', marker);
+  }
+  git(repo, 'config', 'diff.ignoreSubmodules', 'all');
+  for (const format of ['log', 'diff']) {
+    git(repo, 'config', 'diff.submodule', format);
+    const outputs = [];
+    const report = await collect(repo, { patchRefs: ['refs/heads/topic'] }, { spawn(bin, args, options) {
+      const result = fixtureSpawn(bin, args, options);
+      if (args.includes('show')) outputs.push(result.stdout.toString('utf8'));
+      return result;
+    } });
+    assert.equal(patch(report).treeEquality, 'different');
+    assert.deepEqual(patch(report).matches, [], `gitlink changes disappeared with ${format} configuration`);
+    assert.equal(patch(report).unmatched.length, 2);
+    assert.equal(patch(report).complete, true);
+    for (const oid of [childTopic, childMain]) assert.ok(outputs.some(output => output.includes(`+Subproject commit ${oid}`)));
+    assert.ok(outputs.every(output => !output.includes('child/module.txt') && !output.includes(marker)));
+    assert.equal(report.exitCode, 0);
+  }
+});

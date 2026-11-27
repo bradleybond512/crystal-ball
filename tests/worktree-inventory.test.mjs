@@ -707,7 +707,7 @@ for (const phase of ['metadata', 'status', 'patch']) {
     let tick = 0;
     const report = await collect(repo, { statusWorktrees: [repo], patchRefs: ['refs/heads/topic'], limits: { [`${phase}Ms`]: 1 } }, {
       now: () => tick,
-      spawn(bin, args, options) { tick += 2; return fixtureSpawn(bin, args, options); },
+      spawn(bin, args, options) { tick += 2; return fixtureSpawn(bin, args, { ...options, timeout: 5000 }); },
     });
     assert.equal(report.complete, false);
     assert.equal(report.exitCode, phase === 'metadata' ? 1 : 2);

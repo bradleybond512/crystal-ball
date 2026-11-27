@@ -793,7 +793,8 @@
   ".github/workflows/lint.yml": [
     "test:workflow-security",
     "test:main-sync-gate",
-    "test:eslint-runner"
+    "test:eslint-runner",
+    "test:stacking"
   ],
   ".github/workflows/pages.yml": [
     "test:workflow-security"
@@ -1669,5 +1670,14 @@
   ],
   "src/utils/keyword-match.ts": [
     "test:keyword-match"
+  ],
+  "scripts/lint-stacking.mjs": [
+    "test:stacking"
+  ],
+  "scripts/stacking-inventory.json": [
+    "test:stacking"
+  ],
+  "tests/lint-stacking.test.mjs": [
+    "test:stacking"
   ]
 }

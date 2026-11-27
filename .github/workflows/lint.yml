@@ -30,6 +30,8 @@ jobs:
       # Hardcoded-color ratchet — counts can only go down. Gates the whole
       # combined tree in the merge queue so the design-token debt can't grow.
       - run: npm run lint:colors
+      - run: npm run test:stacking
+      - run: npm run lint:stacking
       - name: Lint repository markdown
         if: github.event_name == 'merge_group'
         run: npm run lint:md

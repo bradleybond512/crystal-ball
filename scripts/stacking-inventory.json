@@ -1,0 +1,4371 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "path": "src/app/panel-layout.ts",
+      "kind": "css-z-index",
+      "anchor": "js > class:PanelLayoutManager > function:showBootDegradedBanner > assignment:banner.style.cssText > css > z-index",
+      "expression": "99999",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "panel-layout",
+      "context": "Boot-degraded banner appends to document.body after its dismiss button; computed runtime ordering unverified.",
+      "rationale": "Preserve the reviewed existing declaration for panel-layout. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/app/panel-layout.ts",
+          "anchor": "js > class:PanelLayoutManager > function:showBootDegradedBanner > assignment:banner.style.cssText > css > z-index",
+          "fact": "Declares z-index as 99999."
+        },
+        {
+          "path": "src/app/panel-layout.ts",
+          "anchor": "file",
+          "fact": "Boot-degraded banner appends to document.body after its dismiss button; computed runtime ordering unverified."
+        }
+      ]
+    },
+    {
+      "path": "src/app/vault-intro.ts",
+      "kind": "css-z-index",
+      "anchor": "js > function:buildOverlay > assignment:interior.style.cssText > css > z-index",
+      "expression": "0",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "vault-intro",
+      "context": "Vault overlay appends to document.body; interior glow and door root append to scene inside the overlay. Scene ancestry observed; computed runtime ordering unverified.",
+      "rationale": "Preserve the reviewed existing declaration for vault-intro. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/app/vault-intro.ts",
+          "anchor": "js > function:buildOverlay > assignment:interior.style.cssText > css > z-index",
+          "fact": "Declares z-index as 0."
+        },
+        {
+          "path": "src/app/vault-intro.ts",
+          "anchor": "file",
+          "fact": "Vault overlay appends to document.body; interior glow and door root append to scene inside the overlay. Scene ancestry observed; computed runtime ordering unverified."
+        }
+      ]
+    },
+    {
+      "path": "src/app/vault-intro.ts",
+      "kind": "css-z-index",
+      "anchor": "js > function:buildOverlay > assignment:overlay.style.cssText > css > z-index",
+      "expression": "9999",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "vault-intro",
+      "context": "Vault overlay appends to document.body; interior glow and door root append to scene inside the overlay. Scene ancestry observed; computed runtime ordering unverified.",
+      "rationale": "Preserve the reviewed existing declaration for vault-intro. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/app/vault-intro.ts",
+          "anchor": "js > function:buildOverlay > assignment:overlay.style.cssText > css > z-index",
+          "fact": "Declares z-index as 9999."
+        },
+        {
+          "path": "src/app/vault-intro.ts",
+          "anchor": "file",
+          "fact": "Vault overlay appends to document.body; interior glow and door root append to scene inside the overlay. Scene ancestry observed; computed runtime ordering unverified."
+        }
+      ]
+    },
+    {
+      "path": "src/app/vault-intro.ts",
+      "kind": "css-z-index",
+      "anchor": "js > function:buildOverlay > assignment:parts.root.style.cssText > css > z-index",
+      "expression": "1",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "vault-intro",
+      "context": "Vault overlay appends to document.body; interior glow and door root append to scene inside the overlay. Scene ancestry observed; computed runtime ordering unverified.",
+      "rationale": "Preserve the reviewed existing declaration for vault-intro. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/app/vault-intro.ts",
+          "anchor": "js > function:buildOverlay > assignment:parts.root.style.cssText > css > z-index",
+          "fact": "Declares z-index as 1."
+        },
+        {
+          "path": "src/app/vault-intro.ts",
+          "anchor": "file",
+          "fact": "Vault overlay appends to document.body; interior glow and door root append to scene inside the overlay. Scene ancestry observed; computed runtime ordering unverified."
+        }
+      ]
+    },
+    {
+      "path": "src/app/workspace-startup.ts",
+      "kind": "js-z-index",
+      "anchor": "js > function:showWorkspaceStartupFailure > call:Object.assign(notice.style) > zIndex",
+      "expression": "'10001'",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "workspace-startup",
+      "context": "Failure notice appends to the caller-supplied Document.body. Relationship to the main document is caller-dependent; computed runtime ordering unverified.",
+      "rationale": "Preserve the reviewed existing declaration for workspace-startup. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/app/workspace-startup.ts",
+          "anchor": "js > function:showWorkspaceStartupFailure > call:Object.assign(notice.style) > zIndex",
+          "fact": "Writes zIndex as '10001'."
+        },
+        {
+          "path": "src/app/workspace-startup.ts",
+          "anchor": "file",
+          "fact": "Failure notice appends to the caller-supplied Document.body. Relationship to the main document is caller-dependent; computed runtime ordering unverified."
+        }
+      ]
+    },
+    {
+      "path": "src/components/AnalyticsConsentBanner.ts",
+      "kind": "js-z-index",
+      "anchor": "js > function:mountAnalyticsConsentBanner > call:Object.assign(banner.style) > zIndex",
+      "expression": "'10000'",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "AnalyticsConsentBanner",
+      "context": "Reset notice and consent banner append to document.body; computed runtime ordering unverified.",
+      "rationale": "Preserve the reviewed existing declaration for AnalyticsConsentBanner. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/AnalyticsConsentBanner.ts",
+          "anchor": "js > function:mountAnalyticsConsentBanner > call:Object.assign(banner.style) > zIndex",
+          "fact": "Writes zIndex as '10000'."
+        },
+        {
+          "path": "src/components/AnalyticsConsentBanner.ts",
+          "anchor": "file",
+          "fact": "Reset notice and consent banner append to document.body; computed runtime ordering unverified."
+        }
+      ]
+    },
+    {
+      "path": "src/components/AnalyticsConsentBanner.ts",
+      "kind": "js-z-index",
+      "anchor": "js > function:mountResetNotice > call:Object.assign(notice.style) > zIndex",
+      "expression": "'10000'",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "AnalyticsConsentBanner",
+      "context": "Reset notice and consent banner append to document.body; computed runtime ordering unverified.",
+      "rationale": "Preserve the reviewed existing declaration for AnalyticsConsentBanner. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/AnalyticsConsentBanner.ts",
+          "anchor": "js > function:mountResetNotice > call:Object.assign(notice.style) > zIndex",
+          "fact": "Writes zIndex as '10000'."
+        },
+        {
+          "path": "src/components/AnalyticsConsentBanner.ts",
+          "anchor": "file",
+          "fact": "Reset notice and consent banner append to document.body; computed runtime ordering unverified."
+        }
+      ]
+    },
+    {
+      "path": "src/components/CommandPalettePanel.ts",
+      "kind": "css-z-index",
+      "anchor": "js > variable:STYLE > css > .cmdk-v2-overlay > z-index",
+      "expression": "10005",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "CommandPalettePanel",
+      "context": "Style element appends to document.head; overlay mounts on document.body through panel-layout.ts. Existing level is 10005; computed runtime ordering unverified.",
+      "rationale": "Preserve the reviewed existing declaration for CommandPalettePanel. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/CommandPalettePanel.ts",
+          "anchor": "js > variable:STYLE > css > .cmdk-v2-overlay > z-index",
+          "fact": "Declares z-index as 10005."
+        },
+        {
+          "path": "src/components/CommandPalettePanel.ts",
+          "anchor": "file",
+          "fact": "Style element appends to document.head; overlay mounts on document.body through panel-layout.ts. Existing level is 10005; computed runtime ordering unverified."
+        },
+        {
+          "path": "src/app/panel-layout.ts",
+          "anchor": "file",
+          "fact": "CommandPalettePanel and LibraryOverlay mount on document.body."
+        }
+      ]
+    },
+    {
+      "path": "src/components/ContextualHint.ts",
+      "kind": "css-z-index",
+      "anchor": "js > function:buildTooltip > assignment:tooltip.style.cssText > css > z-index",
+      "expression": "9999",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "ContextualHint",
+      "context": "Tooltip positioning appends the tooltip to document.body; computed runtime ordering unverified.",
+      "rationale": "Preserve the reviewed existing declaration for ContextualHint. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/ContextualHint.ts",
+          "anchor": "js > function:buildTooltip > assignment:tooltip.style.cssText > css > z-index",
+          "fact": "Declares z-index as 9999."
+        },
+        {
+          "path": "src/components/ContextualHint.ts",
+          "anchor": "file",
+          "fact": "Tooltip positioning appends the tooltip to document.body; computed runtime ordering unverified."
+        }
+      ]
+    },
+    {
+      "path": "src/components/CountryTimeline.ts",
+      "kind": "js-z-index",
+      "anchor": "js > class:CountryTimeline > function:createTooltip > call:Object.assign(this.tooltip.style) > zIndex",
+      "expression": "'9999'",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "CountryTimeline",
+      "context": "Tooltip appends to this.container, which is positioned relative. Caller-provided container ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for CountryTimeline. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/CountryTimeline.ts",
+          "anchor": "js > class:CountryTimeline > function:createTooltip > call:Object.assign(this.tooltip.style) > zIndex",
+          "fact": "Writes zIndex as '9999'."
+        },
+        {
+          "path": "src/components/CountryTimeline.ts",
+          "anchor": "file",
+          "fact": "Tooltip appends to this.container, which is positioned relative. Caller-provided container ancestry unknown."
+        }
+      ]
+    },
+    {
+      "path": "src/components/DeckGLMap.ts",
+      "kind": "css-z-index",
+      "anchor": "js > class:DeckGLMap > function:flashLocation > assignment:flashMarker.style.cssText > css > z-index",
+      "expression": "1000",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "DeckGLMap",
+      "context": "Map status, scrubber, flash and error surfaces append to the component container or its map wrapper. Complete ancestor stacking contexts unknown.",
+      "rationale": "Preserve the reviewed existing declaration for DeckGLMap. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/DeckGLMap.ts",
+          "anchor": "js > class:DeckGLMap > function:flashLocation > assignment:flashMarker.style.cssText > css > z-index",
+          "fact": "Declares z-index as 1000."
+        },
+        {
+          "path": "src/components/DeckGLMap.ts",
+          "anchor": "file",
+          "fact": "Map status, scrubber, flash and error surfaces append to the component container or its map wrapper. Complete ancestor stacking contexts unknown."
+        }
+      ]
+    },
+    {
+      "path": "src/components/DeckGLMap.ts",
+      "kind": "css-z-index",
+      "anchor": "js > class:DeckGLMap > function:setupDOM > assignment:baselineStatus.style.cssText > css > z-index",
+      "expression": "4",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "DeckGLMap",
+      "context": "Map status, scrubber, flash and error surfaces append to the component container or its map wrapper. Complete ancestor stacking contexts unknown.",
+      "rationale": "Preserve the reviewed existing declaration for DeckGLMap. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/DeckGLMap.ts",
+          "anchor": "js > class:DeckGLMap > function:setupDOM > assignment:baselineStatus.style.cssText > css > z-index",
+          "fact": "Declares z-index as 4."
+        },
+        {
+          "path": "src/components/DeckGLMap.ts",
+          "anchor": "file",
+          "fact": "Map status, scrubber, flash and error surfaces append to the component container or its map wrapper. Complete ancestor stacking contexts unknown."
+        }
+      ]
+    },
+    {
+      "path": "src/components/DeckGLMap.ts",
+      "kind": "css-z-index",
+      "anchor": "js > class:DeckGLMap > function:showMapErrorOverlay > assignment:overlay.style.cssText > css > z-index",
+      "expression": "5",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "DeckGLMap",
+      "context": "Map status, scrubber, flash and error surfaces append to the component container or its map wrapper. Complete ancestor stacking contexts unknown.",
+      "rationale": "Preserve the reviewed existing declaration for DeckGLMap. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/DeckGLMap.ts",
+          "anchor": "js > class:DeckGLMap > function:showMapErrorOverlay > assignment:overlay.style.cssText > css > z-index",
+          "fact": "Declares z-index as 5."
+        },
+        {
+          "path": "src/components/DeckGLMap.ts",
+          "anchor": "file",
+          "fact": "Map status, scrubber, flash and error surfaces append to the component container or its map wrapper. Complete ancestor stacking contexts unknown."
+        }
+      ]
+    },
+    {
+      "path": "src/components/DeckGLMap.ts",
+      "kind": "css-z-index",
+      "anchor": "js > class:DeckGLMap > function:syncSmokeScrubber > assignment:wrap.style.cssText > css > z-index",
+      "expression": "5",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "DeckGLMap",
+      "context": "Map status, scrubber, flash and error surfaces append to the component container or its map wrapper. Complete ancestor stacking contexts unknown.",
+      "rationale": "Preserve the reviewed existing declaration for DeckGLMap. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/DeckGLMap.ts",
+          "anchor": "js > class:DeckGLMap > function:syncSmokeScrubber > assignment:wrap.style.cssText > css > z-index",
+          "fact": "Declares z-index as 5."
+        },
+        {
+          "path": "src/components/DeckGLMap.ts",
+          "anchor": "file",
+          "fact": "Map status, scrubber, flash and error surfaces append to the component container or its map wrapper. Complete ancestor stacking contexts unknown."
+        }
+      ]
+    },
+    {
+      "path": "src/components/GlobeHUD.ts",
+      "kind": "css-z-index",
+      "anchor": "js > class:GlobeHUD > constructor > assignment:this.element.style.cssText > css > z-index",
+      "expression": "10",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "GlobeHUD",
+      "context": "HUD element appends to constructor-provided container. Container ancestry and computed runtime ordering unknown.",
+      "rationale": "Preserve the reviewed existing declaration for GlobeHUD. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/GlobeHUD.ts",
+          "anchor": "js > class:GlobeHUD > constructor > assignment:this.element.style.cssText > css > z-index",
+          "fact": "Declares z-index as 10."
+        },
+        {
+          "path": "src/components/GlobeHUD.ts",
+          "anchor": "file",
+          "fact": "HUD element appends to constructor-provided container. Container ancestry and computed runtime ordering unknown."
+        }
+      ]
+    },
+    {
+      "path": "src/components/InfrastructureBannerBar.ts",
+      "kind": "js-z-index",
+      "anchor": "js > function:createHost > assignment:el.style.zIndex > zIndex",
+      "expression": "'9999'",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "InfrastructureBannerBar",
+      "context": "Host appends to document.body when no existing host is found; computed runtime ordering unverified.",
+      "rationale": "Preserve the reviewed existing declaration for InfrastructureBannerBar. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/InfrastructureBannerBar.ts",
+          "anchor": "js > function:createHost > assignment:el.style.zIndex > zIndex",
+          "fact": "Writes zIndex as '9999'."
+        },
+        {
+          "path": "src/components/InfrastructureBannerBar.ts",
+          "anchor": "file",
+          "fact": "Host appends to document.body when no existing host is found; computed runtime ordering unverified."
+        }
+      ]
+    },
+    {
+      "path": "src/components/LiveWebcamsPanel.ts",
+      "kind": "css-z-index",
+      "anchor": "js > class:LiveWebcamsPanel > function:_showUnavailableState > assignment:overlay.style.cssText > css > z-index",
+      "expression": "6",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "LiveWebcamsPanel",
+      "context": "Unavailable-stream overlay appends to the webcam cell. Complete cell ancestry and computed runtime ordering unknown.",
+      "rationale": "Preserve the reviewed existing declaration for LiveWebcamsPanel. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/LiveWebcamsPanel.ts",
+          "anchor": "js > class:LiveWebcamsPanel > function:_showUnavailableState > assignment:overlay.style.cssText > css > z-index",
+          "fact": "Declares z-index as 6."
+        },
+        {
+          "path": "src/components/LiveWebcamsPanel.ts",
+          "anchor": "file",
+          "fact": "Unavailable-stream overlay appends to the webcam cell. Complete cell ancestry and computed runtime ordering unknown."
+        }
+      ]
+    },
+    {
+      "path": "src/components/Map.ts",
+      "kind": "js-z-index",
+      "anchor": "js > class:MapComponent > function:renderOverlays > call:CENTRAL_BANKS.forEach > assignment:div.style.zIndex > zIndex",
+      "expression": "bank.type === 'supranational' ? '48' : (bank.type === 'major' ? '42' : '38')",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map",
+      "context": "Marker divs append to this.overlays under the map wrapper. Complete ancestor stacking contexts unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/Map.ts",
+          "anchor": "js > class:MapComponent > function:renderOverlays > call:CENTRAL_BANKS.forEach > assignment:div.style.zIndex > zIndex",
+          "fact": "Writes zIndex as bank.type === 'supranational' ? '48' : (bank.type === 'major' ? '42' : '38')."
+        },
+        {
+          "path": "src/components/Map.ts",
+          "anchor": "file",
+          "fact": "Marker divs append to this.overlays under the map wrapper. Complete ancestor stacking contexts unknown."
+        }
+      ]
+    },
+    {
+      "path": "src/components/Map.ts",
+      "kind": "js-z-index",
+      "anchor": "js > class:MapComponent > function:renderOverlays > call:COMMODITY_HUBS.forEach > assignment:div.style.zIndex > zIndex",
+      "expression": "'38'",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map",
+      "context": "Marker divs append to this.overlays under the map wrapper. Complete ancestor stacking contexts unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/Map.ts",
+          "anchor": "js > class:MapComponent > function:renderOverlays > call:COMMODITY_HUBS.forEach > assignment:div.style.zIndex > zIndex",
+          "fact": "Writes zIndex as '38'."
+        },
+        {
+          "path": "src/components/Map.ts",
+          "anchor": "file",
+          "fact": "Marker divs append to this.overlays under the map wrapper. Complete ancestor stacking contexts unknown."
+        }
+      ]
+    },
+    {
+      "path": "src/components/Map.ts",
+      "kind": "js-z-index",
+      "anchor": "js > class:MapComponent > function:renderOverlays > call:FINANCIAL_CENTERS.forEach > assignment:div.style.zIndex > zIndex",
+      "expression": "center.type === 'global' ? '45' : '35'",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map",
+      "context": "Marker divs append to this.overlays under the map wrapper. Complete ancestor stacking contexts unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/Map.ts",
+          "anchor": "js > class:MapComponent > function:renderOverlays > call:FINANCIAL_CENTERS.forEach > assignment:div.style.zIndex > zIndex",
+          "fact": "Writes zIndex as center.type === 'global' ? '45' : '35'."
+        },
+        {
+          "path": "src/components/Map.ts",
+          "anchor": "file",
+          "fact": "Marker divs append to this.overlays under the map wrapper. Complete ancestor stacking contexts unknown."
+        }
+      ]
+    },
+    {
+      "path": "src/components/Map.ts",
+      "kind": "js-z-index",
+      "anchor": "js > class:MapComponent > function:renderOverlays > call:STOCK_EXCHANGES.forEach > assignment:div.style.zIndex > zIndex",
+      "expression": "exchange.tier === 'mega' ? '50' : '40'",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map",
+      "context": "Marker divs append to this.overlays under the map wrapper. Complete ancestor stacking contexts unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/Map.ts",
+          "anchor": "js > class:MapComponent > function:renderOverlays > call:STOCK_EXCHANGES.forEach > assignment:div.style.zIndex > zIndex",
+          "fact": "Writes zIndex as exchange.tier === 'mega' ? '50' : '40'."
+        },
+        {
+          "path": "src/components/Map.ts",
+          "anchor": "file",
+          "fact": "Marker divs append to this.overlays under the map wrapper. Complete ancestor stacking contexts unknown."
+        }
+      ]
+    },
+    {
+      "path": "src/components/Map.ts",
+      "kind": "js-z-index",
+      "anchor": "js > class:MapComponent > function:renderOverlays > call:this.geoActivities.forEach > assignment:div.style.zIndex > zIndex",
+      "expression": "activity.activityLevel === 'high' ? '60' : (activity.activityLevel === 'elevated' ? '50' : '40')",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map",
+      "context": "Marker divs append to this.overlays under the map wrapper. Complete ancestor stacking contexts unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/Map.ts",
+          "anchor": "js > class:MapComponent > function:renderOverlays > call:this.geoActivities.forEach > assignment:div.style.zIndex > zIndex",
+          "fact": "Writes zIndex as activity.activityLevel === 'high' ? '60' : (activity.activityLevel === 'elevated' ? '50' : '40')."
+        },
+        {
+          "path": "src/components/Map.ts",
+          "anchor": "file",
+          "fact": "Marker divs append to this.overlays under the map wrapper. Complete ancestor stacking contexts unknown."
+        }
+      ]
+    },
+    {
+      "path": "src/components/Map.ts",
+      "kind": "js-z-index",
+      "anchor": "js > class:MapComponent > function:renderOverlays > call:this.techActivities.forEach > assignment:div.style.zIndex > zIndex",
+      "expression": "activity.activityLevel === 'high' ? '60' : (activity.activityLevel === 'elevated' ? '50' : '40')",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map",
+      "context": "Marker divs append to this.overlays under the map wrapper. Complete ancestor stacking contexts unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/Map.ts",
+          "anchor": "js > class:MapComponent > function:renderOverlays > call:this.techActivities.forEach > assignment:div.style.zIndex > zIndex",
+          "fact": "Writes zIndex as activity.activityLevel === 'high' ? '60' : (activity.activityLevel === 'elevated' ? '50' : '40')."
+        },
+        {
+          "path": "src/components/Map.ts",
+          "anchor": "file",
+          "fact": "Marker divs append to this.overlays under the map wrapper. Complete ancestor stacking contexts unknown."
+        }
+      ]
+    },
+    {
+      "path": "src/components/NavigationHUD.ts",
+      "kind": "css-z-index",
+      "anchor": "js > class:NavigationHUD > function:mount > assignment:this.root.style.cssText > call:array.join > css > z-index",
+      "expression": "1000",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "NavigationHUD",
+      "context": "HUD root appends to this.container. Caller-provided container ancestry and computed runtime ordering unknown.",
+      "rationale": "Preserve the reviewed existing declaration for NavigationHUD. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/NavigationHUD.ts",
+          "anchor": "js > class:NavigationHUD > function:mount > assignment:this.root.style.cssText > call:array.join > css > z-index",
+          "fact": "Declares z-index as 1000."
+        },
+        {
+          "path": "src/components/NavigationHUD.ts",
+          "anchor": "file",
+          "fact": "HUD root appends to this.container. Caller-provided container ancestry and computed runtime ordering unknown."
+        }
+      ]
+    },
+    {
+      "path": "src/components/NavigationPanel.ts",
+      "kind": "js-z-index",
+      "anchor": "js > class:NavigationPanel > function:mount > call:Object.assign(closeBtn.style) > zIndex",
+      "expression": "'1001'",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "NavigationPanel",
+      "context": "Close button appends to this.root; root appends to this.container. Caller-provided container ancestry and computed runtime ordering unknown.",
+      "rationale": "Preserve the reviewed existing declaration for NavigationPanel. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/NavigationPanel.ts",
+          "anchor": "js > class:NavigationPanel > function:mount > call:Object.assign(closeBtn.style) > zIndex",
+          "fact": "Writes zIndex as '1001'."
+        },
+        {
+          "path": "src/components/NavigationPanel.ts",
+          "anchor": "file",
+          "fact": "Close button appends to this.root; root appends to this.container. Caller-provided container ancestry and computed runtime ordering unknown."
+        }
+      ]
+    },
+    {
+      "path": "src/components/NavigationPanel.ts",
+      "kind": "js-z-index",
+      "anchor": "js > class:NavigationPanel > function:mount > call:Object.assign(this.root.style) > zIndex",
+      "expression": "'999'",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "NavigationPanel",
+      "context": "Close button appends to this.root; root appends to this.container. Caller-provided container ancestry and computed runtime ordering unknown.",
+      "rationale": "Preserve the reviewed existing declaration for NavigationPanel. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/NavigationPanel.ts",
+          "anchor": "js > class:NavigationPanel > function:mount > call:Object.assign(this.root.style) > zIndex",
+          "fact": "Writes zIndex as '999'."
+        },
+        {
+          "path": "src/components/NavigationPanel.ts",
+          "anchor": "file",
+          "fact": "Close button appends to this.root; root appends to this.container. Caller-provided container ancestry and computed runtime ordering unknown."
+        }
+      ]
+    },
+    {
+      "path": "src/components/NotificationStack.ts",
+      "kind": "js-z-index",
+      "anchor": "js > class:NotificationStack > constructor > call:Object.assign(el.style) > zIndex",
+      "expression": "'9001'",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "NotificationStack",
+      "context": "mount(parent = document.body) accepts an alternate parent. Actual caller ancestry and computed runtime ordering unknown.",
+      "rationale": "Preserve the reviewed existing declaration for NotificationStack. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/NotificationStack.ts",
+          "anchor": "js > class:NotificationStack > constructor > call:Object.assign(el.style) > zIndex",
+          "fact": "Writes zIndex as '9001'."
+        },
+        {
+          "path": "src/components/NotificationStack.ts",
+          "anchor": "file",
+          "fact": "mount(parent = document.body) accepts an alternate parent. Actual caller ancestry and computed runtime ordering unknown."
+        }
+      ]
+    },
+    {
+      "path": "src/components/ProgressChartsPanel.ts",
+      "kind": "js-z-index",
+      "anchor": "js > class:ProgressChartsPanel > function:createTooltip > call:Object.assign(this.tooltip.style) > zIndex",
+      "expression": "'9999'",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "ProgressChartsPanel",
+      "context": "Tooltip appends to this.content, which is positioned relative. Complete panel ancestry and computed runtime ordering unknown.",
+      "rationale": "Preserve the reviewed existing declaration for ProgressChartsPanel. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/ProgressChartsPanel.ts",
+          "anchor": "js > class:ProgressChartsPanel > function:createTooltip > call:Object.assign(this.tooltip.style) > zIndex",
+          "fact": "Writes zIndex as '9999'."
+        },
+        {
+          "path": "src/components/ProgressChartsPanel.ts",
+          "anchor": "file",
+          "fact": "Tooltip appends to this.content, which is positioned relative. Complete panel ancestry and computed runtime ordering unknown."
+        }
+      ]
+    },
+    {
+      "path": "src/components/ReasoningDebugOverlay.ts",
+      "kind": "css-z-index",
+      "anchor": "js > function:ensureReasoningDebugCss > assignment:style.textContent > css > .reasoning-debug-overlay > z-index",
+      "expression": "550",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "ReasoningDebugOverlay",
+      "context": "Injected selector styles the reasoning overlay; complete attachment ancestry and computed runtime ordering unknown.",
+      "rationale": "Preserve the reviewed existing declaration for ReasoningDebugOverlay. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/ReasoningDebugOverlay.ts",
+          "anchor": "js > function:ensureReasoningDebugCss > assignment:style.textContent > css > .reasoning-debug-overlay > z-index",
+          "fact": "Declares z-index as 550."
+        },
+        {
+          "path": "src/components/ReasoningDebugOverlay.ts",
+          "anchor": "file",
+          "fact": "Injected selector styles the reasoning overlay; complete attachment ancestry and computed runtime ordering unknown."
+        }
+      ]
+    },
+    {
+      "path": "src/components/Toast.ts",
+      "kind": "js-z-index",
+      "anchor": "js > function:getContainer > call:Object.assign(el.style) > zIndex",
+      "expression": "'10004'",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Toast",
+      "context": "getContainer appends the toast container to document.body at 10004. Home descendants have their own containing stacking context; computed runtime ordering unverified.",
+      "rationale": "Preserve the reviewed existing declaration for Toast. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/Toast.ts",
+          "anchor": "js > function:getContainer > call:Object.assign(el.style) > zIndex",
+          "fact": "Writes zIndex as '10004'."
+        },
+        {
+          "path": "src/components/Toast.ts",
+          "anchor": "file",
+          "fact": "getContainer appends the toast container to document.body at 10004. Home descendants have their own containing stacking context; computed runtime ordering unverified."
+        }
+      ]
+    },
+    {
+      "path": "src/components/UnifiedWebcamPanel.ts",
+      "kind": "js-z-index",
+      "anchor": "js > class:UnifiedWebcamPanel > function:showToast > assignment:toast.style.zIndex > zIndex",
+      "expression": "'99999'",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "UnifiedWebcamPanel",
+      "context": "Transient toast appends to document.body; computed runtime ordering unverified.",
+      "rationale": "Preserve the reviewed existing declaration for UnifiedWebcamPanel. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/UnifiedWebcamPanel.ts",
+          "anchor": "js > class:UnifiedWebcamPanel > function:showToast > assignment:toast.style.zIndex > zIndex",
+          "fact": "Writes zIndex as '99999'."
+        },
+        {
+          "path": "src/components/UnifiedWebcamPanel.ts",
+          "anchor": "file",
+          "fact": "Transient toast appends to document.body; computed runtime ordering unverified."
+        }
+      ]
+    },
+    {
+      "path": "src/components/WelcomeFlow.ts",
+      "kind": "js-z-index",
+      "anchor": "js > class:WelcomeFlow > constructor > call:Object.assign(this.backdrop.style) > zIndex",
+      "expression": "String(WELCOME_BACKDROP_Z_INDEX)",
+      "count": 1,
+      "bindings": [
+        {
+          "name": "js > variable:WELCOME_BACKDROP_Z_INDEX",
+          "expression": "100000"
+        }
+      ],
+      "classification": "dom",
+      "owner": "WelcomeFlow",
+      "context": "show appends backdrop to document.body. Sink references local WELCOME_BACKDROP_Z_INDEX = 100_000; computed runtime ordering unverified.",
+      "rationale": "Preserve the reviewed existing declaration for WelcomeFlow. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/WelcomeFlow.ts",
+          "anchor": "js > class:WelcomeFlow > constructor > call:Object.assign(this.backdrop.style) > zIndex",
+          "fact": "Writes zIndex as String(WELCOME_BACKDROP_Z_INDEX)."
+        },
+        {
+          "path": "src/components/WelcomeFlow.ts",
+          "anchor": "file",
+          "fact": "show appends backdrop to document.body. Sink references local WELCOME_BACKDROP_Z_INDEX = 100_000; computed runtime ordering unverified."
+        }
+      ]
+    },
+    {
+      "path": "src/components/gods-vision/GlobeHeatmap.ts",
+      "kind": "css-z-index",
+      "anchor": "js > class:GlobeHeatmap > function:mount > assignment:canvas.style.cssText > css > z-index",
+      "expression": "5",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "GlobeHeatmap",
+      "context": "Canvas appends to this.container; complete ancestor stacking contexts unknown.",
+      "rationale": "Preserve the reviewed existing declaration for GlobeHeatmap. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/gods-vision/GlobeHeatmap.ts",
+          "anchor": "js > class:GlobeHeatmap > function:mount > assignment:canvas.style.cssText > css > z-index",
+          "fact": "Declares z-index as 5."
+        },
+        {
+          "path": "src/components/gods-vision/GlobeHeatmap.ts",
+          "anchor": "file",
+          "fact": "Canvas appends to this.container; complete ancestor stacking contexts unknown."
+        }
+      ]
+    },
+    {
+      "path": "src/components/gods-vision/GlobeHeatmapToggle.ts",
+      "kind": "css-z-index",
+      "anchor": "js > class:GlobeHeatmapToggle > function:mount > assignment:root.style.cssText > call:array.join > css > z-index",
+      "expression": "8",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "GlobeHeatmapToggle",
+      "context": "Toggle root appends to this.container; complete ancestor stacking contexts unknown.",
+      "rationale": "Preserve the reviewed existing declaration for GlobeHeatmapToggle. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/gods-vision/GlobeHeatmapToggle.ts",
+          "anchor": "js > class:GlobeHeatmapToggle > function:mount > assignment:root.style.cssText > call:array.join > css > z-index",
+          "fact": "Declares z-index as 8."
+        },
+        {
+          "path": "src/components/gods-vision/GlobeHeatmapToggle.ts",
+          "anchor": "file",
+          "fact": "Toggle root appends to this.container; complete ancestor stacking contexts unknown."
+        }
+      ]
+    },
+    {
+      "path": "src/components/gods-vision/GlobeTimelineSync.ts",
+      "kind": "css-z-index",
+      "anchor": "js > class:GlobeTimelineSync > function:mount > assignment:badge.style.cssText > call:array.join > css > z-index",
+      "expression": "8",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "GlobeTimelineSync",
+      "context": "Timeline badge appends to this.container; complete ancestor stacking contexts unknown.",
+      "rationale": "Preserve the reviewed existing declaration for GlobeTimelineSync. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/components/gods-vision/GlobeTimelineSync.ts",
+          "anchor": "js > class:GlobeTimelineSync > function:mount > assignment:badge.style.cssText > call:array.join > css > z-index",
+          "fact": "Declares z-index as 8."
+        },
+        {
+          "path": "src/components/gods-vision/GlobeTimelineSync.ts",
+          "anchor": "file",
+          "fact": "Timeline badge appends to this.container; complete ancestor stacking contexts unknown."
+        }
+      ]
+    },
+    {
+      "path": "src/main.ts",
+      "kind": "js-z-index",
+      "anchor": "js > function:showDesktopRuntimeDebugNotice > call:Object.assign(banner.style) > zIndex",
+      "expression": "'10000'",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "main",
+      "context": "Runtime debug banner appends to document.body; computed runtime ordering unverified.",
+      "rationale": "Preserve the reviewed existing declaration for main. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/main.ts",
+          "anchor": "js > function:showDesktopRuntimeDebugNotice > call:Object.assign(banner.style) > zIndex",
+          "fact": "Writes zIndex as '10000'."
+        },
+        {
+          "path": "src/main.ts",
+          "anchor": "file",
+          "fact": "Runtime debug banner appends to document.body; computed runtime ordering unverified."
+        }
+      ]
+    },
+    {
+      "path": "src/services/arrival-choreography.ts",
+      "kind": "css-z-index",
+      "anchor": "js > function:ensureCanvas > assignment:canvas.style.cssText > css > z-index",
+      "expression": "10",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "arrival-choreography",
+      "context": "Canvas appends to the supplied wrapper; complete ancestor stacking contexts unknown.",
+      "rationale": "Preserve the reviewed existing declaration for arrival-choreography. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/services/arrival-choreography.ts",
+          "anchor": "js > function:ensureCanvas > assignment:canvas.style.cssText > css > z-index",
+          "fact": "Declares z-index as 10."
+        },
+        {
+          "path": "src/services/arrival-choreography.ts",
+          "anchor": "file",
+          "fact": "Canvas appends to the supplied wrapper; complete ancestor stacking contexts unknown."
+        }
+      ]
+    },
+    {
+      "path": "src/services/log-bridge.ts",
+      "kind": "css-z-index",
+      "anchor": "js > function:showToast > assignment:el.style.cssText > css > z-index",
+      "expression": "99999",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "log-bridge",
+      "context": "Transient log feedback toast appends to document.body; computed runtime ordering unverified.",
+      "rationale": "Preserve the reviewed existing declaration for log-bridge. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/services/log-bridge.ts",
+          "anchor": "js > function:showToast > assignment:el.style.cssText > css > z-index",
+          "fact": "Declares z-index as 99999."
+        },
+        {
+          "path": "src/services/log-bridge.ts",
+          "anchor": "file",
+          "fact": "Transient log feedback toast appends to document.body; computed runtime ordering unverified."
+        }
+      ]
+    },
+    {
+      "path": "src/services/mode-transition-card.ts",
+      "kind": "js-z-index",
+      "anchor": "js > function:showCard > call:Object.assign(card.style) > zIndex",
+      "expression": "'99998'",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "mode-transition-card",
+      "context": "Mode transition card appends to document.body; computed runtime ordering unverified.",
+      "rationale": "Preserve the reviewed existing declaration for mode-transition-card. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/services/mode-transition-card.ts",
+          "anchor": "js > function:showCard > call:Object.assign(card.style) > zIndex",
+          "fact": "Writes zIndex as '99998'."
+        },
+        {
+          "path": "src/services/mode-transition-card.ts",
+          "anchor": "file",
+          "fact": "Mode transition card appends to document.body; computed runtime ordering unverified."
+        }
+      ]
+    },
+    {
+      "path": "src/services/panel-correlation.ts",
+      "kind": "js-z-index",
+      "anchor": "js > function:_showBanner > call:Object.assign(banner.style) > zIndex",
+      "expression": "'99999'",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "panel-correlation",
+      "context": "Compound alert banner appends to document.body; computed runtime ordering unverified.",
+      "rationale": "Preserve the reviewed existing declaration for panel-correlation. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/services/panel-correlation.ts",
+          "anchor": "js > function:_showBanner > call:Object.assign(banner.style) > zIndex",
+          "fact": "Writes zIndex as '99999'."
+        },
+        {
+          "path": "src/services/panel-correlation.ts",
+          "anchor": "file",
+          "fact": "Compound alert banner appends to document.body; computed runtime ordering unverified."
+        }
+      ]
+    },
+    {
+      "path": "src/services/survival/lens-marker-apply.ts",
+      "kind": "js-z-index",
+      "anchor": "js > function:applyLensStyle > zIndex",
+      "expression": "style.zIndex",
+      "count": 1,
+      "bindings": [],
+      "classification": "non-dom",
+      "owner": "lens-marker-apply",
+      "context": "Pure AppliedMarkerVisual return object copies style.zIndex. This site does not assign a DOM style; downstream render mapping is outside this classification.",
+      "rationale": "Preserve this reviewed draw/sort metadata field separately from DOM stacking. This classification covers only this return-object field.",
+      "evidence": [
+        {
+          "path": "src/services/survival/lens-marker-apply.ts",
+          "anchor": "js > function:applyLensStyle > zIndex",
+          "fact": "Writes zIndex as style.zIndex."
+        },
+        {
+          "path": "src/services/survival/lens-marker-apply.ts",
+          "anchor": "file",
+          "fact": "Pure AppliedMarkerVisual return object copies style.zIndex. This site does not assign a DOM style; downstream render mapping is outside this classification."
+        }
+      ]
+    },
+    {
+      "path": "src/services/survival/lens-marker-style.ts",
+      "kind": "js-z-index",
+      "anchor": "js > function:markerStyleForLens > zIndex",
+      "expression": "tint.priority",
+      "count": 1,
+      "bindings": [
+        {
+          "name": "js > function:markerStyleForLens > variable:tint",
+          "expression": "lensTint(view.tier)"
+        }
+      ],
+      "classification": "non-dom",
+      "owner": "lens-marker-style",
+      "context": "Pure LensMarkerStyle return object copies tint.priority as draw/sort metadata. This site does not assign a DOM style; downstream render mapping is outside this classification.",
+      "rationale": "Preserve this reviewed draw/sort metadata field separately from DOM stacking. This classification covers only this return-object field.",
+      "evidence": [
+        {
+          "path": "src/services/survival/lens-marker-style.ts",
+          "anchor": "js > function:markerStyleForLens > zIndex",
+          "fact": "Writes zIndex as tint.priority."
+        },
+        {
+          "path": "src/services/survival/lens-marker-style.ts",
+          "anchor": "file",
+          "fact": "Pure LensMarkerStyle return object copies tint.priority as draw/sort metadata. This site does not assign a DOM style; downstream render mapping is outside this classification."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/alerts.css",
+      "kind": "css-z-index",
+      "anchor": "css > .cmdk-overlay > z-index",
+      "expression": "10001",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Alert center, triage, watchlist, digest and shortcut overlays / .cmdk-overlay",
+      "context": "Application stylesheet selectors; document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Alert center, triage, watchlist, digest and shortcut overlays / .cmdk-overlay. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/alerts.css",
+          "anchor": "css > .cmdk-overlay > z-index",
+          "fact": "Declares z-index as 10001."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/alerts.css",
+      "kind": "css-z-index",
+      "anchor": "css > .corr-overlay > z-index",
+      "expression": "10003",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Alert center, triage, watchlist, digest and shortcut overlays / .corr-overlay",
+      "context": "Application stylesheet selectors; document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Alert center, triage, watchlist, digest and shortcut overlays / .corr-overlay. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/alerts.css",
+          "anchor": "css > .corr-overlay > z-index",
+          "fact": "Declares z-index as 10003."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/alerts.css",
+      "kind": "css-z-index",
+      "anchor": "css > .digest-overlay > z-index",
+      "expression": "10002",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Alert center, triage, watchlist, digest and shortcut overlays / .digest-overlay",
+      "context": "Application stylesheet selectors; document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Alert center, triage, watchlist, digest and shortcut overlays / .digest-overlay. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/alerts.css",
+          "anchor": "css > .digest-overlay > z-index",
+          "fact": "Declares z-index as 10002."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/alerts.css",
+      "kind": "css-z-index",
+      "anchor": "css > .help-overlay > z-index",
+      "expression": "10004",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Alert center, triage, watchlist, digest and shortcut overlays / .help-overlay",
+      "context": "Application stylesheet selectors; document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Alert center, triage, watchlist, digest and shortcut overlays / .help-overlay. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/alerts.css",
+          "anchor": "css > .help-overlay > z-index",
+          "fact": "Declares z-index as 10004."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/alerts.css",
+      "kind": "css-z-index",
+      "anchor": "css > .today-view > z-index",
+      "expression": "9999",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Alert center, triage, watchlist, digest and shortcut overlays / .today-view",
+      "context": "Application stylesheet selectors; document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Alert center, triage, watchlist, digest and shortcut overlays / .today-view. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/alerts.css",
+          "anchor": "css > .today-view > z-index",
+          "fact": "Declares z-index as 9999."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/alerts.css",
+      "kind": "css-z-index",
+      "anchor": "css > .triage-preset-menu > z-index",
+      "expression": "200",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Alert center, triage, watchlist, digest and shortcut overlays / .triage-preset-menu",
+      "context": "Application stylesheet selectors; document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Alert center, triage, watchlist, digest and shortcut overlays / .triage-preset-menu. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/alerts.css",
+          "anchor": "css > .triage-preset-menu > z-index",
+          "fact": "Declares z-index as 200."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/alerts.css",
+      "kind": "css-z-index",
+      "anchor": "css > .triage-snooze-menu > z-index",
+      "expression": "10000",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Alert center, triage, watchlist, digest and shortcut overlays / .triage-snooze-menu",
+      "context": "Application stylesheet selectors; document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Alert center, triage, watchlist, digest and shortcut overlays / .triage-snooze-menu. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/alerts.css",
+          "anchor": "css > .triage-snooze-menu > z-index",
+          "fact": "Declares z-index as 10000."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/alerts.css",
+      "kind": "css-z-index",
+      "anchor": "css > .watchlist-editor > z-index",
+      "expression": "9999",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Alert center, triage, watchlist, digest and shortcut overlays / .watchlist-editor",
+      "context": "Application stylesheet selectors; document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Alert center, triage, watchlist, digest and shortcut overlays / .watchlist-editor. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/alerts.css",
+          "anchor": "css > .watchlist-editor > z-index",
+          "fact": "Declares z-index as 9999."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/correlation-banner.css",
+      "kind": "css-z-index",
+      "anchor": "css > .cb-correlation-banner > z-index",
+      "expression": "999",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Correlation banner / .cb-correlation-banner",
+      "context": "Relative-positioned banner stylesheet; actual parent and stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Correlation banner / .cb-correlation-banner. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/correlation-banner.css",
+          "anchor": "css > .cb-correlation-banner > z-index",
+          "fact": "Declares z-index as 999."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/eew-status-bar.css",
+      "kind": "css-z-index",
+      "anchor": "css > .eew-status-bar > z-index",
+      "expression": "var(--z-status-bar)",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "EEWStatusBar / .eew-status-bar",
+      "context": "Fixed alert bar stylesheet with macOS-specific override; actual parent and stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for EEWStatusBar / .eew-status-bar. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/eew-status-bar.css",
+          "anchor": "css > .eew-status-bar > z-index",
+          "fact": "Declares z-index as var(--z-status-bar)."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/eew-status-bar.css",
+      "kind": "css-z-index",
+      "anchor": "css > body.is-desktop-macos .eew-status-bar > z-index",
+      "expression": "calc(var(--z-status-bar) + 2)",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "EEWStatusBar / body.is-desktop-macos .eew-status-bar",
+      "context": "Fixed alert bar stylesheet with macOS-specific override; actual parent and stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for EEWStatusBar / body.is-desktop-macos .eew-status-bar. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/eew-status-bar.css",
+          "anchor": "css > body.is-desktop-macos .eew-status-bar > z-index",
+          "fact": "Declares z-index as calc(var(--z-status-bar) + 2)."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/gods-eye-4d.css",
+      "kind": "css-z-index",
+      "anchor": "css > .ge-event-block:hover > z-index",
+      "expression": "2",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "God's Eye swimlane / .ge-event-block:hover",
+      "context": "Swimlane, hovered event, current-time line and tooltip selectors; complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for God's Eye swimlane / .ge-event-block:hover. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/gods-eye-4d.css",
+          "anchor": "css > .ge-event-block:hover > z-index",
+          "fact": "Declares z-index as 2."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/gods-eye-4d.css",
+      "kind": "css-z-index",
+      "anchor": "css > .ge-now-line > z-index",
+      "expression": "5",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "God's Eye swimlane / .ge-now-line",
+      "context": "Swimlane, hovered event, current-time line and tooltip selectors; complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for God's Eye swimlane / .ge-now-line. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/gods-eye-4d.css",
+          "anchor": "css > .ge-now-line > z-index",
+          "fact": "Declares z-index as 5."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/gods-eye-4d.css",
+      "kind": "css-z-index",
+      "anchor": "css > .ge-swimlane > z-index",
+      "expression": "8",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "God's Eye swimlane / .ge-swimlane",
+      "context": "Swimlane, hovered event, current-time line and tooltip selectors; complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for God's Eye swimlane / .ge-swimlane. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/gods-eye-4d.css",
+          "anchor": "css > .ge-swimlane > z-index",
+          "fact": "Declares z-index as 8."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/gods-eye-4d.css",
+      "kind": "css-z-index",
+      "anchor": "css > .ge-swimlane-tooltip > z-index",
+      "expression": "100",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "God's Eye swimlane / .ge-swimlane-tooltip",
+      "context": "Swimlane, hovered event, current-time line and tooltip selectors; complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for God's Eye swimlane / .ge-swimlane-tooltip. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/gods-eye-4d.css",
+          "anchor": "css > .ge-swimlane-tooltip > z-index",
+          "fact": "Declares z-index as 100."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/gods-vision.css",
+      "kind": "css-z-index",
+      "anchor": "css > .ge-drag-strip > z-index",
+      "expression": "100",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "GodsVisionView and globe HUD styling / .ge-drag-strip",
+      "context": "God's Vision root and child surface selectors; complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for GodsVisionView and globe HUD styling / .ge-drag-strip. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/gods-vision.css",
+          "anchor": "css > .ge-drag-strip > z-index",
+          "fact": "Declares z-index as 100."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/gods-vision.css",
+      "kind": "css-z-index",
+      "anchor": "css > .ge-flymode-bar > z-index",
+      "expression": "20",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "GodsVisionView and globe HUD styling / .ge-flymode-bar",
+      "context": "God's Vision root and child surface selectors; complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for GodsVisionView and globe HUD styling / .ge-flymode-bar. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/gods-vision.css",
+          "anchor": "css > .ge-flymode-bar > z-index",
+          "fact": "Declares z-index as 20."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/gods-vision.css",
+      "kind": "css-z-index",
+      "anchor": "css > .ge-scanlines > z-index",
+      "expression": "20",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "GodsVisionView and globe HUD styling / .ge-scanlines",
+      "context": "God's Vision root and child surface selectors; complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for GodsVisionView and globe HUD styling / .ge-scanlines. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/gods-vision.css",
+          "anchor": "css > .ge-scanlines > z-index",
+          "fact": "Declares z-index as 20."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/gods-vision.css",
+      "kind": "css-z-index",
+      "anchor": "css > .ge-search-root > z-index",
+      "expression": "20",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "GodsVisionView and globe HUD styling / .ge-search-root",
+      "context": "God's Vision root and child surface selectors; complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for GodsVisionView and globe HUD styling / .ge-search-root. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/gods-vision.css",
+          "anchor": "css > .ge-search-root > z-index",
+          "fact": "Declares z-index as 20."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/gods-vision.css",
+      "kind": "css-z-index",
+      "anchor": "css > .ge-tooltip > z-index",
+      "expression": "50",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "GodsVisionView and globe HUD styling / .ge-tooltip",
+      "context": "God's Vision root and child surface selectors; complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for GodsVisionView and globe HUD styling / .ge-tooltip. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/gods-vision.css",
+          "anchor": "css > .ge-tooltip > z-index",
+          "fact": "Declares z-index as 50."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/gods-vision.css",
+      "kind": "css-z-index",
+      "anchor": "css > .ge-vignette > z-index",
+      "expression": "19",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "GodsVisionView and globe HUD styling / .ge-vignette",
+      "context": "God's Vision root and child surface selectors; complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for GodsVisionView and globe HUD styling / .ge-vignette. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/gods-vision.css",
+          "anchor": "css > .ge-vignette > z-index",
+          "fact": "Declares z-index as 19."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/gods-vision.css",
+      "kind": "css-z-index",
+      "anchor": "css > .gods-vision-container > z-index",
+      "expression": "1000",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "GodsVisionView and globe HUD styling / .gods-vision-container",
+      "context": "God's Vision root and child surface selectors; complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for GodsVisionView and globe HUD styling / .gods-vision-container. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/gods-vision.css",
+          "anchor": "css > .gods-vision-container > z-index",
+          "fact": "Declares z-index as 1000."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/gods-vision.css",
+      "kind": "css-z-index",
+      "anchor": "css > .gods-vision-webcam-viewer > z-index",
+      "expression": "30",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "GodsVisionView and globe HUD styling / .gods-vision-webcam-viewer",
+      "context": "God's Vision root and child surface selectors; complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for GodsVisionView and globe HUD styling / .gods-vision-webcam-viewer. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/gods-vision.css",
+          "anchor": "css > .gods-vision-webcam-viewer > z-index",
+          "fact": "Declares z-index as 30."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/gods-vision.css",
+      "kind": "css-z-index",
+      "anchor": "css > .time-scrubber-hud > z-index",
+      "expression": "20",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "GodsVisionView and globe HUD styling / .time-scrubber-hud",
+      "context": "God's Vision root and child surface selectors; complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for GodsVisionView and globe HUD styling / .time-scrubber-hud. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/gods-vision.css",
+          "anchor": "css > .time-scrubber-hud > z-index",
+          "fact": "Declares z-index as 20."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/happy-theme.css",
+      "kind": "css-z-index",
+      "anchor": "css > [data-tv-mode] .tv-exit-btn > z-index",
+      "expression": "9999",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Happy variant card, chart and TV styling / [data-tv-mode] .tv-exit-btn",
+      "context": "Variant/TV-scoped selectors and pseudo-elements; actual parent and stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Happy variant card, chart and TV styling / [data-tv-mode] .tv-exit-btn. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/happy-theme.css",
+          "anchor": "css > [data-tv-mode] .tv-exit-btn > z-index",
+          "fact": "Declares z-index as 9999."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/happy-theme.css",
+      "kind": "css-z-index",
+      "anchor": "css > [data-tv-mode]::before, [data-tv-mode]::after > z-index",
+      "expression": "0",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Happy variant card, chart and TV styling / [data-tv-mode]::before, [data-tv-mode]::after",
+      "context": "Variant/TV-scoped selectors and pseudo-elements; actual parent and stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Happy variant card, chart and TV styling / [data-tv-mode]::before, [data-tv-mode]::after. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/happy-theme.css",
+          "anchor": "css > [data-tv-mode]::before, [data-tv-mode]::after > z-index",
+          "fact": "Declares z-index as 0."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/happy-theme.css",
+      "kind": "css-z-index",
+      "anchor": "css > [data-variant='happy'] .progress-chart-tooltip > z-index",
+      "expression": "10",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Happy variant card, chart and TV styling / [data-variant='happy'] .progress-chart-tooltip",
+      "context": "Variant/TV-scoped selectors and pseudo-elements; actual parent and stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Happy variant card, chart and TV styling / [data-variant='happy'] .progress-chart-tooltip. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/happy-theme.css",
+          "anchor": "css > [data-variant='happy'] .progress-chart-tooltip > z-index",
+          "fact": "Declares z-index as 10."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/happy-theme.css",
+      "kind": "css-z-index",
+      "anchor": "css > [data-variant=\"happy\"] .positive-card-share > z-index",
+      "expression": "2",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Happy variant card, chart and TV styling / [data-variant=\"happy\"] .positive-card-share",
+      "context": "Variant/TV-scoped selectors and pseudo-elements; actual parent and stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Happy variant card, chart and TV styling / [data-variant=\"happy\"] .positive-card-share. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/happy-theme.css",
+          "anchor": "css > [data-variant=\"happy\"] .positive-card-share > z-index",
+          "fact": "Declares z-index as 2."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/home-shell.css",
+      "kind": "css-z-index",
+      "anchor": "css > .home-shell > z-index",
+      "expression": "10000",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "HomeShellOverlay / .home-shell",
+      "context": "Home creates a fixed stacking context at 10000; local descendants cannot be globally ordered by their own levels. Complete computed ancestry unverified.",
+      "rationale": "Preserve the reviewed existing declaration for HomeShellOverlay / .home-shell. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/home-shell.css",
+          "anchor": "css > .home-shell > z-index",
+          "fact": "Declares z-index as 10000."
+        },
+        {
+          "path": "src/components/HomeShellOverlay.ts",
+          "anchor": "file",
+          "fact": "mount builds header and viewport within scroll, appends scroll to root, and mounts dossier/focus hosts on root. Root is .home-shell."
+        },
+        {
+          "path": "src/app/panel-layout.ts",
+          "anchor": "file",
+          "fact": "ensureHomeShell mounts HomeShellOverlay on document.body."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/home-shell.css",
+      "kind": "css-z-index",
+      "anchor": "css > .home-shell-header > z-index",
+      "expression": "5",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "HomeShellOverlay / .home-shell-header",
+      "context": "Home creates a fixed stacking context at 10000; local descendants cannot be globally ordered by their own levels. Complete computed ancestry unverified.",
+      "rationale": "Preserve the reviewed existing declaration for HomeShellOverlay / .home-shell-header. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/home-shell.css",
+          "anchor": "css > .home-shell-header > z-index",
+          "fact": "Declares z-index as 5."
+        },
+        {
+          "path": "src/components/HomeShellOverlay.ts",
+          "anchor": "file",
+          "fact": "mount builds header and viewport within scroll, appends scroll to root, and mounts dossier/focus hosts on root. Root is .home-shell."
+        },
+        {
+          "path": "src/app/panel-layout.ts",
+          "anchor": "file",
+          "fact": "ensureHomeShell mounts HomeShellOverlay on document.body."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/home-shell.css",
+      "kind": "css-z-index",
+      "anchor": "css > .hs-dossier > z-index",
+      "expression": "2",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "HomeShellOverlay / .hs-dossier",
+      "context": "Home creates a fixed stacking context at 10000; local descendants cannot be globally ordered by their own levels. Complete computed ancestry unverified.",
+      "rationale": "Preserve the reviewed existing declaration for HomeShellOverlay / .hs-dossier. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/home-shell.css",
+          "anchor": "css > .hs-dossier > z-index",
+          "fact": "Declares z-index as 2."
+        },
+        {
+          "path": "src/components/HomeShellOverlay.ts",
+          "anchor": "file",
+          "fact": "mount builds header and viewport within scroll, appends scroll to root, and mounts dossier/focus hosts on root. Root is .home-shell."
+        },
+        {
+          "path": "src/app/panel-layout.ts",
+          "anchor": "file",
+          "fact": "ensureHomeShell mounts HomeShellOverlay on document.body."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/home-shell.css",
+      "kind": "css-z-index",
+      "anchor": "css > .hs-dossier-scrim > z-index",
+      "expression": "1",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "HomeShellOverlay / .hs-dossier-scrim",
+      "context": "Home creates a fixed stacking context at 10000; local descendants cannot be globally ordered by their own levels. Complete computed ancestry unverified.",
+      "rationale": "Preserve the reviewed existing declaration for HomeShellOverlay / .hs-dossier-scrim. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/home-shell.css",
+          "anchor": "css > .hs-dossier-scrim > z-index",
+          "fact": "Declares z-index as 1."
+        },
+        {
+          "path": "src/components/HomeShellOverlay.ts",
+          "anchor": "file",
+          "fact": "mount builds header and viewport within scroll, appends scroll to root, and mounts dossier/focus hosts on root. Root is .home-shell."
+        },
+        {
+          "path": "src/app/panel-layout.ts",
+          "anchor": "file",
+          "fact": "ensureHomeShell mounts HomeShellOverlay on document.body."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/home-shell.css",
+      "kind": "css-z-index",
+      "anchor": "css > .hs-focus > z-index",
+      "expression": "4",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "HomeShellOverlay / .hs-focus",
+      "context": "Home creates a fixed stacking context at 10000; local descendants cannot be globally ordered by their own levels. Complete computed ancestry unverified.",
+      "rationale": "Preserve the reviewed existing declaration for HomeShellOverlay / .hs-focus. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/home-shell.css",
+          "anchor": "css > .hs-focus > z-index",
+          "fact": "Declares z-index as 4."
+        },
+        {
+          "path": "src/components/HomeShellOverlay.ts",
+          "anchor": "file",
+          "fact": "mount builds header and viewport within scroll, appends scroll to root, and mounts dossier/focus hosts on root. Root is .home-shell."
+        },
+        {
+          "path": "src/app/panel-layout.ts",
+          "anchor": "file",
+          "fact": "ensureHomeShell mounts HomeShellOverlay on document.body."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/home-shell.css",
+      "kind": "css-z-index",
+      "anchor": "css > .hs-focus-scrim > z-index",
+      "expression": "3",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "HomeShellOverlay / .hs-focus-scrim",
+      "context": "Home creates a fixed stacking context at 10000; local descendants cannot be globally ordered by their own levels. Complete computed ancestry unverified.",
+      "rationale": "Preserve the reviewed existing declaration for HomeShellOverlay / .hs-focus-scrim. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/home-shell.css",
+          "anchor": "css > .hs-focus-scrim > z-index",
+          "fact": "Declares z-index as 3."
+        },
+        {
+          "path": "src/components/HomeShellOverlay.ts",
+          "anchor": "file",
+          "fact": "mount builds header and viewport within scroll, appends scroll to root, and mounts dossier/focus hosts on root. Root is .home-shell."
+        },
+        {
+          "path": "src/app/panel-layout.ts",
+          "anchor": "file",
+          "fact": "ensureHomeShell mounts HomeShellOverlay on document.body."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/home-shell.css",
+      "kind": "css-z-index",
+      "anchor": "css > .hs-pin-list > z-index",
+      "expression": "10",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "HomeShellOverlay / .hs-pin-list",
+      "context": "Home creates a fixed stacking context at 10000; local descendants cannot be globally ordered by their own levels. Complete computed ancestry unverified.",
+      "rationale": "Preserve the reviewed existing declaration for HomeShellOverlay / .hs-pin-list. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/home-shell.css",
+          "anchor": "css > .hs-pin-list > z-index",
+          "fact": "Declares z-index as 10."
+        },
+        {
+          "path": "src/components/HomeShellOverlay.ts",
+          "anchor": "file",
+          "fact": "mount builds header and viewport within scroll, appends scroll to root, and mounts dossier/focus hosts on root. Root is .home-shell."
+        },
+        {
+          "path": "src/app/panel-layout.ts",
+          "anchor": "file",
+          "fact": "ensureHomeShell mounts HomeShellOverlay on document.body."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/library.css",
+      "kind": "css-z-index",
+      "anchor": "css > .library-overlay > z-index",
+      "expression": "10001",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "LibraryOverlay / .library-overlay",
+      "context": "LibraryOverlay.mount receives document.body in panel-layout.ts; computed runtime ancestry unverified.",
+      "rationale": "Preserve the reviewed existing declaration for LibraryOverlay / .library-overlay. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/library.css",
+          "anchor": "css > .library-overlay > z-index",
+          "fact": "Declares z-index as 10001."
+        },
+        {
+          "path": "src/app/panel-layout.ts",
+          "anchor": "file",
+          "fact": "CommandPalettePanel and LibraryOverlay mount on document.body."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/macos-native.css",
+      "kind": "css-z-index",
+      "anchor": "css > .godsvision-time-machine > z-index",
+      "expression": "30",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "macOS sidebar, God's Eye time machine and setup styling / .godsvision-time-machine",
+      "context": "Mode-scoped sidebar pseudo-elements and positioned controls; actual parent and stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for macOS sidebar, God's Eye time machine and setup styling / .godsvision-time-machine. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/macos-native.css",
+          "anchor": "css > .godsvision-time-machine > z-index",
+          "fact": "Declares z-index as 30."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/macos-native.css",
+      "kind": "css-z-index",
+      "anchor": "css > .mac-sidebar-collapse-tab > z-index",
+      "expression": "1000",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "macOS sidebar, God's Eye time machine and setup styling / .mac-sidebar-collapse-tab",
+      "context": "Mode-scoped sidebar pseudo-elements and positioned controls; actual parent and stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for macOS sidebar, God's Eye time machine and setup styling / .mac-sidebar-collapse-tab. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/macos-native.css",
+          "anchor": "css > .mac-sidebar-collapse-tab > z-index",
+          "fact": "Declares z-index as 1000."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/macos-native.css",
+      "kind": "css-z-index",
+      "anchor": "css > .setup-wizard-overlay > z-index",
+      "expression": "9999",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "macOS sidebar, God's Eye time machine and setup styling / .setup-wizard-overlay",
+      "context": "Mode-scoped sidebar pseudo-elements and positioned controls; actual parent and stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for macOS sidebar, God's Eye time machine and setup styling / .setup-wizard-overlay. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/macos-native.css",
+          "anchor": "css > .setup-wizard-overlay > z-index",
+          "fact": "Declares z-index as 9999."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/macos-native.css",
+      "kind": "css-z-index",
+      "anchor": "css > body.is-desktop-macos[data-app-mode=\"disaster\"] .mac-sidebar::before > z-index",
+      "expression": "10",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "macOS sidebar, God's Eye time machine and setup styling / body.is-desktop-macos[data-app-mode=\"disaster\"] .mac-sidebar::before",
+      "context": "Mode-scoped sidebar pseudo-elements and positioned controls; actual parent and stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for macOS sidebar, God's Eye time machine and setup styling / body.is-desktop-macos[data-app-mode=\"disaster\"] .mac-sidebar::before. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/macos-native.css",
+          "anchor": "css > body.is-desktop-macos[data-app-mode=\"disaster\"] .mac-sidebar::before > z-index",
+          "fact": "Declares z-index as 10."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/macos-native.css",
+      "kind": "css-z-index",
+      "anchor": "css > body.is-desktop-macos[data-app-mode=\"finance\"] .mac-sidebar::before > z-index",
+      "expression": "10",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "macOS sidebar, God's Eye time machine and setup styling / body.is-desktop-macos[data-app-mode=\"finance\"] .mac-sidebar::before",
+      "context": "Mode-scoped sidebar pseudo-elements and positioned controls; actual parent and stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for macOS sidebar, God's Eye time machine and setup styling / body.is-desktop-macos[data-app-mode=\"finance\"] .mac-sidebar::before. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/macos-native.css",
+          "anchor": "css > body.is-desktop-macos[data-app-mode=\"finance\"] .mac-sidebar::before > z-index",
+          "fact": "Declares z-index as 10."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/macos-native.css",
+      "kind": "css-z-index",
+      "anchor": "css > body.is-desktop-macos[data-app-mode=\"ghost\"] .mac-sidebar::before > z-index",
+      "expression": "10",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "macOS sidebar, God's Eye time machine and setup styling / body.is-desktop-macos[data-app-mode=\"ghost\"] .mac-sidebar::before",
+      "context": "Mode-scoped sidebar pseudo-elements and positioned controls; actual parent and stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for macOS sidebar, God's Eye time machine and setup styling / body.is-desktop-macos[data-app-mode=\"ghost\"] .mac-sidebar::before. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/macos-native.css",
+          "anchor": "css > body.is-desktop-macos[data-app-mode=\"ghost\"] .mac-sidebar::before > z-index",
+          "fact": "Declares z-index as 10."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/macos-native.css",
+      "kind": "css-z-index",
+      "anchor": "css > body.is-desktop-macos[data-app-mode=\"war\"] .mac-sidebar::before > z-index",
+      "expression": "10",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "macOS sidebar, God's Eye time machine and setup styling / body.is-desktop-macos[data-app-mode=\"war\"] .mac-sidebar::before",
+      "context": "Mode-scoped sidebar pseudo-elements and positioned controls; actual parent and stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for macOS sidebar, God's Eye time machine and setup styling / body.is-desktop-macos[data-app-mode=\"war\"] .mac-sidebar::before. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/macos-native.css",
+          "anchor": "css > body.is-desktop-macos[data-app-mode=\"war\"] .mac-sidebar::before > z-index",
+          "fact": "Declares z-index as 10."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-token",
+      "anchor": "css > :root > --z-help",
+      "expression": "10004",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Shared overlay token scale",
+      "context": "Application :root token definition; consumers can inhabit different stacking contexts.",
+      "rationale": "Preserve the reviewed existing declaration for Shared overlay token scale. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > :root > --z-help",
+          "fact": "Defines token as 10004."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-token",
+      "anchor": "css > :root > --z-modal",
+      "expression": "10000",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Shared overlay token scale",
+      "context": "Application :root token definition; consumers can inhabit different stacking contexts.",
+      "rationale": "Preserve the reviewed existing declaration for Shared overlay token scale. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > :root > --z-modal",
+          "fact": "Defines token as 10000."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-token",
+      "anchor": "css > :root > --z-modal-raised",
+      "expression": "10001",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Shared overlay token scale",
+      "context": "Application :root token definition; consumers can inhabit different stacking contexts.",
+      "rationale": "Preserve the reviewed existing declaration for Shared overlay token scale. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > :root > --z-modal-raised",
+          "fact": "Defines token as 10001."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-token",
+      "anchor": "css > :root > --z-modal-top",
+      "expression": "10002",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Shared overlay token scale",
+      "context": "Application :root token definition; consumers can inhabit different stacking contexts.",
+      "rationale": "Preserve the reviewed existing declaration for Shared overlay token scale. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > :root > --z-modal-top",
+          "fact": "Defines token as 10002."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-token",
+      "anchor": "css > :root > --z-overlay-top",
+      "expression": "10003",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Shared overlay token scale",
+      "context": "Application :root token definition; consumers can inhabit different stacking contexts.",
+      "rationale": "Preserve the reviewed existing declaration for Shared overlay token scale. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > :root > --z-overlay-top",
+          "fact": "Defines token as 10003."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-token",
+      "anchor": "css > :root > --z-shift-overlay",
+      "expression": "1200",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Shared overlay token scale",
+      "context": "Application :root token definition; consumers can inhabit different stacking contexts.",
+      "rationale": "Preserve the reviewed existing declaration for Shared overlay token scale. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > :root > --z-shift-overlay",
+          "fact": "Defines token as 1200."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-token",
+      "anchor": "css > :root > --z-status-bar",
+      "expression": "9000",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Shared overlay token scale",
+      "context": "Application :root token definition; consumers can inhabit different stacking contexts.",
+      "rationale": "Preserve the reviewed existing declaration for Shared overlay token scale. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > :root > --z-status-bar",
+          "fact": "Defines token as 9000."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-token",
+      "anchor": "css > :root > --z-strip",
+      "expression": "1040",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Shared overlay token scale",
+      "context": "Application :root token definition; consumers can inhabit different stacking contexts.",
+      "rationale": "Preserve the reviewed existing declaration for Shared overlay token scale. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > :root > --z-strip",
+          "fact": "Defines token as 1040."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-token",
+      "anchor": "css > :root > --z-strip-raised",
+      "expression": "1050",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Shared overlay token scale",
+      "context": "Application :root token definition; consumers can inhabit different stacking contexts.",
+      "rationale": "Preserve the reviewed existing declaration for Shared overlay token scale. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > :root > --z-strip-raised",
+          "fact": "Defines token as 1050."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-token",
+      "anchor": "css > :root > --z-toast",
+      "expression": "10004",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Shared overlay token scale",
+      "context": "Application :root token definition; consumers can inhabit different stacking contexts.",
+      "rationale": "Preserve the reviewed existing declaration for Shared overlay token scale. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > :root > --z-toast",
+          "fact": "Defines token as 10004."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > #unifiedSettingsModal, #savedPlaceModal > z-index",
+      "expression": "var(--z-modal-raised)",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "UnifiedSettings and SavedPlaceModal",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for UnifiedSettings and SavedPlaceModal. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > #unifiedSettingsModal, #savedPlaceModal > z-index",
+          "fact": "Declares z-index as var(--z-modal-raised)."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .accelerator-marker > z-index",
+      "expression": "53",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map accelerator markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map accelerator markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .accelerator-marker > z-index",
+          "fact": "Declares z-index as 53."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .ai-brief-modal-overlay > z-index",
+      "expression": "1000",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "AiBriefModal",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for AiBriefModal. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .ai-brief-modal-overlay > z-index",
+          "fact": "Declares z-index as 1000."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .ais-disruption-marker > z-index",
+      "expression": "53",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map AIS disruption markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map AIS disruption markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .ais-disruption-marker > z-index",
+          "fact": "Declares z-index as 53."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .alert-timeline > z-index",
+      "expression": "44",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "AlertTimeline",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for AlertTimeline. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .alert-timeline > z-index",
+          "fact": "Declares z-index as 44."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .analyst-hud > z-index",
+      "expression": "520",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "AnalystHUD",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for AnalystHUD. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .analyst-hud > z-index",
+          "fact": "Declares z-index as 520."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .analyst-hud-settings > z-index",
+      "expression": "1",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "AnalystHUD settings",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for AnalystHUD settings. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .analyst-hud-settings > z-index",
+          "fact": "Declares z-index as 1."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .apt-marker > z-index",
+      "expression": "53",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map APT markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map APT markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .apt-marker > z-index",
+          "fact": "Declares z-index as 53."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .at-dropdown > z-index",
+      "expression": "200",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "AlertTimeline dropdown",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for AlertTimeline dropdown. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .at-dropdown > z-index",
+          "fact": "Declares z-index as 200."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .base-marker > z-index",
+      "expression": "51",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map base markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map base markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .base-marker > z-index",
+          "fact": "Declares z-index as 51."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .base-marker.asset-highlight, .datacenter-marker.asset-highlight, .nuclear-marker.asset-highlight > z-index",
+      "expression": "30",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map asset highlights",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map asset highlights. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .base-marker.asset-highlight, .datacenter-marker.asset-highlight, .nuclear-marker.asset-highlight > z-index",
+          "fact": "Declares z-index as 30."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .breaking-news-container > z-index",
+      "expression": "1001",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "BreakingNewsBanner",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for BreakingNewsBanner. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .breaking-news-container > z-index",
+          "fact": "Declares z-index as 1001."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .breaking-tag > z-index",
+      "expression": "55",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map breaking tag styling (runtime consumer unknown)",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map breaking tag styling (runtime consumer unknown). Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .breaking-tag > z-index",
+          "fact": "Declares z-index as 55."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .cable-advisory-marker, .repair-ship-marker > z-index",
+      "expression": "52",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map cable advisory and repair ship markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map cable advisory and repair ship markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .cable-advisory-marker, .repair-ship-marker > z-index",
+          "fact": "Declares z-index as 52."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .cb-export-menu > z-index",
+      "expression": "10",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "CountryBriefPage export menu",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for CountryBriefPage export menu. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .cb-export-menu > z-index",
+          "fact": "Declares z-index as 10."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .cb-header > z-index",
+      "expression": "1",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "CountryBriefPage sticky header",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for CountryBriefPage sticky header. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .cb-header > z-index",
+          "fact": "Declares z-index as 1."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .cb-summary-strip > z-index",
+      "expression": "40",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "SummaryStrip",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for SummaryStrip. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .cb-summary-strip > z-index",
+          "fact": "Declares z-index as 40."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .cbs-strip > z-index",
+      "expression": "var(--z-strip-raised)",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "CrystalBallSays",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for CrystalBallSays. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .cbs-strip > z-index",
+          "fact": "Declares z-index as var(--z-strip-raised)."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .cloud-region-marker > z-index",
+      "expression": "54",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map cloud region markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map cloud region markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .cloud-region-marker > z-index",
+          "fact": "Declares z-index as 54."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .cluster-badge > z-index",
+      "expression": "10",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map cluster badges",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map cluster badges. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .cluster-badge > z-index",
+          "fact": "Declares z-index as 10."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .community-widget > z-index",
+      "expression": "9000",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "CommunityWidget",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for CommunityWidget. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .community-widget > z-index",
+          "fact": "Declares z-index as 9000."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .conflict-click-area > z-index",
+      "expression": "50",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map conflict click area",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map conflict click area. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .conflict-click-area > z-index",
+          "fact": "Declares z-index as 50."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .conflict-label-overlay > z-index",
+      "expression": "55",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map conflict label styling (runtime consumer unknown)",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map conflict label styling (runtime consumer unknown). Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .conflict-label-overlay > z-index",
+          "fact": "Declares z-index as 55."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .country-brief-overlay > z-index",
+      "expression": "10002",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "CountryBriefPage",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for CountryBriefPage. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .country-brief-overlay > z-index",
+          "fact": "Declares z-index as 10002."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .country-intel-overlay > z-index",
+      "expression": "10001",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "CountryIntelModal",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for CountryIntelModal. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .country-intel-overlay > z-index",
+          "fact": "Declares z-index as 10001."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .datacenter-marker > z-index",
+      "expression": "52",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map datacenter marker styling",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map datacenter marker styling. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .datacenter-marker > z-index",
+          "fact": "Declares z-index as 52."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .datacenter-marker > z-index",
+      "expression": "54",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map datacenter marker styling",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map datacenter marker styling. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .datacenter-marker > z-index",
+          "fact": "Declares z-index as 54."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .deckgl-controls .map-btn > z-index",
+      "expression": "1",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "DeckGLMap control buttons",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for DeckGLMap control buttons. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .deckgl-controls .map-btn > z-index",
+          "fact": "Declares z-index as 1."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .deckgl-controls > z-index",
+      "expression": "500",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "DeckGLMap controls",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for DeckGLMap controls. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .deckgl-controls > z-index",
+          "fact": "Declares z-index as 500."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .deckgl-layer-toggles > z-index",
+      "expression": "100",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "DeckGLMap layer toggles",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for DeckGLMap layer toggles. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .deckgl-layer-toggles > z-index",
+          "fact": "Declares z-index as 100."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .deckgl-legend > z-index",
+      "expression": "100",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "DeckGLMap legend",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for DeckGLMap legend. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .deckgl-legend > z-index",
+          "fact": "Declares z-index as 100."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .deckgl-time-slider > z-index",
+      "expression": "100",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "DeckGLMap time slider",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for DeckGLMap time slider. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .deckgl-time-slider > z-index",
+          "fact": "Declares z-index as 100."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .deckgl-timestamp > z-index",
+      "expression": "100",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "DeckGLMap timestamp styling",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for DeckGLMap timestamp styling. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .deckgl-timestamp > z-index",
+          "fact": "Declares z-index as 100."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .download-dropdown > z-index",
+      "expression": "1000",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Application download menu",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Application download menu. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .download-dropdown > z-index",
+          "fact": "Declares z-index as 1000."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .earthquake-marker > z-index",
+      "expression": "53",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map earthquake markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map earthquake markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .earthquake-marker > z-index",
+          "fact": "Declares z-index as 53."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .economic-marker > z-index",
+      "expression": "50",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map economic markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map economic markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .economic-marker > z-index",
+          "fact": "Declares z-index as 50."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .economic-marker:hover > z-index",
+      "expression": "100",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map economic marker hover",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map economic marker hover. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .economic-marker:hover > z-index",
+          "fact": "Declares z-index as 100."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .entity-heat-rail > z-index",
+      "expression": "45",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "EntityHeatRail",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for EntityHeatRail. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .entity-heat-rail > z-index",
+          "fact": "Declares z-index as 45."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .evac-route-endpoint > z-index",
+      "expression": "86",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map evacuation endpoints",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map evacuation endpoints. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .evac-route-endpoint > z-index",
+          "fact": "Declares z-index as 86."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .evidence-drawer-overlay > z-index",
+      "expression": "1001",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "EvidenceDrawer",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for EvidenceDrawer. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .evidence-drawer-overlay > z-index",
+          "fact": "Declares z-index as 1001."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .export-menu > z-index",
+      "expression": "1000",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Export menu",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Export menu. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .export-menu > z-index",
+          "fact": "Declares z-index as 1000."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .findings-modal-overlay > z-index",
+      "expression": "10000",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "IntelligenceGapBadge findings modal",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for IntelligenceGapBadge findings modal. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .findings-modal-overlay > z-index",
+          "fact": "Declares z-index as 10000."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .fire-dot > z-index",
+      "expression": "53",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map fire dots",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map fire dots. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .fire-dot > z-index",
+          "fact": "Declares z-index as 53."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .flight-delay-marker > z-index",
+      "expression": "53",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map flight delay markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map flight delay markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .flight-delay-marker > z-index",
+          "fact": "Declares z-index as 53."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .hotspot > z-index",
+      "expression": "50",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map hotspot markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map hotspot markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .hotspot > z-index",
+          "fact": "Declares z-index as 50."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .intel-findings-dropdown > z-index",
+      "expression": "1000",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "IntelligenceGapBadge findings dropdown",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for IntelligenceGapBadge findings dropdown. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .intel-findings-dropdown > z-index",
+          "fact": "Declares z-index as 1000."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .iran-event-marker > z-index",
+      "expression": "54",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map Iran event markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map Iran event markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .iran-event-marker > z-index",
+          "fact": "Declares z-index as 54."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .irradiator-marker > z-index",
+      "expression": "51",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map irradiator markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map irradiator markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .irradiator-marker > z-index",
+          "fact": "Declares z-index as 51."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .just-in-rail > z-index",
+      "expression": "10002",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "JustInRail",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for JustInRail. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .just-in-rail > z-index",
+          "fact": "Declares z-index as 10002."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .layer-help-popup > z-index",
+      "expression": "200",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map layer help",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map layer help. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .layer-help-popup > z-index",
+          "fact": "Declares z-index as 200."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .layer-toggles:not(.deckgl-layer-toggles) > z-index",
+      "expression": "100",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map layer toggles",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map layer toggles. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .layer-toggles:not(.deckgl-layer-toggles) > z-index",
+          "fact": "Declares z-index as 100."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .lifeline-map-marker, .evac-route-endpoint > z-index",
+      "expression": "88",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map lifeline markers and evacuation endpoints",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map lifeline markers and evacuation endpoints. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .lifeline-map-marker, .evac-route-endpoint > z-index",
+          "fact": "Declares z-index as 88."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .lifeline-map-marker:hover, .lifeline-map-marker:focus-visible > z-index",
+      "expression": "90",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map lifeline marker hover and focus",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map lifeline marker hover and focus. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .lifeline-map-marker:hover, .lifeline-map-marker:focus-visible > z-index",
+          "fact": "Declares z-index as 90."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .live-channels-modal-close > z-index",
+      "expression": "1",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "LiveNewsPanel channel modal close",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for LiveNewsPanel channel modal close. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .live-channels-modal-close > z-index",
+          "fact": "Declares z-index as 1."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .live-channels-modal-overlay > z-index",
+      "expression": "9999",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "LiveNewsPanel channel modal",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for LiveNewsPanel channel modal. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .live-channels-modal-overlay > z-index",
+          "fact": "Declares z-index as 9999."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .map-attribution > z-index",
+      "expression": "10",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map tile attribution",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map tile attribution. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .map-attribution > z-index",
+          "fact": "Declares z-index as 10."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .map-container.deckgl-mode::after > z-index",
+      "expression": "99",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "MapContainer WebGL pseudo-element",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for MapContainer WebGL pseudo-element. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .map-container.deckgl-mode::after > z-index",
+          "fact": "Declares z-index as 99."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .map-context-menu > z-index",
+      "expression": "9999",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "MapContextMenu",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for MapContextMenu. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .map-context-menu > z-index",
+          "fact": "Declares z-index as 9999."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .map-controls > z-index",
+      "expression": "500",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map controls",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map controls. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .map-controls > z-index",
+          "fact": "Declares z-index as 500."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .map-legend > z-index",
+      "expression": "100",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map legend",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map legend. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .map-legend > z-index",
+          "fact": "Declares z-index as 100."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .map-popup > z-index",
+      "expression": "1000",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "MapPopup",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for MapPopup. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .map-popup > z-index",
+          "fact": "Declares z-index as 1000."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .map-popup-sheet-handle > z-index",
+      "expression": "3",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "MapPopup sheet handle",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for MapPopup sheet handle. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .map-popup-sheet-handle > z-index",
+          "fact": "Declares z-index as 3."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .map-resize-handle > z-index",
+      "expression": "200",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Application map layout",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Application map layout. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .map-resize-handle > z-index",
+          "fact": "Declares z-index as 200."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .map-section.pinned > z-index",
+      "expression": "100",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Application map layout",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Application map layout. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .map-section.pinned > z-index",
+          "fact": "Declares z-index as 100."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .map-timestamp > z-index",
+      "expression": "100",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map timestamp styling (runtime consumer unknown)",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map timestamp styling (runtime consumer unknown). Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .map-timestamp > z-index",
+          "fact": "Declares z-index as 100."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .military-cluster-marker > z-index",
+      "expression": "57",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map military clusters",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map military clusters. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .military-cluster-marker > z-index",
+          "fact": "Declares z-index as 57."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .military-flight-marker > z-index",
+      "expression": "55",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map military flight markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map military flight markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .military-flight-marker > z-index",
+          "fact": "Declares z-index as 55."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .military-vessel-marker > z-index",
+      "expression": "54",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map military vessel markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map military vessel markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .military-vessel-marker > z-index",
+          "fact": "Declares z-index as 54."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .military-vessel-marker.carrier > z-index",
+      "expression": "56",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map carrier markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map carrier markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .military-vessel-marker.carrier > z-index",
+          "fact": "Declares z-index as 56."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .mineral-marker > z-index",
+      "expression": "54",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map mineral markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map mineral markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .mineral-marker > z-index",
+          "fact": "Declares z-index as 54."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .mission-map-overlay-status > z-index",
+      "expression": "510",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "MapContainer mission overlay status",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for MapContainer mission overlay status. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .mission-map-overlay-status > z-index",
+          "fact": "Declares z-index as 510."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .mobile-warning-overlay > z-index",
+      "expression": "3000",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "MobileWarningModal",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for MobileWarningModal. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .mobile-warning-overlay > z-index",
+          "fact": "Declares z-index as 3000."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .modal-overlay > z-index",
+      "expression": "1000",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Shared modal styling",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Shared modal styling. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .modal-overlay > z-index",
+          "fact": "Declares z-index as 1000."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .nat-event-marker > z-index",
+      "expression": "54",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map natural-event markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map natural-event markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .nat-event-marker > z-index",
+          "fact": "Declares z-index as 54."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .nuclear-marker > z-index",
+      "expression": "52",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map nuclear markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map nuclear markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .nuclear-marker > z-index",
+          "fact": "Declares z-index as 52."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .outage-marker > z-index",
+      "expression": "51",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map outage markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map outage markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .outage-marker > z-index",
+          "fact": "Declares z-index as 51."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .panel-ai-overlay > z-index",
+      "expression": "10",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Panel AI summary",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Panel AI summary. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .panel-ai-overlay > z-index",
+          "fact": "Declares z-index as 10."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .panel-col-resize-handle > z-index",
+      "expression": "100",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Panel column resize handle",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Panel column resize handle. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .panel-col-resize-handle > z-index",
+          "fact": "Declares z-index as 100."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .panel-info-tooltip > z-index",
+      "expression": "1000",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Panel information tooltip",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Panel information tooltip. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .panel-info-tooltip > z-index",
+          "fact": "Declares z-index as 1000."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .panel-resize-handle > z-index",
+      "expression": "100",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Panel resize handle",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Panel resize handle. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .panel-resize-handle > z-index",
+          "fact": "Declares z-index as 100."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .panels-grid > z-index",
+      "expression": "1",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Panel grid",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Panel grid. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .panels-grid > z-index",
+          "fact": "Declares z-index as 1."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .pizzint-indicator > z-index",
+      "expression": "1000",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "PizzIntIndicator",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for PizzIntIndicator. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .pizzint-indicator > z-index",
+          "fact": "Declares z-index as 1000."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .playback-panel > z-index",
+      "expression": "100",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Playback controls",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Playback controls. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .playback-panel > z-index",
+          "fact": "Declares z-index as 100."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .popup-header > z-index",
+      "expression": "1",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "MapPopup sticky header",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for MapPopup sticky header. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .popup-header > z-index",
+          "fact": "Declares z-index as 1."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .popup-header::before > z-index",
+      "expression": "-1",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "MapPopup header backdrop pseudo-element",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for MapPopup header backdrop pseudo-element. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .popup-header::before > z-index",
+          "fact": "Declares z-index as -1."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .port-marker > z-index",
+      "expression": "50",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map port markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map port markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .port-marker > z-index",
+          "fact": "Declares z-index as 50."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .protest-marker > z-index",
+      "expression": "53",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map protest markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map protest markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .protest-marker > z-index",
+          "fact": "Declares z-index as 53."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .related-strip > z-index",
+      "expression": "1060",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "RelatedStrip",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for RelatedStrip. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .related-strip > z-index",
+          "fact": "Declares z-index as 1060."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .replay-scrubber > z-index",
+      "expression": "var(--z-strip)",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "AlertReplayScrubber",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for AlertReplayScrubber. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .replay-scrubber > z-index",
+          "fact": "Declares z-index as var(--z-strip)."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .risk-score-inner > z-index",
+      "expression": "1",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "StrategicRiskPanel risk score",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for StrategicRiskPanel risk score. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .risk-score-inner > z-index",
+          "fact": "Declares z-index as 1."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .search-overlay > z-index",
+      "expression": "2000",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "SearchModal",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for SearchModal. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .search-overlay > z-index",
+          "fact": "Declares z-index as 2000."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .shift-overlay > z-index",
+      "expression": "1200",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "ShiftHandoffCard",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for ShiftHandoffCard. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .shift-overlay > z-index",
+          "fact": "Declares z-index as 1200."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .sigint-legend > z-index",
+      "expression": "5",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "DeckGLMap SIGINT legend",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for DeckGLMap SIGINT legend. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .sigint-legend > z-index",
+          "fact": "Declares z-index as 5."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .signal-modal-overlay > z-index",
+      "expression": "1000",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "SignalModal",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for SignalModal. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .signal-modal-overlay > z-index",
+          "fact": "Declares z-index as 1000."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .spaceport-marker > z-index",
+      "expression": "55",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map spaceport markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map spaceport markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .spaceport-marker > z-index",
+          "fact": "Declares z-index as 55."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .spm-pick-banner > z-index",
+      "expression": "10003",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "SavedPlaceModal pick banner",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for SavedPlaceModal pick banner. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .spm-pick-banner > z-index",
+          "fact": "Declares z-index as 10003."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .startup-hub-marker > z-index",
+      "expression": "56",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map startup hub markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map startup hub markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .startup-hub-marker > z-index",
+          "fact": "Declares z-index as 56."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .status-overlay > z-index",
+      "expression": "500",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "StatusOverlay",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for StatusOverlay. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .status-overlay > z-index",
+          "fact": "Declares z-index as 500."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .story-close-x > z-index",
+      "expression": "1",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "StoryModal close control",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for StoryModal close control. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .story-close-x > z-index",
+          "fact": "Declares z-index as 1."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .story-modal-overlay > z-index",
+      "expression": "10001",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "StoryModal",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for StoryModal. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .story-modal-overlay > z-index",
+          "fact": "Declares z-index as 10001."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .tech-event-marker.cluster > z-index",
+      "expression": "1001",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map technology event clusters",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map technology event clusters. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .tech-event-marker.cluster > z-index",
+          "fact": "Declares z-index as 1001."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .tech-event-marker:hover > z-index",
+      "expression": "1000",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map technology event hover",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map technology event hover. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .tech-event-marker:hover > z-index",
+          "fact": "Declares z-index as 1000."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .tech-globe > z-index",
+      "expression": "1",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "TechReadinessPanel globe ornament",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for TechReadinessPanel globe ornament. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .tech-globe > z-index",
+          "fact": "Declares z-index as 1."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .tech-hq-marker > z-index",
+      "expression": "55",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map technology headquarters markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map technology headquarters markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .tech-hq-marker > z-index",
+          "fact": "Declares z-index as 55."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .tech-hq-marker.cluster > z-index",
+      "expression": "60",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map technology headquarters clusters",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map technology headquarters clusters. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .tech-hq-marker.cluster > z-index",
+          "fact": "Declares z-index as 60."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .time-slider > z-index",
+      "expression": "100",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map time slider",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map time slider. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .time-slider > z-index",
+          "fact": "Declares z-index as 100."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .toast-notification > z-index",
+      "expression": "10002",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Country intelligence / event feedback toast",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Country intelligence / event feedback toast. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .toast-notification > z-index",
+          "fact": "Declares z-index as 10002."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .update-toast > z-index",
+      "expression": "10003",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Desktop updater",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Desktop updater. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .update-toast > z-index",
+          "fact": "Declares z-index as 10003."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .waterway-marker > z-index",
+      "expression": "50",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map waterway markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map waterway markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .waterway-marker > z-index",
+          "fact": "Declares z-index as 50."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .weather-marker > z-index",
+      "expression": "60",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map weather markers",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map weather markers. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .weather-marker > z-index",
+          "fact": "Declares z-index as 60."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .webcam-cell-label > z-index",
+      "expression": "2",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "LiveWebcamsPanel cell label",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for LiveWebcamsPanel cell label. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .webcam-cell-label > z-index",
+          "fact": "Declares z-index as 2."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > .wm-share-toast > z-index",
+      "expression": "9999",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Share URL feedback",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Share URL feedback. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > .wm-share-toast > z-index",
+          "fact": "Declares z-index as 9999."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/main.css",
+      "kind": "css-z-index",
+      "anchor": "css > @media (max-width: 768px) > .hotspot, .base-marker, .nuclear-marker, .economic-marker > z-index",
+      "expression": "50",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Map responsive marker override",
+      "context": "Application stylesheet rule; actual document parent and complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Map responsive marker override. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/main.css",
+          "anchor": "css > @media (max-width: 768px) > .hotspot, .base-marker, .nuclear-marker, .economic-marker > z-index",
+          "fact": "Declares z-index as 50."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/map-feature-list.css",
+      "kind": "css-z-index",
+      "anchor": "css > .map-feature-list-entry > z-index",
+      "expression": "6",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "MapFeatureList and feature-detail MapPopup / .map-feature-list-entry",
+      "context": "Map entry, feature panel and explicit feature popup selectors; complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for MapFeatureList and feature-detail MapPopup / .map-feature-list-entry. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/map-feature-list.css",
+          "anchor": "css > .map-feature-list-entry > z-index",
+          "fact": "Declares z-index as 6."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/map-feature-list.css",
+      "kind": "css-z-index",
+      "anchor": "css > .map-feature-list-panel > z-index",
+      "expression": "var(--z-modal-raised, 10001)",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "MapFeatureList and feature-detail MapPopup / .map-feature-list-panel",
+      "context": "Map entry, feature panel and explicit feature popup selectors; complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for MapFeatureList and feature-detail MapPopup / .map-feature-list-panel. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/map-feature-list.css",
+          "anchor": "css > .map-feature-list-panel > z-index",
+          "fact": "Declares z-index as var(--z-modal-raised, 10001)."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/map-feature-list.css",
+      "kind": "css-z-index",
+      "anchor": "css > .map-popup.map-popup-from-features > z-index",
+      "expression": "var(--z-modal-raised, 10001)",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "MapFeatureList and feature-detail MapPopup / .map-popup.map-popup-from-features",
+      "context": "Map entry, feature panel and explicit feature popup selectors; complete stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for MapFeatureList and feature-detail MapPopup / .map-popup.map-popup-from-features. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/map-feature-list.css",
+          "anchor": "css > .map-popup.map-popup-from-features > z-index",
+          "fact": "Declares z-index as var(--z-modal-raised, 10001)."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/modes.css",
+      "kind": "css-z-index",
+      "anchor": "css > .cb-operator-feed-strip > z-index",
+      "expression": "9999",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "OperatorModePanel feed strip / .cb-operator-feed-strip",
+      "context": "Fixed operator feed strip stylesheet; actual parent and stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for OperatorModePanel feed strip / .cb-operator-feed-strip. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/modes.css",
+          "anchor": "css > .cb-operator-feed-strip > z-index",
+          "fact": "Declares z-index as 9999."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/panels.css",
+      "kind": "css-z-index",
+      "anchor": "css > .sw-imagery-modal > z-index",
+      "expression": "9999",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Download banner and space-weather imagery viewer / .sw-imagery-modal",
+      "context": "Fixed download banner / imagery modal stylesheet; actual parent and stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Download banner and space-weather imagery viewer / .sw-imagery-modal. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/panels.css",
+          "anchor": "css > .sw-imagery-modal > z-index",
+          "fact": "Declares z-index as 9999."
+        }
+      ]
+    },
+    {
+      "path": "src/styles/panels.css",
+      "kind": "css-z-index",
+      "anchor": "css > .wm-dl-panel > z-index",
+      "expression": "900",
+      "count": 1,
+      "bindings": [],
+      "classification": "dom",
+      "owner": "Download banner and space-weather imagery viewer / .wm-dl-panel",
+      "context": "Fixed download banner / imagery modal stylesheet; actual parent and stacking ancestry unknown.",
+      "rationale": "Preserve the reviewed existing declaration for Download banner and space-weather imagery viewer / .wm-dl-panel. Runtime ordering was not verified.",
+      "evidence": [
+        {
+          "path": "src/styles/panels.css",
+          "anchor": "css > .wm-dl-panel > z-index",
+          "fact": "Declares z-index as 900."
+        }
+      ]
+    }
+  ]
+}

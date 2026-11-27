@@ -47,16 +47,46 @@ function decodeCss(s) {
   return s.replace(/\\([\da-f]{1,6})(?:\r\n|\s)?|\\([^\r\n\f])/gi, (_, hex, char) => hex ? String.fromCodePoint(Math.min(Number.parseInt(hex, 16) || 0xFF_FD, 0x10_FF_FF)) : char);
 }
 function jsText(node, source) { return canonical(printer.printNode(ts.EmitHint.Unspecified, node, source)); }
+function unwrapRuntimeExpression(node) {
+  while (node) {
+    switch (node.kind) {
+      case ts.SyntaxKind.ParenthesizedExpression:
+      case ts.SyntaxKind.AsExpression:
+      case ts.SyntaxKind.TypeAssertionExpression:
+      case ts.SyntaxKind.NonNullExpression:
+      case ts.SyntaxKind.SatisfiesExpression: {
+        node = node.expression;
+        break;
+      }
+      default: {
+        return node;
+      }
+    }
+  }
+  return node;
+}
+function staticLiteralName(node) {
+  const expression = unwrapRuntimeExpression(node);
+  if (!expression) return null;
+  return ts.isStringLiteralLike(expression) || ts.isNumericLiteral(expression) ? expression.text : null;
+}
 function literalName(node) {
   if (!node) return null;
-  if (ts.isComputedPropertyName(node)) return literalName(node.expression);
-  if (ts.isIdentifier(node) || ts.isStringLiteralLike(node) || ts.isNumericLiteral(node)) return node.text;
-  return null;
+  if (ts.isComputedPropertyName(node)) return staticLiteralName(node.expression);
+  if (ts.isIdentifier(node)) return node.text;
+  return staticLiteralName(node);
+}
+function sourceName(node, source) {
+  const name = literalName(node);
+  if (ts.isComputedPropertyName(node) && unwrapRuntimeExpression(node.expression) !== node.expression) return `${jsText(node, source)} > ${name}`;
+  return name;
 }
 function stackingName(name) { return name === 'zIndex' || name === 'z-index' || name?.startsWith('--z-'); }
 function accessName(node) {
-  if (ts.isPropertyAccessExpression(node)) return node.name.text;
-  if (ts.isElementAccessExpression(node) && ts.isStringLiteralLike(node.argumentExpression)) return node.argumentExpression.text;
+  const expression = unwrapRuntimeExpression(node);
+  if (!expression) return null;
+  if (ts.isPropertyAccessExpression(expression)) return expression.name.text;
+  if (ts.isElementAccessExpression(expression)) return staticLiteralName(expression.argumentExpression);
   return null;
 }
 function isAssignment(node) {
@@ -199,19 +229,34 @@ function isAccessor(node) {
   return ts.isGetAccessorDeclaration(node) || ts.isSetAccessorDeclaration(node) || ts.isMethodDeclaration(node);
 }
 function jsSink(node, emit, source, dependencies) {
-  if (isAccessor(node) && stackingName(literalName(node.name))) emit(node, 'unsupported', literalName(node.name), jsText(node, source), dependencies(node));
-  else if (ts.isPropertyAssignment(node) && stackingName(literalName(node.name))) emit(node, 'js-z-index', literalName(node.name), jsText(node.initializer, source), dependencies(node.initializer));
+  if (isAccessor(node) && stackingName(literalName(node.name))) emit(node, 'unsupported', sourceName(node.name, source), jsText(node, source), dependencies(node));
+  else if (ts.isPropertyAssignment(node) && stackingName(literalName(node.name))) emit(node, 'js-z-index', sourceName(node.name, source), jsText(node.initializer, source), dependencies(node.initializer));
   else if (ts.isShorthandPropertyAssignment(node) && stackingName(node.name.text)) emit(node, 'unsupported', node.name.text, jsText(node, source), dependencies(node.name));
-  else if (isAssignment(node) && stackingName(accessName(node.left))) {
-    const plain = node.operatorToken.kind === ts.SyntaxKind.EqualsToken;
-    emit(node, plain ? 'js-z-index' : 'unsupported', accessName(node.left), jsText(plain ? node.right : node, source), dependencies(node.right));
+}
+function classifyWrite(node) {
+  if (isAssignment(node)) {
+    const category = node.operatorToken.kind === ts.SyntaxKind.EqualsToken ? 'assignment' : 'compound-assignment';
+    return { operation: node, target: node.left, name: accessName(node.left), category, dependencyNodes: [node.right] };
   }
+  if (!ts.isPrefixUnaryExpression(node) && !ts.isPostfixUnaryExpression(node)) return null;
+  if (node.operator !== ts.SyntaxKind.PlusPlusToken && node.operator !== ts.SyntaxKind.MinusMinusToken) return null;
+  return { operation: node, target: node.operand, name: accessName(node.operand), category: 'update', dependencyNodes: [node.operand] };
+}
+function jsWrite(node, emit, source, dependencies) {
+  const write = classifyWrite(node);
+  if (!write || !stackingName(write.name)) return;
+  const plain = write.category === 'assignment';
+  const expression = plain ? write.operation.right : write.operation;
+  emit(write.operation, plain ? 'js-z-index' : 'unsupported', write.name, jsText(expression, source), write.dependencyNodes.flatMap((dependency) => dependencies(dependency)));
 }
 function jsPropertyCall(node, emit, source, dependencies) {
   if (!ts.isCallExpression(node) || accessName(node.expression) !== 'setProperty' || !node.arguments[0]) return;
-  const property = ts.isStringLiteralLike(node.arguments[0]) ? node.arguments[0].text : null;
-  if (stackingName(property)) emit(node, node.arguments.length >= 2 ? 'js-z-index' : 'unsupported', property, node.arguments.slice(1).map((arg) => jsText(arg, source)).join(', ') || jsText(node, source), node.arguments.slice(1).flatMap((arg) => dependencies(arg)));
-  else if (/zIndex|z-index|--z-/.test(jsText(node.arguments[0], source))) emit(node, 'unsupported', 'dynamic-property', jsText(node, source), dependencies(node));
+  const property = staticLiteralName(node.arguments[0]);
+  if (stackingName(property)) {
+    const wrappedName = unwrapRuntimeExpression(node.arguments[0]) !== node.arguments[0];
+    const name = wrappedName ? `${jsText(node.arguments[0], source)} > ${property}` : property;
+    emit(node, node.arguments.length >= 2 ? 'js-z-index' : 'unsupported', name, node.arguments.slice(1).map((arg) => jsText(arg, source)).join(', ') || jsText(node, source), node.arguments.slice(1).flatMap((arg) => dependencies(arg)));
+  } else if (/zIndex|z-index|--z-/.test(jsText(node.arguments[0], source))) emit(node, 'unsupported', 'dynamic-property', jsText(node, source), dependencies(node));
 }
 function dynamicProperty(node, source) {
   if (!ts.isComputedPropertyName(node) && !ts.isElementAccessExpression(node)) return false;
@@ -250,12 +295,6 @@ function hasStyleMarkup(input) {
     if (/\sstyle\s*=/i.test(match[0])) return true;
   }
   return false;
-}
-function jsUpdate(node, emit, source, dependencies) {
-  if (!ts.isPrefixUnaryExpression(node) && !ts.isPostfixUnaryExpression(node)) return;
-  if (node.operator !== ts.SyntaxKind.PlusPlusToken && node.operator !== ts.SyntaxKind.MinusMinusToken) return;
-  const name = accessName(node.operand);
-  if (stackingName(name)) emit(node, 'unsupported', name, jsText(node, source), dependencies(node.operand));
 }
 function runtimeHeritage(node) {
   if (!ts.isExpressionWithTypeArguments(node) || !ts.isHeritageClause(node.parent)) return false;
@@ -336,6 +375,7 @@ export function extractDeclarations(text, { path: sourcePath } = {}) {
     const dependencies = (expression) => {
       const found = new Map(), visiting = new Set();
       const visit = (node) => {
+        if (ts.isTypeNode(node)) return;
         if (isReference(node)) {
           const binding = findBinding(node, scopes);
           if (constantBinding(binding, source)) {
@@ -380,7 +420,7 @@ export function extractDeclarations(text, { path: sourcePath } = {}) {
       if (runtimeHeritage(node)) { visit(node.expression); return; }
       if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node)) return;
       jsSink(node, emit, source, dependencies);
-      jsUpdate(node, emit, source, dependencies);
+      jsWrite(node, emit, source, dependencies);
       jsPropertyCall(node, emit, source, dependencies);
       if (dynamicProperty(node, source)) emit(node, 'unsupported', 'dynamic-property', jsText(node, source), dependencies(node));
       if (isPlus(node) && !isPlus(node.parent) && /z-index|--z-|&#/.test(node.getText(source))) concatenated(node);

@@ -599,3 +599,173 @@ for (const [label, source] of [
     }
   });
 }
+
+const recognitionWrappers = [
+  ['parentheses', value => `(${value})`],
+  ['as', value => `(${value} as any)`],
+  ['angle assertion', value => `(<any>${value})`],
+  ['non-null', value => `${value}!`],
+  ['satisfies', value => `(${value} satisfies any)`],
+  ['nested', value => `((<any>(${value} as any))! satisfies any)`],
+];
+const wrappedOperations = [
+  ['assignment', target => `${target} = 9;`, 'js-z-index'],
+  ['compound assignment', target => `${target} += 9;`, 'unsupported'],
+  ['logical and assignment', target => `${target} &&= 9;`, 'unsupported'],
+  ['logical or assignment', target => `${target} ||= 9;`, 'unsupported'],
+  ['nullish assignment', target => `${target} ??= 9;`, 'unsupported'],
+  ['prefix increment', target => `++${target};`, 'unsupported'],
+  ['postfix increment', target => `${target}++;`, 'unsupported'],
+  ['prefix decrement', target => `--${target};`, 'unsupported'],
+  ['postfix decrement', target => `${target}--;`, 'unsupported'],
+];
+
+for (const [wrapperName, wrap] of recognitionWrappers) {
+  for (const [accessName, access] of [['dot', 'overlay.style.zIndex'], ['bracket', 'overlay.style["z-index"]']]) {
+    for (const [operationName, operation, kind] of wrappedOperations) {
+      test(`wrapper revision ${wrapperName} ${accessName} ${operationName}`, t => {
+        const source = operation(wrap(access));
+        const root = fixture(t, { 'src/a.ts': source });
+        const scan = scanRepository(root);
+        assert.deepEqual(scan.errors, []);
+        assert.equal(scan.declarations.length, 1, source);
+        assert.equal(scan.declarations[0].kind, kind);
+        rejects(reconcileInventory(scan, { version: 1, entries: [] }, { root }), 'wrapped operation requires ownership');
+        assert.deepEqual(reconcileInventory(scan, inventoryFor(scan), { root }), []);
+        if (kind === 'unsupported') {
+          assert.match(scan.declarations[0].expression, /overlay\.style/);
+          assert.match(scan.declarations[0].expression, /\+\+|--|\+=|&&=|\|\|=|\?\?=/);
+          if (wrapperName === 'as' || wrapperName === 'nested') assert.match(scan.declarations[0].expression, /\bas\b/);
+          if (wrapperName === 'satisfies' || wrapperName === 'nested') assert.match(scan.declarations[0].expression, /\bsatisfies\b/);
+        } else assert.equal(scan.declarations[0].expression, '9');
+      });
+    }
+  }
+  for (const [context, source] of [
+    ['computed object key', `const style = { [${wrap('"zIndex"')}]: 9 };`],
+    ['computed assignment key', `overlay.style[${wrap('"z-index"')}] = 9;`],
+    ['setProperty callee', `${wrap('overlay.style.setProperty')}("z-index", "9");`],
+    ['setProperty property argument', `overlay.style.setProperty(${wrap('"z-index"')}, "9");`],
+    ['computed setProperty callee key', `overlay.style[${wrap('"setProperty"')}]("z-index", "9");`],
+  ]) {
+    test(`wrapper revision ${wrapperName} ${context}`, t => {
+      const root = fixture(t, { 'src/a.ts': source });
+      const scan = scanRepository(root);
+      assert.deepEqual(scan.errors, []);
+      assert.equal(scan.declarations.length, 1, source);
+      assert.equal(scan.declarations[0].kind, 'js-z-index');
+      assert.match(scan.declarations[0].expression, /9/);
+      rejects(reconcileInventory(scan, { version: 1, entries: [] }, { root }), 'wrapped static name requires ownership');
+      assert.deepEqual(reconcileInventory(scan, inventoryFor(scan), { root }), []);
+    });
+  }
+}
+
+for (const [context, operation] of [
+  ['assignment', '((overlay.style.zIndex as any)!) = LEVEL;'],
+  ['compound', '((overlay.style.zIndex as any)!) += LEVEL;'],
+  ['call', '(overlay.style.setProperty as any)(("z-index" satisfies string), String(LEVEL));'],
+]) {
+  test(`wrapper revision ${context} preserves dependencies and ignores line shifts`, t => {
+    const source = `const BASE = 8; const LEVEL = BASE + 1; ${operation}`;
+    const root = fixture(t, { 'src/a.ts': source });
+    const scan = scanRepository(root);
+    assert.deepEqual(scan.errors, []);
+    assert.equal(scan.declarations.length, 1);
+    assert.ok(scan.declarations[0].bindings.some(binding => /BASE/.test(binding.name) && binding.expression === '8'));
+    assert.ok(scan.declarations[0].bindings.some(binding => /LEVEL/.test(binding.name) && /BASE/.test(binding.expression)));
+    const inventory = inventoryFor(scan);
+    writeFileSync(path.join(root, 'src/a.ts'), `\n// explanation\n${source}`);
+    assert.deepEqual(reconcileInventory(scanRepository(root), inventory, { root }), []);
+    writeFileSync(path.join(root, 'src/a.ts'), source.replace('BASE = 8', 'BASE = 9'));
+    rejects(reconcileInventory(scanRepository(root), inventory, { root }), 'wrapped dependency change');
+  });
+}
+
+test('wrapper revision keeps target spelling and unsupported operation identity', t => {
+  for (const [before, after] of [
+    ['(overlay.style.zIndex as any) = 9;', '(overlay.style.zIndex satisfies any) = 9;'],
+    ['(overlay.style.zIndex as any) += 9;', '(overlay.style.zIndex as any) ||= 9;'],
+    ['(overlay.style.zIndex as any)++;', '++(overlay.style.zIndex as any);'],
+    ['(overlay.style.zIndex as any)++;', '(other.style.zIndex as any)++;'],
+  ]) {
+    const root = fixture(t, { 'src/a.ts': before });
+    const scan = scanRepository(root);
+    assert.deepEqual(scan.errors, []);
+    assert.equal(scan.declarations.length, 1);
+    writeFileSync(path.join(root, 'src/a.ts'), after);
+    rejects(reconcileInventory(scanRepository(root), inventoryFor(scan), { root }), 'operation or original target changed');
+  }
+});
+
+for (const [wrapperName, wrap] of recognitionWrappers) {
+  test(`wrapper revision ${wrapperName} does not turn reads or nonstacking writes into declarations`, () => {
+    const source = `const read = ${wrap('overlay.style.zIndex')}; ${wrap('overlay.style.opacity')} = 9; ${wrap('overlay.style.opacity')}++; // (overlay.style.zIndex) = 20;\n const example = "(overlay.style.zIndex as any)++";`;
+    assert.deepEqual(extract(source), []);
+  });
+}
+
+test('wrapper revision preserves type-only exclusions', () => {
+  const source = 'type Shape = { zIndex: number }; interface Style { zIndex: number; } const value = data as { zIndex: number }; const other = data satisfies { zIndex: number };';
+  assert.deepEqual(extract(source), []);
+});
+
+test('wrapper revision does not treat calls, conditionals or comma expressions as transparent names', () => {
+  for (const source of [
+    'overlay.style[(choose("z-index"))] = 9;',
+    'overlay.style[(ready ? "z-index" : "opacity")] = 9;',
+    'overlay.style[(sideEffect(), "z-index")] = 9;',
+    'const KEY = "z-index"; overlay.style[KEY] = 9;',
+  ]) {
+    const rows = extract(source);
+    assert.ok(rows.every(row => row.kind === 'unsupported'), source);
+  }
+});
+
+for (const [wrapperName, wrap] of recognitionWrappers.filter(([name]) => name !== 'angle assertion' && name !== 'nested')) {
+  test(`wrapper revision ${wrapperName} remains valid in TSX`, () => {
+    const rows = extract(`${wrap('overlay.style.zIndex')} = 9; const panel = <div />;`, 'src/a.tsx');
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].kind, 'js-z-index');
+  });
+}
+
+test('wrapper revision TSX angle assertion ambiguity fails closed', () => {
+  const result = extractDeclarations('(<any>overlay.style.zIndex) = 9;', { path: 'src/a.tsx' });
+  assert.ok(result.errors.length > 0);
+});
+
+for (const source of ['(overlay.style.zIndex as) = 9;', '(<any>overlay.style.zIndex = 9;', '(overlay.style.zIndex satisfies)++;']) {
+  test(`wrapper revision malformed expression fails closed: ${source}`, t => {
+    const root = fixture(t, { 'src/a.ts': source });
+    const scan = scanRepository(root);
+    assert.ok(scan.errors.length > 0);
+    rejects(reconcileInventory(scan, inventoryFor(scan), { root }), 'malformed wrapper syntax');
+  });
+}
+
+for (const [context, before, after] of [
+  ['computed object key', 'const style = { ["zIndex"]: 9 };', 'const style = { [("zIndex" as string)]: 9 };'],
+  ['setProperty name argument', 'overlay.style.setProperty("z-index", "9");', 'overlay.style.setProperty(("z-index" as string), "9");'],
+]) {
+  test(`wrapper revision preserves original ${context} spelling`, t => {
+    const root = fixture(t, { 'src/a.ts': before });
+    const scan = scanRepository(root);
+    assert.deepEqual(scan.errors, []);
+    assert.equal(scan.declarations.length, 1);
+    writeFileSync(path.join(root, 'src/a.ts'), after);
+    const changed = scanRepository(root);
+    assert.deepEqual(changed.errors, []);
+    assert.equal(changed.declarations.length, 1);
+    assert.notEqual(changed.declarations[0].anchor, scan.declarations[0].anchor);
+    rejects(reconcileInventory(changed, inventoryFor(scan), { root }), 'wrapper spelling change requires review');
+  });
+}
+
+test('wrapper revision excludes assertion type aliases from runtime dependencies', () => {
+  const rows = extract('type LEVEL = number; const BASE = 5; (overlay.style.zIndex as LEVEL) = (BASE as LEVEL);');
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].bindings.length, 1);
+  assert.ok(rows[0].bindings[0].name.includes('BASE'));
+  assert.equal(rows[0].bindings[0].expression, '5');
+});

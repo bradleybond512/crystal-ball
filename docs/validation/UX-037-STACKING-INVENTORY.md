@@ -1,9 +1,12 @@
 # UX-037 — stacking ownership ratchet validation
 
 Draft [#1923](https://github.com/bradleybond512/crystal-ball/pull/1923).
-Implementation `012162cda63d43194ac6c9e00cd83af93250f21a`; base
-`ffb3f3ccb4542de61d11ac0d5b7c452d82c20dda`. Local implementation qualified;
-hosted enforcement and publication remain pending.
+Current code `bb1758632f35100fe1e4cd050afdcde6ef7764aa`; base
+`ffb3f3ccb4542de61d11ac0d5b7c452d82c20dda`. **NOT ACCEPTED:** transparent-expression wrappers still bypass the scanner after
+two automatic repair attempts. Bradley approved the revised parsing design and
+renewed local implementation on November 26. This report retains the prior
+checkpoint until fresh validation and reviews finish. Code publication and hosted acceptance
+remain blocked; draft #1923 contains only the earlier documentation claim.
 
 ## Result and change surface
 
@@ -32,8 +35,8 @@ Actual excerpts:
 
 ```text
 npm run test:stacking
-# tests 89
-# pass 89
+# tests 99
+# pass 99
 # fail 0
 
 npm run lint:stacking
@@ -55,7 +58,7 @@ lint (including stacking), types, secrets, cross-agent configuration, docs,
 roadmap and build checks. Configuration validation is not a review verdict.
 Build produced advisory bundle/plugin timing messages; no gate failed.
 
-Single new-process timing sample (not a cold-filesystem benchmark):
+Initial candidate timing sample (not a final-code or cold-filesystem benchmark):
 
 ```text
 Stacking inventory: 2168 files, 214 declarations, 0 errors
@@ -64,35 +67,39 @@ Cold scan: 4248 ms
 
 ## Mutation evidence
 
-Baseline and restored suite: `89 pass / 0 fail`. Each mutation began with empty
+Baseline and restored suite: `99 pass / 0 fail`. Each mutation began with empty
 Git status, recorded `shasum -a 256`, displayed and saved the applied diff,
 produced actual red assertions, restored matching bytes/checksums and verified
-empty status. All 15 regressions were caught. Raw assertion names, TAP, diffs
-and restoration receipts are retained in `next-nov25/ux037`.
+empty status. All 19 tested regressions were caught. Raw assertion names, TAP, diffs
+and restoration receipts are retained in `next-nov25/ux037/final`.
 
 | Reverted guard | Actual pass / fail |
 | --- | --- |
-| expression-identity | 81 / 8 |
-| constant-dependencies | 85 / 4 |
-| stale-entry | 88 / 1 |
-| multiplicity | 87 / 2 |
-| css-extraction | 44 / 45 |
-| js-extraction | 67 / 22 |
-| unsupported-failclosed | 87 / 2 |
-| html-entity-decoding | 82 / 7 |
-| schema-classification | 88 / 1 |
-| token-resolution | 88 / 1 |
-| path-containment | 87 / 2 |
-| symlink-boundary | 86 / 3 |
-| strict-lint-wiring | 88 / 1 |
-| ci-lint-wiring | 88 / 1 |
-| ci-test-wiring | 88 / 1 |
+| ambiguous-markup-fallback | 97 / 2 |
+| css-markup-dispatch | 97 / 2 |
+| stacking-update-writes | 95 / 4 |
+| runtime-class-heritage | 98 / 1 |
+| expression-identity | 85 / 14 |
+| constant-dependencies | 95 / 4 |
+| stale-entry | 98 / 1 |
+| multiplicity | 97 / 2 |
+| css-extraction | 52 / 47 |
+| js-extraction | 72 / 27 |
+| unsupported-failclosed | 97 / 2 |
+| html-entity-decoding | 92 / 7 |
+| schema-classification | 98 / 1 |
+| token-resolution | 98 / 1 |
+| path-containment | 97 / 2 |
+| symlink-boundary | 96 / 3 |
+| strict-lint-wiring | 98 / 1 |
+| ci-lint-wiring | 98 / 1 |
+| ci-test-wiring | 98 / 1 |
 
 Mutated files: scanner for extraction/matching/schema/boundary guards,
 `package.json` for strict-lint wiring, `.github/workflows/lint.yml` for CI wiring.
 Restored checksums:
 
-- scanner: `6e16b4d09801a7a682cc56db65c61e96b6ba31a2936f68cf43395e93f55a62c0`
+- scanner: `890231f3146bdd52edbf518e7b595d9c642560ed4eaf48468016c98a06d959c1`
 - package: `734b3a2cbaf688f9136124aa2999ac9421b648a09f2d6b87a07c871314098feb`
 - workflow: `1b89ca0ceffe1f907459a19fe54c26ad74f2bffa74ea33ad34af62c5a91456ae`
 
@@ -102,10 +109,28 @@ template prefiltering. They now pass, and the decoder mutation fails seven tests
 
 ## Review and limits
 
-Independent Sol and actual Sonnet review the final code/evidence tip; actual
-conclusions are retained separately, with Sonnet recorded as a SHA-pinned verdict
-before publication. Local gate success alone is not independent review.
+Initial independent review at `d85bb389e2` found two blocking gaps: CSS quoted
+HTML text could redirect extraction, and literal increment/decrement writes were
+missed. Parent also confirmed Sonnet's runtime class-heritage candidate.
 
+Repair attempt 1 added quote/comment-aware dispatch, update-expression detection
+and runtime heritage traversal. Its new fixtures were first `1 pass / 7 fail`
+and then passed, but apostrophes in HTML text still suppressed styled markup.
+Repair attempt 2 added an exact unsupported-fragment fallback; those fixtures
+were first `0 pass / 2 fail` and then passed.
+
+Final known-suite validation is 99/0, all 19 deliberate regressions were caught,
+and the full gate plus all 11 selected scripts passed. Those results do not
+establish acceptance: parent subsequently reproduced both
+`(overlay.style.zIndex)++;` and `(overlay.style.zIndex) = 9;` returning
+`declarations: []`, `errors: []`. Raw AST targets are recognized inconsistently
+when semantically transparent wrappers surround them. Two repairs addressed
+individual cases without a common reference-normalization boundary.
+
+No final zero-blocker verdict has been recorded. Project rules require stopping
+automatic repairs and escalating after two attempts; a revised design and new
+human approval were required before further production changes. Bradley granted
+that approval on November 26; revised implementation and validation are underway.
 This is a declaration ratchet, not proof of global runtime ordering. Dynamic
 property construction, arbitrary dataflow, imported runtime values, generated
 CSS and ancestor changes without stacking declarations are outside its contract.
@@ -129,5 +154,6 @@ exercise additions, substitutions and deletion drift without modifying live UI.
 Rollback reverts the scanner, inventory, tests and wiring together; there is no
 stored-data migration or application rollback. Proposed PR summary: require
 reviewed ownership for stacking declarations while preserving application CSS and
-behavior; 89 tests, 15 mutation proofs, 11 selected scripts and full local gate
-pass. Merging, auto-merge, releases, deployment and installation remain paused.
+behavior. Known validation is 99 tests, 19 mutation proofs, 11 selected scripts
+and a passing full local gate, but the confirmed wrapper bypass blocks completion
+and publication. No final completion claim is proposed. Merging, auto-merge, releases, deployment and installation remain paused.

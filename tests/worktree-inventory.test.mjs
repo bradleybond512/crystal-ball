@@ -509,6 +509,7 @@ test('per-ref commit cap preserves explicit omissions and incomplete patch evide
   for (let i = 0; i < 3; i++) commit(repo, `commit-${i}.txt`, `${i}\n`);
   git(repo, 'checkout', '--quiet', 'main');
   const report = await collect(repo, { patchRefs: ['refs/heads/topic'], limits: { commitsPerRef: 1 } });
+  assert.equal(report.counters.examinedPatchCommits, 1);
   assert.equal(patch(report).complete, false);
   assert.equal(report.exitCode, 2);
   assert.ok(report.skipped.some(item => item.dimension === 'patches'));

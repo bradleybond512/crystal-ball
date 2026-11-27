@@ -284,7 +284,7 @@ function validPrSnapshot(value, now) {
 }
 
 function ownership(ref, config, identity, snapshot, valid) {
-  if (!snapshot) return unknown('pr-snapshot-not-supplied');
+  if (snapshot === undefined) return unknown('pr-snapshot-not-supplied');
   if (!valid || !identity || snapshot.repository.toLowerCase() !== identity) return unknown('pr-snapshot-invalid-stale-or-mismatched');
   let headRepo = identity;
   let headRef = ref.ref;
@@ -317,7 +317,7 @@ function validRecovery(value, now) {
 }
 
 function recovery(ref, identity, snapshot, valid) {
-  if (!snapshot || !valid || !identity) return { ...unknown(snapshot ? 'recovery-evidence-invalid-or-stale' : 'recovery-evidence-not-supplied'), collectorVerified: false };
+  if (!valid || !identity) return { ...unknown(snapshot === undefined ? 'recovery-evidence-not-supplied' : 'recovery-evidence-invalid-or-stale'), collectorVerified: false };
   const record = snapshot.records.find(item => item.repository.toLowerCase() === identity && item.oid === ref.oid);
   if (!record) return { ...unknown('recovery-coverage-unknown'), collectorVerified: false };
   return { state: 'supplied-verification-record', complete: true, collectorVerified: false,
@@ -422,8 +422,8 @@ function refEvidence(ref, context, data, repo, cache, counters) {
   let identity = data.identity;
   if (ref.kind === 'cached-tracking') identity = data.config.remotes.get(ref.ref.slice(13).split('/')[0]);
   ref.recovery = recovery(ref, identity, options.recoverySnapshot, validCopy);
-  if (options.prSnapshot && ref.ownership.state === 'unknown') fail('ownership', ref.ref, ref.ownership.reason);
-  if (options.recoverySnapshot && ref.recovery.state === 'unknown') fail('recovery', ref.ref, ref.recovery.reason);
+  if (options.prSnapshot !== undefined && ref.ownership.state === 'unknown') fail('ownership', ref.ref, ref.ownership.reason);
+  if (options.recoverySnapshot !== undefined && ref.recovery.state === 'unknown') fail('recovery', ref.ref, ref.recovery.reason);
 }
 
 function collectRepository(alias, context, counters) {
@@ -519,8 +519,8 @@ export function collectInventory(options, dependencies = {}) {
   const validCopy = validRecovery(options.recoverySnapshot, started);
   const fail = (dimension, id, reason) => { report.complete = false; report.skipped.push({ dimension, id, reason }); };
   const context = { now, run, limits, validPr, validCopy, fail, options, report, internals: new Map() };
-  if (options.prSnapshot && !validPr) fail('ownership', 'supplied-pr-snapshot', 'invalid-incomplete-or-stale');
-  if (options.recoverySnapshot && !validCopy) fail('recovery', 'supplied-recovery-snapshot', 'invalid-incomplete-or-stale');
+  if (options.prSnapshot !== undefined && !validPr) fail('ownership', 'supplied-pr-snapshot', 'invalid-incomplete-or-stale');
+  if (options.recoverySnapshot !== undefined && !validCopy) fail('recovery', 'supplied-recovery-snapshot', 'invalid-incomplete-or-stale');
   const counters = { refs: 0, worktrees: 0, ancestry: 0 };
   for (const alias of report.requested.repos) {
     try { collectRepository(alias, context, counters); }

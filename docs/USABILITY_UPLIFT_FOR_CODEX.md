@@ -1630,7 +1630,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-065 | Round 4 checkpoint and remaining security drafts | NOT STARTED | |
 | UX-066 | Dependabot backlog in reviewed batches | NOT STARTED | |
 | UX-067 | Green release-integrity signal on main | WAITING | |
-| UX-068 | Inventory branches and worktrees before cleanup | IN REVIEW — HIGH ASSURANCE | Approved bounded inventory claim; [design](plans/2026-11-25-ux068-inventory-design.md). Read-only collection only; cleanup disabled, ownership/recovery and full cleanup acceptance remain open. |
+| UX-068 | Inventory branches and worktrees before cleanup | IN REVIEW — HIGH ASSURANCE | [Draft #1924](https://github.com/bradleybond512/crystal-ball/pull/1924); approved bounded [design](plans/2026-11-25-ux068-inventory-design.md). Read-only collection only; cleanup disabled, ownership/recovery and full cleanup acceptance remain open. |
 | UX-069 | Auto-PR workflow warning | NOT STARTED | |
 | UX-070 | Design dependency and scheduled test coverage | NOT STARTED — HIGH ASSURANCE | |
 | UX-071 | Design safe Rust tests and Clippy CI | NOT STARTED — HIGH ASSURANCE | |

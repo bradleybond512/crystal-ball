@@ -1,4 +1,6 @@
 {
+  "scripts/worktree-inventory.mjs": ["test:worktree-inventory"],
+  "tests/worktree-inventory.test.mjs": ["test:worktree-inventory"],
   "src/services/foreign-mil-news.ts": ["test:foreign-mil-angle"],
   "src/services/__tests__/fixtures/foreign-mil-original.ts.txt": ["test:foreign-mil-angle"],
   "src/services/spc-mesoscale.ts": ["test:spc-angle"],

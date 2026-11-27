@@ -1,6 +1,7 @@
 # UX-068 — current branch and worktree inventory
 
-High Assurance bounded inventory stage approved November 26, 2026. The roadmap selects UX-068 [C] after
+Initial discovery brief prepared November 25, 2026. Bradley approved the
+bounded inventory stage on November 26. The roadmap selects UX-068 [C] after
 UX-016 and UX-037 were claimed in drafts #1922 and #1923. The documentation draft claim and bounded implementation are authorized;
 cleanup and code publication remain separate.
 
@@ -15,7 +16,9 @@ full UX-068 cleanup acceptance. Preserve unique work and every existing director
 
 Read-only repository analyst traces existing workflow and Git inventory seams;
 architect designs manifest fields, evidence, completeness, costs, tests and
-approval boundaries. Parent writes the reviewable design. No implementation,
-deletion, pruning, branch changes in other workspaces, stash operations, cleanup
+approval boundaries. Parent writes the reviewable design. That discovery phase is complete; the
+[approved design](2026-11-25-ux068-inventory-design.md) now authorizes bounded
+implementation and read-only collection. It does not authorize deletion, pruning,
+branch changes in other workspaces, stash operations, cleanup
 workflow dispatch, app/profile access, merging, auto-merge, release, deployment
 or installation. Leave separate dependency PR #1920 in its existing workflow.

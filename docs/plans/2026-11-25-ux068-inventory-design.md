@@ -152,9 +152,14 @@ ignored caps or ending fingerprints, and leaked filenames/patches. Record
 applied diffs, actual red counts, restored checksums and clean status.
 
 Planned checks: `npm run test:worktree-inventory`, `npm run typecheck:all`, and
-`bash scripts/agentic-validate.sh --tests "test:worktree-inventory"`. No collector
-implementation or tests have run yet. Rollback removes collector/tests/wiring;
-there is no migration. Workflow disablement survives rollback. Proposed draft:
+`bash scripts/agentic-validate.sh --tests "test:worktree-inventory"`. Implementation, 77 tests, mutation evidence, reviews and the bounded local
+collection are recorded in the [validation report](../validation/UX-068-WORKTREE-INVENTORY.md). Rollback removes collector/tests/wiring;
+there is no migration. Workflow disablement survives rollback. Draft [#1924](https://github.com/bradleybond512/crystal-ball/pull/1924):
 “UX-068: inventory branch evidence without cleanup authority”. Full UX-068 stays
 open until ownership, recovery and separately approved cleanup are verified.
 Merging, auto-merge, releases, deployment and installation remain paused.
+
+Validated boundary clarification: failed patch reads retain reserved budget and
+observed capture overshoot; one overflow stops later patch reads. Output caps are
+requested subprocess capture limits, not exact OS-byte ceilings. Normalized patch
+IDs reflect examined local diff settings and never establish semantic equivalence.

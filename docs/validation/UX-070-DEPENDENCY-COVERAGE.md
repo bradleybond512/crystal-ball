@@ -281,3 +281,23 @@ merge/install pauses above describe earlier checkpoints. Fresh independent
 reviews, SHA-pinned verdict and hosted acceptance remain required; public
 releases, deployment and destructive cleanup remain paused. Rollback and the
 broader browser-coverage limits above still apply.
+
+### November 28 native-candidate integration
+
+Source `30f7415232` reapplies only UX-070 onto native candidate `394522cb9a`.
+All native source, workflow/driver safeguards, combined dependency fixes,
+Zizmor pin and current SPC fixture remain byte-identical to that parent.
+Both parents' package scripts and additive test mappings are retained. The
+three previewed textual conflicts are resolved: mapping union, both tracker
+rows and the actual 39-checkout inventory with every credential assertion
+preserved. The selector now describes Cargo coverage as reported separately
+by UX-071 Native tests; dependency obligations and workflow budgets are unchanged.
+
+All ten targeted suites passed again at 19/0, 12/0, 8/0, 86/0, 96/0, 27/0,
+63/0, 22/0, 135/0 and 5/0. The full gate with that same ten-suite command and
+canonical macOS `TMPDIR` ended with `Agentic validation gate passed.` Type
+checks, lint, secret scanning, roadmap/documentation checks and build passed.
+Raw logs, exact commands and parent-preservation checks are retained under
+`next-nov28/ux070-reconciliation/stacked`. The earlier failed alias-path run
+remains recorded above. Fresh reviews and complete hosted graph receipts remain
+required; this local reconciliation has not been pushed or merged.

@@ -81,7 +81,7 @@ no runtime performance, storage or migration behavior.
    metadata in `docs/USABILITY_UPLIFT_FOR_CODEX.md`. Reconcile stale UX-076 merge
    metadata only; its packaged acceptance remains open.
 3. Validate matrix claims against source, links and roadmap metadata. Run
-   `npm run test:roadmap-controller`, `npm run docs:check`,
+   `npm run test:roadmap-controller`, `npm run docs:check -- --changelog-advisory`,
    `npm run typecheck:all` and the required named validation gate. These checks
    validate documentation/source consistency, not shipped coverage. No artificial
    mutation proof for prose; future verifier tests must detect tampered digests,

@@ -1522,7 +1522,7 @@ Status: MONITOR
 Evidence: [Merged #1900](https://github.com/bradleybond512/crystal-ball/pull/1900), November 14, 2026, at `92ff943dfc96c31c1c9f399baf9e1429e75bbd75`; [bounded UI design](plans/2026-11-10-ux076-imessage-draft-recovery.md).
 Exit condition: Complete the separately scoped packaged acceptance for failed-save draft recovery, correction, cancellation and confirmed saved authority when delivery holds permit; source merge alone is not packaged acceptance.
 Review after: 2026-11-28
-Reviewed November 25: GitHub confirms the source PR is merged. This reconciles stale claim metadata only; no application launch, real message, installed-settings write, release or installation is claimed. The review date is a manual checkpoint, not an automation.
+Earlier reconciliation reviewed November 25; reverified against GitHub November 27: the source PR is merged. This reconciles stale claim metadata only; no application launch, real message, installed-settings write, release or installation is claimed. The review date is a manual checkpoint, not an automation.
 
 Preserve a submitted recipient after invalid-format, unavailable, persistence, or busy-retry failures so it can be corrected and explicitly retried. Native validation, exact-recipient confirmation, storage authority, cancellation and immediate disable remain unchanged. Test must use only confirmed saved state. Do not persist drafts or send messages during verification.
 

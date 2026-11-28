@@ -37,7 +37,8 @@ test('every checkout discards its authentication while retaining narrowly scoped
       }
     }
   }
-  assert.equal(count, 36, 'all 34 existing checkouts and the two native coverage jobs are covered');
+  assert.equal(count, 39, 'all 34 existing checkouts, three dependency and two native coverage jobs are covered');
+  assert.deepEqual(Object.keys(workflow('dependency-coverage.yml').jobs), ['plan', 'execute', 'aggregate']);
   const wf = workflow('build-desktop.yml');
   assert.deepEqual(wf.jobs['publish-release'].permissions, { contents: 'write', 'id-token': 'write', attestations: 'write' });
   assert.deepEqual(wf.jobs['publish-release'].environment, { name: 'release' });

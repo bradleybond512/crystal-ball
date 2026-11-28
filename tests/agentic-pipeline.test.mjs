@@ -1172,6 +1172,8 @@ function targetedCliFixture(t, { extraScripts = {}, trustedFiles = {} } = {}) {
   const scripts = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [
     `test:padding-${i}`, `node --test tests/padding-${i}.test.mjs`,
   ]));
+  const required = ['test:install-scripts', 'test:workflow-security', 'test:domain-retirement', 'test:desktop-identity', 'test:e2e:ci-wiring', 'test:supply-chain-gates', 'test:ux054'];
+  for (const name of required) scripts[name] = `node --test tests/mandatory-${name.replaceAll(':', '-')}.test.mjs`;
   scripts['test:providers'] = 'node --test tests/trusted.test.mjs';
   Object.assign(scripts, extraScripts);
   const write = (file, contents) => {
@@ -1182,16 +1184,21 @@ function targetedCliFixture(t, { extraScripts = {}, trustedFiles = {} } = {}) {
   const markerTest = (marker) => `import { writeFileSync } from 'node:fs';\nwriteFileSync(${JSON.stringify(marker)}, 'executed');\n`;
   write('package.json', packageJson(scripts));
   write('tests/trusted.test.mjs', markerTest('trusted-ran.txt'));
+  write('scripts/targeted-tests-overrides.json', '{}');
+  const requiredFiles = required.filter(name => !Object.hasOwn(extraScripts, name))
+    .map(name => `tests/mandatory-${name.replaceAll(':', '-')}.test.mjs`);
+  for (const file of requiredFiles) write(file, markerTest(`${file}.ran`));
   for (const [file, contents] of Object.entries(trustedFiles)) write(file, contents);
-  git('add', 'package.json', 'tests/trusted.test.mjs', ...Object.keys(trustedFiles));
+  git('add', 'package.json', 'tests/trusted.test.mjs', 'scripts/targeted-tests-overrides.json', ...requiredFiles, ...Object.keys(trustedFiles));
   git('commit', '-q', '-m', 'fixture: trusted main commands');
   git('update-ref', 'refs/remotes/origin/main', 'HEAD');
   return {
     dir, scripts, write, packageJson, markerTest,
-    run(files) {
+    run(files, inheritedEnv = process.env) {
       git('add', ...files);
       git('commit', '-q', '-m', 'fixture: PR changes');
-      const env = { ...process.env };
+      const env = { ...inheritedEnv };
+      delete env.CB_TARGETED_POLICY_SHA;
       delete env.GITHUB_BASE_REF;
       delete env.GITHUB_STEP_SUMMARY;
       delete env.NODE_TEST_CONTEXT;
@@ -1201,6 +1208,16 @@ function targetedCliFixture(t, { extraScripts = {}, trustedFiles = {} } = {}) {
     },
   };
 }
+
+test('selector fixture uses its own trusted revision despite outer CI policy', (t) => {
+  const f = targetedCliFixture(t);
+  f.write('src/app/data-loader.ts', 'export const value = 1;\n');
+  const result = f.run(['src/app/data-loader.ts'], { ...process.env, CB_TARGETED_POLICY_SHA: 'f'.repeat(40) });
+  assert.equal(result.status, 0, result.stderr);
+  const fixtureSha = execFileSync('git', ['rev-parse', 'origin/main'], { cwd: f.dir, encoding: 'utf8' }).trim();
+  assert.ok(result.stdout.includes(`[targeted-tests] policy SHA: ${fixtureSha}`));
+  assert.equal(readFileSync(join(f.dir, 'trusted-ran.txt'), 'utf8'), 'executed');
+});
 
 function desktopUpdaterCliFixture(t, { failUpdater = false } = {}) {
   const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
@@ -1234,7 +1251,7 @@ test('updater CLI runs every main-owned stage despite PR rewrites of both aliase
     ['--test', 'src/app/__tests__/desktop-updater.test.mts']);
   assert.equal(existsSync(join(f.dir, 'replacement-ran.txt')), false);
   assert.match(result.stdout, /\[trusted:main\] test:desktop-identity:/);
-  assert.match(result.stdout, /1 script\(s\) passed/);
+  assert.match(result.stdout, /7 script\(s\) passed/);
 });
 
 test('updater CLI propagates a trusted updater failure and stops before tsx', (t) => {
@@ -1264,7 +1281,7 @@ test('PR overrides CLI: the declaration file causes the new suite to execute', (
   ]);
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.equal(readFileSync(join(f.dir, 'declared-ran.txt'), 'utf8'), 'executed');
-  assert.match(result.stdout, /1 script\(s\) passed/);
+  assert.match(result.stdout, /8 script\(s\) passed/);
   assert.doesNotMatch(result.stdout, /NEW GAP/);
 });
 
@@ -1305,7 +1322,7 @@ test('PR overrides CLI: a declaration and package rewrite cannot replace a main-
   assert.equal(readFileSync(join(f.dir, 'declared-ran.txt'), 'utf8'), 'executed');
   assert.equal(existsSync(join(f.dir, 'replacement-ran.txt')), false);
   assert.match(result.stdout, /\[trusted:main\] test:providers: node --test tests\/trusted\.test\.mjs/);
-  assert.match(result.stdout, /2 script\(s\) passed/);
+  assert.match(result.stdout, /9 script\(s\) passed/);
 });
 
 test('the main-owned UX-050 command expands its build and PWA budget without npm or a shell', () => {

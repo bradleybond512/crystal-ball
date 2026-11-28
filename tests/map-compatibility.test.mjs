@@ -338,9 +338,11 @@ test('icon atlas import does not touch the document or allocate graphics', () =>
 for (const first of ['getIconAtlas', 'getIconMapping']) {
   test(`icon atlas preserves all original symbols and state with ${first} first`, () => {
     const fixture = iconAtlasFixture();
-    fixture.api[first]();
+    const firstResult = fixture.api[first]();
+    assert.deepEqual(fixture.counts, { documentReads: 1, allocations: 1, contextRequests: 1 });
     const atlas = fixture.api.getIconAtlas();
     const mapping = fixture.api.getIconMapping();
+    assert.equal(firstResult, first === 'getIconAtlas' ? atlas : mapping);
     assert.deepEqual({ width: atlas.width, height: atlas.height }, atlasBaseline.dimensions);
     assert.deepEqual(Object.keys(mapping), atlasBaseline.names);
     assert.equal(Object.keys(mapping).length, 22);

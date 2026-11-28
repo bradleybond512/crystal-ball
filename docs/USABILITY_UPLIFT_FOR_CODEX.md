@@ -1334,6 +1334,12 @@ stronger repairs. Replaying their old ancestry can overwrite those fixes.
 - Done when each draft is safely delivered, superseded with verified coverage,
   or has an explicit unresolved hold. Do not close unique work without approval.
 
+November 9 reconciliation is **DONE** in [draft PR #1899](https://github.com/bradleybond512/crystal-ball/pull/1899): the [dated checkpoint](SECURITY_SCAN_ROUND_4_FOR_CODEX.md#reconciliation-checkpoint--november-9-2026)
+records three open and four closed originals, verified replacement receipts,
+remaining scopes and explicit ownership/acceptance holds. Independent review
+confirmed the dispositions. Completion covers reconciliation and explicit holds;
+the underlying security work remains open. November 28 authorization permits protected safe merging and local Mac installation; public releases, deployment and destructive cleanup remain held.
+
 ### UX-066 — Clear the dependency backlog in technically reviewed batches
 
 Priority: S
@@ -1655,7 +1661,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-061 | Truthful, restrained map presentation | DONE | #1802; [bounded evidence](validation/MAP-CLARITY-CLEANUP.md); native acceptance recorded separately |
 | UX-062 | Label forecasts that trail their baseline | MONITOR — HIGH ASSURANCE | [Candidate #1886](https://github.com/bradleybond512/crystal-ball/pull/1886); approved bounded Unverified labels; [original QA](validation/UX-062-UNVERIFIED-FORECAST-LABELS.md) and [current integration](validation/UX-062-SAFE-INTEGRATION.md). Full matched-baseline comparison, freshness and installed acceptance remain open; exit condition above, review after 2026-11-29. Safe protected integration is authorized; fresh review and required checks remain gates. |
 | UX-063 | Evaluate bounded CI Sonnet review | DONE — HIGH ASSURANCE | [Candidate #1890](https://github.com/bradleybond512/crystal-ball/pull/1890); [retained-path decision](validation/UX-063-REVIEW-PATH-DECISION.md) and [current reconciliation](validation/UX-063-SAFE-MERGE.md). Documentation-only evaluation; no new CI implementation. Exact-tip review and hosted acceptance remain required. |
-| UX-065 | Round 4 checkpoint and remaining security drafts | NOT STARTED | |
+| UX-065 | Round 4 checkpoint and remaining security drafts | DONE | [Candidate #1899](https://github.com/bradleybond512/crystal-ball/pull/1899); [dated reconciliation checkpoint](SECURITY_SCAN_ROUND_4_FOR_CODEX.md) and [current integration](validation/UX-065-SAFE-MERGE.md). Documentation checkpoint only; underlying security holds remain open. Fresh exact-tip review and hosted checks remain required. |
 | UX-066 | Dependabot backlog in reviewed batches | MONITOR | [Merged #1902](https://github.com/bradleybond512/crystal-ball/pull/1902) at `6869676878`; all 16 latest hosted workflows passed before protected closeout. [Evidence](validation/UX-066-SECURITY-INTEGRATION.md). Full backlog remains open; the separately owned dependency workflow stays untouched. Public releases, deployment and cleanup remain held. |
 | UX-067 | Green release-integrity signal on main | WAITING | |
 | UX-068 | Inventory branches and worktrees before cleanup | NOT STARTED — HIGH ASSURANCE | |

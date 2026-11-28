@@ -41,7 +41,7 @@ fi
 
 PR_JSON=$(gh pr view "$BRANCH" --json number,headRefOid,state,baseRefName 2>/dev/null || echo "")
 if [ -z "$PR_JSON" ]; then
-  printf 'pr-closeout: no open PR for %s — the auto-PR workflow creates one on push; wait or open it.\n' "$BRANCH" >&2
+  printf 'pr-closeout: no open PR for %s — publish a draft PR explicitly after approval, then rerun.\n' "$BRANCH" >&2
   exit 1
 fi
 PR_NUMBER=$(printf '%s' "$PR_JSON" | node -e 'let d="";process.stdin.on("data",(c)=>d+=c).on("end",()=>{const j=JSON.parse(d);if(j.state!=="OPEN"){console.error(`PR #${j.number} is ${j.state}`);process.exit(1)}console.log(j.number)})')

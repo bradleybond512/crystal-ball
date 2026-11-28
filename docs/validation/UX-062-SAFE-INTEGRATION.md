@@ -161,3 +161,33 @@ as documented in the original paired baseline evidence.
 Rollback reverts this UI/test slice only. No forecast data, models, storage or
 security-baseline changes require rollback. Required exact-tip review, protected
 CI and parent-controlled delivery remain prerequisites to integration.
+
+## Actual main reconciliation — November 28
+
+Replayed the four prepared commits onto merged main
+`bda25b90e3039a3ffc21131ce858dfa85a945922` after UX-066, UX-071 and UX-070
+passed hosted CI. The only conflict was additive package-script placement;
+all three dependency-coverage scripts and `test:ux062` were retained.
+Every task payload file remains byte-identical to reviewed repaired
+`a2a5450b1b416aa97f6e6fb50caeca9aa5fbb1c9`; parent package scripts and mapping
+entries are preserved. Identity receipt: `/tmp/ux062-main-identity.json`.
+The earlier preparation bases, review-pending text and validation results above
+are dated stages, superseded by this reconciliation. Sol and Sonnet both cleared
+the repaired source; fresh exact-tip reconciliation review and hosted acceptance
+remain pending. Full baseline comparisons and native spoken-output acceptance
+stay open. The current authorization covers protected merge and verified local
+Mac installation; public release, deployment and destructive cleanup stay held.
+
+The actual-main named gate passed, exit 0, with focused `14/0`, intelligence
+`597/0`, insights `133/0` and MCP orchestration `1/0` (inner `24/0` and `23/0`):
+
+```text
+Agentic validation gate passed.
+Tests run: test:ux062 test:intelligence test:insights test:mcp-untrusted
+```
+
+Log: `/tmp/ux062-main-gate-rerun.log`. The first attempt stopped at an MD012
+extra blank line in this new appendix; only that formatting was corrected.
+`/tmp/ux062-main-gate.log` retains the failure. No assertion, source behavior or
+gate was weakened. Final documentation checks and normal commit hooks cover
+this results-only addition.

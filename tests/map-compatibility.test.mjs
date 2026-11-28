@@ -251,3 +251,156 @@ test('lightning tooltip preserves existing time and empty-selection behavior', (
   assert.equal(tooltip.call({}, { layer: { id: 'lightning-strikes' }, object: { time: 660000 } }).html,
     '<div class="deckgl-tooltip"><strong>⚡ Lightning Strike</strong><br/>-1m ago</div>');
 });
+
+function iconAtlasSource() {
+  return source('src/components/deckgl-icon-atlas.ts');
+}
+
+function iconAtlasFixture({ contextAvailable = true } = {}) {
+  const transcript = [];
+  const counts = { documentReads: 0, allocations: 0, contextRequests: 0 };
+  const methods = new Set(['beginPath', 'moveTo', 'lineTo', 'closePath', 'fill', 'roundRect', 'arc', 'stroke', 'bezierCurveTo', 'quadraticCurveTo', 'fillRect', 'save', 'translate', 'restore']);
+  let state, frames;
+  function context() {
+    state = { fillStyle: '#000000', strokeStyle: '#000000', lineWidth: 1, lineCap: 'butt', lineJoin: 'miter', globalCompositeOperation: 'source-over', translation: [0, 0] };
+    frames = [];
+    return new Proxy({}, {
+      set(_target, property, value) {
+        assert.ok(Object.hasOwn(state, property), `unrecognized canvas state ${property}`);
+        transcript.push(['set', property, value]); state[property] = value; return true;
+      },
+      get(_target, property) {
+        if (Object.hasOwn(state, property)) return state[property];
+        assert.ok(methods.has(property), `unrecognized canvas operation ${String(property)}`);
+        return (...args) => {
+          transcript.push([property, ...args]);
+          if (property === 'save') frames.push(structuredClone(state));
+          else if (property === 'restore') { assert.ok(frames.length > 0); state = frames.pop(); }
+          else if (property === 'translate') state.translation = state.translation.map((value, i) => value + args[i]);
+        };
+      },
+    });
+  }
+  const module = { exports: {} };
+  const globals = { module, exports: module.exports, require: name => { throw new Error(`unexpected atlas import ${name}`); } };
+  Object.defineProperty(globals, 'document', { get() {
+    counts.documentReads++;
+    return { createElement(name) {
+      assert.equal(name, 'canvas'); counts.allocations++;
+      return { width: 0, height: 0, getContext(kind) {
+        assert.equal(kind, '2d'); counts.contextRequests++;
+        return contextAvailable ? context() : null;
+      } };
+    } };
+  } });
+  vm.runInNewContext(ts.transpileModule(iconAtlasSource(), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText, globals);
+  return { api: module.exports, counts, transcript, state: () => structuredClone(state), depth: () => frames.length,
+    setContextAvailable(value) { contextAvailable = value; } };
+}
+
+function iconAtlasConsumers() {
+  const text = source('src/components/DeckGLMap.ts');
+  const parsed = ts.createSourceFile('DeckGLMap.ts', text, ts.ScriptTarget.Latest, true);
+  const consumers = [];
+  function visit(node) {
+    if (ts.isObjectLiteralExpression(node)) {
+      const property = name => node.properties.find(item => ts.isPropertyAssignment(item) && item.name.getText(parsed) === name)?.initializer;
+      const atlas = property('iconAtlas'), mapping = property('iconMapping');
+      if (atlas || mapping) {
+        let owner = node.parent;
+        while (owner && !ts.isMethodDeclaration(owner)) owner = owner.parent;
+        assert.ok(owner && atlas && mapping, 'layer atlas and mapping stay paired');
+        for (const [call, name] of [[atlas, 'getIconAtlas'], [mapping, 'getIconMapping']]) {
+          assert.ok(ts.isCallExpression(call) && ts.isIdentifier(call.expression) && call.expression.text === name && call.arguments.length === 0, `layer must call ${name}`);
+        }
+        const id = property('id');
+        assert.ok(id && ts.isStringLiteral(id), 'atlas layer has a stable literal ID');
+        consumers.push({ method: owner.name.getText(parsed), layerId: id.text });
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(parsed);
+  return consumers;
+}
+
+const atlasBaseline = JSON.parse(source('tests/fixtures/deckgl-icon-atlas-baseline.json'));
+
+test('icon atlas import does not touch the document or allocate graphics', () => {
+  const fixture = iconAtlasFixture();
+  assert.deepEqual(Object.keys(fixture.api).sort(), ['getIconAtlas', 'getIconMapping']);
+  assert.deepEqual(fixture.counts, { documentReads: 0, allocations: 0, contextRequests: 0 });
+  assert.deepEqual(fixture.transcript, []);
+});
+
+for (const first of ['getIconAtlas', 'getIconMapping']) {
+  test(`icon atlas preserves all original symbols and state with ${first} first`, () => {
+    const fixture = iconAtlasFixture();
+    const firstResult = fixture.api[first]();
+    assert.deepEqual(fixture.counts, { documentReads: 1, allocations: 1, contextRequests: 1 });
+    const atlas = fixture.api.getIconAtlas();
+    const mapping = fixture.api.getIconMapping();
+    assert.equal(firstResult, first === 'getIconAtlas' ? atlas : mapping);
+    assert.deepEqual({ width: atlas.width, height: atlas.height }, atlasBaseline.dimensions);
+    assert.deepEqual(Object.keys(mapping), atlasBaseline.names);
+    assert.equal(Object.keys(mapping).length, 22);
+    assert.deepEqual(JSON.parse(JSON.stringify(mapping)), atlasBaseline.mapping);
+    assert.deepEqual(fixture.transcript, atlasBaseline.transcript);
+    assert.deepEqual(fixture.state(), atlasBaseline.restoredState);
+    assert.equal(fixture.depth(), 0);
+    assert.deepEqual(fixture.counts, { documentReads: 1, allocations: 1, contextRequests: 1 });
+  });
+
+  test(`icon atlas reuses the same objects without extra work with ${first} first`, () => {
+    const fixture = iconAtlasFixture();
+    fixture.api[first]();
+    const atlas = fixture.api.getIconAtlas();
+    const mapping = fixture.api.getIconMapping();
+    const transcript = structuredClone(fixture.transcript);
+    for (let iteration = 0; iteration < 100; iteration++) {
+      assert.equal(fixture.api.getIconMapping(), mapping);
+      assert.equal(fixture.api.getIconAtlas(), atlas);
+    }
+    assert.deepEqual(fixture.transcript, transcript);
+    assert.deepEqual(fixture.counts, { documentReads: 1, allocations: 1, contextRequests: 1 });
+  });
+
+  test(`icon atlas preserves failed context initialization and retry with ${first} first`, () => {
+    const fixture = iconAtlasFixture({ contextAvailable: false });
+    assert.throws(() => fixture.api[first](), error => error.name === 'TypeError');
+    assert.deepEqual(fixture.counts, { documentReads: 1, allocations: 1, contextRequests: 1 });
+    assert.deepEqual(fixture.transcript, []);
+    fixture.setContextAvailable(true);
+    fixture.api[first]();
+    assert.deepEqual(JSON.parse(JSON.stringify(fixture.api.getIconMapping())), atlasBaseline.mapping);
+    assert.deepEqual(fixture.transcript, atlasBaseline.transcript);
+    assert.deepEqual(fixture.counts, { documentReads: 2, allocations: 2, contextRequests: 2 });
+  });
+}
+
+test('all original atlas layer consumers retain paired accessors and identities', () => {
+  assert.equal(atlasBaseline.consumers.length, 21);
+  assert.deepEqual(iconAtlasConsumers(), atlasBaseline.consumers);
+});
+
+
+test('DeckGL imports the isolated atlas accessors without shadowing them', () => {
+  const parsed = ts.createSourceFile('DeckGLMap.ts', source('src/components/DeckGLMap.ts'), ts.ScriptTarget.Latest, true);
+  const imports = parsed.statements.filter(entry => ts.isImportDeclaration(entry) && entry.moduleSpecifier.text === './deckgl-icon-atlas');
+  assert.equal(imports.length, 1);
+  const clause = imports[0].importClause;
+  assert.ok(clause && !clause.isTypeOnly && !clause.name);
+  assert.ok(ts.isNamedImports(clause.namedBindings));
+  assert.deepEqual(clause.namedBindings.elements.map(item => ({ name: item.name.text, alias: item.propertyName?.text, typeOnly: item.isTypeOnly })), [
+    { name: 'getIconAtlas', alias: undefined, typeOnly: false },
+    { name: 'getIconMapping', alias: undefined, typeOnly: false },
+  ]);
+  const declarations = parsed.statements.flatMap(entry => ts.isVariableStatement(entry)
+    ? entry.declarationList.declarations.map(item => item.name.getText(parsed))
+    : ts.isFunctionDeclaration(entry) ? [entry.name?.text] : []);
+  for (const name of ['ICON_SIZE', 'ICON_DRAW_FNS', '_iconAtlas', '_iconMapping', 'getIconAtlas', 'getIconMapping']) {
+    assert.ok(!declarations.includes(name), `${name} belongs solely to the atlas module`);
+  }
+});

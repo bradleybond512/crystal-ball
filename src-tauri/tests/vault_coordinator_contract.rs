@@ -207,7 +207,7 @@ fn concurrent_saves_lose_nothing() {
     }
     let expected = "BASE=0,K0=v0,K1=v1,K2=v2,K3=v3,K4=v4,K5=v5";
     assert_eq!(fmt(&writer.state().snapshot()), expected);
-    let last_vault = store.events().into_iter().filter(|e| e.starts_with("vault:")).last().unwrap();
+    let last_vault = store.events().into_iter().rfind(|e| e.starts_with("vault:")).unwrap();
     assert_eq!(last_vault, format!("vault:{expected}"));
     assert_eq!(writer.write_state().revision, 6);
 }

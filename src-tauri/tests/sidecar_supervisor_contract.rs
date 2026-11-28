@@ -94,7 +94,7 @@ fn start_failures_count_toward_giving_up() {
 #[test]
 fn manual_retry_only_acts_when_stopped_and_clears_the_breaker() {
     let mut s = started_at(0);
-    assert_eq!(s.on_manual_retry(500), false, "running sidecar must not be restartable from the renderer");
+    assert!(!s.on_manual_retry(500), "running sidecar must not be restartable from the renderer");
     for i in 0..FLAP_LIMIT {
         let _ = s.on_exit(1_000 + i as u64, None, None);
     }
@@ -111,7 +111,7 @@ fn nothing_restarts_after_shutdown() {
     s.on_shutdown();
     assert_eq!(s.on_exit(1_000, Some(0), None), Decision::Ignore);
     assert_eq!(s.on_start_failed(2_000), Decision::Ignore);
-    assert_eq!(s.on_manual_retry(2_500), false, "no manual retry once shutdown began");
+    assert!(!s.on_manual_retry(2_500), "no manual retry once shutdown began");
     s.on_started(3_000);
     assert_eq!(s.snapshot(3_000).phase, PhaseLabel::ShuttingDown);
 }
@@ -148,7 +148,7 @@ fn foreign_listeners_are_never_treated_as_ours() {
         (" ".to_string(), "", ""),
     ];
     for (command, node, script) in &foreign {
-        assert_eq!(is_own_sidecar_command(command, node, script), false, "{command:?} would be signalled as ours");
+        assert!(!is_own_sidecar_command(command, node, script), "{command:?} would be signalled as ours");
     }
 }
 
@@ -391,7 +391,7 @@ fn publication_waits_for_the_child_lock_before_it_touches_the_port() {
         Err(TryLockError::Poisoned(_)) => Err("poisoned"),
     };
     assert_eq!(port, Ok(None), "the publisher must not touch the port before it holds the child lock");
-    assert_eq!(shared.confirmed.load(Ordering::SeqCst), false, "nothing is confirmed while another holder owns the child lock");
+    assert!(!shared.confirmed.load(Ordering::SeqCst), "nothing is confirmed while another holder owns the child lock");
     drop(held);
     assert_eq!(publisher.join().unwrap(), Publication::Confirmed(40_001));
 }

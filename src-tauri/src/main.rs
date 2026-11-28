@@ -20,11 +20,15 @@ use aes_gcm::{Aes256Gcm, Nonce, aead::{Aead, KeyInit}};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use tauri::menu::{AboutMetadata, Menu, MenuItemKind, MenuItem, PredefinedMenuItem, Submenu};
-use tauri::{AppHandle, Manager, RunEvent, TitleBarStyle, Webview, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::{AppHandle, Manager, RunEvent, Webview, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+#[cfg(target_os = "macos")]
+use tauri::TitleBarStyle;
 mod corelocation;
 mod current_location;
+mod current_location_native;
 mod imessage;
 mod log_rotation;
+#[cfg(target_os = "macos")]
 mod notify_policy;
 mod sidecar_publication;
 mod secret_sync;
@@ -33,7 +37,9 @@ mod updater_policy;
 mod updater_identity;
 mod vault_coordinator;
 mod watchdog;
-use updater_policy::{BrowserReason, SignerRequirement, UpdateError, UpdateOutcome};
+use updater_policy::{BrowserReason, UpdateError, UpdateOutcome};
+#[cfg(target_os = "macos")]
+use updater_policy::SignerRequirement;
 use vault_coordinator::{
     LateOutcome, LoadGuard, LoadPhase, OutcomeStatus, ReadResult, VaultCoordinator, VaultSource,
     VaultState, VaultStore,
@@ -137,7 +143,9 @@ const SUPPORTED_SECRET_KEYS: [&str; 77] = [
 // Priority-aware admission for native notifications (R4-BUG-002). Each
 // priority has its own lane (see notify_policy.rs), so a routine notification
 // can never consume the budget of a life-safety one.
+#[cfg(target_os = "macos")]
 static NOTIFICATION_LANES: Mutex<notify_policy::LaneState> = Mutex::new(notify_policy::LaneState::new());
+#[cfg(target_os = "macos")]
 static NATIVE_CLOCK_ORIGIN: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
 
 /// What actually happened to a native notification or utterance. Callers must
@@ -145,20 +153,27 @@ static NATIVE_CLOCK_ORIGIN: std::sync::OnceLock<Instant> = std::sync::OnceLock::
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 enum NativeOutcome {
+ #[cfg(any(target_os = "macos", test))]
  Delivered,
+ #[cfg(any(target_os = "macos", test))]
  RateLimited,
+ #[cfg(any(not(target_os = "macos"), test))]
  Unsupported,
 }
 
+#[cfg(target_os = "macos")]
 fn native_clock_ms() -> u64 {
  let origin = NATIVE_CLOCK_ORIGIN.get_or_init(Instant::now);
  u64::try_from(origin.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
+#[cfg(target_os = "macos")]
 static IMESSAGE_SERVICE: std::sync::OnceLock<Arc<imessage::Service<imessage::NativeEffects>>> = std::sync::OnceLock::new();
 // Voice alerts (`say`) are more disruptive than push, so we use a 5s
 // floor to avoid stacked utterances when several alerts fire at once.
+#[cfg(target_os = "macos")]
 static VOICE_LAST_SENT: Mutex<Option<Instant>> = Mutex::new(None);
+#[cfg(target_os = "macos")]
 const VOICE_RATE_LIMIT: Duration = Duration::from_secs(5);
 const MIN_CACHE_FLUSH_INTERVAL: Duration = Duration::from_secs(2);
 const CACHE_TTL_MILLIS: u64 = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -728,52 +743,6 @@ fn schedule_cache_flush(app: &AppHandle) {
  });
 }
 
-fn humanize_user_name(value: &str) -> Option<String> {
- let mut parts = Vec::new();
- for raw in value.split(|c: char| c == '.' || c == '_' || c == '-' || c.is_whitespace()) {
- let trimmed = raw.trim();
- if trimmed.is_empty() {
- continue;
- }
- let mut chars = trimmed.chars();
- if let Some(first) = chars.next() {
- let first_upper = first.to_uppercase().collect::<String>();
- let rest = chars.as_str().to_lowercase();
- parts.push(format!("{first_upper}{rest}"));
- }
- }
-
- if parts.is_empty() {
- None
- } else {
- Some(parts.join(" "))
- }
-}
-
-fn resolve_runtime_user_name() -> Option<String> {
- env::var("USER")
- .ok()
- .or_else(|| env::var("USERNAME").ok())
- .map(|value| value.trim().to_string())
- .filter(|value| !value.is_empty())
-}
-
-fn resolve_runtime_display_name(username: Option<&String>) -> Option<String> {
- #[cfg(target_os = "macos")]
- {
- if let Ok(output) = Command::new("id").arg("-F").output() {
- if output.status.success() {
- let display_name = String::from_utf8_lossy(&output.stdout).trim().to_string();
- if !display_name.is_empty() {
- return Some(display_name);
- }
- }
- }
- }
-
- username.and_then(|value| humanize_user_name(value))
-}
-
 fn save_vault(cache: &HashMap<String, String>) -> Result<(), String> {
  let json =
  serde_json::to_string(cache).map_err(|e| format!("Failed to serialize vault: {e}"))?;
@@ -833,8 +802,9 @@ fn encrypt_vault_shadow(key: &[u8; 32], plaintext: &str) -> Option<String> {
  let cipher = Aes256Gcm::new_from_slice(key).ok()?;
  let mut nonce_bytes = [0u8; 12];
  getrandom::fill(&mut nonce_bytes).ok()?;
+ let nonce = Nonce::from(nonce_bytes);
  let ct = cipher
-     .encrypt(Nonce::from_slice(&nonce_bytes), plaintext.as_bytes())
+     .encrypt(&nonce, plaintext.as_bytes())
      .ok()?;
  serde_json::to_string(&ShadowEnvelope { v: 2, n: nonce_bytes.to_vec(), c: ct }).ok()
 }
@@ -848,7 +818,9 @@ fn decrypt_vault_shadow(key: &[u8; 32], raw: &str) -> Option<String> {
      return None;
  }
  let cipher = Aes256Gcm::new_from_slice(key).ok()?;
- let pt = cipher.decrypt(Nonce::from_slice(&env.n), env.c.as_ref()).ok()?;
+ let nonce_bytes: [u8; 12] = env.n.as_slice().try_into().ok()?;
+ let nonce = Nonce::from(nonce_bytes);
+ let pt = cipher.decrypt(&nonce, env.c.as_ref()).ok()?;
  String::from_utf8(pt).ok()
 }
 
@@ -981,20 +953,20 @@ fn begin_activity_macos() -> Option<usize> {
     const NS_USER_INITIATED: u64 = 0x00FF_FFFF | NS_SUDDEN_TERM_DISABLED;
     let options: u64 = NS_USER_INITIATED & !NS_IDLE_SYSTEM_SLEEP_DISABLED;
     unsafe {
-        let pi_cls = objc_getClass(b"NSProcessInfo\0".as_ptr());
-        let str_cls = objc_getClass(b"NSString\0".as_ptr());
+        let pi_cls = objc_getClass(c"NSProcessInfo".as_ptr().cast::<u8>());
+        let str_cls = objc_getClass(c"NSString".as_ptr().cast::<u8>());
         if pi_cls.is_null() || str_cls.is_null() {
             return None;
         }
-        let process_info = objc_msgSend(pi_cls, sel_registerName(b"processInfo\0".as_ptr()));
+        let process_info = objc_msgSend(pi_cls, sel_registerName(c"processInfo".as_ptr().cast::<u8>()));
         if process_info.is_null() {
             return None;
         }
-        let with_utf8 = sel_registerName(b"stringWithUTF8String:\0".as_ptr());
+        let with_utf8 = sel_registerName(c"stringWithUTF8String:".as_ptr().cast::<u8>());
         let reason_fn: unsafe extern "C" fn(*mut c_void, *mut c_void, *const u8) -> *mut c_void =
             std::mem::transmute(objc_msgSend as *const ());
-        let reason = reason_fn(str_cls, with_utf8, b"Crystal Ball 24/7 monitoring\0".as_ptr());
-        let begin_sel = sel_registerName(b"beginActivityWithOptions:reason:\0".as_ptr());
+        let reason = reason_fn(str_cls, with_utf8, c"Crystal Ball 24/7 monitoring".as_ptr().cast::<u8>());
+        let begin_sel = sel_registerName(c"beginActivityWithOptions:reason:".as_ptr().cast::<u8>());
         let begin_fn: unsafe extern "C" fn(*mut c_void, *mut c_void, u64, *mut c_void) -> *mut c_void =
             std::mem::transmute(objc_msgSend as *const ());
         let token = begin_fn(process_info, begin_sel, options, reason);
@@ -1002,7 +974,7 @@ fn begin_activity_macos() -> Option<usize> {
             return None;
         }
         // retain so it survives past this scope
-        objc_msgSend(token, sel_registerName(b"retain\0".as_ptr()));
+        objc_msgSend(token, sel_registerName(c"retain".as_ptr().cast::<u8>()));
         Some(token as usize)
     }
 }
@@ -1016,16 +988,16 @@ fn end_activity_macos(token: usize) {
         fn objc_msgSend(receiver: *mut c_void, sel: *mut c_void, ...) -> *mut c_void;
     }
     unsafe {
-        let pi_cls = objc_getClass(b"NSProcessInfo\0".as_ptr());
+        let pi_cls = objc_getClass(c"NSProcessInfo".as_ptr().cast::<u8>());
         if pi_cls.is_null() {
             return;
         }
-        let process_info = objc_msgSend(pi_cls, sel_registerName(b"processInfo\0".as_ptr()));
-        let end_sel = sel_registerName(b"endActivity:\0".as_ptr());
+        let process_info = objc_msgSend(pi_cls, sel_registerName(c"processInfo".as_ptr().cast::<u8>()));
+        let end_sel = sel_registerName(c"endActivity:".as_ptr().cast::<u8>());
         let end_fn: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void) -> *mut c_void =
             std::mem::transmute(objc_msgSend as *const ());
         end_fn(process_info, end_sel, token as *mut c_void);
-        objc_msgSend(token as *mut c_void, sel_registerName(b"release\0".as_ptr()));
+        objc_msgSend(token as *mut c_void, sel_registerName(c"release".as_ptr().cast::<u8>()));
     }
 }
 
@@ -1683,7 +1655,7 @@ fn open_path_in_shell(path: &Path) -> Result<(), String> {
 fn is_172_16_range(host: &str) -> bool {
  if let Some(rest) = host.strip_prefix("172.") {
   if let Some(s) = rest.split('.').next() {
-   if let Ok(n) = s.parse::<u8>() { return n >= 16 && n <= 31; }
+   if let Ok(n) = s.parse::<u8>() { return (16..=31).contains(&n); }
   }
  }
  false
@@ -1693,7 +1665,7 @@ fn is_172_16_range(host: &str) -> bool {
 fn is_cgnat_range(host: &str) -> bool {
  if let Some(rest) = host.strip_prefix("100.") {
   if let Some(s) = rest.split('.').next() {
-   if let Ok(n) = s.parse::<u8>() { return n >= 64 && n <= 127; }
+   if let Ok(n) = s.parse::<u8>() { return (64..=127).contains(&n); }
   }
  }
  false
@@ -1830,7 +1802,7 @@ fn send_notification(
  #[cfg(not(target_os = "macos"))]
  {
  let _ = (title, body, sound, priority);
- return Ok(NativeOutcome::Unsupported);
+ Ok(NativeOutcome::Unsupported)
  }
  #[cfg(target_os = "macos")]
  {
@@ -1926,7 +1898,7 @@ fn speak_aloud(
  #[cfg(not(target_os = "macos"))]
  {
  let _ = (text, voice, rate);
- return Ok(NativeOutcome::Unsupported);
+ Ok(NativeOutcome::Unsupported)
  }
  #[cfg(target_os = "macos")]
  {
@@ -1996,6 +1968,7 @@ fn resolve_update_install_path() -> Result<String, String> {
 /// Returns the normalized lowercase hex string, or an error describing why
 /// the value is unusable (missing, malformed, wrong length). Pure / side-effect
 /// free so it can be unit-tested without the macOS cfg gate.
+#[cfg(any(target_os = "macos", test))]
 fn validate_expected_sha256(raw: Option<&str>) -> Result<String, String> {
  let trimmed = raw.map(|s| s.trim()).unwrap_or("");
  if trimmed.is_empty() {
@@ -2053,6 +2026,7 @@ fn verify_app_bundle_signature(app_path: &str, label: &str) -> Result<(), String
 /// Parse the `TeamIdentifier=...` field out of `codesign -dvvv` stderr. Pure so
 /// it can be unit-tested. Returns None when the field is absent or `not set`
 /// (ad-hoc / unsigned bundles), which callers treat as "no team to pin against".
+#[cfg(any(target_os = "macos", test))]
 fn parse_team_identifier(codesign_stderr: &str) -> Option<String> {
  for line in codesign_stderr.lines() {
  if let Some(rest) = line.trim().strip_prefix("TeamIdentifier=") {
@@ -2178,9 +2152,9 @@ fn reject_symlinked_path(path: &str, label: &str) -> Result<(), String> {
 /// `requirement` and `expected_version` are captured ONCE from the live install
 /// before validation and threaded in here, so this re-checks integrity + bundle ID
 /// + that same immutable pin + that the landed version EXACTLY equals the one that
-/// was validated. This closes both the rename-window TOCTOU (a local process swaps
-/// the staged directory after validation but before the move) and the downgrade
-/// window (substituting an older but legitimately-signed bundle post-validation).
+///   was validated. This closes both the rename-window TOCTOU (a local process swaps
+///   the staged directory after validation but before the move) and the downgrade
+///   window (substituting an older but legitimately-signed bundle post-validation).
 #[cfg(target_os = "macos")]
 fn swap_staged_into_place(
  staged: &str,
@@ -2190,7 +2164,7 @@ fn swap_staged_into_place(
  expected_version: &str,
 ) -> Result<(), String> {
  swap_staged_into_place_with(staged, dest, backup, |dest| {
- verify_app_bundle_signature(&dest, "Installed app")
+ verify_app_bundle_signature(dest, "Installed app")
  .and_then(|_| verify_update_bundle_identifier(dest))
  .and_then(|_| verify_bundle_satisfies_requirement(dest, requirement))
  .and_then(|_| {
@@ -2282,6 +2256,7 @@ async fn bounded_update_body(mut response: reqwest::Response, limit: u64, expect
  Ok(bytes)
 }
 
+#[cfg(target_os = "macos")]
 fn update_asset_client(initial: &str, timeout: u64) -> Result<reqwest::Client, UpdateError> {
  updater_policy::validate_initial_url(initial, initial).map_err(|_| UpdateError::check())?;
  let initial = initial.to_string();
@@ -2312,7 +2287,7 @@ async fn stage_latest_update(webview: Webview) -> Result<UpdateOutcome, UpdateEr
  updater_policy::version(current).map_err(|_| UpdateError::check())?;
  if !is_semver_newer(&version, current) { return Ok(UpdateOutcome::UpToDate { current_version: current.into(), checked_at }); }
  #[cfg(not(target_os = "macos"))]
- { let _ = guard; return Ok(UpdateOutcome::browser(&version, BrowserReason::UnsupportedPlatform, checked_at)); }
+ { let _ = guard; Ok(UpdateOutcome::browser(&version, BrowserReason::UnsupportedPlatform, checked_at)) }
  #[cfg(target_os = "macos")]
  {
  let selected = match updater_policy::select_assets(&release, std::env::consts::ARCH) {
@@ -2500,6 +2475,7 @@ impl CrossProcessSwapLock {
  OpenOptions::new()
  .create(true)
  .write(true)
+ .truncate(false)
  .open(&path)
  .map_err(|e| format!("Could not open update lock {path}: {e}"))
  }
@@ -2803,6 +2779,7 @@ async fn fetch_polymarket(webview: Webview, path: String, params: String) -> Res
 /// - Debug builds only: the Vite dev server / sidecar loopback origins, because
 ///   in dev the window is loaded directly from one of them and reloads re-enter
 ///   this guard. Compiled out of release builds.
+#[cfg(test)]
 fn is_trusted_window_navigation(url: &Url) -> bool {
  if url.scheme() == "tauri" {
   return true;
@@ -2851,53 +2828,6 @@ fn is_main_window_navigation(url: &Url) -> bool {
   return true;
  }
  false
-}
-
-fn open_live_channels_window(app: &AppHandle, base_url: Option<String>) -> Result<(), String> {
- if let Some(window) = app.get_webview_window("live-channels") {
- let _ = window.show();
- window
- .set_focus()
- .map_err(|e| format!("Failed to focus live channels window: {e}"))?;
- return Ok(());
- }
-
- // In dev, use the same origin as the main window (e.g. http://localhost:3001) so we don't
- // get "connection refused" when Vite runs on a different port than devUrl.
- let url = match base_url {
- Some(ref origin) if !origin.is_empty() => {
- let path = origin.trim_end_matches('/');
- let full_url = format!("{}/live-channels.html", path);
- let parsed = Url::parse(&full_url).map_err(|_| "Invalid base URL".to_string())?;
- // This window holds the same IPC trust as `main`, so it must never be
- // navigated to an attacker-supplied origin. Only loopback dev origins are
- // honored; anything else falls back to the bundled app asset.
- let host = parsed.host_str().unwrap_or("");
- let is_loopback_dev = matches!(parsed.scheme(), "http" | "https")
- && matches!(host, "localhost" | "127.0.0.1" | "::1" | "[::1]");
- if is_loopback_dev {
- WebviewUrl::External(parsed)
- } else {
- WebviewUrl::App("live-channels.html".into())
- }
- }
- _ => WebviewUrl::App("live-channels.html".into()),
- };
-
- let _live_channels_window = WebviewWindowBuilder::new(app, "live-channels", url)
- .title("Channel management - Crystal Ball")
- .inner_size(680.0, 760.0)
- .min_inner_size(520.0, 600.0)
- .resizable(true)
- .on_navigation(is_trusted_window_navigation)
- .background_color(tauri::webview::Color(26, 28, 30, 255))
- .build()
- .map_err(|e| format!("Failed to create live channels window: {e}"))?;
-
- #[cfg(not(target_os = "macos"))]
- let _ = _live_channels_window.remove_menu();
-
- Ok(())
 }
 
 fn open_youtube_login_window(app: &AppHandle) -> Result<(), String> {
@@ -3000,22 +2930,22 @@ fn set_dock_badge(webview: Webview, count: u32) -> Result<(), String> {
    let msgsend_obj: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void) -> *mut c_void =
     std::mem::transmute(objc_msgSend as *const ());
 
-   let nsapp_cls = objc_getClass(b"NSApplication\0".as_ptr());
+   let nsapp_cls = objc_getClass(c"NSApplication".as_ptr().cast::<u8>());
    if nsapp_cls.is_null() { return Ok(()); }
-   let shared_sel = sel_registerName(b"sharedApplication\0".as_ptr());
+   let shared_sel = sel_registerName(c"sharedApplication".as_ptr().cast::<u8>());
    let app_inst = objc_msgSend(nsapp_cls, shared_sel);
    if app_inst.is_null() { return Ok(()); }
-   let dock_tile_sel = sel_registerName(b"dockTile\0".as_ptr());
+   let dock_tile_sel = sel_registerName(c"dockTile".as_ptr().cast::<u8>());
    let tile = objc_msgSend(app_inst, dock_tile_sel);
    if tile.is_null() { return Ok(()); }
 
    // Build an NSString from the count (or empty string to clear).
    let cstr = if count == 0 { CString::new("").unwrap() } else { CString::new(count.to_string()).unwrap() };
-   let nsstring_cls = objc_getClass(b"NSString\0".as_ptr());
-   let from_utf8_sel = sel_registerName(b"stringWithUTF8String:\0".as_ptr());
+   let nsstring_cls = objc_getClass(c"NSString".as_ptr().cast::<u8>());
+   let from_utf8_sel = sel_registerName(c"stringWithUTF8String:".as_ptr().cast::<u8>());
    let label = msgsend_cstr(nsstring_cls, from_utf8_sel, cstr.as_ptr());
 
-   let set_label_sel = sel_registerName(b"setBadgeLabel:\0".as_ptr());
+   let set_label_sel = sel_registerName(c"setBadgeLabel:".as_ptr().cast::<u8>());
    msgsend_obj(tile, set_label_sel, label);
   }
  }
@@ -3075,13 +3005,13 @@ unsafe fn ensure_menubar_status_item(title: &str) {
 
  // Lazily create the NSStatusItem once.
  let item_ptr = MENUBAR_STATUS_ITEM.get_or_init(|| {
-  let bar_cls = objc_getClass(b"NSStatusBar\0".as_ptr());
+  let bar_cls = objc_getClass(c"NSStatusBar".as_ptr().cast::<u8>());
   if bar_cls.is_null() { return 0; }
-  let system_sel = sel_registerName(b"systemStatusBar\0".as_ptr());
+  let system_sel = sel_registerName(c"systemStatusBar".as_ptr().cast::<u8>());
   let bar = objc_msgSend(bar_cls, system_sel);
   if bar.is_null() { return 0; }
   // -1 == NSVariableStatusItemLength so the title sizes the item.
-  let new_item_sel = sel_registerName(b"statusItemWithLength:\0".as_ptr());
+  let new_item_sel = sel_registerName(c"statusItemWithLength:".as_ptr().cast::<u8>());
   let item = msgsend_f64(bar, new_item_sel, -1.0f64);
   if item.is_null() { return 0; }
   // Retain so the system status bar can't drop it after our scope.
@@ -3092,14 +3022,14 @@ unsafe fn ensure_menubar_status_item(title: &str) {
  let item = *item_ptr as *mut c_void;
 
  // statusItem.button.title = title
- let button_sel = sel_registerName(b"button\0".as_ptr());
+ let button_sel = sel_registerName(c"button".as_ptr().cast::<u8>());
  let btn = objc_msgSend(item, button_sel);
  if btn.is_null() { return; }
  let cstr = CString::new(title).unwrap_or_else(|_| CString::new("Crystal Ball").unwrap());
- let nsstring_cls = objc_getClass(b"NSString\0".as_ptr());
- let from_utf8_sel = sel_registerName(b"stringWithUTF8String:\0".as_ptr());
+ let nsstring_cls = objc_getClass(c"NSString".as_ptr().cast::<u8>());
+ let from_utf8_sel = sel_registerName(c"stringWithUTF8String:".as_ptr().cast::<u8>());
  let ns_title = msgsend_cstr(nsstring_cls, from_utf8_sel, cstr.as_ptr());
- let set_title_sel = sel_registerName(b"setTitle:\0".as_ptr());
+ let set_title_sel = sel_registerName(c"setTitle:".as_ptr().cast::<u8>());
  msgsend_obj(btn, set_title_sel, ns_title);
 }
 
@@ -3115,10 +3045,8 @@ fn update_mode_label(webview: Webview, app: AppHandle, mode: String) -> Result<(
  _ => "Mode: \u{1F54A} Peace",
  };
  if let Some(menu) = app.menu() {
- if let Some(item_kind) = menu.get(MENU_VIEW_MODE_ID) {
- if let MenuItemKind::MenuItem(item) = item_kind {
+ if let Some(MenuItemKind::MenuItem(item)) = menu.get(MENU_VIEW_MODE_ID) {
  item.set_text(label).map_err(|e| format!("Failed to update mode label: {e}"))?;
- }
  }
  }
  Ok(())
@@ -3301,10 +3229,46 @@ fn sanitize_path_for_node(p: &Path) -> String {
 }
 
 #[cfg(test)]
+mod native_outcome_tests {
+ use super::NativeOutcome;
+ #[test]
+ fn native_outcome_serialization_preserves_wire_values() {
+ for (outcome, expected) in [(NativeOutcome::Delivered, "delivered"), (NativeOutcome::RateLimited, "rate_limited"), (NativeOutcome::Unsupported, "unsupported")] {
+ assert_eq!(serde_json::to_value(outcome).unwrap(), serde_json::json!(expected));
+ }
+ }
+}
+
+#[cfg(test)]
 mod updater_gate_tests {
  use super::{is_semver_newer, parse_team_identifier, validate_expected_sha256};
  use super::updater_policy::validate_initial_url;
  fn validate_update_url(raw: &str) -> Result<(), ()> { validate_initial_url(raw, raw) }
+
+ #[cfg(target_os = "macos")]
+ #[test]
+ fn lock_reopen_preserves_bytes_inode_and_exclusion() {
+ use std::os::unix::fs::MetadataExt;
+ let root = std::env::temp_dir().join(format!("cb-lock-contract-{}-{}", std::process::id(), super::STAGE_COUNTER.fetch_add(1, super::Ordering::Relaxed)));
+ std::fs::create_dir(&root).unwrap();
+ let dest = root.join("owned-install-fixture");
+ let dest = dest.to_str().unwrap();
+ let lock_path = format!("{dest}.update.lock");
+ std::fs::write(&lock_path, b"persistent lock marker").unwrap();
+ let inode = std::fs::metadata(&lock_path).unwrap().ino();
+ let held = super::CrossProcessSwapLock::try_acquire(dest).unwrap();
+ let reopened = super::CrossProcessSwapLock::open_lockfile(dest).unwrap();
+ assert_eq!(std::fs::read(&lock_path).unwrap(), b"persistent lock marker");
+ assert_eq!(reopened.metadata().unwrap().ino(), inode);
+ assert!(super::CrossProcessSwapLock::try_acquire(dest).is_err());
+ drop(reopened);
+ drop(held);
+ let reacquired = super::CrossProcessSwapLock::try_acquire(dest).unwrap();
+ assert_eq!(std::fs::read(&lock_path).unwrap(), b"persistent lock marker");
+ assert_eq!(std::fs::metadata(&lock_path).unwrap().ino(), inode);
+ drop(reacquired);
+ std::fs::remove_dir_all(root).unwrap();
+ }
 
  #[test]
  fn staging_guard_is_exclusive_and_releases_on_failure() {
@@ -3652,7 +3616,10 @@ mod keychain_read_tests {
 
 #[cfg(test)]
 mod vault_shadow_crypto_tests {
- use super::{decrypt_vault_shadow, encrypt_vault_shadow};
+ use super::{decrypt_vault_shadow, encrypt_vault_shadow, ShadowEnvelope};
+
+ const FIXTURE_ENVELOPE: &str = r#"{"v":2,"n":[0,1,2,3,4,5,6,7,8,9,10,11],"c":[99,163,143,25,101,125,172,59,18,144,223,190,151,32,92,205,208,17,192,188,58,31,129,22,226,4,227,111,126,136,165,131,145,53,169,158,45,191]}"#;
+ const ZERO_NONCE_ENVELOPE: &str = r#"{"v":2,"n":[0,0,0,0,0,0,0,0,0,0,0,0],"c":[26,250,194,219,131,230,126,154,132,37,181,70,177,3,123,153,140,194,223,203,81,161,83,34,68,56,252,54,232,13,210,96,71,121,137,242,36,128]}"#;
 
  #[test]
  fn roundtrip_recovers_plaintext_and_hides_secret() {
@@ -3688,6 +3655,40 @@ mod vault_shadow_crypto_tests {
  let tampered = enc.replacen("\"c\":[", "\"c\":[255,", 1);
  assert!(decrypt_vault_shadow(&key, &tampered).is_none());
  }
+
+ #[test]
+ fn existing_v2_ciphertext_fixture_decrypts() {
+ assert_eq!(decrypt_vault_shadow(&[7u8; 32], FIXTURE_ENVELOPE).as_deref(), Some(r#"{"fixture":"ux071-v2"}"#));
+ assert_eq!(decrypt_vault_shadow(&[7u8; 32], ZERO_NONCE_ENVELOPE).as_deref(), Some(r#"{"fixture":"ux071-v2"}"#));
+ }
+
+ #[test]
+ fn malformed_nonce_lengths_are_rejected() {
+ for length in [0, 1, 11, 13, 16] {
+ let mut envelope: ShadowEnvelope = serde_json::from_str(ZERO_NONCE_ENVELOPE).expect("fixture envelope");
+ envelope.n.resize(length, 0);
+ let malformed = serde_json::to_string(&envelope).expect("serialize fixture");
+ assert!(decrypt_vault_shadow(&[7u8; 32], &malformed).is_none(), "accepted nonce length {length}");
+ }
+ }
+
+ #[test]
+ fn modified_nonce_is_rejected() {
+ let mut envelope: ShadowEnvelope = serde_json::from_str(FIXTURE_ENVELOPE).expect("fixture envelope");
+ envelope.n[0] ^= 1;
+ let modified = serde_json::to_string(&envelope).expect("serialize fixture");
+ assert!(decrypt_vault_shadow(&[7u8; 32], &modified).is_none());
+ }
+
+ #[test]
+ fn modified_tag_is_rejected() {
+ let mut envelope: ShadowEnvelope = serde_json::from_str(FIXTURE_ENVELOPE).expect("fixture envelope");
+ let tag_end = envelope.c.len() - 1;
+ envelope.c[tag_end] ^= 1;
+ let modified = serde_json::to_string(&envelope).expect("serialize fixture");
+ assert!(decrypt_vault_shadow(&[7u8; 32], &modified).is_none());
+ }
+
 }
 
 #[cfg(test)]
@@ -5272,7 +5273,7 @@ fn main() {
  close_settings_window,
  open_url,
  open_system_prefs_location,
- current_location::get_native_location,
+ current_location_native::get_native_location,
  open_youtube_login,
  open_youtube_logout,
  fetch_polymarket,
@@ -5290,7 +5291,7 @@ fn main() {
  ])
  .setup(|app| {
  // Load persistent cache into memory (avoids 14MB file I/O on every IPC call)
- let cache_path = cache_file_path(&app.handle()).unwrap_or_default();
+ let cache_path = cache_file_path(app.handle()).unwrap_or_default();
  app.manage(PersistentCache::load(&cache_path));
 
  // ── Renderer watchdog ──────────────────────────────────────────────────
@@ -5317,7 +5318,7 @@ fn main() {
  // Heartbeat tick to the dated log (~every 30s) — steady proof-of-life
  // that both the watchdog thread and the renderer's beat are alive,
  // regardless of focus.
- if tick % 10 == 0 {
+ if tick.is_multiple_of(10) {
  let beat_age = renderer_now_ms().saturating_sub(LAST_RENDERER_HEARTBEAT_MS.load(Ordering::Relaxed));
  let focused = MAIN_WINDOW_FOCUS.snapshot().focused;
  append_watchdog_log(&app_handle, "INFO", &format!("heartbeat: renderer last beat {beat_age}ms ago, focused={focused}"));
@@ -5393,7 +5394,7 @@ fn main() {
  Some(12.0),
  ) {
  append_desktop_log(
- &app.handle(),
+ app.handle(),
  "WARN",
  &format!("apply_vibrancy failed (continuing without vibrancy): {err}"),
  );
@@ -5401,7 +5402,7 @@ fn main() {
  }
 
  append_desktop_log(
- &app.handle(),
+ app.handle(),
  "INFO",
  &format!(
  "════════ SESSION START pid={} version={} bundle={} ════════",
@@ -5608,7 +5609,7 @@ fn main() {
  }
  }
  RunEvent::ExitRequested { code, .. } => {
- current_location::cleanup_on_exit();
+ current_location_native::cleanup_on_exit();
  append_desktop_log(
  app,
  "INFO",
@@ -5623,7 +5624,7 @@ fn main() {
  stop_local_api(app);
  }
  RunEvent::Exit => {
- current_location::cleanup_on_exit();
+ current_location_native::cleanup_on_exit();
  append_desktop_log(
  app,
  "INFO",

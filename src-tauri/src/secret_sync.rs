@@ -19,13 +19,16 @@ pub enum Outcome {
     Exhausted,
 }
 
+#[cfg(test)]
+type OwnedMapProbe = Box<dyn Fn(&HashMap<String, String>) + Send + Sync>;
+
 #[derive(Default)]
 pub struct RevisionClock {
     counter: AtomicU64,
     #[cfg(test)]
     reservation_probe: Option<Box<dyn Fn() + Send + Sync>>,
     #[cfg(test)]
-    owned_map_probe: Option<Box<dyn Fn(&HashMap<String, String>) + Send + Sync>>,
+    owned_map_probe: Option<OwnedMapProbe>,
 }
 impl RevisionClock {
     // Call only while owning the cache mutex, so revision order is value order.

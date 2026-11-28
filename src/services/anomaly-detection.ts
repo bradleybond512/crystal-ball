@@ -54,6 +54,11 @@ const Z_SCORE_THRESHOLD = 2.5;
 const BURST_MULTIPLIER = 10;
 const SILENCE_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2 hours without update = silence
 const MIN_OBSERVATIONS = 3; // lowered 5→3: reduces cold-start gap from ~25min to ~15min
+// Prior observations required before a z-score is trusted. A standard deviation
+// estimated from fewer points is too noisy at a 2.5-sigma threshold (roughly one
+// false alarm in six with a three-point baseline). Eight matches when z-score
+// detection first became reachable before the baseline excluded the new value.
+const MIN_BASELINE_FOR_ZSCORE = 8;
 const REVERSAL_Z_THRESHOLD = 1.5; // Lower threshold for reversals — inherently notable
 const COMPOUND_WINDOW_MS = 30 * 60 * 1000; // 30 minutes — temporal convergence window
 const MIN_COMPOUND_DOMAINS = 2; // need anomalies from at least 2 different domains
@@ -315,11 +320,21 @@ class AnomalyDetectionEngine {
  if (state.observations.length < MIN_OBSERVATIONS) return;
 
  const values = state.observations.map(o => o.value);
- const m = mean(values);
- const sd = stdDev(values);
+ // ingest() has already pushed the new observation, so it is the last entry.
+ // The baseline must exclude it: a value scored against a sample that
+ // contains itself can never exceed (n - 1) / sqrt(n) sigma, which stays
+ // below Z_SCORE_THRESHOLD until n = 9 and makes the burst test unreachable
+ // until n = 11, however extreme the value is.
+ const baseline = values.slice(0, -1);
+ const m = mean(baseline);
+ const sd = stdDev(baseline);
 
+ if (baseline.length >= MIN_BASELINE_FOR_ZSCORE) {
  this.detectZScoreAnomaly(source, value, m, sd, timestamp);
+ }
+ if (baseline.length >= MIN_OBSERVATIONS) {
  this.detectBurst(source, value, m, sd, timestamp);
+ }
  this.detectReversal(source, state, values, value, sd, timestamp);
   }
 

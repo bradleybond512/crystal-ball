@@ -81,7 +81,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7
         with:
           toolchain: stable
-      - uses: swatinem/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db
+      - uses: swatinem/rust-cache@eedcf2fb1c22f010a0eb66b92f378c110977f266
         with:
           workspaces: src-tauri
       - name: Install cargo-audit
@@ -100,7 +100,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7
         with:
           toolchain: stable
-      - uses: swatinem/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db
+      - uses: swatinem/rust-cache@eedcf2fb1c22f010a0eb66b92f378c110977f266
         with:
           workspaces: src-tauri
       - name: Install cargo-deny

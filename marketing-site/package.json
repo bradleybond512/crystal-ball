@@ -15,7 +15,7 @@
     "generate": "node scripts/generate-site-data.mjs && node scripts/generate-discovery.mjs"
   },
   "dependencies": {
-    "next": "16.4.2",
+    "next": "16.4.6",
     "react": "19.2.9",
     "react-dom": "19.2.9"
   },

@@ -13,7 +13,10 @@ findings before protected merging. It retains the exact reviewed Zizmor 1.32.0
 pin and main's SPC date fix. No application source, storage, permissions, audit
 thresholds or ignored advisories change. Only three Cargo package records change
 (cookie 0.18.3, URL 2.5.9, form_urlencoded 1.2.3); the marketing pair is byte-for-byte
-reviewed #1904 with coherent React/DOM/RSC 19.2.9. No other #1920 changes are replayed
+reviewed #1904 with coherent React/DOM/RSC 19.2.9. The stale UX-076 tracker note is reconciled to merged #1900: GitHub reverified
+on November 28, merged November 14 at 21:18:06Z, SHA
+`92ff943dfc96c31c1c9f399baf9e1429e75bbd75`. This metadata correction does not
+claim new UX-076 implementation. No other #1920 changes are replayed
 and its branch/settings remain untouched. The full dependency backlog stays open.
 
 ## Dependency assessment and release age
@@ -34,7 +37,10 @@ age condition is not met until November 30 at that time. A justified
 `dependency-age-reviewed` label is appropriate under UX-066's standing delegation:
 this minimal available patch addresses RUSTSEC-2026-0594, official bytes and source
 were assessed, the build script is unchanged, and library/native/audit regression
-checks passed. This is an explicit review exception, not an ordinary age pass.
+checks passed. The direct benefit established here is removal of a known vulnerable dependency
+and restoring audit-gate cleanliness; application exposure to the fork issue is
+unestablished. Waiting until November 30 at 07:45:48 UTC is the alternative.
+This is an explicit review exception, not an ordinary age pass.
 URL/form were published November 20 and the npm trio October 14; their ordinary
 age condition is met. `dependency-change-approved` is supported by this assessment;
 no human-only install-script approval is asserted.
@@ -92,7 +98,8 @@ Isolated marketing `npm ci --ignore-scripts`, peer check, typecheck and lint exi
 8 moderate, 0 high, 0 critical is consistent with the unchanged high threshold.
 
 `cargo test --manifest-path src-tauri/Cargo.toml --locked --no-run` exited 0 and
-compiled 8 test executables; none was executed. Initial compilation failed because
+compiled 8 test executables; this compilation step executed none. The later
+explicit navigation-only execution below is separate. Initial compilation failed because
 an isolated copy lacked the generated XMPP bundle. Existing sebuf/XMPP build scripts
 and the ordinary web output supplied the resources before the successful retry;
 no resource check was weakened. Existing native warnings remain (38 contract,
@@ -137,6 +144,116 @@ marketing package.json: a2e94b691eef5edbca7dff08d96f2b504e26a19a17ae54ff498d2d69
 marketing package-lock.json: 2b19677e71fb4bfff6d9181ee3dee31945b1645655021dba7666e21e842d0872
 ```
 
+## Review follow-up and raw output
+
+Sol and Sonnet reviewed `ac61ffe78c52628ea2b5ce61150f826cc0df4cde`; no code blockers.
+Sol requested raw output excerpts; Sonnet requested explicit URL-callsite review,
+UX-076 merge confirmation, age alternatives and code/evidence identity verification.
+This documentation follow-up resolves those requests; refreshed final-tip review
+is still required before recording the verdict.
+
+`rg` inspection found no direct native `.origin()` calls. `open_url` requires HTTPS
+and rejects internal hosts; updater redirect validation requires HTTPS, its fixed
+release host and raw path constraints; navigation guards compare explicit scheme
+and host. Parent inspected these call sites and their existing fixture tests.
+The already compiled candidate test binary was then run with only
+`navigation_guard_tests::`; no GUI app or private state is used. These debug-build
+checks are not release/platform-complete coverage. UX-071's hosted native coverage
+and final exact-main installation checks remain required.
+
+Actual log excerpts follow (verbatim except removal of terminal color codes):
+
+Marketing `npm test`:
+
+```text
+# tests 51
+# pass 51
+# fail 0
+```
+
+Native `cargo test --locked --no-run`:
+
+```text
+    Finished `test` profile [unoptimized] target(s) in 46.23s
+  Executable unittests src/main.rs (/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov28/ux066-cookie/native-target/debug/deps/crystalball-113e99f55c337e4f)
+  Executable tests/current_location_contract.rs (/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov28/ux066-cookie/native-target/debug/deps/current_location_contract-f7aed1bb1f012790)
+  Executable tests/imessage_contract.rs (/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov28/ux066-cookie/native-target/debug/deps/imessage_contract-175e071711171e8c)
+  Executable tests/notify_policy_contract.rs (/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov28/ux066-cookie/native-target/debug/deps/notify_policy_contract-791ab7928a533dd9)
+  Executable tests/sidecar_supervisor_contract.rs (/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov28/ux066-cookie/native-target/debug/deps/sidecar_supervisor_contract-23139c7cddf7ffb7)
+  Executable tests/updater_identity_contract.rs (/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov28/ux066-cookie/native-target/debug/deps/updater_identity_contract-acc79d2dd1b90830)
+  Executable tests/vault_coordinator_contract.rs (/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov28/ux066-cookie/native-target/debug/deps/vault_coordinator_contract-587f4b7926fb461d)
+  Executable tests/watchdog_contract.rs (/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov28/ux066-cookie/native-target/debug/deps/watchdog_contract-4fc86207540ad06c)
+```
+
+Cookie default library tests:
+
+```text
+test result: ok. 21 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+```
+
+Cookie all-feature library tests:
+
+```text
+test result: ok. 37 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+```
+
+URL baseline origin tests:
+
+```text
+test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+```
+
+URL candidate origin tests:
+
+```text
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+```
+
+Zizmor offline scan:
+
+```text
+ INFO audit: zizmor: 🌈 completed .github/workflows/accessibility.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/actionlint.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/auto-merge-agent-branches.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/auto-tag.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/auto-update-pr-branches.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/build-desktop.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/bundle-size.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/cleanup-stale-branches.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/cross-agent-review.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/dependency-change-gate.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/eslint.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/lint.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/pages.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/release-integrity.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/roadmap-controller.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/sast.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/secret-scan.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/security-audit.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/smoke.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/targeted-tests.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/test-linux-app.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/typecheck.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/variant-e2e.yml
+```
+
+Navigation-only fixture execution:
+
+```text
+running 9 tests
+test navigation_guard_tests::trusted_window_allows_loopback_dev_only_in_debug ... ok
+test navigation_guard_tests::main_window_rejects_external_origin ... ok
+test navigation_guard_tests::trusted_window_allows_tauri_scheme ... ok
+test navigation_guard_tests::main_window_allows_tauri_scheme ... ok
+test navigation_guard_tests::main_window_allows_localhost_dev_only_in_debug ... ok
+test navigation_guard_tests::main_window_allows_windows_app_origin ... ok
+test navigation_guard_tests::main_window_rejects_loopback_service ... ok
+test navigation_guard_tests::trusted_window_allows_windows_app_origin ... ok
+test navigation_guard_tests::trusted_window_rejects_external_origin ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 108 filtered out; finished in 0.00s
+```
+
 ## Review, delivery, manual verification and rollback
 
 Fresh Sol and Sonnet review of the final evidence tip remains required. Preserve
@@ -150,7 +267,7 @@ The user authorized safe merging and a new local Mac build. No public release,
 deployment or destructive cleanup is authorized. Final exact-main app compilation,
 stable signing, bundle/hash checks, installation and launch are still pending.
 Manual acceptance must confirm the installed Crystal Ball source identity and
-startup without reading private profile data. No live application, Keychain or
+startup without reading private profile data. No GUI application, Keychain or
 user storage was accessed during these tests. Moderate findings, full backlog
 reconciliation and platform coverage remain open.
 

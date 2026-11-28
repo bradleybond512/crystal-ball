@@ -108,8 +108,8 @@ function superforecastButtonLabel(loading: boolean, cached: boolean, expanded: b
  * (the live-repro cause of "Esc sometimes doesn't close the HUD").
  */
 function shouldIgnoreKey(e: KeyboardEvent): boolean {
-  const target = e.target as HTMLElement | null;
-  if (!target) return false;
+  const target = e.target;
+  if (!(target instanceof Element)) return false;
   return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'
     || target.closest('.forecast-unverified summary') !== null;
 }

@@ -51,7 +51,7 @@ function harness(t) {
     const exports = {};
     modules.set(file, exports);
     vm.runInNewContext(compiled.get(file), {
-      exports, document: win.document, window: win, HTMLElement: win.HTMLElement, CustomEvent: win.CustomEvent,
+      exports, document: win.document, window: win, Element: win.Element, HTMLElement: win.HTMLElement, CustomEvent: win.CustomEvent,
       localStorage: win.localStorage, console, Date, fetch: () => fail('fetch'),
       setTimeout: () => fail('setTimeout'), setInterval: () => fail('setInterval'),
       require(id) {
@@ -213,6 +213,23 @@ test('native HUD disclosure activation is not consumed as projection or ensemble
   assert.equal(hud.visible, false);
   assert.equal(hud.root.hidden, true);
 });
+
+for (const targetName of ['document', 'window', 'undispatched']) {
+  test(`HUD navigation preserves ${targetName} keyboard targets without an element lookup`, (t) => {
+    const h = harness(t); const hud = hudSubject(h);
+    hud.snapshot.hypotheses = [hypothesis, { ...hypothesis, id: 'h2' }];
+    let renders = 0;
+    hud.render = () => { renders++; };
+    const event = new h.win.KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true });
+    const target = targetName === 'document' ? h.win.document : targetName === 'window' ? h.win : null;
+    target?.dispatchEvent(event);
+    assert.equal(event.target, target);
+    assert.doesNotThrow(() => hud.handleKeydown(event));
+    assert.equal(hud.selectedHypothesisIndex, 1, 'existing navigation still selects the next estimate');
+    assert.equal(renders, 1);
+    assert.equal(event.defaultPrevented, true);
+  });
+}
 
 test('HUD focus trap includes the disclosure when it is the only control', (t) => {
   const h = harness(t); const hud = hudSubject(h);

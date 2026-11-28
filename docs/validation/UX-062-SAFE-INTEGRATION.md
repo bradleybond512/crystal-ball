@@ -108,8 +108,13 @@ identical to the reviewed implementation; no ingestion, scoring, persistence,
 network or provider behavior changes.
 
 Full matched-cohort beats/trails, current comparator and freshness acceptance
-remain OPEN. Historical isolated Chromium evidence is retained; fresh native and
-full-app acceptance are separate. The known 375-pixel action-row clipping remains
+remain OPEN. The roadmap uses MONITOR with Candidate #1886 evidence and
+a November 29 review date. Its exit condition explicitly retains the full
+baseline-comparison work and installed macOS keyboard/focus, explanation and
+probability/warning/action preservation acceptance. MONITOR is not a claim that
+the candidate has merged or that these remaining checks passed. Historical
+isolated Chromium evidence is retained; fresh native and full-app acceptance
+are separate. The known 375-pixel action-row clipping remains
 as documented in the original paired baseline evidence.
 
 Rollback reverts this UI/test slice only. No forecast data, models, storage or

@@ -1628,7 +1628,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-062 | Label forecasts that trail their baseline | NOT STARTED — HIGH ASSURANCE | |
 | UX-063 | Evaluate bounded CI Sonnet review | NOT STARTED — HIGH ASSURANCE | |
 | UX-065 | Round 4 checkpoint and remaining security drafts | NOT STARTED | |
-| UX-066 | Dependabot backlog in reviewed batches | IN PROGRESS | [Draft #1902](https://github.com/bradleybond512/crystal-ball/pull/1902); [cookie phase](plans/2026-11-27-ux066-cookie-repair-design.md) and [security-first integration](plans/2026-11-28-ux066-security-integration.md). Cookie detecting/restored proof complete; integrate existing marketing and URL fixes before protected merging. Preserve Zizmor and main's clock fix; #1920 stays untouched. Full backlog remains open; public releases, deployment and cleanup remain held. |
+| UX-066 | Dependabot backlog in reviewed batches | IN REVIEW | [Draft #1902](https://github.com/bradleybond512/crystal-ball/pull/1902); [security integration](plans/2026-11-28-ux066-security-integration.md) and [fresh validation](validation/UX-066-SECURITY-INTEGRATION.md). Combined cookie/URL/marketing repairs pass local audits and detecting/restored proofs; final reviews and hosted acceptance pending. Safe merging and Mac installation authorized; #1920 remains untouched. Full backlog stays open; public releases, deployment and cleanup remain held. |
 | UX-067 | Green release-integrity signal on main | WAITING | |
 | UX-068 | Inventory branches and worktrees before cleanup | NOT STARTED — HIGH ASSURANCE | |
 | UX-069 | Auto-PR workflow warning | NOT STARTED | |

@@ -1,0 +1,463 @@
+{
+  "base": "f8fc6cac84fe087a562139d86d59f2f7aaec7c5a",
+  "node": "22.23.1",
+  "selectorSha256": "b1cf2ebb917248edaa8bb1033b853da14d5b0a0970f58f7522ad17b7a4d83070",
+  "selectorVerifiedByteEqualOriginMain": true,
+  "changedPathsAtSelection": [
+    "docs/USABILITY_UPLIFT_FOR_CODEX.md",
+    "package.json",
+    "scripts/targeted-tests-overrides.json",
+    "src/components/AnalystHUD.ts",
+    "src/components/CommandCenterPanel.ts",
+    "src/components/SituationPanel.ts",
+    "src/styles/main.css",
+    "src/styles/panels.css",
+    "docs/plans/2026-11-07-ux062-unverified-forecast-labels.md",
+    "docs/validation/UX-062-SAFE-INTEGRATION.md",
+    "docs/validation/UX-062-UNVERIFIED-FORECAST-LABELS.md",
+    "docs/validation/UX062-BROWSER.json",
+    "docs/validation/UX062-MUTATIONS.json",
+    "docs/validation/UX062-NARROW-BASELINE.json",
+    "docs/validation/UX062-SELECTED-CI.json",
+    "tests/ux062-forecast-baseline-labels.test.mjs"
+  ],
+  "selectedScripts": [
+    "test:acc509",
+    "test:acc510",
+    "test:agentic-pipeline",
+    "test:analytics-consent",
+    "test:analytics-lifecycle",
+    "test:breaking-stack-lifecycle",
+    "test:components",
+    "test:desktop-identity",
+    "test:domain-retirement",
+    "test:e2e:ci-wiring",
+    "test:emergency-pack",
+    "test:emergency-readiness",
+    "test:event-store",
+    "test:evidence-journal",
+    "test:feed-health",
+    "test:feed-health-dashboard",
+    "test:firms",
+    "test:home-posture",
+    "test:home-reassurance",
+    "test:imessage",
+    "test:insights",
+    "test:install-scripts",
+    "test:lifelines",
+    "test:lifelines-grid",
+    "test:lifelines-map",
+    "test:little-snitch",
+    "test:live-news-links",
+    "test:map-clarity",
+    "test:mcp-untrusted",
+    "test:notification-history",
+    "test:notifications",
+    "test:openaq",
+    "test:quiet-hours",
+    "test:repair12",
+    "test:review-trail",
+    "test:roadmap-controller",
+    "test:rules-engine",
+    "test:secret-boundary",
+    "test:security",
+    "test:sidecar-ci",
+    "test:situations",
+    "test:ucdp-provider",
+    "test:untrusted-html",
+    "test:ux010",
+    "test:ux011",
+    "test:ux026",
+    "test:ux032",
+    "test:ux044",
+    "test:ux049",
+    "test:ux050",
+    "test:ux052",
+    "test:ux055",
+    "test:ux058",
+    "test:ux060",
+    "test:ux062",
+    "test:watchboard",
+    "test:weather",
+    "test:webcams",
+    "test:workflow-security"
+  ],
+  "initialResults": [
+    {
+      "script": "test:acc509",
+      "exit": 0
+    },
+    {
+      "script": "test:acc510",
+      "exit": 0
+    },
+    {
+      "script": "test:agentic-pipeline",
+      "exit": 0
+    },
+    {
+      "script": "test:analytics-consent",
+      "exit": 0
+    },
+    {
+      "script": "test:analytics-lifecycle",
+      "exit": 0
+    },
+    {
+      "script": "test:breaking-stack-lifecycle",
+      "exit": 0
+    },
+    {
+      "script": "test:components",
+      "exit": 0
+    },
+    {
+      "script": "test:desktop-identity",
+      "exit": 0
+    },
+    {
+      "script": "test:domain-retirement",
+      "exit": 0
+    },
+    {
+      "script": "test:e2e:ci-wiring",
+      "exit": 0
+    },
+    {
+      "script": "test:emergency-pack",
+      "exit": 0
+    },
+    {
+      "script": "test:emergency-readiness",
+      "exit": 0
+    },
+    {
+      "script": "test:event-store",
+      "exit": 0
+    },
+    {
+      "script": "test:evidence-journal",
+      "exit": 0
+    },
+    {
+      "script": "test:feed-health",
+      "exit": 0
+    },
+    {
+      "script": "test:feed-health-dashboard",
+      "exit": 0
+    },
+    {
+      "script": "test:firms",
+      "exit": 0
+    },
+    {
+      "script": "test:home-posture",
+      "exit": 0
+    },
+    {
+      "script": "test:home-reassurance",
+      "exit": 0
+    },
+    {
+      "script": "test:imessage",
+      "exit": 0
+    },
+    {
+      "script": "test:insights",
+      "exit": 0
+    },
+    {
+      "script": "test:install-scripts",
+      "exit": 0
+    },
+    {
+      "script": "test:lifelines",
+      "exit": 0
+    },
+    {
+      "script": "test:lifelines-grid",
+      "exit": 0
+    },
+    {
+      "script": "test:lifelines-map",
+      "exit": 0
+    },
+    {
+      "script": "test:little-snitch",
+      "exit": 0
+    },
+    {
+      "script": "test:live-news-links",
+      "exit": 0
+    },
+    {
+      "script": "test:map-clarity",
+      "exit": 0
+    },
+    {
+      "script": "test:mcp-untrusted",
+      "exit": 1
+    },
+    {
+      "script": "test:notification-history",
+      "exit": 0
+    },
+    {
+      "script": "test:notifications",
+      "exit": 0
+    },
+    {
+      "script": "test:openaq",
+      "exit": 0
+    },
+    {
+      "script": "test:quiet-hours",
+      "exit": 0
+    },
+    {
+      "script": "test:repair12",
+      "exit": 0
+    },
+    {
+      "script": "test:review-trail",
+      "exit": 0
+    },
+    {
+      "script": "test:roadmap-controller",
+      "exit": 0
+    },
+    {
+      "script": "test:rules-engine",
+      "exit": 0
+    },
+    {
+      "script": "test:secret-boundary",
+      "exit": 0
+    },
+    {
+      "script": "test:security",
+      "exit": 0
+    },
+    {
+      "script": "test:sidecar-ci",
+      "exit": 0
+    },
+    {
+      "script": "test:situations",
+      "exit": 0
+    },
+    {
+      "script": "test:ucdp-provider",
+      "exit": 0
+    },
+    {
+      "script": "test:untrusted-html",
+      "exit": 0
+    },
+    {
+      "script": "test:ux010",
+      "exit": 0
+    },
+    {
+      "script": "test:ux011",
+      "exit": 0
+    },
+    {
+      "script": "test:ux026",
+      "exit": 0
+    },
+    {
+      "script": "test:ux032",
+      "exit": 0
+    },
+    {
+      "script": "test:ux044",
+      "exit": 0
+    },
+    {
+      "script": "test:ux049",
+      "exit": 0
+    },
+    {
+      "script": "test:ux050",
+      "exit": 0
+    },
+    {
+      "script": "test:ux052",
+      "exit": 0
+    },
+    {
+      "script": "test:ux055",
+      "exit": 0
+    },
+    {
+      "script": "test:ux058",
+      "exit": 0
+    },
+    {
+      "script": "test:ux060",
+      "exit": 0
+    },
+    {
+      "script": "test:ux062",
+      "exit": 0
+    },
+    {
+      "script": "test:watchboard",
+      "exit": 0
+    },
+    {
+      "script": "test:weather",
+      "exit": 0
+    },
+    {
+      "script": "test:webcams",
+      "exit": 0
+    },
+    {
+      "script": "test:workflow-security",
+      "exit": 0
+    }
+  ],
+  "mainCommands": {
+    "test:analytics-consent": "tsx --test src/services/__tests__/analytics-consent.test.mts src/services/__tests__/analytics-sdk-lifecycle.test.mjs src/components/__tests__/analytics-reset-notice.test.mts src/components/__tests__/shell-a11y-contracts.test.mts",
+    "test:analytics-lifecycle": "tsx --test src/services/__tests__/analytics-sdk-lifecycle.test.mjs src/components/__tests__/analytics-reset-notice.test.mts",
+    "test:breaking-stack-lifecycle": "tsx --test src/components/__tests__/breaking-news-stack-lifecycle.test.mts",
+    "test:components": "tsx --test src/components/__tests__/disease-outbreak-tabs.test.mts src/components/__tests__/space-weather-panel.test.mts",
+    "test:emergency-pack": "tsx --test src/services/emergency-pack/__tests__/*.test.mts src/components/__tests__/emergency-pack-view.test.mts src/components/__tests__/emergency-readiness-pack-panel.test.mts",
+    "test:emergency-readiness": "tsx --import ./tests/panels/register-hook.mjs --test src/services/survival/__tests__/snapshot-store.test.mts src/services/lifelines/__tests__/lifeline-runtime.test.mts src/components/__tests__/emergency-readiness-view.test.mts src/components/__tests__/emergency-readiness-panel.test.mts tests/emergency-readiness-panel-wiring.test.mjs",
+    "test:event-store": "tsx --test src/components/__tests__/event-store-helpers.test.mts && node --test src-tauri/sidecar/__tests__/event-store.test.mjs src-tauri/sidecar/__tests__/event-store-wiring.test.mjs",
+    "test:evidence-journal": "node --test src-tauri/sidecar/__tests__/evidence-store.test.mjs src-tauri/sidecar/__tests__/evidence-routes.test.mjs tests/evidence-journal-boundary.test.mjs && tsx --test src/services/intelligence/__tests__/evidence-journal.test.mts src/components/__tests__/evidence-journal-view.test.mts src/components/__tests__/evidence-journal-panel.test.mts",
+    "test:feed-health": "tsx --test src/services/diagnostics/__tests__/feed-catalog.test.mts src/components/__tests__/feed-health-panel.test.mts && node --test src-tauri/sidecar/__tests__/feed-tracker.test.mjs",
+    "test:feed-health-dashboard": "tsx --test src/components/__tests__/feed-health-dashboard-panel.test.mts",
+    "test:firms": "tsx --test src/components/__tests__/firms-helpers.test.mts",
+    "test:home-posture": "tsx --test src/components/__tests__/home-posture-band.test.mts src/components/__tests__/home-shell-reassurance.test.mts",
+    "test:home-reassurance": "tsx --test src/services/home-shell/__tests__/briefing-view.test.mts src/components/__tests__/home-shell-reassurance.test.mts",
+    "test:imessage": "node --test tests/imessage-native-boundary.test.mjs && tsx --test src/services/__tests__/imessage-bridge.test.mts src/components/__tests__/imessage-settings.test.mts src/app/__tests__/desktop-imessage.test.mts src/services/seismic/__tests__/eew-imessage.test.mts src/services/notifications/__tests__/imessage-bridge-extended.test.mts src/services/notifications/__tests__/imessage-pause-alerts.test.mts src/components/__tests__/imessage-paused-notice.test.mts src/components/__tests__/imessage-paused-notice-bridge.test.mts",
+    "test:insights": "tsx --test src/services/insights/__tests__/big-event-detector.test.mts src/services/insights/__tests__/confidence-urgency-matrix.test.mts src/services/insights/__tests__/notification-ladder.test.mts src/services/insights/__tests__/share-packet.test.mts src/services/insights/__tests__/ask-the-data.test.mts src/services/insights/__tests__/ask-context.test.mts src/components/__tests__/ask-the-data-view.test.mts src/services/insights/__tests__/action-briefs.test.mts src/services/insights/__tests__/data-bridge.test.mts src/services/action-guidance/__tests__/earthquake-action-guidance.test.mts",
+    "test:lifelines": "node --test api/local-logistics.test.mjs api/grid-outages.test.mjs api/usgs-water-proxy.test.mjs api/__tests__/local-logistics.test.mjs src-tauri/sidecar/__tests__/bounded-provider-responses.test.mjs src-tauri/sidecar/__tests__/local-logistics-route.test.mjs src-tauri/sidecar/__tests__/intel-expansion-cluster3.test.mjs src-tauri/sidecar/__tests__/sidecar-ttl-cache-guards.test.mjs tests/local-logistics-panel.test.mjs tests/lifeline-runtime-wiring.test.mjs tests/place-briefs.test.mjs tests/saved-place-lifeline-pack-wiring.test.mjs tests/water-quality-wiring.test.mjs && tsx --test src/services/lifelines/__tests__/*.test.mts src/services/__tests__/offline-alert-cache.test.mts tests/comms-lifeline-context.test.mts tests/lifeline-evidence-expiry.test.mts tests/local-logistics.test.mts tests/local-logistics-prewarm.test.mts tests/place-briefs-lifelines.test.mts tests/saved-place-lifeline-pack.test.mts tests/saved-place-weather.test.mts tests/water-quality-truth.test.mts src/components/__tests__/feed-health-panel.test.mts src/components/__tests__/local-logistics-panel.test.mts src/components/__tests__/personal-storm-mode-shelf.test.mts src/services/diagnostics/__tests__/feed-catalog.test.mts",
+    "test:lifelines-grid": "node --test api/grid-outages.test.mjs tests/grid-odin-wiring.test.mjs src-tauri/sidecar/__tests__/intel-expansion-cluster3.test.mjs src-tauri/sidecar/__tests__/sidecar-ttl-cache-guards.test.mjs && tsx --test tests/grid-loader-lifecycle.test.mts src/services/infrastructure/__tests__/grid-monitor.test.mts src/services/infrastructure/__tests__/infrastructure-overlay.test.mts src/services/infrarisks/__tests__/infra-risk-service.test.mts src/services/diagnostics/__tests__/feed-catalog.test.mts src/components/__tests__/feed-health-panel.test.mts",
+    "test:lifelines-map": "tsx --import ./tests/panels/register-hook.mjs --test tests/lifelines-map.test.mts tests/evacuation-routing.test.mts src/components/__tests__/map-popup-lifeline.test.mts && node --test api/osrm-route.test.mjs src-tauri/sidecar/__tests__/osrm-route.test.mjs tests/lifelines-map-wiring.test.mjs",
+    "test:little-snitch": "node --test scripts/export-little-snitch-traffic.test.mjs scripts/install-little-snitch-exporter.test.mjs scripts/little-snitch-log-traffic-helper.test.mjs src-tauri/sidecar/local-api-server.test.mjs && tsx --test src/services/__tests__/little-snitch.test.mts src/components/__tests__/little-snitch-panel-source-state.test.mts",
+    "test:live-news-links": "tsx --import ./tests/panels/register-hook.mjs --test src/components/__tests__/live-news-url.test.mts src/components/__tests__/live-news-links.test.mts && node --test tests/live-news-hls.test.mjs",
+    "test:map-clarity": "tsx --test src/components/__tests__/map-clarity-model.test.mts src/components/__tests__/map-feature-list.test.mts && tsx --import ./tests/panels/register-hook.mjs --test --test-force-exit src/components/__tests__/map-popup-faa-camera.test.mts",
+    "test:notification-history": "tsx --test src/services/notifications/__tests__/notification-history-service.test.mts src/services/notifications/__tests__/push-notifier-history.test.mts src/components/__tests__/notification-history-helpers.test.mts src/services/diagnostics/__tests__/sidecar-self-test.test.mts && node --test src-tauri/sidecar/__tests__/self-test-classify.test.mjs",
+    "test:notifications": "tsx --test src/services/notifications/__tests__/eew-tiers.test.mts src/services/notifications/__tests__/notification-ledger.test.mts src/services/notifications/__tests__/push-notifier.test.mts src/services/notifications/__tests__/imessage-bridge-extended.test.mts src/services/notifications/__tests__/voice-alerter.test.mts src/services/notifications/__tests__/event-bridge.test.mts src-tauri/sidecar/__tests__/notification-integration.test.mts src/components/__tests__/notification-panels.test.mts tests/notifications/all-producers.integration.test.mts tests/notifications/notification-ladder.test.mts src/services/insights/__tests__/weather-quiet-hours-wiring.test.mts",
+    "test:openaq": "tsx --test src/services/airquality/__tests__/openaq-service.test.mts src/components/__tests__/openaq-panel-contract.test.mts src/app/__tests__/openaq-desktop-boundary.test.mts && node --test src-tauri/sidecar/__tests__/openaq-v3-route.test.mjs tests/openaq-local-boundary.test.mjs",
+    "test:quiet-hours": "tsx --import ./tests/panels/register-hook.mjs --test src/services/notifications/__tests__/quiet-hours.test.mts src/components/__tests__/notification-quiet-hours-panels.test.mts src/components/__tests__/notification-settings-unavailable.test.mts src/services/notifications/__tests__/notification-settings-service.test.mts src/services/__tests__/notification-dispatcher-trace.test.mts src/services/insights/__tests__/weather-quiet-hours-wiring.test.mts src/services/notifications/__tests__/alert-trace.test.mts src/components/__tests__/notification-panels.test.mts",
+    "test:repair12": "node --test --import tsx tests/diagnostics-navigation.test.mts src/services/keyboard/__tests__/shortcut-bootstrap.test.mts src/services/keyboard/__tests__/shortcut-registry.test.mts src/services/keyboard/__tests__/palette-capture-net.test.mts src/services/command-palette/__tests__/command-registry.test.mts src/services/command-palette/__tests__/command-palette-panel.test.mts src/config/__tests__/panel-metadata.test.mts src/services/home-shell/__tests__/library-view.test.mts src/components/__tests__/unified-settings-keyboard.test.mts src/app/__tests__/gods-vision-events.test.mts",
+    "test:review-trail": "tsx --test src/services/__tests__/panel-attention.test.mts src/services/__tests__/sidebar-heat.test.mts src/components/__tests__/attention-navigator.test.mts src/app/__tests__/panel-attention-wiring.test.mts",
+    "test:roadmap-controller": "node --test tests/roadmap-controller.test.mjs",
+    "test:rules-engine": "tsx --test src/services/intelligence/__tests__/rules-engine.test.mts src/services/intelligence/__tests__/rules-bootstrap.test.mts src/components/__tests__/observation-rules-helpers.test.mts && node --test src-tauri/sidecar/__tests__/rules.test.mjs",
+    "test:secret-boundary": "node --test tests/secret-boundary.test.mjs tests/sidecar-secret-routing-boundary.test.mjs tests/ucdp-local-boundary.test.mjs src-tauri/sidecar/secret-sync.test.mjs && tsx --test src/services/__tests__/secret-boundary.test.mts src/services/__tests__/keychain.test.mts src/components/__tests__/key-dashboard-secret-boundary.test.mts",
+    "test:security": "tsx --test src/services/security/__tests__/cve-service.test.mts src/services/security/__tests__/vulners-service.test.mts src/components/__tests__/cve-panel-helpers.test.mts && node --test src-tauri/sidecar/__tests__/security-cve-parity.test.mjs",
+    "test:situations": "tsx --test src/services/intelligence/__tests__/situation-store.test.mts src/services/intelligence/__tests__/situation-detector.test.mts src/components/__tests__/situation-panel-helpers.test.mts && node --test src-tauri/sidecar/__tests__/situations.test.mjs",
+    "test:ucdp-provider": "tsx --test server/crystalball/conflict/v1/__tests__/list-ucdp-events.test.mts src/services/conflict/__tests__/ucdp-fetch-behavior.test.mts src/services/__tests__/ucdp-runtime-boundary.test.mts src/components/__tests__/ucdp-events-panel.test.mts src/app/__tests__/ucdp-desktop-boundary.test.mts api/__tests__/ucdp-classifications.test.mjs src-tauri/sidecar/__tests__/ucdp-local-routes.test.mjs tests/ucdp-local-boundary.test.mjs tests/ucdp-loader-freshness.test.mjs",
+    "test:untrusted-html": "tsx --import ./tests/panels/register-hook.mjs --test src/services/resource-inventory/__tests__/schema.test.mts src/utils/__tests__/finite-number.test.mts src/components/__tests__/resource-inventory-untrusted.test.mts src/components/__tests__/untrusted-numeric-fields.test.mts",
+    "test:ux010": "node --test tests/ux010-location-startup.test.mjs && tsx --test src/services/__tests__/location.test.mts tests/ux010-ephemeral-local-logistics.test.mts tests/ux010-current-location-save.test.mts src/components/__tests__/ux010-current-location-panel.test.mts && npm run build:full && node --test tests/ux010-native-gate.test.mjs",
+    "test:ux011": "tsx --test src/services/weather/__tests__/weather-alerts-parse.test.mts src/services/weather/__tests__/evacuation-hazard-exposure.test.mts src/components/__tests__/evacuation-hazard-exposure-panel.test.mts && node --test tests/evacuation-hazard-exposure-wiring.test.mjs",
+    "test:ux026": "tsx --test src/services/__tests__/digest-alert-projection.test.mts src/services/__tests__/digest-narrative-contract.test.mts src/services/__tests__/nws-alert-retrieval-freshness.test.mts src/components/__tests__/digest-overlay.test.mts tests/ux026-digest-lifecycle.test.mjs tests/ux026-fourth-cycle-runtime.test.mjs",
+    "test:ux032": "tsx --test src/components/__tests__/unified-settings-keyboard.test.mts",
+    "test:ux044": "tsx --test src/components/__tests__/critical-posture-banner.test.mts src/components/__tests__/summary-strip-announcements.test.mts",
+    "test:ux049": "tsx --test src/services/synthesis/__tests__/threat-aggregator.test.mts src/services/synthesis/__tests__/geo-threat-evidence.test.mts src/services/synthesis/__tests__/transport-evidence.test.mts src/services/synthesis/__tests__/faa-stop-handoff.test.mts src/services/aviation/__tests__/threat-feed-cache.test.mts tests/panels/threat-transport-coverage.test.mts src/services/earthquake/__tests__/usgs-fusion-fetch.test.mts src/services/spaceweather/__tests__/kp-fusion-observations.test.mts src/components/__tests__/threat-dashboard-coverage.test.mts && node --test tests/data-sources-wiring.test.mjs",
+    "test:ux050": "tsx --test src/services/__tests__/ghost-mode-state.test.mts src/services/__tests__/ghost-notification-policy.test.mts src/services/__tests__/notification-dispatcher-trace.test.mts src/components/__tests__/ghost-mode-notice.test.mts tests/ghost-mode-entry.test.mts src/config/__tests__/story-renderer-chunk.test.mts && node --test tests/comms-panel.test.mjs && npm run build:full && node scripts/check-precache-budget.mjs && node --experimental-vm-modules --test tests/ghost-mode-bundle.test.mjs",
+    "test:ux052": "tsx --import ./tests/panels/register-hook.mjs --test src/services/__tests__/derived-notification-policy.test.mts src/services/__tests__/derived-alert-reactions.test.mts src/services/notifications/__tests__/notification-settings-service.test.mts src/services/notifications/__tests__/alert-trace.test.mts src/services/notifications/__tests__/quiet-hours.test.mts src/components/__tests__/notification-panels.test.mts src/components/__tests__/notification-quiet-hours-panels.test.mts src/components/__tests__/notification-settings-unavailable.test.mts",
+    "test:ux055": "tsx --test src/services/__tests__/credential-evidence.test.mts src/services/__tests__/settings-manager-verification.test.mts src/services/__tests__/standalone-credential-row.test.mts src/services/__tests__/secret-boundary.test.mts src/components/__tests__/key-dashboard-secret-boundary.test.mts src/services/__tests__/wizard-state.test.mts src/services/__tests__/secret-write-pending.test.mts src/components/__tests__/unified-settings-keyboard.test.mts src-tauri/sidecar/__tests__/credential-verification.test.mjs",
+    "test:ux058": "tsx --test src/services/__tests__/alert-retention-provenance.test.mts src/services/insights/__tests__/notification-ladder.test.mts src/services/__tests__/nws-notification-owner.test.mts src/services/__tests__/warning-inbox-dispositions.test.mts src/components/__tests__/unified-alert-inbox-disposition.test.mts src/services/__tests__/notification-dispatcher-trace.test.mts src/services/__tests__/unified-alerts-warning-delivery.test.mts",
+    "test:ux060": "tsx --test tests/ux060-onboarding-digest.test.mjs src/components/__tests__/digest-overlay.test.mts src/components/__tests__/welcome-flow-sources.test.mts",
+    "test:watchboard": "tsx --test src/components/__tests__/watchboard-store-helpers.test.mts && node --test src-tauri/sidecar/__tests__/watchboard-engine.test.mjs",
+    "test:weather": "tsx --test src/services/weather/__tests__/weather-exposure.test.mts src/services/weather/__tests__/nws-polygon-match.test.mts src/services/weather/__tests__/personal-storm-mode.test.mts src/services/weather/__tests__/spc-outlook.test.mts src/services/weather/__tests__/warning-verification-bridge.test.mts src/services/weather/__tests__/weather-warning-diagnostics.test.mts src/services/weather/__tests__/weather-feed-select.test.mts src/services/weather/__tests__/weather-feed-state.test.mts src/services/weather/__tests__/saved-place-adapter.test.mts src/services/weather/__tests__/personal-weather-status.test.mts src/services/weather/__tests__/ring-geometry.test.mts src/services/weather/__tests__/weather-alerts-parse.test.mts src/services/weather/__tests__/weather-unevaluable-alert.test.mts src/services/weather/__tests__/weather-feed-toctou.test.mts src/services/weather/__tests__/weather-ugc-fetch.test.mts src/services/weather/__tests__/saved-place-signature.test.mts src/services/weather/__tests__/classify-hazard.test.mts src/services/weather/__tests__/nws-hazards.test.mts src/services/weather/__tests__/self-test-fixture.test.mts src/services/weather/__tests__/weather-urgency.test.mts src/services/weather/__tests__/weather-warning-router.test.mts src/services/weather/__tests__/weather-fusion-observations.test.mts src/components/__tests__/personal-storm-mode-view.test.mts src/components/__tests__/personal-storm-mode-shelf.test.mts",
+    "test:webcams": "tsx --test src/services/webcams/__tests__/webcam-aggregator.test.mts src/services/webcams/__tests__/webcam-health.test.mts src/services/webcams/__tests__/flight-rule.test.mts src/services/webcams/__tests__/metar-parser.test.mts src/services/webcams/__tests__/station-matcher.test.mts src/services/webcams/__tests__/dot511-adapter.test.mts src/services/webcams/__tests__/volcano-cam-catalog.test.mts src/services/webcams/__tests__/nps-adapter.test.mts src/services/webcams/__tests__/alertwildfire-adapter.test.mts src/services/webcams/__tests__/streamgauge-adapter.test.mts src/services/webcams/__tests__/windy-adapter.test.mts src/services/webcams/__tests__/noaa-coastal-catalog.test.mts src/services/webcams/__tests__/health-view.test.mts src/services/webcams/__tests__/youtube-live-registry.test.mts src/services/webcams/__tests__/probe-backoff.test.mts src/services/webcams/__tests__/pinned-store.test.mts src/services/webcams/__tests__/webcam-config-loader.test.mts src/services/webcams/__tests__/caltrans-config.test.mts src/services/webcams/__tests__/tfl-config.test.mts src/services/webcams/__tests__/singapore-config.test.mts src/services/webcams/__tests__/airnow-visibility-catalog.test.mts src/services/webcams/__tests__/geonet-config.test.mts src/services/webcams/__tests__/hazecam-catalog.test.mts src/services/webcams/__tests__/live-video-refresh.test.mts src/services/webcams/__tests__/webcam-pick.test.mts src/services/webcams/__tests__/webcam-viewer.test.mts src/services/webcams/__tests__/webcam-globe-layer.test.mts src/services/webcams/__tests__/frame-resolver.test.mts && tsx --import ./tests/panels/register-hook.mjs --test --test-force-exit src/components/__tests__/live-webcams-panel.test.mts src/components/__tests__/map-popup-faa-camera.test.mts"
+  },
+  "candidateCommands": {
+    "test:acc509": "tsx --test src/services/__tests__/alert-identity.test.mts src/services/__tests__/unified-alerts-identity.test.mts src/services/__tests__/lsr-alert-identity.test.mts src/services/__tests__/acc509-replay.test.mts tests/intelligence/situation-engine-identity.test.mts tests/intelligence/compound-episode-identity.test.mts tests/intelligence/situation-geography-consumers.test.mts tests/components/situation-panel-delegation.test.mts",
+    "test:acc510": "tsx --test src/services/__tests__/acc510-news-domain.test.mts src/services/__tests__/acc510-news-producers.test.mts src/services/__tests__/acc510-news-handoff.test.mts src/services/__tests__/acc510-news-replay.test.mts src/services/__tests__/acc510-situation-domains.test.mts src/services/__tests__/acc510-analyst-domain-path.test.mts tests/intelligence/acc510-neutral-consumers.test.mts tests/components/situation-panel-delegation.test.mts",
+    "test:agentic-pipeline": "tsx --test tests/agentic-pipeline.test.mjs",
+    "test:desktop-identity": "node --test tests/desktop-identity.test.mjs tests/release-metadata.test.mjs tests/release-context.test.mjs tests/release-manifest.test.mjs tests/build-desktop-workflow.test.mjs tests/desktop-package-signing.test.mjs && npm run test:desktop-updater",
+    "test:domain-retirement": "node --test tests/retired-domain-suite.test.mjs",
+    "test:e2e:ci-wiring": "node --test tests/e2e-ci-coverage.test.mjs",
+    "test:install-scripts": "node --test tests/install-script-drift.test.mjs tests/main-sync-agent.test.mjs tests/install-mcp-deps.test.mjs tests/desktop-package-signing.test.mjs tests/desktop-build-full.test.mjs scripts/install-crystalball-mcp.test.mjs",
+    "test:mcp-untrusted": "node --test tests/mcp-untrusted-suite.test.mjs",
+    "test:sidecar-ci": "node --test tests/sidecar-ci-inventory.test.mjs tests/sidecar-ci-suite.test.mjs",
+    "test:ux062": "node --test tests/ux062-forecast-baseline-labels.test.mjs",
+    "test:workflow-security": "node --test tests/workflow-injection.test.mjs tests/dependency-change-gate.test.mjs tests/lint-workflow.test.mjs tests/build-desktop-workflow.test.mjs tests/github-automation-hardening.test.mjs tests/agent-merge-workflow.test.mjs tests/workflow-action-pinning.test.mjs tests/workflow-security-boundaries.test.mjs tests/auto-tag-auth.test.mjs tests/workflow-expression-runtime.test.mjs tests/dependency-overrides.test.mjs"
+  },
+  "environmentRepair": {
+    "missing": "tools/mcp-server/node_modules",
+    "nestedLockByteEqualOriginalWorktree": true,
+    "sourceChanges": false,
+    "retryCommand": "npm run test:mcp-untrusted",
+    "exit": 0,
+    "innerStages": [
+      {
+        "tests": 24,
+        "pass": 24,
+        "fail": 0,
+        "exit": 0
+      },
+      {
+        "tests": 23,
+        "pass": 23,
+        "fail": 0,
+        "exit": 0
+      }
+    ],
+    "outer": {
+      "tests": 1,
+      "pass": 1,
+      "fail": 0
+    }
+  },
+  "logs": {
+    "baseline-red": {
+      "path": "/tmp/ux062-integration-baseline-red.log",
+      "sha256": "d1ef0cf18f1d975cbc5267ea1b9ef0017889ba3e8d1f8f21ce43913e8e07eb5f"
+    },
+    "focused": {
+      "path": "/tmp/ux062-integration-focused.log",
+      "sha256": "59d9ed1d799a30626d36a4d16a370c9c39a88b27b9a27376d973c723ea7b8f44"
+    },
+    "intelligence": {
+      "path": "/tmp/ux062-integration-intelligence.log",
+      "sha256": "475451479478ca8c8567b2b1591f6c6d7f22049e0d6c9c7fe926738d63fa181c"
+    },
+    "insights": {
+      "path": "/tmp/ux062-integration-insights.log",
+      "sha256": "73813b1c007aed838cfcaebb96ca28c9b1d731cf63ceeb77e5416d7ae08249e6"
+    },
+    "typecheck": {
+      "path": "/tmp/ux062-integration-typecheck.log",
+      "sha256": "8dd0de642e8828958d945d67311cfb9d2be0d16b1f6be457e359f717bb785828"
+    },
+    "eslint": {
+      "path": "/tmp/ux062-integration-eslint.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "gate": {
+      "path": "/tmp/ux062-integration-gate.log",
+      "sha256": "4d3d50bb5d31bd5468b7555c3fd60b36833802af2ad6644fd4054a444709c7ef"
+    },
+    "selected": {
+      "path": "/tmp/ux062-integration-selected.log",
+      "sha256": "6784838c4a4cf67da546ce09d7d8a9acc76ef116bf0f276eeb34bfd4353f88c3"
+    },
+    "mcp-rerun": {
+      "path": "/tmp/ux062-integration-mcp-rerun.log",
+      "sha256": "e3d301d3ec9f0577427b277c4be0c6dd5ccc37ba744b0be33e91098f9853d390"
+    },
+    "docs": {
+      "path": "/tmp/ux062-integration-docs.log",
+      "sha256": "6753201d50503739b420318c2477090ffbac4e080db92aeea676b4aa749092d2"
+    },
+    "secrets": {
+      "path": "/tmp/ux062-integration-secrets.log",
+      "sha256": "bf0a41f271fdd073198ea2a005c54aac589c5266b37e0d99b9ce1efeb31a7036"
+    }
+  },
+  "freshIndependentReview": "pending",
+  "fullUx062Acceptance": "OPEN",
+  "evidenceScope": "Initial integration checkpoint before the keyboard review repair",
+  "sourceCheckpoint": "4e6a9c96f457a0572b5621245440ae4f2172c64a",
+  "laterRepairEvidence": "docs/validation/UX062-KEYBOARD-REPAIR.json"
+}

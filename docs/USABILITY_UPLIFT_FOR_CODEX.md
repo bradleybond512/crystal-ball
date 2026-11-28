@@ -1325,6 +1325,10 @@ stronger repairs. Replaying their old ancestry can overwrite those fixes.
 
 Priority: S
 Dependencies: none
+Status: MONITOR
+Evidence: [Merged #1902](https://github.com/bradleybond512/crystal-ball/pull/1902), November 28 at `6869676878a7e918eb0b297cee731cba9b2aebc9`; [security integration validation](validation/UX-066-SECURITY-INTEGRATION.md). All 16 latest hosted workflows passed before protected closeout.
+Exit condition: Qualify remaining dependency updates as merged, held or superseded and complete the accessible-alert review; the merged security batch does not complete the backlog. Leave #1920's existing workflow untouched.
+Review after: 2026-11-29
 
 The November 7 inventory has 13 open dependency PRs, not the original twelve.
 A green bot review gate alone is not a genuine agent review. Old failed checks
@@ -1416,6 +1420,10 @@ The old 169-suite/25,000-case inventory is not a current measurement.
 
 Priority: S
 Dependencies: none
+Status: MONITOR
+Evidence: [Candidate #1904](https://github.com/bradleybond512/crystal-ball/pull/1904); [current reconciliation](validation/UX-071-SAFE-MERGE-RECONCILIATION.md) and [historical native acceptance](validation/UX-071-CI-ACCEPTANCE.md).
+Exit condition: Verify fresh hosted Linux/macOS tests, strict Clippy and detecting controls on the reconciled dependency graph, protected merge and final exact-main installed acceptance; local and historical results do not establish these pending results.
+Review after: 2026-11-29
 
 Current workflows run cargo audit/deny but no explicit cargo test/clippy job.
 Refresh the historical test/unsafe counts and map platform requirements first.
@@ -1628,12 +1636,12 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-062 | Label forecasts that trail their baseline | NOT STARTED — HIGH ASSURANCE | |
 | UX-063 | Evaluate bounded CI Sonnet review | NOT STARTED — HIGH ASSURANCE | |
 | UX-065 | Round 4 checkpoint and remaining security drafts | NOT STARTED | |
-| UX-066 | Dependabot backlog in reviewed batches | IN REVIEW | [Draft #1902](https://github.com/bradleybond512/crystal-ball/pull/1902); [security integration](plans/2026-11-28-ux066-security-integration.md) and [fresh validation](validation/UX-066-SECURITY-INTEGRATION.md). Combined cookie/URL/marketing repairs pass local audits and detecting/restored proofs; final reviews and hosted acceptance pending. Safe merging and Mac installation authorized; #1920 remains untouched. Full backlog stays open; public releases, deployment and cleanup remain held. |
+| UX-066 | Dependabot backlog in reviewed batches | MONITOR | [Merged #1902](https://github.com/bradleybond512/crystal-ball/pull/1902) at `6869676878`; all 16 latest hosted workflows passed before protected closeout. [Evidence](validation/UX-066-SECURITY-INTEGRATION.md). Full backlog remains open; #1920 stays untouched. Public releases, deployment and cleanup remain held. |
 | UX-067 | Green release-integrity signal on main | WAITING | |
 | UX-068 | Inventory branches and worktrees before cleanup | NOT STARTED — HIGH ASSURANCE | |
 | UX-069 | Auto-PR workflow warning | NOT STARTED | |
 | UX-070 | Design dependency and scheduled test coverage | NOT STARTED — HIGH ASSURANCE | |
-| UX-071 | Design safe Rust tests and Clippy CI | IN PROGRESS — HIGH ASSURANCE | [Draft #1904](https://github.com/bradleybond512/crystal-ball/pull/1904); [historical CI acceptance](validation/UX-071-CI-ACCEPTANCE.md) and [November 28 reconciliation](validation/UX-071-SAFE-MERGE-RECONCILIATION.md). Reviewed native code preserved on the dependency-repaired parent; six local suites and full gate passed. Actual-main reconciliation, fresh reviews, hosted native acceptance and installed acceptance remain pending. Protected safe merging and Mac installation authorized; public releases, deployment and cleanup remain held. |
+| UX-071 | Design safe Rust tests and Clippy CI | MONITOR — HIGH ASSURANCE | [Candidate #1904](https://github.com/bradleybond512/crystal-ball/pull/1904); [November 28 reconciliation](validation/UX-071-SAFE-MERGE-RECONCILIATION.md). Reviewed native code preserved on actual audit-repaired main, fresh reviews and six local suites/full gate passed. Current hosted native acceptance, protected merge and installed acceptance remain pending; safe merging and Mac installation authorized. |
 | UX-072 | Local user-data backup and restore | NOT STARTED — HIGH ASSURANCE | |
 | UX-073 | Scope cohesive module extractions | NOT STARTED | |
 | UX-074 | Release SBOMs | NOT STARTED — HIGH ASSURANCE | |

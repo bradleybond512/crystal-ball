@@ -76,3 +76,21 @@ checks; failed qualification blocks installation. Rollback removes this
 bounded native reconciliation while retaining the parent's dependency fixes;
 historical evidence remains available. Do not roll back security repairs to
 make an older native result appear current.
+
+## Post-merge metadata reconciliation
+
+Protected closeout merged #1902 on November 28 at 07:03:54 UTC, main SHA
+`6869676878a7e918eb0b297cee731cba9b2aebc9`, after all 16 latest workflows
+passed. The first #1904 hosted roadmap job then correctly rejected UX-066's
+stale active status. This documentation repair marks that completed batch as
+MONITOR with the full dependency backlog still explicitly open. UX-071 also
+uses MONITOR with explicit pending fresh hosted and installed acceptance so
+its eventual merge cannot leave an active claim pointing to a merged PR.
+No task is falsely marked complete and no roadmap rule is weakened.
+
+UX-071's actual-main rebase from reviewed `394522cb9a` to `c47ef7885a`
+retained identical parent and final Git trees; both final reviewers confirmed
+zero blockers. This additional metadata commit requires refreshed final review.
+Current hosted native/Clippy/control results remain pending; no application or
+dependency bytes change in this repair. The user still authorizes safe merging
+and a local Mac build, with public releases/deployment/cleanup held.

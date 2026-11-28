@@ -11,6 +11,8 @@ import type { UnifiedAlert, AlertSeverity, AlertSource } from './unified-alerts'
 import type { CompoundThreat } from './compound-threat';
 import type { Anomaly } from './anomaly-detection';
 import { getNotificationModeState, recordGhostSuppression } from './mode-manager';
+import { notifyNative } from './native-notify';
+import { hasTauriInvokeBridge } from './tauri-bridge';
 import {
   evaluateNotificationPreference,
   getSettings,
@@ -446,7 +448,11 @@ class NotificationDispatcher {
     trace?: DispatchTrace, stillEligible?: (afterPermission: boolean) => boolean): void {
     try {
       if (!('Notification' in window)) {
-        recordNativeResult(trace, { delivered: false, surface: 'failed', error: 'notification-api-unavailable' });
+        // The packaged WKWebView has no web Notification API. Every hold,
+        // preference and rate-limit check has already passed by this point,
+        // so hand the alert to the native command instead of dropping it.
+        if (hasTauriInvokeBridge()) this.sendNativeFallback(alert, trace);
+        else recordNativeResult(trace, { delivered: false, surface: 'failed', error: 'notification-api-unavailable' });
       } else if (Notification.permission === 'granted') {
         this.presentNotification(alert, trace);
       } else if (Notification.permission === 'denied') {
@@ -459,6 +465,26 @@ class NotificationDispatcher {
     } catch {
       recordNativeResult(trace, { delivered: false, surface: 'failed', error: 'notification-delivery-failed' });
     }
+  }
+
+  // Only a 'delivered' outcome counts: a rate-limited or failed native call
+  // is recorded as a failure so the trace never claims the user was warned.
+  private sendNativeFallback(alert: UnifiedAlert, trace?: DispatchTrace): void {
+    const critical = alert.severity === 'critical';
+    void notifyNative({
+      title: alert.title,
+      body: alert.body,
+      priority: critical ? 'critical' : 'high',
+      ...(critical ? { sound: 'Basso' } : {}),
+    }).then(outcome => {
+      if (outcome === 'delivered') {
+        recordNativeResult(trace, { delivered: true, surface: critical ? 'critical' : 'banner' });
+      } else {
+        recordNativeResult(trace, { delivered: false, surface: 'failed', error: `native-${outcome}` });
+      }
+    }).catch(() => {
+      recordNativeResult(trace, { delivered: false, surface: 'failed', error: 'notification-delivery-failed' });
+    });
   }
 
   private awaitPermission(alert: UnifiedAlert, domain: NotificationDomain,

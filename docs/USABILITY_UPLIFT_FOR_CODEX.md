@@ -1327,7 +1327,7 @@ Priority: S
 Dependencies: none
 Status: MONITOR
 Evidence: [Merged #1902](https://github.com/bradleybond512/crystal-ball/pull/1902), November 28 at `6869676878a7e918eb0b297cee731cba9b2aebc9`; [security integration validation](validation/UX-066-SECURITY-INTEGRATION.md). All 16 latest hosted workflows passed before protected closeout.
-Exit condition: Qualify remaining dependency updates as merged, held or superseded and complete the accessible-alert review; the merged security batch does not complete the backlog. Leave #1920's existing workflow untouched.
+Exit condition: Qualify remaining dependency updates as merged, held or superseded and complete the accessible-alert review; the merged security batch does not complete the backlog. Leave the separately owned dependency workflow untouched.
 Review after: 2026-11-29
 
 The November 7 inventory has 13 open dependency PRs, not the original twelve.
@@ -1636,7 +1636,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-062 | Label forecasts that trail their baseline | NOT STARTED — HIGH ASSURANCE | |
 | UX-063 | Evaluate bounded CI Sonnet review | NOT STARTED — HIGH ASSURANCE | |
 | UX-065 | Round 4 checkpoint and remaining security drafts | NOT STARTED | |
-| UX-066 | Dependabot backlog in reviewed batches | MONITOR | [Merged #1902](https://github.com/bradleybond512/crystal-ball/pull/1902) at `6869676878`; all 16 latest hosted workflows passed before protected closeout. [Evidence](validation/UX-066-SECURITY-INTEGRATION.md). Full backlog remains open; #1920 stays untouched. Public releases, deployment and cleanup remain held. |
+| UX-066 | Dependabot backlog in reviewed batches | MONITOR | [Merged #1902](https://github.com/bradleybond512/crystal-ball/pull/1902) at `6869676878`; all 16 latest hosted workflows passed before protected closeout. [Evidence](validation/UX-066-SECURITY-INTEGRATION.md). Full backlog remains open; the separately owned dependency workflow stays untouched. Public releases, deployment and cleanup remain held. |
 | UX-067 | Green release-integrity signal on main | WAITING | |
 | UX-068 | Inventory branches and worktrees before cleanup | NOT STARTED — HIGH ASSURANCE | |
 | UX-069 | Auto-PR workflow warning | NOT STARTED | |

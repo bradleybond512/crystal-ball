@@ -104,17 +104,16 @@ test('the gate workflow runs from the base branch, never checks out PR code, and
   assert.match(wf, /^ {2}dependency-change-gate:\n {4}name: dependency-change-gate$/m);
 });
 
-test('auto-merge is skipped (and turned off) for sensitive PRs', () => {
+test('agent publication never arms auto-merge and retains fail-closed sensitive protection', () => {
   const wf = read('.github/workflows/auto-merge-agent-branches.yml');
   const policy = wf.indexOf('git diff --name-only origin/main...HEAD | node scripts/dependency-change-policy.mjs --stdin');
-  const enable = wf.indexOf('- name: Enable GitHub auto-merge');
-  assert.ok(policy > 0 && enable > policy, 'policy runs first');
-  assert.match(wf.slice(enable, enable + 120), /if: steps\.policy\.outputs\.sensitive != 'true'/);
+  const off = wf.indexOf('- name: Turn auto-merge off for a sensitive PR');
+  assert.ok(policy > 0 && off > policy, 'sensitive detection runs before disablement');
+  assert.match(wf.slice(policy, off), /sensitive=false[\s\S]*else[\s\S]*sensitive=true/);
+  assert.match(wf.slice(off, off + 250), /if:.*steps\.policy\.outputs\.sensitive == 'true'/);
   assert.match(wf, /disablePullRequestAutoMerge/);
-  // The branch name reaches the script through env, never pasted into its code.
-  const off = wf.slice(wf.indexOf('- name: Turn auto-merge off for a sensitive PR'), enable);
-  assert.match(off, /env:\n\s+BRANCH: \$\{\{ github\.ref_name \}\}/);
-  assert.doesNotMatch(off.slice(off.indexOf('script: |')), /\$\{\{/, 'no expression inside the script');
+  assert.doesNotMatch(wf, /enablePullRequestAutoMerge|github\.rest\.pulls\.merge/);
+  assert.doesNotMatch(wf.slice(off).split('script: |')[1], /\$\{\{/, 'no workflow expression in executable code');
 });
 
 test('CI verifies registry signatures and dependency age', () => {

@@ -1635,7 +1635,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-070 | Design dependency and scheduled test coverage | NOT STARTED — HIGH ASSURANCE | |
 | UX-071 | Design safe Rust tests and Clippy CI | NOT STARTED — HIGH ASSURANCE | |
 | UX-072 | Local user-data backup and restore | NOT STARTED — HIGH ASSURANCE | |
-| UX-073 | Scope cohesive module extractions | IN PROGRESS | Approved [bounded atlas design](plans/2026-11-27-ux073-icon-atlas-design.md); documentation draft claim pending. One literal extraction with characterization, bundle and fixture-browser evidence; all delivery holds remain. |
+| UX-073 | Scope cohesive module extractions | IN PROGRESS | [Draft #1926](https://github.com/bradleybond512/crystal-ball/pull/1926); approved [bounded atlas design](plans/2026-11-27-ux073-icon-atlas-design.md). One literal extraction with characterization, bundle and fixture-browser evidence; all delivery holds remain. |
 | UX-074 | Release SBOMs | NOT STARTED — HIGH ASSURANCE | |
 | UX-075 | Remove unsupported lightning tooltip measurement | DONE | #1887; late claim after implementation `95d5f64167fb`. At the pre-merge source checkpoint, final exact-tip validation, independent review and hosted gates remain required before merge. No browser/native acceptance claimed. |
 | UX-076 | Preserve failed iMessage setup drafts | MONITOR | [Merged #1900](https://github.com/bradleybond512/crystal-ball/pull/1900); [bounded design](plans/2026-11-10-ux076-imessage-draft-recovery.md). Source merged November 14; separately scoped packaged acceptance remains open. |

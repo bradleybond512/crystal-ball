@@ -1669,5 +1669,8 @@
   ],
   "src/utils/keyword-match.ts": [
     "test:keyword-match"
+  ],
+  "src/components/deckgl-icon-atlas.ts": [
+    "test:map-compatibility"
   ]
 }

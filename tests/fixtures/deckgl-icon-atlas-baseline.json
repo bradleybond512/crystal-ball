@@ -1,0 +1,1943 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "0c799756b1",
+  "sourceFile": "src/components/DeckGLMap.ts",
+  "atlasSourceSha256": "ccd25e78ecf23cafc79146c5861c97c03008c621b5eb0142ab1080490fc474d4",
+  "importedCounts": {
+    "documentReads": 0,
+    "allocations": 0,
+    "contextRequests": 0
+  },
+  "dimensions": {
+    "width": 704,
+    "height": 32
+  },
+  "names": [
+    "triangleUp",
+    "hexagon",
+    "square",
+    "circle",
+    "diamond",
+    "star",
+    "airplane",
+    "fighter",
+    "ship",
+    "satellite",
+    "earthquake",
+    "fire",
+    "lightning",
+    "rocket",
+    "anchor",
+    "crosshair",
+    "biohazard",
+    "shield",
+    "cloud",
+    "turbine",
+    "chart",
+    "bank"
+  ],
+  "mapping": {
+    "triangleUp": {
+      "x": 0,
+      "y": 0,
+      "width": 32,
+      "height": 32,
+      "anchorX": 16,
+      "anchorY": 16,
+      "mask": true
+    },
+    "hexagon": {
+      "x": 32,
+      "y": 0,
+      "width": 32,
+      "height": 32,
+      "anchorX": 16,
+      "anchorY": 16,
+      "mask": true
+    },
+    "square": {
+      "x": 64,
+      "y": 0,
+      "width": 32,
+      "height": 32,
+      "anchorX": 16,
+      "anchorY": 16,
+      "mask": true
+    },
+    "circle": {
+      "x": 96,
+      "y": 0,
+      "width": 32,
+      "height": 32,
+      "anchorX": 16,
+      "anchorY": 16,
+      "mask": true
+    },
+    "diamond": {
+      "x": 128,
+      "y": 0,
+      "width": 32,
+      "height": 32,
+      "anchorX": 16,
+      "anchorY": 16,
+      "mask": true
+    },
+    "star": {
+      "x": 160,
+      "y": 0,
+      "width": 32,
+      "height": 32,
+      "anchorX": 16,
+      "anchorY": 16,
+      "mask": true
+    },
+    "airplane": {
+      "x": 192,
+      "y": 0,
+      "width": 32,
+      "height": 32,
+      "anchorX": 16,
+      "anchorY": 16,
+      "mask": true
+    },
+    "fighter": {
+      "x": 224,
+      "y": 0,
+      "width": 32,
+      "height": 32,
+      "anchorX": 16,
+      "anchorY": 16,
+      "mask": true
+    },
+    "ship": {
+      "x": 256,
+      "y": 0,
+      "width": 32,
+      "height": 32,
+      "anchorX": 16,
+      "anchorY": 16,
+      "mask": true
+    },
+    "satellite": {
+      "x": 288,
+      "y": 0,
+      "width": 32,
+      "height": 32,
+      "anchorX": 16,
+      "anchorY": 16,
+      "mask": true
+    },
+    "earthquake": {
+      "x": 320,
+      "y": 0,
+      "width": 32,
+      "height": 32,
+      "anchorX": 16,
+      "anchorY": 16,
+      "mask": true
+    },
+    "fire": {
+      "x": 352,
+      "y": 0,
+      "width": 32,
+      "height": 32,
+      "anchorX": 16,
+      "anchorY": 16,
+      "mask": true
+    },
+    "lightning": {
+      "x": 384,
+      "y": 0,
+      "width": 32,
+      "height": 32,
+      "anchorX": 16,
+      "anchorY": 16,
+      "mask": true
+    },
+    "rocket": {
+      "x": 416,
+      "y": 0,
+      "width": 32,
+      "height": 32,
+      "anchorX": 16,
+      "anchorY": 16,
+      "mask": true
+    },
+    "anchor": {
+      "x": 448,
+      "y": 0,
+      "width": 32,
+      "height": 32,
+      "anchorX": 16,
+      "anchorY": 16,
+      "mask": true
+    },
+    "crosshair": {
+      "x": 480,
+      "y": 0,
+      "width": 32,
+      "height": 32,
+      "anchorX": 16,
+      "anchorY": 16,
+      "mask": true
+    },
+    "biohazard": {
+      "x": 512,
+      "y": 0,
+      "width": 32,
+      "height": 32,
+      "anchorX": 16,
+      "anchorY": 16,
+      "mask": true
+    },
+    "shield": {
+      "x": 544,
+      "y": 0,
+      "width": 32,
+      "height": 32,
+      "anchorX": 16,
+      "anchorY": 16,
+      "mask": true
+    },
+    "cloud": {
+      "x": 576,
+      "y": 0,
+      "width": 32,
+      "height": 32,
+      "anchorX": 16,
+      "anchorY": 16,
+      "mask": true
+    },
+    "turbine": {
+      "x": 608,
+      "y": 0,
+      "width": 32,
+      "height": 32,
+      "anchorX": 16,
+      "anchorY": 16,
+      "mask": true
+    },
+    "chart": {
+      "x": 640,
+      "y": 0,
+      "width": 32,
+      "height": 32,
+      "anchorX": 16,
+      "anchorY": 16,
+      "mask": true
+    },
+    "bank": {
+      "x": 672,
+      "y": 0,
+      "width": 32,
+      "height": 32,
+      "anchorX": 16,
+      "anchorY": 16,
+      "mask": true
+    }
+  },
+  "transcript": [
+    [
+      "set",
+      "fillStyle",
+      "white"
+    ],
+    [
+      "set",
+      "strokeStyle",
+      "white"
+    ],
+    [
+      "save"
+    ],
+    [
+      "translate",
+      0,
+      0
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "moveTo",
+      16,
+      2
+    ],
+    [
+      "lineTo",
+      30,
+      28
+    ],
+    [
+      "lineTo",
+      2,
+      28
+    ],
+    [
+      "closePath"
+    ],
+    [
+      "fill"
+    ],
+    [
+      "restore"
+    ],
+    [
+      "save"
+    ],
+    [
+      "translate",
+      32,
+      0
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "moveTo",
+      16,
+      2
+    ],
+    [
+      "lineTo",
+      28,
+      9
+    ],
+    [
+      "lineTo",
+      28,
+      23
+    ],
+    [
+      "lineTo",
+      16,
+      30
+    ],
+    [
+      "lineTo",
+      4,
+      23
+    ],
+    [
+      "lineTo",
+      4,
+      9
+    ],
+    [
+      "closePath"
+    ],
+    [
+      "fill"
+    ],
+    [
+      "restore"
+    ],
+    [
+      "save"
+    ],
+    [
+      "translate",
+      64,
+      0
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "roundRect",
+      2,
+      2,
+      28,
+      28,
+      3
+    ],
+    [
+      "fill"
+    ],
+    [
+      "restore"
+    ],
+    [
+      "save"
+    ],
+    [
+      "translate",
+      96,
+      0
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "arc",
+      16,
+      16,
+      14,
+      0,
+      6.283185307179586
+    ],
+    [
+      "fill"
+    ],
+    [
+      "restore"
+    ],
+    [
+      "save"
+    ],
+    [
+      "translate",
+      128,
+      0
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "moveTo",
+      16,
+      2
+    ],
+    [
+      "lineTo",
+      30,
+      16
+    ],
+    [
+      "lineTo",
+      16,
+      30
+    ],
+    [
+      "lineTo",
+      2,
+      16
+    ],
+    [
+      "closePath"
+    ],
+    [
+      "fill"
+    ],
+    [
+      "restore"
+    ],
+    [
+      "save"
+    ],
+    [
+      "translate",
+      160,
+      0
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "moveTo",
+      16,
+      2
+    ],
+    [
+      "lineTo",
+      20,
+      12
+    ],
+    [
+      "lineTo",
+      30,
+      12
+    ],
+    [
+      "lineTo",
+      22,
+      19
+    ],
+    [
+      "lineTo",
+      25,
+      30
+    ],
+    [
+      "lineTo",
+      16,
+      23
+    ],
+    [
+      "lineTo",
+      7,
+      30
+    ],
+    [
+      "lineTo",
+      10,
+      19
+    ],
+    [
+      "lineTo",
+      2,
+      12
+    ],
+    [
+      "lineTo",
+      12,
+      12
+    ],
+    [
+      "closePath"
+    ],
+    [
+      "fill"
+    ],
+    [
+      "restore"
+    ],
+    [
+      "save"
+    ],
+    [
+      "translate",
+      192,
+      0
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "moveTo",
+      16,
+      1
+    ],
+    [
+      "lineTo",
+      14,
+      10
+    ],
+    [
+      "lineTo",
+      4,
+      18
+    ],
+    [
+      "lineTo",
+      4,
+      20
+    ],
+    [
+      "lineTo",
+      14,
+      17
+    ],
+    [
+      "lineTo",
+      14,
+      25
+    ],
+    [
+      "lineTo",
+      10,
+      28
+    ],
+    [
+      "lineTo",
+      10,
+      30
+    ],
+    [
+      "lineTo",
+      16,
+      28
+    ],
+    [
+      "lineTo",
+      22,
+      30
+    ],
+    [
+      "lineTo",
+      22,
+      28
+    ],
+    [
+      "lineTo",
+      18,
+      25
+    ],
+    [
+      "lineTo",
+      18,
+      17
+    ],
+    [
+      "lineTo",
+      28,
+      20
+    ],
+    [
+      "lineTo",
+      28,
+      18
+    ],
+    [
+      "lineTo",
+      18,
+      10
+    ],
+    [
+      "closePath"
+    ],
+    [
+      "fill"
+    ],
+    [
+      "restore"
+    ],
+    [
+      "save"
+    ],
+    [
+      "translate",
+      224,
+      0
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "moveTo",
+      16,
+      1
+    ],
+    [
+      "lineTo",
+      14,
+      8
+    ],
+    [
+      "lineTo",
+      2,
+      16
+    ],
+    [
+      "lineTo",
+      2,
+      18
+    ],
+    [
+      "lineTo",
+      14,
+      15
+    ],
+    [
+      "lineTo",
+      13,
+      22
+    ],
+    [
+      "lineTo",
+      8,
+      26
+    ],
+    [
+      "lineTo",
+      8,
+      28
+    ],
+    [
+      "lineTo",
+      14,
+      25
+    ],
+    [
+      "lineTo",
+      14,
+      29
+    ],
+    [
+      "lineTo",
+      16,
+      31
+    ],
+    [
+      "lineTo",
+      18,
+      29
+    ],
+    [
+      "lineTo",
+      18,
+      25
+    ],
+    [
+      "lineTo",
+      24,
+      28
+    ],
+    [
+      "lineTo",
+      24,
+      26
+    ],
+    [
+      "lineTo",
+      19,
+      22
+    ],
+    [
+      "lineTo",
+      18,
+      15
+    ],
+    [
+      "lineTo",
+      30,
+      18
+    ],
+    [
+      "lineTo",
+      30,
+      16
+    ],
+    [
+      "lineTo",
+      18,
+      8
+    ],
+    [
+      "closePath"
+    ],
+    [
+      "fill"
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "moveTo",
+      12,
+      10
+    ],
+    [
+      "lineTo",
+      10,
+      12
+    ],
+    [
+      "lineTo",
+      14,
+      11
+    ],
+    [
+      "closePath"
+    ],
+    [
+      "fill"
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "moveTo",
+      20,
+      10
+    ],
+    [
+      "lineTo",
+      22,
+      12
+    ],
+    [
+      "lineTo",
+      18,
+      11
+    ],
+    [
+      "closePath"
+    ],
+    [
+      "fill"
+    ],
+    [
+      "restore"
+    ],
+    [
+      "save"
+    ],
+    [
+      "translate",
+      256,
+      0
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "moveTo",
+      16,
+      3
+    ],
+    [
+      "lineTo",
+      20,
+      10
+    ],
+    [
+      "lineTo",
+      21,
+      24
+    ],
+    [
+      "lineTo",
+      19,
+      29
+    ],
+    [
+      "lineTo",
+      13,
+      29
+    ],
+    [
+      "lineTo",
+      11,
+      24
+    ],
+    [
+      "lineTo",
+      12,
+      10
+    ],
+    [
+      "closePath"
+    ],
+    [
+      "fill"
+    ],
+    [
+      "restore"
+    ],
+    [
+      "save"
+    ],
+    [
+      "translate",
+      288,
+      0
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "roundRect",
+      13,
+      8,
+      6,
+      16,
+      1
+    ],
+    [
+      "fill"
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "roundRect",
+      2,
+      12,
+      10,
+      8,
+      1
+    ],
+    [
+      "fill"
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "roundRect",
+      20,
+      12,
+      10,
+      8,
+      1
+    ],
+    [
+      "fill"
+    ],
+    [
+      "restore"
+    ],
+    [
+      "save"
+    ],
+    [
+      "translate",
+      320,
+      0
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "moveTo",
+      4,
+      16
+    ],
+    [
+      "lineTo",
+      8,
+      8
+    ],
+    [
+      "lineTo",
+      12,
+      22
+    ],
+    [
+      "lineTo",
+      16,
+      6
+    ],
+    [
+      "lineTo",
+      20,
+      26
+    ],
+    [
+      "lineTo",
+      24,
+      10
+    ],
+    [
+      "lineTo",
+      28,
+      16
+    ],
+    [
+      "set",
+      "lineWidth",
+      2.5
+    ],
+    [
+      "set",
+      "lineCap",
+      "round"
+    ],
+    [
+      "set",
+      "lineJoin",
+      "round"
+    ],
+    [
+      "stroke"
+    ],
+    [
+      "restore"
+    ],
+    [
+      "save"
+    ],
+    [
+      "translate",
+      352,
+      0
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "moveTo",
+      16,
+      2
+    ],
+    [
+      "bezierCurveTo",
+      16,
+      2,
+      24,
+      12,
+      24,
+      20
+    ],
+    [
+      "bezierCurveTo",
+      24,
+      24.4,
+      20.4,
+      28,
+      16,
+      28
+    ],
+    [
+      "bezierCurveTo",
+      11.6,
+      28,
+      8,
+      24.4,
+      8,
+      20
+    ],
+    [
+      "bezierCurveTo",
+      8,
+      12,
+      16,
+      2,
+      16,
+      2
+    ],
+    [
+      "fill"
+    ],
+    [
+      "restore"
+    ],
+    [
+      "save"
+    ],
+    [
+      "translate",
+      384,
+      0
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "moveTo",
+      18,
+      2
+    ],
+    [
+      "lineTo",
+      10,
+      18
+    ],
+    [
+      "lineTo",
+      15,
+      18
+    ],
+    [
+      "lineTo",
+      14,
+      30
+    ],
+    [
+      "lineTo",
+      22,
+      14
+    ],
+    [
+      "lineTo",
+      17,
+      14
+    ],
+    [
+      "closePath"
+    ],
+    [
+      "fill"
+    ],
+    [
+      "restore"
+    ],
+    [
+      "save"
+    ],
+    [
+      "translate",
+      416,
+      0
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "moveTo",
+      16,
+      2
+    ],
+    [
+      "bezierCurveTo",
+      16,
+      2,
+      22,
+      8,
+      22,
+      18
+    ],
+    [
+      "lineTo",
+      25,
+      22
+    ],
+    [
+      "lineTo",
+      25,
+      25
+    ],
+    [
+      "lineTo",
+      20,
+      22
+    ],
+    [
+      "lineTo",
+      20,
+      26
+    ],
+    [
+      "lineTo",
+      18,
+      28
+    ],
+    [
+      "lineTo",
+      16,
+      26
+    ],
+    [
+      "lineTo",
+      14,
+      28
+    ],
+    [
+      "lineTo",
+      12,
+      26
+    ],
+    [
+      "lineTo",
+      12,
+      22
+    ],
+    [
+      "lineTo",
+      7,
+      25
+    ],
+    [
+      "lineTo",
+      7,
+      22
+    ],
+    [
+      "lineTo",
+      10,
+      18
+    ],
+    [
+      "bezierCurveTo",
+      10,
+      8,
+      16,
+      2,
+      16,
+      2
+    ],
+    [
+      "fill"
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "arc",
+      16,
+      15,
+      3,
+      0,
+      6.283185307179586
+    ],
+    [
+      "set",
+      "globalCompositeOperation",
+      "destination-out"
+    ],
+    [
+      "fill"
+    ],
+    [
+      "set",
+      "globalCompositeOperation",
+      "source-over"
+    ],
+    [
+      "restore"
+    ],
+    [
+      "save"
+    ],
+    [
+      "translate",
+      448,
+      0
+    ],
+    [
+      "set",
+      "lineWidth",
+      2
+    ],
+    [
+      "set",
+      "lineCap",
+      "round"
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "arc",
+      16,
+      8,
+      3,
+      0,
+      6.283185307179586
+    ],
+    [
+      "stroke"
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "moveTo",
+      16,
+      11
+    ],
+    [
+      "lineTo",
+      16,
+      27
+    ],
+    [
+      "stroke"
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "moveTo",
+      11,
+      17
+    ],
+    [
+      "lineTo",
+      21,
+      17
+    ],
+    [
+      "stroke"
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "moveTo",
+      10,
+      22
+    ],
+    [
+      "quadraticCurveTo",
+      10,
+      29,
+      16,
+      29
+    ],
+    [
+      "stroke"
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "moveTo",
+      22,
+      22
+    ],
+    [
+      "quadraticCurveTo",
+      22,
+      29,
+      16,
+      29
+    ],
+    [
+      "stroke"
+    ],
+    [
+      "restore"
+    ],
+    [
+      "save"
+    ],
+    [
+      "translate",
+      480,
+      0
+    ],
+    [
+      "set",
+      "lineWidth",
+      2
+    ],
+    [
+      "set",
+      "lineCap",
+      "round"
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "arc",
+      16,
+      16,
+      8,
+      0,
+      6.283185307179586
+    ],
+    [
+      "stroke"
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "arc",
+      16,
+      16,
+      3,
+      0,
+      6.283185307179586
+    ],
+    [
+      "fill"
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "moveTo",
+      16,
+      4
+    ],
+    [
+      "lineTo",
+      16,
+      8
+    ],
+    [
+      "moveTo",
+      16,
+      24
+    ],
+    [
+      "lineTo",
+      16,
+      28
+    ],
+    [
+      "moveTo",
+      4,
+      16
+    ],
+    [
+      "lineTo",
+      8,
+      16
+    ],
+    [
+      "moveTo",
+      24,
+      16
+    ],
+    [
+      "lineTo",
+      28,
+      16
+    ],
+    [
+      "stroke"
+    ],
+    [
+      "restore"
+    ],
+    [
+      "save"
+    ],
+    [
+      "translate",
+      512,
+      0
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "arc",
+      16,
+      16,
+      3,
+      0,
+      6.283185307179586
+    ],
+    [
+      "fill"
+    ],
+    [
+      "set",
+      "lineWidth",
+      2.5
+    ],
+    [
+      "set",
+      "lineCap",
+      "round"
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "arc",
+      16,
+      10,
+      8,
+      2.199114857512855,
+      3.455751918948773
+    ],
+    [
+      "stroke"
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "arc",
+      22,
+      20,
+      8,
+      3.7699111843077517,
+      5.340707511102648
+    ],
+    [
+      "stroke"
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "arc",
+      10,
+      20,
+      8,
+      -0.6283185307179586,
+      0.9424777960769379
+    ],
+    [
+      "stroke"
+    ],
+    [
+      "restore"
+    ],
+    [
+      "save"
+    ],
+    [
+      "translate",
+      544,
+      0
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "moveTo",
+      16,
+      3
+    ],
+    [
+      "lineTo",
+      4,
+      8
+    ],
+    [
+      "lineTo",
+      4,
+      16
+    ],
+    [
+      "quadraticCurveTo",
+      4,
+      26,
+      16,
+      30
+    ],
+    [
+      "quadraticCurveTo",
+      28,
+      26,
+      28,
+      16
+    ],
+    [
+      "lineTo",
+      28,
+      8
+    ],
+    [
+      "closePath"
+    ],
+    [
+      "fill"
+    ],
+    [
+      "restore"
+    ],
+    [
+      "save"
+    ],
+    [
+      "translate",
+      576,
+      0
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "arc",
+      12,
+      16,
+      6,
+      0,
+      6.283185307179586
+    ],
+    [
+      "arc",
+      20,
+      15,
+      7,
+      0,
+      6.283185307179586
+    ],
+    [
+      "arc",
+      8,
+      19,
+      4,
+      0,
+      6.283185307179586
+    ],
+    [
+      "arc",
+      24,
+      18,
+      4,
+      0,
+      6.283185307179586
+    ],
+    [
+      "fill"
+    ],
+    [
+      "fillRect",
+      6,
+      16,
+      20,
+      8
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "fillRect",
+      15,
+      11,
+      2,
+      6
+    ],
+    [
+      "fill"
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "arc",
+      16,
+      10,
+      1,
+      0,
+      6.283185307179586
+    ],
+    [
+      "fill"
+    ],
+    [
+      "restore"
+    ],
+    [
+      "save"
+    ],
+    [
+      "translate",
+      608,
+      0
+    ],
+    [
+      "set",
+      "lineWidth",
+      2
+    ],
+    [
+      "set",
+      "lineCap",
+      "round"
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "moveTo",
+      16,
+      13
+    ],
+    [
+      "lineTo",
+      16,
+      28
+    ],
+    [
+      "moveTo",
+      12,
+      28
+    ],
+    [
+      "lineTo",
+      20,
+      28
+    ],
+    [
+      "stroke"
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "arc",
+      16,
+      10,
+      3,
+      0,
+      6.283185307179586
+    ],
+    [
+      "fill"
+    ],
+    [
+      "set",
+      "lineWidth",
+      2.5
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "moveTo",
+      16,
+      10
+    ],
+    [
+      "lineTo",
+      16,
+      2
+    ],
+    [
+      "moveTo",
+      16,
+      10
+    ],
+    [
+      "lineTo",
+      23,
+      16
+    ],
+    [
+      "moveTo",
+      16,
+      10
+    ],
+    [
+      "lineTo",
+      9,
+      16
+    ],
+    [
+      "stroke"
+    ],
+    [
+      "restore"
+    ],
+    [
+      "save"
+    ],
+    [
+      "translate",
+      640,
+      0
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "roundRect",
+      5,
+      18,
+      4,
+      10,
+      1
+    ],
+    [
+      "fill"
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "roundRect",
+      11,
+      12,
+      4,
+      16,
+      1
+    ],
+    [
+      "fill"
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "roundRect",
+      17,
+      6,
+      4,
+      22,
+      1
+    ],
+    [
+      "fill"
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "roundRect",
+      23,
+      14,
+      4,
+      14,
+      1
+    ],
+    [
+      "fill"
+    ],
+    [
+      "restore"
+    ],
+    [
+      "save"
+    ],
+    [
+      "translate",
+      672,
+      0
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "moveTo",
+      16,
+      3
+    ],
+    [
+      "lineTo",
+      28,
+      10
+    ],
+    [
+      "lineTo",
+      28,
+      12
+    ],
+    [
+      "lineTo",
+      4,
+      12
+    ],
+    [
+      "lineTo",
+      4,
+      10
+    ],
+    [
+      "closePath"
+    ],
+    [
+      "fill"
+    ],
+    [
+      "fillRect",
+      6,
+      13,
+      3,
+      12
+    ],
+    [
+      "fillRect",
+      11,
+      13,
+      3,
+      12
+    ],
+    [
+      "fillRect",
+      18,
+      13,
+      3,
+      12
+    ],
+    [
+      "fillRect",
+      23,
+      13,
+      3,
+      12
+    ],
+    [
+      "beginPath"
+    ],
+    [
+      "roundRect",
+      4,
+      26,
+      24,
+      3,
+      1
+    ],
+    [
+      "fill"
+    ],
+    [
+      "restore"
+    ]
+  ],
+  "counts": {
+    "documentReads": 1,
+    "allocations": 1,
+    "contextRequests": 1
+  },
+  "restoredState": {
+    "fillStyle": "white",
+    "strokeStyle": "white",
+    "lineWidth": 1,
+    "lineCap": "butt",
+    "lineJoin": "miter",
+    "globalCompositeOperation": "source-over",
+    "translation": [
+      0,
+      0
+    ]
+  },
+  "remainingFrames": 0,
+  "consumers": [
+    {
+      "method": "createBasesLayer",
+      "layerId": "bases-layer"
+    },
+    {
+      "method": "createNuclearLayer",
+      "layerId": "nuclear-layer"
+    },
+    {
+      "method": "createSpaceportsLayer",
+      "layerId": "spaceports-layer"
+    },
+    {
+      "method": "createPortsLayer",
+      "layerId": "ports-layer"
+    },
+    {
+      "method": "createDiseaseIntelOutbreakPinsLayer",
+      "layerId": "disease-intel-outbreak-pins"
+    },
+    {
+      "method": "createDatacentersLayer",
+      "layerId": "datacenters-layer"
+    },
+    {
+      "method": "createEarthquakesLayer",
+      "layerId": "earthquakes-layer"
+    },
+    {
+      "method": "createFiresLayer",
+      "layerId": "fires-layer"
+    },
+    {
+      "method": "createWeatherLayer",
+      "layerId": "weather-layer"
+    },
+    {
+      "method": "createCyberThreatsLayer",
+      "layerId": "cyber-threats-layer"
+    },
+    {
+      "method": "createAdsbLayer",
+      "layerId": "adsb-layer"
+    },
+    {
+      "method": "createRepairShipsLayer",
+      "layerId": "repair-ships-layer"
+    },
+    {
+      "method": "createMilitaryVesselsLayer",
+      "layerId": "military-vessels-layer"
+    },
+    {
+      "method": "createMilitaryFlightsLayer",
+      "layerId": "military-flights-layer"
+    },
+    {
+      "method": "createStockExchangesLayer",
+      "layerId": "stock-exchanges-layer"
+    },
+    {
+      "method": "createCentralBanksLayer",
+      "layerId": "central-banks-layer"
+    },
+    {
+      "method": "createRenewableInstallationsLayer",
+      "layerId": "renewable-installations-layer"
+    },
+    {
+      "method": "createAirstrikesLayer",
+      "layerId": "airstrikes-layer"
+    },
+    {
+      "method": "createStrikePackageIconLayer",
+      "layerId": "strike-package-icons"
+    },
+    {
+      "method": "createLightningLayer",
+      "layerId": "lightning-strikes"
+    },
+    {
+      "method": "createSatelliteLayer",
+      "layerId": "satellite-positions"
+    }
+  ]
+}

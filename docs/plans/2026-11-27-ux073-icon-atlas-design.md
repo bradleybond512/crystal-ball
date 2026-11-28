@@ -47,6 +47,13 @@ isolation. Keep lazy singleton allocation, mapping-first access and returned
 object identity. Import alone must not access `document` or allocate a canvas.
 Keep existing canvas-initialization failure behavior; add no fallback policy.
 
+Typing integration assessed during implementation: the original file permitted
+`any`; the isolated file correctly rejects it. Installed DeckGL declarations
+omit a canvas accepted by its image runtime. Keep a precise canvas cache and a
+documented type-only return boundary using the existing IconLayerProps type;
+no runtime import, conversion or lint exception. Architect reviewed this bounded
+integration. Emitted JavaScript must remain identical to the original atlas.
+
 No external inputs, requests, storage, permissions, dependencies or application
 settings change. No provider, forecast, notification or native behavior changes.
 

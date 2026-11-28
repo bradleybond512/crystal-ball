@@ -301,3 +301,26 @@ Raw logs, exact commands and parent-preservation checks are retained under
 `next-nov28/ux070-reconciliation/stacked`. The earlier failed alias-path run
 remains recorded above. Fresh reviews and complete hosted graph receipts remain
 required; this local reconciliation has not been pushed or merged.
+
+#### Verbatim output for source `30f7415232`
+
+The following lines are copied from the actual targeted logs for the native-candidate integration above.
+
+| Command | Literal output | Literal output |
+| --- | --- | --- |
+| `npm run test:dependency-coverage` | `# pass 19` | `# fail 0` |
+| `npm run test:dependency-coverage-workflow` | `# pass 12` | `# fail 0` |
+| `npm run test:dependency-runtime-contracts` | `# pass 8` | `# fail 0` |
+| `npm run test:agentic-pipeline` | `# pass 86` | `# fail 0` |
+| `npm run test:workflow-security` | `# pass 96` | `# fail 0` |
+| `npm run test:supply-chain-gates` | `# pass 27` | `# fail 0` |
+| `npm run test:install-scripts` | `# pass 63` | `# fail 0` |
+| `npm run test:ux054` | `# pass 22` | `# fail 0` |
+| `npm run test:roadmap-controller` | `# pass 135` | `# fail 0` |
+| `npm run test:spc-angle` | `# pass 5` | `# fail 0` |
+
+Literal final gate output for the same source:
+
+```text
+Agentic validation gate passed.
+```

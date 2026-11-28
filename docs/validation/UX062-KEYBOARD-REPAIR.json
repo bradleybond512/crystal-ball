@@ -1,0 +1,123 @@
+{
+  "sourceCommit": "177ef0a58176865aed416c2ed91839a9c4dea8eb",
+  "mutatedFile": "src/components/AnalystHUD.ts",
+  "cleanBefore": true,
+  "checksumBefore": "3146461b808c7ff21965e53dca0c25a558f1f59734562040e941ba75694217c3",
+  "confirmedAppliedDiff": "diff --git a/src/components/AnalystHUD.ts b/src/components/AnalystHUD.ts\nindex 902c633b30..561dbbbf82 100644\n--- a/src/components/AnalystHUD.ts\n+++ b/src/components/AnalystHUD.ts\n@@ -109,7 +109,7 @@ function superforecastButtonLabel(loading: boolean, cached: boolean, expanded: b\n  */\n function shouldIgnoreKey(e: KeyboardEvent): boolean {\n   const target = e.target;\n-  if (!(target instanceof Element)) return false;\n+  if (!target) return false;\n   return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'\n     || target.closest('.forecast-unverified summary') !== null;\n }\n",
+  "red": {
+    "command": "npm run test:ux062",
+    "exit": 1,
+    "pass": 12,
+    "fail": 2,
+    "assertions": [
+      "HUD navigation preserves document keyboard targets without an element lookup",
+      "HUD navigation preserves window keyboard targets without an element lookup"
+    ],
+    "actualMessage": "target.closest is not a function"
+  },
+  "checksumRestored": "3146461b808c7ff21965e53dca0c25a558f1f59734562040e941ba75694217c3",
+  "cleanAfterRestoration": true,
+  "checksumCommand": "shasum -a 256 src/components/AnalystHUD.ts",
+  "restored": {
+    "command": "npm run test:ux062",
+    "exit": 0,
+    "pass": 14,
+    "fail": 0,
+    "cleanAfterTest": true
+  },
+  "reviewRepairCycle": 1,
+  "priorReviewedCommit": "429d0d97121d689a619017c50207afe2e9f07da1",
+  "testFirst": {
+    "pass": 12,
+    "fail": 2,
+    "actualMessage": "target.closest is not a function"
+  },
+  "freshValidation": {
+    "focused": {
+      "pass": 14,
+      "fail": 0
+    },
+    "intelligence": {
+      "pass": 597,
+      "fail": 0
+    },
+    "insights": {
+      "pass": 133,
+      "fail": 0
+    },
+    "mcpUntrusted": {
+      "inner": [
+        {
+          "pass": 24,
+          "fail": 0
+        },
+        {
+          "pass": 23,
+          "fail": 0
+        }
+      ],
+      "outer": {
+        "pass": 1,
+        "fail": 0
+      }
+    },
+    "typecheckExit": 0,
+    "eslintExit": 0,
+    "gate": {
+      "command": "bash scripts/agentic-validate.sh --tests 'test:ux062 test:intelligence test:insights test:mcp-untrusted'",
+      "exit": 0,
+      "output": "Agentic validation gate passed."
+    }
+  },
+  "productionDifferenceLimitedToElementGuard": true,
+  "sourceSha256": "3146461b808c7ff21965e53dca0c25a558f1f59734562040e941ba75694217c3",
+  "testSha256": "abfaf38de9afcd3f757c2bf334da8e1cb168b28054ceb10458affd1be5351615",
+  "logs": {
+    "red": {
+      "path": "/tmp/ux062-keyboard-red.log",
+      "sha256": "ec62a5d71a3686ff76343641a07a272c5eb812474cf248277c8c9c46a91e37b4"
+    },
+    "green": {
+      "path": "/tmp/ux062-keyboard-green.log",
+      "sha256": "a5d2d4b92e526eb39bc15d85e588f7a2df63707d2c1225f45b1036283a9c5167"
+    },
+    "typecheck": {
+      "path": "/tmp/ux062-keyboard-typecheck.log",
+      "sha256": "8dd0de642e8828958d945d67311cfb9d2be0d16b1f6be457e359f717bb785828"
+    },
+    "eslint": {
+      "path": "/tmp/ux062-keyboard-eslint.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "intelligence": {
+      "path": "/tmp/ux062-keyboard-intelligence.log",
+      "sha256": "b704804682557e5a2d809c5a738d491ef411cf9c992109bf4ddeb0de5774d294"
+    },
+    "insights": {
+      "path": "/tmp/ux062-keyboard-insights.log",
+      "sha256": "2ffb0b939cce8f7097b1826538dbd8043cc6257d33e2bdc9074ead1596809506"
+    },
+    "mcp": {
+      "path": "/tmp/ux062-keyboard-mcp.log",
+      "sha256": "d291079f9ebef780fd913ab7e36ca471f3147318cebe22ed3cfdee18d2203309"
+    },
+    "gate": {
+      "path": "/tmp/ux062-keyboard-gate.log",
+      "sha256": "f80b93429209a571b780695e9d0fa0da0fa69222654e39c19b040020b178ae95"
+    },
+    "mutation-red": {
+      "path": "/tmp/ux062-keyboard-mutation-red.log",
+      "sha256": "dac498caec4c3526d914dafa259bd21aebbace4a3ac14d4ea3e9f9e864ef6608"
+    },
+    "mutation-restored": {
+      "path": "/tmp/ux062-keyboard-mutation-restored.log",
+      "sha256": "3faaf4a8aa52611373fbec588811c04b8a78b0c1849f2ea923c60325e0e477a7"
+    }
+  },
+  "accessibilityTriage": {
+    "classification": "nonblocking contextual usability concern; native spoken-output acceptance remains open",
+    "evidence": "Native summaries have visible Unverified text next to each estimate and open a scoped explanation; isolated controls-list context may remain ambiguous.",
+    "change": "No accessible-name or layout redesign; no claim that native speech acceptance passed."
+  },
+  "postRepairIndependentReview": "pending"
+}

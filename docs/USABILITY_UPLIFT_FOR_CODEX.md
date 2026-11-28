@@ -1286,6 +1286,9 @@ do not complete the remaining backlog or native/release acceptance.
 
 ### UX-063 — Evaluate a bounded CI Sonnet review option *(High Assurance)*
 
+Status: DONE — HIGH ASSURANCE
+Evidence: [Candidate #1890](https://github.com/bradleybond512/crystal-ball/pull/1890); [reviewed retained-path decision](validation/UX-063-REVIEW-PATH-DECISION.md). This completes the approved documentation-only evaluation, not a new CI runner. Local Sonnet review remains; future CI credentials, billing or permissions require separately approved design. Exact-tip review and hosted publication acceptance remain required.
+
 Priority: S
 Dependencies: none
 
@@ -1651,7 +1654,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-060 | Preserve onboarding keyboard ownership against proactive digest | DONE | #1735 |
 | UX-061 | Truthful, restrained map presentation | DONE | #1802; [bounded evidence](validation/MAP-CLARITY-CLEANUP.md); native acceptance recorded separately |
 | UX-062 | Label forecasts that trail their baseline | MONITOR — HIGH ASSURANCE | [Candidate #1886](https://github.com/bradleybond512/crystal-ball/pull/1886); approved bounded Unverified labels; [original QA](validation/UX-062-UNVERIFIED-FORECAST-LABELS.md) and [current integration](validation/UX-062-SAFE-INTEGRATION.md). Full matched-baseline comparison, freshness and installed acceptance remain open; exit condition above, review after 2026-11-29. Safe protected integration is authorized; fresh review and required checks remain gates. |
-| UX-063 | Evaluate bounded CI Sonnet review | NOT STARTED — HIGH ASSURANCE | |
+| UX-063 | Evaluate bounded CI Sonnet review | DONE — HIGH ASSURANCE | [Candidate #1890](https://github.com/bradleybond512/crystal-ball/pull/1890); [retained-path decision](validation/UX-063-REVIEW-PATH-DECISION.md) and [current reconciliation](validation/UX-063-SAFE-MERGE.md). Documentation-only evaluation; no new CI implementation. Exact-tip review and hosted acceptance remain required. |
 | UX-065 | Round 4 checkpoint and remaining security drafts | NOT STARTED | |
 | UX-066 | Dependabot backlog in reviewed batches | MONITOR | [Merged #1902](https://github.com/bradleybond512/crystal-ball/pull/1902) at `6869676878`; all 16 latest hosted workflows passed before protected closeout. [Evidence](validation/UX-066-SECURITY-INTEGRATION.md). Full backlog remains open; the separately owned dependency workflow stays untouched. Public releases, deployment and cleanup remain held. |
 | UX-067 | Green release-integrity signal on main | WAITING | |

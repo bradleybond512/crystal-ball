@@ -104,5 +104,8 @@
   "unrelatedTrackerTextUnchanged": true,
   "dependencyLocksUnchanged": true,
   "historicalVerdictReplayed": false,
-  "conflicts": []
+  "conflicts": [],
+  "evidenceScope": "Initial integration checkpoint before the keyboard review repair",
+  "sourceCheckpoint": "4e6a9c96f457a0572b5621245440ae4f2172c64a",
+  "laterRepairEvidence": "docs/validation/UX062-KEYBOARD-REPAIR.json"
 }

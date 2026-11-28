@@ -110,7 +110,8 @@ function superforecastButtonLabel(loading: boolean, cached: boolean, expanded: b
 function shouldIgnoreKey(e: KeyboardEvent): boolean {
   const target = e.target as HTMLElement | null;
   if (!target) return false;
-  return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+  return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'
+    || target.closest('.forecast-unverified summary') !== null;
 }
 
 export class AnalystHUD {
@@ -361,7 +362,7 @@ export class AnalystHUD {
   /** Minimal focus trap: Tab cycles within the HUD while it's open. */
   private trapFocus(e: KeyboardEvent): void {
     const focusables = [...this.root.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), input:not([disabled]), select, textarea, [href], [tabindex]:not([tabindex="-1"])',
+      'button:not([disabled]), input:not([disabled]), select, textarea, [href], [tabindex]:not([tabindex="-1"]), .forecast-unverified summary',
     )].filter((el) => el.offsetParent !== null);
     if (focusables.length === 0) return;
     const first = focusables[0]!;
@@ -947,11 +948,18 @@ export class AnalystHUD {
     wrap.className = 'analyst-hud-hyp-superforecast';
     const sf = getCachedSuperforecast(h);
     if (!sf || !this.expandedSuperforecast.has(h.id)) return wrap;
-    for (const text of buildSuperforecastLines(sf)) {
+    for (const [index, text] of buildSuperforecastLines(sf).entries()) {
       const line = document.createElement('p');
       line.className = 'analyst-hud-superforecast-line';
       line.textContent = text;
-      wrap.append(line);
+      if (index === 0) {
+        const head = document.createElement('div');
+        head.className = 'analyst-hud-superforecast-head';
+        head.append(line, this.buildUnverifiedLabel('No exact recorded identity for this displayed result.'));
+        wrap.append(head);
+      } else {
+        wrap.append(line);
+      }
     }
     return wrap;
   }
@@ -1057,7 +1065,7 @@ export class AnalystHUD {
     conf.textContent = `${(h.confidence * 100).toFixed(0)}%`;
 
     const thread = getThreadFor(h);
-    head.append(kind, risk, conf);
+    head.append(kind, risk, conf, this.buildUnverifiedLabel('Baseline skill is unverified for this displayed estimate.'));
 
     const accuracy = getKindAccuracy();
     const kindStats = accuracy.get(h.kind);
@@ -1091,6 +1099,17 @@ export class AnalystHUD {
     return head;
   }
 
+  private buildUnverifiedLabel(explanation: string): HTMLElement {
+    const details = document.createElement('details');
+    details.className = 'forecast-unverified';
+    const summary = document.createElement('summary');
+    summary.textContent = 'Unverified';
+    const reason = document.createElement('p');
+    reason.textContent = explanation;
+    details.append(summary, reason);
+    return details;
+  }
+
   private buildForecastBar(forecast: HypothesisForecast): HTMLElement {
     const wrap = document.createElement('div');
     wrap.className = 'analyst-hud-forecast-bar';
@@ -1113,7 +1132,7 @@ export class AnalystHUD {
     fill.style.width = `${pct}%`;
     track.append(fill);
 
-    wrap.append(label, track);
+    wrap.append(label, this.buildUnverifiedLabel('No exact matching baseline evaluation for this adjusted forecast.'), track);
 
     const details = document.createElement('details');
     details.className = 'analyst-hud-forecast-why';

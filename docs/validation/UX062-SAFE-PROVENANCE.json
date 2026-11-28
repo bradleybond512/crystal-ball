@@ -1,0 +1,108 @@
+{
+  "base": "f8fc6cac84fe087a562139d86d59f2f7aaec7c5a",
+  "originalBase": "4432188fedbaba28938608cc07da6a25d11ca0c9",
+  "reviewedSource": "31979f2a157dc58c84746bacd0c0e35ebea2d654",
+  "originalVerdict": "cba94b041e559351823864d2080d4f91240c6392",
+  "files": [
+    {
+      "path": "src/components/AnalystHUD.ts",
+      "baseSha256": "85fa0070d0bd101248a1311fb5459f1c1f91e4634ce7a68c42e89c33a428b1e5",
+      "originalBaseSha256": "85fa0070d0bd101248a1311fb5459f1c1f91e4634ce7a68c42e89c33a428b1e5",
+      "reviewedSha256": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "candidateSha256": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "baseEqualsOriginal": true,
+      "candidateEqualsReviewed": true
+    },
+    {
+      "path": "src/components/CommandCenterPanel.ts",
+      "baseSha256": "9f4cb9c0f570f913115344c49604dbeb346e44e42bfddb29dd9abd9607ab53ca",
+      "originalBaseSha256": "9f4cb9c0f570f913115344c49604dbeb346e44e42bfddb29dd9abd9607ab53ca",
+      "reviewedSha256": "7a9d6b2c9859a4a78e4848c74825515572f39a014fa7c4bede00860fde361475",
+      "candidateSha256": "7a9d6b2c9859a4a78e4848c74825515572f39a014fa7c4bede00860fde361475",
+      "baseEqualsOriginal": true,
+      "candidateEqualsReviewed": true
+    },
+    {
+      "path": "src/components/SituationPanel.ts",
+      "baseSha256": "9b3b4f9f43e7c7976bd07408222a58c9547d7757dee85cf99f29dad1be19c02f",
+      "originalBaseSha256": "9b3b4f9f43e7c7976bd07408222a58c9547d7757dee85cf99f29dad1be19c02f",
+      "reviewedSha256": "11bb02d94a835d5bd7c92664685a396adc8e7e6f03208960639cc2bce39be9b8",
+      "candidateSha256": "11bb02d94a835d5bd7c92664685a396adc8e7e6f03208960639cc2bce39be9b8",
+      "baseEqualsOriginal": true,
+      "candidateEqualsReviewed": true
+    },
+    {
+      "path": "src/styles/main.css",
+      "baseSha256": "a3bf5cd41485a8f2d9e8fcd3b77b656832de9ba0b83cd3271bc8492290eb9f80",
+      "originalBaseSha256": "a3bf5cd41485a8f2d9e8fcd3b77b656832de9ba0b83cd3271bc8492290eb9f80",
+      "reviewedSha256": "23a3ef8386eddb52981a1ac47cf7bd782276fe4a18db8a743fa0a46943e0a699",
+      "candidateSha256": "23a3ef8386eddb52981a1ac47cf7bd782276fe4a18db8a743fa0a46943e0a699",
+      "baseEqualsOriginal": true,
+      "candidateEqualsReviewed": true
+    },
+    {
+      "path": "src/styles/panels.css",
+      "baseSha256": "b85c0a00ff6577b13f47f937022861fb46d3d99e7c1d62de20075a3c308fd585",
+      "originalBaseSha256": "b85c0a00ff6577b13f47f937022861fb46d3d99e7c1d62de20075a3c308fd585",
+      "reviewedSha256": "361247a36d356c3534c435a1f4de7e3bbaa79ba8676ddaab5bdcadcbc5473598",
+      "candidateSha256": "361247a36d356c3534c435a1f4de7e3bbaa79ba8676ddaab5bdcadcbc5473598",
+      "baseEqualsOriginal": true,
+      "candidateEqualsReviewed": true
+    },
+    {
+      "path": "tests/ux062-forecast-baseline-labels.test.mjs",
+      "reviewedSha256": "49c6649e0e93e4d1fbd463f019d2aad75c8d21e3df57f29291fbf9cd74d7c417",
+      "candidateSha256": "49c6649e0e93e4d1fbd463f019d2aad75c8d21e3df57f29291fbf9cd74d7c417",
+      "candidateEqualsReviewed": true
+    },
+    {
+      "path": "docs/validation/UX062-BROWSER.json",
+      "reviewedSha256": "627808ac63329f77dbbb0ded574d559a648d96edd16834379370fac712aae326",
+      "candidateSha256": "627808ac63329f77dbbb0ded574d559a648d96edd16834379370fac712aae326",
+      "candidateEqualsReviewed": true
+    },
+    {
+      "path": "docs/validation/UX062-MUTATIONS.json",
+      "reviewedSha256": "afdd417bd0a2e9cacb9961166cc18b0d3fbc60195f201ada51ed4890b4f1c978",
+      "candidateSha256": "afdd417bd0a2e9cacb9961166cc18b0d3fbc60195f201ada51ed4890b4f1c978",
+      "candidateEqualsReviewed": true
+    },
+    {
+      "path": "docs/validation/UX062-NARROW-BASELINE.json",
+      "reviewedSha256": "ea2b907c22aeb3304a9d62d71410c639b929a6be78f394786fc3fca1e087764b",
+      "candidateSha256": "ea2b907c22aeb3304a9d62d71410c639b929a6be78f394786fc3fca1e087764b",
+      "candidateEqualsReviewed": true
+    },
+    {
+      "path": "docs/validation/UX062-SELECTED-CI.json",
+      "reviewedSha256": "0268f744143fc81e0cb851c2f1285a029a4aca26786ad587cb04a4302198863e",
+      "candidateSha256": "0268f744143fc81e0cb851c2f1285a029a4aca26786ad587cb04a4302198863e",
+      "candidateEqualsReviewed": true
+    }
+  ],
+  "packageOnlyAddsUx062Script": true,
+  "testMappingsOnlyAdd": {
+    "src/styles/main.css": [
+      "test:ux062"
+    ],
+    "src/components/SituationPanel.ts": [
+      "test:ux062"
+    ],
+    "src/components/AnalystHUD.ts": [
+      "test:ux062"
+    ],
+    "src/components/CommandCenterPanel.ts": [
+      "test:ux062"
+    ],
+    "src/styles/panels.css": [
+      "test:ux062"
+    ],
+    "tests/ux062-forecast-baseline-labels.test.mjs": [
+      "test:ux062"
+    ]
+  },
+  "unrelatedTrackerTextUnchanged": true,
+  "dependencyLocksUnchanged": true,
+  "historicalVerdictReplayed": false,
+  "conflicts": []
+}

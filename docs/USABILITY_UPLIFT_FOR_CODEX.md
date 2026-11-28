@@ -1633,7 +1633,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-068 | Inventory branches and worktrees before cleanup | NOT STARTED — HIGH ASSURANCE | |
 | UX-069 | Auto-PR workflow warning | NOT STARTED | |
 | UX-070 | Design dependency and scheduled test coverage | NOT STARTED — HIGH ASSURANCE | |
-| UX-071 | Design safe Rust tests and Clippy CI | IN PROGRESS — HIGH ASSURANCE | [Draft #1904](https://github.com/bradleybond512/crystal-ball/pull/1904); [verified CI acceptance](validation/UX-071-CI-ACCEPTANCE.md) complete at `46ecea15e0`: all 16 workflows passed, Linux 269/0, macOS ARM64 272/0, strict Clippy both, and all eight/nine native mutation controls verified. Evidence closed; draft delivery hold remains. No GUI, real-Keychain, Windows or Intel runtime acceptance claimed. |
+| UX-071 | Design safe Rust tests and Clippy CI | IN PROGRESS — HIGH ASSURANCE | [Draft #1904](https://github.com/bradleybond512/crystal-ball/pull/1904); [historical CI acceptance](validation/UX-071-CI-ACCEPTANCE.md) and [November 28 reconciliation](validation/UX-071-SAFE-MERGE-RECONCILIATION.md). Reviewed native code preserved on the dependency-repaired parent; six local suites and full gate passed. Actual-main reconciliation, fresh reviews, hosted native acceptance and installed acceptance remain pending. Protected safe merging and Mac installation authorized; public releases, deployment and cleanup remain held. |
 | UX-072 | Local user-data backup and restore | NOT STARTED — HIGH ASSURANCE | |
 | UX-073 | Scope cohesive module extractions | NOT STARTED | |
 | UX-074 | Release SBOMs | NOT STARTED — HIGH ASSURANCE | |

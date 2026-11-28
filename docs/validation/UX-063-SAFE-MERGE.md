@@ -43,3 +43,13 @@ Tests run: test:agentic-pipeline test:roadmap-controller
 The gate also ran typecheck:all, lint, secrets, documentation and ordinary build.
 No new behavior or dependency execution policy was added. Raw log:
 `/tmp/ux063-safe-gate.log`. No application installation or private-state test ran.
+
+## Actual main reconciliation
+
+The documentation-only delta was replayed without conflicts onto merged main
+`bda25b90e3039a3ffc21131ce858dfa85a945922`. Its original three payload files,
+UX-063 task section and row remain identical to independently reviewed
+`62bbc12b1d28790104db703a26696c6fc6d0019e`; all intervening security, native and
+dependency-coverage changes remain on the parent. The gate above is the earlier
+preparation result, not a new run. Both reviews cleared that prepared diff;
+current-tip reconciliation review and hosted CI remain pending.

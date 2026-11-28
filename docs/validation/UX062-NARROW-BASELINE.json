@@ -1,0 +1,217 @@
+{
+  "baselineRevision": "4432188fedbaba28938608cc07da6a25d11ca0c9",
+  "currentRevision": "99260927fa61c1d5d8843949d5f196596c17f295",
+  "sameActionGeometry": true,
+  "baselineGeometry": {
+    "card": {
+      "left": 15,
+      "right": 360,
+      "width": 345,
+      "scrollWidth": 415,
+      "clientWidth": 343
+    },
+    "row": {
+      "left": 51,
+      "right": 327,
+      "width": 276,
+      "scrollWidth": 380,
+      "clientWidth": 276
+    },
+    "actions": [
+      {
+        "action": "thumbs-up",
+        "left": 51,
+        "right": 60.015625,
+        "width": 9.015625,
+        "scrollWidth": 7,
+        "clientWidth": 7
+      },
+      {
+        "action": "thumbs-down",
+        "left": 66.015625,
+        "right": 72.015625,
+        "width": 6,
+        "scrollWidth": 4,
+        "clientWidth": 4
+      },
+      {
+        "action": "outcome-confirmed",
+        "left": 78.015625,
+        "right": 142.75,
+        "width": 64.734375,
+        "scrollWidth": 63,
+        "clientWidth": 63
+      },
+      {
+        "action": "outcome-wrong",
+        "left": 148.75,
+        "right": 194.953125,
+        "width": 46.203125,
+        "scrollWidth": 44,
+        "clientWidth": 44
+      },
+      {
+        "action": "simulate",
+        "left": 200.953125,
+        "right": 253.1875,
+        "width": 52.234375,
+        "scrollWidth": 50,
+        "clientWidth": 50
+      },
+      {
+        "action": "ensemble",
+        "left": 259.1875,
+        "right": 338.953125,
+        "width": 79.765625,
+        "scrollWidth": 78,
+        "clientWidth": 78
+      },
+      {
+        "action": "superforecast",
+        "left": 344.953125,
+        "right": 383.75,
+        "width": 38.796875,
+        "scrollWidth": 37,
+        "clientWidth": 37
+      },
+      {
+        "action": "copy",
+        "left": 389.75,
+        "right": 431,
+        "width": 41.25,
+        "scrollWidth": 39,
+        "clientWidth": 39
+      }
+    ]
+  },
+  "currentGeometry": {
+    "card": {
+      "left": 15,
+      "right": 360,
+      "width": 345,
+      "scrollWidth": 415,
+      "clientWidth": 343
+    },
+    "row": {
+      "left": 51,
+      "right": 327,
+      "width": 276,
+      "scrollWidth": 380,
+      "clientWidth": 276
+    },
+    "actions": [
+      {
+        "action": "thumbs-up",
+        "left": 51,
+        "right": 60.015625,
+        "width": 9.015625,
+        "scrollWidth": 7,
+        "clientWidth": 7
+      },
+      {
+        "action": "thumbs-down",
+        "left": 66.015625,
+        "right": 72.015625,
+        "width": 6,
+        "scrollWidth": 4,
+        "clientWidth": 4
+      },
+      {
+        "action": "outcome-confirmed",
+        "left": 78.015625,
+        "right": 142.75,
+        "width": 64.734375,
+        "scrollWidth": 63,
+        "clientWidth": 63
+      },
+      {
+        "action": "outcome-wrong",
+        "left": 148.75,
+        "right": 194.953125,
+        "width": 46.203125,
+        "scrollWidth": 44,
+        "clientWidth": 44
+      },
+      {
+        "action": "simulate",
+        "left": 200.953125,
+        "right": 253.1875,
+        "width": 52.234375,
+        "scrollWidth": 50,
+        "clientWidth": 50
+      },
+      {
+        "action": "ensemble",
+        "left": 259.1875,
+        "right": 338.953125,
+        "width": 79.765625,
+        "scrollWidth": 78,
+        "clientWidth": 78
+      },
+      {
+        "action": "superforecast",
+        "left": 344.953125,
+        "right": 383.75,
+        "width": 38.796875,
+        "scrollWidth": 37,
+        "clientWidth": 37
+      },
+      {
+        "action": "copy",
+        "left": 389.75,
+        "right": 431,
+        "width": 41.25,
+        "scrollWidth": 39,
+        "clientWidth": 39
+      }
+    ]
+  },
+  "baselineSourceHashes": {
+    "src/components/CommandCenterPanel.ts": "9f4cb9c0f570f913115344c49604dbeb346e44e42bfddb29dd9abd9607ab53ca",
+    "src/components/AnalystHUD.ts": "85fa0070d0bd101248a1311fb5459f1c1f91e4634ce7a68c42e89c33a428b1e5",
+    "src/components/SituationPanel.ts": "9b3b4f9f43e7c7976bd07408222a58c9547d7757dee85cf99f29dad1be19c02f",
+    "src/services/cognition/calibration-report-view.ts": "2bfa6bc756442dc0b20f119df436e97f5dc4c912b014c1b36fecaee36c169c40",
+    "src/utils/sanitize.ts": "739dc902bd0348d6c1c47b71a46b6b85656b5db9fbfd6ab51f53cd8a1c393f8d",
+    "src/services/cognition/recalibration.ts": "626a48456457cfe57b8a293a887862cee424f93fedeb2e96d207a4f6ef4ec28b",
+    "src/utils/dom-utils.ts": "55e8d486bfd041c63145c40e58855167f917f2e8412a835ae86eb7bbded4f96a",
+    "src/utils/format-duration.ts": "3c5bee3e4504b46a9ebc1902bf950e98463ea661bbf298e9e32d133b7b2a4b96",
+    "src/components/agent-suggestions-view.ts": "2224576f00fcbcf3e08afb73b3b2879043b05a571da891a51d5c47879d89db58",
+    "src/components/forecast-provenance-view.ts": "56bb0c0c40d1517ef1ce033c90541c9aae776b51a1cdab0543f9c8d29700213c",
+    "src/styles/tokens.css": "8d1cd87d6198ba2a48e2b343c415a9c8161785f0918e9f188aa331a3d96744a3",
+    "src/styles/mode-states.css": "f7aef870586602becf41626610a3677e7f1cb9782a99c3c95cd76da890fc7119",
+    "src/styles/visual-semantics.css": "b0243fde97b6522bfcfbc583fd1e20907f0aa00a265bc8b38d3c53f975d34e27",
+    "src/styles/rtl-overrides.css": "d99d0b1be9d60baea4a4fa2da732da68429e1d41f649065c62bd416345a588f0",
+    "src/styles/panels.css": "b85c0a00ff6577b13f47f937022861fb46d3d99e7c1d62de20075a3c308fd585",
+    "src/styles/macos-native.css": "ea54598a001d8202500be256f5cbef6228a8d0586e00408eb8de5ba1f483771c",
+    "src/styles/gods-vision.css": "6b14dd347abe2f99646184869f58bacc2e4e7679752aa4fd6f61f2d7a2951df1",
+    "src/styles/alerts.css": "11cb87b93cd5ba9848f4b48a7d1e7bd4bf7054d352faf3e59735e79b9797fbbc",
+    "src/styles/eew-status-bar.css": "85e5958779e7754a576e111ebf88203ba203a86c387f71f6d3dfa30a05bd2be6",
+    "src/styles/correlation-banner.css": "35def960714ce346b6fc0d0c62318614144ee39dea810df5d151a5fd034886ea",
+    "src/styles/disclosure.css": "968cf5be79aabb65094d8b705afb57c7ebeb7c53bd4cc3754bb9f051d2fea500",
+    "src/styles/main.css": "a3bf5cd41485a8f2d9e8fcd3b77b656832de9ba0b83cd3271bc8492290eb9f80"
+  },
+  "currentSourceHashes": {
+    "src/components/CommandCenterPanel.ts": "7a9d6b2c9859a4a78e4848c74825515572f39a014fa7c4bede00860fde361475",
+    "src/components/AnalystHUD.ts": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+    "src/components/SituationPanel.ts": "11bb02d94a835d5bd7c92664685a396adc8e7e6f03208960639cc2bce39be9b8",
+    "src/services/cognition/calibration-report-view.ts": "2bfa6bc756442dc0b20f119df436e97f5dc4c912b014c1b36fecaee36c169c40",
+    "src/utils/sanitize.ts": "739dc902bd0348d6c1c47b71a46b6b85656b5db9fbfd6ab51f53cd8a1c393f8d",
+    "src/services/cognition/recalibration.ts": "626a48456457cfe57b8a293a887862cee424f93fedeb2e96d207a4f6ef4ec28b",
+    "src/utils/dom-utils.ts": "55e8d486bfd041c63145c40e58855167f917f2e8412a835ae86eb7bbded4f96a",
+    "src/utils/format-duration.ts": "3c5bee3e4504b46a9ebc1902bf950e98463ea661bbf298e9e32d133b7b2a4b96",
+    "src/components/agent-suggestions-view.ts": "2224576f00fcbcf3e08afb73b3b2879043b05a571da891a51d5c47879d89db58",
+    "src/components/forecast-provenance-view.ts": "56bb0c0c40d1517ef1ce033c90541c9aae776b51a1cdab0543f9c8d29700213c",
+    "src/styles/tokens.css": "8d1cd87d6198ba2a48e2b343c415a9c8161785f0918e9f188aa331a3d96744a3",
+    "src/styles/mode-states.css": "f7aef870586602becf41626610a3677e7f1cb9782a99c3c95cd76da890fc7119",
+    "src/styles/visual-semantics.css": "b0243fde97b6522bfcfbc583fd1e20907f0aa00a265bc8b38d3c53f975d34e27",
+    "src/styles/rtl-overrides.css": "d99d0b1be9d60baea4a4fa2da732da68429e1d41f649065c62bd416345a588f0",
+    "src/styles/panels.css": "361247a36d356c3534c435a1f4de7e3bbaa79ba8676ddaab5bdcadcbc5473598",
+    "src/styles/macos-native.css": "ea54598a001d8202500be256f5cbef6228a8d0586e00408eb8de5ba1f483771c",
+    "src/styles/gods-vision.css": "6b14dd347abe2f99646184869f58bacc2e4e7679752aa4fd6f61f2d7a2951df1",
+    "src/styles/alerts.css": "11cb87b93cd5ba9848f4b48a7d1e7bd4bf7054d352faf3e59735e79b9797fbbc",
+    "src/styles/eew-status-bar.css": "85e5958779e7754a576e111ebf88203ba203a86c387f71f6d3dfa30a05bd2be6",
+    "src/styles/correlation-banner.css": "35def960714ce346b6fc0d0c62318614144ee39dea810df5d151a5fd034886ea",
+    "src/styles/disclosure.css": "968cf5be79aabb65094d8b705afb57c7ebeb7c53bd4cc3754bb9f051d2fea500",
+    "src/styles/main.css": "23a3ef8386eddb52981a1ac47cf7bd782276fe4a18db8a743fa0a46943e0a699"
+  }
+}

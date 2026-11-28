@@ -1,0 +1,1010 @@
+{
+  "task": "UX-062 approved bounded Unverified labels",
+  "certificateVersion": 1,
+  "command": "PATH=/opt/homebrew/opt/node@22/bin:$PATH npm run test:ux062",
+  "validDetectingProofCount": 29,
+  "testFile": "tests/ux062-forecast-baseline-labels.test.mjs",
+  "testVersions": [
+    {
+      "commit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "sha256": "933307bcb1f0a8bea3f7efbb2a898228c2690d818ffd58462722862c2faf9765",
+      "validProofCount": 28
+    },
+    {
+      "commit": "e95f91cb88dabfa811a6d7a17b8b23c68ec58f0c",
+      "sha256": "49c6649e0e93e4d1fbd463f019d2aad75c8d21e3df57f29291fbf9cd74d7c417",
+      "validProofCount": 1
+    }
+  ],
+  "testOnlySupplementDiff": "diff --git a/tests/ux062-forecast-baseline-labels.test.mjs b/tests/ux062-forecast-baseline-labels.test.mjs\nindex 54d4cd68e..121f63b97 100644\n--- a/tests/ux062-forecast-baseline-labels.test.mjs\n+++ b/tests/ux062-forecast-baseline-labels.test.mjs\n@@ -166,7 +166,7 @@ test('every scenario keeps its probability, warning, action, and escaping with i\n   assert.equal(card.querySelector('.sit-act-dismiss').dataset.actId, 'act1');\n   assert.equal(card.querySelector('.sit-act-dismiss').textContent, 'Dismiss');\n   assert.ok(card.querySelector('button.sit-map-btn'));\n-  assert.equal(card.querySelector('script, img, strong'), null);\n+  assert.equal(card.querySelector('script, img, strong') === null, true, 'untrusted markup remains text');\n   const scenarios = [...card.querySelectorAll('.sit-scenario')];\n   assert.equal(scenarios.length, 3);\n   scenarios.forEach((sc, i) => {\n",
+  "productionParity": [
+    {
+      "file": "src/components/AnalystHUD.ts",
+      "historicalSha256": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "finalSha256": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "identical": true
+    },
+    {
+      "file": "src/components/CommandCenterPanel.ts",
+      "historicalSha256": "7a9d6b2c9859a4a78e4848c74825515572f39a014fa7c4bede00860fde361475",
+      "finalSha256": "7a9d6b2c9859a4a78e4848c74825515572f39a014fa7c4bede00860fde361475",
+      "identical": true
+    },
+    {
+      "file": "src/components/SituationDossier.ts",
+      "historicalSha256": "b382e081d675346a736b0bf3204b86b6245c76c94b6e5104257ef5cb815aa511",
+      "finalSha256": "b382e081d675346a736b0bf3204b86b6245c76c94b6e5104257ef5cb815aa511",
+      "identical": true
+    },
+    {
+      "file": "src/components/SituationPanel.ts",
+      "historicalSha256": "11bb02d94a835d5bd7c92664685a396adc8e7e6f03208960639cc2bce39be9b8",
+      "finalSha256": "11bb02d94a835d5bd7c92664685a396adc8e7e6f03208960639cc2bce39be9b8",
+      "identical": true
+    },
+    {
+      "file": "src/components/forecast-provenance-view.ts",
+      "historicalSha256": "56bb0c0c40d1517ef1ce033c90541c9aae776b51a1cdab0543f9c8d29700213c",
+      "finalSha256": "56bb0c0c40d1517ef1ce033c90541c9aae776b51a1cdab0543f9c8d29700213c",
+      "identical": true
+    }
+  ],
+  "proofs": [
+    {
+      "id": "raw-label",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/AnalystHUD.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 8,
+        "fail": 3
+      },
+      "appliedDiff": "diff --git a/src/components/AnalystHUD.ts b/src/components/AnalystHUD.ts\nindex 66b892109..4c422b898 100644\n--- a/src/components/AnalystHUD.ts\n+++ b/src/components/AnalystHUD.ts\n@@ -1065,7 +1065,7 @@ export class AnalystHUD {\n     conf.textContent = `${(h.confidence * 100).toFixed(0)}%`;\n \n     const thread = getThreadFor(h);\n-    head.append(kind, risk, conf, this.buildUnverifiedLabel('Baseline skill is unverified for this displayed estimate.'));\n+    head.append(kind, risk, conf);\n \n     const accuracy = getKindAccuracy();\n     const kindStats = accuracy.get(h.kind);\n",
+      "failures": [
+        {
+          "testNumber": 1,
+          "testName": "raw HUD confidence is independently Unverified without changing confidence or risk",
+          "assertionOutput": "|-\n    one independently scoped visible Unverified disclosure\n    \n    0 !== 1",
+          "assertionLine": 74
+        },
+        {
+          "testNumber": 7,
+          "testName": "native HUD disclosure activation is not consumed as projection or ensemble keyboard shortcuts",
+          "assertionOutput": "'raw confidence explanation has native activation target'",
+          "assertionLine": 202
+        },
+        {
+          "testNumber": 8,
+          "testName": "HUD focus trap includes the disclosure when it is the only control",
+          "assertionOutput": "'raw confidence explanation is keyboard reachable'",
+          "assertionLine": 221
+        }
+      ],
+      "sha256Before": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "sha256Restored": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/raw-label.log",
+      "logSha256": "f4b86713b8c2586de32064d1572948230435cb6c17c4a43ecb0f8edc2f17c35c"
+    },
+    {
+      "id": "raw-scope",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/AnalystHUD.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 10,
+        "fail": 1
+      },
+      "appliedDiff": "diff --git a/src/components/AnalystHUD.ts b/src/components/AnalystHUD.ts\nindex 66b892109..e8d42f696 100644\n--- a/src/components/AnalystHUD.ts\n+++ b/src/components/AnalystHUD.ts\n@@ -1065,7 +1065,7 @@ export class AnalystHUD {\n     conf.textContent = `${(h.confidence * 100).toFixed(0)}%`;\n \n     const thread = getThreadFor(h);\n-    head.append(kind, risk, conf, this.buildUnverifiedLabel('Baseline skill is unverified for this displayed estimate.'));\n+    head.append(kind, risk, conf, this.buildUnverifiedLabel('No exact matching baseline evaluation for this adjusted forecast.'));\n \n     const accuracy = getKindAccuracy();\n     const kindStats = accuracy.get(h.kind);\n",
+      "failures": [
+        {
+          "testNumber": 1,
+          "testName": "raw HUD confidence is independently Unverified without changing confidence or risk",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'No exact matching baseline evaluation for this adjusted forecast.'\n    - 'Baseline skill is unverified for this displayed estimate.'",
+          "assertionLine": 81
+        }
+      ],
+      "sha256Before": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "sha256Restored": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/raw-scope.log",
+      "logSha256": "68ce858174529ce3e5d192c8ca0772f1667d619a484123ecc88814357ec0123f"
+    },
+    {
+      "id": "adjusted-label",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/AnalystHUD.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 10,
+        "fail": 1
+      },
+      "appliedDiff": "diff --git a/src/components/AnalystHUD.ts b/src/components/AnalystHUD.ts\nindex 66b892109..b4f36be34 100644\n--- a/src/components/AnalystHUD.ts\n+++ b/src/components/AnalystHUD.ts\n@@ -1132,7 +1132,7 @@ export class AnalystHUD {\n     fill.style.width = `${pct}%`;\n     track.append(fill);\n \n-    wrap.append(label, this.buildUnverifiedLabel('No exact matching baseline evaluation for this adjusted forecast.'), track);\n+    wrap.append(label, track);\n \n     const details = document.createElement('details');\n     details.className = 'analyst-hud-forecast-why';\n",
+      "failures": [
+        {
+          "testNumber": 2,
+          "testName": "adjusted HUD forecast has its own explanation while exact values, bars, and provenance remain",
+          "assertionOutput": "|-\n    one independently scoped visible Unverified disclosure\n    \n    0 !== 1",
+          "assertionLine": 74
+        }
+      ],
+      "sha256Before": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "sha256Restored": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/adjusted-label.log",
+      "logSha256": "a2ef57433010e6d008d3c0cb08429365ecd54c966bd2f2f662f1a81faf0c2274"
+    },
+    {
+      "id": "adjusted-scope",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/AnalystHUD.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 10,
+        "fail": 1
+      },
+      "appliedDiff": "diff --git a/src/components/AnalystHUD.ts b/src/components/AnalystHUD.ts\nindex 66b892109..bf4c807b0 100644\n--- a/src/components/AnalystHUD.ts\n+++ b/src/components/AnalystHUD.ts\n@@ -1132,7 +1132,7 @@ export class AnalystHUD {\n     fill.style.width = `${pct}%`;\n     track.append(fill);\n \n-    wrap.append(label, this.buildUnverifiedLabel('No exact matching baseline evaluation for this adjusted forecast.'), track);\n+    wrap.append(label, this.buildUnverifiedLabel('Baseline skill is unverified for this displayed estimate.'), track);\n \n     const details = document.createElement('details');\n     details.className = 'analyst-hud-forecast-why';\n",
+      "failures": [
+        {
+          "testNumber": 2,
+          "testName": "adjusted HUD forecast has its own explanation while exact values, bars, and provenance remain",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'Baseline skill is unverified for this displayed estimate.'\n    - 'No exact matching baseline evaluation for this adjusted forecast.'",
+          "assertionLine": 81
+        }
+      ],
+      "sha256Before": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "sha256Restored": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/adjusted-scope.log",
+      "logSha256": "c3c23542bc8954422112f246e8eca91a6e6831dabfcb99ea610117a6f13ae2b0"
+    },
+    {
+      "id": "superforecast-label",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/AnalystHUD.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 10,
+        "fail": 1
+      },
+      "appliedDiff": "diff --git a/src/components/AnalystHUD.ts b/src/components/AnalystHUD.ts\nindex 66b892109..98d00e0e8 100644\n--- a/src/components/AnalystHUD.ts\n+++ b/src/components/AnalystHUD.ts\n@@ -955,7 +955,7 @@ export class AnalystHUD {\n       if (index === 0) {\n         const head = document.createElement('div');\n         head.className = 'analyst-hud-superforecast-head';\n-        head.append(line, this.buildUnverifiedLabel('No exact recorded identity for this displayed result.'));\n+        head.append(line);\n         wrap.append(head);\n       } else {\n         wrap.append(line);\n",
+      "failures": [
+        {
+          "testNumber": 3,
+          "testName": "expanded Superforecast labels only the headline and preserves every estimate and interval",
+          "assertionOutput": "|-\n    one independently scoped visible Unverified disclosure\n    \n    0 !== 1",
+          "assertionLine": 74
+        }
+      ],
+      "sha256Before": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "sha256Restored": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/superforecast-label.log",
+      "logSha256": "980ef69420eb8a8b9bae4e168075f77aa330f77957334bc0b49791d0c0b0af13"
+    },
+    {
+      "id": "superforecast-scope",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/AnalystHUD.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 10,
+        "fail": 1
+      },
+      "appliedDiff": "diff --git a/src/components/AnalystHUD.ts b/src/components/AnalystHUD.ts\nindex 66b892109..e6e94fcbb 100644\n--- a/src/components/AnalystHUD.ts\n+++ b/src/components/AnalystHUD.ts\n@@ -955,7 +955,7 @@ export class AnalystHUD {\n       if (index === 0) {\n         const head = document.createElement('div');\n         head.className = 'analyst-hud-superforecast-head';\n-        head.append(line, this.buildUnverifiedLabel('No exact recorded identity for this displayed result.'));\n+        head.append(line, this.buildUnverifiedLabel('Unverified.'));\n         wrap.append(head);\n       } else {\n         wrap.append(line);\n",
+      "failures": [
+        {
+          "testNumber": 3,
+          "testName": "expanded Superforecast labels only the headline and preserves every estimate and interval",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'Unverified.'\n    - 'No exact recorded identity for this displayed result.'",
+          "assertionLine": 81
+        }
+      ],
+      "sha256Before": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "sha256Restored": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/superforecast-scope.log",
+      "logSha256": "2594b4f6df093c9c57eff5a8031d581b4c1882119dedcdbebfdaed479c55d334"
+    },
+    {
+      "id": "scenario-label",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/SituationPanel.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 9,
+        "fail": 2
+      },
+      "appliedDiff": "diff --git a/src/components/SituationPanel.ts b/src/components/SituationPanel.ts\nindex 88d40db6d..588384b2c 100644\n--- a/src/components/SituationPanel.ts\n+++ b/src/components/SituationPanel.ts\n@@ -354,7 +354,6 @@ export class SituationPanel extends Panel {\n  <div class=\"sit-sc-header\">\n  <span class=\"sit-sc-label\">${this.esc(sc.label)}</span>\n  <span class=\"sit-sc-prob\" style=\"color:${SEVERITY_COLORS[sc.severity]}\">${Math.round(sc.probability * 100)}%</span>\n- <details class=\"forecast-unverified\"><summary>Unverified</summary><p>No matching baseline evidence.</p></details>\n  </div>\n  <div class=\"sit-sc-bar\">\n  <div class=\"sit-sc-fill\" style=\"width:${Math.round(sc.probability * 100)}%;background:${SEVERITY_COLORS[sc.severity]}\"></div>\n",
+      "failures": [
+        {
+          "testNumber": 5,
+          "testName": "every scenario keeps its probability, warning, action, and escaping with its own disclosure",
+          "assertionOutput": "|-\n    one independently scoped visible Unverified disclosure\n    \n    0 !== 1",
+          "assertionLine": 74
+        },
+        {
+          "testNumber": 6,
+          "testName": "scenario disclosure click does not collapse the card or dismiss its warning action",
+          "assertionOutput": "'scenario explanation has native activation target'",
+          "assertionLine": 190
+        }
+      ],
+      "sha256Before": "11bb02d94a835d5bd7c92664685a396adc8e7e6f03208960639cc2bce39be9b8",
+      "sha256Restored": "11bb02d94a835d5bd7c92664685a396adc8e7e6f03208960639cc2bce39be9b8",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/scenario-label.log",
+      "logSha256": "2e111ca68e887df417a45874151840868140b884c580c5dd6b85558dc4d737e6"
+    },
+    {
+      "id": "scenario-scope",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/SituationPanel.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 10,
+        "fail": 1
+      },
+      "appliedDiff": "diff --git a/src/components/SituationPanel.ts b/src/components/SituationPanel.ts\nindex 88d40db6d..0b540cbc5 100644\n--- a/src/components/SituationPanel.ts\n+++ b/src/components/SituationPanel.ts\n@@ -354,7 +354,7 @@ export class SituationPanel extends Panel {\n  <div class=\"sit-sc-header\">\n  <span class=\"sit-sc-label\">${this.esc(sc.label)}</span>\n  <span class=\"sit-sc-prob\" style=\"color:${SEVERITY_COLORS[sc.severity]}\">${Math.round(sc.probability * 100)}%</span>\n- <details class=\"forecast-unverified\"><summary>Unverified</summary><p>No matching baseline evidence.</p></details>\n+ <details class=\"forecast-unverified\"><summary>Unverified</summary><p>Unverified.</p></details>\n  </div>\n  <div class=\"sit-sc-bar\">\n  <div class=\"sit-sc-fill\" style=\"width:${Math.round(sc.probability * 100)}%;background:${SEVERITY_COLORS[sc.severity]}\"></div>\n",
+      "failures": [
+        {
+          "testNumber": 5,
+          "testName": "every scenario keeps its probability, warning, action, and escaping with its own disclosure",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'Unverified.'\n    - 'No matching baseline evidence.'",
+          "assertionLine": 81
+        }
+      ],
+      "sha256Before": "11bb02d94a835d5bd7c92664685a396adc8e7e6f03208960639cc2bce39be9b8",
+      "sha256Restored": "11bb02d94a835d5bd7c92664685a396adc8e7e6f03208960639cc2bce39be9b8",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/scenario-scope.log",
+      "logSha256": "5327885146757121a2c846d4484572b90364bb502cf3e36c23143f3e0f8beff6"
+    },
+    {
+      "id": "historical-label",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/CommandCenterPanel.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 10,
+        "fail": 1
+      },
+      "appliedDiff": "diff --git a/src/components/CommandCenterPanel.ts b/src/components/CommandCenterPanel.ts\nindex 76f234f99..0bfd0de8d 100644\n--- a/src/components/CommandCenterPanel.ts\n+++ b/src/components/CommandCenterPanel.ts\n@@ -663,7 +663,6 @@ export class CommandCenterPanel extends Panel {\n         ${chip(card.overall.label)}\n       </div>\n       <div style=\"font-size:11px;color:var(--text-secondary,#aaa);margin-bottom:6px;line-height:1.4;\">${escapeHtml(card.overall.summary)}</div>\n-      <p class=\"calibration-baseline-note\" style=\"font-size:11px;color:var(--text-secondary,#aaa);margin:0 0 6px;line-height:1.4;\">Baseline comparison: Unverified. This summary combines historical forecasts and does not verify individual forecast skill.</p>\n       ${rows}\n     </div>`;\n   }\n",
+      "failures": [
+        {
+          "testNumber": 9,
+          "testName": "historical calibration assessments never promote the scoped baseline comparison",
+          "assertionOutput": "'historical summary explicitly scopes baseline verification'",
+          "assertionLine": 244
+        }
+      ],
+      "sha256Before": "7a9d6b2c9859a4a78e4848c74825515572f39a014fa7c4bede00860fde361475",
+      "sha256Restored": "7a9d6b2c9859a4a78e4848c74825515572f39a014fa7c4bede00860fde361475",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/historical-label.log",
+      "logSha256": "1b0760e0de689081f737fb7806c91f7071f354d9ee7da06dc31ca2ada360f883"
+    },
+    {
+      "id": "historical-scope",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/CommandCenterPanel.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 10,
+        "fail": 1
+      },
+      "appliedDiff": "diff --git a/src/components/CommandCenterPanel.ts b/src/components/CommandCenterPanel.ts\nindex 76f234f99..9b049ca75 100644\n--- a/src/components/CommandCenterPanel.ts\n+++ b/src/components/CommandCenterPanel.ts\n@@ -663,7 +663,7 @@ export class CommandCenterPanel extends Panel {\n         ${chip(card.overall.label)}\n       </div>\n       <div style=\"font-size:11px;color:var(--text-secondary,#aaa);margin-bottom:6px;line-height:1.4;\">${escapeHtml(card.overall.summary)}</div>\n-      <p class=\"calibration-baseline-note\" style=\"font-size:11px;color:var(--text-secondary,#aaa);margin:0 0 6px;line-height:1.4;\">Baseline comparison: Unverified. This summary combines historical forecasts and does not verify individual forecast skill.</p>\n+      <p class=\"calibration-baseline-note\" style=\"font-size:11px;color:var(--text-secondary,#aaa);margin:0 0 6px;line-height:1.4;\">Baseline comparison: Unverified.</p>\n       ${rows}\n     </div>`;\n   }\n",
+      "failures": [
+        {
+          "testNumber": 9,
+          "testName": "historical calibration assessments never promote the scoped baseline comparison",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'Baseline comparison: Unverified.'\n    - 'Baseline comparison: Unverified. This summary combines historical forecasts and does not verify individual forecast skill.'",
+          "assertionLine": 245
+        }
+      ],
+      "sha256Before": "7a9d6b2c9859a4a78e4848c74825515572f39a014fa7c4bede00860fde361475",
+      "sha256Restored": "7a9d6b2c9859a4a78e4848c74825515572f39a014fa7c4bede00860fde361475",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/historical-scope.log",
+      "logSha256": "9a22e21f8c03c1d486b63bec4cfbb00ff3c273750daed3bf661649ae8414341c"
+    },
+    {
+      "id": "native-keyboard",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/AnalystHUD.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 10,
+        "fail": 1
+      },
+      "appliedDiff": "diff --git a/src/components/AnalystHUD.ts b/src/components/AnalystHUD.ts\nindex 66b892109..475fecfdb 100644\n--- a/src/components/AnalystHUD.ts\n+++ b/src/components/AnalystHUD.ts\n@@ -110,8 +110,7 @@ function superforecastButtonLabel(loading: boolean, cached: boolean, expanded: b\n function shouldIgnoreKey(e: KeyboardEvent): boolean {\n   const target = e.target as HTMLElement | null;\n   if (!target) return false;\n-  return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'\n-    || target.closest('.forecast-unverified summary') !== null;\n+  return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';\n }\n \n export class AnalystHUD {\n",
+      "failures": [
+        {
+          "testNumber": 7,
+          "testName": "native HUD disclosure activation is not consumed as projection or ensemble keyboard shortcuts",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    \n    1 !== 0",
+          "assertionLine": 207
+        }
+      ],
+      "sha256Before": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "sha256Restored": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/native-keyboard.log",
+      "logSha256": "5ba79cc118f3a05beab8aa48c45c618691406c0b252ae2cd954b7aeb55c5cc7d"
+    },
+    {
+      "id": "focus-trap",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/AnalystHUD.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 10,
+        "fail": 1
+      },
+      "appliedDiff": "diff --git a/src/components/AnalystHUD.ts b/src/components/AnalystHUD.ts\nindex 66b892109..9b278e71d 100644\n--- a/src/components/AnalystHUD.ts\n+++ b/src/components/AnalystHUD.ts\n@@ -362,7 +362,7 @@ export class AnalystHUD {\n   /** Minimal focus trap: Tab cycles within the HUD while it's open. */\n   private trapFocus(e: KeyboardEvent): void {\n     const focusables = [...this.root.querySelectorAll<HTMLElement>(\n-      'button:not([disabled]), input:not([disabled]), select, textarea, [href], [tabindex]:not([tabindex=\"-1\"]), .forecast-unverified summary',\n+      'button:not([disabled]), input:not([disabled]), select, textarea, [href], [tabindex]:not([tabindex=\"-1\"])',\n     )].filter((el) => el.offsetParent !== null);\n     if (focusables.length === 0) return;\n     const first = focusables[0]!;\n",
+      "failures": [
+        {
+          "testNumber": 8,
+          "testName": "HUD focus trap includes the disclosure when it is the only control",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    \n    false !== true",
+          "assertionLine": 227
+        }
+      ],
+      "sha256Before": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "sha256Restored": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/focus-trap.log",
+      "logSha256": "50328848513bb9f5738f504c9c6d191c37d92b8003fac3848eb4cef180ddc942"
+    },
+    {
+      "id": "native-summary",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/AnalystHUD.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 6,
+        "fail": 5
+      },
+      "appliedDiff": "diff --git a/src/components/AnalystHUD.ts b/src/components/AnalystHUD.ts\nindex 66b892109..29317aa13 100644\n--- a/src/components/AnalystHUD.ts\n+++ b/src/components/AnalystHUD.ts\n@@ -1102,7 +1102,7 @@ export class AnalystHUD {\n   private buildUnverifiedLabel(explanation: string): HTMLElement {\n     const details = document.createElement('details');\n     details.className = 'forecast-unverified';\n-    const summary = document.createElement('summary');\n+    const summary = document.createElement('span');\n     summary.textContent = 'Unverified';\n     const reason = document.createElement('p');\n     reason.textContent = explanation;\n",
+      "failures": [
+        {
+          "testNumber": 1,
+          "testName": "raw HUD confidence is independently Unverified without changing confidence or risk",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    \n    'SPAN' !== 'SUMMARY'",
+          "assertionLine": 76
+        },
+        {
+          "testNumber": 2,
+          "testName": "adjusted HUD forecast has its own explanation while exact values, bars, and provenance remain",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    \n    'SPAN' !== 'SUMMARY'",
+          "assertionLine": 76
+        },
+        {
+          "testNumber": 3,
+          "testName": "expanded Superforecast labels only the headline and preserves every estimate and interval",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    \n    'SPAN' !== 'SUMMARY'",
+          "assertionLine": 76
+        },
+        {
+          "testNumber": 7,
+          "testName": "native HUD disclosure activation is not consumed as projection or ensemble keyboard shortcuts",
+          "assertionOutput": "'raw confidence explanation has native activation target'",
+          "assertionLine": 202
+        },
+        {
+          "testNumber": 8,
+          "testName": "HUD focus trap includes the disclosure when it is the only control",
+          "assertionOutput": "'raw confidence explanation is keyboard reachable'",
+          "assertionLine": 221
+        }
+      ],
+      "sha256Before": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "sha256Restored": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/native-summary.log",
+      "logSha256": "b3ac0b7facae60aad8cf7132987c223b65e5d0e91eaf1797adca2a84458fa11d"
+    },
+    {
+      "id": "visible-summary",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/AnalystHUD.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 8,
+        "fail": 3
+      },
+      "appliedDiff": "diff --git a/src/components/AnalystHUD.ts b/src/components/AnalystHUD.ts\nindex 66b892109..dc0032da8 100644\n--- a/src/components/AnalystHUD.ts\n+++ b/src/components/AnalystHUD.ts\n@@ -1104,6 +1104,7 @@ export class AnalystHUD {\n     details.className = 'forecast-unverified';\n     const summary = document.createElement('summary');\n     summary.textContent = 'Unverified';\n+    summary.hidden = true;\n     const reason = document.createElement('p');\n     reason.textContent = explanation;\n     details.append(summary, reason);\n",
+      "failures": [
+        {
+          "testNumber": 1,
+          "testName": "raw HUD confidence is independently Unverified without changing confidence or risk",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    \n    true !== false",
+          "assertionLine": 78
+        },
+        {
+          "testNumber": 2,
+          "testName": "adjusted HUD forecast has its own explanation while exact values, bars, and provenance remain",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    \n    true !== false",
+          "assertionLine": 78
+        },
+        {
+          "testNumber": 3,
+          "testName": "expanded Superforecast labels only the headline and preserves every estimate and interval",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    \n    true !== false",
+          "assertionLine": 78
+        }
+      ],
+      "sha256Before": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "sha256Restored": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/visible-summary.log",
+      "logSha256": "c6f954e154460180f4499eec723665a7c94e0553e242e14a2905d0eafca6e73c"
+    },
+    {
+      "id": "accessible-summary",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/AnalystHUD.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 8,
+        "fail": 3
+      },
+      "appliedDiff": "diff --git a/src/components/AnalystHUD.ts b/src/components/AnalystHUD.ts\nindex 66b892109..17c607fa5 100644\n--- a/src/components/AnalystHUD.ts\n+++ b/src/components/AnalystHUD.ts\n@@ -1104,6 +1104,7 @@ export class AnalystHUD {\n     details.className = 'forecast-unverified';\n     const summary = document.createElement('summary');\n     summary.textContent = 'Unverified';\n+    summary.setAttribute('aria-hidden', 'true');\n     const reason = document.createElement('p');\n     reason.textContent = explanation;\n     details.append(summary, reason);\n",
+      "failures": [
+        {
+          "testNumber": 1,
+          "testName": "raw HUD confidence is independently Unverified without changing confidence or risk",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    \n    'true' !== null",
+          "assertionLine": 79
+        },
+        {
+          "testNumber": 2,
+          "testName": "adjusted HUD forecast has its own explanation while exact values, bars, and provenance remain",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    \n    'true' !== null",
+          "assertionLine": 79
+        },
+        {
+          "testNumber": 3,
+          "testName": "expanded Superforecast labels only the headline and preserves every estimate and interval",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    \n    'true' !== null",
+          "assertionLine": 79
+        }
+      ],
+      "sha256Before": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "sha256Restored": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/accessible-summary.log",
+      "logSha256": "dbdec90a6aa68290130f3f769b283f87da2cde158832560def996852b569e8fb"
+    },
+    {
+      "id": "preserve-raw-value",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/AnalystHUD.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 10,
+        "fail": 1
+      },
+      "appliedDiff": "diff --git a/src/components/AnalystHUD.ts b/src/components/AnalystHUD.ts\nindex 66b892109..a58ab1d7a 100644\n--- a/src/components/AnalystHUD.ts\n+++ b/src/components/AnalystHUD.ts\n@@ -1062,7 +1062,7 @@ export class AnalystHUD {\n     risk.style.color = RISK_COLORS[h.risk];\n     const conf = document.createElement('span');\n     conf.className = 'analyst-hud-hyp-conf';\n-    conf.textContent = `${(h.confidence * 100).toFixed(0)}%`;\n+    conf.textContent = '50%';\n \n     const thread = getThreadFor(h);\n     head.append(kind, risk, conf, this.buildUnverifiedLabel('Baseline skill is unverified for this displayed estimate.'));\n",
+      "failures": [
+        {
+          "testNumber": 1,
+          "testName": "raw HUD confidence is independently Unverified without changing confidence or risk",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    \n    '50%' !== '84%'",
+          "assertionLine": 118
+        }
+      ],
+      "sha256Before": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "sha256Restored": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/preserve-raw-value.log",
+      "logSha256": "7a33e89f5cb54cc835617076e1c6d07d977b625cef0755c78ac040ffe1121d93"
+    },
+    {
+      "id": "preserve-adjusted-width",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/AnalystHUD.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 10,
+        "fail": 1
+      },
+      "appliedDiff": "diff --git a/src/components/AnalystHUD.ts b/src/components/AnalystHUD.ts\nindex 66b892109..f21aec171 100644\n--- a/src/components/AnalystHUD.ts\n+++ b/src/components/AnalystHUD.ts\n@@ -1129,7 +1129,7 @@ export class AnalystHUD {\n     track.className = 'analyst-hud-forecast-track';\n     const fill = document.createElement('div');\n     fill.className = 'analyst-hud-forecast-fill';\n-    fill.style.width = `${pct}%`;\n+    fill.style.width = '50%';\n     track.append(fill);\n \n     wrap.append(label, this.buildUnverifiedLabel('No exact matching baseline evaluation for this adjusted forecast.'), track);\n",
+      "failures": [
+        {
+          "testNumber": 2,
+          "testName": "adjusted HUD forecast has its own explanation while exact values, bars, and provenance remain",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    \n    '50%' !== '0%'",
+          "assertionLine": 130
+        }
+      ],
+      "sha256Before": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "sha256Restored": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/preserve-adjusted-width.log",
+      "logSha256": "8d01274eb3dd274137468daf6fe05e8b5c5ca3058bfaef1249ff99d108fbbe90"
+    },
+    {
+      "id": "preserve-superforecast-interval",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/forecast-provenance-view.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 10,
+        "fail": 1
+      },
+      "appliedDiff": "diff --git a/src/components/forecast-provenance-view.ts b/src/components/forecast-provenance-view.ts\nindex 4fa8f7f95..680dcafb3 100644\n--- a/src/components/forecast-provenance-view.ts\n+++ b/src/components/forecast-provenance-view.ts\n@@ -27,7 +27,7 @@ export function buildSuperforecastLines(sf: SuperForecast): string[] {\n   ];\n   if (sf.interval) {\n     const coverage = Math.round((1 - sf.interval.alpha) * 100);\n-    lines.push(`${coverage}% interval ${pct(sf.interval.lo)}\u2013${pct(sf.interval.hi)} (n=${sf.interval.n})`);\n+\n   }\n   if (sf.referenceClass) lines.push(`Reference class: ${sf.referenceClass}`);\n   for (const e of sf.estimates) {\n",
+      "failures": [
+        {
+          "testNumber": 3,
+          "testName": "expanded Superforecast labels only the headline and preserves every estimate and interval",
+          "assertionOutput": "|-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        'Superforecast 45% (partial LLM pipeline)',\n    -   '80% interval 30%\u201360% (n=57)',\n        'base-rate 30% (weight 1.0)',\n        'persona-analyst 55% (weight 1.0)',\n        'Estimate spread 25%'\n      ]",
+          "assertionLine": 142
+        }
+      ],
+      "sha256Before": "56bb0c0c40d1517ef1ce033c90541c9aae776b51a1cdab0543f9c8d29700213c",
+      "sha256Restored": "56bb0c0c40d1517ef1ce033c90541c9aae776b51a1cdab0543f9c8d29700213c",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/preserve-superforecast-interval.log",
+      "logSha256": "34cf6cfa80aae6e43de540c36d722d3e8b576d12c04f51df361922b29a59c887"
+    },
+    {
+      "id": "preserve-warning",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/SituationPanel.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 10,
+        "fail": 1
+      },
+      "appliedDiff": "diff --git a/src/components/SituationPanel.ts b/src/components/SituationPanel.ts\nindex 88d40db6d..502cd6bb0 100644\n--- a/src/components/SituationPanel.ts\n+++ b/src/components/SituationPanel.ts\n@@ -370,7 +370,7 @@ export class SituationPanel extends Panel {\n  el.className = `sit-action sit-act-${ac.urgency}`;\n  el.innerHTML = `\n  <div class=\"sit-act-header\">\n- <span class=\"sit-act-urgency\" style=\"background:${URGENCY_COLORS[ac.urgency]}\">${ac.urgency.toUpperCase()}</span>\n+ <span class=\"sit-act-urgency\" style=\"background:${URGENCY_COLORS[ac.urgency]}\"></span>\n  <span class=\"sit-act-headline\">${this.esc(ac.headline)}</span>\n  </div>\n  <div class=\"sit-act-rationale\">${this.esc(ac.rationale)}</div>\n",
+      "failures": [
+        {
+          "testNumber": 5,
+          "testName": "every scenario keeps its probability, warning, action, and escaping with its own disclosure",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    \n    '' !== 'IMMEDIATE'",
+          "assertionLine": 164
+        }
+      ],
+      "sha256Before": "11bb02d94a835d5bd7c92664685a396adc8e7e6f03208960639cc2bce39be9b8",
+      "sha256Restored": "11bb02d94a835d5bd7c92664685a396adc8e7e6f03208960639cc2bce39be9b8",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/preserve-warning.log",
+      "logSha256": "3d8dac9d6d80b619567a45ea8a375e0e1d53c5694b398a62474343f67382b85c"
+    },
+    {
+      "id": "preserve-scenario-width",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/SituationPanel.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 10,
+        "fail": 1
+      },
+      "appliedDiff": "diff --git a/src/components/SituationPanel.ts b/src/components/SituationPanel.ts\nindex 88d40db6d..3a6d2ea14 100644\n--- a/src/components/SituationPanel.ts\n+++ b/src/components/SituationPanel.ts\n@@ -357,7 +357,7 @@ export class SituationPanel extends Panel {\n  <details class=\"forecast-unverified\"><summary>Unverified</summary><p>No matching baseline evidence.</p></details>\n  </div>\n  <div class=\"sit-sc-bar\">\n- <div class=\"sit-sc-fill\" style=\"width:${Math.round(sc.probability * 100)}%;background:${SEVERITY_COLORS[sc.severity]}\"></div>\n+ <div class=\"sit-sc-fill\" style=\"width:50%;background:${SEVERITY_COLORS[sc.severity]}\"></div>\n  </div>\n  <div class=\"sit-sc-desc\">${this.esc(sc.description)}</div>\n  <div class=\"sit-sc-horizon\">${sc.horizonHours}h horizon \u00b7 ${sc.severity}</div>\n",
+      "failures": [
+        {
+          "testNumber": 5,
+          "testName": "every scenario keeps its probability, warning, action, and escaping with its own disclosure",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    \n    '50%' !== '0%'",
+          "assertionLine": 172
+        }
+      ],
+      "sha256Before": "11bb02d94a835d5bd7c92664685a396adc8e7e6f03208960639cc2bce39be9b8",
+      "sha256Restored": "11bb02d94a835d5bd7c92664685a396adc8e7e6f03208960639cc2bce39be9b8",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/preserve-scenario-width.log",
+      "logSha256": "3e5cc59dbc387024e335f2c7c2d1ea060b1883447ee63350491327894014dd75"
+    },
+    {
+      "id": "preserve-historical-brier",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/CommandCenterPanel.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 10,
+        "fail": 1
+      },
+      "appliedDiff": "diff --git a/src/components/CommandCenterPanel.ts b/src/components/CommandCenterPanel.ts\nindex 76f234f99..6d75cb175 100644\n--- a/src/components/CommandCenterPanel.ts\n+++ b/src/components/CommandCenterPanel.ts\n@@ -645,7 +645,7 @@ export class CommandCenterPanel extends Panel {\n     };\n \n     const rows = card.domains.slice(0, 5).map((row) => {\n-      const brier = row.brier === null ? '' : ` \u00b7 Brier ${row.brier.toFixed(2)}`;\n+      const brier = row.brier === null ? '' : ` \u00b7 Brier ${row.brier.toFixed(1)}`;\n       return `<div style=\"display:flex;flex-direction:column;gap:2px;padding:4px 0;\">\n         <div style=\"display:flex;align-items:center;gap:6px;\">\n           <strong style=\"font-size:12px;\">${escapeHtml(row.label)}</strong>\n",
+      "failures": [
+        {
+          "testNumber": 9,
+          "testName": "historical calibration assessments never promote the scoped baseline comparison",
+          "assertionOutput": "|-\n    The input did not match the regular expression /n=12 \u00b7 Brier 0\\.04/. Input:\n    \n    '\\n' +\n      '      \\n' +\n      '        Forecast calibration\\n' +\n      '        runs cold\\n' +\n      '      \\n' +\n      '      Overall underconfident across 12 resolved forecasts; most off-calibration domain: Weather (underconfident)\\n' +\n      '      Baseline comparison: Unverified. This summary combines historical forecasts and does not verify individual forecast skill.\\n' +\n      '      \\n' +\n      '        \\n' +\n      '          Weather\\n' +\n      '          runs cold\\n' +\n      '          n=12 \u00b7 Brier 0.0\\n' +\n      '          \\n' +\n      '        \\n' +\n      '        Weather run cold \u2014 predicted ~80% yet 100% materialized (n=12) \u00b7 recalibration inactive (needs 50 pooled, has 12)\\n' +\n      '      \\n' +\n      '    '",
+          "assertionLine": 242
+        }
+      ],
+      "sha256Before": "7a9d6b2c9859a4a78e4848c74825515572f39a014fa7c4bede00860fde361475",
+      "sha256Restored": "7a9d6b2c9859a4a78e4848c74825515572f39a014fa7c4bede00860fde361475",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/preserve-historical-brier.log",
+      "logSha256": "a7cd160117800d0a500f739075e523905bba8f7157a34206cc364d71142748c4"
+    },
+    {
+      "id": "preserve-dossier-category",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/SituationDossier.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 10,
+        "fail": 1
+      },
+      "appliedDiff": "diff --git a/src/components/SituationDossier.ts b/src/components/SituationDossier.ts\nindex df84e3f67..d63728ffa 100644\n--- a/src/components/SituationDossier.ts\n+++ b/src/components/SituationDossier.ts\n@@ -168,7 +168,7 @@ export class SituationDossier {\n \n   private renderHeader(view: DossierView): void {\n     if (!this.headerEl) return;\n-    const badge = el('span', `hs-dossier-badge hs-dossier-badge--${view.badge.tone}`, view.badge.text);\n+    const badge = el('span', `hs-dossier-badge hs-dossier-badge--${view.badge.tone}`, view.badge.text + ' Unverified');\n     const share = button('share', 'Share \u2318E');\n     const close = button('close', 'Close \u238b');\n     const actions = el('div', 'hs-dossier-actions');\n",
+      "failures": [
+        {
+          "testNumber": 11,
+          "testName": "actual dossier categorical confidence and urgency remain unchanged without forecast badges",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'ACT SOON \u00b7 LOW CONF Unverified'\n    - 'ACT SOON \u00b7 LOW CONF'\n                          ^",
+          "assertionLine": 267
+        }
+      ],
+      "sha256Before": "b382e081d675346a736b0bf3204b86b6245c76c94b6e5104257ef5cb815aa511",
+      "sha256Restored": "b382e081d675346a736b0bf3204b86b6245c76c94b6e5104257ef5cb815aa511",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/preserve-dossier-category.log",
+      "logSha256": "be15f134fdfa333a8656aac586e71e9f36d2e566353a1104ed1e3e11599cff45"
+    },
+    {
+      "id": "missing-superforecast-empty",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/AnalystHUD.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 10,
+        "fail": 1
+      },
+      "appliedDiff": "diff --git a/src/components/AnalystHUD.ts b/src/components/AnalystHUD.ts\nindex 66b892109..f64a45118 100644\n--- a/src/components/AnalystHUD.ts\n+++ b/src/components/AnalystHUD.ts\n@@ -947,7 +947,8 @@ export class AnalystHUD {\n     const wrap = document.createElement('div');\n     wrap.className = 'analyst-hud-hyp-superforecast';\n     const sf = getCachedSuperforecast(h);\n-    if (!sf || !this.expandedSuperforecast.has(h.id)) return wrap;\n+    if (!sf) { wrap.textContent = 'Unverified'; return wrap; }\n+    if (!this.expandedSuperforecast.has(h.id)) return wrap;\n     for (const [index, text] of buildSuperforecastLines(sf).entries()) {\n       const line = document.createElement('p');\n       line.className = 'analyst-hud-superforecast-line';\n",
+      "failures": [
+        {
+          "testNumber": 4,
+          "testName": "missing or collapsed Superforecast creates no new empty-state label",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    \n    'Unverified' !== ''",
+          "assertionLine": 155
+        }
+      ],
+      "sha256Before": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "sha256Restored": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/missing-superforecast-empty.log",
+      "logSha256": "932198de5fe711a1dee9938d9521ace50e431ebb44527ee60b29c96491766b61"
+    },
+    {
+      "id": "collapsed-superforecast-empty",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/AnalystHUD.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 10,
+        "fail": 1
+      },
+      "appliedDiff": "diff --git a/src/components/AnalystHUD.ts b/src/components/AnalystHUD.ts\nindex 66b892109..1f75f91d4 100644\n--- a/src/components/AnalystHUD.ts\n+++ b/src/components/AnalystHUD.ts\n@@ -947,7 +947,8 @@ export class AnalystHUD {\n     const wrap = document.createElement('div');\n     wrap.className = 'analyst-hud-hyp-superforecast';\n     const sf = getCachedSuperforecast(h);\n-    if (!sf || !this.expandedSuperforecast.has(h.id)) return wrap;\n+    if (!sf) return wrap;\n+    if (!this.expandedSuperforecast.has(h.id)) { wrap.textContent = 'Unverified'; return wrap; }\n     for (const [index, text] of buildSuperforecastLines(sf).entries()) {\n       const line = document.createElement('p');\n       line.className = 'analyst-hud-superforecast-line';\n",
+      "failures": [
+        {
+          "testNumber": 4,
+          "testName": "missing or collapsed Superforecast creates no new empty-state label",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    \n    'Unverified' !== ''",
+          "assertionLine": 153
+        }
+      ],
+      "sha256Before": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "sha256Restored": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/collapsed-superforecast-empty.log",
+      "logSha256": "7150c822cd9489d6b01baba5666db94398a396d93317565415c2a62feafea12e"
+    },
+    {
+      "id": "empty-calibration-card",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/CommandCenterPanel.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 10,
+        "fail": 1
+      },
+      "appliedDiff": "diff --git a/src/components/CommandCenterPanel.ts b/src/components/CommandCenterPanel.ts\nindex 76f234f99..27c5c00df 100644\n--- a/src/components/CommandCenterPanel.ts\n+++ b/src/components/CommandCenterPanel.ts\n@@ -625,7 +625,7 @@ export class CommandCenterPanel extends Panel {\n    */\n   private renderCalibrationReport(): string {\n     const card = buildCalibrationReportCard(getCalibrationStore().all());\n-    if (card.overall.resolvedTotal === 0) return '';\n+    if (card.overall.resolvedTotal === 0) return getCalibrationStore().all().length === 0 ? 'Unverified' : '';\n \n     const chip = (label: CalibrationReliabilityLabel): string => {\n       const color = CALIBRATION_TONE[label];\n",
+      "failures": [
+        {
+          "testNumber": 10,
+          "testName": "no resolved calibration history preserves the absent card",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    \n    'Unverified' !== ''",
+          "assertionLine": 254
+        }
+      ],
+      "sha256Before": "7a9d6b2c9859a4a78e4848c74825515572f39a014fa7c4bede00860fde361475",
+      "sha256Restored": "7a9d6b2c9859a4a78e4848c74825515572f39a014fa7c4bede00860fde361475",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/empty-calibration-card.log",
+      "logSha256": "0a2b4c953584af862d7f8593c0fae7709bfeacc3090a826ba6d27005a066c88a"
+    },
+    {
+      "id": "pending-calibration-card",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/CommandCenterPanel.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 10,
+        "fail": 1
+      },
+      "appliedDiff": "diff --git a/src/components/CommandCenterPanel.ts b/src/components/CommandCenterPanel.ts\nindex 76f234f99..565ed560d 100644\n--- a/src/components/CommandCenterPanel.ts\n+++ b/src/components/CommandCenterPanel.ts\n@@ -625,7 +625,7 @@ export class CommandCenterPanel extends Panel {\n    */\n   private renderCalibrationReport(): string {\n     const card = buildCalibrationReportCard(getCalibrationStore().all());\n-    if (card.overall.resolvedTotal === 0) return '';\n+    if (card.overall.resolvedTotal === 0) return getCalibrationStore().all().length > 0 ? 'Unverified' : '';\n \n     const chip = (label: CalibrationReliabilityLabel): string => {\n       const color = CALIBRATION_TONE[label];\n",
+      "failures": [
+        {
+          "testNumber": 10,
+          "testName": "no resolved calibration history preserves the absent card",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    \n    'Unverified' !== ''",
+          "assertionLine": 256
+        }
+      ],
+      "sha256Before": "7a9d6b2c9859a4a78e4848c74825515572f39a014fa7c4bede00860fde361475",
+      "sha256Restored": "7a9d6b2c9859a4a78e4848c74825515572f39a014fa7c4bede00860fde361475",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/pending-calibration-card.log",
+      "logSha256": "e622dda64faf2c7aced84dba233d0ca24fc704fe08706e8c3487c495b8837b2a"
+    },
+    {
+      "id": "accidental-collapse",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/SituationPanel.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 10,
+        "fail": 1
+      },
+      "appliedDiff": "diff --git a/src/components/SituationPanel.ts b/src/components/SituationPanel.ts\nindex 88d40db6d..065f35edb 100644\n--- a/src/components/SituationPanel.ts\n+++ b/src/components/SituationPanel.ts\n@@ -142,6 +142,7 @@ export class SituationPanel extends Panel {\n  const card = target.closest<HTMLElement>('.sit-card');\n  const sitId = card?.dataset.sitId;\n  if (!sitId) return;\n+ if (target.closest('.forecast-unverified summary')) { this._expandedSitId = null; return; }\n  // Most-specific controls first \u2014 they previously stopped propagation to\n  // beat the header toggle; this ordering reproduces that precedence.\n  if (target.closest('.sit-map-btn')) {\n",
+      "failures": [
+        {
+          "testNumber": 6,
+          "testName": "scenario disclosure click does not collapse the card or dismiss its warning action",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    \n    null !== 'sit1'",
+          "assertionLine": 192
+        }
+      ],
+      "sha256Before": "11bb02d94a835d5bd7c92664685a396adc8e7e6f03208960639cc2bce39be9b8",
+      "sha256Restored": "11bb02d94a835d5bd7c92664685a396adc8e7e6f03208960639cc2bce39be9b8",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/scenario-interaction-proofs/accidental-collapse.log",
+      "logSha256": "24cc3e66691a95cfe4e745bd3475fa5dedcb4546281c2d790b2792fe3f86d20a"
+    },
+    {
+      "id": "accidental-dismiss",
+      "testedCommit": "99260927fa61c1d5d8843949d5f196596c17f295",
+      "file": "src/components/SituationPanel.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 10,
+        "fail": 1
+      },
+      "appliedDiff": "diff --git a/src/components/SituationPanel.ts b/src/components/SituationPanel.ts\nindex 88d40db6d..9ed414816 100644\n--- a/src/components/SituationPanel.ts\n+++ b/src/components/SituationPanel.ts\n@@ -142,6 +142,7 @@ export class SituationPanel extends Panel {\n  const card = target.closest<HTMLElement>('.sit-card');\n  const sitId = card?.dataset.sitId;\n  if (!sitId) return;\n+ if (target.closest('.forecast-unverified summary')) { situationEngine.getSituations().find(s => s.id === sitId)!.actions[0]!.dismissed = true; return; }\n  // Most-specific controls first \u2014 they previously stopped propagation to\n  // beat the header toggle; this ordering reproduces that precedence.\n  if (target.closest('.sit-map-btn')) {\n",
+      "failures": [
+        {
+          "testNumber": 6,
+          "testName": "scenario disclosure click does not collapse the card or dismiss its warning action",
+          "assertionOutput": "|-\n    Expected values to be strictly equal:\n    \n    true !== false",
+          "assertionLine": 193
+        }
+      ],
+      "sha256Before": "11bb02d94a835d5bd7c92664685a396adc8e7e6f03208960639cc2bce39be9b8",
+      "sha256Restored": "11bb02d94a835d5bd7c92664685a396adc8e7e6f03208960639cc2bce39be9b8",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/scenario-interaction-proofs/accidental-dismiss.log",
+      "logSha256": "75eba6a63cb389be144225f95d5f0f316deaf8a17a44388c36da23a365f2d25b"
+    },
+    {
+      "id": "preserve-scenario-escaping-bounded-diagnostic",
+      "testedCommit": "e95f91cb88dabfa811a6d7a17b8b23c68ec58f0c",
+      "file": "src/components/SituationPanel.ts",
+      "baseline": {
+        "exit": 0,
+        "pass": 11,
+        "fail": 0
+      },
+      "red": {
+        "exit": 1,
+        "pass": 10,
+        "fail": 1
+      },
+      "appliedDiff": "diff --git a/src/components/SituationPanel.ts b/src/components/SituationPanel.ts\nindex 88d40db6d..e45bb6bfc 100644\n--- a/src/components/SituationPanel.ts\n+++ b/src/components/SituationPanel.ts\n@@ -352,7 +352,7 @@ export class SituationPanel extends Panel {\n  el.className = 'sit-scenario';\n  el.innerHTML = `\n  <div class=\"sit-sc-header\">\n- <span class=\"sit-sc-label\">${this.esc(sc.label)}</span>\n+ <span class=\"sit-sc-label\">${sc.label}</span>\n  <span class=\"sit-sc-prob\" style=\"color:${SEVERITY_COLORS[sc.severity]}\">${Math.round(sc.probability * 100)}%</span>\n  <details class=\"forecast-unverified\"><summary>Unverified</summary><p>No matching baseline evidence.</p></details>\n  </div>\n",
+      "failures": [
+        {
+          "testNumber": 5,
+          "testName": "every scenario keeps its probability, warning, action, and escaping with its own disclosure",
+          "assertionOutput": "|-\n    untrusted markup remains text\n    \n    false !== true",
+          "assertionLine": 169
+        }
+      ],
+      "sha256Before": "11bb02d94a835d5bd7c92664685a396adc8e7e6f03208960639cc2bce39be9b8",
+      "sha256Restored": "11bb02d94a835d5bd7c92664685a396adc8e7e6f03208960639cc2bce39be9b8",
+      "restoredClean": true,
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/escaping-rerun/red.log",
+      "logSha256": "6cbdc7485cdba4c63dabbaeb99c32133dd0b8196236eb9f758e444c906f7ab02"
+    }
+  ],
+  "uncreditedAttempts": [
+    {
+      "id": "ambiguous-adjusted-width-anchor",
+      "applied": false,
+      "reason": "Runner refused anchor matching two places before writing; no suite run credited. Refined forecast-specific context subsequently produced valid detecting proof.",
+      "recordedOutput": "AssertionError [ERR_ASSERTION]: preserve-adjusted-width: mutation must match once\n2 !== 1",
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutation-run.log"
+    },
+    {
+      "id": "interrupted-scenario-escaping-diagnostic",
+      "applied": true,
+      "countAsDetectingProof": false,
+      "reason": "DOM-vs-null assertion diagnostic consumed CPU; test child terminated after54seconds. SIGTERM/ERR_TEST_FAILURE is not an assertion proof. Same-predicate boolean diagnostic supplement produced subsequent valid proof.",
+      "actualInterruptedCounts": {
+        "pass": 0,
+        "fail": 1,
+        "exit": 1
+      },
+      "testSignal": "SIGTERM",
+      "logPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/mutations/preserve-scenario-escaping.log",
+      "restoredClean": true
+    },
+    {
+      "id": "missing-output-directory",
+      "applied": false,
+      "countAsDetectingProof": false,
+      "reason": "Initial shell redirection failed before runner launch; directory created and command retried."
+    }
+  ],
+  "finalRestoration": {
+    "commit": "e95f91cb88dabfa811a6d7a17b8b23c68ec58f0c",
+    "baseline": {
+      "exit": 0,
+      "pass": 11,
+      "fail": 0
+    },
+    "restored": {
+      "exit": 0,
+      "pass": 11,
+      "fail": 0
+    },
+    "gitStatusPorcelain": "",
+    "restoredLogPath": "/Users/bradleybond/.codex/visualizations/2026/11/01/01a198d2-bc4c-72e3-b3e6-09b3625b5098/next-nov7/ux062/escaping-rerun/restored.log"
+  },
+  "limitations": [
+    "Actual renderer methods and production view-models execute in VM with Happy DOM; acquisition/bootstrap boundaries are replaced and unexpected reads fail.",
+    "Native Chromium activation/layout/accessibility-tree results are separate browser evidence; this certificate makes no native WebKit or VoiceOver claim.",
+    "Fallback invariance is not evidence of full beats/trails/current-comparator/freshness acceptance."
+  ]
+}

@@ -1,0 +1,1102 @@
+{
+  "status": "PASS",
+  "node": "v22.23.1",
+  "browser": "147.0.7727.15",
+  "revision": "99260927fa61c1d5d8843949d5f196596c17f295",
+  "sourceHashes": {
+    "src/components/CommandCenterPanel.ts": "7a9d6b2c9859a4a78e4848c74825515572f39a014fa7c4bede00860fde361475",
+    "src/components/AnalystHUD.ts": "960395225c1f3d165c690df3478e920b7ead50c7e80113f9997fe1dd5c8edc46",
+    "src/components/SituationPanel.ts": "11bb02d94a835d5bd7c92664685a396adc8e7e6f03208960639cc2bce39be9b8",
+    "src/services/cognition/calibration-report-view.ts": "2bfa6bc756442dc0b20f119df436e97f5dc4c912b014c1b36fecaee36c169c40",
+    "src/utils/sanitize.ts": "739dc902bd0348d6c1c47b71a46b6b85656b5db9fbfd6ab51f53cd8a1c393f8d",
+    "src/services/cognition/recalibration.ts": "626a48456457cfe57b8a293a887862cee424f93fedeb2e96d207a4f6ef4ec28b",
+    "src/utils/format-duration.ts": "3c5bee3e4504b46a9ebc1902bf950e98463ea661bbf298e9e32d133b7b2a4b96",
+    "src/utils/dom-utils.ts": "55e8d486bfd041c63145c40e58855167f917f2e8412a835ae86eb7bbded4f96a",
+    "src/components/agent-suggestions-view.ts": "2224576f00fcbcf3e08afb73b3b2879043b05a571da891a51d5c47879d89db58",
+    "src/components/forecast-provenance-view.ts": "56bb0c0c40d1517ef1ce033c90541c9aae776b51a1cdab0543f9c8d29700213c",
+    "src/styles/tokens.css": "8d1cd87d6198ba2a48e2b343c415a9c8161785f0918e9f188aa331a3d96744a3",
+    "src/styles/mode-states.css": "f7aef870586602becf41626610a3677e7f1cb9782a99c3c95cd76da890fc7119",
+    "src/styles/visual-semantics.css": "b0243fde97b6522bfcfbc583fd1e20907f0aa00a265bc8b38d3c53f975d34e27",
+    "src/styles/rtl-overrides.css": "d99d0b1be9d60baea4a4fa2da732da68429e1d41f649065c62bd416345a588f0",
+    "src/styles/panels.css": "361247a36d356c3534c435a1f4de7e3bbaa79ba8676ddaab5bdcadcbc5473598",
+    "src/styles/macos-native.css": "ea54598a001d8202500be256f5cbef6228a8d0586e00408eb8de5ba1f483771c",
+    "src/styles/gods-vision.css": "6b14dd347abe2f99646184869f58bacc2e4e7679752aa4fd6f61f2d7a2951df1",
+    "src/styles/alerts.css": "11cb87b93cd5ba9848f4b48a7d1e7bd4bf7054d352faf3e59735e79b9797fbbc",
+    "src/styles/eew-status-bar.css": "85e5958779e7754a576e111ebf88203ba203a86c387f71f6d3dfa30a05bd2be6",
+    "src/styles/correlation-banner.css": "35def960714ce346b6fc0d0c62318614144ee39dea810df5d151a5fd034886ea",
+    "src/styles/disclosure.css": "968cf5be79aabb65094d8b705afb57c7ebeb7c53bd4cc3754bb9f051d2fea500",
+    "src/styles/main.css": "23a3ef8386eddb52981a1ac47cf7bd782276fe4a18db8a743fa0a46943e0a699"
+  },
+  "productionModules": [
+    "src/components/CommandCenterPanel.ts",
+    "src/components/AnalystHUD.ts",
+    "src/components/SituationPanel.ts",
+    "src/services/cognition/calibration-report-view.ts",
+    "src/utils/sanitize.ts",
+    "src/services/cognition/recalibration.ts",
+    "src/utils/format-duration.ts",
+    "src/utils/dom-utils.ts",
+    "src/components/agent-suggestions-view.ts",
+    "src/components/forecast-provenance-view.ts"
+  ],
+  "stubExports": {
+    "src/services/mode-manager.ts": [
+      "isGhostMode"
+    ],
+    "src/services/alert-reactions.ts": [
+      "jumpToPanel",
+      "flashPanel"
+    ],
+    "src/services/analyst-loop.ts": [
+      "subscribeAnalyst",
+      "getAnalystSnapshot"
+    ],
+    "src/services/mode-forecast.ts": [
+      "subscribeModeAdvisory",
+      "getForecastSnapshot"
+    ],
+    "src/services/auto-brief.ts": [
+      "subscribeAutoBrief",
+      "getLatestBriefs",
+      "isAutoBriefEnabled",
+      "setAutoBriefEnabled"
+    ],
+    "src/services/hypothesis-feedback.ts": [
+      "thumbsUp",
+      "thumbsDown"
+    ],
+    "src/services/agent-suggestions.ts": [
+      "listAgentSuggestions",
+      "subscribeAgentSuggestions"
+    ],
+    "src/services/analyst-command-listener.ts": [
+      "confirmAgentSuggestion",
+      "rejectAgentSuggestion"
+    ],
+    "src/services/hypothesis-accuracy.ts": [
+      "getKindAccuracy"
+    ],
+    "src/services/hypothesis-threads.ts": [
+      "getThreadFor"
+    ],
+    "src/services/hypothesis-entities.ts": [
+      "entitiesForHypothesis",
+      "entitiesFromHypothesis",
+      "getHotEntities"
+    ],
+    "src/services/hypothesis-skeptic.ts": [
+      "getSkepticNote",
+      "isSkepticEnabled",
+      "setSkepticEnabled",
+      "subscribeSkeptic"
+    ],
+    "src/services/hypothesis-alternatives.ts": [
+      "getAlternativeView",
+      "isAlternativesEnabled",
+      "setAlternativesEnabled",
+      "subscribeAlternatives"
+    ],
+    "src/services/pressure-history.ts": [
+      "getPressureHistory",
+      "buildSparklinePath",
+      "subscribePressureHistory"
+    ],
+    "src/services/action-memory.ts": [
+      "getPlaybookFor",
+      "summarizePlaybook",
+      "recordAction",
+      "noteRecurrence"
+    ],
+    "src/services/question-suggester.ts": [
+      "suggestQuestionsRanked",
+      "getCachedAnswer",
+      "askQuestion",
+      "subscribeQuestionAnswered"
+    ],
+    "src/services/briefing-archive.ts": [
+      "getArchive",
+      "subscribeBriefingArchive"
+    ],
+    "src/services/hypothesis-projection.ts": [
+      "projectHypothesis",
+      "getCachedProjection",
+      "subscribeProjection"
+    ],
+    "src/services/hypothesis-export.ts": [
+      "exportHypothesisToClipboard"
+    ],
+    "src/services/llm-budget.ts": [
+      "getBudgetStatus",
+      "subscribeBudget",
+      "setCloudCap",
+      "resetBudget"
+    ],
+    "src/services/reasoning-debug.ts": [
+      "getTotalErrorCount",
+      "subscribeDebug",
+      "logDebug"
+    ],
+    "src/services/ai-flow-settings.ts": [
+      "isLlmEgressDisclosed",
+      "setLlmEgressDisclosed",
+      "isLocalModelOnly",
+      "setLocalModelOnly",
+      "subscribeLlmEgressChange"
+    ],
+    "src/services/snapshot-archive.ts": [
+      "getAllSnapshots",
+      "subscribeSnapshotArchive"
+    ],
+    "src/services/hypothesis-ensemble.ts": [
+      "runEnsemble",
+      "getCachedEnsemble",
+      "subscribeEnsemble"
+    ],
+    "src/services/intelligence/hypothesis-forecast.ts": [
+      "forecastAll"
+    ],
+    "src/services/cognition/superforecast-state.ts": [
+      "requestSuperforecast",
+      "getCachedSuperforecast"
+    ],
+    "src/services/cognition/evoi-surface.ts": [
+      "buildCheckNextItems"
+    ],
+    "src/services/cognition/episodic-memory.ts": [
+      "recall"
+    ],
+    "src/services/cognition/cognition-settings.ts": [
+      "subscribeCognitionFlags"
+    ],
+    "src/services/intelligence/predictive-crisis-index.ts": [
+      "getLatestPCI"
+    ],
+    "src/components/Panel.ts": [
+      "Panel"
+    ],
+    "src/services/situation-types.ts": [
+      "situationDisplayCenter"
+    ],
+    "src/services/situation-engine.ts": [
+      "situationEngine"
+    ],
+    "src/components/DisclosureContainer.ts": [
+      "attachDisclosureClickDelegation",
+      "renderDisclosureSwitcherHtml"
+    ],
+    "src/services/ui/progressive-disclosure.ts": [
+      "disclosureService"
+    ],
+    "src/services/diagnostics/diagnostics-state.ts": [
+      "getFeatureHealthRegistry",
+      "getFeedSentinels"
+    ],
+    "src/services/diagnostics/system-health.ts": [
+      "aggregateSystemHealth",
+      "contextFromSnapshots"
+    ],
+    "src/services/diagnostics/live-diagnostics-snapshot.ts": [
+      "getLiveDiagnosticsSnapshot"
+    ],
+    "src/services/diagnostics/sentinel-feed-audit.ts": [
+      "auditFeeds"
+    ],
+    "src/services/insights/insights-state.ts": [
+      "getActiveActionBrief",
+      "getActiveSituation",
+      "getPersonalImpactReport",
+      "getProviderRedundancyReport",
+      "getRecentEvents"
+    ],
+    "src/services/insights/ask-context.ts": [
+      "askLive"
+    ],
+    "src/components/ask-the-data-view.ts": [
+      "ASK_SUGGESTED_QUESTIONS",
+      "buildAskAnswerHtml",
+      "buildAskFollowupChipHtml"
+    ],
+    "src/services/intelligence/forecast-calibration-adapter.ts": [
+      "getCalibrationStore"
+    ],
+    "src/services/saved-places.ts": [
+      "getSavedPlaces"
+    ],
+    "src/services/intelligence/situation-store.ts": [
+      "getActive"
+    ],
+    "src/services/command-center/layout-persistence.ts": [
+      "defaultLayout",
+      "loadLayout",
+      "reconcileLayout",
+      "reorderLayout",
+      "saveLayout",
+      "clearLayout"
+    ],
+    "src/services/command-center/what-changed.ts": [
+      "formatDelta",
+      "getWhatChanged",
+      "recordSnapshot"
+    ],
+    "src/services/intelligence/rules-engine.ts": [
+      "loadRules"
+    ],
+    "src/services/intelligence/command-center-summary.ts": [
+      "buildCommandCenterSummary",
+      "buildSituationTimeline"
+    ],
+    "src/services/intelligence/panel-lens-adapter.ts": [
+      "mountLensBanner"
+    ],
+    "src/services/intelligence/lens-context.ts": [
+      "getLensContextService"
+    ],
+    "src/components/share-briefing.ts": [
+      "buildShareBriefing"
+    ],
+    "src/services/insights/share-packet.ts": [
+      "buildSharePacket",
+      "selectFormat"
+    ],
+    "src/services/survival-guide/guide-library.ts": [
+      "allGuides",
+      "getGuide"
+    ],
+    "src/services/survival-guide/checklist-store.ts": [
+      "getCheckedIds",
+      "subscribe"
+    ],
+    "src/services/survival-guide/readiness-score.ts": [
+      "computeOverallReadiness"
+    ],
+    "src/services/survival-guide/guide-links.ts": [
+      "guidesForPlaybookCategory"
+    ],
+    "src/services/algorithms/tunable-params-store.ts": [
+      "getTunedParam"
+    ]
+  },
+  "evidence": [
+    {
+      "label": "Preserved actual HUD numeric strings, adjusted bar, risk, statement and action controls",
+      "value": {
+        "feedback": 0,
+        "recordedActions": 0,
+        "visible": true,
+        "expandedProjection": [],
+        "expandedEnsemble": [],
+        "superforecastLines": [
+          "Superforecast 45% (partial LLM pipeline)",
+          "80% interval 30%–60% (n=57)",
+          "base-rate 30% (weight 1.0)",
+          "persona-analyst 55% (weight 1.0)",
+          "Estimate spread 25%"
+        ],
+        "raw": "84%",
+        "adjusted": "63% ↑ 24h",
+        "bar": "63%",
+        "risk": "critical",
+        "statement": "Keep the warning visible",
+        "actions": [
+          "thumbs-up",
+          "thumbs-down",
+          "outcome-confirmed",
+          "outcome-wrong",
+          "simulate",
+          "ensemble",
+          "superforecast",
+          "copy"
+        ]
+      }
+    },
+    {
+      "label": "HUD disclosure 0: actual Enter opens/closes; explanation exposed to accessibility tree",
+      "explanation": "Baseline skill is unverified for this displayed estimate."
+    },
+    {
+      "label": "HUD disclosure 0: actual Space opens/closes; explanation exposed to accessibility tree",
+      "explanation": "Baseline skill is unverified for this displayed estimate."
+    },
+    {
+      "label": "HUD disclosure 1: actual Enter opens/closes; explanation exposed to accessibility tree",
+      "explanation": "No exact matching baseline evaluation for this adjusted forecast."
+    },
+    {
+      "label": "HUD disclosure 1: actual Space opens/closes; explanation exposed to accessibility tree",
+      "explanation": "No exact matching baseline evaluation for this adjusted forecast."
+    },
+    {
+      "label": "HUD disclosure 2: actual Enter opens/closes; explanation exposed to accessibility tree",
+      "explanation": "No exact recorded identity for this displayed result."
+    },
+    {
+      "label": "HUD disclosure 2: actual Space opens/closes; explanation exposed to accessibility tree",
+      "explanation": "No exact recorded identity for this displayed result."
+    },
+    {
+      "label": "Keyboard focus indicator is visible",
+      "focusStyle": {
+        "outlineStyle": "solid",
+        "outlineWidth": "2px",
+        "outlineColor": "rgb(255, 255, 255)"
+      }
+    },
+    {
+      "label": "Real Tab and reverse Tab move between raw and adjusted summaries"
+    },
+    {
+      "label": "Real HUD focus trap reverse-wraps from root to last action, forward-wraps to first header control"
+    },
+    {
+      "label": "Escape from open summary closes actual HUD and restores opener focus"
+    },
+    {
+      "label": "Scenario 0: actual Enter and Space open/close"
+    },
+    {
+      "label": "Scenario 1: actual Enter and Space open/close"
+    },
+    {
+      "label": "Real scenario bars, urgent action and historical calibration retained",
+      "note": "Baseline comparison: Unverified. This summary combines historical forecasts and does not verify individual forecast skill."
+    },
+    {
+      "label": "Existing delegated Useful action still dispatches once"
+    },
+    {
+      "label": "Actual production CSS wrapping at 1280px",
+      "hud": [
+        {
+          "left": 356,
+          "right": 927,
+          "width": 571,
+          "scrollWidth": 571,
+          "clientWidth": 571,
+          "explanationLeft": 356,
+          "explanationRight": 927
+        },
+        {
+          "left": 356,
+          "right": 927,
+          "width": 571,
+          "scrollWidth": 571,
+          "clientWidth": 571,
+          "explanationLeft": 356,
+          "explanationRight": 927
+        },
+        {
+          "left": 366,
+          "right": 927,
+          "width": 561,
+          "scrollWidth": 561,
+          "clientWidth": 561,
+          "explanationLeft": 366,
+          "explanationRight": 927
+        }
+      ],
+      "scenarios": [
+        {
+          "left": 36,
+          "right": 644,
+          "scrollWidth": 608,
+          "clientWidth": 608
+        },
+        {
+          "left": 36,
+          "right": 644,
+          "scrollWidth": 608,
+          "clientWidth": 608
+        }
+      ]
+    },
+    {
+      "label": "Actual production CSS wrapping at 640px",
+      "hud": [
+        {
+          "left": 61.59375,
+          "right": 581.390625,
+          "width": 519.796875,
+          "scrollWidth": 520,
+          "clientWidth": 520,
+          "explanationLeft": 61.59375,
+          "explanationRight": 581.390625
+        },
+        {
+          "left": 61.59375,
+          "right": 581.390625,
+          "width": 519.796875,
+          "scrollWidth": 520,
+          "clientWidth": 520,
+          "explanationLeft": 61.59375,
+          "explanationRight": 581.390625
+        },
+        {
+          "left": 71.59375,
+          "right": 581.390625,
+          "width": 509.796875,
+          "scrollWidth": 510,
+          "clientWidth": 510,
+          "explanationLeft": 71.59375,
+          "explanationRight": 581.390625
+        }
+      ],
+      "scenarios": [
+        {
+          "left": 36,
+          "right": 604,
+          "scrollWidth": 568,
+          "clientWidth": 568
+        },
+        {
+          "left": 36,
+          "right": 604,
+          "scrollWidth": 568,
+          "clientWidth": 568
+        }
+      ]
+    },
+    {
+      "label": "Actual production CSS wrapping at 375px",
+      "hud": [
+        {
+          "left": 51,
+          "right": 327,
+          "width": 276,
+          "scrollWidth": 276,
+          "clientWidth": 276,
+          "explanationLeft": 51,
+          "explanationRight": 327
+        },
+        {
+          "left": 51,
+          "right": 327,
+          "width": 276,
+          "scrollWidth": 276,
+          "clientWidth": 276,
+          "explanationLeft": 51,
+          "explanationRight": 327
+        },
+        {
+          "left": 61,
+          "right": 327,
+          "width": 266,
+          "scrollWidth": 266,
+          "clientWidth": 266,
+          "explanationLeft": 61,
+          "explanationRight": 327
+        }
+      ],
+      "scenarios": [
+        {
+          "left": 36,
+          "right": 339,
+          "scrollWidth": 303,
+          "clientWidth": 303
+        },
+        {
+          "left": 36,
+          "right": 339,
+          "scrollWidth": 303,
+          "clientWidth": 303
+        }
+      ]
+    },
+    {
+      "label": "Computed new-label/explanation text contrast with ancestor alpha composition",
+      "styles": [
+        {
+          "text": "Unverified",
+          "color": "rgb(204, 204, 204)",
+          "fontSize": "11px",
+          "ancestors": [
+            {
+              "tag": "SUMMARY",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DETAILS",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(20, 20, 20)"
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 10, 10)"
+            },
+            {
+              "tag": "HTML",
+              "background": "rgba(0, 0, 0, 0)"
+            }
+          ]
+        },
+        {
+          "text": "No matching baseline evidence.",
+          "color": "rgb(204, 204, 204)",
+          "fontSize": "11px",
+          "ancestors": [
+            {
+              "tag": "P",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DETAILS",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(20, 20, 20)"
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 10, 10)"
+            },
+            {
+              "tag": "HTML",
+              "background": "rgba(0, 0, 0, 0)"
+            }
+          ]
+        },
+        {
+          "text": "Unverified",
+          "color": "rgb(204, 204, 204)",
+          "fontSize": "11px",
+          "ancestors": [
+            {
+              "tag": "SUMMARY",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DETAILS",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(20, 20, 20)"
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 10, 10)"
+            },
+            {
+              "tag": "HTML",
+              "background": "rgba(0, 0, 0, 0)"
+            }
+          ]
+        },
+        {
+          "text": "No matching baseline evidence.",
+          "color": "rgb(204, 204, 204)",
+          "fontSize": "11px",
+          "ancestors": [
+            {
+              "tag": "P",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DETAILS",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(20, 20, 20)"
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 10, 10)"
+            },
+            {
+              "tag": "HTML",
+              "background": "rgba(0, 0, 0, 0)"
+            }
+          ]
+        },
+        {
+          "text": "Baseline comparison: Unverified. This summary combines historical forecasts and does not verify individual forecast skill.",
+          "color": "rgb(204, 204, 204)",
+          "fontSize": "11px",
+          "ancestors": [
+            {
+              "tag": "P",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(20, 20, 20)"
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 10, 10)"
+            },
+            {
+              "tag": "HTML",
+              "background": "rgba(0, 0, 0, 0)"
+            }
+          ]
+        },
+        {
+          "text": "Unverified",
+          "color": "rgb(204, 204, 204)",
+          "fontSize": "11px",
+          "ancestors": [
+            {
+              "tag": "SUMMARY",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DETAILS",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(255, 255, 255, 0.03)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(14, 18, 26, 0.98)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0.55)"
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 10, 10)"
+            },
+            {
+              "tag": "HTML",
+              "background": "rgba(0, 0, 0, 0)"
+            }
+          ]
+        },
+        {
+          "text": "Baseline skill is unverified for this displayed estimate.",
+          "color": "rgb(204, 204, 204)",
+          "fontSize": "11px",
+          "ancestors": [
+            {
+              "tag": "P",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DETAILS",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(255, 255, 255, 0.03)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(14, 18, 26, 0.98)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0.55)"
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 10, 10)"
+            },
+            {
+              "tag": "HTML",
+              "background": "rgba(0, 0, 0, 0)"
+            }
+          ]
+        },
+        {
+          "text": "Unverified",
+          "color": "rgb(204, 204, 204)",
+          "fontSize": "11px",
+          "ancestors": [
+            {
+              "tag": "SUMMARY",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DETAILS",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(255, 255, 255, 0.03)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(14, 18, 26, 0.98)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0.55)"
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 10, 10)"
+            },
+            {
+              "tag": "HTML",
+              "background": "rgba(0, 0, 0, 0)"
+            }
+          ]
+        },
+        {
+          "text": "No exact matching baseline evaluation for this adjusted forecast.",
+          "color": "rgb(204, 204, 204)",
+          "fontSize": "11px",
+          "ancestors": [
+            {
+              "tag": "P",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DETAILS",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(255, 255, 255, 0.03)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(14, 18, 26, 0.98)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0.55)"
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 10, 10)"
+            },
+            {
+              "tag": "HTML",
+              "background": "rgba(0, 0, 0, 0)"
+            }
+          ]
+        },
+        {
+          "text": "Unverified",
+          "color": "rgb(204, 204, 204)",
+          "fontSize": "11px",
+          "ancestors": [
+            {
+              "tag": "SUMMARY",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DETAILS",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(255, 255, 255, 0.03)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(14, 18, 26, 0.98)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0.55)"
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 10, 10)"
+            },
+            {
+              "tag": "HTML",
+              "background": "rgba(0, 0, 0, 0)"
+            }
+          ]
+        },
+        {
+          "text": "No exact recorded identity for this displayed result.",
+          "color": "rgb(204, 204, 204)",
+          "fontSize": "11px",
+          "ancestors": [
+            {
+              "tag": "P",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DETAILS",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(255, 255, 255, 0.03)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(14, 18, 26, 0.98)"
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0.55)"
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 10, 10)"
+            },
+            {
+              "tag": "HTML",
+              "background": "rgba(0, 0, 0, 0)"
+            }
+          ]
+        }
+      ],
+      "contrasts": [
+        {
+          "text": "Unverified",
+          "ratio": 11.471578793925827,
+          "foreground": [
+            204,
+            204,
+            204
+          ],
+          "background": [
+            20,
+            20,
+            20
+          ]
+        },
+        {
+          "text": "No matching baseline evidence.",
+          "ratio": 11.471578793925827,
+          "foreground": [
+            204,
+            204,
+            204
+          ],
+          "background": [
+            20,
+            20,
+            20
+          ]
+        },
+        {
+          "text": "Unverified",
+          "ratio": 11.471578793925827,
+          "foreground": [
+            204,
+            204,
+            204
+          ],
+          "background": [
+            20,
+            20,
+            20
+          ]
+        },
+        {
+          "text": "No matching baseline evidence.",
+          "ratio": 11.471578793925827,
+          "foreground": [
+            204,
+            204,
+            204
+          ],
+          "background": [
+            20,
+            20,
+            20
+          ]
+        },
+        {
+          "text": "Baseline comparison: Unverified. This summary combines historical forecasts and does not verify individual forecast skill.",
+          "ratio": 11.471578793925827,
+          "foreground": [
+            204,
+            204,
+            204
+          ],
+          "background": [
+            20,
+            20,
+            20
+          ]
+        },
+        {
+          "text": "Unverified",
+          "ratio": 10.978587554606706,
+          "foreground": [
+            204,
+            204,
+            204
+          ],
+          "background": [
+            21.045699999999997,
+            24.8481,
+            32.4529
+          ]
+        },
+        {
+          "text": "Baseline skill is unverified for this displayed estimate.",
+          "ratio": 10.978587554606706,
+          "foreground": [
+            204,
+            204,
+            204
+          ],
+          "background": [
+            21.045699999999997,
+            24.8481,
+            32.4529
+          ]
+        },
+        {
+          "text": "Unverified",
+          "ratio": 10.978587554606706,
+          "foreground": [
+            204,
+            204,
+            204
+          ],
+          "background": [
+            21.045699999999997,
+            24.8481,
+            32.4529
+          ]
+        },
+        {
+          "text": "No exact matching baseline evaluation for this adjusted forecast.",
+          "ratio": 10.978587554606706,
+          "foreground": [
+            204,
+            204,
+            204
+          ],
+          "background": [
+            21.045699999999997,
+            24.8481,
+            32.4529
+          ]
+        },
+        {
+          "text": "Unverified",
+          "ratio": 10.978587554606706,
+          "foreground": [
+            204,
+            204,
+            204
+          ],
+          "background": [
+            21.045699999999997,
+            24.8481,
+            32.4529
+          ]
+        },
+        {
+          "text": "No exact recorded identity for this displayed result.",
+          "ratio": 10.978587554606706,
+          "foreground": [
+            204,
+            204,
+            204
+          ],
+          "background": [
+            21.045699999999997,
+            24.8481,
+            32.4529
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "network": [],
+  "limitations": [
+    "Actual bundled production renderer methods, HUD constructor/delegated clicks/keyboard and complete main.css; bounded fixture shell composes selected methods rather than full application startup.",
+    "HUD initial visibility state is fixture-controlled; actual hide and focus restore tested. No mount subscriptions, backend, providers, network or native runtime exercised.",
+    "No installed WKWebView, full dashboard layout, screen-reader speech, automated global accessibility audit or background update persistence claim."
+  ]
+}

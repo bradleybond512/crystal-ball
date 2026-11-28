@@ -1,0 +1,221 @@
+name: Dependency coverage
+
+on:
+  pull_request:
+    branches: [main]
+  merge_group:
+  schedule:
+    - cron: '23 3 * * 3'
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-coverage-${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'sweep' || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    outputs:
+      graphs: ${{ steps.plan.outputs.graphs }}
+      policy_sha: ${{ steps.plan.outputs.policy_sha }}
+      execution_sha: ${{ steps.plan.outputs.execution_sha }}
+      policy_mode: ${{ steps.plan.outputs.policy_mode }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Resolve policy and plan coverage
+        id: plan
+        env:
+          EXECUTION_SHA: ${{ github.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+        run: |
+          if [[ ! "$EXECUTION_SHA" =~ ^[a-f0-9]{40}$ || ! "$BASE_SHA" =~ ^[a-f0-9]{40}$ ]]; then
+            echo 'dependency identities require exact commit SHAs' >&2
+            exit 1
+          fi
+          git cat-file -e "$EXECUTION_SHA^{commit}"
+          git cat-file -e "$BASE_SHA^{commit}"
+          git fetch origin main --quiet
+          main_sha=$(git rev-parse origin/main)
+          if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
+            main_sha=$EXECUTION_SHA
+          fi
+          [[ "$main_sha" =~ ^[a-f0-9]{40}$ ]]
+          git show "$main_sha:scripts/targeted-tests.mjs" > "$RUNNER_TEMP/main-selector.mjs"
+          policy_sha=$main_sha
+          policy_mode=trusted
+          if ! git cat-file -e "$main_sha:scripts/dependency-test-runner.mjs" 2>/dev/null; then
+            if grep -q 'DEPENDENCY_POLICY_VERSION' "$RUNNER_TEMP/main-selector.mjs"; then
+              echo 'trusted dependency runner is missing' >&2
+              exit 1
+            fi
+            if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
+              echo 'scheduled coverage requires trusted policy' >&2
+              exit 1
+            fi
+            case "$GITHUB_EVENT_NAME" in
+              pull_request|merge_group|workflow_dispatch) ;;
+              *) echo 'unrecognized preview event' >&2; exit 1 ;;
+            esac
+            policy_sha=$EXECUTION_SHA
+            policy_mode=preview
+          fi
+          export POLICY_SHA=$policy_sha POLICY_MODE=$policy_mode
+          mkdir -p "$RUNNER_TEMP/dependency-policy"
+          for file in scripts/targeted-tests.mjs scripts/dependency-test-runner.mjs; do
+            entry=$(git ls-tree "$policy_sha" -- "$file")
+            if [[ "$entry" != '100644 blob '* && "$entry" != '100755 blob '* ]]; then
+              echo 'dependency policy must be a regular Git blob' >&2
+              exit 1
+            fi
+            git show "$policy_sha:$file" > "$RUNNER_TEMP/dependency-policy/${file##*/}"
+          done
+          echo "Dependency policy mode: $policy_mode; policy: $policy_sha; execution: $EXECUTION_SHA"
+          node "$RUNNER_TEMP/dependency-policy/dependency-test-runner.mjs" plan \
+            --policy-sha "$policy_sha" --execution-sha "$EXECUTION_SHA" \
+            --base-sha "$BASE_SHA" --mode "$policy_mode" --event "$GITHUB_EVENT_NAME" \
+            --out "$RUNNER_TEMP/dependency-plan.json"
+          node --input-type=module <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const plan = JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/dependency-plan.json`, 'utf8'));
+          const allowed = new Set(['cb-control', 'codex', 'fixtures', 'marketing', 'mcp', 'root', 'scripts']);
+          if (!Array.isArray(plan.graphs) || plan.graphs.length > 7 || new Set(plan.graphs).size !== plan.graphs.length || plan.graphs.some(graph => !allowed.has(graph))
+              || plan.policySha !== process.env.POLICY_SHA || plan.executionSha !== process.env.EXECUTION_SHA || plan.mode !== process.env.POLICY_MODE) throw Error('Invalid dependency plan output');
+          appendFileSync(process.env.GITHUB_OUTPUT, `graphs=${JSON.stringify(plan.graphs)}\npolicy_sha=${plan.policySha}\nexecution_sha=${plan.executionSha}\npolicy_mode=${plan.mode}\n`);
+          NODE
+      - name: Preserve the planned obligations
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: dependency-plan
+          path: ${{ runner.temp }}/dependency-plan.json
+          if-no-files-found: error
+          retention-days: 7
+
+  execute:
+    needs: plan
+    if: needs.plan.outputs.graphs != '[]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 19
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        graph: ${{ fromJSON(needs.plan.outputs.graphs) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.plan.outputs.execution_sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: dependency-plan
+          path: ${{ runner.temp }}
+      - name: Restore the pinned policy
+        env:
+          POLICY_SHA: ${{ needs.plan.outputs.policy_sha }}
+        run: |
+          [[ "$POLICY_SHA" =~ ^[a-f0-9]{40}$ ]]
+          mkdir -p "$RUNNER_TEMP/dependency-policy"
+          for file in scripts/targeted-tests.mjs scripts/dependency-test-runner.mjs; do
+            entry=$(git ls-tree "$POLICY_SHA" -- "$file")
+            if [[ "$entry" != '100644 blob '* && "$entry" != '100755 blob '* ]]; then
+              echo 'dependency policy must be a regular Git blob' >&2
+              exit 1
+            fi
+            git show "$POLICY_SHA:$file" > "$RUNNER_TEMP/dependency-policy/${file##*/}"
+          done
+      - name: Verify native build prerequisites
+        if: matrix.graph == 'cb-control'
+        run: |
+          python3 --version
+          make --version
+          g++ --version
+          printf '#include <pty.h>\nint main(){return 0;}\n' > "$RUNNER_TEMP/pty-headers.cpp"
+          g++ -std=c++20 "$RUNNER_TEMP/pty-headers.cpp" -lutil -o "$RUNNER_TEMP/pty-headers"
+      - name: Execute the selected graph
+        env:
+          DEPENDENCY_GRAPH: ${{ matrix.graph }}
+        run: |
+          node "$RUNNER_TEMP/dependency-policy/dependency-test-runner.mjs" run \
+            --plan "$RUNNER_TEMP/dependency-plan.json" --graph "$DEPENDENCY_GRAPH" \
+            --out "$RUNNER_TEMP/dependency-results"
+      - name: Preserve graph receipts and bounded logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: dependency-results-${{ matrix.graph }}
+          path: ${{ runner.temp }}/dependency-results
+          if-no-files-found: error
+          retention-days: 7
+
+  aggregate:
+    needs: [plan, execute]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - name: Require a successful plan
+        env:
+          PLAN_RESULT: ${{ needs.plan.result }}
+        run: test "$PLAN_RESULT" = success
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.plan.outputs.execution_sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: dependency-plan
+          path: ${{ runner.temp }}
+      - name: Download graph evidence
+        if: needs.plan.outputs.graphs != '[]'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          pattern: dependency-results-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/dependency-results
+      - name: Restore the pinned reporting policy
+        env:
+          POLICY_SHA: ${{ needs.plan.outputs.policy_sha }}
+        run: |
+          [[ "$POLICY_SHA" =~ ^[a-f0-9]{40}$ ]]
+          mkdir -p "$RUNNER_TEMP/dependency-policy"
+          for file in scripts/targeted-tests.mjs scripts/dependency-test-runner.mjs; do
+            entry=$(git ls-tree "$POLICY_SHA" -- "$file")
+            if [[ "$entry" != '100644 blob '* && "$entry" != '100755 blob '* ]]; then
+              echo 'dependency policy must be a regular Git blob' >&2
+              exit 1
+            fi
+            git show "$POLICY_SHA:$file" > "$RUNNER_TEMP/dependency-policy/${file##*/}"
+          done
+      - name: Verify every planned result
+        env:
+          EXECUTION_RESULT: ${{ needs.execute.result }}
+          PLANNED_GRAPHS: ${{ needs.plan.outputs.graphs }}
+        run: |
+          node "$RUNNER_TEMP/dependency-policy/dependency-test-runner.mjs" aggregate \
+            --plan "$RUNNER_TEMP/dependency-plan.json" --results "$RUNNER_TEMP/dependency-results"
+          if [[ "$PLANNED_GRAPHS" != '[]' && "$EXECUTION_RESULT" != success ]]; then
+            echo 'A dependency graph job did not complete successfully.' >&2
+            exit 1
+          fi

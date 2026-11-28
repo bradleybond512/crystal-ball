@@ -1394,6 +1394,11 @@ exists; inspect its current scope before proposing another mechanism.
 
 ### UX-069 — Align auto-PR messaging with the actual publication path
 
+Status: MONITOR
+Evidence: [Candidate #1925](https://github.com/bradleybond512/crystal-ball/pull/1925); [reviewed publication notices](validation/UX-069-PUBLICATION-NOTICES.md); [November 28 reconciliation](validation/UX-069-SAFE-MERGE-RECONCILIATION.md).
+Exit condition: Observe the approved workflow on an authorized hosted push, verifying accurate notice, preserved PR body/readiness, auto-merge off and unchanged required checks; mocked API tests do not complete hosted publication acceptance.
+Review after: 2026-11-29
+
 Priority: C
 Dependencies: none
 
@@ -1651,7 +1656,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-066 | Dependabot backlog in reviewed batches | MONITOR | [Merged #1902](https://github.com/bradleybond512/crystal-ball/pull/1902) at `6869676878`; all 16 latest hosted workflows passed before protected closeout. [Evidence](validation/UX-066-SECURITY-INTEGRATION.md). Full backlog remains open; the separately owned dependency workflow stays untouched. Public releases, deployment and cleanup remain held. |
 | UX-067 | Green release-integrity signal on main | WAITING | |
 | UX-068 | Inventory branches and worktrees before cleanup | NOT STARTED — HIGH ASSURANCE | |
-| UX-069 | Auto-PR workflow warning | NOT STARTED | |
+| UX-069 | Auto-PR workflow warning | MONITOR | [Candidate #1925](https://github.com/bradleybond512/crystal-ball/pull/1925); [November 28 reconciliation](validation/UX-069-SAFE-MERGE-RECONCILIATION.md). Explicit publication notices, no automatic creation/arming and retained sensitive disablement. Fresh reviews, hosted publication acceptance and protected merge remain open; repository settings and permissions unchanged. |
 | UX-070 | Design dependency and scheduled test coverage | MONITOR — HIGH ASSURANCE | [Candidate #1903](https://github.com/bradleybond512/crystal-ball/pull/1903); [approved design](plans/2026-11-13-ux070-dependency-test-coverage.md) and [local reconciliation evidence](validation/UX-070-DEPENDENCY-COVERAGE.md). Bounded policy and runtime contracts validated locally; complete hosted graph receipts, mixed-selection execution and full coverage acceptance remain open. Review after 2026-11-29; fresh reviews and protected CI remain required. |
 | UX-071 | Design safe Rust tests and Clippy CI | MONITOR — HIGH ASSURANCE | [Candidate #1904](https://github.com/bradleybond512/crystal-ball/pull/1904); [November 28 reconciliation](validation/UX-071-SAFE-MERGE-RECONCILIATION.md). Reviewed native code preserved on actual audit-repaired main, fresh reviews and six local suites/full gate passed. Current hosted native acceptance, protected merge and installed acceptance remain pending; safe merging and Mac installation authorized. |
 | UX-072 | Local user-data backup and restore | NOT STARTED — HIGH ASSURANCE | |

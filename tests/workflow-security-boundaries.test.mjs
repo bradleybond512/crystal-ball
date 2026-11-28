@@ -37,8 +37,13 @@ test('every checkout discards its authentication while retaining narrowly scoped
       }
     }
   }
-  assert.equal(count, 39, 'all 34 existing checkouts, three dependency and two native coverage jobs are covered');
+  assert.equal(count, 38, 'all current dependency and native checkouts remain covered after the notice checkout is removed');
   assert.deepEqual(Object.keys(workflow('dependency-coverage.yml').jobs), ['plan', 'execute', 'aggregate']);
+  const agent = workflow('auto-merge-agent-branches.yml');
+  assert.ok(agent.jobs['auto-pr'].steps.every(step => !step.uses?.startsWith('actions/checkout@')), 'publication notices need no source checkout');
+  const sensitiveCheckouts = agent.jobs['auto-merge'].steps.filter(step => step.uses?.startsWith('actions/checkout@'));
+  assert.equal(sensitiveCheckouts.length, 1, 'sensitive-file inspection retains its source checkout');
+  assert.equal(sensitiveCheckouts[0].with['persist-credentials'], false);
   const wf = workflow('build-desktop.yml');
   assert.deepEqual(wf.jobs['publish-release'].permissions, { contents: 'write', 'id-token': 'write', attestations: 'write' });
   assert.deepEqual(wf.jobs['publish-release'].environment, { name: 'release' });

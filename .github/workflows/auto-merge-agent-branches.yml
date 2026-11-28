@@ -1,4 +1,4 @@
-name: Auto-PR for AI agent branches
+name: Agent publication notices and merge safety
 
 on:
   push:
@@ -16,130 +16,93 @@ on:
 permissions:
   contents: read
 
-# R4-LOW-002: values derived from the push (branch name, step outputs) are
-# passed to scripts only through env: and read as "$VAR" / process.env.VAR.
-# A branch name containing $(...) or a quote can then never become code.
+# Push values and step outputs remain data, never executable script source.
 jobs:
   auto-pr:
-    name: Create or update PR
+    name: Report PR and apply branch labels
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
+    outputs:
+      pr_number: ${{ steps.create-pr.outputs.pr_number }}
+      pr_node_id: ${{ steps.create-pr.outputs.pr_node_id }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-
-      - name: Generate PR metadata
-        id: meta
-        shell: bash
-        env:
-          BRANCH: ${{ github.ref_name }}
-        run: |
-          # Cap inside git, not with `| head -20`. Under this step's
-          # `-e -o pipefail`, head closes the pipe once it has 20 lines; if
-          # git log is still writing it dies of SIGPIPE (141), pipefail
-          # promotes that to the pipeline status and -e aborts the step.
-          # Only reachable past 20 commits (observed on a 29-commit branch).
-          COMMITS=$(git log origin/main..HEAD --oneline --no-merges --max-count=20)
-          FILE_COUNT=$(git diff --name-only origin/main...HEAD | wc -l | tr -d ' ')
-          TITLE=${BRANCH##*/}
-          TITLE=${TITLE//-/ }
-          {
-            echo "title=auto: $TITLE"
-            echo "branch=$BRANCH"
-            echo "file_count=$FILE_COUNT"
-          } >> "$GITHUB_OUTPUT"
-          cat > /tmp/pr-body.md << PREOF
-          ## Auto-generated PR from \`$BRANCH\`
-
-          **Files changed:** $FILE_COUNT
-
-          ### Commits
-          \`\`\`
-          $COMMITS
-          \`\`\`
-
-          ---
-          > This PR was created automatically when the branch was pushed. Review and merge when ready, or close if superseded.
-          PREOF
-
-      - name: Create or update pull request
+      - name: Report explicit pull request publication
         id: create-pr
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         env:
-          BRANCH: ${{ steps.meta.outputs.branch }}
-          TITLE: ${{ steps.meta.outputs.title }}
+          BRANCH: ${{ github.ref_name }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const fs = require('fs');
-            const body = fs.readFileSync('/tmp/pr-body.md', 'utf8');
             const branch = process.env.BRANCH;
-            const title = process.env.TITLE;
-
-            const { data: prs } = await github.rest.pulls.list({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              head: `${context.repo.owner}:${branch}`,
-              state: 'open'
-            });
-
-            if (prs.length > 0) {
-              // Don't clobber the body on existing PRs. The cross-agent
-              // gate no longer reads the body (it verifies the SHA-pinned
-              // verdict commit), but the body still carries hand-written
-              // context, task claims, and review notes. Keep the auto-PR
-              // for creation only; let humans / agents own the text after.
-              console.log(`PR #${prs[0].number} already exists; leaving body untouched.`);
-              core.setOutput('pr_number', String(prs[0].number));
+            const repository = `${context.repo.owner}/${context.repo.repo}`.toLowerCase();
+            const sameRepository = value => typeof value === 'string' && value.toLowerCase() === repository;
+            const validSha = value => typeof value === 'string' && /^[a-f0-9]{40}$/.test(value);
+            if (!branch || branch.length > 1024 || /[\0\r\n]/.test(branch) || !validSha(context.sha)) {
+              core.setFailed('PR lookup has invalid push metadata.');
               return;
             }
+            let response;
             try {
-              const { data: pr } = await github.rest.pulls.create({
+              response = await github.rest.pulls.list({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                title: title,
-                head: branch,
+                head: `${context.repo.owner}:${branch}`,
                 base: 'main',
-                body: body,
-                draft: false
+                state: 'open',
+                per_page: 2,
+                page: 1
               });
-              console.log(`Created PR #${pr.number}: ${pr.html_url}`);
-              core.setOutput('pr_number', String(pr.number));
-            } catch (err) {
-              const msg = String((err && err.message) || err);
-              // 403 "GitHub Actions is not permitted to create or approve pull
-              // requests" => the repo/org setting "Allow GitHub Actions to
-              // create and approve pull requests" is off. Nothing this workflow
-              // can do about it; the PR is created by the agent/harness anyway.
-              // Warn instead of failing so the check stays green.
-              if (/not permitted to create|not accessible by integration|403/i.test(msg)) {
-                core.warning(
-                  `Could not auto-create a PR for ${branch}: ${msg}. ` +
-                  `Enable Settings → Actions → General → "Allow GitHub Actions to ` +
-                  `create and approve pull requests" to use auto-PR creation.`
-                );
-                return;
-              }
-              throw err;
+            } catch (error) {
+              const status = Number.isInteger(error?.status) && error.status >= 100 && error.status <= 599 ? `HTTP ${error.status}` : 'unknown status';
+              core.setFailed(`PR lookup failed (${status}).`);
+              return;
+            }
+            const prs = response?.data;
+            const link = response?.headers?.link;
+            if (!Array.isArray(prs) || prs.length > 1 || (link !== undefined && (typeof link !== 'string' || /rel\s*=\s*"?next\b/i.test(link)))) {
+              core.setFailed('PR lookup returned malformed, ambiguous or truncated results.');
+              return;
+            }
+            if (prs.length === 0) {
+              core.notice('No matching open PR was found at this check. Publish a draft PR explicitly after approval.');
+              return;
+            }
+            const pr = prs[0];
+            if (!pr || !Number.isSafeInteger(pr.number) || pr.number < 1 || typeof pr.node_id !== 'string' || !/^[A-Za-z0-9_+/=-]{1,256}$/.test(pr.node_id)
+              || pr.state !== 'open' || typeof pr.draft !== 'boolean' || pr.head?.ref !== branch || !validSha(pr.head?.sha)
+              || pr.base?.ref !== 'main' || !sameRepository(pr.head?.repo?.full_name) || !sameRepository(pr.base?.repo?.full_name)) {
+              core.setFailed('PR lookup returned a malformed or mismatched pull request.');
+              return;
+            }
+            core.setOutput('pr_number', String(pr.number));
+            core.setOutput('pr_node_id', pr.node_id);
+            const readiness = pr.draft ? 'draft' : 'ready';
+            if (pr.head.sha === context.sha) {
+              core.info(`Existing ${readiness} PR #${pr.number} contains this push; body and readiness are unchanged.`);
+            } else {
+              core.warning(`Existing ${readiness} PR #${pr.number} has a head SHA that does not match this push; body and readiness are unchanged.`);
             }
 
       - name: Label PR by branch prefix
         if: steps.create-pr.outputs.pr_number != ''
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         env:
-          BRANCH: ${{ steps.meta.outputs.branch }}
+          BRANCH: ${{ github.ref_name }}
           PR_NUMBER: ${{ steps.create-pr.outputs.pr_number }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const branch = process.env.BRANCH;
-            const prNumber = Number.parseInt(process.env.PR_NUMBER, 10);
+            const prNumber = Number(process.env.PR_NUMBER);
+            if (!branch || !/^[1-9][0-9]*$/.test(process.env.PR_NUMBER ?? '') || !Number.isSafeInteger(prNumber)) {
+              core.setFailed('PR labeling has invalid pull request metadata.');
+              return;
+            }
             const labelMap = {
-              'claude/':  ['ai-generated', 'claude'],
+              'claude/': ['ai-generated', 'claude'],
               'codex/': ['ai-generated', 'codex'],
               'copilot/': ['ai-generated', 'copilot'],
               'feat/': ['feature'],
@@ -149,44 +112,36 @@ jobs:
               'perf/': ['performance'],
               'docs/': ['documentation']
             };
-            const labels = [];
-            for (const [prefix, tags] of Object.entries(labelMap)) {
-              if (branch.startsWith(prefix)) { labels.push(...tags); break; }
-            }
-            if (labels.length > 0) {
-              try {
-                await github.rest.issues.addLabels({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: prNumber,
-                  labels: labels
-                });
-              } catch (e) {
-                console.log('Labels may not exist yet:', e.message);
-              }
+            const labels = Object.entries(labelMap).find(([prefix]) => branch.startsWith(prefix))?.[1];
+            if (!labels) return;
+            try {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                labels
+              });
+            } catch (error) {
+              const status = Number.isInteger(error?.status) && error.status >= 100 && error.status <= 599 ? `HTTP ${error.status}` : 'unknown status';
+              core.setFailed(`PR labeling failed (${status}).`);
             }
 
   auto-merge:
-    name: Auto-merge when checks pass
+    name: Disable auto-merge for sensitive changes
     needs: auto-pr
     runs-on: ubuntu-latest
-    # enablePullRequestAutoMerge requires contents: write on the token;
-    # the top-level contents: read made every run fail with
-    # "Resource not accessible by integration".
     permissions:
       contents: write
       pull-requests: write
-    if: startsWith(github.ref_name, 'claude/') || startsWith(github.ref_name, 'codex/') || startsWith(github.ref_name, 'copilot/') || startsWith(github.ref_name, 'feat/') || startsWith(github.ref_name, 'fix/') || startsWith(github.ref_name, 'chore/')
+    if: ${{ !cancelled() && needs.auto-pr.outputs.pr_number != '' && (startsWith(github.ref_name, 'claude/') || startsWith(github.ref_name, 'codex/') || startsWith(github.ref_name, 'copilot/') || startsWith(github.ref_name, 'feat/') || startsWith(github.ref_name, 'fix/') || startsWith(github.ref_name, 'chore/')) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
           fetch-depth: 0
 
-      # R4-SEC-002 step 5: never auto-merge a change to lockfiles, Cargo
-      # manifests, .npmrc, CI workflows or the supply-chain gates. Defense in
-      # depth: the binding check is dependency-change-gate.yml, which runs
-      # from the base branch. Any policy error counts as sensitive.
+      # Defense in depth; dependency-change-gate.yml is the binding base-branch
+      # check. Any policy error counts as sensitive.
       - name: Detect dependency or CI-policy changes
         id: policy
         shell: bash
@@ -202,88 +157,56 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         env:
           BRANCH: ${{ github.ref_name }}
+          PR_NUMBER: ${{ needs.auto-pr.outputs.pr_number }}
+          PR_NODE_ID: ${{ needs.auto-pr.outputs.pr_node_id }}
         with:
           github-token: ${{ secrets.AUTO_MERGE_PAT || secrets.GITHUB_TOKEN }}
           script: |
             const branch = process.env.BRANCH;
-            const { data: prs } = await github.rest.pulls.list({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              head: `${context.repo.owner}:${branch}`,
-              state: 'open'
-            });
-            if (prs.length === 0) return;
-            core.warning(`PR #${prs[0].number} changes dependency or CI-policy files: auto-merge stays off until Bradley reviews it.`);
-            try {
-              await github.graphql(
-                'mutation($id: ID!) { disablePullRequestAutoMerge(input: { pullRequestId: $id }) { pullRequest { number } } }',
-                { id: prs[0].node_id },
-              );
-            } catch (err) {
-              core.info(`Auto-merge was not on, or could not be turned off: ${String((err && err.message) || err)}`);
-            }
-
-      - name: Enable GitHub auto-merge
-        if: steps.policy.outputs.sensitive != 'true'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
-        env:
-          BRANCH: ${{ github.ref_name }}
-          HAS_PAT: ${{ secrets.AUTO_MERGE_PAT != '' }}
-        with:
-          # Prefer a PAT / App token (AUTO_MERGE_PAT) because the default
-          # GITHUB_TOKEN cannot call enablePullRequestAutoMerge in this repo —
-          # it returns "Resource not accessible by integration", which used to
-          # fail this check on every push. With the PAT present, auto-merge is
-          # enabled for real; without it, the step degrades to a warning so the
-          # check stays green instead of blocking the PR.
-          github-token: ${{ secrets.AUTO_MERGE_PAT || secrets.GITHUB_TOKEN }}
-          script: |
-            // Only whether the PAT exists reaches the script, never its value.
-            const usingPat = process.env.HAS_PAT === 'true';
-            const branch = process.env.BRANCH;
-            const { data: prs } = await github.rest.pulls.list({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              head: `${context.repo.owner}:${branch}`,
-              state: 'open'
-            });
-            if (prs.length === 0) {
-              core.info(`No open PR for ${branch}; nothing to enable.`);
+            const id = process.env.PR_NODE_ID;
+            const number = Number(process.env.PR_NUMBER);
+            const repository = `${context.repo.owner}/${context.repo.repo}`.toLowerCase();
+            const sameRepository = value => typeof value === 'string' && value.toLowerCase() === repository;
+            if (!branch || !/^[1-9][0-9]*$/.test(process.env.PR_NUMBER ?? '') || !Number.isSafeInteger(number)
+              || typeof id !== 'string' || !/^[A-Za-z0-9_+/=-]{1,256}$/.test(id)) {
+              core.setFailed('Sensitive PR protection has invalid pull request metadata.');
               return;
             }
-            const pr = prs[0];
-            // The repo currently disallows squash merges
-            // (allow_squash_merge=false / allow_rebase_merge=true).
-            // Use REBASE so auto-merge actually engages instead of
-            // bouncing with "squash merging is not allowed."
-            const mutation = `
-              mutation EnablePullRequestAutoMerge($pullRequestId: ID!) {
-                enablePullRequestAutoMerge(input: {
-                  pullRequestId: $pullRequestId
-                  mergeMethod: REBASE
-                }) {
-                  pullRequest {
-                    number
-                  }
-                }
-              }
-            `;
+            let observed;
             try {
-              await github.graphql(mutation, { pullRequestId: pr.node_id });
-              core.info(`Enabled GitHub auto-merge for PR #${pr.number}`);
-            } catch (err) {
-              const msg = String((err && err.message) || err);
-              // Benign states: auto-merge already enabled, or the PR is already
-              // mergeable/clean so there is nothing to queue. Not a failure.
-              if (/already|clean status|not mergeable|in the (allowed|clean)/i.test(msg)) {
-                core.info(`Auto-merge not (re)enabled for PR #${pr.number}: ${msg}`);
+              observed = await github.graphql(
+                'query($id: ID!) { node(id: $id) { __typename ... on PullRequest { id number state headRefName baseRefName headRepository { nameWithOwner } repository { nameWithOwner } autoMergeRequest { enabledAt } } } }',
+                { id }
+              );
+            } catch (error) {
+              const status = Number.isInteger(error?.status) && error.status >= 100 && error.status <= 599 ? `HTTP ${error.status}` : 'unknown status';
+              core.setFailed(`Sensitive PR auto-merge state lookup failed (${status}).`);
+              return;
+            }
+            const pr = observed?.node;
+            if (!pr || pr.__typename !== 'PullRequest' || pr.id !== id || pr.number !== number || pr.state !== 'OPEN'
+              || pr.headRefName !== branch || pr.baseRefName !== 'main'
+              || !sameRepository(pr.headRepository?.nameWithOwner) || !sameRepository(pr.repository?.nameWithOwner)
+              || (pr.autoMergeRequest !== null && (typeof pr.autoMergeRequest?.enabledAt !== 'string' || !Number.isFinite(Date.parse(pr.autoMergeRequest.enabledAt))))) {
+              core.setFailed('Sensitive PR auto-merge lookup returned malformed or mismatched evidence.');
+              return;
+            }
+            if (pr.autoMergeRequest === null) {
+              core.info(`PR #${number} has auto-merge off at this check.`);
+              return;
+            }
+            try {
+              const result = await github.graphql(
+                'mutation($id: ID!) { disablePullRequestAutoMerge(input: { pullRequestId: $id }) { pullRequest { id number autoMergeRequest { enabledAt } } } }',
+                { id }
+              );
+              const updated = result?.disablePullRequestAutoMerge?.pullRequest;
+              if (updated?.id !== id || updated?.number !== number || updated?.autoMergeRequest !== null) {
+                core.setFailed('Sensitive PR auto-merge disablement was not confirmed.');
                 return;
               }
-              // "Resource not accessible by integration" => the token can't
-              // enable auto-merge. Expected with the default GITHUB_TOKEN.
-              // Warn (don't fail) so this check stops blocking every PR.
-              const hint = usingPat
-                ? 'The AUTO_MERGE_PAT may be missing repo/PR scope or lack write access.'
-                : 'Add an AUTO_MERGE_PAT secret (a PAT or App token with repo scope) — the default GITHUB_TOKEN cannot enable auto-merge in this repo.';
-              core.warning(`Could not enable auto-merge for PR #${pr.number}: ${msg}. ${hint}`);
+              core.info(`PR #${number} auto-merge is confirmed off after sensitive-change protection.`);
+            } catch (error) {
+              const status = Number.isInteger(error?.status) && error.status >= 100 && error.status <= 599 ? `HTTP ${error.status}` : 'unknown status';
+              core.setFailed(`Sensitive PR auto-merge disablement failed (${status}); off state is unconfirmed.`);
             }

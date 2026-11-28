@@ -4,6 +4,7 @@ import { strict as assert } from 'node:assert';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { parse } from 'yaml';
 
 const root = path.resolve(import.meta.dirname, '..');
 const read = (file) => readFileSync(path.join(root, file), 'utf8');
@@ -54,10 +55,16 @@ test('build-desktop separates dispatched ref and recovery tag through env', () =
   }
 });
 
-test('the PAT value never enters a script, only whether it exists', () => {
-  const wf = read('.github/workflows/auto-merge-agent-branches.yml');
-  assert.match(wf, /HAS_PAT: \$\{\{ secrets\.AUTO_MERGE_PAT != '' \}\}/);
-  assert.equal(wf.includes("Boolean('${{ secrets.AUTO_MERGE_PAT }}')"), false);
+test('the existing PAT is confined to the GitHub token input, never env or executable scripts', () => {
+  const wf = parse(read('.github/workflows/auto-merge-agent-branches.yml'));
+  function inspect(value, keys = []) {
+    if (typeof value === 'string' && value.includes('AUTO_MERGE_PAT')) {
+      assert.deepEqual(keys.slice(-2), ['with', 'github-token'], `secret reference outside token input: ${keys.join('.')}`);
+    } else if (value && typeof value === 'object') {
+      for (const [key, child] of Object.entries(value)) inspect(child, [...keys, key]);
+    }
+  }
+  inspect(wf);
 });
 
 test('zizmor runs in CI, pinned by version and hash, failing on medium and higher findings', () => {

@@ -1402,6 +1402,8 @@ changing the workflow; do not enable broader Actions approval permissions.
 
 Priority: S
 Dependencies: none
+Exit condition: Complete passing hosted receipts for all six npm graphs and the fixture job, validate mixed dependency selection, and complete remaining dependency/scheduled coverage acceptance. Local fixtures alone do not close this task.
+Review after: 2026-11-29
 
 The targeted selector currently permits an empty selection for dependency-only
 paths; this is an explicit policy, not proof that no other CI tests execute.
@@ -1640,7 +1642,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-067 | Green release-integrity signal on main | WAITING | |
 | UX-068 | Inventory branches and worktrees before cleanup | NOT STARTED — HIGH ASSURANCE | |
 | UX-069 | Auto-PR workflow warning | NOT STARTED | |
-| UX-070 | Design dependency and scheduled test coverage | IN PROGRESS — HIGH ASSURANCE | [Draft #1903](https://github.com/bradleybond512/crystal-ball/pull/1903); [approved design](plans/2026-11-13-ux070-dependency-test-coverage.md). Runtime execution and hosted acceptance remain open. |
+| UX-070 | Design dependency and scheduled test coverage | MONITOR — HIGH ASSURANCE | [Candidate #1903](https://github.com/bradleybond512/crystal-ball/pull/1903); [approved design](plans/2026-11-13-ux070-dependency-test-coverage.md) and [local reconciliation evidence](validation/UX-070-DEPENDENCY-COVERAGE.md). Bounded policy and runtime contracts validated locally; complete hosted graph receipts, mixed-selection execution and full coverage acceptance remain open. Review after 2026-11-29; fresh reviews and protected CI remain required. |
 | UX-071 | Design safe Rust tests and Clippy CI | MONITOR — HIGH ASSURANCE | [Candidate #1904](https://github.com/bradleybond512/crystal-ball/pull/1904); [November 28 reconciliation](validation/UX-071-SAFE-MERGE-RECONCILIATION.md). Reviewed native code preserved on actual audit-repaired main, fresh reviews and six local suites/full gate passed. Current hosted native acceptance, protected merge and installed acceptance remain pending; safe merging and Mac installation authorized. |
 | UX-072 | Local user-data backup and restore | NOT STARTED — HIGH ASSURANCE | |
 | UX-073 | Scope cohesive module extractions | NOT STARTED | |

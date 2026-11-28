@@ -1,0 +1,108 @@
+name: Native Tests
+
+on:
+  pull_request:
+    paths:
+      - 'src-tauri/**'
+      - 'scripts/native-test-driver.mjs'
+      - 'scripts/native-test-inventory.json'
+      - 'scripts/build-sidecar-xmpp.mjs'
+      - 'scripts/prune-tauri-dist.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'rust-toolchain*'
+      - '.cargo/**'
+      - 'tests/native-ci-*.test.mjs'
+      - '.github/workflows/native-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src-tauri/**'
+      - 'scripts/native-test-driver.mjs'
+      - 'scripts/native-test-inventory.json'
+      - 'scripts/build-sidecar-xmpp.mjs'
+      - 'scripts/prune-tauri-dist.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'rust-toolchain*'
+      - '.cargo/**'
+      - 'tests/native-ci-*.test.mjs'
+      - '.github/workflows/native-tests.yml'
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: Native (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux-x64
+          - os: macos-15
+            platform: darwin-arm64
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7
+        with:
+          toolchain: '1.93.1'
+          components: clippy
+      - name: Linux native libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev
+      - name: Run reviewed native harnesses and strict Clippy
+        run: node scripts/native-test-driver.mjs run
+      - name: Preserve bounded native evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: native-${{ matrix.platform }}
+          path: ${{ runner.temp }}/ux071-receipts-${{ matrix.platform }}
+          retention-days: 7
+          if-no-files-found: error
+
+  report:
+    name: Native evidence gate
+    needs: native
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          pattern: native-*
+          path: ${{ runner.temp }}/native-receipts
+      - name: Require both platforms and complete execution evidence
+        env:
+          NATIVE_RESULT: ${{ needs.native.result }}
+          RECEIPT_DIR: ${{ runner.temp }}/native-receipts
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          node scripts/native-test-driver.mjs aggregate "$RECEIPT_DIR"
+          test "$NATIVE_RESULT" = success

@@ -1219,15 +1219,19 @@ Evidence: #1802 — [bounded map cleanup](validation/MAP-CLARITY-CLEANUP.md). Th
 
 ### UX-062 — Label forecasts that trail their own baseline *(High Assurance)*
 
-Status: IN REVIEW — HIGH ASSURANCE
+Status: MONITOR — HIGH ASSURANCE
 
 Priority: S
 
 Dependencies: ACC-008
 
-Claim: draft [#1886](https://github.com/bradleybond512/crystal-ball/pull/1886), `codex/ux062-forecast-baseline-labels`; Bradley approved the [bounded Unverified-labeling design](plans/2026-11-07-ux062-unverified-forecast-labels.md), documentation-only draft claim and local implementation on 2026-11-08. This partial slice labels unmatched HUD/Superforecast/scenario estimates and scopes Command Center's historical summary. The actual SituationDossier's categorical confidence stays unchanged. Full matched-cohort beats/trails, current comparator and freshness requirements below remain open; this task is not DONE or REJECTED. On November 28, Bradley authorized safe protected merges and a new Mac build. This slice is being revalidated on the combined security candidate; final review and required hosted checks govern integration.
+Exit condition: Complete separately approved exact forecast-identity and matched-cohort evidence alignment, current comparator probability and freshness behavior with beats/trails/unverified/stale fixtures on supported surfaces; record installed macOS acceptance for disclosure keyboard/focus behavior, explanations and preserved probabilities, warnings and actions. The bounded Unverified-labeling slice and its local checks do not complete those requirements.
 
-Evidence: [bounded local implementation and QA](validation/UX-062-UNVERIFIED-FORECAST-LABELS.md): 59 selected suites, 29 mutation proofs and isolated Chromium checks passed. Full baseline comparison acceptance remains open. [Current integration evidence](validation/UX-062-SAFE-INTEGRATION.md) distinguishes fresh checks from the original review artifacts.
+Review after: 2026-11-29
+
+Claim: [Candidate #1886](https://github.com/bradleybond512/crystal-ball/pull/1886), `codex/ux062-forecast-baseline-labels`; Bradley approved the [bounded Unverified-labeling design](plans/2026-11-07-ux062-unverified-forecast-labels.md), documentation-only draft claim and local implementation on 2026-11-08. This partial slice labels unmatched HUD/Superforecast/scenario estimates and scopes Command Center's historical summary. The actual SituationDossier's categorical confidence stays unchanged. Full matched-cohort beats/trails, current comparator and freshness requirements below remain open; this task is not DONE or REJECTED. On November 28, Bradley authorized safe protected merges and a new Mac build. This slice has passed local validation on the combined security candidate; final review and required hosted checks govern integration. MONITOR retains the remaining baseline-comparison and installed-acceptance work without claiming completion or a merged result.
+
+Evidence: [Candidate #1886](https://github.com/bradleybond512/crystal-ball/pull/1886) — [bounded local implementation and QA](validation/UX-062-UNVERIFIED-FORECAST-LABELS.md): 59 selected suites, 29 mutation proofs and isolated Chromium checks passed. Full baseline comparison acceptance remains open. [Current integration evidence](validation/UX-062-SAFE-INTEGRATION.md) distinguishes fresh checks from the original review artifacts.
 
 The 2026-07-26 baseline put the analyst loop at Brier 0.569 over 32 resolved
 forecasts. Answering 50% every time scores 0.25. Until UX-019 records a
@@ -1641,7 +1645,7 @@ do not establish native keyboard delivery, VoiceOver or packaged behavior.
 | UX-059 | Retain active alerts using authoritative lifecycle evidence | DONE | #1739; [evidence](validation/UX-059-RETENTION.md); ACC-509 integration hold |
 | UX-060 | Preserve onboarding keyboard ownership against proactive digest | DONE | #1735 |
 | UX-061 | Truthful, restrained map presentation | DONE | #1802; [bounded evidence](validation/MAP-CLARITY-CLEANUP.md); native acceptance recorded separately |
-| UX-062 | Label forecasts that trail their baseline | IN REVIEW — HIGH ASSURANCE | Draft #1886; approved bounded Unverified labels; [original QA](validation/UX-062-UNVERIFIED-FORECAST-LABELS.md) and [current integration](validation/UX-062-SAFE-INTEGRATION.md). Full matched-baseline comparison and freshness work remains open. Safe protected integration is authorized; fresh review and required checks remain gates. |
+| UX-062 | Label forecasts that trail their baseline | MONITOR — HIGH ASSURANCE | [Candidate #1886](https://github.com/bradleybond512/crystal-ball/pull/1886); approved bounded Unverified labels; [original QA](validation/UX-062-UNVERIFIED-FORECAST-LABELS.md) and [current integration](validation/UX-062-SAFE-INTEGRATION.md). Full matched-baseline comparison, freshness and installed acceptance remain open; exit condition above, review after 2026-11-29. Safe protected integration is authorized; fresh review and required checks remain gates. |
 | UX-063 | Evaluate bounded CI Sonnet review | NOT STARTED — HIGH ASSURANCE | |
 | UX-065 | Round 4 checkpoint and remaining security drafts | NOT STARTED | |
 | UX-066 | Dependabot backlog in reviewed batches | MONITOR | [Merged #1902](https://github.com/bradleybond512/crystal-ball/pull/1902) at `6869676878`; all 16 latest hosted workflows passed before protected closeout. [Evidence](validation/UX-066-SECURITY-INTEGRATION.md). Full backlog remains open; the separately owned dependency workflow stays untouched. Public releases, deployment and cleanup remain held. |

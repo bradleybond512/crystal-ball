@@ -49,7 +49,7 @@ test('focused native gate executes the current-location Rust contract', () => {
     assert.equal(result.error, undefined, output);
     assert.equal(result.signal, null, output);
     assert.equal(result.status, 0, output);
-    assert.match(output, /test result: ok\. 9 passed; 0 failed;/);
+    assert.match(output, /test result: ok\. 10 passed; 0 failed;/);
   } finally {
     rmSync(tauriFrontendDist, { recursive: true, force: true });
   }

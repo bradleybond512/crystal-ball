@@ -2,8 +2,11 @@
 
 Approved November 28: High Assurance continuation of existing draft #1902,
 including local implementation, isolated dependency testing and reconciliation.
-This is not a new roadmap claim. Publication/history replacement requires a
-separate reviewed-tip approval; all merge and delivery holds remain.
+This is not a new roadmap claim. The cookie-only phase and its proof are now
+preserved at `fbe474ebb3789873dbec8b482ee7407e49b3b2de`. The subsequent user
+instruction authorizes safe protected merging and local Mac installation; the
+[security-first integration plan](2026-11-28-ux066-security-integration.md) governs
+the continuation. The scope/holds below record this earlier phase historically.
 
 ## Verified need and existing owners
 

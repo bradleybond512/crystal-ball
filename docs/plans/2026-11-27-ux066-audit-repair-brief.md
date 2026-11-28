@@ -2,7 +2,8 @@
 
 High Assurance continuation of existing UX-066 ownership in draft #1902.
 November 28 approval covers the bounded cookie-only design, isolated testing and
-local reconciliation. Publication/history replacement remains separately gated.
+local reconciliation. The later safe-merge/Mac-build instruction authorizes protected delivery after
+validation; see the security-first integration plan for that continuation.
 The complete roadmap snapshot has no eligible unclaimed task. Shared audit
 failures still block reviewed drafts, so identify a bounded continuation of the
 existing dependency-backlog task without duplicating other owners.
